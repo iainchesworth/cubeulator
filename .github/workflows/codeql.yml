@@ -70,10 +70,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-15
 
-      # bgfx's vcpkg port unconditionally find_package(X11)s - see the
-      # equivalent comment in ci.yml.
-      - name: Install bgfx build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       # Sanitizers disabled: CodeQL's build tracer sets its own LD_PRELOAD for
       # the whole build step, which collides with ASan needing to be first in
