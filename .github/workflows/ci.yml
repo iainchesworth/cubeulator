@@ -17,6 +17,17 @@ jobs:
   build-and-test:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
+    # Caps vcpkg's internal build parallelism (used for every port it
+    # compiles, including a single heavy port's own --parallel build step).
+    # Confirmed in CI: building onnxruntime with the runner's default
+    # nproc-wide parallelism (4 on these standard runners) OOM'd the whole
+    # runner (exit 143, "runner has received a shutdown signal") partway
+    # through compiling it, well after its ~30 Boost/Abseil transitive
+    # dependencies had already built and cached successfully at full
+    # parallelism - onnxruntime's own translation units are large/heavy
+    # enough that 4 of them compiling at once exceeds the runner's memory.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
     strategy:
       fail-fast: false
       matrix:
@@ -210,6 +221,11 @@ jobs:
   coverage:
     name: Coverage (Linux, GCC)
     runs-on: ubuntu-24.04
+    # Caps vcpkg's internal build parallelism - see the equivalent comment
+    # on build-and-test above (onnxruntime OOM'd this runner at full nproc
+    # parallelism).
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
