@@ -70,14 +70,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-15
 
-      # bgfx's vcpkg port unconditionally find_package(X11)s - see the
-      # equivalent comment on build-and-test below. autoconf-archive/libtool
-      # are for gperf, a transitive dependency built from source via
-      # autotools - previously masked by the vcpkg binary cache (keyed on
-      # vcpkg.json's hash) until that file changed for the first time
-      # (confirmed in CI: gperf failed with "requires autoconf
-      # autoconf-archive automake libtoolize").
-      - name: Install Linux build dependencies
+      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
+      - name: Install vcpkg build dependencies
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       - name: Install clang-tidy
@@ -186,13 +181,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-15
 
-      # bgfx's vcpkg port unconditionally find_package(X11)s even with
-      # examples/tools disabled; GitHub's ubuntu-24.04 runner doesn't ship
-      # these dev headers by default (confirmed in CI: bgfx's source build
-      # failed with "Could NOT find X11"). autoconf-archive/libtool are for
-      # gperf, a transitive dependency built from source via autotools - see
-      # the equivalent comment on clang-tidy above.
-      - name: Install Linux build dependencies
+      # Two distinct vcpkg build gaps on a stock ubuntu-24.04 runner: (1)
+      # bgfx's port unconditionally find_package(X11)s even with
+      # examples/tools disabled ("Could NOT find X11"); (2) gperf (a
+      # transitive dependency via gettext, itself pulled in by
+      # onnxruntime/protobuf) needs the autotools chain to build from source
+      # ("gperf currently requires ... autoconf autoconf-archive automake
+      # libtoolize"). Both confirmed in CI.
+      - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
@@ -263,7 +259,7 @@ jobs:
       # from source via autotools - see the equivalent comment on clang-tidy
       # in build-and-test above. No X11/GL packages needed here: bgfx.cmake
       # explicitly excludes ANDROID from its X11 path.
-      - name: Install Linux build dependencies
+      - name: Install vcpkg build dependencies
         run: sudo apt-get install -y autoconf autoconf-archive automake libtool
 
       - name: Configure vcpkg binary cache
@@ -398,11 +394,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-15
 
-      # bgfx's vcpkg port unconditionally find_package(X11)s - see the
-      # equivalent comment in the build-and-test job above. autoconf-archive/
-      # libtool are for gperf - see the equivalent comment on clang-tidy
-      # above.
-      - name: Install Linux build dependencies
+      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # build-and-test above (X11 for bgfx, autotools for gperf).
+      - name: Install vcpkg build dependencies
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       - name: Install gcovr
