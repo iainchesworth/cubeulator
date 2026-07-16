@@ -1,0 +1,51 @@
+name: OSSF Scorecard
+
+# Supply-chain security health score for the published repo — runs against
+# 'main' only. Visible-only: results are a score/badge, not a pass/fail check.
+#
+# The branch-protection sub-check needs read access to repo settings to
+# score fully; without a token it degrades gracefully rather than failing.
+# To get the fuller score, add a fine-grained PAT (read-only,
+# "Administration: read") as a repo secret named SCORECARD_READ_TOKEN and
+# uncomment repo_token below.
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions: read-all
+
+concurrency:
+  group: scorecard-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  analysis:
+    name: Analyze
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard analysis
+        uses: ossf/scorecard-action@4eaacf0543bb3f2c246792bd56e8cdeffafb205a # v2.4.3
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+          # repo_token: ${{ secrets.SCORECARD_READ_TOKEN }}
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          sarif_file: results.sarif
+          category: scorecard

@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea for Cubeulator
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For anything more than a small tweak, opening an issue first (like
+        this one) before sinking time into a PR avoids duplicated effort —
+        see [Contributing](https://iainchesworth.github.io/cubeulator/CONTRIBUTING/).
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: What are you trying to do that the app doesn't support today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any other ways to solve this, and why you'd prefer this approach.

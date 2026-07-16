@@ -1,0 +1,64 @@
+name: CodeQL (C++)
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "17 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (C++)
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          languages: cpp
+          build-mode: manual
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        with:
+          cmakeVersion: "latest"
+
+      - name: Install GCC 15
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update
+          sudo apt-get install -y g++-15
+
+      # Sanitizers disabled: CodeQL's build tracer sets its own LD_PRELOAD for
+      # the whole build step, which collides with ASan needing to be first in
+      # the preload chain. CodeQL is pure static analysis and gets nothing
+      # from ASan/UBSan being enabled here.
+      - name: Configure (library + platform only, no Qt app)
+        run: >
+          cmake --preset linux-gcc-debug
+          -DCMAKE_CXX_COMPILER=g++-15
+          -DCUBEULATOR_BUILD_APP=OFF
+          -DCUBEULATOR_ENABLE_SANITIZERS=OFF
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-debug
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
+        with:
+          category: "/language:cpp"

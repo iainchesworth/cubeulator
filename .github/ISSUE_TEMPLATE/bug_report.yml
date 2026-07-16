@@ -1,0 +1,64 @@
+name: Bug report
+description: Something in the app or the build is broken
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. If this is a security
+        vulnerability, please use
+        [private reporting](https://github.com/iainchesworth/cubeulator/security/advisories/new)
+        instead of a public issue.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: >
+        From Settings → About in the app, or `cubeulator --version`.
+        If you built from source, include the commit hash instead.
+      placeholder: "0.1.0-beta.1 (commit a8f2179)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Android (build-only, unofficial)
+        - iOS (build-only, unofficial)
+        - Building from source / library only
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected instead, too.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Build output / logs
+      description: >
+        If this is a build failure, paste the CMake/compiler output. Use a
+        code block (\`\`\`) so it stays readable.
+      render: shell

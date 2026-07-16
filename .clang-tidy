@@ -1,0 +1,18 @@
+---
+# Static analysis for first-party code. Kept in step with the compiler warning
+# set in cmake/CompilerWarnings.cmake.
+Checks: >
+  bugprone-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -modernize-use-trailing-return-type,
+  -readability-identifier-length,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay
+
+WarningsAsErrors: ''
+HeaderFilterRegex: 'src/(lib|app|render)/.*'
+FormatStyle: file

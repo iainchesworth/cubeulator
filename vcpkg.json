@@ -1,0 +1,32 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cubeulator",
+  "version": "0.1.0",
+  "description": "A camera-driven, on-device Rubik's Cube solver.",
+  "homepage": "https://github.com/iainchesworth/cubeulator",
+  "license": "GPL-3.0-or-later",
+  "builtin-baseline": "5b698638c97b4610044a254347d571f823e56557",
+  "dependencies": [
+    {
+      "name": "opencv4",
+      "platform": "!ios & !android"
+    },
+    {
+      "name": "onnxruntime",
+      "platform": "!ios & !android"
+    },
+    {
+      "name": "bgfx",
+      "platform": "!ios & !android"
+    }
+  ],
+  "default-features": [],
+  "features": {
+    "tests": {
+      "description": "Dependencies for the unit and integration test suites",
+      "dependencies": [
+        "catch2"
+      ]
+    }
+  }
+}

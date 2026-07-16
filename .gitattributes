@@ -1,0 +1,18 @@
+# Normalise line endings: LF in the repository for text, native on checkout is
+# left to the platform's core.autocrlf. Force LF for shell scripts.
+* text=auto
+
+*.sh   text eol=lf
+*.bat  text eol=crlf
+*.cmake text
+CMakeLists.txt text
+*.cpp  text
+*.hpp  text
+*.txt  text
+*.json text
+*.md   text
+
+# Treat these as binary.
+*.png binary
+*.ico binary
+*.qm  binary

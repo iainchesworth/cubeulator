@@ -1,0 +1,202 @@
+{
+  "version": 8,
+  "cmakeMinimumRequired": {
+    "major": 4,
+    "minor": 0,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "debug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "release",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-msvc-base",
+      "hidden": true,
+      "inherits": ["base"],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows"
+      }
+    },
+    {
+      "name": "windows-msvc-debug",
+      "displayName": "Windows (MSVC, Debug)",
+      "inherits": ["windows-msvc-base", "debug"]
+    },
+    {
+      "name": "windows-msvc-release",
+      "displayName": "Windows (MSVC, Release)",
+      "inherits": ["windows-msvc-base", "release"]
+    },
+    {
+      "name": "linux-gcc-base",
+      "hidden": true,
+      "inherits": ["base"],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_CXX_COMPILER": "g++",
+        "VCPKG_TARGET_TRIPLET": "x64-linux"
+      }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "displayName": "Linux (GCC, Debug)",
+      "inherits": ["linux-gcc-base", "debug"]
+    },
+    {
+      "name": "linux-gcc-release",
+      "displayName": "Linux (GCC, Release)",
+      "inherits": ["linux-gcc-base", "release"]
+    },
+    {
+      "name": "linux-gcc-coverage",
+      "displayName": "Linux (GCC, Coverage)",
+      "inherits": ["linux-gcc-base", "debug"],
+      "cacheVariables": {
+        "CUBEULATOR_ENABLE_COVERAGE": "ON",
+        "CUBEULATOR_ENABLE_SANITIZERS": "OFF"
+      }
+    },
+    {
+      "name": "macos-clang-base",
+      "hidden": true,
+      "inherits": ["base"],
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-osx"
+      }
+    },
+    {
+      "name": "macos-clang-debug",
+      "displayName": "macOS (AppleClang, Debug)",
+      "inherits": ["macos-clang-base", "debug"]
+    },
+    {
+      "name": "macos-clang-release",
+      "displayName": "macOS (AppleClang, Release)",
+      "inherits": ["macos-clang-base", "release"]
+    },
+    {
+      "name": "android-clang-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-28",
+        "CUBEULATOR_BUILD_APP": "OFF",
+        "CUBEULATOR_BUILD_TESTS": "OFF"
+      }
+    },
+    {
+      "name": "android-clang-debug",
+      "displayName": "Android (arm64-v8a, Debug)",
+      "inherits": ["android-clang-base", "debug"]
+    },
+    {
+      "name": "android-clang-release",
+      "displayName": "Android (arm64-v8a, Release)",
+      "inherits": ["android-clang-base", "release"]
+    },
+    {
+      "name": "ios-clang-base",
+      "hidden": true,
+      "generator": "Xcode",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_SYSTEM_NAME": "iOS",
+        "CMAKE_OSX_SYSROOT": "iphoneos",
+        "CMAKE_OSX_ARCHITECTURES": "arm64",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "16.3",
+        "CUBEULATOR_BUILD_APP": "OFF",
+        "CUBEULATOR_BUILD_TESTS": "OFF",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+        "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": ""
+      }
+    },
+    {
+      "name": "ios-clang-debug",
+      "displayName": "iOS (device, Debug)",
+      "inherits": ["ios-clang-base", "debug"]
+    },
+    {
+      "name": "ios-clang-release",
+      "displayName": "iOS (device, Release)",
+      "inherits": ["ios-clang-base", "release"]
+    }
+  ],
+  "buildPresets": [
+    { "name": "windows-msvc-debug", "configurePreset": "windows-msvc-debug" },
+    { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release" },
+    { "name": "linux-gcc-debug", "configurePreset": "linux-gcc-debug" },
+    { "name": "linux-gcc-release", "configurePreset": "linux-gcc-release" },
+    { "name": "linux-gcc-coverage", "configurePreset": "linux-gcc-coverage" },
+    { "name": "macos-clang-debug", "configurePreset": "macos-clang-debug" },
+    { "name": "macos-clang-release", "configurePreset": "macos-clang-release" },
+    { "name": "android-clang-debug", "configurePreset": "android-clang-debug" },
+    { "name": "android-clang-release", "configurePreset": "android-clang-release" },
+    { "name": "ios-clang-debug", "configurePreset": "ios-clang-debug" },
+    { "name": "ios-clang-release", "configurePreset": "ios-clang-release" }
+  ],
+  "testPresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error",
+        "stopOnFailure": false
+      }
+    },
+    { "name": "windows-msvc-debug", "inherits": "base", "configurePreset": "windows-msvc-debug" },
+    { "name": "windows-msvc-release", "inherits": "base", "configurePreset": "windows-msvc-release" },
+    { "name": "linux-gcc-debug", "inherits": "base", "configurePreset": "linux-gcc-debug" },
+    { "name": "linux-gcc-release", "inherits": "base", "configurePreset": "linux-gcc-release" },
+    { "name": "linux-gcc-coverage", "inherits": "base", "configurePreset": "linux-gcc-coverage" },
+    { "name": "macos-clang-debug", "inherits": "base", "configurePreset": "macos-clang-debug" },
+    { "name": "macos-clang-release", "inherits": "base", "configurePreset": "macos-clang-release" }
+  ]
+}
