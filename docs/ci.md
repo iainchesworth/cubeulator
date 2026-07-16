@@ -19,11 +19,14 @@ configured as required on `main`.
 ## Dependencies
 
 vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
-Runtime, and bgfx on desktop triplets (fmt also resolves on mobile triplets
-via a chainloaded toolchain — see below). Qt is a separate prebuilt install
-(`jurplel/install-qt-action` in CI, `ci/install-qt.*` locally) — kept out of
-vcpkg for build size and Windows `MAX_PATH` reasons.
+Runtime, and bgfx on every triplet, desktop and mobile alike, via a
+chainloaded toolchain on `arm64-ios`/`arm64-android` — see below. Qt is a
+separate prebuilt install (`jurplel/install-qt-action` in CI,
+`ci/install-qt.*` locally) — kept out of vcpkg for build size and Windows
+`MAX_PATH` reasons.
 
-Mobile (arm64-ios/arm64-android) dependency resolution is an open item — see
+Mobile (arm64-ios/arm64-android) vcpkg builds of opencv4/onnxruntime/bgfx are
+new and not yet proven out in CI (the `android-build`/`ios-build` jobs stay
+`continue-on-error: true` until they are) — see
 [Dependency strategy](dependency-strategy.md) for the evidence and the
-planned hybrid approach.
+fallback plan if any of the three doesn't work out.

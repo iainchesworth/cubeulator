@@ -1,4 +1,4 @@
-# Dependency strategy: vcpkg vs. mobile
+# Dependency strategy: vcpkg on every platform
 
 Cubeulator vendors [vcpkg](https://github.com/microsoft/vcpkg) as a pinned git
 submodule (manifest mode, `vcpkg.json`) for its C++ dependencies: Catch2,
@@ -7,40 +7,76 @@ fmt, OpenCV, ONNX Runtime, and bgfx. Qt is a separate prebuilt install
 same reasons CountdownSolver keeps it out of vcpkg (build size, Windows
 `MAX_PATH`).
 
-`fmt` is resolved via vcpkg on **every** triplet, including
-`arm64-android`/`arm64-ios` — unlike the three libraries below, it has no
-native/platform-specific code that makes mobile triplets risky, so the
+All five vcpkg dependencies - including OpenCV, ONNX Runtime, and bgfx - are
+plain, unscoped entries in `vcpkg.json`: they resolve the same way on every
+triplet vcpkg supports, `arm64-android`/`arm64-ios` included. The
 `android-clang-*`/`ios-clang-*` presets chainload vcpkg's toolchain on top of
-the NDK/iOS toolchain (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) specifically so
-`fmt` (and `Catch2` on desktop) resolve the same way everywhere.
+the NDK/iOS toolchain (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) so every dependency
+resolves the same way everywhere.
 `cube::lib`'s `version.cpp` uses `fmt::format` rather than `std::format`
 because the Android NDK's `libc++` doesn't implement `<format>` (it needs
 locale support the NDK's minimal libc doesn't provide) — this was discovered
 via a real CI failure, not anticipated in advance.
 
-## The gap
+## Earlier plan and why it changed
 
-Before writing any application code, the three heavier dependencies were
-checked for support on the `arm64-ios` and `arm64-android` vcpkg triplets:
+The original bootstrap spec scoped `opencv4`, `onnxruntime`, and `bgfx` to
+desktop-only triplets (`"platform": "!ios & !android"`), based on upstream
+evidence that each library's mobile vcpkg support looked unverified or gappy:
 
-| Library | vcpkg triplet support (mobile) | Evidence |
+| Library | Concern raised | Evidence |
 |---|---|---|
 | `bgfx` | No verified iOS/Android build via vcpkg's own port | [bgfx#905](https://github.com/bkaradzic/bgfx/issues/905) — upstream tracking issue for iOS arm64 |
 | `onnxruntime` | Open, maintainer-acknowledged gap for iOS | [onnxruntime#23158](https://github.com/microsoft/onnxruntime/issues/23158) |
 | `opencv4` | Android is an officially tested vcpkg triplet; iOS is unverified | [vcpkg blog: Android tested triplets](https://devblogs.microsoft.com/cppblog/vcpkg-2023-06-20-and-2023-07-21-releases-github-dependency-graph-support-android-tested-triplets-xbox-triplet-improvements-and-more/) |
 
-None of the three vcpkg mobile CI wrappers (`bgfx.cmake` included) have a
-reliably maintained iOS/Android path either — see
-[widberg/bgfx.cmake#85](https://github.com/widberg/bgfx.cmake/issues/85).
+Re-checking the actual vcpkg port manifests (`deps/vcpkg/ports/*/vcpkg.json`)
+rather than just those linked issues showed none of the three are actually
+blocked by vcpkg on mobile triplets:
 
-## The strategy
+- **bgfx**'s port declares `"supports": "!bsd"` — no ios/android exclusion.
+  It's built via the [bgfx.cmake](https://github.com/widberg/bgfx.cmake)
+  community wrapper, which has real, dedicated iOS support
+  (`cmake/bgfx.cmake`: links `OpenGLES`/`Metal`/`UIKit`/`CoreGraphics`/
+  `QuartzCore` frameworks when `CMAKE_SYSTEM_NAME MATCHES iOS`) and
+  explicitly excludes `ANDROID` from its X11 lookup
+  (`if(UNIX AND NOT APPLE AND NOT EMSCRIPTEN AND NOT ANDROID)`), so the X11
+  dev packages CI installs for the Linux desktop build are never needed on
+  either mobile platform.
+- **onnxruntime**'s port declares `"supports": "!uwp"` — no ios/android
+  exclusion; one optional feature is even scoped `"osx | ios"` specifically.
+- **opencv4**'s port carries no `supports` restriction at all, and pulls in
+  an Android-specific `cpu-features` dependency — a real signal of Android
+  work already in the port, matching the officially-tested-triplet claim
+  above.
 
-`vcpkg.json` scopes `opencv4`, `onnxruntime`, and `bgfx` to desktop triplets
-only (`"platform": "!ios & !android"`). For `arm64-ios` / `arm64-android`, the
-plan is to consume each library's own official distribution instead, wrapped
-as a CMake `IMPORTED` target behind the same interface name
-(`cube::opencv`, `cube::onnxruntime`, `cube::bgfx`) so vision/render code
-never branches on how a dependency was acquired:
+So the original exclusion was a defensive call based on adjacent evidence,
+not something vcpkg itself enforces. The strategy is now to let vcpkg build
+all three uniformly across every platform and see what actually happens,
+rather than pre-committing to a heavier, platform-specific fallback before
+testing the simpler path.
+
+## What this means for CI
+
+`ci.yml`'s `android-build` and `ios-build` jobs are marked
+`continue-on-error: true`, matching CountdownSolver's own treatment of
+experimental matrix legs. They now attempt real vcpkg builds of
+opencv4/onnxruntime/bgfx for `arm64-android`/`arm64-ios`, which was
+previously untested territory for two of the three libraries on both
+platforms. Both jobs cap `VCPKG_MAX_CONCURRENCY` at 2, mirroring the desktop
+jobs' existing mitigation - onnxruntime alone already OOM'd runners at
+default parallelism once its build reached compilation.
+
+Because these jobs are `continue-on-error: true`, a build failure won't turn
+CI red; check the job logs directly rather than relying on the checkmark.
+
+## Fallback: native SDKs per platform
+
+If vcpkg's mobile build of any one of these three libraries turns out not to
+actually work, the fallback is to consume that library's own official mobile
+distribution instead, wrapped as a CMake `IMPORTED` target behind the same
+interface name (`cube::opencv`, `cube::onnxruntime`, `cube::bgfx`) so
+vision/render code still never branches on how the dependency was acquired:
 
 - **OpenCV**: `opencv2.framework` (iOS, via `platforms/ios/build_framework.py`)
   / `OpenCV-android-sdk` (Android, `OpenCV_DIR=.../sdk/native/jni` +
@@ -53,17 +89,7 @@ never branches on how a dependency was acquired:
 - **bgfx**: built via its own GENie build (`make ios-arm64`, `make
   android-arm64`), not vcpkg or `bgfx.cmake`, then `IMPORTED`-wrapped.
 
-`cmake/MobileDependencies.cmake` is where this wiring will live; it is
-currently a documented placeholder (see its header comment) because no code
-in this bootstrap spec links any of the three libraries yet — the vision,
-edge-AI, and render specs are what will actually need them, and implementing
-the real fetch/build/unpack logic is tracked as follow-up work at that point.
-
-## What this means for CI
-
-`ci.yml`'s `android-build` and `ios-build` jobs are marked
-`continue-on-error: true`, matching CountdownSolver's own treatment of
-experimental matrix legs. They are expected to build the (Qt-free, dependency-
-free) `cube::lib` and `cube::platform` targets successfully now; they are not
-expected to build anything that links OpenCV/ONNX Runtime/bgfx until the
-mobile dependency wiring above is implemented.
+This fallback is not currently pursued for any of the three libraries -
+`cmake/MobileDependencies.cmake` sources all three via vcpkg on every
+platform. It stays documented here so it isn't lost if CI shows one of them
+genuinely doesn't work out.

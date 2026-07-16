@@ -218,6 +218,12 @@ jobs:
     name: Android (arm64-v8a, ${{ matrix.config }}, build-only)
     runs-on: ubuntu-24.04
     continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
     strategy:
       fail-fast: false
       matrix:
@@ -264,9 +270,10 @@ jobs:
 
       # No Qt install needed: the android-clang-* presets set
       # CUBEULATOR_BUILD_APP=OFF (see docs/dependency-strategy.md - mobile
-      # shells are native, not Qt/QML). vcpkg is used here only for fmt
-      # (chainloaded onto the NDK toolchain); OpenCV/ONNX Runtime/bgfx remain
-      # desktop-only - see docs/dependency-strategy.md.
+      # shells are native, not Qt/QML). vcpkg now builds opencv4/onnxruntime/
+      # bgfx here too, chainloaded onto the NDK toolchain the same way as
+      # fmt - see docs/dependency-strategy.md. No libx11-dev install needed:
+      # bgfx.cmake explicitly excludes ANDROID from its X11 path.
       - name: Configure
         run: cmake --preset android-clang-${{ matrix.config }}
 
@@ -277,6 +284,12 @@ jobs:
     name: iOS (device, ${{ matrix.config }}, build-only, unsigned)
     runs-on: macos-15
     continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
     strategy:
       fail-fast: false
       matrix:
@@ -316,8 +329,8 @@ jobs:
       # Unsigned build only (see the ios-clang-* preset's
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
-      # comment above; the same reasoning applies here. vcpkg is used here
-      # only for fmt - see the android job comment above.
+      # comment above; the same reasoning applies here. vcpkg now builds
+      # opencv4/onnxruntime/bgfx here too - see the android job comment above.
       - name: Configure
         run: cmake --preset ios-clang-${{ matrix.config }}
 
