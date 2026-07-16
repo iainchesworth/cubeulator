@@ -73,7 +73,7 @@ jobs:
       # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
       # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev
 
       - name: Install clang-tidy
         run: sudo apt-get install -y clang-tidy
@@ -127,11 +127,15 @@ jobs:
           - name: Linux (GCC 15, Release)
             os: ubuntu-24.04
             preset: linux-gcc-release
+          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
+          # links unconditionally on macOS ("ld: framework 'AGL' not
+          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
           - name: macOS (AppleClang, Debug)
-            os: macos-26
+            os: macos-15
             preset: macos-clang-debug
           - name: macOS (AppleClang, Release)
-            os: macos-26
+            os: macos-15
             preset: macos-clang-release
           - name: Windows (MSVC, Debug)
             os: windows-2025
@@ -190,7 +194,7 @@ jobs:
       # libtoolize"). Both confirmed in CI.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -260,7 +264,7 @@ jobs:
       # in build-and-test above. No X11/GL packages needed here: bgfx.cmake
       # explicitly excludes ANDROID from its X11 path.
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y autoconf autoconf-archive automake libtool
+        run: sudo apt-get install -y autoconf autoconf-archive automake libtool libltdl-dev
 
       - name: Configure vcpkg binary cache
         shell: bash
@@ -293,7 +297,12 @@ jobs:
 
   ios-build:
     name: iOS (device, ${{ matrix.config }}, build-only, unsigned)
-    runs-on: macos-26
+    # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+    # libwebp's arm64-ios build intermittently fails vcpkg_fixup_pkgconfig
+    # on macos-26 ("pkg-config --exists libsharpyuv failed") - a known,
+    # still-open vcpkg/pkgconf issue (microsoft/vcpkg#50681), not something
+    # to work around here. Revisit once that's resolved upstream.
+    runs-on: macos-15
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
     # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
@@ -397,7 +406,7 @@ jobs:
       # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
       # build-and-test above (X11 for bgfx, autotools for gperf).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr
