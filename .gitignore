@@ -1,3 +1,6 @@
+# Local Claude Code tool state (not project content)
+/.claude/
+
 # mkdocs build output
 /site/
 
