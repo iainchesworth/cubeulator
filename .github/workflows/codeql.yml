@@ -36,6 +36,24 @@ jobs:
           languages: cpp
           build-mode: manual
 
+      # This job configures the same linux-gcc-debug preset (and the same
+      # vcpkg manifest) as ci.yml's "Linux (GCC 15)" leg, so it shares that
+      # leg's cache key/scope: vcpkg's "files" binary cache backend replaces
+      # the removed x-gha provider, and actions/cache tolerates two jobs
+      # racing to populate the same key (whichever finishes first wins; the
+      # other just skips its own save harmlessly).
+      - name: Configure vcpkg binary cache
+        shell: bash
+        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-binary-cache-linux-gcc-debug-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binary-cache-linux-gcc-debug-
+
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
         with:
