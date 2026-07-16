@@ -7,6 +7,7 @@
   "license": "GPL-3.0-or-later",
   "builtin-baseline": "5b698638c97b4610044a254347d571f823e56557",
   "dependencies": [
+    "fmt",
     {
       "name": "opencv4",
       "platform": "!ios & !android"

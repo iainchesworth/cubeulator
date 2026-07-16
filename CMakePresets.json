@@ -114,9 +114,11 @@
       "hidden": true,
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build/${presetName}",
-      "toolchainFile": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
+      "toolchainFile": "${sourceDir}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_TARGET_TRIPLET": "arm64-android",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake",
         "ANDROID_ABI": "arm64-v8a",
         "ANDROID_PLATFORM": "android-28",
         "CUBEULATOR_BUILD_APP": "OFF",
@@ -143,7 +145,9 @@
         "lhs": "${hostSystemName}",
         "rhs": "Darwin"
       },
+      "toolchainFile": "${sourceDir}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake",
       "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "arm64-ios",
         "CMAKE_SYSTEM_NAME": "iOS",
         "CMAKE_OSX_SYSROOT": "iphoneos",
         "CMAKE_OSX_ARCHITECTURES": "arm64",

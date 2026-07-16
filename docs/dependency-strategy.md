@@ -2,9 +2,21 @@
 
 Cubeulator vendors [vcpkg](https://github.com/microsoft/vcpkg) as a pinned git
 submodule (manifest mode, `vcpkg.json`) for its C++ dependencies: Catch2,
-OpenCV, ONNX Runtime, and bgfx. Qt is a separate prebuilt install (aqtinstall /
-`jurplel/install-qt-action`), not a vcpkg dependency, for the same reasons
-CountdownSolver keeps it out of vcpkg (build size, Windows `MAX_PATH`).
+fmt, OpenCV, ONNX Runtime, and bgfx. Qt is a separate prebuilt install
+(aqtinstall / `jurplel/install-qt-action`), not a vcpkg dependency, for the
+same reasons CountdownSolver keeps it out of vcpkg (build size, Windows
+`MAX_PATH`).
+
+`fmt` is resolved via vcpkg on **every** triplet, including
+`arm64-android`/`arm64-ios` — unlike the three libraries below, it has no
+native/platform-specific code that makes mobile triplets risky, so the
+`android-clang-*`/`ios-clang-*` presets chainload vcpkg's toolchain on top of
+the NDK/iOS toolchain (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) specifically so
+`fmt` (and `Catch2` on desktop) resolve the same way everywhere.
+`cube::lib`'s `version.cpp` uses `fmt::format` rather than `std::format`
+because the Android NDK's `libc++` doesn't implement `<format>` (it needs
+locale support the NDK's minimal libc doesn't provide) — this was discovered
+via a real CI failure, not anticipated in advance.
 
 ## The gap
 

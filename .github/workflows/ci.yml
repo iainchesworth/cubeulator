@@ -72,6 +72,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y g++-15
 
+      # bgfx's vcpkg port unconditionally find_package(X11)s even with
+      # examples/tools disabled; GitHub's ubuntu-24.04 runner doesn't ship
+      # these dev headers by default (confirmed in CI: bgfx's source build
+      # failed with "Could NOT find X11").
+      - name: Install bgfx build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
@@ -124,6 +132,18 @@ jobs:
           sdkmanager --install "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
 
+      - name: Configure vcpkg binary cache
+        shell: bash
+        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-binary-cache-android-clang-debug-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binary-cache-android-clang-debug-
+
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
         with:
@@ -131,8 +151,9 @@ jobs:
 
       # No Qt install needed: the android-clang-* presets set
       # CUBEULATOR_BUILD_APP=OFF (see docs/dependency-strategy.md - mobile
-      # shells are native, not Qt/QML, and the mobile dependency wiring for
-      # OpenCV/ONNX Runtime/bgfx isn't implemented yet either).
+      # shells are native, not Qt/QML). vcpkg is used here only for fmt
+      # (chainloaded onto the NDK toolchain); OpenCV/ONNX Runtime/bgfx remain
+      # desktop-only - see docs/dependency-strategy.md.
       - name: Configure
         run: cmake --preset android-clang-debug
 
@@ -158,6 +179,18 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Configure vcpkg binary cache
+        shell: bash
+        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+      - name: Cache vcpkg binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-binary-cache-ios-clang-debug-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binary-cache-ios-clang-debug-
+
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
         with:
@@ -166,7 +199,8 @@ jobs:
       # Unsigned build only (see the ios-clang-* preset's
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
-      # comment above; the same reasoning applies here.
+      # comment above; the same reasoning applies here. vcpkg is used here
+      # only for fmt - see the android job comment above.
       - name: Configure
         run: cmake --preset ios-clang-debug
 
@@ -213,6 +247,11 @@ jobs:
           sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
           sudo apt-get update
           sudo apt-get install -y g++-15
+
+      # bgfx's vcpkg port unconditionally find_package(X11)s - see the
+      # equivalent comment in the build-and-test job above.
+      - name: Install bgfx build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr

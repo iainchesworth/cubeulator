@@ -1,7 +1,6 @@
 #include <cube/version.hpp>
 
-#include <format>
-#include <string>
+#include <fmt/format.h>
 
 namespace cube {
 
@@ -31,22 +30,22 @@ std::string build_target() {
 #endif
 
 #if defined(__clang__)
-    return std::format("{} {} (Clang {}.{}.{})", os, arch, __clang_major__, __clang_minor__,
+    return fmt::format("{} {} (Clang {}.{}.{})", os, arch, __clang_major__, __clang_minor__,
                         __clang_patchlevel__);
 #elif defined(_MSC_VER)
-    return std::format("{} {} (MSVC {})", os, arch, _MSC_VER);
+    return fmt::format("{} {} (MSVC {})", os, arch, _MSC_VER);
 #elif defined(__GNUC__)
-    return std::format("{} {} (GCC {}.{}.{})", os, arch, __GNUC__, __GNUC_MINOR__,
+    return fmt::format("{} {} (GCC {}.{}.{})", os, arch, __GNUC__, __GNUC_MINOR__,
                         __GNUC_PATCHLEVEL__);
 #else
-    return std::format("{} {} (unknown compiler)", os, arch);
+    return fmt::format("{} {} (unknown compiler)", os, arch);
 #endif
 }
 
 }  // namespace
 
 std::string version_details() {
-    return std::format(
+    return fmt::format(
         "Cubeulator {}\n"
         "  release: {}\n"
         "  commit:  {}\n"

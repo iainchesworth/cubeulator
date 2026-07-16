@@ -4,6 +4,13 @@
 add_library(cube_lib)
 add_library(cube::lib ALIAS cube_lib)
 
+# fmt fills the gap std::format leaves on Android: the NDK's libc++ doesn't
+# implement <format> (it needs locale support the NDK's minimal libc doesn't
+# provide). Resolved via vcpkg on every triplet, including mobile - unlike
+# opencv4/onnxruntime/bgfx, fmt has no native/platform-specific code to make
+# mobile triplets risky (see docs/dependency-strategy.md).
+find_package(fmt CONFIG REQUIRED)
+
 # --- Version + git stamp ---------------------------------------------------
 find_package(Git QUIET)
 set(CUBEULATOR_VERSION_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/cube/version.hpp.in")
@@ -49,4 +56,9 @@ target_include_directories(cube_lib
 
 target_compile_features(cube_lib PUBLIC cxx_std_23)
 
-target_link_libraries(cube_lib PRIVATE cube::warnings cube::sanitizers cube::coverage)
+target_link_libraries(cube_lib
+    PRIVATE
+        cube::warnings
+        cube::sanitizers
+        cube::coverage
+        fmt::fmt)
