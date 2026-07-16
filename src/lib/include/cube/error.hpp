@@ -37,20 +37,34 @@ enum class CubeError {
 
 [[nodiscard]] constexpr std::string_view to_string(CubeError error) noexcept {
     switch (error) {
-        case CubeError::invalid_cube_state:            return "the supplied cube state is not physically valid";
-        case CubeError::unsolvable_state:               return "no solution exists for this cube state";
-        case CubeError::invalid_move_sequence:          return "the move sequence contains an invalid move";
-        case CubeError::no_solution:                    return "no solution could be found";
-        case CubeError::camera_not_found:               return "no camera device was found";
-        case CubeError::camera_start_failed:            return "the camera could not be started";
-        case CubeError::no_valid_cube_detected:          return "no valid cube was detected in the frame";
-        case CubeError::face_capture_incomplete:        return "not all faces have been captured yet";
-        case CubeError::model_load_failed:              return "the inference model could not be loaded";
-        case CubeError::inference_provider_unavailable:  return "no suitable inference execution provider is available";
-        case CubeError::inference_failed:               return "inference failed to produce a result";
-        case CubeError::gpu_surface_unavailable:        return "no GPU-compatible render surface is available";
-        case CubeError::shader_compile_failed:          return "a shader failed to compile";
-        case CubeError::locale_resource_not_found:       return "a locale resource file could not be found";
+        case CubeError::invalid_cube_state:
+            return "the supplied cube state is not physically valid";
+        case CubeError::unsolvable_state:
+            return "no solution exists for this cube state";
+        case CubeError::invalid_move_sequence:
+            return "the move sequence contains an invalid move";
+        case CubeError::no_solution:
+            return "no solution could be found";
+        case CubeError::camera_not_found:
+            return "no camera device was found";
+        case CubeError::camera_start_failed:
+            return "the camera could not be started";
+        case CubeError::no_valid_cube_detected:
+            return "no valid cube was detected in the frame";
+        case CubeError::face_capture_incomplete:
+            return "not all faces have been captured yet";
+        case CubeError::model_load_failed:
+            return "the inference model could not be loaded";
+        case CubeError::inference_provider_unavailable:
+            return "no suitable inference execution provider is available";
+        case CubeError::inference_failed:
+            return "inference failed to produce a result";
+        case CubeError::gpu_surface_unavailable:
+            return "no GPU-compatible render surface is available";
+        case CubeError::shader_compile_failed:
+            return "a shader failed to compile";
+        case CubeError::locale_resource_not_found:
+            return "a locale resource file could not be found";
     }
     return "unknown error";
 }

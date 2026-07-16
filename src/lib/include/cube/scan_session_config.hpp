@@ -29,7 +29,9 @@ public:
         return std::forward<Self>(self);
     }
 
-    [[nodiscard]] const std::string& device_identifier() const noexcept { return device_identifier_; }
+    [[nodiscard]] const std::string& device_identifier() const noexcept {
+        return device_identifier_;
+    }
     [[nodiscard]] bool auto_advance() const noexcept { return auto_advance_; }
     [[nodiscard]] std::uint32_t frame_timeout_ms() const noexcept { return frame_timeout_ms_; }
 

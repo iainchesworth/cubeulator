@@ -3,9 +3,8 @@
 #include <cube/scan_session_config.hpp>
 
 TEST_CASE("ScanSessionConfig fluent builder chains and defaults sensibly", "[config]") {
-    const auto config = cube::ScanSessionConfig{}
-                             .with_device("front-camera")
-                             .with_auto_advance(true);
+    const auto config =
+        cube::ScanSessionConfig{}.with_device("front-camera").with_auto_advance(true);
 
     REQUIRE(config.device_identifier() == "front-camera");
     REQUIRE(config.auto_advance());

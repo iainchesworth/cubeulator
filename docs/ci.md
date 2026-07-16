@@ -4,7 +4,7 @@
 
 | Workflow | Purpose | Blocking? |
 | --- | --- | --- |
-| `ci.yml` | Build + test matrix (Linux/macOS/Windows), Android/iOS build-only, coverage gate | Yes (desktop legs + coverage) |
+| `ci.yml` | Build + test matrix (Linux/macOS/Windows, debug + release), Android/iOS build-only (debug + release), coverage gate | Yes (desktop legs + coverage) |
 | `codeql.yml` | Static analysis (C++) | Yes |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes |
 | `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes |
@@ -18,8 +18,9 @@ configured as required on `main`.
 
 ## Dependencies
 
-vcpkg (vendored submodule, manifest mode) supplies Catch2, OpenCV, ONNX
-Runtime, and bgfx on desktop triplets. Qt is a separate prebuilt install
+vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
+Runtime, and bgfx on desktop triplets (fmt also resolves on mobile triplets
+via a chainloaded toolchain — see below). Qt is a separate prebuilt install
 (`jurplel/install-qt-action` in CI, `ci/install-qt.*` locally) — kept out of
 vcpkg for build size and Windows `MAX_PATH` reasons.
 
