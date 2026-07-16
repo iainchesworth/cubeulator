@@ -71,9 +71,14 @@ jobs:
           sudo apt-get install -y g++-15
 
       # bgfx's vcpkg port unconditionally find_package(X11)s - see the
-      # equivalent comment on build-and-test below.
-      - name: Install bgfx build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+      # equivalent comment on build-and-test below. autoconf-archive/libtool
+      # are for gperf, a transitive dependency built from source via
+      # autotools - previously masked by the vcpkg binary cache (keyed on
+      # vcpkg.json's hash) until that file changed for the first time
+      # (confirmed in CI: gperf failed with "requires autoconf
+      # autoconf-archive automake libtoolize").
+      - name: Install Linux build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       - name: Install clang-tidy
         run: sudo apt-get install -y clang-tidy
@@ -128,10 +133,10 @@ jobs:
             os: ubuntu-24.04
             preset: linux-gcc-release
           - name: macOS (AppleClang, Debug)
-            os: macos-15
+            os: macos-26
             preset: macos-clang-debug
           - name: macOS (AppleClang, Release)
-            os: macos-15
+            os: macos-26
             preset: macos-clang-release
           - name: Windows (MSVC, Debug)
             os: windows-2025
@@ -184,10 +189,12 @@ jobs:
       # bgfx's vcpkg port unconditionally find_package(X11)s even with
       # examples/tools disabled; GitHub's ubuntu-24.04 runner doesn't ship
       # these dev headers by default (confirmed in CI: bgfx's source build
-      # failed with "Could NOT find X11").
-      - name: Install bgfx build dependencies (Linux)
+      # failed with "Could NOT find X11"). autoconf-archive/libtool are for
+      # gperf, a transitive dependency built from source via autotools - see
+      # the equivalent comment on clang-tidy above.
+      - name: Install Linux build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -251,6 +258,14 @@ jobs:
           sdkmanager --install "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
 
+      # gperf (a transitive dependency, built as a host tool regardless of
+      # target triplet) needs these from the system package manager to build
+      # from source via autotools - see the equivalent comment on clang-tidy
+      # in build-and-test above. No X11/GL packages needed here: bgfx.cmake
+      # explicitly excludes ANDROID from its X11 path.
+      - name: Install Linux build dependencies
+        run: sudo apt-get install -y autoconf autoconf-archive automake libtool
+
       - name: Configure vcpkg binary cache
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
@@ -282,7 +297,7 @@ jobs:
 
   ios-build:
     name: iOS (device, ${{ matrix.config }}, build-only, unsigned)
-    runs-on: macos-15
+    runs-on: macos-26
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
     # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
@@ -384,9 +399,11 @@ jobs:
           sudo apt-get install -y g++-15
 
       # bgfx's vcpkg port unconditionally find_package(X11)s - see the
-      # equivalent comment in the build-and-test job above.
-      - name: Install bgfx build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+      # equivalent comment in the build-and-test job above. autoconf-archive/
+      # libtool are for gperf - see the equivalent comment on clang-tidy
+      # above.
+      - name: Install Linux build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool
 
       - name: Install gcovr
         run: pip install --quiet gcovr
