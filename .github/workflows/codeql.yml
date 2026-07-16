@@ -22,9 +22,12 @@ jobs:
       contents: read
 
     steps:
+      # fetch-depth: 0 is required for vcpkg's version resolution against the
+      # deps/vcpkg submodule — see the equivalent comment in ci.yml.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Initialize CodeQL

@@ -32,9 +32,17 @@ jobs:
             preset: windows-msvc-debug
 
     steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
 
       # vcpkg's x-gha binary caching provider was removed; 'files' +
@@ -95,9 +103,17 @@ jobs:
     continue-on-error: true
 
     steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install Android SDK
@@ -129,9 +145,17 @@ jobs:
     continue-on-error: true
 
     steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Install CMake 4 + Ninja
@@ -154,9 +178,17 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           submodules: recursive
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Configure vcpkg binary cache
