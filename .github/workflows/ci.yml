@@ -51,13 +51,16 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and the coverage job - see the fuller comment there on
+      # why per-preset keys were wasteful/over quota.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-linux-gcc-debug-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-linux-gcc-debug-
+            vcpkg-binary-cache-x64-linux-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -140,21 +143,27 @@ jobs:
           - name: Linux (GCC 15, Debug)
             os: ubuntu-24.04
             preset: linux-gcc-debug
+            triplet: x64-linux
           - name: Linux (GCC 15, Release)
             os: ubuntu-24.04
             preset: linux-gcc-release
+            triplet: x64-linux
           - name: macOS (AppleClang, Debug)
             os: macos-15
             preset: macos-clang-debug
+            triplet: arm64-osx
           - name: macOS (AppleClang, Release)
             os: macos-15
             preset: macos-clang-release
+            triplet: arm64-osx
           - name: Windows (MSVC, Debug)
             os: windows-2025
             preset: windows-msvc-debug
+            triplet: x64-windows
           - name: Windows (MSVC, Release)
             os: windows-2025
             preset: windows-msvc-release
+            triplet: x64-windows
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -177,13 +186,22 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet, not per CMake preset: vcpkg builds both
+      # debug and release variants of every package together in one pass,
+      # regardless of our own project's build type, so linux-gcc-debug and
+      # linux-gcc-release (same x64-linux triplet) would otherwise each
+      # cache a near-identical ~1.8GB copy of opencv4/onnxruntime/bgfx.
+      # GitHub's 10GB-per-repo cache cap was being exceeded by this
+      # duplication across every preset/triplet combination, causing
+      # semi-random eviction (confirmed via the cache usage API - 10.7GB
+      # across 15 entries, over the limit).
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-${{ matrix.preset }}-
+            vcpkg-binary-cache-${{ matrix.triplet }}-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -268,13 +286,18 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (arm64-android), shared across debug/release -
+      # see the fuller comment on build-and-test above on why per-preset keys
+      # were wasteful/over the 10GB cap (fmt is the only dependency resolved
+      # here, so this one was never a big contributor, but keeping the same
+      # scheme everywhere avoids reintroducing the same mistake later).
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-android-clang-${{ matrix.config }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-arm64-android-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-android-clang-${{ matrix.config }}-
+            vcpkg-binary-cache-arm64-android-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -319,13 +342,15 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (arm64-ios), shared across debug/release -
+      # see the equivalent comment on android-build above.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-ios-clang-${{ matrix.config }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-arm64-ios-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-ios-clang-${{ matrix.config }}-
+            vcpkg-binary-cache-arm64-ios-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -370,13 +395,16 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and clang-tidy - see the fuller comment on build-and-test
+      # above on why per-preset keys were wasteful/over the 10GB cap.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-linux-gcc-coverage-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-linux-gcc-coverage-
+            vcpkg-binary-cache-x64-linux-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
