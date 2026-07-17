@@ -73,7 +73,27 @@ function(cube_import_bgfx)
     endif()
 endfunction()
 
+# CMake's FindThreads (transitively pulled in by abseil, itself pulled in by
+# protobuf/opencv4) fails outright under this project's NDK-chainloaded-under-
+# vcpkg toolchain: every detection strategy it tries fails in sequence -
+# CMAKE_HAVE_LIBC_PTHREAD's try_compile, -lpthreads, -lpthread, and even
+# "does the compiler accept -pthread" all report failure (confirmed in CI) -
+# which points to try_compile()'s isolated sub-invocation not correctly
+# inheriting the chainloaded NDK toolchain, not an actual absence of thread
+# support. Android's Bionic libc has bundled pthreads since API 21 (this
+# project targets API 28), so pre-seeding CMAKE_HAVE_LIBC_PTHREAD as a cached
+# TRUE - the standard workaround for this class of NDK/CMake interaction bug
+# - makes FindThreads skip its broken detection and use the (correct) libc
+# answer directly, without needing to fix the underlying toolchain plumbing.
+function(cube_workaround_android_findthreads)
+    set(CMAKE_HAVE_LIBC_PTHREAD 1 CACHE INTERNAL "Pre-seeded: Android's Bionic libc bundles pthreads (API 21+)")
+endfunction()
+
 function(cube_configure_mobile_dependencies)
+    if(ANDROID)
+        cube_workaround_android_findthreads()
+    endif()
+
     cube_import_opencv()
     cube_import_onnxruntime()
     cube_import_bgfx()
