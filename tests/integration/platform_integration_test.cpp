@@ -20,7 +20,12 @@ namespace {
 // other tests. A null value unsets the variable for the scope's duration.
 class ScopedEnvVar {
 public:
-    ScopedEnvVar(const char* name, const char* value) : name_(name) {
+    // name/value are always passed as literals at the call site (the
+    // variable being overridden, and its temporary value), so a same-type
+    // swap isn't a realistic risk here.
+    ScopedEnvVar(const char* name,  // NOLINT(bugprone-easily-swappable-parameters)
+                 const char* value)
+        : name_(name) {
         if (const char* existing = std::getenv(name)) {
             previous_ = existing;
         }
@@ -41,6 +46,8 @@ public:
 
     ScopedEnvVar(const ScopedEnvVar&) = delete;
     ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+    ScopedEnvVar(ScopedEnvVar&&) = delete;
+    ScopedEnvVar& operator=(ScopedEnvVar&&) = delete;
 
 private:
     std::string name_;
