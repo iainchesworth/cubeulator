@@ -28,6 +28,14 @@ Android/iOS are build-only for now: mobile shells are planned to be native
 bgfx on the mobile triplets too, the same way as desktop — see
 [Dependency strategy](dependency-strategy.md).
 
+`android-clang-{debug,release}` set `CMAKE_CXX_SCAN_FOR_MODULES=OFF`: CMake's
+Ninja generator auto-enables C++20 modules dependency scanning (needs
+`clang-scan-deps`), which the Android NDK's bundled LLVM toolchain doesn't
+expose in a way CMake can locate when chainloaded under vcpkg's toolchain
+file — confirmed in CI (`CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS-NOTFOUND`). The
+project doesn't use C++ modules, so disabling the scan avoids the missing
+tool entirely rather than chasing its exact path per NDK version.
+
 ## Options
 
 - `CUBEULATOR_BUILD_APP` (default `ON`) — builds the Qt6 GUI shell. Off by
