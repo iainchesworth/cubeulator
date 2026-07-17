@@ -8,11 +8,13 @@ include(Catch)
 add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
-    unit/scan_session_config_test.cpp)
+    unit/scan_session_config_test.cpp
+    unit/lib_stub_functions_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
         cube::lib
+        cube::gpu_render
         cube::warnings
         cube::sanitizers
         cube::coverage
