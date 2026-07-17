@@ -51,13 +51,16 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and the coverage job - see the fuller comment there on
+      # why per-preset keys were wasteful/over quota.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-linux-gcc-debug-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-linux-gcc-debug-
+            vcpkg-binary-cache-x64-linux-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -122,32 +125,33 @@ jobs:
     # enough that 4 of them compiling at once exceeds the runner's memory.
     env:
       VCPKG_MAX_CONCURRENCY: "2"
+    # CI only builds the Release preset per platform - it's what would
+    # actually ship, and vcpkg builds both debug/release variants of every
+    # dependency together in one pass regardless, so a Debug leg here would
+    # mostly just re-verify the same dependency build under a different
+    # CMAKE_BUILD_TYPE. Debug remains fully available locally (`cmake
+    # --preset <platform>-debug`) or via a personal CMakeUserPresets.json -
+    # it's just not something CI needs to babysit on every push.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux (GCC 15, Debug)
-            os: ubuntu-26.04
-            preset: linux-gcc-debug
-          - name: Linux (GCC 15, Release)
+          - name: Linux (GCC 15)
             os: ubuntu-26.04
             preset: linux-gcc-release
+            triplet: x64-linux
           # Pinned to macos-15, not the newer macos-26: confirmed in CI that
           # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
           # links unconditionally on macOS ("ld: framework 'AGL' not
           # found"). Revisit once Qt or vcpkg's mobile ports account for it.
-          - name: macOS (AppleClang, Debug)
-            os: macos-15
-            preset: macos-clang-debug
-          - name: macOS (AppleClang, Release)
+          - name: macOS (AppleClang)
             os: macos-15
             preset: macos-clang-release
-          - name: Windows (MSVC, Debug)
-            os: windows-2025-vs2026
-            preset: windows-msvc-debug
-          - name: Windows (MSVC, Release)
+            triplet: arm64-osx
+          - name: Windows (MSVC)
             os: windows-2025-vs2026
             preset: windows-msvc-release
+            triplet: x64-windows
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -170,13 +174,22 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet, not per CMake preset: vcpkg builds both
+      # debug and release variants of every package together in one pass,
+      # regardless of our own project's build type, so linux-gcc-debug and
+      # linux-gcc-release (same x64-linux triplet) would otherwise each
+      # cache a near-identical ~1.8GB copy of opencv4/onnxruntime/bgfx.
+      # GitHub's 10GB-per-repo cache cap was being exceeded by this
+      # duplication across every preset/triplet combination, causing
+      # semi-random eviction (confirmed via the cache usage API - 10.7GB
+      # across 15 entries, over the limit).
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-${{ matrix.preset }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-${{ matrix.preset }}-
+            vcpkg-binary-cache-${{ matrix.triplet }}-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -225,7 +238,7 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   android-build:
-    name: Android (arm64-v8a, ${{ matrix.config }}, build-only)
+    name: Android (arm64-v8a, build-only)
     runs-on: ubuntu-26.04
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
@@ -234,10 +247,6 @@ jobs:
     # OOM'd desktop runners at default parallelism.
     env:
       VCPKG_MAX_CONCURRENCY: "2"
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [debug, release]
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -273,13 +282,17 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (arm64-android) - see the fuller comment on
+      # build-and-test above on why per-preset keys were wasteful/over the
+      # 10GB cap; keeping the same scheme everywhere avoids reintroducing the
+      # same mistake later.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-android-clang-${{ matrix.config }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-arm64-android-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-android-clang-${{ matrix.config }}-
+            vcpkg-binary-cache-arm64-android-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -291,15 +304,16 @@ jobs:
       # shells are native, not Qt/QML). vcpkg now builds opencv4/onnxruntime/
       # bgfx here too, chainloaded onto the NDK toolchain the same way as
       # fmt - see docs/dependency-strategy.md. No libx11-dev install needed:
-      # bgfx.cmake explicitly excludes ANDROID from its X11 path.
+      # bgfx.cmake explicitly excludes ANDROID from its X11 path. Release
+      # only - see the equivalent comment on build-and-test above.
       - name: Configure
-        run: cmake --preset android-clang-${{ matrix.config }}
+        run: cmake --preset android-clang-release
 
       - name: Build
-        run: cmake --build --preset android-clang-${{ matrix.config }}
+        run: cmake --build --preset android-clang-release
 
   ios-build:
-    name: iOS (device, ${{ matrix.config }}, build-only, unsigned)
+    name: iOS (device, build-only, unsigned)
     # Pinned to macos-15, not the newer macos-26: confirmed in CI that
     # libwebp's arm64-ios build intermittently fails vcpkg_fixup_pkgconfig
     # on macos-26 ("pkg-config --exists libsharpyuv failed") - a known,
@@ -313,10 +327,6 @@ jobs:
     # OOM'd desktop runners at default parallelism.
     env:
       VCPKG_MAX_CONCURRENCY: "2"
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [debug, release]
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -336,13 +346,15 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (arm64-ios), shared across debug/release -
+      # see the equivalent comment on android-build above.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-ios-clang-${{ matrix.config }}-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-arm64-ios-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-ios-clang-${{ matrix.config }}-
+            vcpkg-binary-cache-arm64-ios-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -353,12 +365,14 @@ jobs:
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
       # comment above; the same reasoning applies here. vcpkg now builds
-      # opencv4/onnxruntime/bgfx here too - see the android job comment above.
+      # opencv4/onnxruntime/bgfx here too - see the android job comment
+      # above. Release only - see the equivalent comment on build-and-test
+      # above.
       - name: Configure
-        run: cmake --preset ios-clang-${{ matrix.config }}
+        run: cmake --preset ios-clang-release
 
       - name: Build
-        run: cmake --build --preset ios-clang-${{ matrix.config }}
+        run: cmake --build --preset ios-clang-release
 
   coverage:
     name: Coverage (Linux, GCC)
@@ -387,13 +401,16 @@ jobs:
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and clang-tidy - see the fuller comment on build-and-test
+      # above on why per-preset keys were wasteful/over the 10GB cap.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-linux-gcc-coverage-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-binary-cache-linux-gcc-coverage-
+            vcpkg-binary-cache-x64-linux-
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
