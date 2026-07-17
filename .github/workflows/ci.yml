@@ -16,7 +16,7 @@ permissions:
 jobs:
   clang-format:
     name: clang-format
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -32,7 +32,7 @@ jobs:
 
   clang-tidy:
     name: clang-tidy
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Caps vcpkg's internal build parallelism - see the equivalent comment
     # on build-and-test below (onnxruntime OOM'd this runner at full nproc
     # parallelism).
@@ -67,35 +67,24 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxtst-dev autoconf autoconf-archive automake libtool libltdl-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
 
       # clang-tidy uses its own clang frontend to parse the compile commands
       # regardless of which compiler actually built the code, so this job
       # compiles with clang++ rather than GCC to avoid a cross-toolchain
       # parsing mismatch entirely (it only needs to statically analyze the
       # code, not test GCC-specific behavior - that's the build-and-test
-      # job's Linux leg). But Ubuntu 24.04's *default* apt clang/clang-tidy
-      # package is 1:18.0 (noble's stock version), which still can't parse
-      # <expected> at all even when matched against its own clang-compiled
-      # code - cascading into the same "no template named 'Result'"/"no
-      # member 'expected'" errors on every file (confirmed in CI; a newer
-      # default on a different Debian-based distro used for local validation
-      # masked this). Installing a specific modern Clang from LLVM's own apt
-      # repository - the same pattern CountdownSolver uses for its Clang 21
-      # leg - fixes it. The signing key is pinned by checksum before use
-      # rather than piping https://apt.llvm.org/llvm.sh through sudo.
+      # job's Linux leg). Ubuntu 24.04's *default* apt clang/clang-tidy
+      # package was 1:18.0 (noble's stock version), too old to parse
+      # <expected> at all - cascading into "no template named 'Result'"/"no
+      # member 'expected'" errors on every file (confirmed in CI on that
+      # image). ubuntu-26.04 ships clang-21 directly (20/21/22 side by side),
+      # so no LLVM apt-repo pin is needed anymore - just install it.
       - name: Install Clang 21
-        run: |
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key -o /tmp/llvm-snapshot.gpg.key
-          echo "8b2a587ffd672c4687e7581dad4b2f6c1bb2ad6b480cd9771ba2ff48e0b8c75d  /tmp/llvm-snapshot.gpg.key" | sha256sum -c -
-          sudo install -m 0755 -d /etc/apt/keyrings
-          sudo gpg --dearmor -o /etc/apt/keyrings/llvm-snapshot.gpg /tmp/llvm-snapshot.gpg.key
-          echo "deb [signed-by=/etc/apt/keyrings/llvm-snapshot.gpg] http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-21 main" | sudo tee /etc/apt/sources.list.d/llvm.list
-          sudo apt-get update
-          sudo apt-get install -y clang-21 clang-tidy-21
+        run: sudo apt-get install -y clang-21 clang-tidy-21
 
       - name: Configure (library + platform only, no Qt app)
         run: >
@@ -148,15 +137,19 @@ jobs:
       matrix:
         include:
           - name: Linux (GCC 15)
-            os: ubuntu-24.04
+            os: ubuntu-26.04
             preset: linux-gcc-release
             triplet: x64-linux
+          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
+          # links unconditionally on macOS ("ld: framework 'AGL' not
+          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
           - name: macOS (AppleClang)
             os: macos-15
             preset: macos-clang-release
             triplet: arm64-osx
           - name: Windows (MSVC)
-            os: windows-2025
+            os: windows-2025-vs2026
             preset: windows-msvc-release
             triplet: x64-windows
 
@@ -203,14 +196,12 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      - name: Install GCC 15 (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y g++-15
-
-      # Two distinct vcpkg build gaps on a stock ubuntu-24.04 runner: (1)
+      # No separate GCC 15 install step needed here: ubuntu-26.04 ships
+      # GCC 13/14/15 side by side out of the box (unlike ubuntu-24.04, which
+      # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
+      # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
+      #
+      # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
       # bgfx's port unconditionally find_package(X11)s even with
       # examples/tools disabled ("Could NOT find X11"); (2) gperf (a
       # transitive dependency via gettext, itself pulled in by
@@ -219,7 +210,7 @@ jobs:
       # libtoolize"). Both confirmed in CI.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxtst-dev autoconf autoconf-archive automake libtool libltdl-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -248,8 +239,17 @@ jobs:
 
   android-build:
     name: Android (arm64-v8a, build-only)
-    runs-on: ubuntu-24.04
+    # ubuntu-26.04, matching every other build agent - see the diagnostic
+    # step below for why this needed a closer look before deciding whether
+    # to stay here.
+    runs-on: ubuntu-26.04
     continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -273,15 +273,22 @@ jobs:
           sdkmanager --install "ndk;26.1.10909125"
           echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
 
+      # gperf (a transitive dependency, built as a host tool regardless of
+      # target triplet) needs these from the system package manager to build
+      # from source via autotools - see the equivalent comment on clang-tidy
+      # in build-and-test above. No X11/GL packages needed here: bgfx.cmake
+      # explicitly excludes ANDROID from its X11 path.
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y autoconf autoconf-archive automake libtool libltdl-dev
+
       - name: Configure vcpkg binary cache
         shell: bash
         run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
 
-      # Keyed per vcpkg triplet (arm64-android), shared across debug/release -
-      # see the fuller comment on build-and-test above on why per-preset keys
-      # were wasteful/over the 10GB cap (fmt is the only dependency resolved
-      # here, so this one was never a big contributor, but keeping the same
-      # scheme everywhere avoids reintroducing the same mistake later).
+      # Keyed per vcpkg triplet (arm64-android) - see the fuller comment on
+      # build-and-test above on why per-preset keys were wasteful/over the
+      # 10GB cap; keeping the same scheme everywhere avoids reintroducing the
+      # same mistake later.
       - name: Cache vcpkg binaries
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
@@ -297,20 +304,59 @@ jobs:
 
       # No Qt install needed: the android-clang-* presets set
       # CUBEULATOR_BUILD_APP=OFF (see docs/dependency-strategy.md - mobile
-      # shells are native, not Qt/QML). vcpkg is used here only for fmt
-      # (chainloaded onto the NDK toolchain); OpenCV/ONNX Runtime/bgfx remain
-      # desktop-only - see docs/dependency-strategy.md. Release only - see
-      # the equivalent comment on build-and-test above.
+      # shells are native, not Qt/QML). vcpkg now builds opencv4/onnxruntime/
+      # bgfx here too, chainloaded onto the NDK toolchain the same way as
+      # fmt - see docs/dependency-strategy.md. No libx11-dev install needed:
+      # bgfx.cmake explicitly excludes ANDROID from its X11 path. Release
+      # only - see the equivalent comment on build-and-test above.
       - name: Configure
         run: cmake --preset android-clang-release
+
+      # CMake's Check*/Find* modules (e.g. FindThreads) only print "Failed"
+      # to the main log on failure - the actual compiler/linker error only
+      # ever lands in CMakeError.log/CMakeOutput.log inside the build tree.
+      # The first attempt at this diagnostic assumed a fixed path and found
+      # nothing there (confirmed in CI: the assumed path didn't exist, or
+      # CMake never flushed it before the FATAL_ERROR unwound) - this version
+      # searches the whole build tree instead of guessing a path, and also
+      # dumps the relevant CMakeCache.txt entries in case a stale cached
+      # try_compile result (not a fresh failure) is the real culprit.
+      - name: Dump CMake diagnostics on configure failure
+        if: failure()
+        run: |
+          echo "::group::find build -iname CMakeError.log/CMakeOutput.log"
+          find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" || true
+          echo "::endgroup::"
+          while IFS= read -r f; do
+            echo "::group::$f"
+            cat "$f" || true
+            echo "::endgroup::"
+          done < <(find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" 2>/dev/null || true)
+          echo "::group::build/android-clang-release/CMakeFiles listing"
+          find build/android-clang-release/CMakeFiles -maxdepth 1 2>&1 || true
+          echo "::endgroup::"
+          echo "::group::CMakeCache.txt PTHREAD/THREADS entries"
+          grep -i "pthread\|thread" build/android-clang-release/CMakeCache.txt 2>&1 || true
+          echo "::endgroup::"
 
       - name: Build
         run: cmake --build --preset android-clang-release
 
   ios-build:
     name: iOS (device, build-only, unsigned)
+    # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+    # libwebp's arm64-ios build intermittently fails vcpkg_fixup_pkgconfig
+    # on macos-26 ("pkg-config --exists libsharpyuv failed") - a known,
+    # still-open vcpkg/pkgconf issue (microsoft/vcpkg#50681), not something
+    # to work around here. Revisit once that's resolved upstream.
     runs-on: macos-15
     continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -348,9 +394,10 @@ jobs:
       # Unsigned build only (see the ios-clang-* preset's
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
-      # comment above; the same reasoning applies here. vcpkg is used here
-      # only for fmt - see the android job comment above. Release only - see
-      # the equivalent comment on build-and-test above.
+      # comment above; the same reasoning applies here. vcpkg now builds
+      # opencv4/onnxruntime/bgfx here too - see the android job comment
+      # above. Release only - see the equivalent comment on build-and-test
+      # above.
       - name: Configure
         run: cmake --preset ios-clang-release
 
@@ -359,7 +406,7 @@ jobs:
 
   coverage:
     name: Coverage (Linux, GCC)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     # Caps vcpkg's internal build parallelism - see the equivalent comment
     # on build-and-test above (onnxruntime OOM'd this runner at full nproc
     # parallelism).
@@ -400,16 +447,13 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      - name: Install GCC 15 (Linux)
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y g++-15
-
-      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
+      # out of the box - see the equivalent comment on build-and-test above.
+      #
+      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test above (X11 for bgfx, autotools for gperf).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxtst-dev autoconf autoconf-archive automake libtool libltdl-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr

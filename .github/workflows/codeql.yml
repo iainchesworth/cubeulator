@@ -16,7 +16,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (C++)
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       security-events: write
       contents: read
@@ -66,16 +66,14 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      - name: Install GCC 15
-        run: |
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
-          sudo apt-get update
-          sudo apt-get install -y g++-15
-
-      # Two vcpkg build gaps on ubuntu-24.04 - see the fuller comment on
+      # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
+      # out of the box - see the equivalent comment on ci.yml's build-and-test
+      # job.
+      #
+      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libxtst-dev autoconf autoconf-archive automake libtool libltdl-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
 
       # Sanitizers disabled: CodeQL's build tracer sets its own LD_PRELOAD for
       # the whole build step, which collides with ASan needing to be first in
