@@ -315,18 +315,29 @@ jobs:
       # CMake's Check*/Find* modules (e.g. FindThreads) only print "Failed"
       # to the main log on failure - the actual compiler/linker error only
       # ever lands in CMakeError.log/CMakeOutput.log inside the build tree.
-      # Surfaces those here so a configure failure is diagnosable from the
-      # Actions log directly instead of guessing blind.
-      - name: Dump CMake error/output logs on configure failure
+      # The first attempt at this diagnostic assumed a fixed path and found
+      # nothing there (confirmed in CI: the assumed path didn't exist, or
+      # CMake never flushed it before the FATAL_ERROR unwound) - this version
+      # searches the whole build tree instead of guessing a path, and also
+      # dumps the relevant CMakeCache.txt entries in case a stale cached
+      # try_compile result (not a fresh failure) is the real culprit.
+      - name: Dump CMake diagnostics on configure failure
         if: failure()
         run: |
-          for f in build/android-clang-release/CMakeFiles/CMakeError.log build/android-clang-release/CMakeFiles/CMakeOutput.log; do
-            if [ -f "$f" ]; then
-              echo "::group::$f"
-              cat "$f"
-              echo "::endgroup::"
-            fi
-          done
+          echo "::group::find build -iname CMakeError.log/CMakeOutput.log"
+          find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" || true
+          echo "::endgroup::"
+          while IFS= read -r f; do
+            echo "::group::$f"
+            cat "$f" || true
+            echo "::endgroup::"
+          done < <(find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" 2>/dev/null || true)
+          echo "::group::build/android-clang-release/CMakeFiles listing"
+          find build/android-clang-release/CMakeFiles -maxdepth 1 2>&1 || true
+          echo "::endgroup::"
+          echo "::group::CMakeCache.txt PTHREAD/THREADS entries"
+          grep -i "pthread\|thread" build/android-clang-release/CMakeCache.txt 2>&1 || true
+          echo "::endgroup::"
 
       - name: Build
         run: cmake --build --preset android-clang-release
