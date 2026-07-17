@@ -239,7 +239,15 @@ jobs:
 
   android-build:
     name: Android (arm64-v8a, build-only)
-    runs-on: ubuntu-26.04
+    # Pinned to ubuntu-24.04, not ubuntu-26.04: this job doesn't actually
+    # benefit from the newer host GCC/Clang the other jobs were bumped for -
+    # Android compiles exclusively via the NDK's own bundled Clang, not the
+    # host toolchain. Confirmed in CI: on ubuntu-26.04, CMake's
+    # CMAKE_HAVE_LIBC_PTHREAD/find_package(Threads) detection fails outright
+    # under NDK 26's cross-compilation (surfaced via
+    # cube_import_opencv -> OpenCV -> protobuf -> abseil -> Threads), where
+    # it had always worked cleanly on ubuntu-24.04.
+    runs-on: ubuntu-24.04
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
     # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
