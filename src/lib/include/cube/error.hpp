@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <expected>
 #include <string_view>
 
@@ -9,7 +10,7 @@ namespace cube {
 // rather than by throwing. Combined with `Result<T>` (an alias for
 // std::expected) this lets call sites compose with the C++23 monadic
 // operations (and_then / transform / or_else) instead of try/catch.
-enum class CubeError {
+enum class CubeError : std::uint8_t {
     // Cube state / solver
     invalid_cube_state,
     unsolvable_state,

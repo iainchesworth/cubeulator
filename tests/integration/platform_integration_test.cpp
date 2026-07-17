@@ -15,15 +15,25 @@
 namespace {
 
 // Saves an environment variable's value on construction and restores it on
-// destruction, so tests can exercise the XDG-set branch of paths_linux.cpp /
-// inference_env_linux.cpp without leaking state into other tests.
+// destruction, so tests can exercise both the XDG-set and XDG-unset branches
+// of paths_linux.cpp / inference_env_linux.cpp without leaking state into
+// other tests. A null value unsets the variable for the scope's duration.
 class ScopedEnvVar {
 public:
-    ScopedEnvVar(const char* name, const char* value) : name_(name) {
+    // name/value are always passed as literals at the call site (the
+    // variable being overridden, and its temporary value), so a same-type
+    // swap isn't a realistic risk here.
+    ScopedEnvVar(const char* name,  // NOLINT(bugprone-easily-swappable-parameters)
+                 const char* value)
+        : name_(name) {
         if (const char* existing = std::getenv(name)) {
             previous_ = existing;
         }
-        setenv(name_.c_str(), value, 1);
+        if (value != nullptr) {
+            setenv(name_.c_str(), value, 1);
+        } else {
+            unsetenv(name_.c_str());
+        }
     }
 
     ~ScopedEnvVar() {
@@ -36,6 +46,8 @@ public:
 
     ScopedEnvVar(const ScopedEnvVar&) = delete;
     ScopedEnvVar& operator=(const ScopedEnvVar&) = delete;
+    ScopedEnvVar(ScopedEnvVar&&) = delete;
+    ScopedEnvVar& operator=(ScopedEnvVar&&) = delete;
 
 private:
     std::string name_;
@@ -97,5 +109,25 @@ TEST_CASE("inference_env::current prefers XDG_DATA_HOME when set",
 
     const auto env = cube::platform::inference_env::current();
     REQUIRE(env.model_search_path == "/tmp/cubeulator-test-data/cubeulator/models");
+}
+
+TEST_CASE("paths::current falls back to an empty path when neither XDG nor HOME is set",
+          "[integration][platform][linux]") {
+    ScopedEnvVar config_home("XDG_CONFIG_HOME", nullptr);
+    ScopedEnvVar cache_home("XDG_CACHE_HOME", nullptr);
+    ScopedEnvVar home("HOME", nullptr);
+
+    const auto paths = cube::platform::paths::current();
+    REQUIRE(paths.data_dir.empty());
+    REQUIRE(paths.cache_dir.empty());
+}
+
+TEST_CASE("inference_env::current falls back to an empty path when neither XDG nor HOME is set",
+          "[integration][platform][linux]") {
+    ScopedEnvVar data_home("XDG_DATA_HOME", nullptr);
+    ScopedEnvVar home("HOME", nullptr);
+
+    const auto env = cube::platform::inference_env::current();
+    REQUIRE(env.model_search_path.empty());
 }
 #endif
