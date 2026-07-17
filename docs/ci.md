@@ -4,7 +4,7 @@
 
 | Workflow | Purpose | Blocking? |
 | --- | --- | --- |
-| `ci.yml` | Build + test matrix (Linux/macOS/Windows, debug + release), Android/iOS build-only (debug + release), coverage gate | Yes (desktop legs + coverage) |
+| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android/iOS build-only (release only), coverage gate | Yes (desktop legs + coverage) |
 | `codeql.yml` | Static analysis (C++) | Yes |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes |
 | `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes |

@@ -136,31 +136,26 @@ jobs:
     # enough that 4 of them compiling at once exceeds the runner's memory.
     env:
       VCPKG_MAX_CONCURRENCY: "2"
+    # CI only builds the Release preset per platform - it's what would
+    # actually ship, and vcpkg builds both debug/release variants of every
+    # dependency together in one pass regardless, so a Debug leg here would
+    # mostly just re-verify the same dependency build under a different
+    # CMAKE_BUILD_TYPE. Debug remains fully available locally (`cmake
+    # --preset <platform>-debug`) or via a personal CMakeUserPresets.json -
+    # it's just not something CI needs to babysit on every push.
     strategy:
       fail-fast: false
       matrix:
         include:
-          - name: Linux (GCC 15, Debug)
-            os: ubuntu-24.04
-            preset: linux-gcc-debug
-            triplet: x64-linux
-          - name: Linux (GCC 15, Release)
+          - name: Linux (GCC 15)
             os: ubuntu-24.04
             preset: linux-gcc-release
             triplet: x64-linux
-          - name: macOS (AppleClang, Debug)
-            os: macos-15
-            preset: macos-clang-debug
-            triplet: arm64-osx
-          - name: macOS (AppleClang, Release)
+          - name: macOS (AppleClang)
             os: macos-15
             preset: macos-clang-release
             triplet: arm64-osx
-          - name: Windows (MSVC, Debug)
-            os: windows-2025
-            preset: windows-msvc-debug
-            triplet: x64-windows
-          - name: Windows (MSVC, Release)
+          - name: Windows (MSVC)
             os: windows-2025
             preset: windows-msvc-release
             triplet: x64-windows
@@ -252,13 +247,9 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   android-build:
-    name: Android (arm64-v8a, ${{ matrix.config }}, build-only)
+    name: Android (arm64-v8a, build-only)
     runs-on: ubuntu-24.04
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [debug, release]
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -308,21 +299,18 @@ jobs:
       # CUBEULATOR_BUILD_APP=OFF (see docs/dependency-strategy.md - mobile
       # shells are native, not Qt/QML). vcpkg is used here only for fmt
       # (chainloaded onto the NDK toolchain); OpenCV/ONNX Runtime/bgfx remain
-      # desktop-only - see docs/dependency-strategy.md.
+      # desktop-only - see docs/dependency-strategy.md. Release only - see
+      # the equivalent comment on build-and-test above.
       - name: Configure
-        run: cmake --preset android-clang-${{ matrix.config }}
+        run: cmake --preset android-clang-release
 
       - name: Build
-        run: cmake --build --preset android-clang-${{ matrix.config }}
+        run: cmake --build --preset android-clang-release
 
   ios-build:
-    name: iOS (device, ${{ matrix.config }}, build-only, unsigned)
+    name: iOS (device, build-only, unsigned)
     runs-on: macos-15
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        config: [debug, release]
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -361,12 +349,13 @@ jobs:
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
       # comment above; the same reasoning applies here. vcpkg is used here
-      # only for fmt - see the android job comment above.
+      # only for fmt - see the android job comment above. Release only - see
+      # the equivalent comment on build-and-test above.
       - name: Configure
-        run: cmake --preset ios-clang-${{ matrix.config }}
+        run: cmake --preset ios-clang-release
 
       - name: Build
-        run: cmake --build --preset ios-clang-${{ matrix.config }}
+        run: cmake --build --preset ios-clang-release
 
   coverage:
     name: Coverage (Linux, GCC)

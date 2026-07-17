@@ -6,12 +6,22 @@ Naming convention: `<os>-<compiler>-<config>`.
 
 | Preset | Notes |
 | --- | --- |
-| `windows-msvc-{debug,release}` | Full build + test |
-| `linux-gcc-{debug,release}` | Full build + test |
+| `windows-msvc-{debug,release}` | CI builds+tests `release` only |
+| `linux-gcc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-coverage` | Debug + gcov instrumentation, 80% line/branch gate |
-| `macos-clang-{debug,release}` | Full build + test |
-| `android-clang-{debug,release}` | Build-only; `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
-| `ios-clang-{debug,release}` | Build-only, unsigned; `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
+| `macos-clang-{debug,release}` | CI builds+tests `release` only |
+| `android-clang-{debug,release}` | CI builds `release` only; build-only, `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
+| `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
+
+**CI only builds the `release` preset per platform** — that's what would
+actually ship, and vcpkg builds both debug/release variants of every
+dependency together in one pass regardless of which config our own project
+targets, so a routine Debug CI leg would mostly just re-verify the same
+dependency build under a different `CMAKE_BUILD_TYPE`. `debug` presets stay
+fully defined and buildable locally (`cmake --preset linux-gcc-debug`) for
+whenever you actually need an unoptimized/more-debuggable build, or define
+your own combination in a personal `CMakeUserPresets.json` — CI just doesn't
+babysit them on every push.
 
 Android/iOS are build-only for now: mobile shells are planned to be native
 (SwiftUI/Jetpack Compose), not Qt/QML, and the OpenCV/ONNX Runtime/bgfx
