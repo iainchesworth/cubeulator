@@ -10,8 +10,8 @@ Naming convention: `<os>-<compiler>-<config>`.
 | `linux-gcc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-coverage` | Debug + gcov instrumentation, 80% line/branch gate |
 | `macos-clang-{debug,release}` | CI builds+tests `release` only |
-| `android-clang-{debug,release}` | CI builds `release` only; build-only, `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
-| `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) |
+| `android-clang-{debug,release}` | CI builds `release` only; builds the Qt/QML app via Qt for Android |
+| `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
 
 **CI only builds the `release` preset per platform** — that's what would
 actually ship, and vcpkg builds both debug/release variants of every
@@ -23,10 +23,11 @@ whenever you actually need an unoptimized/more-debuggable build, or define
 your own combination in a personal `CMakeUserPresets.json` — CI just doesn't
 babysit them on every push.
 
-Android/iOS are build-only for now: mobile shells are planned to be native
-(SwiftUI/Jetpack Compose), not Qt/QML. vcpkg now builds opencv4/onnxruntime/
-bgfx on the mobile triplets too, the same way as desktop — see
-[Dependency strategy](dependency-strategy.md).
+Android builds the Qt/QML shell like every other platform (see
+[Architecture](architecture.md)); iOS remains build-only,
+`CUBEULATOR_BUILD_APP=OFF`, until Qt-for-iOS packaging is wired up. vcpkg
+builds opencv4/onnxruntime/bgfx on the mobile triplets too, the same way as
+desktop — see [Dependency strategy](dependency-strategy.md).
 
 `android-clang-{debug,release}` set `CMAKE_CXX_SCAN_FOR_MODULES=OFF`: CMake's
 Ninja generator auto-enables C++20 modules dependency scanning (needs

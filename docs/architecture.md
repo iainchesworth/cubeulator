@@ -35,12 +35,10 @@ OS under `src/app/platform/`, selected by CMake at configure time
 
 ## GUI shell strategy
 
-The desktop shell (`src/app/qt/`) is Qt 6 Quick/QML. Mobile shells are
-planned to be **native** (SwiftUI on iOS, Jetpack Compose on Android) rather
-than an extended QML target — a deliberate default, not a QML limitation, to
-give the camera/GPU/on-device-ML flagship flow a platform-native feel. This
-default should be revisited deliberately before mobile UI work starts, not
-left standing by default alone.
+Every platform — desktop (Windows/Linux/macOS) and mobile (Android/iOS) —
+shares the same Qt 6 Quick/QML shell (`src/app/qt/`). There is no
+native-per-platform shell split: Android is packaged via `androiddeployqt`,
+iOS via Qt's Xcode integration, both loading the same `Main.qml`.
 
 ## What's implemented today vs. planned
 

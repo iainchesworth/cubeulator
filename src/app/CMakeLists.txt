@@ -59,19 +59,29 @@ target_link_libraries(cube_platform
         cube::coverage)
 
 # ---------------------------------------------------------------------------
-# cube_app - the Qt6 Quick (QML) GUI shell. Desktop-only for now (see
-# docs/architecture.md: Option B is the default GUI-shell strategy, so
-# ios/android get native shells in a later spec, not this QML one) - the
-# android-clang/ios-clang presets set CUBEULATOR_BUILD_APP=OFF, so this whole
-# block never runs there.
+# cube_app - the Qt6 Quick (QML) GUI shell, shared across every platform (see
+# docs/architecture.md). The ios-clang preset still sets
+# CUBEULATOR_BUILD_APP=OFF (Qt-for-iOS packaging isn't wired up yet); every
+# other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2)
     qt_standard_project_setup(REQUIRES 6.5)
 
+    # STATIC: cube_app_qml is embedded directly into the cube_app executable
+    # (via WHOLE_ARCHIVE below), not loaded as a runtime plugin from a
+    # qmldir. Qt's own build here is shared, so qt_add_qml_module would
+    # otherwise default cube_app_qml to SHARED too - WHOLE_ARCHIVE has no
+    # effect on a shared library, so nothing forces its Cubeulator module
+    # registration to run: on Linux the .so still gets loaded unconditionally
+    # as an explicit link dependency (registration runs as a side effect),
+    # but on Windows the linker drops an unreferenced DLL import entirely,
+    # so QQmlApplicationEngine fails with "No module named Cubeulator found"
+    # (confirmed in a local windows-msvc-debug run).
     qt_add_qml_module(cube_app_qml
         URI Cubeulator
         VERSION 1.0
+        STATIC
         QML_FILES
             qt/Main.qml)
 
