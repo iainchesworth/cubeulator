@@ -238,7 +238,7 @@ jobs:
         run: ctest --preset ${{ matrix.preset }}
 
   android-build:
-    name: Android (arm64-v8a, build-only)
+    name: Android (arm64-v8a)
     # ubuntu-26.04, matching every other build agent - see the diagnostic
     # step below for why this needed a closer look before deciding whether
     # to stay here.
@@ -302,15 +302,36 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      # No Qt install needed: the android-clang-* presets set
-      # CUBEULATOR_BUILD_APP=OFF (see docs/dependency-strategy.md - mobile
-      # shells are native, not Qt/QML). vcpkg now builds opencv4/onnxruntime/
-      # bgfx here too, chainloaded onto the NDK toolchain the same way as
-      # fmt - see docs/dependency-strategy.md. No libx11-dev install needed:
-      # bgfx.cmake explicitly excludes ANDROID from its X11 path. Release
-      # only - see the equivalent comment on build-and-test above.
+      # All platforms share the same Qt/QML shell (see docs/architecture.md),
+      # so this leg installs Qt for Android same as build-and-test installs
+      # it for desktop. install-qt-action also provisions the matching host
+      # (Linux desktop) Qt and exports QT_HOST_PATH automatically when
+      # target: android is set - QT_HOST_PATH_CMAKE_DIR and
+      # CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH are still passed explicitly
+      # since the NDK toolchain defaults CMAKE_FIND_ROOT_PATH_MODE_PACKAGE to
+      # ONLY, which would otherwise hide both Qt kits and vcpkg's install
+      # tree from find_package() (confirmed locally on windows-msvc/android).
+      - name: Install Qt (prebuilt, Android)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: "6.8.3"
+          target: android
+          arch: android_arm64_v8a
+          cache: true
+
+      # vcpkg now builds opencv4/onnxruntime/bgfx here too, chainloaded onto
+      # the NDK toolchain the same way as fmt - see docs/dependency-strategy.md.
+      # No libx11-dev install needed: bgfx.cmake explicitly excludes ANDROID
+      # from its X11 path. Release only - see the equivalent comment on
+      # build-and-test above.
       - name: Configure
-        run: cmake --preset android-clang-release
+        run: >
+          cmake --preset android-clang-release
+          -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+          -DQT_HOST_PATH="$QT_HOST_PATH"
+          -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"
+          -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
+          -DANDROID_SDK_ROOT="$ANDROID_SDK_ROOT"
 
       # CMake's Check*/Find* modules (e.g. FindThreads) only print "Failed"
       # to the main log on failure - the actual compiler/linker error only
@@ -341,6 +362,17 @@ jobs:
 
       - name: Build
         run: cmake --build --preset android-clang-release
+
+      # androiddeployqt runs automatically as part of the build above and
+      # produces a debug-signed APK; upload it so the Qt/QML shell can
+      # actually be installed and looked at, not just compiled.
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cube_app-android-arm64-v8a
+          path: build/android-clang-release/src/app/android-build/build/outputs/apk/**/*.apk
+          if-no-files-found: ignore
 
   ios-build:
     name: iOS (device, build-only, unsigned)

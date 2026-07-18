@@ -37,6 +37,29 @@ file — confirmed in CI (`CMAKE_CXX_COMPILER_CLANG_SCAN_DEPS-NOTFOUND`). The
 project doesn't use C++ modules, so disabling the scan avoids the missing
 tool entirely rather than chasing its exact path per NDK version.
 
+Configuring `android-clang-*` locally (outside `ci.yml`, which passes these
+via `jurplel/install-qt-action`'s env vars) needs four extra cache variables
+that a plain desktop configure doesn't:
+
+```
+cmake --preset android-clang-debug \
+  -DCMAKE_PREFIX_PATH=<path-to-Qt>/6.8.3/android_arm64_v8a \
+  -DQT_HOST_PATH=<path-to-Qt>/6.8.3/<desktop-kit> \
+  -DQT_HOST_PATH_CMAKE_DIR=<path-to-Qt>/6.8.3/<desktop-kit>/lib/cmake \
+  -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
+  -DANDROID_SDK_ROOT=<path-to-Android-SDK>
+```
+
+`QT_HOST_PATH`/`QT_HOST_PATH_CMAKE_DIR` are normally supplied by Qt's own
+`qt-cmake` wrapper, which this project doesn't use (it configures through
+vcpkg's toolchain directly); without them, `qt_standard_project_setup()` and
+other host-tool-dependent macros are simply undefined ("Unknown CMake
+command"). `CMAKE_FIND_ROOT_PATH_MODE_PACKAGE` defaults to `ONLY` under the
+NDK toolchain, which hides both Qt kits from `find_package()` since neither
+lives under `CMAKE_FIND_ROOT_PATH` (vcpkg's own install tree is unaffected —
+its toolchain file adds itself to `CMAKE_FIND_ROOT_PATH` already). All four
+were confirmed necessary against a real local Android build, not just CI.
+
 ## Options
 
 - `CUBEULATOR_BUILD_APP` (default `ON`) — builds the Qt6 GUI shell. Off by

@@ -48,5 +48,6 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
-See [Building & packaging](building.md) for every preset (including
-Android/iOS, which are currently build-only) and packaging options.
+See [Building & packaging](building.md) for every preset (including Android,
+which builds the same Qt/QML app, and iOS, which is currently build-only)
+and packaging options.
