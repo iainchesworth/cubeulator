@@ -124,4 +124,30 @@ if(CUBEULATOR_BUILD_APP)
     set_target_properties(cube_app PROPERTIES
         WIN32_EXECUTABLE ON
         MACOSX_BUNDLE ON)
+
+    # Windows desktop only: Qt's DLLs aren't next to cube_app.exe or on PATH
+    # by default, so it fails to start (STATUS_DLL_NOT_FOUND) unless launched
+    # from a shell that already has Qt's bin dir on PATH - which Visual
+    # Studio's F5/"Select Startup Item" does not. windeployqt copies
+    # everything cube_app.exe actually needs (Qt DLLs, platform/style
+    # plugins, translations) next to it after every build, so it runs
+    # standalone regardless of how it's launched. macOS would need the
+    # equivalent macdeployqt call, not added here - no Mac available to
+    # verify it against.
+    if(WIN32)
+        find_program(CUBEULATOR_WINDEPLOYQT_EXECUTABLE
+            NAMES windeployqt6 windeployqt
+            HINTS "${Qt6_DIR}/../../../bin")
+        if(CUBEULATOR_WINDEPLOYQT_EXECUTABLE)
+            add_custom_command(TARGET cube_app POST_BUILD
+                COMMAND "${CUBEULATOR_WINDEPLOYQT_EXECUTABLE}"
+                    --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qt"
+                    "$<TARGET_FILE:cube_app>"
+                COMMENT "windeployqt: copying Qt runtime next to cube_app.exe")
+        else()
+            message(WARNING
+                "windeployqt not found near Qt6_DIR (${Qt6_DIR}); cube_app.exe "
+                "will need Qt's bin dir on PATH to run standalone.")
+        endif()
+    endif()
 endif()
