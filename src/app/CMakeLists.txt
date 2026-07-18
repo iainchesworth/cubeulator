@@ -65,7 +65,7 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Quick3D ShaderTools)
     qt_standard_project_setup(REQUIRES 6.5)
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
@@ -83,7 +83,7 @@ if(CUBEULATOR_BUILD_APP)
     # registered as plain (non-singleton) types in the generated qmldir,
     # so every "Theme.xxx"/"AppState.xxx" reference resolved to undefined
     # everywhere (confirmed in a local linux-gcc-debug run).
-    set_source_files_properties(qt/Theme.qml qt/AppState.qml PROPERTIES
+    set_source_files_properties(qt/Theme.qml qt/AppState.qml qt/SettingsState.qml PROPERTIES
         QT_QML_SINGLETON_TYPE TRUE)
 
     qt_add_qml_module(cube_app_qml
@@ -94,14 +94,19 @@ if(CUBEULATOR_BUILD_APP)
             qt/Main.qml
             qt/Theme.qml
             qt/AppState.qml
+            qt/SettingsState.qml
             qt/AppButton.qml
             qt/Icon.qml
             qt/CubeView.qml
+            qt/Cube3DView.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
             qt/ScanScreen.qml
             qt/SolveScreen.qml
-            qt/CompleteScreen.qml)
+            qt/SettingsScreen.qml
+            qt/CompleteScreen.qml
+        RESOURCES
+            qt/shaders/toon.frag)
 
     qt_add_executable(cube_app
         qt/main.cpp)
@@ -115,7 +120,8 @@ if(CUBEULATOR_BUILD_APP)
             cube::coverage
             Qt6::Quick
             Qt6::Gui
-            Qt6::QuickControls2)
+            Qt6::QuickControls2
+            Qt6::Quick3D)
 
     add_dependencies(cube_app cube_version)
 

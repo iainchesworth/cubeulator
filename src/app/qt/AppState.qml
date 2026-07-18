@@ -10,8 +10,17 @@ import Cubeulator
 QtObject {
     id: state
 
-    property string screen: "launch" // launch | permission | scan | solve | complete
+    property string screen: "launch" // launch | permission | scan | solve | settings | complete
     property bool cameraGranted: false
+
+    // Camera-access screens exist only for mobile platforms, where the OS
+    // requires an explicit in-app permission prompt. Desktop platforms grant
+    // camera access via their own OS-level dialog the first time the device
+    // is opened (see docs/architecture.md - Spec 00 skeleton), so "Start
+    // scan" goes straight to the scan screen there.
+    readonly property bool isMobile: Qt.platform.os === "android" || Qt.platform.os === "ios"
+
+    property string previousScreen: "launch"
 
     property int scanned: 0
     readonly property int totalFaces: 6
@@ -65,8 +74,17 @@ QtObject {
     function goLaunch() { screen = "launch"; }
     function requestPermission() { screen = "permission"; }
 
+    function openSettings() {
+        previousScreen = screen;
+        screen = "settings";
+    }
+
+    function closeSettings() {
+        screen = previousScreen;
+    }
+
     function beginScan() {
-        if (cameraGranted) {
+        if (cameraGranted || !isMobile) {
             scanned = 0;
             elapsedSeconds = 0;
             screen = "scan";

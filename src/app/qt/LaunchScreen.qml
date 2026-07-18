@@ -6,8 +6,6 @@ Rectangle {
     color: Theme.paper
     readonly property bool wide: width >= Theme.wideBreakpoint
 
-    property var solvedCube: ({ top: Array(9).fill(Theme.faceU), right: Array(9).fill(Theme.faceR), left: Array(9).fill(Theme.faceF) })
-
     // ---- narrow (phone) ----
     Column {
         visible: !root.wide
@@ -26,12 +24,12 @@ Rectangle {
         Item {
             width: parent.width
             height: root.height - 360
-            CubeView {
-                width: 180; height: 190
+            Cube3DView {
+                width: 190; height: 190
                 anchors.centerIn: parent
-                topColors: root.solvedCube.top
-                rightColors: root.solvedCube.right
-                leftColors: root.solvedCube.left
+                shaderStyle: SettingsState.shaderStyleIndex
+                autoRotate: SettingsState.cubeAutoRotate
+                autoRotateSpeed: SettingsState.rotateSpeedValue
             }
         }
 
@@ -58,11 +56,13 @@ Rectangle {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     variant: "ghost"; text: "English"; leadingIcon: "globe"
+                    onClicked: AppState.openSettings()
                 }
                 AppButton {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     variant: "ghost"; text: "Settings"; leadingIcon: "menu"
+                    onClicked: AppState.openSettings()
                 }
             }
         }
@@ -73,12 +73,23 @@ Rectangle {
         visible: root.wide
         anchors.fill: parent
 
-        Column {
+        // An Item with explicit anchors, not a Column with a hand-computed
+        // spacer: the previous fixed "parent.height - 340" spacer assumed a
+        // specific window height and pushed the English/Settings footer
+        // below the visible area on shorter windows. Anchoring the footer to
+        // the bottom and the hero copy to vertical-center keeps every piece
+        // on screen at any wide-layout height.
+        Item {
+            id: leftPane
             width: parent.width / 2
             height: parent.height
-            padding: Theme.space8 + Theme.space2
+
+            readonly property real pad: Theme.space8 + Theme.space2
 
             Text {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: leftPane.pad
                 text: "CUBEULATOR"
                 color: Theme.accent
                 font.family: Theme.fontHeading
@@ -86,9 +97,12 @@ Rectangle {
                 font.letterSpacing: 1.8
             }
 
-            Item { width: 1; height: parent.height - 340 }
-
             Column {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: leftPane.pad
+                anchors.rightMargin: leftPane.pad
+                anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space3
                 Text {
                     text: "Scan. Solve.\nIn your hands."
@@ -119,12 +133,13 @@ Rectangle {
                 }
             }
 
-            Item { width: 1; height: 40 }
-
             Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: leftPane.pad
                 spacing: Theme.space6
-                AppButton { variant: "ghost"; text: "English"; leadingIcon: "globe" }
-                AppButton { variant: "ghost"; text: "Settings"; leadingIcon: "menu" }
+                AppButton { variant: "ghost"; text: "English"; leadingIcon: "globe"; onClicked: AppState.openSettings() }
+                AppButton { variant: "ghost"; text: "Settings"; leadingIcon: "menu"; onClicked: AppState.openSettings() }
             }
         }
 
@@ -135,12 +150,12 @@ Rectangle {
 
             Rectangle { width: 2; height: parent.height; color: Theme.divider }
 
-            CubeView {
-                width: 300; height: 320
+            Cube3DView {
+                width: 320; height: 320
                 anchors.centerIn: parent
-                topColors: root.solvedCube.top
-                rightColors: root.solvedCube.right
-                leftColors: root.solvedCube.left
+                shaderStyle: SettingsState.shaderStyleIndex
+                autoRotate: SettingsState.cubeAutoRotate
+                autoRotateSpeed: SettingsState.rotateSpeedValue
             }
         }
     }

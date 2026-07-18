@@ -17,7 +17,7 @@ case "$(uname -s)" in
 esac
 
 python3 -m pip install --quiet --upgrade aqtinstall
-python3 -m aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" --outputdir "$OUT_DIR"
+python3 -m aqt install-qt "$HOST" desktop "$QT_VERSION" "$ARCH" -m qtquick3d qtshadertools --outputdir "$OUT_DIR"
 
 echo
 echo "Qt $QT_VERSION installed to $OUT_DIR/$QT_VERSION/$PREFIX_ARCH"

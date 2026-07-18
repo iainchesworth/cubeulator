@@ -222,6 +222,7 @@ jobs:
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: "6.8.3"
+          modules: "qtquick3d qtshadertools"
           cache: true
 
       - name: Configure
@@ -317,6 +318,7 @@ jobs:
           version: "6.8.3"
           target: android
           arch: android_arm64_v8a
+          modules: "qtquick3d qtshadertools"
           cache: true
 
       # vcpkg now builds opencv4/onnxruntime/bgfx here too, chainloaded onto

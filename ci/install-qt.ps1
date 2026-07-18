@@ -12,7 +12,7 @@ $QtVersion = "6.8.3"
 $Arch = "win64_msvc2022_64"
 
 python -m pip install --quiet --upgrade aqtinstall
-python -m aqt install-qt windows desktop $QtVersion $Arch --outputdir $OutDir
+python -m aqt install-qt windows desktop $QtVersion $Arch -m qtquick3d qtshadertools --outputdir $OutDir
 
 $prefix = Join-Path $OutDir "$QtVersion/msvc2022_64"
 Write-Host ""
