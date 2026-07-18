@@ -78,12 +78,30 @@ if(CUBEULATOR_BUILD_APP)
     # but on Windows the linker drops an unreferenced DLL import entirely,
     # so QQmlApplicationEngine fails with "No module named Cubeulator found"
     # (confirmed in a local windows-msvc-debug run).
+    # QT_QML_SINGLETON_TYPE is set explicitly below rather than relying on
+    # "pragma Singleton" auto-detection: with it alone, Theme/AppState were
+    # registered as plain (non-singleton) types in the generated qmldir,
+    # so every "Theme.xxx"/"AppState.xxx" reference resolved to undefined
+    # everywhere (confirmed in a local linux-gcc-debug run).
+    set_source_files_properties(qt/Theme.qml qt/AppState.qml PROPERTIES
+        QT_QML_SINGLETON_TYPE TRUE)
+
     qt_add_qml_module(cube_app_qml
         URI Cubeulator
         VERSION 1.0
         STATIC
         QML_FILES
-            qt/Main.qml)
+            qt/Main.qml
+            qt/Theme.qml
+            qt/AppState.qml
+            qt/AppButton.qml
+            qt/Icon.qml
+            qt/CubeView.qml
+            qt/LaunchScreen.qml
+            qt/PermissionScreen.qml
+            qt/ScanScreen.qml
+            qt/SolveScreen.qml
+            qt/CompleteScreen.qml)
 
     qt_add_executable(cube_app
         qt/main.cpp)
