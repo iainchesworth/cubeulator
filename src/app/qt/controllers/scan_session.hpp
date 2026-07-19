@@ -25,6 +25,7 @@
 #include <array>
 #include <atomic>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -270,7 +271,10 @@ private:
 
     // corner_armed is captured on the GUI thread when the pass is queued so
     // analyze() never reads the slot store from the worker thread.
-    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, bool corner_armed);
+    // frame_t_ms is the frame's TimedFrame mailbox timestamp (see
+    // interfaces/camera.hpp) - the analysis pass's time base for anything
+    // motion-derived, since the poll cadence says nothing about frame age.
+    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed);
 
     [[nodiscard]] bool cornerScanArmed() const;
     [[nodiscard]] bool faceCaptureReady() const;
@@ -315,6 +319,23 @@ private:
     std::unique_ptr<cube::vision::HandPresenceDetector> hand_detector_;
     cube::model::ScanProgress progress_;
     QFutureWatcher<AnalysisResult> analysis_watcher_;
+    // Strict-alternation analysis gate: set when a pass is queued in
+    // poll(), cleared FIRST THING in handleAnalysisFinished() - not
+    // analysis_watcher_.isRunning(), which reports false in the window
+    // between the future finishing and the queued finished() signal
+    // actually running the handler. Gating on isRunning() would let poll()
+    // queue a second pass inside that window; its setFuture() would then
+    // make the pending handler consume the NEW pass's result (blocking the
+    // GUI thread on .result() until it finishes), and any state sampled at
+    // queue time would no longer correspond to the result being handled.
+    // The flag guarantees queue -> handle -> queue -> handle alternation,
+    // which per-pass sampled priors (this feature's whole data flow) depend
+    // on. The timer feeds poll()'s watchdog log for a pass that never
+    // delivered; the logged flag keeps that log at one line per episode
+    // instead of one per poll.
+    bool analysis_inflight_ = false;
+    QElapsedTimer analysis_inflight_timer_;
+    bool analysis_overrun_logged_ = false;
 
     // Opening the real capture device (cube::platform::camera::start()) is a
     // genuine multi-second hardware operation on Windows (MSMF device open),

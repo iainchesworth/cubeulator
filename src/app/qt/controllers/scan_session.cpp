@@ -8,6 +8,7 @@
 #include <cube/model/face.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
+#include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
@@ -19,6 +20,7 @@
 
 #include <QDir>
 #include <QElapsedTimer>
+#include <QtLogging>
 
 #include <algorithm>
 #include <cmath>
@@ -38,6 +40,12 @@ namespace {
 // analysis gate still protects the Qt event loop: a pass that overruns the
 // interval just means the next poll skips queuing another.
 constexpr int kPollIntervalMs = 33;
+
+// Watchdog threshold for the strict-alternation analysis gate (see
+// analysis_inflight_ in the header): a healthy pass completes within a few
+// poll intervals even with ONNX inference in it, so one still unfinished
+// after this long is stuck, not slow.
+constexpr qint64 kAnalysisOverrunWarnMs = 2000;
 
 // Vision analysis cost scales with pixel count and the detectors are
 // resolution-independent above this width, so frames are downscaled before
@@ -131,6 +139,43 @@ void dump_vision_debug(const cv::Mat& analysis_frame, const VisionDebugStats& st
         << " corner=" << stats.corner_status << " steady=" << stats.is_steady << " hand=" << stats.hand_present
         << '\n';
     slot = (slot + 1) % 6;
+}
+
+// Set CUBE_VISION_RECORD_DIR to a writable directory and the analysis
+// worker records EVERY pass's exact detector-input frame plus an index.csv
+// row of per-pass metadata (format shared with the offline [.track-replay]
+// harness via cube/vision/frame_recording.hpp). Unlike dump_vision_debug's
+// throttled 6-frame ring - built for eyeballing single frames - this
+// captures whole motion sequences: the corpus that free-rotation tracking
+// is calibrated and regression-tested against, where inter-frame timing
+// and completeness are the whole point. JPEG q=90 keeps a clip's disk cost
+// ~30x below PNG while staying visually lossless for the Lab-space
+// detectors; the file ring bounds a forgotten recorder's disk use. Same
+// locking story as dump_vision_debug: single-in-flight worker, so the
+// statics need no synchronization.
+void record_vision_frame(const cv::Mat& analysis_frame, std::int64_t frame_t_ms, const cv::Size& full_size) {
+    namespace recording = cube::vision::recording;
+    static const QString dir = qEnvironmentVariable("CUBE_VISION_RECORD_DIR");
+    if (dir.isEmpty()) {
+        return;
+    }
+    static int pass = 0;
+    static std::string dir_path;
+    if (pass == 0) {
+        QDir().mkpath(dir);
+        dir_path = QDir(dir).absolutePath().toStdString();
+        // Truncate, don't append: each app run is a fresh recording, and a
+        // stale index describing last run's (partially overwritten) frames
+        // would poison a replay far more subtly than losing the old clip.
+        std::ofstream header(dir_path + "/" + std::string(recording::kIndexCsvName), std::ios::trunc);
+        header << recording::kIndexCsvHeader << '\n';
+    }
+    cv::imwrite(dir_path + "/" + recording::frame_filename(pass), analysis_frame,
+                {cv::IMWRITE_JPEG_QUALITY, 90});
+    std::ofstream index(dir_path + "/" + std::string(recording::kIndexCsvName), std::ios::app);
+    index << pass << ',' << frame_t_ms << ',' << analysis_frame.cols << ',' << analysis_frame.rows << ','
+          << full_size.width << ',' << full_size.height << '\n';
+    ++pass;
 }
 
 [[nodiscard]] QString facet_color_css(cube::model::FacetColor color) {
@@ -574,6 +619,13 @@ void ScanSession::start(const QString& deviceId) {
 
     restartScan();
 
+    // A stale gate can only be held here if a pre-stop() pass never
+    // delivered at all (its handler would have cleared it); dropping it
+    // matches stop()'s reset and can't double-queue - poll() doesn't run
+    // again until handleStartFinished() restarts the timer, long after any
+    // such pass has drained.
+    analysis_inflight_ = false;
+
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
                                                       .display_name = ""};
     start_watcher_.setFuture(QtConcurrent::run([device]() { return cube::platform::camera::start(device); }));
@@ -588,6 +640,13 @@ void ScanSession::stop() {
 
     poll_timer_.stop();
     cube::platform::camera::stop();
+
+    // The gate is deliberately released even if a pass is still in flight:
+    // its late-delivered result is discarded by handleAnalysisFinished()'s
+    // !running_ guard (clearing an already-clear flag there is harmless),
+    // and no new pass can race it because the poll timer is stopped until
+    // the next start() completes.
+    analysis_inflight_ = false;
 
     running_ = false;
     emit runningChanged();
@@ -654,27 +713,48 @@ void ScanSession::poll() {
 
     {
         std::scoped_lock lock(frame_mutex_);
-        latest_frame_ = *frame;
+        latest_frame_ = frame->frame;
     }
-    frame_width_ = frame->cols;
-    frame_height_ = frame->rows;
+    frame_width_ = frame->frame.cols;
+    frame_height_ = frame->frame.rows;
     ++frame_seq_;
     emit frameUpdated();
 
-    if (analysis_watcher_.isRunning()) {
-        // Still analyzing a previous frame; the live image above still
-        // updated, just skip queuing another analysis pass.
+    if (analysis_inflight_) {
+        // Still analyzing a previous frame (or its result is queued but not
+        // yet handled - see analysis_inflight_ in the header); the live
+        // image above still updated, just skip queuing another pass. A pass
+        // should take tens of milliseconds; one that has held the gate for
+        // seconds means a wedged worker (driver stall, debugger break) and
+        // deserves a trace, since the only visible symptom is the overlay
+        // silently freezing while the video keeps playing.
+        if (analysis_inflight_timer_.isValid() && analysis_inflight_timer_.elapsed() > kAnalysisOverrunWarnMs &&
+            !analysis_overrun_logged_) {
+            analysis_overrun_logged_ = true;
+            qWarning("ScanSession: analysis pass still unfinished after %lld ms",
+                     static_cast<long long>(analysis_inflight_timer_.elapsed()));
+        }
         return;
     }
 
     // Sampled here (GUI thread) rather than inside analyze() so the worker
     // never reads the slot store concurrently with a capture mutating it.
     const bool corner_armed = cornerScanArmed();
-    analysis_watcher_.setFuture(QtConcurrent::run(
-        [this, captured_frame = *frame, corner_armed]() { return analyze(captured_frame, corner_armed); }));
+    analysis_inflight_ = true;
+    analysis_inflight_timer_.restart();
+    analysis_overrun_logged_ = false;
+    analysis_watcher_.setFuture(
+        QtConcurrent::run([this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed]() {
+            return analyze(captured_frame, t_ms, corner_armed);
+        }));
 }
 
 void ScanSession::handleAnalysisFinished() {
+    // Cleared unconditionally before ANY early-out: every queued pass must
+    // release the gate exactly once, or a result discarded below (post-stop
+    // delivery) would leave the gate held forever and no analysis would
+    // ever run again.
+    analysis_inflight_ = false;
     if (!running_) {
         // An analysis pass in flight when stop() was called still delivers
         // its result afterward (QtConcurrent futures are uncancelable).
@@ -822,7 +902,7 @@ void ScanSession::handleAnalysisFinished() {
     }
 }
 
-ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, bool corner_armed) {
+ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed) {
     AnalysisResult result;
 
     // Steadiness and hand presence stay on the full frame - both are
@@ -845,6 +925,11 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, bool corn
         // cv::resize rounds the output size.
         scale_back = static_cast<float>(frame.cols) / static_cast<float>(analysis_frame.cols);
     }
+
+    // Recorded before the detectors run so the corpus captures the exact
+    // input of a pass even if a detector crashes on it - that frame is
+    // precisely the one worth replaying.
+    record_vision_frame(analysis_frame, frame_t_ms, cv::Size(frame.cols, frame.rows));
 
     // A cell projected outside the frame samples fabricated colour (a
     // clamped border strip, or corner sampling's all-zero fallback) that is

@@ -23,13 +23,19 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
+#include <cube/vision/pose_estimation.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -283,4 +289,125 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     std::printf("observe_corner: %s\n", corner_status.c_str());
 
     SUCCEED();
+}
+
+// Sequence replay harness for whole recorded clips - hidden tag, never part
+// of the normal suite. Point CUBE_TRACK_REPLAY_DIR at a directory recorded
+// by ScanSession's CUBE_VISION_RECORD_DIR hook (see record_vision_frame in
+// scan_session.cpp; on-disk format shared via cube/vision/frame_recording.hpp)
+// and run:
+//
+//   cube_unit_tests.exe "[.track-replay]"
+//
+// Every recorded pass is driven through the same detector cascade the live
+// worker runs - observe_face with the fully-visible-cells gate, then
+// observe_corner, then the corner-first pose projection - and emitted as one
+// CSV row per pass on stdout, ready for offline metric extraction (theta
+// histograms, gap lengths, identity stability) as the tracker milestones
+// land. Skips (never fails) when no recording is present: the corpus is
+// recorded on demand from live hardware and does not ship with the repo.
+//
+// Fidelity notes, so numbers from this harness can be trusted against live
+// behavior:
+//  - Frames are replayed at the recorded analysis scale rather than
+//    re-upscaled to full-frame coordinates. Orientation quaternions are
+//    IDENTICAL either way: the pose projectors derive their approximate
+//    intrinsics from the frame size (fx=fy=width, centred principal point,
+//    pose_estimation.cpp), so uniformly scaling both the geometry and the
+//    frame size leaves the normalized camera rays - and hence the rotation
+//    - unchanged. Only the translation magnitude differs, and nothing here
+//    consumes it.
+//  - The live cell_in_frame gate compares full-frame geometry against
+//    full-frame bounds; comparing analysis-scale geometry against
+//    analysis-scale bounds is the same predicate under that uniform scale,
+//    so gating decisions match too.
+//  - JPEG q=90 recompression perturbs Lab samples slightly relative to the
+//    live pass; geometry/pose are unaffected and colour deltas are far
+//    below classification margins.
+TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]") {
+    namespace recording = cube::vision::recording;
+
+    const char* dir = std::getenv("CUBE_TRACK_REPLAY_DIR");
+    if (dir == nullptr) {
+        SKIP("CUBE_TRACK_REPLAY_DIR not set - record a clip via CUBE_VISION_RECORD_DIR first");
+    }
+    const std::string dir_path(dir);
+    std::ifstream index_stream(dir_path + "/" + std::string(recording::kIndexCsvName));
+    if (!index_stream) {
+        SKIP("no " << recording::kIndexCsvName << " under " << dir_path << " - not a recording directory");
+    }
+
+    const auto rows = recording::read_index(index_stream);
+    std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
+    std::printf("pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,pose,qw,qx,qy,qz\n");
+
+    // Same fully-visible gate as the live worker (scan_session.cpp), at
+    // analysis scale per the fidelity note above.
+    const auto cell_in_frame = [](const cube::vision::StickerQuad& cell, const cv::Mat& bounds) {
+        cv::Point2f center(0.0F, 0.0F);
+        for (const auto& corner : cell.corners) {
+            center += corner;
+        }
+        center *= 0.25F;
+        return center.x >= 0.0F && center.y >= 0.0F && center.x < static_cast<float>(bounds.cols) &&
+               center.y < static_cast<float>(bounds.rows);
+    };
+
+    std::int64_t previous_t_ms = 0;
+    bool have_previous = false;
+    std::size_t replayed = 0;
+    for (const auto& row : rows) {
+        const cv::Mat frame = cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
+        if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
+            // Ring wrap: a recording longer than the file ring overwrites
+            // its oldest frames, so early index rows may point at newer
+            // images (caught by the size check when resolutions differ) or
+            // at nothing. Report and carry on - the surviving tail is
+            // still a valid contiguous clip.
+            std::printf("%d,%lld,,overwritten,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            continue;
+        }
+
+        const std::int64_t dt_ms = have_previous ? row.t_ms - previous_t_ms : 0;
+        previous_t_ms = row.t_ms;
+        have_previous = true;
+
+        const auto observed = observe_face(frame);
+        std::optional<cube::vision::FaceObservation> face;
+        if (observed.has_value() &&
+            std::all_of(observed->cells.begin(), observed->cells.end(),
+                        [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); })) {
+            face = *observed;
+        }
+        const auto corner = observe_corner(frame);
+
+        // Corner-first, exactly like the live pass: three pinned quads
+        // constrain the pose far better than one.
+        std::optional<cube::vision::CubePoseProjection> pose;
+        if (corner.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size()); projected.has_value()) {
+                pose = *projected;
+            }
+        } else if (face.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size()); projected.has_value()) {
+                pose = *projected;
+            }
+        }
+
+        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,", row.pass, static_cast<long long>(row.t_ms),
+                    static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
+                    face.has_value() ? face->geometry_confidence : 0.0F, corner.has_value() ? 1 : 0,
+                    corner.has_value() ? corner->geometry_confidence : 0.0F,
+                    pose.has_value() && pose->orientation_valid ? 1 : 0);
+        if (pose.has_value() && pose->orientation_valid) {
+            std::printf("%.5f,%.5f,%.5f,%.5f\n", pose->orientation[0], pose->orientation[1], pose->orientation[2],
+                        pose->orientation[3]);
+        } else {
+            std::printf(",,,\n");
+        }
+        ++replayed;
+    }
+
+    std::printf("replayed %zu of %zu passes\n", replayed, rows.size());
+    CHECK(replayed > 0);
 }

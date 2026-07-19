@@ -29,8 +29,15 @@ void stop() {}
 // interfaces/camera.hpp for what this needs to do once that lands.
 void open_permission_settings() {}
 
-std::optional<cv::Mat> try_pop_latest_frame() {
+std::optional<TimedFrame> try_pop_latest_frame() {
     // Native capture (AVFoundation) lands with the vision pipeline spec.
+    // TODO: when it does, TimedFrame::t_ms must be stamped (steady_clock
+    // ms) at delivery into the mailbox - inside the
+    // AVCaptureVideoDataOutput sample-buffer callback, NOT here in the
+    // poll - per the timestamp contract in interfaces/camera.hpp. The
+    // sample buffer's presentation timestamp is host-time based and could
+    // be converted instead, but a delivery stamp keeps one clock domain
+    // across platforms.
     return std::nullopt;
 }
 

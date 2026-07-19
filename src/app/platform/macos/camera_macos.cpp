@@ -27,7 +27,7 @@ void stop() {
     loop().stop();
 }
 
-std::optional<cv::Mat> try_pop_latest_frame() {
+std::optional<TimedFrame> try_pop_latest_frame() {
     return loop().try_pop_latest_frame();
 }
 

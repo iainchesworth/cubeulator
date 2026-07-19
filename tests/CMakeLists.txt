@@ -17,6 +17,7 @@ add_executable(cube_unit_tests
     unit/corner_observation_test.cpp
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
+    unit/frame_recording_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp

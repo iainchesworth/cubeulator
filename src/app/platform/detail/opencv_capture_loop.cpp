@@ -1,5 +1,6 @@
 #include "platform/detail/opencv_capture_loop.hpp"
 
+#include <chrono>
 #include <exception>
 #include <string>
 #include <utility>
@@ -105,7 +106,7 @@ Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
 
     {
         std::scoped_lock lock(mailbox_mutex_);
-        latest_frame_ = cv::Mat();
+        latest_ = TimedFrame{};
     }
 
     capture_thread_ = std::jthread([this](std::stop_token token) { run(token); });
@@ -120,12 +121,12 @@ void OpenCvCaptureLoop::stop() {
     capture_.release();
 }
 
-std::optional<cv::Mat> OpenCvCaptureLoop::try_pop_latest_frame() {
+std::optional<TimedFrame> OpenCvCaptureLoop::try_pop_latest_frame() {
     std::scoped_lock lock(mailbox_mutex_);
-    if (latest_frame_.empty()) {
+    if (latest_.frame.empty()) {
         return std::nullopt;
     }
-    return std::exchange(latest_frame_, cv::Mat());
+    return std::exchange(latest_, TimedFrame{});
 }
 
 bool OpenCvCaptureLoop::is_capturing() const noexcept {
@@ -140,8 +141,16 @@ void OpenCvCaptureLoop::run(std::stop_token stop_token) {
         if (!capture_.read(frame) || frame.empty()) {
             continue;
         }
+        // Stamped here, after the (blocking, device-rate) read returns, so
+        // the timestamp tracks capture time even when the consumer polls
+        // slower than the device delivers and overwritten frames vanish
+        // without ever being observed - see the TimedFrame contract in
+        // interfaces/camera.hpp.
+        const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::steady_clock::now().time_since_epoch())
+                                .count();
         std::scoped_lock lock(mailbox_mutex_);
-        latest_frame_ = frame.clone();
+        latest_ = TimedFrame{.frame = frame.clone(), .t_ms = now_ms};
     }
 }
 

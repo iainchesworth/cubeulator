@@ -47,11 +47,28 @@ void stop();
 // which have no per-app camera permission gate to escape.
 void open_permission_settings();
 
+// A captured frame plus the moment it entered the mailbox. t_ms is
+// std::chrono::steady_clock milliseconds (monotonic, arbitrary epoch -
+// only differences between frames are meaningful). The stamp exists for
+// motion prediction downstream: the mailbox is latest-wins, so consumers
+// polling slower than capture see irregular inter-frame gaps and must not
+// assume a constant dt - the poll cadence says nothing about how old the
+// frame actually is.
+struct TimedFrame {
+    cv::Mat frame;
+    std::int64_t t_ms = 0;
+};
+
 // The most recently captured frame (BGR) not yet returned by a previous
 // call, or nullopt if nothing new has arrived since the last call or no
 // capture is running. Desktop platforms back this with a single-slot
-// mailbox fed by a capture thread; mobile stubs always return nullopt.
-[[nodiscard]] std::optional<cv::Mat> try_pop_latest_frame();
+// mailbox fed by a capture thread and stamp t_ms at mailbox push (the
+// closest observable point to exposure without per-driver timestamp
+// APIs); mobile backends, whose native capture callbacks hand frames over
+// directly, stamp at delivery into whatever mailbox they maintain - the
+// contract is "as close to capture as the platform allows", never "when
+// the consumer happened to poll". Mobile stubs currently return nullopt.
+[[nodiscard]] std::optional<TimedFrame> try_pop_latest_frame();
 [[nodiscard]] bool is_capturing() noexcept;
 
 }  // namespace cube::platform::camera
