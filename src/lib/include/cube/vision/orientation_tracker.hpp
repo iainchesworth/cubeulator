@@ -76,6 +76,16 @@ struct TrackerConfig {
     // decays faster.
     float coast_sigma_rate_deg = 4.0F;
     float motion_sigma_gain_deg = 40.0F;
+    // Slower inflation rate used IN PLACE of coast_sigma_rate_deg while
+    // acquiring (see miss()): the live1 census showed detections arriving
+    // in short bursts separated by 2-8 pass gaps, so an acquisition streak
+    // that dies on the first miss discards most bursts (68 anchors yielded
+    // ~17 locks). Acquiring has no capture authority - commits require
+    // locked + identity_certain - so the longer bridge risks only anchor
+    // churn, never a wrong capture. 2.5 deg/pass plus the motion term
+    // reaches the 35-degree cap after ~10-12 quiet passes (~1.0-1.15 s at
+    // the measured ~96 ms cadence), covering the measured gap cluster.
+    float acquire_sigma_rate_deg = 2.5F;
     // Sigma above this forces lost. 35 = the pre-basin safety ceiling: the
     // acceptance threshold saturates at basin_ceiling long before, so a
     // coasted track can never inflate its way into accepting a resolution
@@ -87,6 +97,16 @@ struct TrackerConfig {
     // prediction is discarded outright rather than trusted because "only
     // a few passes" elapsed.
     std::int64_t coast_timeout_ms = 700;
+    // The acquiring counterpart, selected by state in on_pass()'s timeout
+    // check: the miss-tolerant streak (see acquire_sigma_rate_deg) needs a
+    // window long enough to bridge the measured 8-12-pass detection gaps,
+    // and stretching the bridge is safe exactly where coast_timeout_ms is
+    // not - acquiring never carries capture authority, so the worst case
+    // is an anchor chained across a stall instead of re-anchored (the
+    // three-consistent-accepts rule still gates the promotion). Locked and
+    // coasting keep the tight 700 ms: that is where a stale identity could
+    // authorise a commit.
+    std::int64_t acquire_coast_timeout_ms = 1200;
     // A measurement implying a whole-cube rate faster than this PLUS the
     // currently tracked rate is a flip glitch (IPPE mirror, corner
     // mislabel), not physics - discarded unless this many CONSECUTIVE
@@ -122,7 +142,14 @@ struct TrackerConfig {
     // extrapolating full speed through a long gap overshoots).
     float omega_blend = 0.3F;
     float omega_decay = 0.9F;
-    // Consecutive accepted passes before acquiring promotes to locked.
+    // ACCEPTED observations (anchor included) before acquiring promotes to
+    // locked. Not consecutive PASSES: while acquiring, a miss coasts the
+    // streak instead of killing it (see miss()), so the three accepts may
+    // be separated by short prediction-bridged gaps. Mutual consistency is
+    // still enforced - every accept passes the basin gate (min(33 deg,
+    // sigma + 25 deg)) and the 15-degree margin gate against the COASTED
+    // prediction, so the accepts are geometrically chained by construction
+    // and the sigma cap/acquire timeout bound how far apart links may sit.
     int acquire_frames = 3;
     // Identity-certainty bar: the no-slip belief must lead every slip
     // hypothesis by ln(this) before downstream may treat identity as

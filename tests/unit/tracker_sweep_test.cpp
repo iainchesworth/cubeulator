@@ -109,6 +109,10 @@ std::vector<SweepAxis> sweep_axes() {
         {"max_interframe_deg", {25.0F, 15.0F, 35.0F}, [](TrackerConfig& c, float v) { c.max_interframe_deg = v; }},
         {"gauge_margin_deg", {15.0F, 10.0F, 20.0F}, [](TrackerConfig& c, float v) { c.gauge_margin_deg = v; }},
         {"coast_sigma_rate_deg", {4.0F, 2.0F, 6.0F}, [](TrackerConfig& c, float v) { c.coast_sigma_rate_deg = v; }},
+        {"acquire_sigma_rate_deg", {2.5F, 1.5F, 4.0F},
+         [](TrackerConfig& c, float v) { c.acquire_sigma_rate_deg = v; }},
+        {"acquire_coast_timeout_ms", {1200.0F, 900.0F, 1600.0F},
+         [](TrackerConfig& c, float v) { c.acquire_coast_timeout_ms = static_cast<std::int64_t>(v); }},
         {"motion_sigma_gain_deg", {40.0F, 20.0F, 80.0F}, [](TrackerConfig& c, float v) { c.motion_sigma_gain_deg = v; }},
         {"coast_timeout_ms", {700.0F, 500.0F, 1000.0F},
          [](TrackerConfig& c, float v) { c.coast_timeout_ms = static_cast<std::int64_t>(v); }},
@@ -332,11 +336,11 @@ struct SweepMetrics {
 // costly to miss (a new swept axis whose default can't be verified).
 auto config_fields(const TrackerConfig& c) {
     return std::make_tuple(c.basin_ceiling_deg, c.max_interframe_deg, c.gauge_margin_deg, c.coast_sigma_rate_deg,
-                           c.motion_sigma_gain_deg, c.max_coast_sigma_deg, c.coast_timeout_ms, c.outlier_omega_deg_s,
-                           c.outlier_reanchor_count, c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend,
-                           c.omega_decay, c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab,
-                           c.unknown_face_log_likelihood, c.max_obs_log_penalty, c.belief_clamp, c.ref_blend,
-                           c.min_dt_s, c.max_dt_s);
+                           c.motion_sigma_gain_deg, c.acquire_sigma_rate_deg, c.max_coast_sigma_deg, c.coast_timeout_ms,
+                           c.acquire_coast_timeout_ms, c.outlier_omega_deg_s, c.outlier_reanchor_count,
+                           c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend, c.omega_decay,
+                           c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab, c.unknown_face_log_likelihood,
+                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.min_dt_s, c.max_dt_s);
 }
 
 SweepMetrics run_variant(const TrackerConfig& config, const std::vector<TrackerPassInput>& inputs) {

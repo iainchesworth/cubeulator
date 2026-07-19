@@ -107,15 +107,21 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // inflation models "many quick passes with nothing accepted", not one
     // long gap - a cube can cross several basins inside a single stalled
     // interval, so a prediction older than the timeout is not a prediction
-    // at all. Every non-lost state is covered, acquiring included: a
-    // one-accept-old anchor is no fresher across a stall than a locked
-    // track (sigma is still zero, so nothing else guards it), and a cube
-    // that crossed a basin during the stall would otherwise resolve
-    // against the stale anchor, be accepted, and PROMOTE to locked with a
-    // silently wrong element. Falling through to the lost branch lets the
-    // same pass's observation re-anchor immediately (loss is cheap by
+    // at all. Every non-lost state is covered; the window is selected by
+    // state because the two states bound DIFFERENT risks. Locked/coasting
+    // keep the tight window: a stale prediction there carries an identity
+    // with capture authority, and a cube that crossed a basin during the
+    // stall would resolve against it and commit-grade state would survive
+    // a jump it never observed. Acquiring gets the longer window (see
+    // acquire_coast_timeout_ms): it claims no identity and cannot commit,
+    // and the miss-tolerant streak exists precisely to bridge multi-pass
+    // detection gaps - killing it at 700 ms would rebuild the anchor churn
+    // the bridge was added to fix. Falling through to the lost branch lets
+    // the same pass's observation re-anchor immediately (loss is cheap by
     // design).
-    if (state_ != TrackState::lost && input.t_ms - last_accept_t_ms_ > config_.coast_timeout_ms) {
+    const std::int64_t stale_timeout_ms =
+        state_ == TrackState::acquiring ? config_.acquire_coast_timeout_ms : config_.coast_timeout_ms;
+    if (state_ != TrackState::lost && input.t_ms - last_accept_t_ms_ > stale_timeout_ms) {
         to_lost();
     }
 
@@ -283,6 +289,11 @@ void OrientationTracker::accept(const Quat& q_meas, int lattice_index, const Tra
         return;
     }
 
+    // The streak counts ACCEPTED observations, not consecutive passes: a
+    // bridged miss while acquiring keeps the streak alive (see miss()), so
+    // sparse burst detections can still finish acquisition. Consistency is
+    // carried by the gates every accept just passed against the coasted
+    // prediction, not by adjacency.
     ++accept_streak_;
     if (state_ == TrackState::acquiring && accept_streak_ < config_.acquire_frames) {
         // still acquiring
@@ -296,18 +307,26 @@ void OrientationTracker::accept(const Quat& q_meas, int lattice_index, const Tra
 void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input, TrackerPassOutput& out,
                               TrackGate gate) {
     out.gate = gate;
-    if (state_ == TrackState::acquiring) {
-        // Acquiring is deliberately fragile: the streak's whole point is
-        // consecutive agreement, and loss is cheap (the next observation
-        // re-anchors immediately), so a broken streak drops straight back
-        // to lost rather than coasting on one or two samples' worth of
-        // trust.
-        to_lost();
-        return;
+    // A miss coasts in EVERY tracking state now - acquiring included. The
+    // original design dropped acquiring straight to lost ("the streak's
+    // whole point is consecutive agreement"), and the live1 census showed
+    // what that costs on a real detector: detections arrive in bursts of
+    // 1-2 separated by 2-8 pass gaps (93 of 169 inter-observation gaps
+    // were a single pass), so 68 anchors yielded only ~17 locks - the
+    // acquisition rule discarded most bursts. Consecutiveness was never
+    // the safety mechanism anyway: every accept is chained to the coasted
+    // prediction by the basin + margin gates, so three accepts within the
+    // coast envelope are mutually consistent by construction, however many
+    // bridged misses sit between them. What DOES change by state is the
+    // envelope's growth rate and label: acquiring keeps its own state (it
+    // must not report an identity, which locked->coasting would) and
+    // inflates sigma at the slower acquire rate - it has no capture
+    // authority, so a longer bridge risks only anchor churn.
+    if (state_ != TrackState::acquiring) {
+        state_ = TrackState::coasting;
     }
-    state_ = TrackState::coasting;
-    // Advance along the prediction so the display keeps turning through
-    // the gap, decay the rate (an unobserved cube in a hand slows), and
+    // Advance along the prediction so the track keeps turning through the
+    // gap, decay the rate (an unobserved cube in a hand slows), and
     // inflate uncertainty - by rate plus how much the scene is visibly
     // moving. The cap forces lost long before the basin gate could be
     // asked to judge a neighbouring element.
@@ -315,7 +334,9 @@ void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input,
     for (auto& component : omega_deg_s_) {
         component *= config_.omega_decay;
     }
-    sigma_deg_ += config_.coast_sigma_rate_deg + config_.motion_sigma_gain_deg * std::max(0.0F, input.motion_score);
+    const float sigma_rate_deg =
+        state_ == TrackState::acquiring ? config_.acquire_sigma_rate_deg : config_.coast_sigma_rate_deg;
+    sigma_deg_ += sigma_rate_deg + config_.motion_sigma_gain_deg * std::max(0.0F, input.motion_score);
     if (sigma_deg_ > config_.max_coast_sigma_deg) {
         to_lost();
     }

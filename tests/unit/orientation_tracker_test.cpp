@@ -123,8 +123,10 @@ TEST_CASE("TrackerConfig defaults transcribe the plan's constants table", "[trac
     CHECK(config.max_interframe_deg == 25.0F);
     CHECK(config.gauge_margin_deg == 15.0F);
     CHECK(config.coast_sigma_rate_deg == 4.0F);
+    CHECK(config.acquire_sigma_rate_deg == 2.5F);
     CHECK(config.max_coast_sigma_deg == 35.0F);
     CHECK(config.coast_timeout_ms == 700);
+    CHECK(config.acquire_coast_timeout_ms == 1200);
     CHECK(config.outlier_omega_deg_s == 400.0F);
     CHECK(config.outlier_reanchor_count == 3);
     CHECK(config.omega_blend == 0.3F);
@@ -323,25 +325,128 @@ TEST_CASE("wall-clock coast timeout kills a stale prediction", "[tracker]") {
         CHECK(out.epoch == 2);
         CHECK_FALSE(out.front_face.has_value());
     }
-    SECTION("the timeout covers acquiring - a stalled streak must not resume, let alone promote") {
+    SECTION("the acquire timeout covers acquiring - a stalled streak re-anchors, never chains") {
         Sim sim;
         sim.step_obs();  // anchor: epoch 1, streak 1
         const auto second = sim.step_obs();
         CHECK(second.state == TrackState::acquiring);  // streak 2, one accept short of locked
-        // One stalled interval during which the cube turned 80 degrees -
-        // most of the way across a lattice basin. The two-pass-old anchor
-        // still has sigma ZERO (nothing inflates it between passes), so
-        // without the wall-clock timeout the resolution would run against
-        // the stale prediction, find the NEIGHBOURING element a mere ~10
-        // degrees away, accept it, complete the streak and promote a
-        // silently wrong identity straight to locked.
-        sim.t_ms += 900;
-        sim.advance({0.0F, 80.0F / 0.9F, 0.0F}, 0.9F);
+        // One stalled interval longer than the ACQUIRING timeout (1200 ms,
+        // deliberately wider than locked's 700 ms - acquiring has no
+        // capture authority, so the miss-tolerant streak may bridge
+        // longer), during which the cube turned 80 degrees - most of the
+        // way across a lattice basin. The stalled anchor still has sigma
+        // ZERO (nothing inflates it between passes), so without the
+        // wall-clock timeout the resolution would run against the stale
+        // prediction, find the NEIGHBOURING element a mere ~10 degrees
+        // away, accept it, complete the streak and promote a silently
+        // wrong identity straight to locked.
+        sim.t_ms += 1400;
+        sim.advance({0.0F, 80.0F / 1.4F, 0.0F}, 1.4F);
         const auto out = sim.step_obs();
         CHECK(out.gate == TrackGate::anchored);
         CHECK(out.epoch == 2);
         CHECK(out.state == TrackState::acquiring);
         CHECK_FALSE(out.front_face.has_value());
+    }
+}
+
+TEST_CASE("acquiring bridges detection gaps: sparse burst accepts still lock", "[tracker]") {
+    // The live1 acquisition lesson: real detections arrive in bursts of
+    // 1-2 separated by 2-8 pass gaps, so the streak must count ACCEPTED
+    // observations across bridged misses, not consecutive passes. Accepts
+    // at passes {0, 3, 6} with misses between must promote at the third
+    // accept exactly as three consecutive ones would.
+    Sim sim;
+    const auto anchored = sim.step_obs();
+    CHECK(anchored.gate == TrackGate::anchored);
+    CHECK(anchored.state == TrackState::acquiring);
+    for (int gap = 0; gap < 2; ++gap) {
+        const auto miss = sim.step_miss();
+        // A bridged miss keeps acquiring (never coasting - that state
+        // reports an identity acquiring has not earned) and claims no
+        // front face.
+        CHECK(miss.state == TrackState::acquiring);
+        CHECK_FALSE(miss.front_face.has_value());
+        CHECK(miss.sigma_deg > 0.0F);  // the envelope is inflating
+    }
+    const auto second = sim.step_obs();
+    CHECK(second.gate == TrackGate::accepted);
+    CHECK(second.state == TrackState::acquiring);
+    for (int gap = 0; gap < 2; ++gap) {
+        CHECK(sim.step_miss().state == TrackState::acquiring);
+    }
+    const auto third = sim.step_obs();
+    CHECK(third.gate == TrackGate::accepted);
+    CHECK(third.state == TrackState::locked);
+    CHECK(third.epoch == 1);  // one epoch throughout: the anchor survived the gaps
+    REQUIRE(third.front_face.has_value());
+}
+
+TEST_CASE("an out-of-basin observation while acquiring misses without killing the streak", "[tracker]") {
+    Sim sim;
+    sim.step_obs();  // anchor: streak 1
+    // 30 degrees from the anchor over a stretched ~200 ms pass: outside
+    // the basin threshold (sigma + 25, sigma still near zero) but at only
+    // ~150 deg/s - under the omega ceiling, so it reaches the basin gate.
+    // Under the old rule this single stray dropped straight to lost and
+    // discarded the anchor.
+    sim.t_ms += 170;
+    const Quat outlier = quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 30.0F), sim.observation());
+    const auto missed = sim.step_obs(outlier);
+    CHECK(missed.gate == TrackGate::basin);
+    CHECK(missed.state == TrackState::acquiring);
+    CHECK_FALSE(missed.front_face.has_value());
+    // Two consistent accepts complete the original streak in the original
+    // epoch - the stray observation cost one pass, not the anchor.
+    const auto second = sim.step_obs();
+    CHECK(second.gate == TrackGate::accepted);
+    CHECK(second.state == TrackState::acquiring);
+    const auto third = sim.step_obs();
+    CHECK(third.gate == TrackGate::accepted);
+    CHECK(third.state == TrackState::locked);
+    CHECK(third.epoch == 1);
+}
+
+TEST_CASE("sustained misses while acquiring force lost through the sigma cap", "[tracker]") {
+    Sim sim;
+    sim.step_obs();  // anchor
+    // 2.5 deg/pass (the acquire rate) must reach the 35-degree cap in ~15
+    // quiet passes - the bridge is bounded, not indefinite - and no pass
+    // along the way may claim an identity.
+    int passes = 0;
+    while (sim.tracker.state() != TrackState::lost) {
+        const auto out = sim.step_miss();
+        CHECK_FALSE(out.front_face.has_value());
+        ++passes;
+        REQUIRE(passes < 20);
+    }
+    CHECK(passes >= 10);  // strictly slower than coasting's 4 deg/pass decay
+    // And the next observation founds a fresh epoch, exactly as any loss.
+    const auto anchored = sim.step_obs();
+    CHECK(anchored.gate == TrackGate::anchored);
+    CHECK(anchored.epoch == 2);
+}
+
+TEST_CASE("a gap exceeding the acquire timeout re-anchors a new epoch", "[tracker]") {
+    SECTION("inside the window the streak chains") {
+        Sim sim;
+        sim.step_obs();  // anchor: streak 1
+        sim.t_ms += 1000;  // long, but inside acquire_coast_timeout_ms
+        const auto out = sim.step_obs();
+        // Same epoch, streak advanced: the cube did not move, so the
+        // resolution against the (still fresh enough) anchor is clean.
+        CHECK(out.gate == TrackGate::accepted);
+        CHECK(out.epoch == 1);
+        CHECK(out.state == TrackState::acquiring);
+    }
+    SECTION("beyond the window the anchor is discarded") {
+        Sim sim;
+        sim.step_obs();  // anchor: epoch 1
+        sim.t_ms += 1300;  // past acquire_coast_timeout_ms
+        const auto out = sim.step_obs();
+        CHECK(out.gate == TrackGate::anchored);
+        CHECK(out.epoch == 2);
+        CHECK(out.state == TrackState::acquiring);
     }
 }
 
