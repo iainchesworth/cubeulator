@@ -9,6 +9,7 @@
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/hand_presence.hpp>
+#include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
 #include <cube/vision/stability.hpp>
 #include <cube/vision/temporal_fusion.hpp>
@@ -111,6 +112,7 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList cornerCellColors READ cornerCellColors NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeVertexPoints READ cubeVertexPoints NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeOrientation READ cubeOrientation NOTIFY readingChanged)
+    Q_PROPERTY(QString trackingState READ trackingState NOTIFY readingChanged)
     Q_PROPERTY(qreal overlayFreshness READ overlayFreshness NOTIFY readingChanged)
     Q_PROPERTY(qreal captureProgress READ captureProgress NOTIFY readingChanged)
     Q_PROPERTY(bool autoAdvance READ autoAdvance WRITE setAutoAdvance NOTIFY autoAdvanceChanged)
@@ -157,15 +159,21 @@ public:
     // bl, then each vertex's rear counterpart); empty when no pose could be
     // estimated this reading. Display-only - see the class comment.
     [[nodiscard]] QVariantList cubeVertexPoints() const;  // 16 reals
-    // The current (or persistence-held) pose's 3D orientation as [w,x,y,z]
-    // reals - the CubePoseProjection quaternion (canonical camera-facing
-    // model frame -> observed pose, y-up display axes; see
-    // pose_estimation.hpp), temporally SMOOTHED (nlerp) so the Quick3D
-    // progress cube turns with the physical cube instead of jittering at
-    // the per-frame estimate noise. Empty when there is no pose this
-    // reading or its orientation_valid is false (corner-path fallback) -
-    // QML treats empty as "not tracking" and idles.
+    // The tracked 3D orientation as [w,x,y,z] reals - the
+    // OrientationTracker's per-pass output (display-frame convention, see
+    // pose_estimation.hpp / orientation_lattice.hpp), temporally SMOOTHED
+    // (nlerp) so the Quick3D progress cube turns with the physical cube
+    // instead of jittering at the per-frame estimate noise. Because the
+    // tracker COASTS on its rate estimate through detection gaps, this
+    // stays populated (and keeps turning) across blips the raw pose stream
+    // would drop. Empty whenever the tracker is lost or still acquiring -
+    // QML treats empty as "not tracking" and idles, exactly as before.
     [[nodiscard]] QVariantList cubeOrientation() const;  // 4 reals or empty
+    // The OrientationTracker's state as a string ("lost", "acquiring",
+    // "locked", "coasting") - QML-friendly, and stable identifiers for the
+    // upcoming lost/coasting UI affordances. Shadow-mode observability for
+    // now: nothing but the 3D cube consumes tracker output yet.
+    [[nodiscard]] QString trackingState() const;
     // 1.0 while the overlay geometry is from a fresh detection, decaying
     // toward 0 over the hold window after detection drops - QML fades the
     // AR overlay by this instead of strobing it at the per-frame detection
@@ -290,6 +298,10 @@ private:
         // same pass without correlating queues.
         std::int64_t frame_ms = 0;
         bool is_steady = false;
+        // The stability tracker's raw score for this pass (is_steady is
+        // its thresholded form): the tracker inflates its coasting
+        // uncertainty faster when the scene is visibly moving.
+        float motion_score = 0.0F;
         // hand_present is only meaningful when hand_checked is true: ONNX
         // inference is decimated (see kHandOnnxDecimation) and skipped
         // passes must not read as "hand gone" - the GUI holds the previous
@@ -401,12 +413,22 @@ private:
     std::optional<cube::vision::FaceObservation> face_observation_;
     std::optional<cube::vision::CornerObservation> corner_observation_;
     std::optional<cube::vision::CubePoseProjection> cube_pose_;
-    // Temporally smoothed pose quaternion backing cubeOrientation (see
-    // kOrientationSmoothing in the .cpp): nlerp'd toward each fresh valid
-    // orientation, held across detection blips alongside cube_pose_, and
-    // reset with the rest of the reading so a new scan never eases in from
-    // a stale pose. has_smoothed_orientation_ distinguishes "no sample yet"
-    // (adopt the first one outright) from an ongoing blend.
+    // Continuous orientation tracking over the 24-element lattice (see
+    // orientation_tracker.hpp). SHADOW MODE for now: it drives
+    // cubeOrientation/trackingState (display) and the TRACK log line, and
+    // nothing else - capture routing and aggregation still run on centre
+    // colours exactly as before, so the tracker can be validated against
+    // live behaviour without being able to break a scan. GUI thread only,
+    // mutated solely in handleAnalysisFinished (one on_pass per analysis
+    // pass - the pass cadence is its clock).
+    cube::vision::OrientationTracker tracker_;
+    // Temporally smoothed tracker quaternion backing cubeOrientation (see
+    // kOrientationSmoothing in the .cpp): nlerp'd toward each pass's
+    // tracked orientation while locked/coasting, dropped on lost/acquiring
+    // (and with the rest of the reading) so a re-lock or a new scan never
+    // eases in from a stale pose. has_smoothed_orientation_ distinguishes
+    // "no sample yet" (adopt the first one outright) from an ongoing
+    // blend.
     std::array<float, 4> smoothed_orientation_{1.0F, 0.0F, 0.0F, 0.0F};
     bool has_smoothed_orientation_ = false;
     std::array<cube::model::Facelet, cube::model::facelets_per_face> facelets_{};

@@ -61,6 +61,7 @@ target_sources(cube_lib
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
+        src/vision/orientation_tracker.cpp
         src/vision/pose_estimation.cpp
         src/vision/color_classification.cpp
         src/vision/stability.cpp

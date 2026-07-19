@@ -188,6 +188,68 @@ void record_vision_frame(const cv::Mat& analysis_frame, std::int64_t frame_t_ms,
     ++pass;
 }
 
+// GUI-thread third leg of the shared observability log (worker per-pass
+// lines from dump_vision_debug, SLOT routing lines from log_slot_decision):
+// one TRACK line per analysis pass with the tracker's full state and gate
+// verdict. This is what the corpus-replay calibration sweeps and any "why
+// did it lose the cube there" post-mortem grep for - the tracker's whole
+// behaviour is these numbers, and shadow mode exists to collect them
+// against live scans before routing depends on the answers.
+// Shared by the TRACK log line and the trackingState Q_PROPERTY - the
+// on-disk and the QML identifiers must never drift apart, or a corpus
+// post-mortem stops matching what the UI showed.
+[[nodiscard]] const char* track_state_name(cube::vision::TrackState state) {
+    switch (state) {
+        case cube::vision::TrackState::lost:
+            return "lost";
+        case cube::vision::TrackState::acquiring:
+            return "acquiring";
+        case cube::vision::TrackState::locked:
+            return "locked";
+        case cube::vision::TrackState::coasting:
+            return "coasting";
+    }
+    return "?";
+}
+
+void log_track_pass(const cube::vision::TrackerPassOutput& track) {
+    static const QString dir = qEnvironmentVariable("CUBE_VISION_DEBUG_DIR");
+    if (dir.isEmpty()) {
+        return;
+    }
+    const auto gate_name = [](cube::vision::TrackGate gate) {
+        switch (gate) {
+            case cube::vision::TrackGate::accepted:
+                return "accepted";
+            case cube::vision::TrackGate::anchored:
+                return "anchored";
+            case cube::vision::TrackGate::no_observation:
+                return "no-obs";
+            case cube::vision::TrackGate::basin:
+                return "basin";
+            case cube::vision::TrackGate::margin:
+                return "margin";
+            case cube::vision::TrackGate::omega_outlier:
+                return "omega-outlier";
+            case cube::vision::TrackGate::implausible:
+                return "implausible";
+            case cube::vision::TrackGate::slip_evidence:
+                return "slip-evidence";
+        }
+        return "?";
+    };
+    // model::Face order U,R,F,D,L,B.
+    const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
+    std::ofstream log(QDir(dir).absolutePath().toStdString() + "/vision_debug.log", std::ios::app);
+    log << "TRACK state=" << track_state_name(track.state) << " gate=" << gate_name(track.gate) << " q=("
+        << track.q_track[0]
+        << ',' << track.q_track[1] << ',' << track.q_track[2] << ',' << track.q_track[3]
+        << ") sigma=" << track.sigma_deg << " theta=" << track.theta_deg << " S=" << track.lattice_index
+        << " margin=" << track.margin_deg << " front=" << front << " k=" << track.quarter_turn_k
+        << " belief=" << track.belief_margin << " certain=" << track.identity_certain << " epoch=" << track.epoch
+        << " dt=" << track.dt_ms << '\n';
+}
+
 [[nodiscard]] QString facet_color_css(cube::model::FacetColor color) {
     using cube::model::FacetColor;
     switch (color) {
@@ -470,17 +532,23 @@ QVariantList ScanSession::cubeVertexPoints() const {
 
 QVariantList ScanSession::cubeOrientation() const {
     QVariantList list;
-    // Empty (QML idles) unless the current/held pose carries a robust
-    // orientation. A held corner pose whose orientation_valid is false
-    // still clears this even while an older smoothed quaternion exists -
-    // "not tracking" must win over "showing a stale rotation".
-    if (cube_pose_ && cube_pose_->orientation_valid && has_smoothed_orientation_) {
+    // has_smoothed_orientation_ is maintained to be true EXACTLY while the
+    // tracker is locked or coasting (set with each pass's smoothing update,
+    // dropped on lost/acquiring and by resetReading), so it alone decides.
+    // Deliberately NOT gated on cube_pose_: the pose overlay's 450 ms hold
+    // expires well inside the tracker's coast window, and a fresh corner
+    // pose can carry orientation_valid == false while the tracker is still
+    // confidently coasting - either condition would blank the 3D cube in
+    // precisely the detection gaps the tracker exists to carry it through.
+    if (has_smoothed_orientation_) {
         for (const float component : smoothed_orientation_) {
             list.append(static_cast<qreal>(component));
         }
     }
     return list;
 }
+
+QString ScanSession::trackingState() const { return QString::fromLatin1(track_state_name(tracker_.state())); }
 
 qreal ScanSession::overlayFreshness() const {
     if (!face_observation_ && !corner_observation_ && !cube_pose_) {
@@ -832,38 +900,6 @@ void ScanSession::handleAnalysisFinished() {
             }
         }
         cube_pose_ = result.pose;
-        if (cube_pose_->orientation_valid) {
-            const std::array<float, 4>& fresh = cube_pose_->orientation;
-            if (!has_smoothed_orientation_) {
-                smoothed_orientation_ = fresh;
-                has_smoothed_orientation_ = true;
-            } else {
-                // nlerp toward the fresh sample. Quaternions double-cover
-                // rotations (q and -q are the SAME orientation), and the
-                // estimator is free to hand back either sign frame to
-                // frame - blending raw components across that sign flip
-                // would drag the interpolant through zero (a wild spin on
-                // screen, or a vanishing norm). dot < 0 means the fresh
-                // sample sits on the far hemisphere, so negate it onto
-                // ours first; nlerp between same-hemisphere unit
-                // quaternions then never degenerates and normalising keeps
-                // the result unit.
-                float dot = 0.0F;
-                for (std::size_t i = 0; i < 4; ++i) {
-                    dot += smoothed_orientation_[i] * fresh[i];
-                }
-                const float sign = dot < 0.0F ? -1.0F : 1.0F;
-                float norm_squared = 0.0F;
-                for (std::size_t i = 0; i < 4; ++i) {
-                    smoothed_orientation_[i] += kOrientationSmoothing * (sign * fresh[i] - smoothed_orientation_[i]);
-                    norm_squared += smoothed_orientation_[i] * smoothed_orientation_[i];
-                }
-                const float norm = std::sqrt(norm_squared);
-                for (auto& component : smoothed_orientation_) {
-                    component /= norm;
-                }
-            }
-        }
     } else if (cube_pose_ && overlay_hold_timer_.isValid() && overlay_hold_timer_.elapsed() > kOverlayHoldMs) {
         cube_pose_.reset();
     }
@@ -888,6 +924,91 @@ void ScanSession::handleAnalysisFinished() {
     } else {
         facelets_.fill(cube::model::Facelet{});
         overall_confidence_ = 0.0F;
+    }
+
+    // --- Orientation tracking (SHADOW MODE) --------------------------------
+    // Exactly one tracker pass per analysis pass, after the display block
+    // and before routing: the tracker drives cubeOrientation /
+    // trackingState and the TRACK log line, and NOTHING downstream -
+    // aggregation and slot capture below still run purely on centre
+    // colours, so the tracker can be validated against live scans without
+    // being able to break one. Inputs are strictly THIS pass's fresh
+    // results, never the persistence-held observations: the tracker does
+    // its own coasting from real timestamps, and re-feeding held data
+    // would double-count frames as fresh evidence.
+    {
+        cube::vision::TrackerPassInput track_in;
+        track_in.t_ms = result.frame_ms;
+        track_in.motion_score = result.motion_score;
+        if (result.pose && result.pose->orientation_valid) {
+            track_in.q_obs = result.pose->orientation;
+            // The centre-Lab evidence must come from the SAME observation
+            // family that produced the pose - pose_source, not mere
+            // presence, decides (a pass can hold both a face and a corner
+            // observation, whose model frames differ).
+            const bool corner_pose = result.pose_source == AnalysisResult::PoseSource::corner ||
+                                     result.pose_source == AnalysisResult::PoseSource::corner_seeded;
+            track_in.corner_view = corner_pose;
+            const auto lab_entry = [](const cv::Vec3f& lab) {
+                return std::array<float, 3>{lab[0], lab[1], lab[2]};
+            };
+            if (corner_pose && result.corner) {
+                track_in.centre_lab_count = 3;
+                track_in.centre_lab[0] = lab_entry(result.corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] =
+                    lab_entry(result.corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] =
+                    lab_entry(result.corner->lower_right.lab[cube::model::center_facelet_index]);
+            } else if (!corner_pose && result.face) {
+                track_in.centre_lab_count = 1;
+                track_in.centre_lab[0] = lab_entry(result.face->lab[cube::model::center_facelet_index]);
+            }
+        }
+        const auto track = tracker_.on_pass(track_in);
+
+        // Display smoothing - the same nlerp the raw pose stream used to
+        // feed, now fed by the tracker (which coasts through detection
+        // gaps, so the 3D cube keeps turning where it used to freeze).
+        // Lost/acquiring drop the smoothed state entirely: cubeOrientation
+        // must go empty (QML idles), and the next lock must adopt the new
+        // orientation outright instead of visibly easing over from a dead
+        // track's pose.
+        if (track.state == cube::vision::TrackState::locked ||
+            track.state == cube::vision::TrackState::coasting) {
+            const std::array<float, 4>& fresh = track.q_track;
+            if (!has_smoothed_orientation_) {
+                smoothed_orientation_ = fresh;
+                has_smoothed_orientation_ = true;
+            } else {
+                // nlerp toward the fresh sample. Quaternions double-cover
+                // rotations (q and -q are the SAME orientation), and the
+                // tracker is free to hand back either sign frame to frame
+                // - blending raw components across that sign flip would
+                // drag the interpolant through zero (a wild spin on
+                // screen, or a vanishing norm). dot < 0 means the fresh
+                // sample sits on the far hemisphere, so negate it onto
+                // ours first; nlerp between same-hemisphere unit
+                // quaternions then never degenerates and normalising keeps
+                // the result unit.
+                float dot = 0.0F;
+                for (std::size_t i = 0; i < 4; ++i) {
+                    dot += smoothed_orientation_[i] * fresh[i];
+                }
+                const float sign = dot < 0.0F ? -1.0F : 1.0F;
+                float norm_squared = 0.0F;
+                for (std::size_t i = 0; i < 4; ++i) {
+                    smoothed_orientation_[i] += kOrientationSmoothing * (sign * fresh[i] - smoothed_orientation_[i]);
+                    norm_squared += smoothed_orientation_[i] * smoothed_orientation_[i];
+                }
+                const float norm = std::sqrt(norm_squared);
+                for (auto& component : smoothed_orientation_) {
+                    component /= norm;
+                }
+            }
+        } else {
+            has_smoothed_orientation_ = false;
+        }
+        log_track_pass(track);
     }
 
     if (rearm_guard_active_) {
@@ -951,6 +1072,11 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // gates capture), and their tuned thresholds predate the downscale.
     const auto stability = stability_.update(frame);
     result.is_steady = stability.is_steady;
+    // The raw score rides along for the tracker (coasting uncertainty
+    // inflates faster when the scene is visibly moving) - dropping it here
+    // would silently pin the tracker's motion term at zero and poison the
+    // calibration sweeps shadow mode exists to feed.
+    result.motion_score = stability.motion_score;
 
     // Decimated (see kHandOnnxDecimation): the verdict was decided on the
     // GUI thread at queue time, so the worker stays counter-free. A pass
@@ -1357,6 +1483,12 @@ void ScanSession::resetReading() {
     // would visibly ease in from wherever the previous cube last pointed.
     smoothed_orientation_ = {1.0F, 0.0F, 0.0F, 0.0F};
     has_smoothed_orientation_ = false;
+    // Full tracker re-init (epoch counter included), for the same reason:
+    // a scan restarted inside the coast window must not inherit the
+    // previous scan's locked track - the user may well have put down a
+    // different cube. Display-only today; load-bearing the moment routing
+    // consumes tracker identity (M5's restartScan/resetReading contract).
+    tracker_.reset();
     facelets_.fill(cube::model::Facelet{});
     overall_confidence_ = 0.0F;
     is_steady_ = false;
