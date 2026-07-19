@@ -117,10 +117,14 @@ struct Sim {
 
 }  // namespace
 
-TEST_CASE("TrackerConfig defaults transcribe the plan's constants table", "[tracker]") {
+TEST_CASE("TrackerConfig defaults hold the live1-calibrated constants", "[tracker]") {
+    // The plan's constants table as amended by the live1 calibration sweep
+    // (see the TrackerConfig comment): max_interframe_deg 25->30 and
+    // acquire_frames 3->2 are the calibrated values; everything else is
+    // the table verbatim.
     const TrackerConfig config;
     CHECK(config.basin_ceiling_deg == 33.0F);
-    CHECK(config.max_interframe_deg == 25.0F);
+    CHECK(config.max_interframe_deg == 30.0F);
     CHECK(config.gauge_margin_deg == 15.0F);
     CHECK(config.coast_sigma_rate_deg == 4.0F);
     CHECK(config.acquire_sigma_rate_deg == 2.5F);
@@ -131,7 +135,7 @@ TEST_CASE("TrackerConfig defaults transcribe the plan's constants table", "[trac
     CHECK(config.outlier_reanchor_count == 3);
     CHECK(config.omega_blend == 0.3F);
     CHECK(config.omega_decay == 0.9F);
-    CHECK(config.acquire_frames == 3);
+    CHECK(config.acquire_frames == 2);
     CHECK(config.posterior_lock_ratio == 100.0F);
     CHECK(config.centre_sigma_lab == 12.0F);
 }
@@ -151,14 +155,12 @@ TEST_CASE("lost claims no identity and anchoring starts an epoch as acquiring", 
     // Acquiring has an orientation but must not claim an identity yet.
     CHECK_FALSE(anchored.front_face.has_value());
 
+    // Second accept completes the (calibrated) two-accept streak: anchor
+    // plus one gate-chained confirmation promotes to locked.
     const auto second = sim.step_obs();
-    CHECK(second.state == TrackState::acquiring);
-    CHECK_FALSE(second.front_face.has_value());
-
-    const auto third = sim.step_obs();
-    CHECK(third.state == TrackState::locked);
-    REQUIRE(third.front_face.has_value());
-    CHECK(*third.front_face == Face::F);  // anchored at identity: body F faces the camera
+    CHECK(second.state == TrackState::locked);
+    REQUIRE(second.front_face.has_value());
+    CHECK(*second.front_face == Face::F);  // anchored at identity: body F faces the camera
 }
 
 TEST_CASE("tracks a single-axis 90-degree tour reporting the correct front face", "[tracker]") {
@@ -327,9 +329,8 @@ TEST_CASE("wall-clock coast timeout kills a stale prediction", "[tracker]") {
     }
     SECTION("the acquire timeout covers acquiring - a stalled streak re-anchors, never chains") {
         Sim sim;
-        sim.step_obs();  // anchor: epoch 1, streak 1
-        const auto second = sim.step_obs();
-        CHECK(second.state == TrackState::acquiring);  // streak 2, one accept short of locked
+        const auto anchored = sim.step_obs();  // anchor: epoch 1, streak 1
+        CHECK(anchored.state == TrackState::acquiring);  // one accept short of locked
         // One stalled interval longer than the ACQUIRING timeout (1200 ms,
         // deliberately wider than locked's 700 ms - acquiring has no
         // capture authority, so the miss-tolerant streak may bridge
@@ -353,9 +354,12 @@ TEST_CASE("wall-clock coast timeout kills a stale prediction", "[tracker]") {
 TEST_CASE("acquiring bridges detection gaps: sparse burst accepts still lock", "[tracker]") {
     // The live1 acquisition lesson: real detections arrive in bursts of
     // 1-2 separated by 2-8 pass gaps, so the streak must count ACCEPTED
-    // observations across bridged misses, not consecutive passes. Accepts
-    // at passes {0, 3, 6} with misses between must promote at the third
-    // accept exactly as three consecutive ones would.
+    // observations across bridged misses, not consecutive passes. An
+    // anchor at pass 0 and a confirmation at pass 3 with misses between
+    // must promote at that (calibrated second) accept exactly as two
+    // consecutive ones would. A three-accept config is exercised too so
+    // the bridging property is shown to be streak-length independent, not
+    // an artifact of the calibrated count.
     Sim sim;
     const auto anchored = sim.step_obs();
     CHECK(anchored.gate == TrackGate::anchored);
@@ -371,40 +375,52 @@ TEST_CASE("acquiring bridges detection gaps: sparse burst accepts still lock", "
     }
     const auto second = sim.step_obs();
     CHECK(second.gate == TrackGate::accepted);
-    CHECK(second.state == TrackState::acquiring);
+    CHECK(second.state == TrackState::locked);
+    CHECK(second.epoch == 1);  // one epoch throughout: the anchor survived the gaps
+    REQUIRE(second.front_face.has_value());
+
+    // Same property at acquire_frames = 3: the middle accept neither
+    // promotes nor dies across its bridged gaps.
+    TrackerConfig config;
+    config.acquire_frames = 3;
+    Sim sim3(config);
+    sim3.step_obs();  // anchor
     for (int gap = 0; gap < 2; ++gap) {
-        CHECK(sim.step_miss().state == TrackState::acquiring);
+        CHECK(sim3.step_miss().state == TrackState::acquiring);
     }
-    const auto third = sim.step_obs();
+    const auto mid = sim3.step_obs();
+    CHECK(mid.gate == TrackGate::accepted);
+    CHECK(mid.state == TrackState::acquiring);
+    for (int gap = 0; gap < 2; ++gap) {
+        CHECK(sim3.step_miss().state == TrackState::acquiring);
+    }
+    const auto third = sim3.step_obs();
     CHECK(third.gate == TrackGate::accepted);
     CHECK(third.state == TrackState::locked);
-    CHECK(third.epoch == 1);  // one epoch throughout: the anchor survived the gaps
+    CHECK(third.epoch == 1);
     REQUIRE(third.front_face.has_value());
 }
 
 TEST_CASE("an out-of-basin observation while acquiring misses without killing the streak", "[tracker]") {
     Sim sim;
     sim.step_obs();  // anchor: streak 1
-    // 30 degrees from the anchor over a stretched ~200 ms pass: outside
-    // the basin threshold (sigma + 25, sigma still near zero) but at only
-    // ~150 deg/s - under the omega ceiling, so it reaches the basin gate.
-    // Under the old rule this single stray dropped straight to lost and
-    // discarded the anchor.
+    // 35 degrees from the anchor over a stretched ~200 ms pass: past the
+    // 33-degree basin ceiling (so refused whatever sigma has inflated to)
+    // but at only ~170 deg/s - under the omega ceiling, so it reaches the
+    // basin gate. Under the old rule this single stray dropped straight
+    // to lost and discarded the anchor.
     sim.t_ms += 170;
-    const Quat outlier = quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 30.0F), sim.observation());
+    const Quat outlier = quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 35.0F), sim.observation());
     const auto missed = sim.step_obs(outlier);
     CHECK(missed.gate == TrackGate::basin);
     CHECK(missed.state == TrackState::acquiring);
     CHECK_FALSE(missed.front_face.has_value());
-    // Two consistent accepts complete the original streak in the original
+    // A consistent accept completes the original streak in the original
     // epoch - the stray observation cost one pass, not the anchor.
     const auto second = sim.step_obs();
     CHECK(second.gate == TrackGate::accepted);
-    CHECK(second.state == TrackState::acquiring);
-    const auto third = sim.step_obs();
-    CHECK(third.gate == TrackGate::accepted);
-    CHECK(third.state == TrackState::locked);
-    CHECK(third.epoch == 1);
+    CHECK(second.state == TrackState::locked);
+    CHECK(second.epoch == 1);
 }
 
 TEST_CASE("sustained misses while acquiring force lost through the sigma cap", "[tracker]") {
@@ -433,11 +449,12 @@ TEST_CASE("a gap exceeding the acquire timeout re-anchors a new epoch", "[tracke
         sim.step_obs();  // anchor: streak 1
         sim.t_ms += 1000;  // long, but inside acquire_coast_timeout_ms
         const auto out = sim.step_obs();
-        // Same epoch, streak advanced: the cube did not move, so the
-        // resolution against the (still fresh enough) anchor is clean.
+        // Same epoch, streak completed: the cube did not move, so the
+        // resolution against the (still fresh enough) anchor is clean and
+        // the accept promotes the two-accept streak.
         CHECK(out.gate == TrackGate::accepted);
         CHECK(out.epoch == 1);
-        CHECK(out.state == TrackState::acquiring);
+        CHECK(out.state == TrackState::locked);
     }
     SECTION("beyond the window the anchor is discarded") {
         Sim sim;

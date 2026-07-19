@@ -59,6 +59,23 @@ namespace cube::vision {
 // (initial values transcribed from it verbatim; the calibration milestone
 // sweeps them over the recorded corpus, which is why nothing here is a
 // scattered file-local constexpr).
+//
+// CALIBRATED on live1, a real 786-pass handheld session (oblique two-face
+// grip, warm dim indoor light, matte tile cube), via [.track-sweep]:
+// one-factor-at-a-time over every sweepable knob, a cartesian refinement
+// over the responsive ones (max_interframe_deg x omega_blend x
+// omega_decay x acquire_frames x coast_sigma_rate_deg x
+// outlier_omega_deg_s, 216 cells), then OFAT re-run around the winner to
+// confirm it as a local optimum. Only TWO knobs moved off the plan's
+// table - max_interframe_deg 25->30 and acquire_frames 3->2 - taking the
+// clip from locked 144 / coasting 157 / zero commit-grade passes to
+// locked 185 / coasting 204 (38% -> 49.5% of passes locked+coasting) and
+// 56 locked-AND-identity-certain passes, with the wrong-identity counter
+// (slip_evidence in an epoch that had reached commit-grade certainty) at
+// ZERO, as it was for every candidate on the shortlist. Configs that
+// scored a few more locked+coasting passes existed (max +4) but all had
+// zero commit-grade passes - continuity bought by never becoming certain
+// is worthless to the capture layer.
 struct TrackerConfig {
     // Acceptance ceiling on the resolved element's residual angle: the
     // lattice basin half-width is 45 degrees, minus a 12-degree snap
@@ -66,7 +83,17 @@ struct TrackerConfig {
     float basin_ceiling_deg = 33.0F;
     // Per-pass motion budget: with sigma at zero (fresh accept last pass)
     // the acceptance threshold is min(basin_ceiling, sigma + this).
-    float max_interframe_deg = 25.0F;
+    // Calibrated 25->30 on live1: the plan's 25 assumed a ~33 ms frame
+    // cadence, but an analysis PASS is ~96 ms, so a casual wrist turn
+    // produces bigger per-pass steps than budgeted and 25 was breaking
+    // accept chains with basin refusals (59 -> 49 on the clip). The knock-
+    // on effect dominates the direct one: unbroken chains keep epochs
+    // alive long enough for colour belief to reach the certainty bar
+    // (commit-grade passes 0 -> 56). Still 3 degrees under the 33-degree
+    // geometric ceiling, and the implied whole-cube rate at pass cadence
+    // (~310 deg/s) stays below the omega glitch gate, so every safety
+    // ordering is preserved.
+    float max_interframe_deg = 30.0F;
     // Refuse any resolution whose runner-up element is closer than this to
     // the best - the prediction cannot actually disambiguate them.
     float gauge_margin_deg = 15.0F;
@@ -144,13 +171,20 @@ struct TrackerConfig {
     float omega_decay = 0.9F;
     // ACCEPTED observations (anchor included) before acquiring promotes to
     // locked. Not consecutive PASSES: while acquiring, a miss coasts the
-    // streak instead of killing it (see miss()), so the three accepts may
-    // be separated by short prediction-bridged gaps. Mutual consistency is
-    // still enforced - every accept passes the basin gate (min(33 deg,
-    // sigma + 25 deg)) and the 15-degree margin gate against the COASTED
-    // prediction, so the accepts are geometrically chained by construction
-    // and the sigma cap/acquire timeout bound how far apart links may sit.
-    int acquire_frames = 3;
+    // streak instead of killing it (see miss()), so the accepts may be
+    // separated by short prediction-bridged gaps. Mutual consistency is
+    // still enforced - every accept passes the basin gate and the
+    // 15-degree margin gate against the COASTED prediction, so the accepts
+    // are geometrically chained by construction and the sigma cap/acquire
+    // timeout bound how far apart links may sit.
+    // Calibrated 3->2 on live1: the oblique-grip session delivers
+    // detections in short bursts, and demanding a third accept spent whole
+    // bursts on acquisition that never promoted (locked passes 144 -> 173
+    // from this knob alone). Two accepts = anchor plus one gate-chained
+    // confirmation; the identity-certainty bar (posterior_lock_ratio) is
+    // untouched and is what actually authorises commits, and the sweep's
+    // wrong-identity counter stayed zero at 2 across every candidate.
+    int acquire_frames = 2;
     // Identity-certainty bar: the no-slip belief must lead every slip
     // hypothesis by ln(this) before downstream may treat identity as
     // commit-grade. The same ratio, accumulated AGAINST the track, force-

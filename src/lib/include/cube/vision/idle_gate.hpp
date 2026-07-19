@@ -48,8 +48,19 @@ public:
     // Every this-many-th idle pass runs the detectors anyway - the escape
     // hatch bounding worst-case reacquisition latency (~0.4 s at the
     // measured cadence) if the cool-hue statistic ever miscalibrates
-    // against a scene.
+    // against a scene. Calibrated on the live1 786-pass session via
+    // [.track-sweep]: 2..8 were indistinguishable on every tracker metric
+    // (anchors, locked/coasting passes, commit passes all identical, only
+    // the skipped-pass budget moved), i.e. the cool-hue floor - not the
+    // escape cadence - decides reacquisition on real footage, so the
+    // default keeps the plan's latency-motivated value.
     static constexpr int kIdleEscapeEvery = 4;
+
+    // The escape cadence is a constructor knob (defaulting to the shipped
+    // constant) so the calibration sweep can vary it against a recorded
+    // corpus without a parallel reimplementation of the gate drifting from
+    // this one; live construction takes the default.
+    explicit IdleGate(int escape_every = kIdleEscapeEvery) noexcept : escape_every_(escape_every) {}
 
     // Verdict for the NEXT queued pass. True only while the gate is
     // engaged AND the next pass is not an escape pass.
@@ -73,7 +84,7 @@ public:
             return;
         }
         ++idle_span_passes_;
-        skip_next_ = (idle_span_passes_ % kIdleEscapeEvery) != 0;
+        skip_next_ = (idle_span_passes_ % escape_every_) != 0;
     }
 
     void reset() noexcept {
@@ -83,6 +94,7 @@ public:
     }
 
 private:
+    int escape_every_ = kIdleEscapeEvery;
     int low_streak_ = 0;
     int idle_span_passes_ = 0;
     bool skip_next_ = false;

@@ -57,6 +57,7 @@
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/frame_recording.hpp>
+#include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
 #include <cube/vision/stability.hpp>
@@ -85,50 +86,78 @@ namespace {
 // bias the next solve's arbitration.
 constexpr std::int64_t kSeedHoldMs = 450;
 
+// Everything one variant may move: the tracker's config plus the idle
+// gate's probe cadence (kIdleEscapeEvery made a constructor knob for
+// exactly this sweep). The gate lives OUTSIDE TrackerConfig in production
+// because it gates the detector cascade, not the tracker - but its skip
+// verdicts null real observations, so its calibration question ("does a
+// slower probe cadence starve reacquisition?") is only answerable through
+// the same replayed tracker metrics as everything else here.
+struct SweepSettings {
+    TrackerConfig tracker;
+    int idle_escape_every = IdleGate::kIdleEscapeEvery;
+};
+
 // One swept knob: a name for the CSV, the candidate values, and how to
-// apply a value to a config. The FIRST value of every axis must be the
-// TrackerConfig default - build_sweep_variants() checks this so the grid
-// can never silently drift from the struct's shipped defaults (which are
-// the plan's constants table, transcribed verbatim).
+// apply a value to the settings. The FIRST value of every axis must be
+// the shipped default - build_sweep_variants() checks this so the grid
+// can never silently drift from the struct's shipped defaults (initially
+// the plan's constants table; now the live1-calibrated values).
 struct SweepAxis {
     const char* name;
     std::vector<float> values;
-    void (*apply)(TrackerConfig&, float);
+    void (*apply)(SweepSettings&, float);
 };
 
-// The sweepable subset of the plan's constants table. Deliberately
-// excluded: basin_ceiling_deg and max_coast_sigma_deg (fixed by
-// geometry/safety), acquire_frames (fixed), and the belief clamps (their
-// failure modes need adversarial captures, not clips). One-factor-at-a-
-// time around the baseline rather than a cartesian product: the grid stays
-// bounded (a few dozen variants), each row is attributable to one knob,
-// and interactions worth chasing show up as two OFAT rows both moving a
-// metric - at which point a targeted follow-up sweep is cheap.
+// The sweepable knob set. Deliberately excluded: basin_ceiling_deg and
+// max_coast_sigma_deg (fixed by geometry/safety) and the belief clamps
+// (their failure modes need adversarial captures, not clips). One-factor-
+// at-a-time around the baseline rather than a cartesian product: the grid
+// stays bounded (a few dozen variants), each row is attributable to one
+// knob, and interactions worth chasing show up as two OFAT rows both
+// moving a metric - at which point the follow-up is to make the joint
+// candidate THE baseline (edit the defaults locally) and re-run: every
+// axis then perturbs around the candidate, confirming or refuting it as
+// a local optimum with the same one-row-one-knob attribution.
 std::vector<SweepAxis> sweep_axes() {
     return {
-        {"max_interframe_deg", {25.0F, 15.0F, 35.0F}, [](TrackerConfig& c, float v) { c.max_interframe_deg = v; }},
-        {"gauge_margin_deg", {15.0F, 10.0F, 20.0F}, [](TrackerConfig& c, float v) { c.gauge_margin_deg = v; }},
-        {"coast_sigma_rate_deg", {4.0F, 2.0F, 6.0F}, [](TrackerConfig& c, float v) { c.coast_sigma_rate_deg = v; }},
+        {"max_interframe_deg", {30.0F, 15.0F, 25.0F, 33.0F},
+         [](SweepSettings& s, float v) { s.tracker.max_interframe_deg = v; }},
+        {"gauge_margin_deg", {15.0F, 10.0F, 20.0F, 25.0F},
+         [](SweepSettings& s, float v) { s.tracker.gauge_margin_deg = v; }},
+        {"coast_sigma_rate_deg", {4.0F, 2.0F, 6.0F, 8.0F},
+         [](SweepSettings& s, float v) { s.tracker.coast_sigma_rate_deg = v; }},
         {"acquire_sigma_rate_deg", {2.5F, 1.5F, 4.0F},
-         [](TrackerConfig& c, float v) { c.acquire_sigma_rate_deg = v; }},
-        {"acquire_coast_timeout_ms", {1200.0F, 900.0F, 1600.0F},
-         [](TrackerConfig& c, float v) { c.acquire_coast_timeout_ms = static_cast<std::int64_t>(v); }},
-        {"motion_sigma_gain_deg", {40.0F, 20.0F, 80.0F}, [](TrackerConfig& c, float v) { c.motion_sigma_gain_deg = v; }},
-        {"coast_timeout_ms", {700.0F, 500.0F, 1000.0F},
-         [](TrackerConfig& c, float v) { c.coast_timeout_ms = static_cast<std::int64_t>(v); }},
-        {"outlier_omega_deg_s", {400.0F, 300.0F, 600.0F}, [](TrackerConfig& c, float v) { c.outlier_omega_deg_s = v; }},
-        {"omega_blend", {0.3F, 0.2F, 0.5F}, [](TrackerConfig& c, float v) { c.omega_blend = v; }},
-        {"omega_decay", {0.9F, 0.8F, 0.95F}, [](TrackerConfig& c, float v) { c.omega_decay = v; }},
-        {"posterior_lock_ratio", {100.0F, 30.0F, 300.0F}, [](TrackerConfig& c, float v) { c.posterior_lock_ratio = v; }},
-        {"centre_sigma_lab", {12.0F, 8.0F, 16.0F}, [](TrackerConfig& c, float v) { c.centre_sigma_lab = v; }},
-        {"obs_pose_ceiling_deg", {100.0F, 85.0F, 115.0F}, [](TrackerConfig& c, float v) { c.obs_pose_ceiling_deg = v; }},
+         [](SweepSettings& s, float v) { s.tracker.acquire_sigma_rate_deg = v; }},
+        {"acquire_coast_timeout_ms", {1200.0F, 900.0F, 1600.0F, 2000.0F},
+         [](SweepSettings& s, float v) { s.tracker.acquire_coast_timeout_ms = static_cast<std::int64_t>(v); }},
+        {"acquire_frames", {2.0F, 3.0F, 4.0F},
+         [](SweepSettings& s, float v) { s.tracker.acquire_frames = static_cast<int>(v); }},
+        {"motion_sigma_gain_deg", {40.0F, 20.0F, 80.0F},
+         [](SweepSettings& s, float v) { s.tracker.motion_sigma_gain_deg = v; }},
+        {"coast_timeout_ms", {700.0F, 500.0F, 1000.0F, 1400.0F},
+         [](SweepSettings& s, float v) { s.tracker.coast_timeout_ms = static_cast<std::int64_t>(v); }},
+        {"outlier_omega_deg_s", {400.0F, 250.0F, 300.0F, 600.0F},
+         [](SweepSettings& s, float v) { s.tracker.outlier_omega_deg_s = v; }},
+        {"omega_blend", {0.3F, 0.1F, 0.15F, 0.2F, 0.5F},
+         [](SweepSettings& s, float v) { s.tracker.omega_blend = v; }},
+        {"omega_decay", {0.9F, 0.7F, 0.8F, 0.95F},
+         [](SweepSettings& s, float v) { s.tracker.omega_decay = v; }},
+        {"posterior_lock_ratio", {100.0F, 30.0F, 300.0F},
+         [](SweepSettings& s, float v) { s.tracker.posterior_lock_ratio = v; }},
+        {"centre_sigma_lab", {12.0F, 8.0F, 16.0F, 20.0F},
+         [](SweepSettings& s, float v) { s.tracker.centre_sigma_lab = v; }},
+        {"obs_pose_ceiling_deg", {100.0F, 85.0F, 115.0F},
+         [](SweepSettings& s, float v) { s.tracker.obs_pose_ceiling_deg = v; }},
+        {"idle_escape_every", {4.0F, 2.0F, 3.0F, 6.0F, 8.0F},
+         [](SweepSettings& s, float v) { s.idle_escape_every = static_cast<int>(v); }},
     };
 }
 
 struct SweepVariant {
     std::string axis;   // "baseline" for the untouched config
     float value = 0.0F; // the moved knob's value (baseline: 0, unused)
-    TrackerConfig config;
+    SweepSettings settings;
 };
 
 // Deterministic variant enumeration: baseline first, then each axis's
@@ -136,11 +165,11 @@ struct SweepVariant {
 // filter a partition rather than a lottery.
 std::vector<SweepVariant> build_sweep_variants() {
     std::vector<SweepVariant> variants;
-    variants.push_back({"baseline", 0.0F, TrackerConfig{}});
+    variants.push_back({"baseline", 0.0F, SweepSettings{}});
     for (const auto& axis : sweep_axes()) {
         for (std::size_t i = 1; i < axis.values.size(); ++i) {
-            SweepVariant variant{axis.name, axis.values[i], TrackerConfig{}};
-            axis.apply(variant.config, axis.values[i]);
+            SweepVariant variant{axis.name, axis.values[i], SweepSettings{}};
+            axis.apply(variant.settings, axis.values[i]);
             variants.push_back(std::move(variant));
         }
     }
@@ -190,11 +219,22 @@ std::vector<std::filesystem::path> collect_clip_dirs(const std::filesystem::path
     return clips;
 }
 
+// One cached pass: the tracker input the live handleAnalysisFinished
+// would have built, plus the frame's cool-hue presence statistic - the
+// idle gate's input, cached alongside so gate-cadence variants can be
+// simulated without re-touching pixels (the worker computes the count on
+// EVERY pass, skipped ones included, so caching it unconditionally is the
+// faithful reproduction, not an approximation).
+struct CachedPass {
+    TrackerPassInput input;
+    int cool_hue_pixels = 0;
+};
+
 // Detector stage, run ONCE per clip (see the cost model above): every
 // surviving recorded pass becomes the exact TrackerPassInput the live
 // handleAnalysisFinished would have built for it.
-std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir) {
-    std::vector<TrackerPassInput> passes;
+std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
+    std::vector<CachedPass> passes;
     std::ifstream index_stream(dir / std::string(recording::kIndexCsvName));
     if (!index_stream) {
         return passes;
@@ -227,7 +267,9 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
             continue;
         }
 
-        TrackerPassInput input;
+        CachedPass cached;
+        cached.cool_hue_pixels = count_cool_hue_pixels(frame);
+        TrackerPassInput& input = cached.input;
         input.t_ms = row.t_ms;
         input.motion_score = stability.update(frame).motion_score;
 
@@ -329,7 +371,7 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
             seed_prior = PoseSeed{pose->rvec, pose->tvec};
             seed_t_ms = row.t_ms;
         }
-        passes.push_back(input);
+        passes.push_back(cached);
     }
     return passes;
 }
@@ -351,34 +393,86 @@ struct SweepMetrics {
     int coasting = 0;
     int lost = 0;
     int certain = 0;
+    // Commit opportunities: passes both locked AND identity_certain - the
+    // exact conjunction the capture layer requires before a facelet commit
+    // may fire. THE objective the calibration maximises (locked alone can
+    // be bought with a low certainty bar; certain alone with a track that
+    // never locks).
+    int commit = 0;
+    // THE disqualifier: slip_evidence force-losses inside an epoch that
+    // had ALREADY reached commit-grade certainty at least once. Colour
+    // evidence proved wrong an identity the tracker would have let commit
+    // - a wrong-identity event, however the aggregates look. A slip in a
+    // never-certain epoch is the opposite: the veto doing its job on a
+    // track that was never granted authority. Any config with
+    // certain_slip > 0 is rejected outright, whatever its lock rate.
+    int certain_slip = 0;
+    // Detector passes the (simulated) idle gate suppressed - the worker
+    // budget the gate reclaims; the probe-cadence axis trades this against
+    // the reacquisition metrics above.
+    int skipped = 0;
     int epochs = 0;
     double theta_sum = 0.0;
     float theta_max = 0.0F;
     double margin_sum = 0.0;
 };
 
-// Every TrackerConfig member as a comparable tuple - the drift check's
+// Every swept-settings member as a comparable tuple - the drift check's
 // stand-in for the reflection C++ doesn't have. memcmp over the struct
 // would be simpler but reads padding bytes, whose values initialization
-// does not define. If a member is added to TrackerConfig it must be added
-// here too; the sweep-axis anchoring test below is what makes forgetting
-// costly to miss (a new swept axis whose default can't be verified).
-auto config_fields(const TrackerConfig& c) {
+// does not define. If a member is added to TrackerConfig (or
+// SweepSettings) it must be added here too; the sweep-axis anchoring test
+// below is what makes forgetting costly to miss (a new swept axis whose
+// default can't be verified).
+auto settings_fields(const SweepSettings& s) {
+    const TrackerConfig& c = s.tracker;
     return std::make_tuple(c.basin_ceiling_deg, c.max_interframe_deg, c.gauge_margin_deg, c.coast_sigma_rate_deg,
                            c.motion_sigma_gain_deg, c.acquire_sigma_rate_deg, c.max_coast_sigma_deg, c.coast_timeout_ms,
                            c.acquire_coast_timeout_ms, c.outlier_omega_deg_s, c.outlier_reanchor_count,
                            c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend, c.omega_decay,
                            c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab, c.unknown_face_log_likelihood,
-                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.min_dt_s, c.max_dt_s);
+                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.min_dt_s, c.max_dt_s,
+                           s.idle_escape_every);
 }
 
-SweepMetrics run_variant(const TrackerConfig& config, const std::vector<TrackerPassInput>& inputs) {
-    OrientationTracker tracker(config);
+SweepMetrics run_variant(const SweepSettings& settings, const std::vector<CachedPass>& inputs) {
+    OrientationTracker tracker(settings.tracker);
+    // The idle gate simulated at replay cadence, the REAL class with the
+    // variant's escape cadence - one implementation, no drift. Wiring
+    // mirrors handleAnalysisFinished exactly: the skip verdict was sampled
+    // at queue time (so it applies to THIS pass's detector work before the
+    // tracker sees the pass), and the gate is updated after the tracker
+    // from the post-pass state. Fidelity note: live, a skipped pass never
+    // runs the detectors, while here the cached detector output is nulled
+    // after the fact - identical outcomes except when the gate would skip
+    // a pass whose detectors WOULD have fired, which is precisely the
+    // starvation cost the gate axis exists to measure.
+    IdleGate gate(settings.idle_escape_every);
     SweepMetrics m;
-    for (const auto& input : inputs) {
+    int prev_epoch = -1;
+    bool epoch_was_certain = false;
+    for (const auto& cached : inputs) {
+        TrackerPassInput input = cached.input;
+        if (gate.skip_next()) {
+            ++m.skipped;
+            input.q_obs.reset();
+            input.corner_view = false;
+            input.centre_lab_count = 0;
+        }
         const auto out = tracker.on_pass(input);
         ++m.passes;
         m.observations += input.q_obs.has_value() ? 1 : 0;
+        // Wrong-identity bookkeeping (see SweepMetrics::certain_slip): the
+        // certainty flag is tracked per epoch, reset when an anchor starts
+        // a new one.
+        if (out.epoch != prev_epoch) {
+            prev_epoch = out.epoch;
+            epoch_was_certain = false;
+        }
+        if (out.gate == TrackGate::slip_evidence && epoch_was_certain) {
+            ++m.certain_slip;
+        }
+        epoch_was_certain = epoch_was_certain || out.identity_certain;
         switch (out.gate) {
             case TrackGate::accepted:
                 ++m.accepted;
@@ -421,7 +515,9 @@ SweepMetrics run_variant(const TrackerConfig& config, const std::vector<TrackerP
                 break;
         }
         m.certain += out.identity_certain ? 1 : 0;
+        m.commit += (out.state == TrackState::locked && out.identity_certain) ? 1 : 0;
         m.epochs = std::max(m.epochs, out.epoch);
+        gate.on_pass(cached.cool_hue_pixels, out.state == TrackState::lost);
     }
     return m;
 }
@@ -435,18 +531,18 @@ SweepMetrics run_variant(const TrackerConfig& config, const std::vector<TrackerP
 // conclusion silently.
 TEST_CASE("sweep variant grid is anchored to TrackerConfig defaults and partitions cleanly",
           "[tracker_sweep]") {
-    const TrackerConfig defaults;
+    const SweepSettings defaults;
     for (const auto& axis : sweep_axes()) {
         // Axis value 0 must BE the default: applying it to a default
         // config must change nothing.
-        TrackerConfig config;
-        axis.apply(config, axis.values[0]);
-        CHECK(config_fields(config) == config_fields(defaults));
+        SweepSettings settings;
+        axis.apply(settings, axis.values[0]);
+        CHECK(settings_fields(settings) == settings_fields(defaults));
         // Every non-default value must actually move the config.
         for (std::size_t i = 1; i < axis.values.size(); ++i) {
-            TrackerConfig moved;
+            SweepSettings moved;
             axis.apply(moved, axis.values[i]);
-            CHECK(config_fields(moved) != config_fields(defaults));
+            CHECK(settings_fields(moved) != settings_fields(defaults));
         }
     }
 
@@ -504,7 +600,7 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
     }
 
     // Detector stage once per clip (the expensive part), cached.
-    std::vector<std::pair<std::string, std::vector<TrackerPassInput>>> clip_passes;
+    std::vector<std::pair<std::string, std::vector<CachedPass>>> clip_passes;
     for (const auto& clip : clips) {
         auto passes = load_clip_passes(clip);
         std::printf("# clip %s: %zu passes\n", clip.filename().string().c_str(), passes.size());
@@ -518,7 +614,8 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
 
     std::printf(
         "variant,axis,value,clip,passes,obs,accepted,anchored,basin,margin,omega,implausible,slip,"
-        "locked,coasting,lost,certain,epochs,lock_rate,mean_theta,max_theta,mean_margin\n");
+        "locked,coasting,lost,certain,commit,certain_slip,skipped,epochs,lock_rate,mean_theta,max_theta,"
+        "mean_margin\n");
     const auto variants = build_sweep_variants();
     std::size_t rows = 0;
     for (std::size_t v = 0; v < variants.size(); ++v) {
@@ -527,15 +624,15 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
         }
         const auto& variant = variants[v];
         for (const auto& [clip_name, passes] : clip_passes) {
-            const auto m = run_variant(variant.config, passes);
+            const auto m = run_variant(variant.settings, passes);
             const double lock_rate = m.passes > 0 ? static_cast<double>(m.locked) / m.passes : 0.0;
             const double mean_theta = m.accepted > 0 ? m.theta_sum / m.accepted : 0.0;
             const double mean_margin = m.accepted > 0 ? m.margin_sum / m.accepted : 0.0;
-            std::printf("%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.4f,%.2f,%.2f,%.2f\n", v,
+            std::printf("%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.4f,%.2f,%.2f,%.2f\n", v,
                         variant.axis.c_str(), static_cast<double>(variant.value), clip_name.c_str(), m.passes,
                         m.observations, m.accepted, m.anchored, m.basin, m.margin, m.omega_outlier, m.implausible,
-                        m.slip, m.locked, m.coasting, m.lost, m.certain, m.epochs, lock_rate, mean_theta,
-                        static_cast<double>(m.theta_max), mean_margin);
+                        m.slip, m.locked, m.coasting, m.lost, m.certain, m.commit, m.certain_slip, m.skipped, m.epochs,
+                        lock_rate, mean_theta, static_cast<double>(m.theta_max), mean_margin);
             ++rows;
         }
     }
