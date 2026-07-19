@@ -26,7 +26,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: root.primary ? (mouse.pressed ? Theme.accent700 : (mouse.containsMouse ? Theme.accent600 : Theme.accent))
-             : root.secondary ? (mouse.containsMouse ? Qt.rgba(0.125, 0.117, 0.113, 0.07) : "transparent")
+             : root.secondary ? (mouse.containsMouse ? Theme.inkMuted(0.07) : "transparent")
              : (mouse.containsMouse ? Qt.rgba(0.925, 0.188, 0.075, 0.10) : "transparent")
         border.width: root.secondary ? 1 : 0
         border.color: Theme.divider

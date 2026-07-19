@@ -20,4 +20,14 @@ struct DeviceInfo {
 [[nodiscard]] Result<void> start(const DeviceInfo& device);
 void stop();
 
+// Opens the OS's app-specific settings page, for when a permission the app
+// needs (camera) has been denied and there's no in-app "ask again" API left
+// - Android's Settings.ACTION_APPLICATION_DETAILS_SETTINGS, iOS's
+// UIApplication.openSettingsURLString. The permission check/request itself
+// goes through Qt's own cross-platform QCameraPermission API (see
+// CameraPermission.hpp) rather than duplicating that per platform here; this
+// is only for the one piece Qt doesn't provide. No-op on desktop platforms,
+// which have no per-app camera permission gate to escape.
+void open_permission_settings();
+
 }  // namespace cube::platform::camera

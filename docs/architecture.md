@@ -51,3 +51,13 @@ in this order:
 2. OpenCV capture-to-state pipeline with manual per-face confirmation.
 3. Edge-AI live tracking (coverage detection, auto-advance).
 4. bgfx technical-drawing render (progress overlay, step animation).
+
+The app shell's own 3D cube (`src/app/qt/Cube3DView.qml`, shown on the launch
+screen and in Settings) and its three render styles — Physically-Based
+Realism, Instructional Glow, Borderlands Cel-Shading — are implemented
+entirely in Qt Quick3D, not `src/render/`'s bgfx pipeline. Quick3D's own
+`CustomMaterial`/`Effect`/`ExtendedSceneEnvironment` extensibility covered all
+three (hard-banded cel shading, inverted-hull ink outlines via a front-face-
+culled duplicate mesh, and a halftone/vignette post-processing pass), so
+Spec 4's bgfx scope above is untouched and still available for its own
+progress-overlay/step-animation work.

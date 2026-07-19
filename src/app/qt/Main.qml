@@ -17,6 +17,7 @@ ApplicationWindow {
             case "permission": return permissionScreen;
             case "scan": return scanScreen;
             case "solve": return solveScreen;
+            case "settings": return settingsScreen;
             case "complete": return completeScreen;
             default: return launchScreen;
             }
@@ -27,5 +28,6 @@ ApplicationWindow {
     Component { id: permissionScreen; PermissionScreen {} }
     Component { id: scanScreen; ScanScreen {} }
     Component { id: solveScreen; SolveScreen {} }
+    Component { id: settingsScreen; SettingsScreen {} }
     Component { id: completeScreen; CompleteScreen {} }
 }

@@ -66,14 +66,14 @@ Rectangle {
                 Column {
                     width: parent.width / 2; height: parent.height
                     padding: Theme.space3
-                    Text { text: "MOVES"; font.pixelSize: 11; font.letterSpacing: 1; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                    Text { text: "MOVES"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
                     Text { text: AppState.moveCount; font.family: Theme.fontMono; font.pixelSize: 30; color: Theme.ink }
                 }
                 Rectangle { width: 2; height: parent.height; color: Theme.divider }
                 Column {
                     width: parent.width / 2 - 2; height: parent.height
                     padding: Theme.space3
-                    Text { text: "TIME"; font.pixelSize: 11; font.letterSpacing: 1; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                    Text { text: "TIME"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
                     Text { text: AppState.elapsedLabel(); font.family: Theme.fontMono; font.pixelSize: 30; color: Theme.ink }
                 }
             }
@@ -131,19 +131,19 @@ Rectangle {
                     anchors.fill: parent
                     Column {
                         width: parent.width / 3; height: parent.height; padding: Theme.space4
-                        Text { text: "MOVES"; font.pixelSize: 11; font.letterSpacing: 1; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                        Text { text: "MOVES"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
                         Text { text: AppState.moveCount; font.family: Theme.fontMono; font.pixelSize: 40; color: Theme.ink }
                     }
                     Rectangle { width: 2; height: parent.height; color: Theme.divider }
                     Column {
                         width: parent.width / 3; height: parent.height; padding: Theme.space4
-                        Text { text: "TIME"; font.pixelSize: 11; font.letterSpacing: 1; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                        Text { text: "TIME"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
                         Text { text: AppState.elapsedLabel(); font.family: Theme.fontMono; font.pixelSize: 40; color: Theme.ink }
                     }
                     Rectangle { width: 2; height: parent.height; color: Theme.divider }
                     Column {
                         width: parent.width / 3 - 4; height: parent.height; padding: Theme.space4
-                        Text { text: "METHOD"; font.pixelSize: 11; font.letterSpacing: 1; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                        Text { text: "METHOD"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
                         Text { text: "Beginner"; font.family: Theme.fontMono; font.pixelSize: 18; color: Theme.ink; topPadding: 14 }
                     }
                 }

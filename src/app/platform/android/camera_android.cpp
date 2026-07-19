@@ -1,5 +1,8 @@
 #include "interfaces/camera.hpp"
 
+#include <QCoreApplication>
+#include <QJniObject>
+
 namespace cube::platform::camera {
 
 Result<std::vector<DeviceInfo>> enumerate_devices() {
@@ -13,5 +16,32 @@ Result<void> start(const DeviceInfo& /*device*/) {
 }
 
 void stop() {}
+
+// Launches Settings.ACTION_APPLICATION_DETAILS_SETTINGS for this app's
+// package - the standard escape hatch once a permission has been denied
+// with "don't ask again" and QCameraPermission's requestPermission() can no
+// longer show the system prompt (see CameraPermission.hpp: the actual
+// check/request goes through Qt's own cross-platform permissions API, not
+// hand-rolled JNI - this is only for the one thing that API doesn't cover).
+void open_permission_settings() {
+    QJniObject context = QNativeInterface::QAndroidApplication::context();
+    if (!context.isValid()) {
+        return;
+    }
+
+    QJniObject package_name = context.callObjectMethod("getPackageName", "()Ljava/lang/String;");
+    QJniObject uri = QJniObject::callStaticObjectMethod(
+        "android/net/Uri", "fromParts",
+        "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/net/Uri;",
+        QJniObject::fromString("package").object<jstring>(), package_name.object<jstring>(), nullptr);
+
+    QJniObject action = QJniObject::getStaticObjectField<jstring>(
+        "android/provider/Settings", "ACTION_APPLICATION_DETAILS_SETTINGS");
+
+    QJniObject intent("android/content/Intent", "(Ljava/lang/String;)V", action.object<jstring>());
+    intent.callObjectMethod("setData", "(Landroid/net/Uri;)Landroid/content/Intent;", uri.object());
+
+    context.callMethod<void>("startActivity", "(Landroid/content/Intent;)V", intent.object());
+}
 
 }  // namespace cube::platform::camera

@@ -65,8 +65,19 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Quick3D ShaderTools LabsSettings)
     qt_standard_project_setup(REQUIRES 6.5)
+
+    # camera_android.cpp uses QJniObject/QNativeInterface for the
+    # ACTION_APPLICATION_DETAILS_SETTINGS permission-settings deep link
+    # (see interfaces/camera.hpp: open_permission_settings()). cube_platform
+    # is otherwise deliberately Qt-free (see the comment on it above) - this
+    # holds only while Android also always builds the Qt app (which is the
+    # case for every current preset); a genuinely headless
+    # CUBEULATOR_BUILD_APP=OFF Android configure would need this revisited.
+    if(ANDROID)
+        target_link_libraries(cube_platform PRIVATE Qt6::Core)
+    endif()
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
     # (via WHOLE_ARCHIVE below), not loaded as a runtime plugin from a
@@ -83,7 +94,7 @@ if(CUBEULATOR_BUILD_APP)
     # registered as plain (non-singleton) types in the generated qmldir,
     # so every "Theme.xxx"/"AppState.xxx" reference resolved to undefined
     # everywhere (confirmed in a local linux-gcc-debug run).
-    set_source_files_properties(qt/Theme.qml qt/AppState.qml PROPERTIES
+    set_source_files_properties(qt/Theme.qml qt/AppState.qml qt/SettingsState.qml PROPERTIES
         QT_QML_SINGLETON_TYPE TRUE)
 
     qt_add_qml_module(cube_app_qml
@@ -94,17 +105,55 @@ if(CUBEULATOR_BUILD_APP)
             qt/Main.qml
             qt/Theme.qml
             qt/AppState.qml
+            qt/SettingsState.qml
             qt/AppButton.qml
             qt/Icon.qml
             qt/CubeView.qml
+            qt/Cube3DView.qml
+            qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
             qt/ScanScreen.qml
             qt/SolveScreen.qml
-            qt/CompleteScreen.qml)
+            qt/SettingsScreen.qml
+            qt/CompleteScreen.qml
+        SOURCES
+            qt/CameraDeviceModel.hpp
+            qt/CameraDeviceModel.cpp
+            qt/CameraPermission.hpp
+            qt/CameraPermission.cpp
+            qt/SystemTheme.hpp
+            qt/SystemTheme.cpp
+        RESOURCES
+            qt/shaders/toon.frag
+            qt/shaders/cel.frag
+            qt/shaders/celshade_post.frag)
+
+    # Qt6::Gui: SystemTheme.cpp uses QGuiApplication/QStyleHints, which live
+    # in Gui, not Core (unlike QCameraPermission, added to Core specifically
+    # so apps didn't need to link Gui/Multimedia just to ask permission).
+    target_link_libraries(cube_app_qml PRIVATE cube::platform Qt6::Gui)
+
+    # The generated cube_app_qml_qmltyperegistrations.cpp includes QML_ELEMENT
+    # headers as "#include <CameraDeviceModel.hpp>" (bare filename, no qt/
+    # prefix) - qt/ itself needs to be on the include path for that to
+    # resolve, not just this directory (confirmed: fails with "undeclared
+    # identifier 'CameraDeviceModel'" otherwise).
+    target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
     qt_add_executable(cube_app
         qt/main.cpp)
+
+    if(ANDROID)
+        # Custom AndroidManifest.xml (see src/app/android/) declaring the
+        # CAMERA permission androiddeployqt's own auto-detection doesn't
+        # know to add for a C++-side QCameraPermission request (confirmed:
+        # without this, the OS permission dialog still appears, but
+        # `pm revoke`/real-device permission tracking doesn't recognise the
+        # app as having requested it at all).
+        set_property(TARGET cube_app PROPERTY
+            QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
+    endif()
 
     target_link_libraries(cube_app
         PRIVATE
@@ -115,7 +164,9 @@ if(CUBEULATOR_BUILD_APP)
             cube::coverage
             Qt6::Quick
             Qt6::Gui
-            Qt6::QuickControls2)
+            Qt6::QuickControls2
+            Qt6::Quick3D
+            Qt6::LabsSettings)
 
     add_dependencies(cube_app cube_version)
 
