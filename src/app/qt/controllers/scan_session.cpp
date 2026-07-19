@@ -1283,7 +1283,20 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
 
     debug_stats.corner_status = "unarmed";
     if (corner_armed) {
-        auto corner = cube::vision::observe_corner(analysis_frame);
+        // The same GUI-sampled prior that seeds the pose solves also hints
+        // the corner detector: at a predicted three-faces-visible pose the
+        // fixed isometric sectors/bases are replaced with pose-derived ones
+        // (compute_corner_hint), so corner detections keep firing well away
+        // from the prompted pose - the detection-cadence closure the
+        // tracker's coasting budget depends on. Computed HERE on the worker
+        // from the by-value prior (the GUI thread ships only the pose, per
+        // the sampling contract); a frontal/edge-on prediction yields no
+        // hint and the detector runs exactly the historical fixed-pose way.
+        std::optional<cube::vision::CornerHint> corner_hint;
+        if (pose_prior) {
+            corner_hint = cube::vision::compute_corner_hint(*pose_prior);
+        }
+        auto corner = cube::vision::observe_corner(analysis_frame, corner_hint ? &*corner_hint : nullptr);
         if (corner.has_value()) {
             scale_corner_view(corner->top, scale_back);
             scale_corner_view(corner->lower_left, scale_back);
@@ -1362,10 +1375,15 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
 
 bool ScanSession::cornerScanArmed() const {
     // A corner view routes its three faces independently through the
-    // identity-keyed store, so it's usable at ANY point in the scan - the
-    // only reason to stop looking for corners (or faces) is that all six
-    // slots are filled.
-    return router_.filled_count() < static_cast<int>(cube::model::face_count);
+    // identity-keyed store, so it's usable at ANY point in the scan. Armed
+    // while any slot is unfilled OR the tracker is locked: a full store
+    // can still be waiting on assembly (the 5<->6 retry loop reopens it),
+    // and while locked the corner path is the tracker's best measurement -
+    // three pinned faces constrain all axes where a face view leaves the
+    // planar ambiguity - so pose continuity keeps its cadence rather than
+    // going face-only the moment the sixth slot lands.
+    return router_.filled_count() < static_cast<int>(cube::model::face_count) ||
+           tracker_.state() == cube::vision::TrackState::locked;
 }
 
 bool ScanSession::anyCaptureReady() const {

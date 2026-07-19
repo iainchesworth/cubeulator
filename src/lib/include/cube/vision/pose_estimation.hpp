@@ -7,6 +7,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <optional>
 
 namespace cube::vision {
 
@@ -47,6 +48,28 @@ struct PoseSeed {
 // re-deriving the axis reconciliation and silently disagreeing with it.
 [[nodiscard]] std::array<float, 4> display_quaternion(const cv::Matx33d& opencv_rotation);
 [[nodiscard]] cv::Matx33d opencv_rotation_from_display(const std::array<float, 4>& display_orientation);
+
+// Derives an observe_corner() hint from a predicted pose: which three
+// model faces the prediction says are visible, re-assigned to the
+// {top, lower_left, lower_right} view roles (most up-screen face plays
+// top, the other two follow by the corner's fixed chirality), and each
+// role's on-screen sector / lattice-basis directions. Returns nullopt when
+// the prediction is not a credible three-faces-visible corner presentation
+// (a frontal or edge-on pose - the caller simply runs the detector
+// unhinted, or not at all).
+//
+// Only the seed's ROTATION is consumed. Directions are computed under the
+// weak-perspective approximation (a 3D direction's screen image is the xy
+// part of its camera-frame rotation): at the distances the projectors
+// model (cube several units out, f = frame width) the perspective
+// correction to a DIRECTION is a fraction of a degree - far below the
+// hand-tilt tolerance the detector's affine refit absorbs anyway - and
+// dropping the translation sidesteps the fact that a PoseSeed's model
+// ORIGIN differs between the face path (near-face centre) and the corner
+// path (cube centre) while their model AXES agree, which is the only part
+// a rotation-only derivation touches. This also makes the hint frame-size
+// independent, so it applies unchanged on the downscaled analysis frame.
+[[nodiscard]] std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed);
 
 // The cube's eight corners projected into frame pixels - what a 3D AR
 // wireframe overlay draws so the user sees the cube tracked as an object
@@ -138,7 +161,12 @@ struct CubePoseProjection {
 // As above from a corner view, where the three visible face quads pin
 // seven of the eight corners directly; the hidden eighth is completed by
 // parallelepiped symmetry. The near face slot for vertex ordering is the
-// TOP face's quad.
+// TOP face's quad. The vertex-sharing identities this construction rests
+// on are defined by the detector's QUAD-CORNER LABELS, not by screen
+// positions, so they hold for any corner presentation - fixed-pose or
+// hint-rotated - as long as the observation's cell bases follow the
+// corner topology (which observe_corner guarantees on both paths; see
+// CornerHint).
 //
 // Orientation: the seven pinned corners are only IMAGE-PLANE points - the
 // geometric construction never recovers depth - so the orientation is

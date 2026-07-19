@@ -9,6 +9,7 @@
 #include <limits>
 #include <numbers>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace cube::vision {
@@ -234,6 +235,139 @@ cv::Matx33d opencv_rotation_from_display(const std::array<float, 4>& display_ori
     return kOpenCVToDisplayFlip * rotation_from_quaternion(display_orientation) * kOpenCVToDisplayFlip;
 }
 
+namespace {
+
+// A face's outward normal must clear the image plane by at least this
+// (camera-frame -z component) before the hint calls it visible: below
+// ~8.6 degrees of elevation the face projects as a sliver no lattice fit
+// could hold anyway, and demanding it of ALL THREE faces is what separates
+// a genuine corner presentation from a frontal/edge-on pose (whose third
+// face hugs the limb). The bound also floors every visible normal's
+// on-screen magnitude at ~0.24 (three orthonormal z-components square-sum
+// to 1), keeping the direction normalisations below well-conditioned.
+constexpr double kMinHintFacingCos = 0.15;
+
+}  // namespace
+
+std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed) {
+    cv::Matx33d rotation;
+    cv::Rodrigues(seed.rvec, rotation);
+
+    // The six outward face normals of the unit-cube model (both projectors
+    // share these model AXES; only the origin differs, which a rotation-
+    // only derivation never touches - see the header). Camera frame: +z
+    // into the screen, so a normal faces the viewer when its rotated z
+    // component is negative.
+    static const std::array<cv::Vec3d, 6> kModelNormals = {{{1.0, 0.0, 0.0},
+                                                            {-1.0, 0.0, 0.0},
+                                                            {0.0, 1.0, 0.0},
+                                                            {0.0, -1.0, 0.0},
+                                                            {0.0, 0.0, 1.0},
+                                                            {0.0, 0.0, -1.0}}};
+    std::array<cv::Vec3d, 3> visible{};
+    std::size_t visible_count = 0;
+    for (const cv::Vec3d& normal : kModelNormals) {
+        const cv::Vec3d in_camera = rotation * normal;
+        if (in_camera[2] < -kMinHintFacingCos) {
+            if (visible_count == visible.size()) {
+                return std::nullopt;  // unreachable for a rotation; defensive
+            }
+            visible[visible_count++] = normal;
+        }
+    }
+    if (visible_count != visible.size()) {
+        return std::nullopt;
+    }
+
+    // On-screen image-coordinate direction of a model direction (weak
+    // perspective, header rationale): camera x is screen-right, camera y
+    // is screen-down - exactly the y-down convention the detector's sector
+    // angles use.
+    const auto screen_vec = [&rotation](const cv::Vec3d& direction) {
+        const cv::Vec3d in_camera = rotation * direction;
+        return cv::Point2f(static_cast<float>(in_camera[0]), static_cast<float>(in_camera[1]));
+    };
+
+    // Role assignment. "Top" is the visible face whose projected normal
+    // points most up-screen - the same convention the fixed pose encodes
+    // (its top face IS the up-screen one), kept so the hint degenerates to
+    // the historical arrangement at the prompted pose. Any of the three
+    // cyclic assignments would be geometrically valid (they differ by a
+    // 120-degree turn about the shared corner's diagonal, a lattice
+    // element the tracker's gauge resolution absorbs); picking the
+    // up-screen one deterministically keeps the roles stable frame to
+    // frame under slow rotation, so per-role aggregation windows aren't
+    // churned by arbitrary re-labelling.
+    double best_upness = -std::numeric_limits<double>::infinity();
+    std::size_t top_index = 0;
+    for (std::size_t i = 0; i < visible.size(); ++i) {
+        const cv::Point2f dir = screen_vec(visible[i]);
+        const double length = std::hypot(static_cast<double>(dir.x), static_cast<double>(dir.y));
+        if (length <= 0.0) {
+            return std::nullopt;  // floored away by kMinHintFacingCos; defensive
+        }
+        const double upness = -static_cast<double>(dir.y) / length;  // image y grows downward
+        if (upness > best_upness) {
+            best_upness = upness;
+            top_index = i;
+        }
+    }
+    const cv::Vec3d n_top = visible[top_index];
+    cv::Vec3d n_left = visible[(top_index + 1) % 3];
+    cv::Vec3d n_right = visible[(top_index + 2) % 3];
+    // Chirality pins the other two roles: in the detector's model frame the
+    // roles play U/F/R around the shared near corner, and U x F = R (model
+    // normals (0,-1,0) x (0,0,-1) = (1,0,0)). The three visible normals are
+    // mutually orthogonal +-axes, so exactly one ordering of the remaining
+    // pair satisfies top x left = right; the other is the mirror
+    // arrangement, which no rotation of a real cube can present.
+    if (n_top.cross(n_left).dot(n_right) < 0.0) {
+        std::swap(n_left, n_right);
+    }
+
+    CornerHint hint;
+    const std::array<cv::Vec3d, 3> role_normals = {n_top, n_left, n_right};
+    for (std::size_t role = 0; role < role_normals.size(); ++role) {
+        const cv::Point2f dir = screen_vec(role_normals[role]);
+        const float length = std::hypot(dir.x, dir.y);
+        hint.face_dir[role] = dir / length;
+    }
+
+    // Lattice bases per role, as 3D model directions first: each face's
+    // cell columns/rows run parallel to the OTHER faces' normals, and the
+    // corner topology (which face corner is the shared one, where rows and
+    // columns advance) fixes the signs. Derived from the fixed pose's
+    // documented cell order (corner_slot_mappings' derivation): the top
+    // face's columns run along the right face's normal and its rows along
+    // the left face's (rows recede toward the shared corner); both hanging
+    // faces' rows run down-screen away from the top face (-n_top), the
+    // left one's columns along n_right (toward the shared corner) and the
+    // right one's along -n_left (away from it). At the isometric pose this
+    // reproduces the fixed kTopColDir/kSideRowDir/... values exactly.
+    const std::array<std::pair<cv::Vec3d, cv::Vec3d>, 3> role_bases = {{
+        {n_right, n_left},          // top: col, row
+        {n_right, -1.0 * n_top},    // lower_left
+        {-1.0 * n_left, -1.0 * n_top},  // lower_right
+    }};
+    for (std::size_t role = 0; role < role_bases.size(); ++role) {
+        const cv::Point2f col = screen_vec(role_bases[role].first);
+        const cv::Point2f row = screen_vec(role_bases[role].second);
+        const float col_length = std::hypot(col.x, col.y);
+        const float row_length = std::hypot(row.x, row.y);
+        const float shorter = std::min(col_length, row_length);
+        if (shorter <= 0.0F) {
+            return std::nullopt;  // same floor argument as face_dir; defensive
+        }
+        // Shorter-axis normalisation (CornerHint contract): the sector
+        // pitch estimate is a nearest-neighbour median, i.e. the spacing
+        // along the MORE foreshortened axis, so scaling that axis to unit
+        // makes pitch * dir land both steps of an oblique face correctly.
+        hint.col_dir[role] = col / shorter;
+        hint.row_dir[role] = row / shorter;
+    }
+    return hint;
+}
+
 Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation, cv::Size frame_size,
                                                   const PoseSeed* seed) {
     if (frame_size.width <= 0 || frame_size.height <= 0) {
@@ -373,11 +507,18 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
     }
 
     // The three visible quads pin seven distinct cube corners directly - no
-    // solvePnP needed. From corner_observation.hpp's documented pose (top
-    // face rhombus above, side parallelograms hanging below-left and
-    // below-right, all meeting at the shared near corner) the quad-corner
-    // coincidences are, in U/F/R vertex names for the first corner view
-    // (identical geometry for the second):
+    // solvePnP needed. The coincidences below are identities on QUAD-CORNER
+    // LABELS, not on screen positions: each view's tl/tr/br/bl follow from
+    // its cell bases (quad corner = anchor -+ 1.5 col_step -+ 1.5 row_step),
+    // and the corner topology fixes where each face's bases point relative
+    // to the shared vertex - the top face's +col/+row advance toward it,
+    // the hanging faces' rows advance away from the top face, the left
+    // one's columns toward the shared vertex and the right one's away. That
+    // convention is what observe_corner's bases encode on BOTH paths (the
+    // fixed isometric directions, or a CornerHint's pose-predicted ones -
+    // compute_corner_hint derives them from this same topology), so the
+    // identities hold for any corner presentation, however rotated on
+    // screen, in U/F/R vertex names of the view's model frame:
     //
     //   URF (shared near corner): top.br = lower_left.tr = lower_right.tl
     //   UFL (top-left edge):      top.bl = lower_left.tl
@@ -386,7 +527,10 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
     //   UBL / DLF / DRB:          top.tl / lower_left.bl / lower_right.br
     //
     // Coincident estimates are averaged so small detector disagreement is
-    // split rather than favouring one face's fit.
+    // split rather than favouring one face's fit. A labelling that does NOT
+    // satisfy the identities (a mis-hinted or degenerate fit) constructs a
+    // self-inconsistent vertex set, which the reprojection gate on the pose
+    // solve below rejects rather than exporting.
     const cv::Point2f v_ubl = top[0];
     const cv::Point2f v_ubr = 0.5F * (top[1] + right[1]);
     const cv::Point2f v_urf = (top[2] + left[1] + right[0]) / 3.0F;

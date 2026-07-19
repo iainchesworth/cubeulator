@@ -369,7 +369,9 @@ private:
     // pose_prior is the previous pass's accepted pose, likewise sampled on
     // the GUI thread at queue time (by value - the worker must never read
     // GUI-owned pose state) and threaded into the projectors as their
-    // continuity seed; nullopt runs the bit-identical unseeded path.
+    // continuity seed AND into compute_corner_hint so the corner detector
+    // follows the predicted pose instead of demanding the fixed isometric
+    // presentation; nullopt runs the bit-identical unseeded, unhinted path.
     // run_hand_detector is the GUI-thread-decided decimation verdict for
     // this pass (the worker holds no pass counter of its own).
     [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,

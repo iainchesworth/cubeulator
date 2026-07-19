@@ -28,6 +28,17 @@ constexpr double kMaxCellAreaFraction = 0.05;
 // 1.6 - the per-face lattice fits, not per-contour squareness, carry the
 // discrimination burden in this mode.
 constexpr double kMaxParallelogramAspect = 3.0;
+// Under a hint the bound relaxes further: the prompted pose keeps every
+// face within ~55 degrees of frontal, but a tracked corner presentation
+// legitimately shows a flank face out toward the capture gates' 70-degree
+// frontal bound, where a cell's sheared parallelogram measures 4-5:1 under
+// minAreaRect (a 66-degree flank already hits 4.3). The looser bound
+// admits more elongated clutter as candidates, which is acceptable
+// PRECISELY because a hint exists: the pose-predicted sectors and bases
+// plus the unchanged 6-of-9 lattice inlier floors reject what the
+// squareness proxy would have, and kMaxCandidatesConsidered still bounds
+// the O(n^2) pitch work either way.
+constexpr double kMaxHintedParallelogramAspect = 6.0;
 constexpr double kApproxPolyEpsilonFraction = 0.04;
 
 // Same CLAHE + locally-adaptive brightness strategy as grid_detection.cpp
@@ -73,10 +84,13 @@ constexpr float kMinInteriorFraction = 0.30F;
 // near-central candidate is not a corner-on cube.
 constexpr float kMaxCentroidGapPitchRatio = 1.25F;
 
-// Sector boundaries for partitioning candidates into the three faces: the
-// bisectors between the face-centroid directions of the documented poses
-// (top face at -90 deg, lower-right at +30 deg, lower-left at +150 deg, in
-// y-down screen angles measured from the candidate centroid).
+// Sector boundaries for partitioning candidates into the three faces on
+// the NO-HINT path: the bisectors between the face-centroid directions of
+// the documented poses (top face at -90 deg, lower-right at +30 deg,
+// lower-left at +150 deg, in y-down screen angles measured from the
+// candidate centroid). A hint replaces these with its own sector centre
+// directions (nearest-direction assignment - the same bisector partition,
+// just rotated to wherever the predicted pose puts the faces).
 constexpr float kTopSectorMin = -5.0F * std::numbers::pi_v<float> / 6.0F;
 constexpr float kTopSectorMax = -std::numbers::pi_v<float> / 6.0F;
 constexpr float kRightSectorMax = std::numbers::pi_v<float> / 2.0F;
@@ -100,7 +114,10 @@ constexpr float kCos30 = 0.86602540F;
 // basis pair per visible face (the same on-screen cell order
 // corner_slot_mappings() below derives its tables for). Fixed rather than
 // searched: the capture UI prompts exactly this pose, and the affine
-// least-squares refit absorbs the residual hand-held tilt.
+// least-squares refit absorbs the residual hand-held tilt. These are the
+// NO-HINT defaults; a CornerHint substitutes pose-predicted directions in
+// the same role slots (compute_corner_hint reproduces exactly these values
+// at the isometric pose, so the hinted path is a strict generalisation).
 const cv::Point2f kTopColDir(kCos30, 0.5F);        // top face: down-right edge
 const cv::Point2f kTopRowDir(-kCos30, 0.5F);       // top face: down-left edge
 const cv::Point2f kSideColRightDir(kCos30, 0.5F);  // lower-left face: shared top edge
@@ -112,7 +129,7 @@ struct Candidate {
     double area = 0.0;
 };
 
-[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame) {
+[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame, double max_aspect) {
     cv::Mat blurred;
     cv::GaussianBlur(bgr_frame, blurred, cv::Size(5, 5), 0);
 
@@ -212,7 +229,7 @@ struct Candidate {
             }
             const float aspect = std::max(min_rect.size.width, min_rect.size.height) /
                                  std::min(min_rect.size.width, min_rect.size.height);
-            if (aspect > kMaxParallelogramAspect) {
+            if (aspect > max_aspect) {
                 continue;
             }
             const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
@@ -516,12 +533,13 @@ struct FaceFit {
 
 }  // namespace
 
-Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
+Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerHint* hint) {
     if (bgr_frame.empty() || bgr_frame.type() != CV_8UC3) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    auto candidates = find_sticker_candidates(bgr_frame);
+    auto candidates = find_sticker_candidates(
+        bgr_frame, hint != nullptr ? kMaxHintedParallelogramAspect : kMaxParallelogramAspect);
     if (candidates.size() < kMinTotalCandidates) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -581,13 +599,34 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
     std::vector<cv::Point2f> lower_right_centers;
     for (const auto& center : centers) {
         const cv::Point2f rel = center - centroid;
-        const float angle = std::atan2(rel.y, rel.x);
-        if (angle >= kTopSectorMin && angle < kTopSectorMax) {
-            top_centers.push_back(center);
-        } else if (angle >= kTopSectorMax && angle < kRightSectorMax) {
-            lower_right_centers.push_back(center);
+        if (hint != nullptr) {
+            // Nearest hinted sector direction wins: maximising the dot
+            // product against unit sector directions minimises the angular
+            // distance (rel's own magnitude scales all three candidates
+            // identically), which is the same bisector partition the fixed
+            // path draws - just rotated to where the pose actually put the
+            // faces.
+            const std::array<std::vector<cv::Point2f>*, 3> sectors{&top_centers, &lower_left_centers,
+                                                                   &lower_right_centers};
+            std::size_t best = 0;
+            float best_dot = std::numeric_limits<float>::lowest();
+            for (std::size_t role = 0; role < sectors.size(); ++role) {
+                const float dot = rel.x * hint->face_dir[role].x + rel.y * hint->face_dir[role].y;
+                if (dot > best_dot) {
+                    best_dot = dot;
+                    best = role;
+                }
+            }
+            sectors[best]->push_back(center);
         } else {
-            lower_left_centers.push_back(center);
+            const float angle = std::atan2(rel.y, rel.x);
+            if (angle >= kTopSectorMin && angle < kTopSectorMax) {
+                top_centers.push_back(center);
+            } else if (angle >= kTopSectorMax && angle < kRightSectorMax) {
+                lower_right_centers.push_back(center);
+            } else {
+                lower_left_centers.push_back(center);
+            }
         }
     }
     if (top_centers.size() < kMinFaceCandidates || lower_left_centers.size() < kMinFaceCandidates ||
@@ -595,9 +634,12 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    const auto top_fit = fit_face_grid(top_centers, kTopColDir, kTopRowDir);
-    const auto lower_left_fit = fit_face_grid(lower_left_centers, kSideColRightDir, kSideRowDir);
-    const auto lower_right_fit = fit_face_grid(lower_right_centers, kSideColUpDir, kSideRowDir);
+    const auto top_fit = fit_face_grid(top_centers, hint != nullptr ? hint->col_dir[0] : kTopColDir,
+                                       hint != nullptr ? hint->row_dir[0] : kTopRowDir);
+    const auto lower_left_fit = fit_face_grid(lower_left_centers, hint != nullptr ? hint->col_dir[1] : kSideColRightDir,
+                                              hint != nullptr ? hint->row_dir[1] : kSideRowDir);
+    const auto lower_right_fit = fit_face_grid(lower_right_centers, hint != nullptr ? hint->col_dir[2] : kSideColUpDir,
+                                               hint != nullptr ? hint->row_dir[2] : kSideRowDir);
     if (!top_fit || !lower_left_fit || !lower_right_fit) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
