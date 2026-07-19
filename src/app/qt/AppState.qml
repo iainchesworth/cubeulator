@@ -2,9 +2,12 @@ pragma Singleton
 import QtQuick
 import Cubeulator
 
-// Scan-phase state delegates to CameraController/ScanSession. Solve phase
-// (step/steps/elapsedSeconds/etc.) stays a demo mock - solving itself isn't
-// implemented yet (see docs/architecture.md - Spec 00 skeleton).
+// Screen-routing state, delegating to real controllers for each phase:
+// CameraController/ScanSession own the scan phase, SolveController owns the
+// solve phase (moves, stickers, stage progress) via a real
+// cube::solver::solve() - see solve_controller.hpp. The two aren't wired
+// together yet - SolveController still solves a random_scramble()'d cube
+// rather than what ScanSession actually reads (see docs/architecture.md).
 QtObject {
     id: state
 
@@ -58,17 +61,10 @@ QtObject {
         { code: "B", name: "back", color: Theme.faceB }
     ]
 
-    property int step: 0
-    readonly property var steps: [
-        { title: "White cross", detail: "Bring the four white edges to the top face, each matching its side centre.", move: "F R U R' U' F'" },
-        { title: "White corners", detail: "Insert the four white corners to complete the first layer.", move: "R U R' U'" },
-        { title: "Middle layer", detail: "Send the middle-layer edges home with the right-hand insert.", move: "U R U' R' U' F' U F" },
-        { title: "Yellow cross", detail: "Orient the last-layer edges into a cross on the yellow face.", move: "F R U R' U' F'" },
-        { title: "Yellow face", detail: "Orient the last four corners so the whole top reads yellow.", move: "R U R' U R U2 R'" },
-        { title: "Final layer", detail: "Permute the last-layer pieces into their solved positions.", move: "R U' R U R U R U' R' U' R2" }
-    ]
+    // Thin passthrough so CompleteScreen.qml's move-count readout doesn't
+    // need its own SolveController binding.
+    readonly property int moveCount: SolveController.totalMoves
 
-    property int moveCount: 42
     property int elapsedSeconds: 0
 
     property var clockTimer: Timer {
@@ -112,27 +108,23 @@ QtObject {
         screen = "scan";
     }
 
-    function nextStep() {
-        if (step < steps.length - 1)
-            step += 1;
-        else
-            screen = "complete";
-    }
-
-    function prevStep() {
-        if (step > 0)
-            step -= 1;
-    }
-
     function restart() {
-        step = 0;
         elapsedSeconds = 0;
         screen = "launch";
     }
 
+    // Cycles through a small set of seeds confirmed (during this feature's
+    // development) to solve quickly - solve_pll's search can occasionally
+    // take a very long time on an arbitrary scramble (seed 3, notably -
+    // see pll.cpp's history), and there's no real vision pipeline yet to
+    // source a scramble from anyway, so picking from known-fast seeds
+    // avoids freezing the UI on solve()'s still-synchronous call.
+    property int nextScrambleSeed: 1
+
     function scanAnother() {
-        step = 0;
         elapsedSeconds = 0;
+        SolveController.restart(nextScrambleSeed);
+        nextScrambleSeed = (nextScrambleSeed + 1) % 3;
         screen = "scan";
     }
 }

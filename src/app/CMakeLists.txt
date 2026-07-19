@@ -180,6 +180,8 @@ if(CUBEULATOR_BUILD_APP)
             qt/CameraPermission.cpp
             qt/SystemTheme.hpp
             qt/SystemTheme.cpp
+            qt/solve_controller.hpp
+            qt/solve_controller.cpp
         RESOURCES
             qt/shaders/toon.frag
             qt/shaders/cel.frag
@@ -190,13 +192,18 @@ if(CUBEULATOR_BUILD_APP)
     # so apps didn't need to link Gui/Multimedia just to ask permission).
     # cube::platform: CameraPermission.cpp calls
     # cube::platform::camera::open_permission_settings().
-    target_link_libraries(cube_app_qml PRIVATE cube::platform Qt6::Gui)
+    # cube::lib + Qt6::Qml: solve_controller.cpp needs cube::lib's include
+    # paths at its own compile step, and QML_ELEMENT/QML_SINGLETON (used by
+    # SolveController) need Qt6::Qml's qqmlregistration.h visible here too.
+    target_link_libraries(cube_app_qml PRIVATE cube::platform cube::lib Qt6::Gui Qt6::Qml)
 
     # The generated cube_app_qml_qmltyperegistrations.cpp includes QML_ELEMENT
-    # headers as "#include <CameraPermission.hpp>" (bare filename, no qt/
-    # prefix) - qt/ itself needs to be on the include path for that to
-    # resolve, not just this directory (confirmed: fails with "undeclared
-    # identifier 'CameraPermission'" otherwise).
+    # headers via "#include <CameraPermission.hpp>" (bare filename) and
+    # "#if __has_include(<solve_controller.hpp>)" (angle brackets) - both
+    # resolve via the include *path*, not relative to the source file's own
+    # directory - so qt/ itself needs to be on the include path for either
+    # to resolve, not just this directory (confirmed: fails with "undeclared
+    # identifier" otherwise, for both CameraPermission and SolveController).
     target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
     qt_add_executable(cube_app

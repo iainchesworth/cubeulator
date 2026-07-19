@@ -43,7 +43,15 @@ target_sources(cube_lib
         src/version.cpp
         src/model/scan_progress.cpp
         src/model/color_scheme.cpp
+        src/solver/cube.cpp
+        src/solver/notation.cpp
+        src/solver/cross.cpp
+        src/solver/corners.cpp
+        src/solver/middle_edges.cpp
+        src/solver/oll.cpp
+        src/solver/pll.cpp
         src/solver/solver.cpp
+        src/solver/stepped_solution.cpp
         src/vision/vision.cpp
         src/vision/grid_detection.cpp
         src/vision/color_classification.cpp

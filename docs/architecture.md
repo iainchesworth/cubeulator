@@ -42,15 +42,31 @@ iOS via Qt's Xcode integration, both loading the same `Main.qml`.
 
 ## What's implemented today vs. planned
 
-This repository is currently the Spec 00 skeleton: `src/lib/`'s
-solver/vision/render/i18n modules and `src/render/` are stub targets that
-compile and link but contain no real logic. That logic lands in later specs,
-in this order:
+`src/lib/`'s solver and vision modules are both real. `cube::solver::solve()`
+solves a cube via the classic beginner (layer-by-layer) method - cross,
+white corners, middle edges, 2-look OLL, 2-look PLL - the same staged
+structure the app teaches, found by search rather than a memorised
+algorithm table (see `src/lib/src/solver/`). `cube::vision` runs a full
+OpenCV capture-to-state pipeline - grid detection, colour classification,
+stability/hand-presence gating, auto-advance - with manual per-face
+confirmation as the fallback (see `src/lib/src/vision/`). There's no wiring
+yet between the two: `src/app/qt/solve_controller.hpp` bridges the solver
+into QML off a `random_scramble()`'d cube rather than a real scan.
+`CubeView.qml` draws a per-move arrow (face + direction) accurate to the
+solver's actual output, with a hidden-face badge for moves on faces this
+fixed 3-face iso view doesn't show. `render` (bgfx) and `i18n` remain stub
+targets that compile and link but contain no real logic.
 
-1. Cube state model + Kociemba solving from a hardcoded scramble.
-2. OpenCV capture-to-state pipeline with manual per-face confirmation.
-3. Edge-AI live tracking (coverage detection, auto-advance).
-4. bgfx technical-drawing render (progress overlay, step animation).
+Planned, in order:
+
+1. Wire the real scan (`cube::vision`) into `SolveController` in place of
+   `random_scramble()`.
+2. Real (not snap/no-op) `CubeView.qml` move animation, now that the
+   separate fully-rendered 3D cube work has landed - it already has a
+   single seam (`animateMove()`) for this to plug into.
+3. bgfx technical-drawing render pipeline, if the QML Canvas approach turns
+   out not to be sufficient on its own.
+4. i18n locale resource loading.
 
 The app shell's own 3D cube (`src/app/qt/Cube3DView.qml`, shown on the launch
 screen and in Settings) and its three render styles — Physically-Based
@@ -59,5 +75,5 @@ entirely in Qt Quick3D, not `src/render/`'s bgfx pipeline. Quick3D's own
 `CustomMaterial`/`Effect`/`ExtendedSceneEnvironment` extensibility covered all
 three (hard-banded cel shading, inverted-hull ink outlines via a front-face-
 culled duplicate mesh, and a halftone/vignette post-processing pass), so
-Spec 4's bgfx scope above is untouched and still available for its own
+the bgfx scope above is untouched and still available for its own
 progress-overlay/step-animation work.
