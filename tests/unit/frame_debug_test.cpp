@@ -25,6 +25,7 @@
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
+#include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
 #include <cube/vision/stability.hpp>
@@ -435,6 +436,17 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     int observation_passes = 0;
     int accepted_passes = 0;
 
+    // Idle-gate shadow simulation: the live worker SKIPS the detectors on
+    // gate-approved passes; here every pass still runs them (this harness
+    // is the gate-off reference), and the gate merely records what it
+    // WOULD have skipped. The safety assertion at the bottom is the
+    // spec'd diff: no pass the gate would skip may be one the tracker
+    // accepted - i.e. gate-on and gate-off accepted-pass sets must be
+    // identical.
+    cube::vision::IdleGate idle_gate;
+    int would_skip_passes = 0;
+    int idle_violations = 0;
+
     std::int64_t previous_t_ms = 0;
     bool have_previous = false;
     std::size_t replayed = 0;
@@ -560,14 +572,18 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                 track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
             }
         }
+        const bool would_idle_skip = idle_gate.skip_next();  // verdict sampled pre-pass, as live
         const auto track = tracker.on_pass(track_in);
         ++state_counts[static_cast<std::size_t>(track.state)];
         ++gate_counts[static_cast<std::size_t>(track.gate)];
         observation_passes += track_in.q_obs.has_value() ? 1 : 0;
-        accepted_passes += (track.gate == cube::vision::TrackGate::accepted ||
-                            track.gate == cube::vision::TrackGate::anchored)
-                               ? 1
-                               : 0;
+        const bool pass_accepted = track.gate == cube::vision::TrackGate::accepted ||
+                                   track.gate == cube::vision::TrackGate::anchored;
+        accepted_passes += pass_accepted ? 1 : 0;
+        would_skip_passes += would_idle_skip ? 1 : 0;
+        idle_violations += (would_idle_skip && pass_accepted) ? 1 : 0;
+        idle_gate.on_pass(cube::vision::count_cool_hue_pixels(frame),
+                          track.state == cube::vision::TrackState::lost);
 
         std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),
                     static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
@@ -594,5 +610,9 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                 "slip-evidence=%d\n",
                 gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4], gate_counts[5],
                 gate_counts[6], gate_counts[7]);
+    std::printf("# idle-gate: would-skip=%d violations=%d\n", would_skip_passes, idle_violations);
+    // The gate-off/gate-on accepted-pass sets must be identical: the gate
+    // may only ever discard passes that would have produced nothing.
+    CHECK(idle_violations == 0);
     CHECK(replayed > 0);
 }

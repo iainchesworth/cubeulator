@@ -27,6 +27,7 @@ add_executable(cube_unit_tests
     unit/auto_advance_test.cpp
     unit/vision_facade_test.cpp
     unit/hand_presence_capability_test.cpp
+    unit/idle_gate_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
     unit/solver/last_layer_test.cpp

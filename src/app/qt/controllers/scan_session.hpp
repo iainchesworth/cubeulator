@@ -10,6 +10,7 @@
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/hand_presence.hpp>
+#include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
@@ -359,6 +360,12 @@ private:
         // value across unchecked passes.
         bool hand_present = false;
         bool hand_checked = false;
+        // Cool-hue presence statistic for the cube-absent idle gate (see
+        // cube/vision/idle_gate.hpp), computed on EVERY pass - including
+        // idle-skipped ones, since it is the signal that ends an idle
+        // span. Consumed by handleAnalysisFinished to advance the
+        // GUI-owned IdleGate.
+        int cool_hue_pixels = 0;
     };
 
     // corner_armed is captured on the GUI thread when the pass is queued so
@@ -373,10 +380,15 @@ private:
     // follows the predicted pose instead of demanding the fixed isometric
     // presentation; nullopt runs the bit-identical unseeded, unhinted path.
     // run_hand_detector is the GUI-thread-decided decimation verdict for
-    // this pass (the worker holds no pass counter of its own).
+    // this pass (the worker holds no pass counter of its own), decimated
+    // harder while the tracker is lost (kHandOnnxDecimationLost).
+    // skip_detectors is likewise decided GUI-side at queue time from the
+    // IdleGate: a true verdict elides the face/corner detectors and pose
+    // for this pass (cube-absent frame, tracker lost) while stability,
+    // hand election, the recorder and the cool-hue statistic still run.
     [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
                                          std::optional<cube::vision::PoseSeed> pose_prior,
-                                         bool run_hand_detector);
+                                         bool run_hand_detector, bool skip_detectors);
 
     [[nodiscard]] bool cornerScanArmed() const;
     // True when some aggregator's window has converged AND the last pass
@@ -480,6 +492,11 @@ private:
     // mutated solely in handleAnalysisFinished (one on_pass per analysis
     // pass - the pass cadence is its clock).
     cube::vision::OrientationTracker tracker_;
+    // Cube-absent idle gate (see cube/vision/idle_gate.hpp): GUI thread
+    // only, advanced once per pass in handleAnalysisFinished from the
+    // worker-computed cool-hue count; poll() samples its skip verdict at
+    // queue time. Reset with the reading - a new scan starts detecting.
+    cube::vision::IdleGate idle_gate_;
     // Temporally smoothed tracker quaternion backing cubeOrientation (see
     // kOrientationSmoothing in the .cpp): nlerp'd toward each pass's
     // tracked orientation while locked/coasting, dropped on lost/acquiring

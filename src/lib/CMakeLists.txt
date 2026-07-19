@@ -68,6 +68,7 @@ target_sources(cube_lib
         src/vision/stability.cpp
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
+        src/vision/idle_gate.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 

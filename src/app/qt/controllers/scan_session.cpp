@@ -61,6 +61,13 @@ constexpr int kAnalysisWidth = 640;
 // skipped passes (see AnalysisResult::hand_checked) so the hint doesn't
 // strobe at the decimation duty cycle.
 constexpr int kHandOnnxDecimation = 4;
+// While the tracker is LOST the decimation stretches further still: hand
+// presence gates nothing in that state (it is a UI hint only, and there
+// is no capture to protect), yet the ONNX pass dominates worker cost at
+// exactly the moment the pipeline most needs cadence to reacquire - the
+// live1 lesson that a lost tracker spent its budget on a hint nobody was
+// consuming. ~2 Hz sampling keeps the hint from freezing entirely.
+constexpr int kHandOnnxDecimationLost = 16;
 
 // --- capture gates (see tryCommitConverged) --------------------------------
 // Primary gate: commits require a LOCKED track whose identity has this
@@ -911,13 +918,24 @@ void ScanSession::poll() {
     if (cube_pose_ && cube_pose_->orientation_valid) {
         pose_prior = cube::vision::PoseSeed{cube_pose_->rvec, cube_pose_->tvec};
     }
-    const bool run_hand_detector = (analysis_pass_seq_++ % kHandOnnxDecimation) == 0;
+    // Lost-mode cadence recovery, both verdicts sampled GUI-side at queue
+    // time like every other per-pass prior: (1) ONNX decimation stretches
+    // while lost (see kHandOnnxDecimationLost); (2) the idle gate may skip
+    // the detector cascade outright on a cube-absent frame - its state was
+    // updated from the PREVIOUS pass's cool-hue count in
+    // handleAnalysisFinished, so the worker stays stateless and the
+    // one-pass verdict lag is covered by the gate's entry hysteresis.
+    const bool tracker_lost = tracker_.state() == cube::vision::TrackState::lost;
+    const int hand_decimation = tracker_lost ? kHandOnnxDecimationLost : kHandOnnxDecimation;
+    const bool run_hand_detector = (analysis_pass_seq_++ % hand_decimation) == 0;
+    const bool skip_detectors = idle_gate_.skip_next();
     analysis_inflight_ = true;
     analysis_inflight_timer_.restart();
     analysis_overrun_logged_ = false;
     analysis_watcher_.setFuture(QtConcurrent::run(
-        [this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed, pose_prior, run_hand_detector]() {
-            return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector);
+        [this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed, pose_prior, run_hand_detector,
+         skip_detectors]() {
+            return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector, skip_detectors);
         }));
 }
 
@@ -1085,6 +1103,12 @@ void ScanSession::handleAnalysisFinished() {
             has_smoothed_orientation_ = false;
         }
         log_track_pass(track);
+
+        // Idle-gate update from the SAME pass's presence statistic and
+        // the tracker's post-pass state (only a lost tracker may idle).
+        // Mutated here - GUI thread, once per pass - so poll() can sample
+        // the skip verdict at queue time with the worker kept stateless.
+        idle_gate_.on_pass(result.cool_hue_pixels, track.state == cube::vision::TrackState::lost);
     }
 
     // --- Identity-keyed aggregation & routing ------------------------------
@@ -1213,7 +1237,7 @@ void ScanSession::handleAnalysisFinished() {
 
 ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
                                                  std::optional<cube::vision::PoseSeed> pose_prior,
-                                                 bool run_hand_detector) {
+                                                 bool run_hand_detector, bool skip_detectors) {
     AnalysisResult result;
     result.frame_ms = frame_t_ms;
 
@@ -1256,6 +1280,26 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // input of a pass even if a detector crashes on it - that frame is
     // precisely the one worth replaying.
     record_vision_frame(analysis_frame, frame_t_ms, cv::Size(frame.cols, frame.rows));
+
+    // Cool-hue presence statistic, computed EVERY pass (idle-skipped ones
+    // included - it is the signal that ENDS an idle span, so it cannot
+    // itself be skipped). Stateless and cheap (fixed 160x120); the GUI
+    // thread owns the IdleGate state it feeds.
+    result.cool_hue_pixels = cube::vision::count_cool_hue_pixels(analysis_frame);
+
+    // Idle skip (see IdleGate): the tracker is lost and the last passes
+    // showed no cube-coloured pixels, so the detector cascade would burn
+    // its full cost on an empty frame. Stability, hand election, the
+    // recorder and the presence statistic above all still ran - only the
+    // detectors and pose are elided, so the pass still ticks the tracker's
+    // clock as an honest no-observation pass.
+    if (skip_detectors) {
+        VisionDebugStats idle_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+        idle_stats.face_status = "idle-skipped";
+        idle_stats.corner_status = "idle-skipped";
+        dump_vision_debug(analysis_frame, idle_stats);
+        return result;
+    }
 
     // A cell projected outside the frame samples fabricated colour (a
     // clamped border strip, or corner sampling's all-zero fallback) that is
@@ -1681,6 +1725,9 @@ void ScanSession::resetReading() {
     // the next pass, and the commit-gate context must not let a stale
     // "locked" verdict authorise a commit into the new scan.
     tracker_.reset();
+    // The idle gate's streaks describe the previous scan's scene; a new
+    // scan must start with the detectors running.
+    idle_gate_.reset();
     capture_gate_ok_ = false;
     consec_accepts_ = 0;
     has_last_track_q_ = false;
