@@ -563,11 +563,42 @@ QVariantList ScanSession::cubeOrientation() const {
     // confidently coasting - either condition would blank the 3D cube in
     // precisely the detection gaps the tracker exists to carry it through.
     if (has_smoothed_orientation_) {
-        for (const float component : smoothed_orientation_) {
-            list.append(static_cast<qreal>(component));
-        }
+        // Mirror compensation, display-only: the preview mirrors the video
+        // about the screen-vertical axis (x -> -x in the display frame),
+        // and conjugating a rotation by that reflection maps the axis to
+        // its mirror image and flips the turn direction - in quaternion
+        // components, (w, x, y, z) -> (w, x, -y, -z). Without it the 3D
+        // progress cube yaws AGAINST the mirrored video (map RC12); with
+        // it, cube and video turn the same way the user's hands do. Applied
+        // at read time so tracker state, routing and the TRACK log all stay
+        // in the camera's unmirrored frame - flipping the flag mid-scan
+        // costs nothing but this getter's output. The sign convention is
+        // derived, not yet verified against a live mirrored webcam (map
+        // open question 7): if empirical checking shows the opposite
+        // handedness, the fix is local to these two negations.
+        const float mirror = preview_mirrored_ ? -1.0F : 1.0F;
+        list.append(static_cast<qreal>(smoothed_orientation_[0]));
+        list.append(static_cast<qreal>(smoothed_orientation_[1]));
+        list.append(static_cast<qreal>(mirror * smoothed_orientation_[2]));
+        list.append(static_cast<qreal>(mirror * smoothed_orientation_[3]));
     }
     return list;
+}
+
+bool ScanSession::previewMirrored() const noexcept {
+    return preview_mirrored_;
+}
+
+void ScanSession::setPreviewMirrored(bool mirrored) {
+    if (preview_mirrored_ == mirrored) {
+        return;
+    }
+    preview_mirrored_ = mirrored;
+    emit previewMirroredChanged();
+    // cubeOrientation's NOTIFY is readingChanged; without this a mirror
+    // flip (camera switch mid-scan) would leave the 3D cube in the stale
+    // handedness until the next analysis pass happened to re-notify.
+    emit readingChanged();
 }
 
 QString ScanSession::trackingState() const { return QString::fromLatin1(track_state_name(tracker_.state())); }

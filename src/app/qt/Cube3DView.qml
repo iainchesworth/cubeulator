@@ -48,6 +48,37 @@ Item {
     // face at a time. The dark cubie bodies stay visible either way.
     property bool skeleton: false
 
+    // Per-face capture fill rings: null, or a JS object mapping face
+    // letter -> "ok" | "conflict". Each named face gets a thin frame drawn
+    // just outside its sticker plane - green for a cleanly captured face,
+    // warning-coloured while the face has an outstanding verification
+    // conflict (ScanSession.faceCaptureStates) - so the progress cube says
+    // not just WHAT was captured (the painted stickers) but how much of
+    // the cube is banked and which face needs re-showing, at a glance and
+    // on the rotating cube itself. The backing model only re-evaluates
+    // when this map object is REPLACED, which the scan screen does on
+    // capture events alone (facesScannedChanged) - the ring Repeater3D
+    // must never rebuild per frame for the same reason cubieDefs must not
+    // (see that comment); per-frame pose updates merely rotate the shared
+    // parent node.
+    property var faceRings: null
+
+    // faceRings flattened for the Repeater3D, in fixed face order so an
+    // unchanged map yields an identical model. Letters map onto the same
+    // local-face keys the stickers use (stickerOrientation/stickerAxis).
+    readonly property var faceRingItems: {
+        var items = [];
+        if (!faceRings)
+            return items;
+        var faceKeys = { U: "py", D: "ny", F: "pz", B: "nz", L: "nx", R: "px" };
+        var letters = ["U", "D", "F", "B", "L", "R"];
+        for (var i = 0; i < letters.length; i++) {
+            if (faceRings[letters[i]])
+                items.push({ face: faceKeys[letters[i]], state: faceRings[letters[i]] });
+        }
+        return items;
+    }
+
     // Live pose driving: a scalar-first [w, x, y, z] quaternion, or null.
     // While set, drag and auto-rotate are suspended and the cube slerps
     // after the supplied orientation - the scan screen feeds it the
@@ -364,6 +395,75 @@ Item {
                 eulerRotation: root.homeRotation
 
                 Node { id: pivot }
+
+                // Capture fill rings (see faceRings above). Parented to
+                // cubeRoot so they turn with the cube under both the pose
+                // feed and drag/idle spin; each ring is four thin bars
+                // rather than a textured quad because Quick3D primitives
+                // have no stroked-rectangle, and four boxes cost nothing.
+                // NoLighting keeps the state colour legible at every
+                // orientation - a ring is a status lamp, not a surface.
+                Repeater3D {
+                    id: faceRingRepeater
+                    model: root.faceRingItems
+
+                    Node {
+                        id: ringNode
+                        required property var modelData
+                        readonly property var orient: root.stickerOrientation[modelData.face]
+                        readonly property var axisVec: root.stickerAxis[modelData.face]
+                        // Just proud of the sticker plane (cubie surface +
+                        // sticker offset ~53.75) so the ring never
+                        // z-fights the stickers it frames.
+                        readonly property real ringDistance: 1.5 * root.step - root.cubieGap / 2 + 1.5
+                        // Frame the full 3x3 face with a little air: the
+                        // ring reads as "this whole face", not as part of
+                        // any one sticker.
+                        readonly property real ringSide: 3 * root.step - root.cubieGap + 4
+                        readonly property real ringHalf: ringSide / 2
+                        readonly property real ringThickness: 2.4
+                        readonly property color ringColor: modelData.state === "conflict"
+                            ? Theme.warning : "#3A9D5D" // the capture-celebration green
+
+                        position: Qt.vector3d(axisVec[0] * ringDistance,
+                                              axisVec[1] * ringDistance,
+                                              axisVec[2] * ringDistance)
+                        eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+
+                        // Local +z now points along the face normal (same
+                        // frame the stickers are laid out in), so the four
+                        // bars live in the local XY plane. Horizontal bars
+                        // overhang by one thickness to close the corners.
+                        Model {
+                            source: "#Cube"
+                            position: Qt.vector3d(0, ringNode.ringHalf, 0)
+                            scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
+                                               ringNode.ringThickness / 100, ringNode.ringThickness / 100)
+                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                        }
+                        Model {
+                            source: "#Cube"
+                            position: Qt.vector3d(0, -ringNode.ringHalf, 0)
+                            scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
+                                               ringNode.ringThickness / 100, ringNode.ringThickness / 100)
+                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                        }
+                        Model {
+                            source: "#Cube"
+                            position: Qt.vector3d(-ringNode.ringHalf, 0, 0)
+                            scale: Qt.vector3d(ringNode.ringThickness / 100,
+                                               ringNode.ringSide / 100, ringNode.ringThickness / 100)
+                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                        }
+                        Model {
+                            source: "#Cube"
+                            position: Qt.vector3d(ringNode.ringHalf, 0, 0)
+                            scale: Qt.vector3d(ringNode.ringThickness / 100,
+                                               ringNode.ringSide / 100, ringNode.ringThickness / 100)
+                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                        }
+                    }
+                }
 
                 Repeater3D {
                     id: cubieRepeater

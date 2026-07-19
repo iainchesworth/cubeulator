@@ -120,6 +120,7 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList cornerCellColors READ cornerCellColors NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeVertexPoints READ cubeVertexPoints NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeOrientation READ cubeOrientation NOTIFY readingChanged)
+    Q_PROPERTY(bool previewMirrored READ previewMirrored WRITE setPreviewMirrored NOTIFY previewMirroredChanged)
     Q_PROPERTY(QString trackingState READ trackingState NOTIFY readingChanged)
     Q_PROPERTY(bool reorienting READ reorienting NOTIFY readingChanged)
     Q_PROPERTY(qreal overlayFreshness READ overlayFreshness NOTIFY readingChanged)
@@ -179,6 +180,16 @@ public:
     // would drop. Empty whenever the tracker is lost or still acquiring -
     // QML treats empty as "not tracking" and idles, exactly as before.
     [[nodiscard]] QVariantList cubeOrientation() const;  // 4 reals or empty
+    // Whether the on-screen video preview is horizontally mirrored - bound
+    // from CameraController.previewMirrored in QML (this class deliberately
+    // has no CameraController dependency; the flag crosses in QML, where
+    // the two singletons already meet). When set, cubeOrientation()
+    // conjugates the tracked quaternion into the mirrored display frame
+    // (see the getter) so the 3D progress cube yaws the way the mirrored
+    // video - and therefore the user's hands - move, instead of opposite
+    // to them (map RC12).
+    [[nodiscard]] bool previewMirrored() const noexcept;
+    void setPreviewMirrored(bool mirrored);
     // The OrientationTracker's state as a string ("lost", "acquiring",
     // "locked", "coasting") - QML-friendly, and stable identifiers for the
     // upcoming lost/coasting UI affordances. Shadow-mode observability for
@@ -279,6 +290,7 @@ signals:
     void readingChanged();
     void autoAdvanceChanged();
     void handDetectionEnabledChanged();
+    void previewMirroredChanged();
     // faceIndex is the SLOT index that was filled or updated - slots carry
     // no face identity, so it only tells the UI "a capture landed", never
     // which cube face it was.
@@ -475,6 +487,11 @@ private:
     // blend.
     std::array<float, 4> smoothed_orientation_{1.0F, 0.0F, 0.0F, 0.0F};
     bool has_smoothed_orientation_ = false;
+    // Display-only mirror flag (see previewMirrored above). GUI thread
+    // only, consumed at cubeOrientation() read time - it must never touch
+    // tracker or routing state, whose geometry is defined by the CAMERA's
+    // (unmirrored) frame regardless of how the preview is painted.
+    bool preview_mirrored_ = false;
     std::array<cube::model::Facelet, cube::model::facelets_per_face> facelets_{};
     float overall_confidence_ = 0.0F;
     bool is_steady_ = false;
