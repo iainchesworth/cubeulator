@@ -2,6 +2,7 @@
 #include "controllers/frame_image_provider.hpp"
 #include "controllers/scan_session.hpp"
 #include "controllers/settings_model.hpp"
+#include "solve_controller.hpp"
 
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
@@ -64,6 +65,13 @@ int main(int argc, char* argv[]) {
 
     cube::app::SettingsModel settingsModel;
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settingsModel);
+
+    // Needs a real reference to scanSession (cube::model::ScanProgress can't
+    // cross into QML), so - like the three controllers above - it's
+    // constructed directly here rather than being QML-engine-owned; declared
+    // after scanSession so it's destroyed first.
+    SolveController solveController(scanSession);
+    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solveController);
 
     QQmlApplicationEngine engine;
     // addImageProvider takes ownership; scanSession outlives engine (engine

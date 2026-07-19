@@ -1,14 +1,18 @@
 #include "solve_controller.hpp"
 
+#include "controllers/scan_session.hpp"
+
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
+#include <cube/error.hpp>
 #include <cube/solver/notation.hpp>
+#include <cube/solver/scan_conversion.hpp>
 #include <cube/solver/solver.hpp>
 
 using cube::solver::Cube;
+using cube::solver::cube_from_scan;
 using cube::solver::Face;
-using cube::solver::random_scramble;
 using cube::solver::solve;
 using cube::solver::SteppedSolution;
 
@@ -60,49 +64,67 @@ QVariantList face_colors(const Cube& cube, Face face) {
 }
 
 // solve() can take anywhere from milliseconds to tens of minutes depending
-// on the scramble (see pll.cpp's history for a seed whose PLL search runs
-// long) - restart() below runs it on a background thread via
-// QtConcurrent::run rather than the UI thread, so which seed this is no
-// longer affects app responsiveness.
-constexpr unsigned kDefaultScrambleSeed = 0;
+// on the cube (see pll.cpp's history for a scramble whose PLL search runs
+// long) - beginSolve() below runs it on a background thread via
+// QtConcurrent::run rather than the UI thread, so a slow cube never freezes
+// the app.
 
-// Runs on a QtConcurrent worker thread, not the UI thread - see restart().
-SteppedSolution solve_stepped(unsigned seed) {
-    const Cube scrambled = random_scramble(seed, 25);
+// Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
+SteppedSolution solve_stepped(Cube scrambled) {
     const auto solution = solve(scrambled);
     if (solution.has_value()) {
         return SteppedSolution::from(scrambled, *solution);
     }
-    // Should not happen for a physically valid scramble (every real
-    // scramble solves) - fall back to an already-solved, zero-move stepped
-    // solution so the UI has something consistent to show rather than
-    // crashing.
+    // Should not happen for a physically valid cube (every real cube
+    // solves) - fall back to an already-solved, zero-move stepped solution
+    // so the UI has something consistent to show rather than crashing.
     return SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
 }
 
 }  // namespace
 
-SolveController::SolveController(QObject* parent) : QObject(parent) {
+SolveController::SolveController(cube::app::ScanSession& scanSession, QObject* parent)
+    : QObject(parent), scanSession_(scanSession) {
     // Safe placeholder so topColors()/etc. never read an empty stepped_
-    // while the constructor's own restart() below is still solving in the
-    // background.
+    // before the first real scan completes.
     stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
     connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this, &SolveController::applySolveResult);
-    restart(kDefaultScrambleSeed);
+    connect(&scanSession_, &cube::app::ScanSession::scanCompleted, this, &SolveController::onScanCompleted);
 }
 
-void SolveController::restart(unsigned seed) {
-    // A restart() already in flight is left to run to completion and its
-    // result discarded on arrival by ignoring this call - AppState.qml only
-    // calls restart() again once the previous solve has had the whole scan
-    // phase (several seconds) to finish, so this isn't expected to actually
-    // trigger; it just avoids re-entering solveWatcher_ mid-flight.
-    if (isSolving_) {
+void SolveController::onScanCompleted() {
+    // Free-form scans arrive pre-assembled: ScanSession only emits
+    // scanCompleted once cube::solver::assemble_scanned_faces() has
+    // produced a validated Cube, exposed via assembledCube() - consume
+    // that directly, skipping the holding-convention cube_from_scan()
+    // conversion entirely. The fallback below only runs when no assembled
+    // cube is set (a ScanSession whose progress was populated without the
+    // free-form pipeline), keeping the legacy construction path - and its
+    // rejection handling - intact.
+    if (const auto assembled = scanSession_.assembledCube(); assembled.has_value()) {
+        beginSolve(*assembled);
+        emit solveReady();
         return;
     }
+
+    const auto scanned_cube = cube_from_scan(scanSession_.progress());
+    if (!scanned_cube.has_value()) {
+        scanSession_.restartScan();
+        emit scanRejected(QString::fromStdString(std::string(to_string(scanned_cube.error()))));
+        return;
+    }
+    beginSolve(*scanned_cube);
+    emit solveReady();
+}
+
+void SolveController::beginSolve(const Cube& scrambled) {
+    // isSolving_ can't already be true here: onScanCompleted() (the only
+    // caller) fires from ScanSession::scanCompleted, which fires once per
+    // completed scan, and the scan screen isn't reachable again until this
+    // solve's result has been applied (see AppState.qml).
     isSolving_ = true;
     emit stateChanged();
-    solveWatcher_.setFuture(QtConcurrent::run(&solve_stepped, seed));
+    solveWatcher_.setFuture(QtConcurrent::run(&solve_stepped, scrambled));
 }
 
 void SolveController::applySolveResult() {

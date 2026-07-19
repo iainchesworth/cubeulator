@@ -5,9 +5,8 @@ import Cubeulator
 // Screen-routing state, delegating to real controllers for each phase:
 // CameraController/ScanSession own the scan phase, SolveController owns the
 // solve phase (moves, stickers, stage progress) via a real
-// cube::solver::solve() - see solve_controller.hpp. The two aren't wired
-// together yet - SolveController still solves a random_scramble()'d cube
-// rather than what ScanSession actually reads (see docs/architecture.md).
+// cube::solver::solve() fed the actual scanned cube (ScanSession's
+// free-form-assembled cube - see solve_controller.hpp).
 QtObject {
     id: state
 
@@ -41,25 +40,49 @@ QtObject {
         }
     }
 
-    // ScanSession reports scanCompleted once all 6 faces are confirmed
-    // (manually via confirmFace(), or automatically when autoAdvance is on).
-    property var scanSessionConnections: Connections {
-        target: ScanSession
-        function onScanCompleted() {
+    // SolveController reports solveReady once a completed scan's assembled
+    // cube has its solve queued, or scanRejected if its legacy fallback
+    // conversion failed - ScanSession's own scanCompleted isn't enough on
+    // its own, since on the fallback path a completed scan isn't
+    // necessarily a valid one (see solve_controller.cpp).
+    property var solveControllerConnections: Connections {
+        target: SolveController
+        function onSolveReady() {
+            scanError = "";
+            scanRetryMessage = "";
             state.screen = "solve";
+        }
+        function onScanRejected(reason) {
+            scanError = reason;
         }
     }
 
-    readonly property int scanned: ScanSession.facesScanned
+    // Set by onScanRejected above; ScanScreen.qml shows it and clears it on
+    // the next successful solveReady. The scan has already restarted (see
+    // SolveController::onScanCompleted's restartScan() call) - the user
+    // stays on the scan screen and just keeps showing faces.
+    property string scanError: ""
 
-    readonly property var faceDefs: [
-        { code: "U", name: "top", color: Theme.faceU },
-        { code: "R", name: "right", color: Theme.faceR },
-        { code: "F", name: "front", color: Theme.faceF },
-        { code: "D", name: "bottom", color: Theme.faceD },
-        { code: "L", name: "left", color: Theme.faceL },
-        { code: "B", name: "back", color: Theme.faceB }
-    ]
+    // Free-form recovery: six captured faces failed to resolve/assemble
+    // into a buildable cube, ScanSession dropped the most-suspect slot, and
+    // scanning continues at 5 of 6. Slots carry no face identity, so the
+    // banner can't name WHICH face was misread - the wording stays generic.
+    // Transient: cleared by the timer (the count in the scan prompt already
+    // shows the dropped slot) or by the next successful solve.
+    property string scanRetryMessage: ""
+    property var scanSessionConnections: Connections {
+        target: ScanSession
+        function onScanNeedsRetry(reason) {
+            scanRetryMessage = "One face looked misread — keep scanning, show faces again";
+            scanRetryTimer.restart();
+        }
+    }
+    property var scanRetryTimer: Timer {
+        interval: 6000
+        onTriggered: state.scanRetryMessage = ""
+    }
+
+    readonly property int scanned: ScanSession.facesScanned
 
     // Thin passthrough so CompleteScreen.qml's move-count readout doesn't
     // need its own SolveController binding.
@@ -113,19 +136,8 @@ QtObject {
         screen = "launch";
     }
 
-    // Cycles through a small set of seeds confirmed (during this feature's
-    // development) to solve quickly - solve_pll's search can occasionally
-    // take a very long time on an arbitrary scramble (seed 3, notably - see
-    // pll.cpp's history), and there's no real vision pipeline yet to source
-    // a scramble from anyway. restart() now solves off the UI thread (see
-    // solve_controller.cpp) so a slow seed wouldn't freeze the app, but
-    // sticking to known-fast ones still keeps "scan another" feeling snappy.
-    property int nextScrambleSeed: 1
-
     function scanAnother() {
         elapsedSeconds = 0;
-        SolveController.restart(nextScrambleSeed);
-        nextScrambleSeed = (nextScrambleSeed + 1) % 3;
         screen = "scan";
     }
 }

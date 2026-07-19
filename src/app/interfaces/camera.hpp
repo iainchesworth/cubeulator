@@ -4,16 +4,30 @@
 
 #include <opencv2/core.hpp>
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
 namespace cube::platform::camera {
 
+// Which way the lens points relative to the user. This drives the UI's
+// preview-mirror convention: front-facing previews are mirrored selfie-style
+// (users expect a mirror when the lens looks at them), and 'unknown' gets
+// the same treatment because it is what desktop webcam APIs report and
+// those cameras face the user. Rear cameras must NOT be mirrored - their
+// preview shows the scene, not the user, and mirroring would flip the
+// cube's sticker layout left-to-right. Mobile platforms carry both kinds
+// on one device, so their enumerate_devices() implementations need special
+// attention to distinguish front vs rear per device (user requirement)
+// rather than assuming a single value for the whole platform.
+enum class Facing : std::uint8_t { front, rear, unknown };
+
 // A capture device as enumerated by the host platform's camera API.
 struct DeviceInfo {
     std::string identifier;
     std::string display_name;
+    Facing facing = Facing::unknown;
 };
 
 // There is exactly one definition of each function below per platform,

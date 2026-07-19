@@ -55,6 +55,9 @@ Result<std::vector<DeviceInfo>> enumerate_devices() {
     std::vector<DeviceInfo> devices;
     if (SUCCEEDED(hr)) {
         for (UINT32 i = 0; i < count; ++i) {
+            // facing stays at its unknown default: desktop webcams face the
+            // user, and unknown already gets the selfie-mirror treatment
+            // (see Facing in interfaces/camera.hpp).
             devices.push_back(DeviceInfo{.identifier = std::to_string(i),
                                           .display_name = "Camera " + std::to_string(i)});
             if (raw_devices[i] != nullptr) {

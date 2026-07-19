@@ -26,6 +26,21 @@ QString CameraController::lastError() const {
     return lastError_;
 }
 
+bool CameraController::previewMirrored() const {
+    // Selfie-mirror for front and unknown facings; rear previews show the
+    // scene rather than the user and must stay un-mirrored (see Facing in
+    // interfaces/camera.hpp). A selection with no matching entry (nothing
+    // selected yet, or a stale id after re-enumeration) is treated as
+    // unknown, which keeps the desktop-webcam default of mirroring.
+    const std::string id = selectedDeviceId_.toStdString();
+    for (const auto& device : deviceInfos_) {
+        if (device.identifier == id) {
+            return device.facing != platform::camera::Facing::rear;
+        }
+    }
+    return true;
+}
+
 void CameraController::refreshDevices() {
     if (watcher_.isRunning()) {
         return;
@@ -46,8 +61,11 @@ void CameraController::handleEnumerationFinished() {
         return;
     }
 
+    const bool wasMirrored = previewMirrored();
+
+    deviceInfos_ = *result;
     devices_.clear();
-    for (const auto& device : *result) {
+    for (const auto& device : deviceInfos_) {
         QVariantMap entry;
         entry["id"] = QString::fromStdString(device.identifier);
         entry["label"] = QString::fromStdString(device.display_name);
@@ -57,6 +75,12 @@ void CameraController::handleEnumerationFinished() {
 
     if (selectedDeviceId_.isEmpty() && !devices_.isEmpty()) {
         selectDevice(devices_.first().toMap()["id"].toString());
+    } else if (previewMirrored() != wasMirrored) {
+        // previewMirrored's NOTIFY is selectedDeviceIdChanged (see header):
+        // a refresh can change the facing recorded for an unchanged
+        // selection, and without this re-emit QML bindings on
+        // previewMirrored would keep the stale value.
+        emit selectedDeviceIdChanged();
     }
 }
 
