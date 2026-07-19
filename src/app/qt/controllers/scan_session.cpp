@@ -121,8 +121,9 @@ constexpr float kOrientationSmoothing = 0.35F;
 // the (single-in-flight) analysis worker, so the statics need no locking.
 struct VisionDebugStats {
     std::size_t bright_candidates = 0;
-    std::string face_status;    // "ok conf=..." | "gated-offframe" | "none"
+    std::string face_status;    // "ok conf=..." | "pose-only conf=..." | "gated-offframe" | "none"
     std::string corner_status;  // likewise, or "unarmed"
+    std::string edge_status = "unrun";  // edge fallback: "ok conf=..." | "pose-failed" | "none" | "unrun"
     bool is_steady = false;
     bool hand_present = false;
 };
@@ -150,8 +151,8 @@ void dump_vision_debug(const cv::Mat& analysis_frame, const VisionDebugStats& st
     std::ofstream log(dir_path + "/vision_debug.log", std::ios::app);
     log << "pass=" << pass << " slot=" << slot << " size=" << analysis_frame.cols << 'x' << analysis_frame.rows
         << " bright_candidates=" << stats.bright_candidates << " face=" << stats.face_status
-        << " corner=" << stats.corner_status << " steady=" << stats.is_steady << " hand=" << stats.hand_present
-        << '\n';
+        << " corner=" << stats.corner_status << " edge=" << stats.edge_status << " steady=" << stats.is_steady
+        << " hand=" << stats.hand_present << '\n';
     slot = (slot + 1) % 6;
 }
 
@@ -1031,6 +1032,13 @@ void ScanSession::handleAnalysisFinished() {
     // frames as fresh evidence.
     const bool corner_pose = result.pose_source == AnalysisResult::PoseSource::corner ||
                              result.pose_source == AnalysisResult::PoseSource::corner_seeded;
+    // Face-family provenance must be POSITIVE, not "not corner": an edge
+    // pose (or a pose-only face pass) can coexist with a fresh face
+    // observation that failed ITS pose solve, and keying colour evidence
+    // or aggregation off that observation under a foreign pose's gauge
+    // would scramble stickers.
+    const bool face_pose = result.pose_source == AnalysisResult::PoseSource::face ||
+                           result.pose_source == AnalysisResult::PoseSource::face_seeded;
     cube::vision::TrackerPassOutput track;
     {
         cube::vision::TrackerPassInput track_in;
@@ -1053,10 +1061,12 @@ void ScanSession::handleAnalysisFinished() {
                     lab_entry(result.corner->lower_left.lab[cube::model::center_facelet_index]);
                 track_in.centre_lab[2] =
                     lab_entry(result.corner->lower_right.lab[cube::model::center_facelet_index]);
-            } else if (!corner_pose && result.face) {
+            } else if (face_pose && result.face) {
                 track_in.centre_lab_count = 1;
                 track_in.centre_lab[0] = lab_entry(result.face->lab[cube::model::center_facelet_index]);
             }
+            // An edge-sourced pose deliberately attaches nothing: the
+            // observation carries no colour by design.
         }
         track = tracker_.on_pass(track_in);
 
@@ -1222,10 +1232,11 @@ void ScanSession::handleAnalysisFinished() {
                           slot_observation(*views[view], result.corner->geometry_confidence),
                           /*from_corner=*/true, result.corner_full_quads);
             }
-        } else if (!corner_pose && fresh_face) {
+        } else if (face_pose && fresh_face) {
             add_keyed(cube::vision::kFaceObsToBody[lattice], *result.face, /*from_corner=*/false,
                       result.face_full_quads);
         }
+        // Edge-sourced passes aggregate nothing: pose-only by contract.
     }
 
     emit readingChanged();
@@ -1439,6 +1450,38 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
             result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::face_seeded
                                                  : AnalysisResult::PoseSource::face;
             result.pose = *pose;
+        }
+    }
+
+    // Two-face edge-view fallback, ONLY when every richer estimator came
+    // up empty - which bounds its cost to exactly the failure passes the
+    // live1 census showed dominating (oblique two-face grip). Hinted from
+    // the same GUI-sampled prior as the corner detector when the predicted
+    // pose is a two-face presentation; unhinted it probes a small fixed
+    // canonical basis set. Pose-only end to end: the observation never
+    // reaches result.face/result.corner, so display, aggregation and
+    // capture cannot see it - the tracker gets q_obs with no colour, and
+    // the wireframe gets vertices, exactly like a pose-only face pass.
+    if (!result.pose) {
+        std::optional<cube::vision::EdgeHint> edge_hint;
+        if (pose_prior) {
+            edge_hint = cube::vision::compute_edge_hint(*pose_prior);
+        }
+        auto edge = cube::vision::observe_edge(analysis_frame, edge_hint ? &*edge_hint : nullptr);
+        if (edge.has_value()) {
+            scale_quad(edge->left_quad, scale_back);
+            scale_quad(edge->right_quad, scale_back);
+            const auto pose = cube::vision::project_cube_from_edge(*edge, full_size, seed);
+            if (pose.has_value()) {
+                debug_stats.edge_status = "ok conf=" + std::to_string(edge->geometry_confidence);
+                result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::edge_seeded
+                                                     : AnalysisResult::PoseSource::edge;
+                result.pose = *pose;
+            } else {
+                debug_stats.edge_status = "pose-failed";
+            }
+        } else {
+            debug_stats.edge_status = "none";
         }
     }
 

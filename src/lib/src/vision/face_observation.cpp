@@ -124,14 +124,15 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
 // into narrow gaps to bridge adjacent cells - a ~20% colour mix over a dark
 // gap still reads strongly saturated), and only open (no close) runs so
 // preserved separations aren't re-sealed.
-[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask) {
+[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask, double max_aspect) {
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-    return detail::candidates_from_binary_mask(mask);
+    return detail::candidates_from_binary_mask(mask, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(const std::vector<cv::Mat>& hsv_channels) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation);
+[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(const std::vector<cv::Mat>& hsv_channels,
+                                                                       double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation, max_aspect);
 }
 
 // A SECOND saturation cut at a stricter floor, contoured independently:
@@ -145,14 +146,15 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
 constexpr int kStrictStickerSaturation = 60;
 
 [[nodiscard]] std::vector<StickerCandidate> find_strict_saturation_candidates(
-    const std::vector<cv::Mat>& hsv_channels) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kStrictStickerSaturation);
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kStrictStickerSaturation, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(const std::vector<cv::Mat>& hsv_channels) {
+[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(const std::vector<cv::Mat>& hsv_channels,
+                                                                  double max_aspect) {
     cv::Mat white_mask;
     cv::bitwise_and(hsv_channels[2] >= kMinWhiteValue, hsv_channels[1] < kMinStickerSaturation, white_mask);
-    return candidates_from_condition_mask(std::move(white_mask));
+    return candidates_from_condition_mask(std::move(white_mask), max_aspect);
 }
 
 // Unions the strategies' candidates, collapsing near-coincident pairs (the
@@ -479,11 +481,14 @@ namespace {
     return std::sqrt(dl * dl + da * da + db * db);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame,
-                                                                    const std::vector<cv::Mat>& hsv_channels) {
-    return merge_candidates({detail::find_square_candidates(bgr_frame), detail::find_dark_square_candidates(bgr_frame),
-                             find_saturation_candidates(hsv_channels), find_strict_saturation_candidates(hsv_channels),
-                             find_white_candidates(hsv_channels)});
+[[nodiscard]] std::vector<StickerCandidate> merged_face_candidate_union(
+    const cv::Mat& bgr_frame, const std::vector<cv::Mat>& hsv_channels,
+    double max_aspect = detail::kDefaultMaxCandidateAspect) {
+    return merge_candidates({detail::find_square_candidates(bgr_frame, max_aspect),
+                             detail::find_dark_square_candidates(bgr_frame, max_aspect),
+                             find_saturation_candidates(hsv_channels, max_aspect),
+                             find_strict_saturation_candidates(hsv_channels, max_aspect),
+                             find_white_candidates(hsv_channels, max_aspect)});
 }
 
 // Partial-lattice completion, the fallback for frames where too few cells
@@ -718,7 +723,7 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
 
-    const auto candidates = merged_face_candidates(bgr_frame, hsv_channels);
+    const auto candidates = merged_face_candidate_union(bgr_frame, hsv_channels);
     const auto fit = detail::fit_lattice_detailed(candidates, bgr_frame.size());
     // The fit alone earns a direct accept only when its matched slots pin
     // the TRANSLATION: anchors in the first and last row AND the first and
@@ -820,6 +825,17 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
 
 namespace detail {
 
+std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame, double max_aspect) {
+    if (bgr_frame.empty()) {
+        return {};
+    }
+    cv::Mat hsv;
+    cv::cvtColor(bgr_frame, hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> hsv_channels;
+    cv::split(hsv, hsv_channels);
+    return merged_face_candidate_union(bgr_frame, hsv_channels, max_aspect);
+}
+
 std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame) {
     if (bgr_frame.empty()) {
         return {};
@@ -828,7 +844,7 @@ std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame) 
     cv::cvtColor(bgr_frame, hsv, cv::COLOR_BGR2HSV);
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
-    return score_placements(bgr_frame, merged_face_candidates(bgr_frame, hsv_channels));
+    return score_placements(bgr_frame, merged_face_candidate_union(bgr_frame, hsv_channels));
 }
 
 }  // namespace detail

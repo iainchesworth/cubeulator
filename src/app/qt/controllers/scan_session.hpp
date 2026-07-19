@@ -325,7 +325,11 @@ private:
         // axes from seven pinned points while a face pose carries the
         // planar ambiguity, and seeded acceptances measure how often
         // continuity is doing real work.
-        enum class PoseSource { none, face, face_seeded, corner, corner_seeded };
+        // `edge` marks the two-face edge-view path (observe_edge +
+        // project_cube_from_edge): pose-only by construction, run only
+        // when neither family produced a pose, and never accompanied by a
+        // capture-grade observation of its own.
+        enum class PoseSource { none, face, face_seeded, corner, corner_seeded, edge, edge_seeded };
 
         std::optional<cube::vision::FaceObservation> face;
         std::optional<cube::vision::CornerObservation> corner;

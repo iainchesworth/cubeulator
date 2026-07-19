@@ -57,6 +57,8 @@ target_sources(cube_lib
         src/vision/vision.cpp
         src/vision/grid_detection.cpp
         src/vision/face_observation.cpp
+        src/vision/face_grid_fit.cpp
+        src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp

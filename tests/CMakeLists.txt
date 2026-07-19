@@ -15,6 +15,7 @@ add_executable(cube_unit_tests
     unit/temporal_fusion_test.cpp
     unit/color_resolution_test.cpp
     unit/corner_observation_test.cpp
+    unit/edge_observation_test.cpp
     unit/orientation_lattice_test.cpp
     unit/orientation_tracker_test.cpp
     unit/tracker_sweep_test.cpp

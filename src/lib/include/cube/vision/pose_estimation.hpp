@@ -2,6 +2,7 @@
 
 #include <cube/error.hpp>
 #include <cube/vision/corner_observation.hpp>
+#include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 
 #include <opencv2/core.hpp>
@@ -70,6 +71,17 @@ struct PoseSeed {
 // a rotation-only derivation touches. This also makes the hint frame-size
 // independent, so it applies unchanged on the downscaled analysis frame.
 [[nodiscard]] std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed);
+
+// Derives an observe_edge() hint from a predicted pose: exactly TWO model
+// faces visible (three is compute_corner_hint's territory, one is a
+// frontal pose) around a near-vertical shared edge, roles assigned by
+// screen side (left plays model F, right plays R - always
+// chirality-consistent, see edge_observation.hpp), and each role's
+// on-screen lattice basis under the same rotation-only weak-perspective
+// derivation and shorter-axis scaling compute_corner_hint uses. Returns
+// nullopt for any other presentation (the caller probes the canonical
+// bases, or skips the edge path entirely).
+[[nodiscard]] std::optional<EdgeHint> compute_edge_hint(const PoseSeed& seed);
 
 // The cube's eight corners projected into frame pixels - what a 3D AR
 // wireframe overlay draws so the user sees the cube tracked as an object
@@ -190,5 +202,32 @@ struct CubePoseProjection {
 [[nodiscard]] Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation,
                                                                    cv::Size frame_size,
                                                                    const PoseSeed* seed = nullptr);
+
+// As above from a two-face edge view: the two fitted quads pin six unique
+// cube vertices (the shared edge's two endpoints coincide by the
+// detector's gates and are averaged), a non-coplanar set that makes a
+// well-posed generic PnP problem under the same approximate intrinsics.
+// The model frame is the centred unit cube with the left quad playing F
+// and the right playing R, so a successful solve lands near the cube
+// yawed ~45 degrees (shared edge toward camera); which physical faces
+// those are is the lattice gauge resolve_alignment absorbs like every
+// other path's.
+//
+// Solve order, each attempt held to the identical cheirality +
+// reprojection gates: seed-initialised iterative first (temporal
+// continuity), then an iterative solve initialised at the canonical
+// symmetric edge pose (the basin every genuine edge detection is in by
+// construction - the detector only accepts left/right column grids), then
+// a cold start. Unlike the corner path there is no independent vertex
+// construction to fall back on, so a solve that passes no gate is an
+// outright failure (no_valid_cube_detected), never an invalid-orientation
+// projection.
+//
+// POSE-ONLY path end to end: callers feed the orientation to the tracker
+// and nothing else - EdgeObservation carries no colour and this function
+// must never grow a sampling side-channel.
+[[nodiscard]] Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation,
+                                                                 cv::Size frame_size,
+                                                                 const PoseSeed* seed = nullptr);
 
 }  // namespace cube::vision

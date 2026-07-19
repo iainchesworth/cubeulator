@@ -279,6 +279,7 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
 
         std::optional<CubePoseProjection> pose;
         bool corner_pose = false;
+        bool face_pose = false;
         if (corner.has_value()) {
             if (auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
@@ -287,10 +288,24 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
         } else if (face.has_value()) {
             if (auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
+                face_pose = true;
             }
         } else if (pose_only_face.has_value()) {
             if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
+            }
+        }
+        // Edge fallback exactly as analyze() runs it: only when nothing
+        // richer produced a pose (pose-only, colour-free by contract).
+        if (!pose.has_value()) {
+            std::optional<EdgeHint> edge_hint;
+            if (seed_prior) {
+                edge_hint = compute_edge_hint(*seed_prior);
+            }
+            if (auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
+                if (auto projected = project_cube_from_edge(*edge, frame.size(), seed); projected.has_value()) {
+                    pose = *projected;
+                }
             }
         }
         if (pose && pose->orientation_valid) {
@@ -304,7 +319,10 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
                 input.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
                 input.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
                 input.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
-            } else if (!corner_pose && face) {
+            } else if (face_pose && face) {
+                // Positive face-family provenance, as live: neither an
+                // edge pose nor a pose-only pass may borrow a coexisting
+                // face observation's colour.
                 input.centre_lab_count = 1;
                 input.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
             }

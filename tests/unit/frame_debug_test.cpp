@@ -292,6 +292,28 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
         corner.has_value() ? "OK conf=" + std::to_string(corner->geometry_confidence) : std::string("FAILED");
     std::printf("observe_corner: %s\n", corner_status.c_str());
 
+    // Stage 5: the two-face edge path with its funnel exposed - candidate
+    // count, split search, per-side inliers and the consistency-gate facts
+    // of the best pairing, then the pose verdict when the fit survived.
+    detail::EdgeDiagnostics edge_diag;
+    const auto edge = detail::observe_edge_diagnosed(frame, nullptr, &edge_diag);
+    std::printf(
+        "observe_edge: %s candidates=%zu splits=%d basis_sets=%d best[split_x=%.0f L=%d R=%d pitch_ratio=%.2f "
+        "shared_px=%.1f]\n",
+        edge.has_value() ? "OK" : "FAILED", edge_diag.candidate_count, edge_diag.splits_evaluated,
+        edge_diag.basis_sets, edge_diag.best_split_x, edge_diag.best_left_inliers, edge_diag.best_right_inliers,
+        edge_diag.best_pitch_ratio, edge_diag.best_shared_edge_px);
+    if (edge.has_value()) {
+        const auto edge_pose = project_cube_from_edge(*edge, frame.size());
+        if (edge_pose.has_value()) {
+            std::printf("  edge pose: q=(%.3f,%.3f,%.3f,%.3f) reproj=%.3f\n", edge_pose->orientation[0],
+                        edge_pose->orientation[1], edge_pose->orientation[2], edge_pose->orientation[3],
+                        edge_pose->max_reproj_fraction);
+        } else {
+            std::printf("  edge pose: FAILED\n");
+        }
+    }
+
     SUCCEED();
 }
 
@@ -527,6 +549,7 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         // seed the way analyze() passes it.
         std::optional<cube::vision::CubePoseProjection> pose;
         const char* pose_src = "none";
+        bool face_pose = false;
         if (corner.has_value()) {
             if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
@@ -536,12 +559,29 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
                 pose_src = "face";
+                face_pose = true;
             }
         } else if (pose_only_face.has_value()) {
             if (const auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed);
                 projected.has_value()) {
                 pose = *projected;
                 pose_src = "face-pose-only";
+            }
+        }
+        // Edge fallback exactly as analyze() runs it: only when every
+        // richer estimator produced no pose at all (an invalid-orientation
+        // corner pose still counts as a pose and suppresses it, as live).
+        if (!pose.has_value()) {
+            std::optional<cube::vision::EdgeHint> edge_hint;
+            if (seed_prior) {
+                edge_hint = cube::vision::compute_edge_hint(*seed_prior);
+            }
+            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
+                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
+                    pose = *projected;
+                    pose_src = "edge";
+                }
             }
         }
         const bool corner_pose = corner.has_value() && pose.has_value();
@@ -567,7 +607,10 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                 track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
                 track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
                 track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
-            } else if (!corner_pose && face.has_value()) {
+            } else if (face_pose && face.has_value()) {
+                // Positive face-family provenance, as live: an edge pose
+                // coexisting with a pose-failed face observation must not
+                // borrow that observation's colour.
                 track_in.centre_lab_count = 1;
                 track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
             }

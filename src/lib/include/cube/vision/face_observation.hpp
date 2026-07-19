@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cube/error.hpp>
+#include <cube/vision/grid_detection.hpp>
 
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <vector>
 
 namespace cube::vision {
 
@@ -56,6 +58,18 @@ struct FaceObservation {
 // Diagnostics seam for the offline frame-replay harness. Not a stable API
 // for anything outside the vision module or its tests.
 namespace detail {
+
+// The full deduped union of every candidate source observe_face runs
+// (both brightness polarities at three scales, the saturation cuts, the
+// white mask). Exposed for the edge-view detector (edge_observation.cpp),
+// which partitions the same candidates across a two-face split instead of
+// fitting one planar lattice - running a second, divergent extraction
+// stack there is how the two paths would rot apart. max_aspect loosens
+// only the per-contour squareness gate (see kDefaultMaxCandidateAspect):
+// the edge path's obliquely foreshortened cells legitimately exceed the
+// frontal bound, while observe_face itself always uses the default.
+[[nodiscard]] std::vector<StickerCandidate> merged_face_candidates(
+    const cv::Mat& bgr_frame, double max_aspect = kDefaultMaxCandidateAspect);
 
 // One photometrically-scored placement of a partial lattice (see
 // grid_detection.hpp's partial_lattice_placements). Deviations are

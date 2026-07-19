@@ -374,6 +374,83 @@ std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed) {
     return hint;
 }
 
+std::optional<EdgeHint> compute_edge_hint(const PoseSeed& seed) {
+    cv::Matx33d rotation;
+    cv::Rodrigues(seed.rvec, rotation);
+
+    // Same visibility floor and model normals as compute_corner_hint; an
+    // edge presentation is EXACTLY two faces clearing it (three is a
+    // corner, one is frontal - each has its own hint/detector).
+    static const std::array<cv::Vec3d, 6> kModelNormals = {{{1.0, 0.0, 0.0},
+                                                            {-1.0, 0.0, 0.0},
+                                                            {0.0, 1.0, 0.0},
+                                                            {0.0, -1.0, 0.0},
+                                                            {0.0, 0.0, 1.0},
+                                                            {0.0, 0.0, -1.0}}};
+    std::array<cv::Vec3d, 2> visible{};
+    std::size_t visible_count = 0;
+    for (const cv::Vec3d& normal : kModelNormals) {
+        const cv::Vec3d in_camera = rotation * normal;
+        if (in_camera[2] < -kMinHintFacingCos) {
+            if (visible_count == visible.size()) {
+                return std::nullopt;  // three or more: a corner presentation
+            }
+            visible[visible_count++] = normal;
+        }
+    }
+    if (visible_count != visible.size()) {
+        return std::nullopt;
+    }
+
+    const auto screen_vec = [&rotation](const cv::Vec3d& direction) {
+        const cv::Vec3d in_camera = rotation * direction;
+        return cv::Point2f(static_cast<float>(in_camera[0]), static_cast<float>(in_camera[1]));
+    };
+
+    // Role assignment by screen side: left plays F, right plays R. Always
+    // chirality-consistent for a real cube (n_left x n_right = the shared
+    // edge's UP direction, exactly F x R = U), so no mirror case exists -
+    // see edge_observation.hpp's convention note.
+    cv::Vec3d n_left = visible[0];
+    cv::Vec3d n_right = visible[1];
+    if (screen_vec(n_left).x > screen_vec(n_right).x) {
+        std::swap(n_left, n_right);
+    }
+
+    // Rows run down-screen along the shared edge: edge-up is
+    // n_left x n_right, so the row direction is its negation. A shared
+    // edge closer to horizontal than vertical is a top/bottom edge
+    // presentation this detector does not model - refuse the hint rather
+    // than fit grids against a basis the split search can't honour.
+    const cv::Vec3d up3 = n_left.cross(n_right);
+    const cv::Point2f row = screen_vec(-1.0 * up3);
+    const float row_length = std::hypot(row.x, row.y);
+    if (row_length <= 0.0F || std::abs(row.y) <= std::abs(row.x) || row.y <= 0.0F) {
+        return std::nullopt;
+    }
+
+    // Columns mirror the corner topology: the left (F-role) face's columns
+    // advance toward the shared edge - along the right face's normal - and
+    // the right (R-role) face's columns advance away from it, along the
+    // left face's negated normal (model F->B).
+    const std::array<cv::Vec3d, 2> col3 = {n_right, -1.0 * n_left};
+    EdgeHint hint;
+    for (std::size_t role = 0; role < 2; ++role) {
+        const cv::Point2f col = screen_vec(col3[role]);
+        const float col_length = std::hypot(col.x, col.y);
+        const float shorter = std::min(col_length, row_length);
+        if (shorter <= 0.0F) {
+            return std::nullopt;  // floored away by kMinHintFacingCos; defensive
+        }
+        // Shorter-axis normalisation, same contract as CornerHint: the
+        // sector pitch estimate is the spacing along the more
+        // foreshortened axis, so that axis must be unit.
+        hint.col_dir[role] = col / shorter;
+        hint.row_dir[role] = row / shorter;
+    }
+    return hint;
+}
+
 Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation, cv::Size frame_size,
                                                   const PoseSeed* seed) {
     if (frame_size.width <= 0 || frame_size.height <= 0) {
@@ -656,6 +733,142 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
     // Honest fallback per the header: no robust basis means identity +
     // invalid, never a guess - the UI's idle rotation takes over.
     result.orientation_valid = fit.has_value();
+    return result;
+}
+
+Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation, cv::Size frame_size,
+                                                  const PoseSeed* seed) {
+    if (frame_size.width <= 0 || frame_size.height <= 0) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+    if (quad_area(observation.left_quad) < kMinQuadAreaPx2 || quad_area(observation.right_quad) < kMinQuadAreaPx2) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+
+    // Centred unit-cube model in OpenCV-style axes (x right, y down, z into
+    // the screen), oriented like the corner path's kCornerModel: display U
+    // is y = -0.5, display F is z = -0.5, display R is x = +0.5. The left
+    // quad plays F (tl,tr,br,bl = UFL,URF,DRF,DLF), the right plays R
+    // (URF,UBR,DRB,DRF); the shared URF/DRF vertices are averaged so small
+    // detector disagreement splits instead of favouring one face's fit.
+    static const std::vector<cv::Point3d> kEdgeModel = {
+        {-0.5, -0.5, -0.5},  // UFL
+        {0.5, -0.5, -0.5},   // URF (shared, top)
+        {0.5, -0.5, 0.5},    // UBR
+        {-0.5, 0.5, -0.5},   // DLF
+        {0.5, 0.5, -0.5},    // DRF (shared, bottom)
+        {0.5, 0.5, 0.5},     // DRB
+    };
+    const std::array<cv::Point2f, 4>& left = observation.left_quad;
+    const std::array<cv::Point2f, 4>& right = observation.right_quad;
+    const cv::Point2f v_urf = 0.5F * (left[1] + right[0]);
+    const cv::Point2f v_drf = 0.5F * (left[2] + right[3]);
+    const std::vector<cv::Point2d> image_points = {cv::Point2d(left[0]), cv::Point2d(v_urf),
+                                                   cv::Point2d(right[1]), cv::Point2d(left[3]),
+                                                   cv::Point2d(v_drf),   cv::Point2d(right[2])};
+
+    const cv::Matx33d camera = approximate_camera_matrix(frame_size);
+
+    struct AcceptedFit {
+        cv::Vec3d rvec;
+        cv::Vec3d tvec;
+        cv::Matx33d rotation;
+        double reproj_fraction = 0.0;
+    };
+    const auto attempt_fit = [&](const cv::Vec3d* init_rvec, const cv::Vec3d* init_tvec) -> std::optional<AcceptedFit> {
+        cv::Vec3d rvec;
+        cv::Vec3d tvec;
+        const bool use_guess = init_rvec != nullptr;
+        if (use_guess) {
+            rvec = *init_rvec;
+            tvec = *init_tvec;
+        }
+        bool solved = false;
+        try {
+            solved = cv::solvePnP(kEdgeModel, image_points, camera, cv::noArray(), rvec, tvec, use_guess,
+                                  cv::SOLVEPNP_ITERATIVE);
+        } catch (const cv::Exception&) {
+            solved = false;
+        }
+        if (!solved) {
+            return std::nullopt;
+        }
+        cv::Matx33d rotation;
+        cv::Rodrigues(rvec, rotation);
+        if (!passes_cheirality(rotation, tvec, kEdgeModel)) {
+            return std::nullopt;
+        }
+        const double fraction = max_reprojection_fraction(kEdgeModel, image_points, rvec, tvec, camera);
+        if (fraction > kMaxReprojectionFraction) {
+            return std::nullopt;
+        }
+        return AcceptedFit{rvec, tvec, rotation, fraction};
+    };
+
+    // Canonical initial guess: the symmetric edge pose every genuine edge
+    // detection is near BY CONSTRUCTION (the detector only accepts
+    // left/right column grids meeting at a near-vertical edge) - display
+    // yaw of -45 degrees about +y, i.e. F leaning screen-left and R
+    // screen-right toward the viewer, a cube's depth out. Derived through
+    // opencv_rotation_from_display so the guess can never drift from the
+    // axis-reconciliation convention.
+    static const cv::Vec3d kCanonicalTvec(0.0, 0.0, 3.0);
+    const cv::Vec3d canonical_rvec = [] {
+        constexpr float kHalfYawRad = -22.5F * 3.14159265358979F / 180.0F;
+        const std::array<float, 4> q{std::cos(kHalfYawRad), 0.0F, std::sin(kHalfYawRad), 0.0F};
+        cv::Vec3d rvec;
+        cv::Rodrigues(opencv_rotation_from_display(q), rvec);
+        return rvec;
+    }();
+
+    std::optional<AcceptedFit> fit;
+    bool from_seed = false;
+    if (seed != nullptr) {
+        fit = attempt_fit(&seed->rvec, &seed->tvec);
+        from_seed = fit.has_value();
+    }
+    if (!fit.has_value()) {
+        fit = attempt_fit(&canonical_rvec, &kCanonicalTvec);
+    }
+    if (!fit.has_value()) {
+        fit = attempt_fit(nullptr, nullptr);
+    }
+    if (!fit.has_value()) {
+        // No independent vertex construction exists for this path (the six
+        // pinned points ARE the observation), so an unexplainable pose is
+        // an outright failure - never an invalid-orientation projection.
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+
+    // Full-cube vertices for the wireframe, header order with the LEFT
+    // (F-role) face as the near face: 0-3 its tl,tr,br,bl, 4-7 each
+    // vertex's rear counterpart.
+    static const std::vector<cv::Point3d> kEdgeWireframe = {
+        {-0.5, -0.5, -0.5},  // UFL
+        {0.5, -0.5, -0.5},   // URF
+        {0.5, 0.5, -0.5},    // DRF
+        {-0.5, 0.5, -0.5},   // DLF
+        {-0.5, -0.5, 0.5},   // UBL
+        {0.5, -0.5, 0.5},    // UBR
+        {0.5, 0.5, 0.5},     // DRB
+        {-0.5, 0.5, 0.5},    // DLB
+    };
+    std::vector<cv::Point2d> projected;
+    cv::projectPoints(kEdgeWireframe, fit->rvec, fit->tvec, camera, cv::noArray(), projected);
+
+    CubePoseProjection result;
+    for (std::size_t i = 0; i < result.vertices.size(); ++i) {
+        result.vertices[i] = cv::Point2f(static_cast<float>(projected[i].x), static_cast<float>(projected[i].y));
+    }
+    if (!projection_is_plausible(result.vertices, frame_size)) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+    result.orientation = display_quaternion(fit->rotation);
+    result.orientation_valid = true;
+    result.rvec = fit->rvec;
+    result.tvec = fit->tvec;
+    result.max_reproj_fraction = fit->reproj_fraction;
+    result.from_seed = from_seed;
     return result;
 }
 

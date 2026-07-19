@@ -22,11 +22,10 @@ using detail::StickerCandidate;
 // lattice fit rejects unstructured noise regardless of count.
 constexpr double kMinCellAreaFraction = 0.0005;
 constexpr double kMaxCellAreaFraction = 0.20;  // 20% of frame area
-// Rotation-invariant squareness bound (max/min side of the contour's
-// minAreaRect, always >= 1) - replaces the old axis-aligned width/height
-// aspect check, which only tolerated a held cube facing the camera
-// dead-on.
-constexpr double kMaxSquareAspectRatio = 1.6;
+// The squareness bound is now the max_aspect PARAMETER on the extraction
+// functions (default kDefaultMaxCandidateAspect in the header - the
+// historical 1.6, rotation-invariant via minAreaRect); the edge-view
+// detector passes a looser bound for obliquely foreshortened cells.
 constexpr double kApproxPolyEpsilonFraction = 0.03;
 
 // CLAHE (local contrast normalization) + a locally-adaptive threshold
@@ -497,7 +496,7 @@ struct LatticeHypothesis {
 
 namespace detail {
 
-std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_mask) {
+std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_mask, double max_aspect) {
     std::vector<std::vector<cv::Point>> contours;
     // RETR_LIST, not RETR_EXTERNAL: if a lighting gradient makes the
     // background register as foreground and swallows a sticker (the
@@ -536,7 +535,7 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         }
         const float squareness = std::max(min_rect.size.width, min_rect.size.height) /
                                   std::min(min_rect.size.width, min_rect.size.height);
-        if (squareness > kMaxSquareAspectRatio) {
+        if (squareness > max_aspect) {
             continue;
         }
         // A convex blob that fills most of its own minAreaRect is box-like;
@@ -578,7 +577,8 @@ namespace {
 // sticker's gap, deep shadow) keeps reading as "missing" for lattice
 // extrapolation while a real-but-dark coloured tile still passes.
 [[nodiscard]] std::vector<StickerCandidate> find_brightness_candidates(const cv::Mat& bgr_frame,
-                                                                        cv::ThresholdTypes threshold_type) {
+                                                                        cv::ThresholdTypes threshold_type,
+                                                                        double max_aspect) {
     cv::Mat blurred;
     cv::GaussianBlur(bgr_frame, blurred, cv::Size(5, 5), 0);
 
@@ -614,7 +614,7 @@ namespace {
         cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kernel);
         cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel);
 
-        auto scale_candidates = candidates_from_binary_mask(binary);
+        auto scale_candidates = candidates_from_binary_mask(binary, max_aspect);
         candidates.insert(candidates.end(), scale_candidates.begin(), scale_candidates.end());
     }
     return candidates;
@@ -622,17 +622,17 @@ namespace {
 
 }  // namespace
 
-std::vector<StickerCandidate> find_square_candidates(const cv::Mat& bgr_frame) {
-    return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY);
+std::vector<StickerCandidate> find_square_candidates(const cv::Mat& bgr_frame, double max_aspect) {
+    return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY, max_aspect);
 }
 
-std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame) {
+std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame, double max_aspect) {
     // The mirror image of find_square_candidates(), for light-bodied cubes:
     // a white/light plastic lattice between tiles makes every coloured cell
     // a local brightness MINIMUM, invisible to the brighter-than-local-mean
     // path (diagnosed from a real webcam frame where the bright path could
     // only ever find the lightest 4 of 9 cells).
-    return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY_INV);
+    return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY_INV, max_aspect);
 }
 
 // Fits the best 3x3 lattice explaining `candidates` (relaxed from the old
