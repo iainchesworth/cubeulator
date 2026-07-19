@@ -1382,6 +1382,20 @@ bool ScanSession::cornerScanArmed() const {
     // three pinned faces constrain all axes where a face view leaves the
     // planar ambiguity - so pose continuity keeps its cadence rather than
     // going face-only the moment the sixth slot lands.
+    //
+    // Budget note, and the plan's "decimate corner passes if M7 profiling
+    // demands" decision: NOT decimated. Profiled via the hidden
+    // [.corner-profile] harness (corner_observation_test.cpp; desktop
+    // MSVC fastdebug, 480x480 synthetic analysis frames):
+    // compute_corner_hint ~0.7 us, and hinted observe_corner is no slower
+    // than the historical detector (~11.5 ms hit / ~11.3 ms miss vs
+    // ~15.1 / ~11.4 unhinted; a stale hint's failed fits stay inside the
+    // kMaxCandidatesConsidered bound). The extra locked-with-6-slots
+    // arming window therefore spends the same tens-of-ms the pre-M7
+    // corner pass already spent whenever armed - no new per-pass cost to
+    // shed. Phone-device numbers need hardware the repo cannot drive;
+    // re-run the harness there when the recorded-corpus work happens, and
+    // revisit only if that measurement disagrees.
     return router_.filled_count() < static_cast<int>(cube::model::face_count) ||
            tracker_.state() == cube::vision::TrackState::locked;
 }

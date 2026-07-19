@@ -37,10 +37,13 @@
 // Detector-stage fidelity mirrors [.track-replay] (frame_debug_test.cpp):
 // same analysis-scale frames (rotation-identical poses - intrinsics
 // derive from frame size), same fully-visible-cells gate on both detector
-// families, same corner-first pose precedence. Two extras for tracker
+// families, same corner-first pose precedence. Extras for tracker
 // fidelity: the pose-seed chain (live passes seed solvePnP from the
 // previous held pose; here the previous VALID pose seeds the next pass,
-// expired after the same 450 ms hold the live overlay uses), and the
+// expired after the same 450 ms hold the live overlay uses), the M7
+// corner hint derived from that same held pose (compute_corner_hint -
+// without it corner detections stop firing off the isometric pose and
+// every metric this sweep calibrates would be skewed), and the
 // stability tracker's motion score (fed the analysis-scale frame - it
 // normalises to a fixed internal resolution, so scores are comparable to
 // the live full-frame feed).
@@ -224,6 +227,17 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
         input.t_ms = row.t_ms;
         input.motion_score = stability.update(frame).motion_score;
 
+        // Live seed lifecycle: the held pose expires with the overlay.
+        // Expired BEFORE the detector stage because the live pass samples
+        // ONE prior at queue time and derives both the corner hint and the
+        // solve seed from it (analyze() in scan_session.cpp); expiring only
+        // at projection time would hint observe_corner from a pose the live
+        // worker would already have dropped.
+        if (seed_prior && row.t_ms - seed_t_ms > kSeedHoldMs) {
+            seed_prior.reset();
+        }
+        const PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
+
         const auto all_cells_in_frame = [&](const auto& cells) {
             return std::all_of(cells.begin(), cells.end(),
                                [&](const StickerQuad& cell) { return cell_in_frame(cell, frame); });
@@ -232,18 +246,25 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
         if (auto observed = observe_face(frame); observed.has_value() && all_cells_in_frame(observed->cells)) {
             face = std::move(*observed);
         }
+        // Hinted from the held pose exactly as the live worker hints it
+        // (M7): off the isometric pose an unhinted detector simply stops
+        // firing, and a sweep replayed that way would understate corner
+        // cadence - skewing lost-rate and identity-stability for precisely
+        // the mechanism the calibration is meant to tune. Null seed (or a
+        // frontal/edge-on prediction) -> null hint -> the historical
+        // fixed-pose detector, as live. The hint is rotation-only
+        // (compute_corner_hint), so the analysis-scale translation in a
+        // replayed seed cannot skew it.
+        std::optional<CornerHint> corner_hint;
+        if (seed_prior) {
+            corner_hint = compute_corner_hint(*seed_prior);
+        }
         std::optional<CornerObservation> corner;
-        if (auto observed = observe_corner(frame);
+        if (auto observed = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
             observed.has_value() && all_cells_in_frame(observed->top.cells) &&
             all_cells_in_frame(observed->lower_left.cells) && all_cells_in_frame(observed->lower_right.cells)) {
             corner = std::move(*observed);
         }
-
-        // Live seed lifecycle: the held pose expires with the overlay.
-        if (seed_prior && row.t_ms - seed_t_ms > kSeedHoldMs) {
-            seed_prior.reset();
-        }
-        const PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
 
         std::optional<CubePoseProjection> pose;
         bool corner_pose = false;

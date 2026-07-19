@@ -329,6 +329,18 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
 //    cells are in frame, a corner only when all 27 cells across its three
 //    views are, and only a surviving corner (falling back to a surviving
 //    face) feeds pose projection.
+//  - Pose continuity is mirrored too: the previous pass's accepted pose is
+//    held under the live 450 ms overlay/seed window (kOverlayHoldMs,
+//    scan_session.cpp), and while live it both seeds the projectors' solves
+//    (M3 arbitration) and hints observe_corner via compute_corner_hint
+//    (M7's pose-derived sectors/bases). Without the hint, corner detections
+//    stop firing off the isometric pose and the replay understates exactly
+//    the detection cadence these CSV rows exist to measure. The hint is
+//    derived from the seed's ROTATION only, so replaying at analysis scale
+//    (which shrinks the held translation along with the frame) cannot skew
+//    it; the seeded solves are self-consistent for the same reason the
+//    first bullet gives. Null seed -> null hint -> the historical
+//    fixed-pose detector, exactly as live.
 //  - Index rows at least one full ring lap older than the newest row are
 //    excluded as overwritten (frame_overwritten in frame_recording.hpp):
 //    their filename slot provably holds a later pass's pixels, and within
@@ -374,6 +386,13 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                center.y < static_cast<float>(bounds.rows);
     };
 
+    // Matches the live overlay/seed hold window (kOverlayHoldMs in
+    // scan_session.cpp), same constant tracker_sweep_test.cpp keeps: a pose
+    // the overlay already dropped is too stale to hint or seed with.
+    constexpr std::int64_t kSeedHoldMs = 450;
+    std::optional<cube::vision::PoseSeed> seed_prior;
+    std::int64_t seed_t_ms = 0;
+
     std::int64_t previous_t_ms = 0;
     bool have_previous = false;
     std::size_t replayed = 0;
@@ -400,6 +419,15 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         previous_t_ms = row.t_ms;
         have_previous = true;
 
+        // Expired BEFORE the detector stage: the live pass samples ONE
+        // prior at queue time and derives both the corner hint and the
+        // solve seed from it, so a pose the live worker would already have
+        // dropped must not hint observe_corner here either.
+        if (seed_prior && row.t_ms - seed_t_ms > kSeedHoldMs) {
+            seed_prior.reset();
+        }
+        const cube::vision::PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
+
         const auto all_cells_in_frame = [&](const auto& cells) {
             return std::all_of(cells.begin(), cells.end(),
                                [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
@@ -414,8 +442,15 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         // Same all-27-cells gate as the live worker: a corner view with any
         // cell off-frame samples fabricated colour and never reaches the
         // live pipeline's aggregation OR pose projection, so it must not
-        // count as a detection (or seed a pose) here either.
-        const auto observed_corner = observe_corner(frame);
+        // count as a detection (or seed a pose) here either. Hinted from
+        // the held pose exactly as analyze() hints it (see the fidelity
+        // note above): a frontal/edge-on prediction yields no hint and the
+        // detector runs the historical fixed-pose way.
+        std::optional<cube::vision::CornerHint> corner_hint;
+        if (seed_prior) {
+            corner_hint = cube::vision::compute_corner_hint(*seed_prior);
+        }
+        const auto observed_corner = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
         const bool corner_gated =
             observed_corner.has_value() &&
             !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
@@ -426,16 +461,21 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         }
 
         // Corner-first, exactly like the live pass: three pinned quads
-        // constrain the pose far better than one.
+        // constrain the pose far better than one. Both solves take the held
+        // seed the way analyze() passes it.
         std::optional<cube::vision::CubePoseProjection> pose;
         if (corner.has_value()) {
-            if (const auto projected = project_cube_from_corner(*corner, frame.size()); projected.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
             }
         } else if (face.has_value()) {
-            if (const auto projected = project_cube_from_face(*face, frame.size()); projected.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
             }
+        }
+        if (pose.has_value() && pose->orientation_valid) {
+            seed_prior = cube::vision::PoseSeed{pose->rvec, pose->tvec};
+            seed_t_ms = row.t_ms;
         }
 
         std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),

@@ -13,8 +13,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
+#include <cstdio>
 #include <limits>
 #include <numbers>
 #include <utility>
@@ -586,4 +588,61 @@ TEST_CASE("observe_corner with a hint re-assigns roles past the 120-degree bound
 
     const auto resolution = require_pose_resolves(*observation, seed, rotation);
     REQUIRE(resolution.lattice_index != kIdentityLatticeIndex);
+}
+
+// Per-pass corner-path budget profiling (the M7 "profiled and reported"
+// verification bullet) - hidden tag, never part of the normal suite:
+// wall-clock numbers are machine- and build-dependent and belong in a
+// report, not an assertion. Run:
+//
+//   cube_unit_tests.exe "[.corner-profile]"
+//
+// Synthetic frames on a desktop bound the RELATIVE cost of the hint (its
+// absolute phone-class number needs a device this repo cannot drive - a
+// user-dependent follow-up, like the recorded corpus). The five scenarios
+// bracket what a live pass can spend: hint derivation alone, the historical
+// unhinted detector on its prompted pose (hit) and off it (miss - the
+// pre-M7 steady state while tracking), and the hinted detector both
+// succeeding and failing (a stale/mismatched hint is the bounded worst
+// case: the full candidate scan runs and every fit is attempted and
+// rejected). The decimation decision recorded at cornerScanArmed
+// (scan_session.cpp) cites these numbers.
+TEST_CASE("profile the corner path's per-pass cost", "[.corner-profile]") {
+    const cv::Matx33d rotated = rot_z_display(40.0) * iso_corner_rotation();
+    const cv::Mat iso_frame = render_rotated_cube(iso_corner_rotation(), kHintTranslation, kHintFrame);
+    const cv::Mat rotated_frame = render_rotated_cube(rotated, kHintTranslation, kHintFrame);
+
+    const PoseSeed rotated_seed = seed_for_rotation(rotated, kHintTranslation);
+    // A hint pointing 100 degrees away from what the frame shows: sectors
+    // and bases land on the wrong candidates, so every per-face fit is
+    // attempted and fails - the detector's bounded-work worst case.
+    const PoseSeed mismatched_seed = seed_for_rotation(rot_z_display(140.0) * iso_corner_rotation(), kHintTranslation);
+
+    const auto time_ms = [](int reps, const auto& body) {
+        const auto start = std::chrono::steady_clock::now();
+        for (int i = 0; i < reps; ++i) {
+            body();
+        }
+        const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+        return elapsed.count() / reps;
+    };
+
+    constexpr int kHintReps = 1000;
+    constexpr int kDetectorReps = 25;
+    const double hint_ms = time_ms(kHintReps, [&] { (void)compute_corner_hint(rotated_seed); });
+    const double unhinted_hit_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(iso_frame); });
+    const double unhinted_miss_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame); });
+    const auto rotated_hint = compute_corner_hint(rotated_seed);
+    REQUIRE(rotated_hint.has_value());
+    const double hinted_hit_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame, &*rotated_hint); });
+    const auto mismatched_hint = compute_corner_hint(mismatched_seed);
+    REQUIRE(mismatched_hint.has_value());
+    const double hinted_miss_ms =
+        time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame, &*mismatched_hint); });
+
+    std::printf("corner-profile (%dx%d synthetic frames)\n", kHintFrame.width, kHintFrame.height);
+    std::printf("  compute_corner_hint      %9.4f ms\n", hint_ms);
+    std::printf("  observe_corner unhinted  %9.4f ms hit   %9.4f ms miss\n", unhinted_hit_ms, unhinted_miss_ms);
+    std::printf("  observe_corner hinted    %9.4f ms hit   %9.4f ms miss\n", hinted_hit_ms, hinted_miss_ms);
+    SUCCEED();
 }

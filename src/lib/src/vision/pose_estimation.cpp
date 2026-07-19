@@ -295,9 +295,15 @@ std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed) {
     // cyclic assignments would be geometrically valid (they differ by a
     // 120-degree turn about the shared corner's diagonal, a lattice
     // element the tracker's gauge resolution absorbs); picking the
-    // up-screen one deterministically keeps the roles stable frame to
-    // frame under slow rotation, so per-role aggregation windows aren't
-    // churned by arbitrary re-labelling.
+    // up-screen one deterministically keeps the roles stable away from the
+    // 120-degree changeover, where frame noise CAN flip the winner between
+    // passes. Deliberately no hysteresis there: it would need the previous
+    // pass's role state threaded through a function that is otherwise pure
+    // in the seed, and a flip costs nothing in correctness - identity comes
+    // from the tracker's gauge resolution, and the relabelled window_map
+    // forces the per-role aggregation reset in scan_session's add_keyed
+    // (the chimera defence doing its job). The price is bounded capture
+    // latency near the boundary: a reset window must re-converge.
     double best_upness = -std::numeric_limits<double>::infinity();
     std::size_t top_index = 0;
     for (std::size_t i = 0; i < visible.size(); ++i) {
