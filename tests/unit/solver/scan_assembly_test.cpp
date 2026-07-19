@@ -18,6 +18,7 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
+using cube::solver::RotationHint;
 
 namespace {
 
@@ -130,6 +131,114 @@ TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations",
     const auto result = assemble_scanned_faces(model_faces_of(Cube::solved()));
     REQUIRE(result.has_value());
     REQUIRE(*result == Cube::solved());
+}
+
+// The canonical near-solved ambiguity (scan_assembly.hpp's "within a
+// couple of moves of solved"): one U quarter-turn away from solved,
+// captured canonically. U and D are uniform (rotation-degenerate), and the
+// four side faces - six own-colour stickers plus one displaced row each -
+// admit a SECOND joint rotation assignment that builds a different but
+// equally solvable cube (the displaced rows re-read as a D-layer turn), so
+// the unhinted search must reject the scan as ambiguous. Shared fixture
+// for every hint test below.
+namespace {
+std::array<std::array<Facelet, 9>, 6> ambiguous_near_solved_input() {
+    return model_faces_of(Cube::solved().apply(Move{Face::U, 1}));
+}
+}  // namespace
+
+TEST_CASE("a rotation hint lifts near-solved assembly ambiguity", "[scan_assembly]") {
+    const Cube original = Cube::solved().apply(Move{Face::U, 1});
+    const auto input = ambiguous_near_solved_input();
+
+    // Establish the premise: without a hint this scan IS ambiguous - if it
+    // ever stops being (a solver change), every hint test here is testing
+    // nothing and must be rebuilt on a new fixture.
+    const auto unhinted = assemble_scanned_faces_with_mapping(input);
+    REQUIRE_FALSE(unhinted.has_value());
+    REQUIRE(unhinted.error() == cube::CubeError::invalid_cube_state);
+
+    // Canonical capture means the true assembly applies zero quarter turns
+    // to every face; the rival survivor needs the side faces re-rotated,
+    // so an all-zeros hint scores the true cube strictly highest.
+    RotationHint hint;
+    hint.quarter_turns.fill(0);
+    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
+    REQUIRE(hinted.has_value());
+    REQUIRE(hinted->cube == original);
+    // Mapping bookkeeping is hint-independent (centres pin it before the
+    // search runs): canonical input order means the identity mapping.
+    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size(); ++face_index) {
+        REQUIRE(hinted->input_index_of_face[face_index] == face_index);
+    }
+}
+
+TEST_CASE("a rotation hint can select the rival survivor instead", "[scan_assembly]") {
+    const Cube original = Cube::solved().apply(Move{Face::U, 1});
+    const auto input = ambiguous_near_solved_input();
+
+    // Hint the four side faces at a half-turn (input order is solver-Face
+    // order here: U,D,L,R,F,B), leaving the degenerate U/D unhinted: the
+    // displaced rows land on the D layer and the OTHER solvable assembly
+    // must win - proof the hint genuinely selects rather than merely
+    // rubber-stamping the assembly the unhinted search would have found
+    // first.
+    RotationHint hint;
+    hint.quarter_turns = {RotationHint::kNoHint, RotationHint::kNoHint, 2, 2, 2, 2};
+    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
+    REQUIRE(hinted.has_value());
+    REQUIRE(hinted->cube != original);
+    REQUIRE(hinted->cube.is_solvable());
+}
+
+TEST_CASE("a hint never vetoes a unique survivor", "[scan_assembly]") {
+    // A scrambled cube's assembly is unique; a hint - even one that
+    // contradicts the true rotations - must not be able to reject it.
+    // Geometry outvotes advice.
+    std::mt19937 rng{7};
+    const Cube original = scrambled_cube(rng, 25);
+    const auto input = model_faces_of(original);
+
+    RotationHint wrong_hint;
+    wrong_hint.quarter_turns.fill(3);  // canonical capture: true digits are all 0
+    const auto hinted = assemble_scanned_faces_with_mapping(input, &wrong_hint);
+    REQUIRE(hinted.has_value());
+    REQUIRE(hinted->cube == original);
+}
+
+TEST_CASE("an unusable hint behaves exactly like no hint", "[scan_assembly]") {
+    const auto input = ambiguous_near_solved_input();
+
+    // Default-constructed (all kNoHint) and out-of-range entries alike
+    // carry no expectation: the ambiguity must fail exactly as unhinted.
+    RotationHint empty_hint;
+    const auto with_empty = assemble_scanned_faces_with_mapping(input, &empty_hint);
+    REQUIRE_FALSE(with_empty.has_value());
+    REQUIRE(with_empty.error() == cube::CubeError::invalid_cube_state);
+
+    RotationHint malformed_hint;
+    malformed_hint.quarter_turns = {7, -5, 4, 99, RotationHint::kNoHint, -1};
+    const auto with_malformed = assemble_scanned_faces_with_mapping(input, &malformed_hint);
+    REQUIRE_FALSE(with_malformed.has_value());
+    REQUIRE(with_malformed.error() == cube::CubeError::invalid_cube_state);
+
+    const auto with_null = assemble_scanned_faces_with_mapping(input, nullptr);
+    REQUIRE_FALSE(with_null.has_value());
+    REQUIRE(with_null.error() == cube::CubeError::invalid_cube_state);
+}
+
+TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing", "[scan_assembly]") {
+    const auto input = ambiguous_near_solved_input();
+
+    // Hinting only the uniform U face is worthless evidence: every
+    // survivor reaches digit 0 on a rotationally symmetric face, so all
+    // scores tie and the scan must still fail - a hint may only ever win
+    // STRICTLY.
+    RotationHint hint;
+    hint.quarter_turns[0] = 0;
+    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
+    REQUIRE_FALSE(hinted.has_value());
+    REQUIRE(hinted.error() == cube::CubeError::invalid_cube_state);
 }
 
 TEST_CASE("duplicate centre colours are rejected", "[scan_assembly]") {
