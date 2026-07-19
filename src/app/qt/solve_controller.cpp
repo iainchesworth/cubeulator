@@ -59,11 +59,12 @@ QVariantList face_colors(const Cube& cube, Face face) {
     return colors;
 }
 
-// solve() can take anywhere from milliseconds to tens of minutes depending
-// on the scramble (see pll.cpp's history for a seed whose PLL search runs
-// long) - restart() below runs it on a background thread via
-// QtConcurrent::run rather than the UI thread, so which seed this is no
-// longer affects app responsiveness.
+// solve() now completes in seconds on any scramble (the last layer uses
+// fixed 2-look algorithms - see src/lib/src/solver/last_layer.hpp; it once
+// ranged up to tens of minutes when that stage was searched per-scramble).
+// restart() below still runs it on a background thread via
+// QtConcurrent::run rather than the UI thread, so even those seconds never
+// affect app responsiveness.
 constexpr unsigned kDefaultScrambleSeed = 0;
 
 // Runs on a QtConcurrent worker thread, not the UI thread - see restart().

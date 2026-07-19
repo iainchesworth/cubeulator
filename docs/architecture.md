@@ -45,8 +45,10 @@ iOS via Qt's Xcode integration, both loading the same `Main.qml`.
 `src/lib/`'s solver and vision modules are both real. `cube::solver::solve()`
 solves a cube via the classic beginner (layer-by-layer) method - cross,
 white corners, middle edges, 2-look OLL, 2-look PLL - the same staged
-structure the app teaches, found by search rather than a memorised
-algorithm table (see `src/lib/src/solver/`). `cube::vision` runs a full
+structure the app teaches. The first two layers are found by targeted
+per-piece search; the last layer composes the standard 2-look algorithms
+(edge flip, Sune, A-perm, U-perm), which keeps every solve bounded to
+seconds for interactive mobile use (see `src/lib/src/solver/`). `cube::vision` runs a full
 OpenCV capture-to-state pipeline - grid detection, colour classification,
 stability/hand-presence gating, auto-advance - with manual per-face
 confirmation as the fallback (see `src/lib/src/vision/`). There's no wiring

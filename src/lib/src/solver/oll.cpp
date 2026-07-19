@@ -1,10 +1,10 @@
 #include <cube/solver/oll.hpp>
 
-#include <array>
+#include <vector>
 
 #include <cube/solver/middle_edges.hpp>
 
-#include "bfs_search.hpp"
+#include "last_layer.hpp"
 
 namespace cube::solver {
 
@@ -26,16 +26,6 @@ bool u_edges_oriented(const Cube& cube) noexcept {
            cube.at(Face::U, 7) == target;
 }
 
-// The faces a commutator's "setup" half (P, see bfs_search.hpp's
-// commutator_search) is built from: every face except D (never needed once
-// F2L is solved). U is included here too, not just as the middle toggle -
-// real algorithms interleave U turns between the F2L-disturbing moves
-// rather than using a single U block, and since U never touches F2L,
-// including it in P doesn't weaken the restoration guarantee at all.
-// Restricting P to only the 4 truly-disturbing faces was tried first and
-// couldn't find a solution even at considerable depth.
-constexpr std::array<Face, 5> kDisturbingFaces = {Face::U, Face::L, Face::R, Face::F, Face::B};
-
 }  // namespace
 
 bool oll_solved(const Cube& cube) noexcept { return f2l_solved(cube) && u_face_solved(cube); }
@@ -44,13 +34,22 @@ Result<std::vector<Move>> solve_oll(const Cube& start) {
     std::vector<Move> solution;
     Cube cube = start;
 
-    const std::vector<Face> disturbing(kDisturbingFaces.begin(), kDisturbingFaces.end());
-
-    auto edges_postcondition = [](const Cube& c) { return u_edges_oriented(c); };
-    Result<std::vector<Move>> edges_step = detail::commutator_search(cube, disturbing, edges_postcondition, 6);
-    if (!edges_step.has_value()) {
-        edges_step = detail::two_commutator_search(cube, disturbing, edges_postcondition, 4);
-    }
+    // Stage 1: orient the U edges (yellow cross on top). The edge-flip
+    // algorithm plus U alignment reaches every edge-orientation case (dot,
+    // L-shape, line) in at most three applications - see last_layer.hpp
+    // for why this composition is bounded to milliseconds, unlike the
+    // per-scramble commutator search it replaced.
+    //
+    // Both stage postconditions below also gate on f2l_solved. That is
+    // redundant while every alphabet word is F2L-safe (they all are -
+    // last_layer_test.cpp proves it), but it means a future broken word
+    // degrades to a missed solution or no_solution instead of this stage
+    // silently returning a move list that scrambles the first two layers -
+    // the U-face-only conditions alone can't tell the difference.
+    const std::vector<std::vector<Move>> edge_alphabet = {detail::kAdjustU, detail::kAdjustU2,
+                                                          detail::kAdjustUPrime, detail::kEdgeOrientFlip};
+    auto edges_postcondition = [](const Cube& c) { return f2l_solved(c) && u_edges_oriented(c); };
+    Result<std::vector<Move>> edges_step = detail::algorithm_search(cube, edge_alphabet, edges_postcondition, 12);
     if (!edges_step.has_value()) {
         return std::unexpected(edges_step.error());
     }
@@ -59,11 +58,16 @@ Result<std::vector<Move>> solve_oll(const Cube& start) {
         solution.push_back(m);
     }
 
-    auto corners_postcondition = [](const Cube& c) { return u_face_solved(c); };
-    Result<std::vector<Move>> corners_step = detail::commutator_search(cube, disturbing, corners_postcondition, 6);
-    if (!corners_step.has_value()) {
-        corners_step = detail::two_commutator_search(cube, disturbing, corners_postcondition, 4);
-    }
+    // Stage 2: orient the U corners. Every corner-orientation case is
+    // within two Sune/Anti-Sune applications (plus U alignment) of solved;
+    // the emitted sequence occasionally spends a third application where
+    // that saves U-alignment words (the search minimises words, and an AUF
+    // costs the same as a Sune).
+    const std::vector<std::vector<Move>> corner_alphabet = {detail::kAdjustU, detail::kAdjustU2,
+                                                            detail::kAdjustUPrime, detail::kSune, detail::kAntiSune};
+    auto corners_postcondition = [](const Cube& c) { return oll_solved(c); };
+    Result<std::vector<Move>> corners_step =
+        detail::algorithm_search(cube, corner_alphabet, corners_postcondition, 12);
     if (!corners_step.has_value()) {
         return std::unexpected(corners_step.error());
     }

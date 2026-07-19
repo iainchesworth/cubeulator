@@ -11,19 +11,22 @@ Two layers, both Catch2:
   `cube::platform::camera`) end to end rather than any single interface in
   isolation.
 
-Run them with `ctest --preset <preset>` after building.
+Run them with `ctest --preset <preset>` after building. Tests are
+independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
+`execution.jobs` in a personal `CMakeUserPresets.json` test preset, where
+machine-specific tuning belongs; the committed presets leave it unset so
+CI's 4-core runners aren't oversubscribed).
 
 ## Debug is slow - use `fastdebug` for local iteration
 
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
 compiles unoptimized *and* enables ASan/UBSan (see
-[Sanitizers.cmake](../cmake/Sanitizers.cmake)). The solver's search
-(`cube::solver::detail::commutator_search` et al., see
-[bfs_search.hpp](../src/lib/src/solver/bfs_search.hpp)) does enough
-`std::vector`/`std::unordered_set` churn per node that an unoptimized build
-alone - independent of the sanitizers - is well over an order of magnitude
-slower there than Release; a handful of `solve_pll`/`solve_oll` corpus
-scrambles can turn a sub-minute Release run into 20+ minutes in Debug.
+[Sanitizers.cmake](../cmake/Sanitizers.cmake)). The solver's first-two-layer
+searches (`cube::solver::detail::bfs_search`, see
+[bfs_search.hpp](../src/lib/src/solver/bfs_search.hpp)) visit up to millions
+of nodes per stage, and an unoptimized build alone - independent of the
+sanitizers - is well over an order of magnitude slower there than Release,
+turning a fast Release corpus run into many Debug minutes.
 
 For local dev/test iteration, prefer the `fastdebug` preset
 (`windows-msvc-fastdebug`/`linux-gcc-fastdebug`/`macos-clang-fastdebug`):
@@ -35,11 +38,13 @@ you actually want ASan/UBSan coverage.
 ## Slow tests
 
 The solver's corpus tests (`solve_cross`, `solve_corners`,
-`solve_middle_edges`, `solve_oll`, `solve_pll`, and `solve`'s own corpus
-case) are tagged `[slow]` - they each search many random scrambles, and
-`solve_pll` in particular can occasionally take tens of minutes to search a
-single hard scramble (see its test's own comment). Skip them for a fast
-local loop, or run only them:
+`solve_middle_edges`, `solve_oll`, `solve_pll`), both `solve` cases, and
+the `SteppedSolution` tests (each of the latter runs a full solve) are
+tagged `[slow]` - every one drives one or more random scrambles through
+the searched first-two-layer stages. (The last layer itself is fixed-algorithm and takes
+milliseconds - see [last_layer.hpp](../src/lib/src/solver/last_layer.hpp) -
+so the corpus cost is the cross/corners/middle-edges searches.) Skip them
+for a fast local loop, or run only them:
 
 ```
 ctest --preset <preset> -LE slow   # everything except the slow solver corpus tests
