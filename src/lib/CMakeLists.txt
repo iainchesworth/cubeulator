@@ -41,7 +41,15 @@ add_custom_target(cube_version ALL
 target_sources(cube_lib
     PRIVATE
         src/version.cpp
+        src/solver/cube.cpp
+        src/solver/notation.cpp
+        src/solver/cross.cpp
+        src/solver/corners.cpp
+        src/solver/middle_edges.cpp
+        src/solver/oll.cpp
+        src/solver/pll.cpp
         src/solver/solver.cpp
+        src/solver/stepped_solution.cpp
         src/vision/vision.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)

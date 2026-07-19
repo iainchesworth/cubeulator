@@ -9,7 +9,16 @@ add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
     unit/scan_session_config_test.cpp
-    unit/lib_stub_functions_test.cpp)
+    unit/lib_stub_functions_test.cpp
+    unit/solver/cube_test.cpp
+    unit/solver/notation_test.cpp
+    unit/solver/cross_test.cpp
+    unit/solver/corners_test.cpp
+    unit/solver/middle_edges_test.cpp
+    unit/solver/oll_test.cpp
+    unit/solver/pll_test.cpp
+    unit/solver/solve_test.cpp
+    unit/solver/stepped_solution_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE

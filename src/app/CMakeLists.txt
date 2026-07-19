@@ -65,7 +65,7 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Qml)
     qt_standard_project_setup(REQUIRES 6.5)
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
@@ -101,7 +101,27 @@ if(CUBEULATOR_BUILD_APP)
             qt/PermissionScreen.qml
             qt/ScanScreen.qml
             qt/SolveScreen.qml
-            qt/CompleteScreen.qml)
+            qt/CompleteScreen.qml
+        SOURCES
+            qt/solve_controller.hpp
+            qt/solve_controller.cpp)
+
+    # cube_app_qml otherwise has no target_link_libraries call at all - it
+    # only gets Qt coverage transitively once cube_app links it via
+    # WHOLE_ARCHIVE below. solve_controller.cpp needs cube::lib's include
+    # paths at its own compile step, and QML_ELEMENT/QML_SINGLETON (used by
+    # SolveController) need Qt6::Qml's qqmlregistration.h visible here too.
+    target_link_libraries(cube_app_qml PRIVATE cube::lib Qt6::Qml)
+
+    # qmltyperegistrar's generated qmltyperegistrations.cpp includes
+    # QML_ELEMENT-tagged headers via "#if __has_include(<solve_controller.hpp>)"
+    # - angle brackets, so it resolves via the include *path*, not relative
+    # to solve_controller.cpp's own directory. Without qt/ on cube_app_qml's
+    # include path, that check silently fails and the #include is skipped,
+    # leaving SolveController undeclared in the generated registration code
+    # (confirmed locally: "SolveController: undeclared identifier" in
+    # cube_app_qml_qmltyperegistrations.cpp without this).
+    target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
     qt_add_executable(cube_app
         qt/main.cpp)

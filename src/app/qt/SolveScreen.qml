@@ -6,14 +6,36 @@ Rectangle {
     color: Theme.paper
     readonly property bool wide: width >= Theme.wideBreakpoint
 
-    readonly property int step: AppState.step
-    readonly property var curStep: AppState.steps[step]
+    // One entry per cube::solver::Stage (Cross, WhiteCorners, MiddleEdges,
+    // Oll, Pll, in that order) - display copy lives here rather than in
+    // the GUI-free solver lib, matching SolveController's own "no UI copy"
+    // contract; SolveController.stageRanges gives the structural (index
+    // range) data this pairs with.
+    readonly property var stageCopy: [
+        { title: "White cross", detail: "Bring the four white edges home, matching each side centre." },
+        { title: "White corners", detail: "Insert the four white corners to complete the first layer." },
+        { title: "Middle layer", detail: "Send the middle-layer edges home." },
+        { title: "Orient last layer", detail: "Orient the last layer's edges and corners so the top face reads solid." },
+        { title: "Permute last layer", detail: "Permute the last layer's pieces into their solved positions." }
+    ]
 
-    readonly property var scrambled: ({
-        top: ["#F2F0EC", "#F2F0EC", "#F0C94A", "#3A9D5D", "#F2F0EC", "#DF7A2B", "#F2F0EC", "#2F6FAE", "#F2F0EC"],
-        right: ["#D1372A", "#DF7A2B", "#D1372A", "#2F6FAE", "#D1372A", "#3A9D5D", "#D1372A", "#F2F0EC", "#F0C94A"],
-        left: ["#3A9D5D", "#F0C94A", "#3A9D5D", "#F2F0EC", "#3A9D5D", "#D1372A", "#DF7A2B", "#3A9D5D", "#2F6FAE"]
-    })
+    function colorHex(name) {
+        switch (name) {
+        case "White": return Theme.faceU;
+        case "Yellow": return Theme.faceD;
+        case "Green": return Theme.faceF;
+        case "Blue": return Theme.faceB;
+        case "Orange": return Theme.faceL;
+        case "Red": return Theme.faceR;
+        }
+        return Theme.paper;
+    }
+    function colorsHex(names) {
+        var out = [];
+        for (var i = 0; i < names.length; i++)
+            out.push(colorHex(names[i]));
+        return out;
+    }
 
     property real arrowOpacity: 1.0
     SequentialAnimation on arrowOpacity {
@@ -26,9 +48,10 @@ Rectangle {
         id: stepRow
         Rectangle {
             property int idx: 0
-            property var s: null
-            readonly property bool isCurrent: idx === root.step
-            readonly property bool isDone: idx < root.step
+            property var copy: null
+            readonly property var range: SolveController.stageRanges[idx]
+            readonly property bool isCurrent: SolveController.currentStageIndex === idx
+            readonly property bool isDone: range && SolveController.moveIndex >= range.endIndex
             width: ListView.view ? ListView.view.width : 320
             height: isCurrent ? (detailCol.implicitHeight + Theme.space3 * 2) : 56
             color: isCurrent ? Theme.accent100 : "transparent"
@@ -64,20 +87,20 @@ Rectangle {
                     width: parent.width - 42
                     spacing: 4
                     Text {
-                        text: s ? s.title : ""
+                        text: copy ? copy.title : ""
                         font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 15
                         color: Theme.ink
                     }
                     Text {
                         visible: isCurrent
-                        text: s ? s.detail : ""
+                        text: copy ? copy.detail : ""
                         font.family: Theme.fontHeading; font.pixelSize: 12
                         color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
                         width: parent.width; wrapMode: Text.WordWrap
                     }
                     Text {
                         visible: isCurrent
-                        text: s ? s.move : ""
+                        text: SolveController.currentMoveNotation
                         font.family: Theme.fontMono; font.pixelSize: 13
                         color: Theme.accent700
                     }
@@ -100,7 +123,7 @@ Rectangle {
                 width: parent.width - 100
             }
             Text {
-                text: AppState.step + " / 42 mv"
+                text: SolveController.moveIndex + " / " + SolveController.totalMoves + " mv"
                 font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink
             }
         }
@@ -111,17 +134,20 @@ Rectangle {
         Item {
             width: parent.width; height: 230
             CubeView {
+                id: narrowCubeView
                 width: 200; height: 200
                 anchors.centerIn: parent
-                topColors: root.scrambled.top
-                rightColors: root.scrambled.right
-                leftColors: root.scrambled.left
-                showArrow: true
+                topColors: root.colorsHex(SolveController.topColors)
+                rightColors: root.colorsHex(SolveController.rightColors)
+                leftColors: root.colorsHex(SolveController.leftColors)
+                showArrow: !SolveController.atEnd
                 arrowOpacity: root.arrowOpacity
+                currentMoveFace: SolveController.currentMoveFace
+                currentMoveTurns: SolveController.currentMoveTurns
             }
             Text {
                 anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space3
-                text: root.curStep.move
+                text: SolveController.currentMoveNotation
                 font.family: Theme.fontMono; font.pixelSize: 22; font.letterSpacing: 1
                 color: Theme.ink
             }
@@ -139,13 +165,15 @@ Rectangle {
             padding: Theme.space4
             spacing: Theme.space1
 
+            readonly property var copy: root.stageCopy[SolveController.currentStageIndex]
+
             Text {
-                text: "STEP " + (root.step + 1) + " OF " + AppState.steps.length
+                text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length
                 color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
             }
-            Text { text: root.curStep.title; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink }
+            Text { text: parent.copy ? parent.copy.title : ""; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink }
             Text {
-                text: root.curStep.detail
+                text: parent.copy ? parent.copy.detail : ""
                 font.family: Theme.fontHeading; font.pixelSize: 13
                 color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
                 width: parent.width - Theme.space8; wrapMode: Text.WordWrap
@@ -154,17 +182,8 @@ Rectangle {
             Row {
                 width: parent.width - Theme.space8
                 spacing: Theme.space2
-                AppButton { height: 44; variant: "secondary"; text: "Previous"; onClicked: AppState.prevStep() }
-                AppButton { height: 44; width: parent.width - 100 - Theme.space2; variant: "primary"; text: "Next step"; onClicked: AppState.nextStep() }
-            }
-            Row {
-                topPadding: Theme.space3
-                spacing: Theme.space2
-                Rectangle {
-                    width: 16; height: 16; border.width: 1.5; border.color: Theme.divider
-                    Icon { anchors.centerIn: parent; name: "check"; color: Theme.accent; width: 12; height: 12; strokeWidth: 3 }
-                }
-                Text { text: "Auto-advance from camera"; font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                AppButton { height: 44; variant: "secondary"; text: "Previous"; enabled: !SolveController.atStart; onClicked: { SolveController.previousMove(); narrowCubeView.animateMove(); } }
+                AppButton { height: 44; width: parent.width - 100 - Theme.space2; variant: "primary"; text: SolveController.atEnd ? "Solved!" : "Next move"; enabled: !SolveController.atEnd; onClicked: { SolveController.nextMove(); narrowCubeView.animateMove(); } }
             }
         }
     }
@@ -178,7 +197,7 @@ Rectangle {
             width: parent.width
             padding: Theme.space3
             Text { text: "Solving — beginner method"; font.family: Theme.fontMono; font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); width: parent.width - 160 }
-            Text { text: AppState.elapsedLabel() + " · " + root.step + "/42"; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
+            Text { text: AppState.elapsedLabel() + " · " + SolveController.moveIndex + "/" + SolveController.totalMoves; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
         }
         Rectangle { width: parent.width; height: 2; color: Theme.divider }
 
@@ -191,19 +210,22 @@ Rectangle {
                 height: parent.height
 
                 CubeView {
+                    id: wideCubeView
                     width: 300; height: 300
                     anchors.centerIn: parent
-                    topColors: root.scrambled.top
-                    rightColors: root.scrambled.right
-                    leftColors: root.scrambled.left
-                    showArrow: true
+                    topColors: root.colorsHex(SolveController.topColors)
+                    rightColors: root.colorsHex(SolveController.rightColors)
+                    leftColors: root.colorsHex(SolveController.leftColors)
+                    showArrow: !SolveController.atEnd
                     arrowOpacity: root.arrowOpacity
+                    currentMoveFace: SolveController.currentMoveFace
+                    currentMoveTurns: SolveController.currentMoveTurns
                 }
                 Column {
                     anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space4
                     spacing: 4
-                    Text { text: "STEP " + (root.step + 1) + " OF " + AppState.steps.length; color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4 }
-                    Text { text: root.curStep.move; font.family: Theme.fontMono; font.pixelSize: 30; font.letterSpacing: 1; color: Theme.ink }
+                    Text { text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length; color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4 }
+                    Text { text: SolveController.currentMoveNotation; font.family: Theme.fontMono; font.pixelSize: 30; font.letterSpacing: 1; color: Theme.ink }
                 }
                 Rectangle {
                     anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: Theme.space4
@@ -218,7 +240,7 @@ Rectangle {
                 }
                 Text {
                     anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.margins: Theme.space4
-                    text: "Orthographic · arrows show the exact turn"
+                    text: "Orthographic · arrow shows the exact turn"
                     font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.55); font.family: Theme.fontHeading
                 }
                 Rectangle { anchors.right: parent.right; width: 2; height: parent.height; color: Theme.divider }
@@ -231,7 +253,7 @@ Rectangle {
                 Text {
                     width: parent.width
                     padding: Theme.space3
-                    text: "STEPS"
+                    text: "STAGES"
                     font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
                     color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
                 }
@@ -241,10 +263,10 @@ Rectangle {
                     width: parent.width
                     height: parent.height - 46 - 62
                     clip: true
-                    model: AppState.steps
+                    model: root.stageCopy
                     delegate: Loader {
                         sourceComponent: stepRow
-                        onLoaded: { item.idx = index; item.s = modelData; }
+                        onLoaded: { item.idx = index; item.copy = modelData; }
                     }
                 }
 
@@ -252,8 +274,8 @@ Rectangle {
                 Row {
                     padding: Theme.space3
                     spacing: Theme.space2
-                    AppButton { height: 42; variant: "secondary"; text: "Previous"; onClicked: AppState.prevStep() }
-                    AppButton { height: 42; width: 320 - 100 - Theme.space2 - Theme.space6; variant: "primary"; text: "Next step"; onClicked: AppState.nextStep() }
+                    AppButton { height: 42; variant: "secondary"; text: "Previous"; enabled: !SolveController.atStart; onClicked: { SolveController.previousMove(); wideCubeView.animateMove(); } }
+                    AppButton { height: 42; width: 320 - 100 - Theme.space2 - Theme.space6; variant: "primary"; text: SolveController.atEnd ? "Solved!" : "Next move"; enabled: !SolveController.atEnd; onClicked: { SolveController.nextMove(); wideCubeView.animateMove(); } }
                 }
             }
         }
