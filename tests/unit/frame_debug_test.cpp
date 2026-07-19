@@ -63,7 +63,7 @@ std::vector<detail::StickerCandidate> replica_saturation_candidates(const cv::Ma
     cv::cvtColor(bgr_frame, hsv, cv::COLOR_BGR2HSV);
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
-    cv::Mat mask = hsv_channels[1] >= 60;
+    cv::Mat mask = hsv_channels[1] >= 40;
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
     return detail::candidates_from_binary_mask(mask);
@@ -75,7 +75,7 @@ std::vector<detail::StickerCandidate> replica_white_candidates(const cv::Mat& bg
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
     cv::Mat mask;
-    cv::bitwise_and(hsv_channels[2] >= 150, hsv_channels[1] < 60, mask);
+    cv::bitwise_and(hsv_channels[2] >= 150, hsv_channels[1] < 40, mask);
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
     return detail::candidates_from_binary_mask(mask);
@@ -230,6 +230,49 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
         }
     } else {
         std::printf("observe_face: FAILED\n");
+    }
+
+    // Stage 3b: partial-lattice completion diagnostics - every scored
+    // placement exactly as the production fallback ranked it.
+    const auto placements = detail::score_partial_placements(frame);
+    std::printf("completion placements: %zu\n", placements.size());
+    for (const auto& placement : placements) {
+        const auto center = [&](float u, float v) {
+            const double x = placement.transform.at<double>(0, 0) * u + placement.transform.at<double>(0, 1) * v +
+                             placement.transform.at<double>(0, 2);
+            const double y = placement.transform.at<double>(1, 0) * u + placement.transform.at<double>(1, 1) * v +
+                             placement.transform.at<double>(1, 2);
+            return cv::Point2f(static_cast<float>(x), static_cast<float>(y));
+        };
+        const cv::Point2f anchor = center(0.0F, 0.0F);
+        const cv::Point2f col_end = center(1.0F, 0.0F);
+        std::printf(
+            "  placement: anchor=(%.0f,%.0f) pitch=%.1f inliers=%d gap_mean=%.1f gap_peak=%.1f contrast=%.1f "
+            "cell_mad=%.2f min_l=%.2f edge=%.1f%s\n",
+            anchor.x, anchor.y, std::hypot(col_end.x - anchor.x, col_end.y - anchor.y), placement.inlier_count,
+            placement.mean_gap_deviation, placement.peak_gap_deviation, placement.anchor_contrast, placement.cell_mad,
+            placement.min_cell_lightness, placement.boundary_contrast, placement.accepted ? " ACCEPTED" : "");
+    }
+
+    // Optional overlay dump: CUBE_DEBUG_OVERLAY=<path.png> draws the
+    // accepted grid (face quad + cell quads) over the frame for visual
+    // placement verification.
+    if (const char* overlay_path = std::getenv("CUBE_DEBUG_OVERLAY"); overlay_path != nullptr && face.has_value()) {
+        cv::Mat overlay = frame.clone();
+        const auto draw_quad = [&](const std::array<cv::Point2f, 4>& corners, const cv::Scalar& colour) {
+            std::vector<cv::Point> points;
+            points.reserve(corners.size());
+            for (const auto& corner : corners) {
+                points.emplace_back(static_cast<int>(std::lround(corner.x)), static_cast<int>(std::lround(corner.y)));
+            }
+            cv::polylines(overlay, points, true, colour, 1, cv::LINE_AA);
+        };
+        for (const auto& cell : face->cells) {
+            draw_quad(cell.corners, cv::Scalar(0, 255, 255));
+        }
+        draw_quad(face->face_quad, cv::Scalar(0, 255, 0));
+        cv::imwrite(overlay_path, overlay);
+        std::printf("overlay written: %s\n", overlay_path);
     }
 
     // Stage 4: corner-path candidate replica, then the real verdict.

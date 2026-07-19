@@ -39,4 +39,32 @@ struct FaceObservation {
 // CubeError::no_valid_cube_detected when no acceptable lattice exists.
 [[nodiscard]] Result<FaceObservation> observe_face(const cv::Mat& bgr_frame);
 
+// Diagnostics seam for the offline frame-replay harness. Not a stable API
+// for anything outside the vision module or its tests.
+namespace detail {
+
+// One photometrically-scored placement of a partial lattice (see
+// grid_detection.hpp's partial_lattice_placements). Deviations are
+// chroma-weighted Lab distances from the placement's own lattice
+// reference - the colour sampled BETWEEN its matched anchor tiles.
+struct ScoredPlacement {
+    cv::Mat transform;                // 3x3 lattice->frame affine
+    int inlier_count = 0;             // anchors backing the underlying lattice
+    float mean_gap_deviation = 0.0F;  // mean over the 12 inter-cell gap midpoints
+    float peak_gap_deviation = 0.0F;  // worst single gap midpoint
+    float anchor_contrast = 0.0F;     // median anchor-tile deviation from the lattice reference
+    float cell_mad = 0.0F;            // mean intra-patch deviation over the 9 cell samples
+    float min_cell_lightness = 0.0F;  // darkest cell's L relative to the median cell's L
+    float boundary_contrast = 0.0F;   // weakest per-side inside-vs-outside face-edge contrast
+    bool accepted = false;            // passed every photometric gate
+};
+
+// Scores every plausible partial-lattice placement for the frame, ordered
+// the way observe_face()'s completion fallback consumes them (accepted
+// first, then most anchors, then tightest gap deviation). Exposed so the
+// frame-debug harness can print the exact scores the production path saw.
+[[nodiscard]] std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame);
+
+}  // namespace detail
+
 }  // namespace cube::vision

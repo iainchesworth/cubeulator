@@ -92,6 +92,37 @@ struct StickerCandidate {
 [[nodiscard]] std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates,
                                                                  cv::Size frame_size);
 
+// One possible placement of a PARTIAL lattice (2+ mutually-consistent
+// candidates) within the 3x3 grid. Unlike GridFitDetail this carries no
+// acceptance verdict: with only a few anchors the geometry alone cannot say
+// which of the several slot placements is the real one (an L of three tiles
+// fits four different corners of the face), so face_observation.cpp scores
+// every placement photometrically and picks the survivor.
+struct PartialPlacement {
+    cv::Point2f anchor;    // frame position of the center slot (row 1, col 1)
+    cv::Point2f col_step;  // basis vector for +1 column, in frame pixels
+    cv::Point2f row_step;  // basis vector for +1 row, in frame pixels
+    // Row-major; nullopt where no candidate matched the slot.
+    std::array<std::optional<cv::Point2f>, cells_per_grid> matched_centers{};
+    int inlier_count = 0;
+};
+
+// Enumerates plausible placements of partial lattices over `candidates`,
+// for frames where fit_lattice_detailed() has too few inliers to accept a
+// unique grid (a white-heavy face on a white-lattice cube segments only
+// 2-3 coloured tiles). Seeds every candidate pair whose separation is
+// consistent with one cell pitch predicted from the candidates' own tile
+// size (pitch ~= 1.1x tile side - unlike fit_lattice_detailed's
+// nearest-neighbour pitch estimate, this needs no minimum candidate count
+// and cannot be dragged by background clutter), fits a lattice around each
+// seed, then emits every translation of each fitted lattice that keeps all
+// matched candidates inside the 3x3 and all nine cell centers inside the
+// frame. Vertical seed pairs are allowed (2-anchor frames often segment a
+// single column); results are ordered best-fit-first but carry NO
+// photometric validation - callers must gate them against the frame.
+[[nodiscard]] std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCandidate> candidates,
+                                                                        cv::Size frame_size);
+
 }  // namespace detail
 
 }  // namespace cube::vision

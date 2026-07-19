@@ -88,6 +88,28 @@ constexpr int kMinInlierCells = 4;
 // which real grid cells are reliably among.
 constexpr std::size_t kMaxCandidatesForLatticeSearch = 40;
 
+// Partial-placement seeding (see partial_lattice_placements): a pair of
+// candidates is a plausible adjacent-cell seed when their separation sits
+// in this window of their own mean tile side. Measured on real cubes:
+// flush-tile light-lattice cubes run pitch/side ~1.0-1.1, bordered-sticker
+// cubes ~1.25; diagonal neighbours (~1.5x) and cells two apart (~2.2x)
+// fall outside the window by construction.
+constexpr float kMinSeedSeparationPerSide = 0.85F;
+constexpr float kMaxSeedSeparationPerSide = 1.35F;
+// Two blobs of genuinely different scale (a tile and a fingernail) must
+// not seed a lattice even if their separation happens to fit.
+constexpr float kMaxSeedSizeRatio = 1.5F;
+// Two mutually-consistent anchors are the floor: one candidate alone
+// fixes neither pitch direction nor scale reliably.
+constexpr int kMinPartialInliers = 2;
+// Bounds on the photometric scoring work a caller is exposed to.
+constexpr std::size_t kMaxPartialHypotheses = 6;
+constexpr std::size_t kMaxPartialPlacements = 48;
+// All nine cell centers of an emitted placement must sit at least this far
+// inside the frame - a face hanging off-frame cannot be validated (or
+// sampled) meaningfully.
+constexpr float kPlacementFrameMargin = 2.0F;
+
 // A hypothesized 3x3 lattice: `anchor` is the world position of the center
 // slot (row=1, col=1); `col_step`/`row_step` are the grid's basis vectors
 // for +1 column / +1 row. `slot_candidate[row*3+col]` holds the matched
@@ -175,6 +197,118 @@ struct LatticeHypothesis {
         }
     }
     return {slots, residuals};
+}
+
+// Partial-lattice twin of fit_lattice_hypothesis for SPARSE candidate
+// sets: anchored at the seed candidate itself instead of the median
+// candidate center. The median anchor works when most candidates are grid
+// cells, but with 2-3 cells amid clutter it routinely lands half a pitch
+// off the lattice (observed on real frames: median y exactly between two
+// tile rows), every candidate then exceeds the residual gate, and the
+// hypothesis dies with zero inliers despite a perfect seed pair.
+// Candidates classify to UNBOUNDED integer offsets relative to the seed;
+// the matched set is then normalized to slot coordinates so long as it
+// spans at most one face (3x3), dropping the smallest-area matches when
+// it does not.
+[[nodiscard]] LatticeHypothesis fit_partial_hypothesis(const std::vector<StickerCandidate>& candidates,
+                                                        cv::Point2f seed_center, cv::Point2f col_step,
+                                                        cv::Point2f row_step) {
+    LatticeHypothesis hyp{.anchor = {}, .col_step = col_step, .row_step = row_step};
+    hyp.slot_candidate.fill(-1);
+
+    const double det = static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    if (std::abs(det) < 1e-6) {
+        return hyp;
+    }
+
+    struct RelativeMatch {
+        int du = 0;
+        int dv = 0;
+        std::size_t candidate = 0;
+        float residual = 0.0F;
+    };
+    std::vector<RelativeMatch> matches;
+    for (std::size_t idx = 0; idx < candidates.size(); ++idx) {
+        const cv::Point2f d = candidates[idx].center - seed_center;
+        const double u = (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
+        const double v = (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double ru = std::round(u);
+        const double rv = std::round(v);
+        // One face is 3x3: anything further than 2 cells from the seed can
+        // never share its face.
+        if (std::abs(ru) > 2.0 || std::abs(rv) > 2.0) {
+            continue;
+        }
+        const auto residual = static_cast<float>(std::hypot(u - ru, v - rv));
+        if (residual > kMaxLatticeResidualRatio) {
+            continue;
+        }
+        RelativeMatch match{.du = static_cast<int>(ru), .dv = static_cast<int>(rv), .candidate = idx,
+                            .residual = residual};
+        // Two candidates rounding to the same relative cell: keep the closer.
+        const auto existing = std::ranges::find_if(
+            matches, [&](const RelativeMatch& m) { return m.du == match.du && m.dv == match.dv; });
+        if (existing != matches.end()) {
+            if (match.residual < existing->residual) {
+                *existing = match;
+            }
+            continue;
+        }
+        matches.push_back(match);
+    }
+
+    // Shrink to a 3-cell span per axis, evicting the smallest-area match
+    // furthest from the seed first (clutter that happened to land on the
+    // extended lattice).
+    const auto span_of = [](const std::vector<RelativeMatch>& set, auto&& proj) {
+        int lo = std::numeric_limits<int>::max();
+        int hi = std::numeric_limits<int>::min();
+        for (const auto& match : set) {
+            lo = std::min(lo, proj(match));
+            hi = std::max(hi, proj(match));
+        }
+        return std::pair{lo, hi};
+    };
+    while (matches.size() >= 2) {
+        const auto [u_lo, u_hi] = span_of(matches, [](const RelativeMatch& m) { return m.du; });
+        const auto [v_lo, v_hi] = span_of(matches, [](const RelativeMatch& m) { return m.dv; });
+        if (u_hi - u_lo < grid_dimension && v_hi - v_lo < grid_dimension) {
+            break;
+        }
+        const auto victim = std::ranges::min_element(matches, {}, [&](const RelativeMatch& m) {
+            const bool at_edge = m.du == u_lo || m.du == u_hi || m.dv == v_lo || m.dv == v_hi;
+            return std::pair{!at_edge, candidates[m.candidate].area};
+        });
+        matches.erase(victim);
+    }
+    if (matches.size() < 2) {
+        return hyp;
+    }
+
+    // Normalize relative offsets to slot coordinates and least-squares the
+    // anchor over every match.
+    const auto [u_lo, u_hi] = span_of(matches, [](const RelativeMatch& m) { return m.du; });
+    const auto [v_lo, v_hi] = span_of(matches, [](const RelativeMatch& m) { return m.dv; });
+    cv::Point2f offset_sum(0.0F, 0.0F);
+    for (const auto& match : matches) {
+        const int col = match.du - u_lo;
+        const int row = match.dv - v_lo;
+        const cv::Point2f expected_offset =
+            static_cast<float>(col - 1) * col_step + static_cast<float>(row - 1) * row_step;
+        offset_sum += candidates[match.candidate].center - expected_offset;
+    }
+    hyp.anchor = cv::Point2f(offset_sum.x / static_cast<float>(matches.size()),
+                             offset_sum.y / static_cast<float>(matches.size()));
+    for (const auto& match : matches) {
+        const int col = match.du - u_lo;
+        const int row = match.dv - v_lo;
+        const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
+        hyp.slot_candidate[slot] = static_cast<int>(match.candidate);
+        ++hyp.inlier_count;
+        hyp.residual_sum += match.residual;
+        hyp.matched_area += candidates[match.candidate].area;
+    }
+    return hyp;
 }
 
 // Scores one (col_step, row_step) basis hypothesis: classifies candidates
@@ -287,6 +421,41 @@ struct LatticeHypothesis {
         return std::nullopt;
     }
     return best;
+}
+
+// Near-coincident duplicates (the same sticker found at several threshold
+// scales, or by several strategies) collapsed before any pitch/seed
+// reasoning: each duplicate's nearest neighbour is its own twin a couple
+// of pixels away, so pitch statistics collapse to noise and no seed pair
+// survives. Radius from median blob side (~half a cell) separates
+// same-sticker twins from genuinely adjacent cells; larger area wins a
+// collapse.
+[[nodiscard]] std::vector<StickerCandidate> collapse_duplicate_candidates(std::vector<StickerCandidate> candidates) {
+    if (candidates.size() < 2) {
+        return candidates;
+    }
+    std::vector<double> sides;
+    sides.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        sides.push_back(std::sqrt(candidate.area));
+    }
+    const auto mid = sides.begin() + static_cast<std::ptrdiff_t>(sides.size() / 2);
+    std::ranges::nth_element(sides, mid);
+    const auto dedupe_radius = static_cast<float>(*mid * 0.5);
+
+    std::ranges::sort(candidates, {}, [](const StickerCandidate& candidate) { return -candidate.area; });
+    std::vector<StickerCandidate> unique;
+    unique.reserve(candidates.size());
+    for (const auto& candidate : candidates) {
+        const bool duplicate = std::ranges::any_of(unique, [&](const StickerCandidate& kept) {
+            const cv::Point2f d = kept.center - candidate.center;
+            return std::hypot(d.x, d.y) < dedupe_radius;
+        });
+        if (!duplicate) {
+            unique.push_back(candidate);
+        }
+    }
+    return unique;
 }
 
 // Median matched-cell width/height, used to size slots that had no matched
@@ -470,37 +639,7 @@ std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_fra
 // "exactly 9 candidates in exactly 3 even rows" requirement), extrapolating
 // bounds for any slot without a matched candidate.
 std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates, cv::Size frame_size) {
-    // Near-coincident duplicates (the same sticker found at several
-    // threshold scales, or by several strategies) must collapse before the
-    // pitch estimate: each duplicate's nearest neighbour is its own twin a
-    // couple of pixels away, so the median nearest-neighbour "pitch"
-    // collapses to noise and no seed pair survives the pitch window.
-    // Radius from median blob side (~half a cell) separates same-sticker
-    // twins from genuinely adjacent cells; larger area wins a collapse.
-    if (candidates.size() >= 2) {
-        std::vector<double> sides;
-        sides.reserve(candidates.size());
-        for (const auto& candidate : candidates) {
-            sides.push_back(std::sqrt(candidate.area));
-        }
-        const auto mid = sides.begin() + static_cast<std::ptrdiff_t>(sides.size() / 2);
-        std::ranges::nth_element(sides, mid);
-        const auto dedupe_radius = static_cast<float>(*mid * 0.5);
-
-        std::ranges::sort(candidates, {}, [](const StickerCandidate& candidate) { return -candidate.area; });
-        std::vector<StickerCandidate> unique;
-        unique.reserve(candidates.size());
-        for (const auto& candidate : candidates) {
-            const bool duplicate = std::ranges::any_of(unique, [&](const StickerCandidate& kept) {
-                const cv::Point2f d = kept.center - candidate.center;
-                return std::hypot(d.x, d.y) < dedupe_radius;
-            });
-            if (!duplicate) {
-                unique.push_back(candidate);
-            }
-        }
-        candidates = std::move(unique);
-    }
+    candidates = collapse_duplicate_candidates(std::move(candidates));
 
     if (candidates.size() > kMaxCandidatesForLatticeSearch) {
         std::ranges::partial_sort(
@@ -535,6 +674,157 @@ std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> 
         }
     }
     return fit;
+}
+
+std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCandidate> candidates,
+                                                         cv::Size frame_size) {
+    candidates = collapse_duplicate_candidates(std::move(candidates));
+    if (candidates.size() < static_cast<std::size_t>(kMinPartialInliers)) {
+        return {};
+    }
+    if (candidates.size() > kMaxCandidatesForLatticeSearch) {
+        std::ranges::partial_sort(
+            candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesForLatticeSearch), {},
+            [](const StickerCandidate& candidate) { return -candidate.area; });
+        candidates.resize(kMaxCandidatesForLatticeSearch);
+    }
+
+    const auto tile_side = [](const StickerCandidate& candidate) {
+        return static_cast<float>(std::max(candidate.bounds.width, candidate.bounds.height));
+    };
+
+    std::vector<LatticeHypothesis> hypotheses;
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        for (std::size_t j = i + 1; j < candidates.size(); ++j) {
+            const float side_i = tile_side(candidates[i]);
+            const float side_j = tile_side(candidates[j]);
+            if (side_i <= 0.0F || side_j <= 0.0F ||
+                std::max(side_i, side_j) / std::min(side_i, side_j) > kMaxSeedSizeRatio) {
+                continue;
+            }
+            const cv::Point2f d = candidates[j].center - candidates[i].center;
+            const float separation = std::hypot(d.x, d.y);
+            const float mean_side = 0.5F * (side_i + side_j);
+            if (separation < mean_side * kMinSeedSeparationPerSide ||
+                separation > mean_side * kMaxSeedSeparationPerSide) {
+                continue;
+            }
+            // The pair's own axis is one basis vector; the other is its
+            // perpendicular at the same pitch (a cube face's lattice is
+            // square). Unlike find_best_lattice, vertical seeds are kept:
+            // a 2-anchor frame often segments exactly one column.
+            cv::Point2f col_step;
+            cv::Point2f row_step;
+            if (std::abs(d.x) >= std::abs(d.y)) {
+                col_step = d.x < 0.0F ? -d : d;
+                row_step = cv::Point2f(-col_step.y, col_step.x);
+            } else {
+                row_step = d.y < 0.0F ? -d : d;
+                col_step = cv::Point2f(row_step.y, -row_step.x);
+            }
+            auto hypothesis = fit_partial_hypothesis(candidates, candidates[i].center, col_step, row_step);
+            if (hypothesis.inlier_count < kMinPartialInliers) {
+                continue;
+            }
+            hypotheses.push_back(std::move(hypothesis));
+        }
+    }
+
+    std::ranges::sort(hypotheses, [](const LatticeHypothesis& a, const LatticeHypothesis& b) {
+        if (a.inlier_count != b.inlier_count) {
+            return a.inlier_count > b.inlier_count;
+        }
+        if (a.matched_area != b.matched_area) {
+            return a.matched_area > b.matched_area;
+        }
+        return a.residual_sum < b.residual_sum;
+    });
+
+    // Every unordered seed pair of the same physical tile row/column
+    // produces a near-identical hypothesis; collapse them so the placement
+    // budget is spent on genuinely distinct lattices.
+    std::vector<LatticeHypothesis> kept;
+    for (auto& hypothesis : hypotheses) {
+        if (kept.size() >= kMaxPartialHypotheses) {
+            break;
+        }
+        const float pitch = std::hypot(hypothesis.col_step.x, hypothesis.col_step.y);
+        const bool duplicate = std::ranges::any_of(kept, [&](const LatticeHypothesis& existing) {
+            const cv::Point2f da = existing.anchor - hypothesis.anchor;
+            const cv::Point2f dc = existing.col_step - hypothesis.col_step;
+            const cv::Point2f dr = existing.row_step - hypothesis.row_step;
+            return std::hypot(da.x, da.y) < pitch * 0.35F && std::hypot(dc.x, dc.y) < pitch * 0.25F &&
+                   std::hypot(dr.x, dr.y) < pitch * 0.25F;
+        });
+        if (!duplicate) {
+            kept.push_back(std::move(hypothesis));
+        }
+    }
+
+    std::vector<PartialPlacement> placements;
+    for (const auto& hypothesis : kept) {
+        int min_row = grid_dimension;
+        int max_row = -1;
+        int min_col = grid_dimension;
+        int max_col = -1;
+        for (int row = 0; row < grid_dimension; ++row) {
+            for (int col = 0; col < grid_dimension; ++col) {
+                if (hypothesis.slot_candidate[static_cast<std::size_t>(row * grid_dimension + col)] < 0) {
+                    continue;
+                }
+                min_row = std::min(min_row, row);
+                max_row = std::max(max_row, row);
+                min_col = std::min(min_col, col);
+                max_col = std::max(max_col, col);
+            }
+        }
+        if (max_row < 0) {
+            continue;
+        }
+
+        for (int row_shift = -min_row; row_shift <= grid_dimension - 1 - max_row; ++row_shift) {
+            for (int col_shift = -min_col; col_shift <= grid_dimension - 1 - max_col; ++col_shift) {
+                const cv::Point2f anchor = hypothesis.anchor -
+                                           static_cast<float>(col_shift) * hypothesis.col_step -
+                                           static_cast<float>(row_shift) * hypothesis.row_step;
+
+                bool in_frame = true;
+                for (int row = 0; row < grid_dimension && in_frame; ++row) {
+                    for (int col = 0; col < grid_dimension && in_frame; ++col) {
+                        const cv::Point2f center = anchor + static_cast<float>(col - 1) * hypothesis.col_step +
+                                                   static_cast<float>(row - 1) * hypothesis.row_step;
+                        in_frame = center.x >= kPlacementFrameMargin &&
+                                   center.x <= static_cast<float>(frame_size.width - 1) - kPlacementFrameMargin &&
+                                   center.y >= kPlacementFrameMargin &&
+                                   center.y <= static_cast<float>(frame_size.height - 1) - kPlacementFrameMargin;
+                    }
+                }
+                if (!in_frame) {
+                    continue;
+                }
+
+                PartialPlacement placement{.anchor = anchor, .col_step = hypothesis.col_step,
+                                           .row_step = hypothesis.row_step};
+                placement.inlier_count = hypothesis.inlier_count;
+                for (int row = 0; row < grid_dimension; ++row) {
+                    for (int col = 0; col < grid_dimension; ++col) {
+                        const int idx = hypothesis.slot_candidate[static_cast<std::size_t>(row * grid_dimension + col)];
+                        if (idx < 0) {
+                            continue;
+                        }
+                        const auto shifted_slot = static_cast<std::size_t>((row + row_shift) * grid_dimension +
+                                                                           (col + col_shift));
+                        placement.matched_centers[shifted_slot] = candidates[static_cast<std::size_t>(idx)].center;
+                    }
+                }
+                placements.push_back(std::move(placement));
+                if (placements.size() >= kMaxPartialPlacements) {
+                    return placements;
+                }
+            }
+        }
+    }
+    return placements;
 }
 
 }  // namespace detail
