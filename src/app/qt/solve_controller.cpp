@@ -1,6 +1,7 @@
 #include "solve_controller.hpp"
 
 #include <QVariantMap>
+#include <QtConcurrentRun>
 
 #include <cube/solver/notation.hpp>
 #include <cube/solver/solver.hpp>
@@ -58,30 +59,55 @@ QVariantList face_colors(const Cube& cube, Face face) {
     return colors;
 }
 
-// solve() is called synchronously on construction/restart - fine for now
-// with a seed known to solve quickly, but genuinely slow for some seeds
-// (see pll.cpp's history: certain scrambles' PLL search can take tens of
-// minutes). Blocking the UI thread on an arbitrary seed would freeze the
-// app; moving this to a background thread (or pre-computing a small pool
-// of known-fast seeds) is a real follow-up, not addressed in this pass.
+// solve() can take anywhere from milliseconds to tens of minutes depending
+// on the scramble (see pll.cpp's history for a seed whose PLL search runs
+// long) - restart() below runs it on a background thread via
+// QtConcurrent::run rather than the UI thread, so which seed this is no
+// longer affects app responsiveness.
 constexpr unsigned kDefaultScrambleSeed = 0;
 
-}  // namespace
-
-SolveController::SolveController(QObject* parent) : QObject(parent) { restart(kDefaultScrambleSeed); }
-
-void SolveController::restart(unsigned seed) {
+// Runs on a QtConcurrent worker thread, not the UI thread - see restart().
+SteppedSolution solve_stepped(unsigned seed) {
     const Cube scrambled = random_scramble(seed, 25);
     const auto solution = solve(scrambled);
     if (solution.has_value()) {
-        stepped_ = SteppedSolution::from(scrambled, *solution);
-    } else {
-        // Should not happen for a physically valid scramble (every real
-        // scramble solves) - fall back to an already-solved, zero-move
-        // stepped solution so the UI has something consistent to show
-        // rather than crashing.
-        stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
+        return SteppedSolution::from(scrambled, *solution);
     }
+    // Should not happen for a physically valid scramble (every real
+    // scramble solves) - fall back to an already-solved, zero-move stepped
+    // solution so the UI has something consistent to show rather than
+    // crashing.
+    return SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
+}
+
+}  // namespace
+
+SolveController::SolveController(QObject* parent) : QObject(parent) {
+    // Safe placeholder so topColors()/etc. never read an empty stepped_
+    // while the constructor's own restart() below is still solving in the
+    // background.
+    stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
+    connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this, &SolveController::applySolveResult);
+    restart(kDefaultScrambleSeed);
+}
+
+void SolveController::restart(unsigned seed) {
+    // A restart() already in flight is left to run to completion and its
+    // result discarded on arrival by ignoring this call - AppState.qml only
+    // calls restart() again once the previous solve has had the whole scan
+    // phase (several seconds) to finish, so this isn't expected to actually
+    // trigger; it just avoids re-entering solveWatcher_ mid-flight.
+    if (isSolving_) {
+        return;
+    }
+    isSolving_ = true;
+    emit stateChanged();
+    solveWatcher_.setFuture(QtConcurrent::run(&solve_stepped, seed));
+}
+
+void SolveController::applySolveResult() {
+    stepped_ = solveWatcher_.result();
+    isSolving_ = false;
     emit stateChanged();
 }
 
@@ -128,6 +154,8 @@ int SolveController::currentStageIndex() const {
     }
     return static_cast<int>(stepped_.current_stage());
 }
+
+bool SolveController::isSolving() const { return isSolving_; }
 
 void SolveController::nextMove() {
     stepped_.next();

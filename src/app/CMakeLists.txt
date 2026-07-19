@@ -65,7 +65,7 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Qml)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Qml Concurrent)
     qt_standard_project_setup(REQUIRES 6.5)
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
@@ -111,7 +111,9 @@ if(CUBEULATOR_BUILD_APP)
     # WHOLE_ARCHIVE below. solve_controller.cpp needs cube::lib's include
     # paths at its own compile step, and QML_ELEMENT/QML_SINGLETON (used by
     # SolveController) need Qt6::Qml's qqmlregistration.h visible here too.
-    target_link_libraries(cube_app_qml PRIVATE cube::lib Qt6::Qml)
+    # Qt6::Concurrent backs solve_controller.cpp's QtConcurrent::run() call
+    # (restart() runs cube::solver::solve() off the UI thread).
+    target_link_libraries(cube_app_qml PRIVATE cube::lib Qt6::Qml Qt6::Concurrent)
 
     # qmltyperegistrar's generated qmltyperegistrations.cpp includes
     # QML_ELEMENT-tagged headers via "#if __has_include(<solve_controller.hpp>)"

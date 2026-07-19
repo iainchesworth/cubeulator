@@ -280,4 +280,51 @@ Rectangle {
             }
         }
     }
+
+    // ---- solving overlay: restart() computes off the UI thread (see
+    // solve_controller.cpp) but there's nothing sensible to show until it
+    // finishes - block interaction with a spinner rather than flashing the
+    // previous solve's stale move data.
+    Rectangle {
+        anchors.fill: parent
+        visible: SolveController.isSolving
+        color: Theme.paper
+
+        MouseArea { anchors.fill: parent }
+
+        Column {
+            anchors.centerIn: parent
+            spacing: Theme.space3
+
+            Rectangle {
+                id: spinner
+                anchors.horizontalCenter: parent.horizontalCenter
+                width: 40; height: 40
+                radius: 20
+                color: "transparent"
+                border.width: 4
+                border.color: Theme.accent100
+
+                Rectangle {
+                    width: 10; height: 10; radius: 5
+                    color: Theme.accent
+                    anchors.top: parent.top
+                    anchors.horizontalCenter: parent.horizontalCenter
+                }
+
+                RotationAnimation on rotation {
+                    running: SolveController.isSolving
+                    from: 0; to: 360
+                    duration: 900
+                    loops: Animation.Infinite
+                }
+            }
+            Text {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: "Solving…"
+                font.family: Theme.fontHeading; font.pixelSize: 14
+                color: Theme.ink
+            }
+        }
+    }
 }
