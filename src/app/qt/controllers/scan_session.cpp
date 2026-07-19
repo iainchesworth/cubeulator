@@ -62,19 +62,29 @@ constexpr int kAnalysisWidth = 640;
 // strobe at the decimation duty cycle.
 constexpr int kHandOnnxDecimation = 4;
 
-// Re-arm guard bounds (see the class comment): the cube leaving detection
-// for this many consecutive analysis passes, or this much wall time,
-// re-enables aggregation after a capture.
-constexpr int kRearmQuietPolls = 10;
-constexpr qint64 kRearmTimeoutMs = 1500;
-
-// Convergence means "consistent across CONSECUTIVE frames". Sporadic
-// single-frame detections minutes apart must not accumulate in the ring
-// buffer until they masquerade as a stable reading (observed in live
-// testing: a face captured itself from stray detections spread over a
-// minute of searching) - a gap longer than this between observations
-// resets the aggregator before the new one is added.
-constexpr qint64 kAggregatorStaleMs = 700;
+// --- capture gates (see tryCommitConverged) --------------------------------
+// Primary gate: commits require a LOCKED track whose identity has this
+// many consecutive accepted resolutions behind it - a fresh re-lock must
+// re-prove itself before its routing is trusted with a write.
+constexpr int kMinCaptureAccepts = 3;
+// Per-identity staleness: convergence means "consistent across
+// consecutive-ish frames" (the lesson the old global 700 ms reset
+// encoded), but identity-keyed windows legitimately pause while the user
+// shows OTHER faces - only a gap long enough for lighting to have drifted
+// resets a face's window now, because the identity key already guarantees
+// the samples belong to the same physical face.
+constexpr std::int64_t kIdentityAggStaleMs = 5000;
+// Frontal-ness: beyond ~35 degrees a face view foreshortens too much to
+// trust colours; a corner view reads its flank faces obliquely by
+// construction, so faces whose window took corner samples get the looser
+// corner bound instead.
+constexpr float kMaxFaceCaptureDeg = 35.0F;
+constexpr float kMaxCornerFlankDeg = 70.0F;
+// Motion: a commit mid-turn samples blur. The resolved per-pass rotation
+// bounds actual cube motion; the stability score (threshold well above
+// its 0.02 steady floor) bounds scene motion the pose can't see.
+constexpr float kMaxCaptureRotDeg = 8.0F;
+constexpr float kMaxCaptureMotionScore = 0.05F;
 
 // AR-overlay persistence (display-only; see handleAnalysisFinished): held
 // geometry outlives a detection blip by this long, fading via
@@ -92,19 +102,6 @@ constexpr float kOverlaySmoothing = 0.6F;
 // than the 2D overlay's because a 3D cube rendering amplifies small
 // angular noise into very visible rocking.
 constexpr float kOrientationSmoothing = 0.35F;
-
-// Slot-store centre matching (see ScanSession::slotCapture): a converged
-// capture whose centre Lab reading is within the tight radius of an
-// existing slot's centre (and classifies as the same provisional colour)
-// is a re-show of that face and updates the slot in place. Centres are
-// rotation-invariant (index 4 stays put however the face is held), so this
-// survives a face being re-presented turned. The looser radius applies
-// only when all six slots are filled and nothing matched tightly: the
-// lighting drifted since the original capture, but the reading still has
-// to belong to one of the six faces, so the nearest slot takes it - unless
-// even that is implausibly far, in which case the capture is dropped.
-constexpr float kSameCenterLabRadius = 25.0F;
-constexpr float kLooseCenterLabRadius = 35.0F;
 
 // --- live-pipeline observability -------------------------------------------
 // Set CUBE_VISION_DEBUG_DIR to a writable directory and the analysis worker
@@ -447,8 +444,9 @@ int ScanSession::frameHeight() const noexcept {
 
 int ScanSession::facesScanned() const {
     // Filled slot count, NOT progress_ - progress_ only gains faces once a
-    // completed scan assembles (slots have no face identity before that).
-    return static_cast<int>(slots_.size());
+    // completed scan assembles (slot keys are tracked body faces, which
+    // stay anonymous to the UI until assembly names their colours).
+    return router_.filled_count();
 }
 
 QVariantList ScanSession::cellColors() const {
@@ -484,7 +482,7 @@ bool ScanSession::cubeDetected() const noexcept {
 }
 
 bool ScanSession::readyToConfirm() const noexcept {
-    return faceCaptureReady() || cornerCaptureReady();
+    return anyCaptureReady();
 }
 
 QVariantList ScanSession::faceQuadPoints() const {
@@ -578,14 +576,16 @@ QVariantList ScanSession::cornerCellColors() const {
 }
 
 qreal ScanSession::captureProgress() const {
-    if (corner_observation_) {
-        qreal sum = 0.0;
-        for (const auto& aggregator : corner_aggregators_) {
-            sum += static_cast<qreal>(aggregator.convergence());
-        }
-        return sum / static_cast<qreal>(corner_aggregators_.size());
+    // The ring shows progress toward capturing what the user is LOOKING
+    // AT: the tracked front face's window. While the tracker claims no
+    // identity there is no window to show - the ring idles at zero rather
+    // than flashing some other face's leftover convergence.
+    const auto state = tracker_.state();
+    if (state != cube::vision::TrackState::locked && state != cube::vision::TrackState::coasting) {
+        return 0.0;
     }
-    return static_cast<qreal>(face_aggregator_.convergence());
+    const auto front = cube::vision::nearest_face(tracker_.orientation());
+    return static_cast<qreal>(aggregators_[static_cast<std::size_t>(front)].convergence());
 }
 
 bool ScanSession::autoAdvance() const noexcept {
@@ -653,7 +653,8 @@ QVariantList ScanSession::progressFacelets() const {
 
 QVariantList ScanSession::slotSummaries() const {
     QVariantList list;
-    for (const auto& slot : slots_) {
+    for (int i = 0; i < router_.filled_count(); ++i) {
+        const cube::vision::CapturedFace& slot = *router_.slot_at(i);
         QVariantMap entry;
         entry.insert(QStringLiteral("face"),
                      face_letter_for_center(
@@ -666,6 +667,18 @@ QVariantList ScanSession::slotSummaries() const {
         list.append(entry);
     }
     return list;
+}
+
+QVariantList ScanSession::faceCaptureStates() const {
+    QVariantList list;
+    for (int i = 0; i < router_.filled_count(); ++i) {
+        list.append(router_.strikes_at(i) > 0 ? QStringLiteral("conflict") : QStringLiteral("ok"));
+    }
+    return list;
+}
+
+bool ScanSession::reorienting() const {
+    return router_.reorienting();
 }
 
 cv::Mat ScanSession::latestFrame() const {
@@ -754,32 +767,34 @@ void ScanSession::handleStartFinished() {
 }
 
 void ScanSession::confirmFace() {
-    // Corner first: when both flows happen to be ready at once, the corner
-    // capture supersedes the single-face one - it includes that face and
-    // two more.
-    if (cornerCaptureReady()) {
-        captureCornerFaces();
-        return;
-    }
-    if (faceCaptureReady()) {
-        captureGuidedFace();
-    }
+    // Manual confirmation runs the exact same gated commit path as
+    // auto-advance - the button exists so auto_advance_ off still works,
+    // not to bypass any safety gate.
+    tryCommitConverged();
 }
 
 void ScanSession::retakeFace() {
     resetAggregators();
-    // Un-arm the guard immediately: a retake means the user is already
-    // re-presenting the same face, so waiting out the quiet period would
-    // just add dead time.
-    rearm_guard_active_ = false;
-    rearm_quiet_polls_ = 0;
     resetReading();
+    emit readingChanged();
+}
+
+void ScanSession::retakeSlot(int slotIndex) {
+    if (!router_.clear_slot(slotIndex)) {
+        return;
+    }
+    // Every window restarts: the cleared face's samples are stale by
+    // definition, and the store<->epoch mapping behind the other windows
+    // is router-internal - a few hundred milliseconds of re-convergence is
+    // cheaper than exposing the gauge just to save the other windows.
+    resetAggregators();
+    emit facesScannedChanged();
     emit readingChanged();
 }
 
 void ScanSession::restartScan() {
     progress_ = cube::model::ScanProgress();
-    slots_.clear();
+    router_.clear();
     assembled_cube_.reset();
     resetAggregators();
     resetReading();
@@ -926,16 +941,18 @@ void ScanSession::handleAnalysisFinished() {
         overall_confidence_ = 0.0F;
     }
 
-    // --- Orientation tracking (SHADOW MODE) --------------------------------
+    // --- Orientation tracking ----------------------------------------------
     // Exactly one tracker pass per analysis pass, after the display block
-    // and before routing: the tracker drives cubeOrientation /
-    // trackingState and the TRACK log line, and NOTHING downstream -
-    // aggregation and slot capture below still run purely on centre
-    // colours, so the tracker can be validated against live scans without
-    // being able to break one. Inputs are strictly THIS pass's fresh
-    // results, never the persistence-held observations: the tracker does
-    // its own coasting from real timestamps, and re-feeding held data
-    // would double-count frames as fresh evidence.
+    // and before routing: the tracker's output IS the routing key for
+    // everything below - the identity-keyed aggregation and the commit
+    // path read this pass's state, epoch and resolved lattice element.
+    // Inputs are strictly THIS pass's fresh results, never the
+    // persistence-held observations: the tracker does its own coasting
+    // from real timestamps, and re-feeding held data would double-count
+    // frames as fresh evidence.
+    const bool corner_pose = result.pose_source == AnalysisResult::PoseSource::corner ||
+                             result.pose_source == AnalysisResult::PoseSource::corner_seeded;
+    cube::vision::TrackerPassOutput track;
     {
         cube::vision::TrackerPassInput track_in;
         track_in.t_ms = result.frame_ms;
@@ -946,8 +963,6 @@ void ScanSession::handleAnalysisFinished() {
             // family that produced the pose - pose_source, not mere
             // presence, decides (a pass can hold both a face and a corner
             // observation, whose model frames differ).
-            const bool corner_pose = result.pose_source == AnalysisResult::PoseSource::corner ||
-                                     result.pose_source == AnalysisResult::PoseSource::corner_seeded;
             track_in.corner_view = corner_pose;
             const auto lab_entry = [](const cv::Vec3f& lab) {
                 return std::array<float, 3>{lab[0], lab[1], lab[2]};
@@ -964,7 +979,7 @@ void ScanSession::handleAnalysisFinished() {
                 track_in.centre_lab[0] = lab_entry(result.face->lab[cube::model::center_facelet_index]);
             }
         }
-        const auto track = tracker_.on_pass(track_in);
+        track = tracker_.on_pass(track_in);
 
         // Display smoothing - the same nlerp the raw pose stream used to
         // feed, now fed by the tracker (which coasts through detection
@@ -1011,53 +1026,108 @@ void ScanSession::handleAnalysisFinished() {
         log_track_pass(track);
     }
 
-    if (rearm_guard_active_) {
-        // "Quiet" means genuinely nothing FRESHLY detected (the held
-        // display overlay doesn't count); any real detection resets the
-        // streak since it may still be the just-captured face.
-        rearm_quiet_polls_ = (fresh_face || fresh_corner) ? 0 : rearm_quiet_polls_ + 1;
-        if (rearm_quiet_polls_ >= kRearmQuietPolls || rearm_timer_.hasExpired(kRearmTimeoutMs)) {
-            rearm_guard_active_ = false;
-        }
+    // --- Identity-keyed aggregation & routing ------------------------------
+    // Epoch bookkeeping first: aggregator keys are the tracker's
+    // epoch-local body faces, so a new epoch (re-anchor after loss,
+    // teleport re-anchor, restart) resets every window before anything
+    // mis-keyed could accumulate. The router runs its own epoch response
+    // (gauge invalidation, recovery-mode entry, strike reset).
+    router_.on_epoch(track.epoch);
+    if (track.epoch != agg_epoch_) {
+        agg_epoch_ = track.epoch;
+        resetAggregators();
+        consec_accepts_ = 0;
+        has_last_track_q_ = false;
     }
+    const bool pass_accepted = track.gate == cube::vision::TrackGate::accepted ||
+                               track.gate == cube::vision::TrackGate::anchored;
+    // The resolved per-pass rotation - the commit-time motion gate. Only
+    // meaningful between two accepted passes of one epoch; a coasted or
+    // rejected pass zeroes the streak, which also (deliberately) makes a
+    // fresh re-lock re-earn kMinCaptureAccepts before it may commit.
+    pass_rotation_deg_ = pass_accepted && has_last_track_q_
+                             ? cube::vision::quat_angle_deg(track.q_track, last_track_q_)
+                             : 0.0F;
+    if (pass_accepted) {
+        last_track_q_ = track.q_track;
+        has_last_track_q_ = true;
+        ++consec_accepts_;
+    } else {
+        consec_accepts_ = 0;
+    }
+
+    // Gate 1 of the capture policy - the identity gate: locked track,
+    // commit-grade identity (belief margin, waived while fewer than two
+    // slots exist for it to be wrong against), and an accept streak.
+    // Failing THIS gate drops the pass's observations entirely (routing
+    // them anywhere would be a guess); the remaining gates are commit-time
+    // and merely pause the commit while the window keeps accumulating.
+    const bool identity_ok = track.identity_certain || router_.filled_count() < 2;
+    capture_gate_ok_ = track.state == cube::vision::TrackState::locked && identity_ok &&
+                       consec_accepts_ >= kMinCaptureAccepts && pass_accepted && track.lattice_index >= 0;
+    capture_q_ = track.q_track;
+    capture_motion_score_ = result.motion_score;
+    last_frame_ms_ = result.frame_ms;
 
     // Aggregation consumes result.face/result.corner (fresh only), never
     // the persistence-held observations - re-adding a held frame would
     // stuff duplicate samples into the ring buffer and fake convergence.
-    // The slot-count gate (not progress_, which stays empty until assembly)
-    // stops aggregation once six distinct faces are in - and reopens it if
-    // a failed assembly drops a slot back to five.
-    if (!rearm_guard_active_ && slots_.size() < cube::model::face_count) {
-        if (fresh_face) {
-            if (face_add_gap_timer_.isValid() && face_add_gap_timer_.elapsed() > kAggregatorStaleMs) {
-                face_aggregator_.reset();
+    // Only the observation family that produced THIS pass's pose routes:
+    // the resolved lattice element describes that family's model frame,
+    // and applying it to the other family's cells would scramble stickers.
+    // The slot-count gate stops aggregation once six faces are in - and
+    // reopens if a failed assembly drops a slot back to five.
+    if (capture_gate_ok_ && router_.filled_count() < static_cast<int>(cube::model::face_count)) {
+        const auto lattice = static_cast<std::size_t>(track.lattice_index);
+        const auto add_keyed = [&](const cube::vision::FaceCellMap& map,
+                                   const cube::vision::FaceObservation& observation, bool from_corner) {
+            const auto face_index = static_cast<std::size_t>(map.body_face);
+            auto& aggregator = aggregators_[face_index];
+            auto& meta = metas_[face_index];
+            // Per-identity staleness AND permutation consistency: a window
+            // whose cell mapping just flipped (the resolution re-keyed at
+            // a 45-degree boundary faster than the samples aged out) must
+            // restart rather than mix two labellings of the same stickers.
+            if (meta.has_window && (result.frame_ms - meta.last_add_ms > kIdentityAggStaleMs ||
+                                    meta.window_map != map.cell)) {
+                aggregator.reset();
+                meta = AggregatorMeta{};
             }
-            face_add_gap_timer_.restart();
-            face_aggregator_.add(*result.face);
-        }
-        if (fresh_corner) {
-            if (corner_add_gap_timer_.isValid() && corner_add_gap_timer_.elapsed() > kAggregatorStaleMs) {
-                for (auto& aggregator : corner_aggregators_) {
-                    aggregator.reset();
-                }
+            // Permute screen-order cells to solver order ON THE WAY IN, so
+            // window cell k always means the same physical sticker no
+            // matter how the face was presented - the chimera-window
+            // defeat, and what makes the captured slot directly
+            // assemblable.
+            cube::vision::FaceObservation permuted = observation;
+            for (std::size_t obs = 0; obs < permuted.lab.size(); ++obs) {
+                const auto solver_index = static_cast<std::size_t>(map.cell[obs]);
+                permuted.lab[solver_index] = observation.lab[obs];
+                permuted.cells[solver_index] = observation.cells[obs];
             }
-            corner_add_gap_timer_.restart();
+            aggregator.add(permuted);
+            meta.has_window = true;
+            meta.window_map = map.cell;
+            meta.last_add_ms = result.frame_ms;
+            meta.full_quads = meta.full_quads && result.full_quads_in_frame;
+            meta.corner_fed = meta.corner_fed || from_corner;
+        };
+        if (corner_pose && fresh_corner) {
             const std::array<const cube::vision::CornerFaceView*, 3> views{
                 &result.corner->top, &result.corner->lower_left, &result.corner->lower_right};
-            for (std::size_t slot = 0; slot < views.size(); ++slot) {
-                corner_aggregators_[slot].add(slot_observation(*views[slot], result.corner->geometry_confidence));
+            for (std::size_t view = 0; view < views.size(); ++view) {
+                add_keyed(cube::vision::kCornerObsToBody[lattice][view],
+                          slot_observation(*views[view], result.corner->geometry_confidence),
+                          /*from_corner=*/true);
             }
+        } else if (!corner_pose && fresh_face) {
+            add_keyed(cube::vision::kFaceObsToBody[lattice], *result.face, /*from_corner=*/false);
         }
     }
 
     emit readingChanged();
 
     if (auto_advance_) {
-        if (cornerCaptureReady()) {
-            captureCornerFaces();
-        } else if (faceCaptureReady()) {
-            captureGuidedFace();
-        }
+        tryCommitConverged();
     }
 }
 
@@ -1216,92 +1286,27 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
 }
 
 bool ScanSession::cornerScanArmed() const {
-    // A corner view slots its three faces independently by centre colour,
-    // so it's usable at ANY point in the scan - the only reason to stop
-    // looking for corners (or faces) is that all six slots are filled.
-    return slots_.size() < cube::model::face_count;
+    // A corner view routes its three faces independently through the
+    // identity-keyed store, so it's usable at ANY point in the scan - the
+    // only reason to stop looking for corners (or faces) is that all six
+    // slots are filled.
+    return router_.filled_count() < static_cast<int>(cube::model::face_count);
 }
 
-bool ScanSession::faceCaptureReady() const {
-    return face_observation_.has_value() && slots_.size() < cube::model::face_count &&
-           face_aggregator_.converged();
-}
-
-bool ScanSession::cornerCaptureReady() const {
-    if (!corner_observation_.has_value() || !cornerScanArmed()) {
+bool ScanSession::anyCaptureReady() const {
+    if (!capture_gate_ok_) {
         return false;
     }
-    for (const auto& aggregator : corner_aggregators_) {
-        if (!aggregator.converged()) {
-            return false;
-        }
-    }
-    return true;
-}
-
-void ScanSession::captureGuidedFace() {
-    slotCapture(face_aggregator_.capture());
-
-    armRearmGuard();
-    // The reset aggregators changed readyToConfirm/captureProgress; without
-    // this, QML would show the stale pre-capture values until the next
-    // analysis pass lands.
-    emit readingChanged();
-    finalizeIfComplete();
-}
-
-void ScanSession::captureCornerFaces() {
-    // Each of the three converged readings routes through the slot store
-    // independently by its own centre colour - no CornerViewId conventions,
-    // no cell remapping. The reading keeps whatever row-major orientation
-    // the camera saw, which is some rigid quarter-rotation of the face
-    // (optics can't reflect); assemble_scanned_faces() searches those
-    // rotations at the end, so no per-view permutation is needed here.
-    for (auto& aggregator : corner_aggregators_) {
-        slotCapture(aggregator.capture());
-    }
-
-    armRearmGuard();
-    // Same post-capture re-notify as captureGuidedFace().
-    emit readingChanged();
-    finalizeIfComplete();
+    return std::ranges::any_of(aggregators_, [](const auto& aggregator) { return aggregator.converged(); });
 }
 
 namespace {
 
-// Rotation-invariant fingerprint of a captured face: how many of its nine
-// stickers provisionally classify as each colour. A genuine re-show of the
-// same face keeps (nearly) the same counts however it is rotated; a
-// DIFFERENT face whose washed centre happens to alias an existing slot's
-// centre almost never shares its sticker population. L1 distance between
-// count vectors: 0 = identical population, each single sticker
-// reclassification costs 2.
-[[nodiscard]] std::array<int, 7> color_census(const cube::vision::CapturedFace& face) {
-    std::array<int, 7> census{};
-    for (const auto& lab : face.lab) {
-        ++census[static_cast<std::size_t>(cube::vision::classify_lab(lab).color)];
-    }
-    return census;
-}
-
-[[nodiscard]] int census_l1_distance(const std::array<int, 7>& a, const std::array<int, 7>& b) {
-    int total = 0;
-    for (std::size_t i = 0; i < a.size(); ++i) {
-        total += std::abs(a[i] - b[i]);
-    }
-    return total;
-}
-
-// Two sticker reclassifications of drift tolerance: enough for lighting
-// changes between two showings of the same face, far under the difference
-// between two distinct scrambled faces.
-constexpr int kMaxCensusDrift = 4;
-
 // GUI-thread twin of dump_vision_debug (which runs on the analysis
 // worker): appends slot-store decisions to the same log so a stuck scan
-// ("always 5 of 6") is diagnosable - the per-frame log can't show WHERE
-// captures went, and that routing is exactly what free-form scanning
-// stands on.
+// is diagnosable - the per-frame log can't show WHERE captures went or
+// WHY one was refused, and that routing is exactly what identity-keyed
+// scanning stands on.
 void log_slot_decision(const std::string& decision) {
     static const QString dir = qEnvironmentVariable("CUBE_VISION_DEBUG_DIR");
     if (dir.isEmpty()) {
@@ -1311,108 +1316,146 @@ void log_slot_decision(const std::string& decision) {
     log << "SLOT " << decision << '\n';
 }
 
-[[nodiscard]] std::string lab_string(const cv::Vec3f& lab) {
-    return "(" + std::to_string(static_cast<int>(lab[0])) + "," + std::to_string(static_cast<int>(lab[1])) + "," +
-           std::to_string(static_cast<int>(lab[2])) + ")";
+[[nodiscard]] const char* commit_outcome_name(cube::vision::CommitOutcome outcome) {
+    switch (outcome) {
+        case cube::vision::CommitOutcome::filled:
+            return "filled";
+        case cube::vision::CommitOutcome::updated:
+            return "updated";
+        case cube::vision::CommitOutcome::quarantined:
+            return "quarantined";
+        case cube::vision::CommitOutcome::deferred:
+            return "deferred";
+        case cube::vision::CommitOutcome::holdoff:
+            return "holdoff";
+    }
+    return "?";
 }
 
 }  // namespace
 
-void ScanSession::slotCapture(const cube::vision::CapturedFace& captured) {
-    const cv::Vec3f center = captured.lab[cube::model::center_facelet_index];
-    const auto center_color = cube::vision::classify_lab(center).color;
-    const auto census = color_census(captured);
-    const auto distance_to = [&center](const cube::vision::CapturedFace& slot) {
-        const cv::Vec3f diff = slot.lab[cube::model::center_facelet_index] - center;
-        return std::sqrt(diff.dot(diff));
-    };
-
-    // Tight match = same provisional colour class AND close centre Lab AND
-    // a matching rotation-invariant sticker census. The class check keeps
-    // washed-out neighbours (an overexposed red centre drifts toward
-    // orange) from aliasing at the boundary; the census check catches the
-    // case the first two can't: a DIFFERENT face whose centre reads within
-    // tolerance of a captured slot's - without it that face can never fill
-    // its own slot, and the scan wedges forever at five of six (observed
-    // live).
-    std::optional<std::size_t> match;
-    float best_distance = kSameCenterLabRadius;
-    for (std::size_t i = 0; i < slots_.size(); ++i) {
-        const float distance = distance_to(slots_[i]);
-        if (distance < best_distance &&
-            cube::vision::classify_lab(slots_[i].lab[cube::model::center_facelet_index]).color == center_color &&
-            census_l1_distance(census, color_census(slots_[i])) <= kMaxCensusDrift) {
-            match = i;
-            best_distance = distance;
-        }
-    }
-
-    if (match.has_value()) {
-        // The user re-showed an already-captured face: refresh that slot in
-        // place with the newer (usually better-lit, more deliberate) read.
-        log_slot_decision("update slot=" + std::to_string(*match) + " center=" + lab_string(center) +
-                          " dist=" + std::to_string(best_distance));
-        slots_[*match] = captured;
-        emit faceConfirmed(static_cast<int>(*match));
-        emit facesScannedChanged();
+void ScanSession::tryCommitConverged() {
+    // Gate 1 (locked + identity-certain + accept streak) was evaluated on
+    // the last analysis pass; without it no window may commit, however
+    // converged - identity is the routing key, and an uncertain key is a
+    // guess.
+    if (!capture_gate_ok_) {
         return;
     }
-
-    if (slots_.size() < cube::model::face_count) {
-        log_slot_decision("new slot=" + std::to_string(slots_.size()) + " center=" + lab_string(center) +
-                          " total=" + std::to_string(slots_.size() + 1));
-        slots_.push_back(captured);
-        emit faceConfirmed(static_cast<int>(slots_.size()) - 1);
-        emit facesScannedChanged();
-        return;
-    }
-
-    // Six distinct slots and no tight match: the lighting drifted since the
-    // original capture, but the reading still has to belong to one of the
-    // six faces - the nearest slot takes it, unless even that is
-    // implausibly far, in which case the capture is dropped (probably a
-    // spurious read; the aggregators will converge again if it was real).
-    std::size_t nearest = 0;
-    float nearest_distance = std::numeric_limits<float>::max();
-    for (std::size_t i = 0; i < slots_.size(); ++i) {
-        const float distance = distance_to(slots_[i]);
-        if (distance < nearest_distance) {
-            nearest = i;
-            nearest_distance = distance;
+    bool any_slot_change = false;
+    for (std::size_t f = 0; f < aggregators_.size(); ++f) {
+        auto& aggregator = aggregators_[f];
+        auto& meta = metas_[f];
+        if (!aggregator.converged()) {
+            continue;
         }
+        const auto body_face = static_cast<cube::model::Face>(f);
+        // Commit-time gates 2-5. Failing any of them leaves the window
+        // accumulating - the user is mid-motion or the view is marginal,
+        // and the capture will be better in a few hundred milliseconds.
+        const float frontal = cube::vision::face_frontal_deg(capture_q_, body_face);
+        if (frontal > (meta.corner_fed ? kMaxCornerFlankDeg : kMaxFaceCaptureDeg)) {
+            continue;
+        }
+        if (pass_rotation_deg_ > kMaxCaptureRotDeg || capture_motion_score_ >= kMaxCaptureMotionScore) {
+            continue;
+        }
+        if (!meta.full_quads) {
+            continue;
+        }
+        const auto captured = aggregator.capture();
+        // Unknown-cell rule (the stationary-finger defeat): a cell whose
+        // fused colour classifies as no sticker colour at all is something
+        // that isn't a sticker - a fingertip, deep shadow, specular burn.
+        // Its cross-frame stability is exactly why convergence can't catch
+        // it, so it blocks the commit here instead.
+        const bool has_unknown_cell = std::ranges::any_of(captured.lab, [](const cv::Vec3f& lab) {
+            return cube::vision::classify_lab(lab).color == cube::model::FacetColor::unknown;
+        });
+        if (has_unknown_cell) {
+            continue;
+        }
+
+        const auto commit = router_.commit(body_face, captured, last_frame_ms_);
+        log_slot_decision("commit face=" + std::string(1, "URFDLB"[f]) +
+                          " outcome=" + commit_outcome_name(commit.outcome) +
+                          " confirmed=" + std::to_string(commit.confirmed_slots.size()) +
+                          (commit.layer_turn ? " LAYER-TURN" : "") +
+                          (commit.force_lost ? " FORCE-LOST" : ""));
+
+        if (commit.outcome == cube::vision::CommitOutcome::holdoff) {
+            // The refractory is the one refusal that keeps the window: the
+            // capture is fine, just early - it commits on a later pass.
+            continue;
+        }
+        // Every other outcome consumed (or invalidated) the window.
+        aggregator.reset();
+        meta = AggregatorMeta{};
+
+        if (commit.layer_turn) {
+            // The router already cleared every slot: the stickers changed
+            // under the scan. All windows restart (their samples predate
+            // the turn) and the tracker keeps running - the pose is fine,
+            // the premise wasn't.
+            resetAggregators();
+            emit facesScannedChanged();
+            emit readingChanged();
+            emit scanInvalidated(QStringLiteral("cube changed mid-scan"));
+            return;
+        }
+        if (commit.force_lost) {
+            // Two verification strikes on one face inside a locked
+            // segment: the TRACK is the suspect, not the slot (its content
+            // was verified when written). An honest loss re-anchors a
+            // fresh epoch whose identity must re-prove itself.
+            tracker_.force_lost();
+            capture_gate_ok_ = false;
+            resetAggregators();
+            emit readingChanged();
+            return;
+        }
+        for (const int slot_index : commit.confirmed_slots) {
+            emit faceConfirmed(slot_index);
+        }
+        any_slot_change = any_slot_change || !commit.confirmed_slots.empty();
     }
-    if (nearest_distance < kLooseCenterLabRadius) {
-        log_slot_decision("loose-update slot=" + std::to_string(nearest) + " center=" + lab_string(center) +
-                          " dist=" + std::to_string(nearest_distance));
-        slots_[nearest] = captured;
-        emit faceConfirmed(static_cast<int>(nearest));
+
+    if (any_slot_change) {
         emit facesScannedChanged();
-    } else {
-        log_slot_decision("dropped center=" + lab_string(center) +
-                          " nearest_dist=" + std::to_string(nearest_distance));
+        emit readingChanged();
+        finalizeIfComplete();
     }
 }
 
 void ScanSession::dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence) {
-    if (slots_.empty()) {
+    const int filled = router_.filled_count();
+    if (filled == 0) {
         return;
     }
-    std::size_t worst = 0;
-    for (std::size_t i = 1; i < slots_.size(); ++i) {
-        if (mean_confidence[i] < mean_confidence[worst]) {
+    int worst = 0;
+    for (int i = 1; i < filled; ++i) {
+        if (mean_confidence[static_cast<std::size_t>(i)] < mean_confidence[static_cast<std::size_t>(worst)]) {
             worst = i;
         }
     }
-    slots_.erase(slots_.begin() + static_cast<std::ptrdiff_t>(worst));
+    // Cleared BY KEY through the router, so the routing log can name the
+    // dropped body face even though the signal payload keeps the legacy
+    // generic reason (the QML contract).
+    const auto face = router_.face_at(worst);
+    log_slot_decision("drop-suspect slot=" + std::to_string(worst) + " face=" +
+                      std::string(1, face ? "URFDLB"[static_cast<std::size_t>(*face)] : '?'));
+    router_.clear_slot(worst);
 }
 
 void ScanSession::finalizeIfComplete() {
-    if (slots_.size() < cube::model::face_count) {
+    if (router_.filled_count() < static_cast<int>(cube::model::face_count)) {
         return;
     }
 
     std::array<cube::vision::CapturedFace, cube::model::face_count> captured{};
-    std::copy(slots_.begin(), slots_.end(), captured.begin());
+    for (std::size_t i = 0; i < captured.size(); ++i) {
+        captured[i] = *router_.slot_at(static_cast<int>(i));
+    }
 
     // Per-slot suspicion score for the recovery path: provisional palette
     // confidence until global resolution succeeds, then the (better)
@@ -1461,18 +1504,11 @@ void ScanSession::finalizeIfComplete() {
     emit scanCompleted();
 }
 
-void ScanSession::armRearmGuard() {
-    rearm_guard_active_ = true;
-    rearm_quiet_polls_ = 0;
-    rearm_timer_.restart();
-    resetAggregators();
-}
-
 void ScanSession::resetAggregators() {
-    face_aggregator_.reset();
-    for (auto& aggregator : corner_aggregators_) {
+    for (auto& aggregator : aggregators_) {
         aggregator.reset();
     }
+    metas_ = {};
 }
 
 void ScanSession::resetReading() {
@@ -1486,9 +1522,15 @@ void ScanSession::resetReading() {
     // Full tracker re-init (epoch counter included), for the same reason:
     // a scan restarted inside the coast window must not inherit the
     // previous scan's locked track - the user may well have put down a
-    // different cube. Display-only today; load-bearing the moment routing
-    // consumes tracker identity (M5's restartScan/resetReading contract).
+    // different cube. Routing consumes tracker identity now, so this is
+    // load-bearing: the epoch reset also invalidates the router's gauge on
+    // the next pass, and the commit-gate context must not let a stale
+    // "locked" verdict authorise a commit into the new scan.
     tracker_.reset();
+    capture_gate_ok_ = false;
+    consec_accepts_ = 0;
+    has_last_track_q_ = false;
+    pass_rotation_deg_ = 0.0F;
     facelets_.fill(cube::model::Facelet{});
     overall_confidence_ = 0.0F;
     is_steady_ = false;

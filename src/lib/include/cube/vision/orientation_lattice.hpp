@@ -175,4 +175,11 @@ struct AlignmentResolution {
 // callers gating on frontal_deg never see a tie matter.
 [[nodiscard]] cube::model::Face nearest_face(const Quat& q) noexcept;
 
+// How far ONE named body face is from dead-on under orientation q
+// (degrees; 0 = its outward normal points straight at the viewer, 90 =
+// edge-on, up to 180 facing away). frontal_deg(q) is this minimised over
+// faces; the per-face form exists for the corner-view capture gates, where
+// each FLANK face has its own (looser) frontal-ness bound.
+[[nodiscard]] float face_frontal_deg(const Quat& q, cube::model::Face face) noexcept;
+
 }  // namespace cube::vision

@@ -1,0 +1,468 @@
+#include <catch2/catch_test_macros.hpp>
+
+#include <cube/model/face.hpp>
+#include <cube/vision/capture_routing.hpp>
+#include <cube/vision/color_resolution.hpp>
+
+#include <opencv2/core.hpp>
+
+#include <array>
+#include <cstdint>
+#include <optional>
+#include <random>
+#include <vector>
+
+using namespace cube::vision;
+using cube::model::Face;
+using cube::model::FacetColor;
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Adversarial routing harness. Contents are chosen against classify_lab's
+// REAL hue-band behaviour (color_resolution.cpp) - the aliases below are
+// the live failure modes the router exists to survive: an over-exposed
+// orange face whose hue drifts under the 44-degree red boundary reads as a
+// solid red face with a centre a few Lab from the true red slot's, which
+// is exactly the reading that used to execute a silent wrong-face
+// overwrite.
+// ---------------------------------------------------------------------------
+
+// Distinct solid faces, one per colour class, centres far apart pairwise.
+const cv::Vec3f kWhite{96.0F, 2.0F, 2.0F};      // chroma < 15
+const cv::Vec3f kYellow{88.0F, 5.0F, 80.0F};    // hue ~86
+const cv::Vec3f kRed{45.0F, 60.0F, 35.0F};      // hue ~30
+const cv::Vec3f kOrange{65.0F, 40.0F, 57.0F};   // hue ~55
+const cv::Vec3f kGreen{50.0F, -50.0F, 45.0F};   // hue ~138
+const cv::Vec3f kBlue{35.0F, 12.0F, -60.0F};    // hue ~281
+// A washed orange tile: hue 36 (classifies RED), centre only ~8.7 Lab from
+// kRed - inside the duplicate radius, same class, identical solid census.
+const cv::Vec3f kWashedOrangeAsRed{50.0F, 55.0F, 40.0F};
+
+[[nodiscard]] CapturedFace solid(const cv::Vec3f& lab) {
+    CapturedFace face;
+    face.lab.fill(lab);
+    return face;
+}
+
+// Same face re-shown under drifted lighting: centre nudged (well inside
+// the verify radius), census unchanged.
+[[nodiscard]] CapturedFace drifted(const CapturedFace& face, float delta_l) {
+    CapturedFace out = face;
+    for (auto& lab : out.lab) {
+        lab[0] += delta_l;
+    }
+    return out;
+}
+
+// One sticker swapped to a different class - census L1 moves by 2 per swap.
+[[nodiscard]] CapturedFace with_sticker(const CapturedFace& face, std::size_t cell, const cv::Vec3f& lab) {
+    CapturedFace out = face;
+    out.lab[cell] = lab;
+    return out;
+}
+
+}  // namespace
+
+TEST_CASE("census helpers count sticker populations rotation-invariantly", "[routing]") {
+    const CapturedFace red = solid(kRed);
+    const auto red_census = color_census(red);
+    CHECK(red_census[static_cast<std::size_t>(FacetColor::red)] == 9);
+    CHECK(census_l1_distance(red_census, red_census) == 0);
+
+    // One sticker reclassified costs 2 (one out of its bucket, one into
+    // another).
+    const auto one_swap = color_census(with_sticker(red, 0, kGreen));
+    CHECK(census_l1_distance(red_census, one_swap) == 2);
+
+    // Solid faces of different colours are maximally apart.
+    CHECK(census_l1_distance(red_census, color_census(solid(kOrange))) == 18);
+
+    // The adversarial alias: a washed orange face's census is IDENTICAL to
+    // the red face's - census cannot tell them apart, which is why it only
+    // ever verifies and never routes.
+    CHECK(census_l1_distance(red_census, color_census(solid(kWashedOrangeAsRed))) == 0);
+    CHECK(centre_lab_distance(red, solid(kWashedOrangeAsRed)) < 18.0F);
+}
+
+TEST_CASE("distinct faces fill six identity-keyed slots in fill order", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    const std::array<cv::Vec3f, 6> palette{kWhite, kYellow, kRed, kOrange, kGreen, kBlue};
+    std::int64_t t = 0;
+    for (std::size_t f = 0; f < palette.size(); ++f) {
+        t += 1000;
+        const auto result = router.commit(static_cast<Face>(f), solid(palette[f]), t);
+        CHECK(result.outcome == CommitOutcome::filled);
+        REQUIRE(result.confirmed_slots.size() == 1);
+        CHECK(result.confirmed_slots.front() == static_cast<int>(f));
+        CHECK_FALSE(result.layer_turn);
+        CHECK_FALSE(result.force_lost);
+    }
+    CHECK(router.filled_count() == 6);
+    // Fill order preserved: slot i still holds the i-th committed face.
+    for (std::size_t f = 0; f < palette.size(); ++f) {
+        REQUIRE(router.slot_at(static_cast<int>(f)) != nullptr);
+        CHECK(centre_lab_distance(*router.slot_at(static_cast<int>(f)), solid(palette[f])) == 0.0F);
+    }
+}
+
+TEST_CASE("verified in-place update is the only content overwrite", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    SECTION("a drifted re-show of the same face refreshes the slot") {
+        const CapturedFace reshow = drifted(with_sticker(solid(kRed), 2, kGreen), 6.0F);
+        const auto result = router.commit(Face::F, reshow, 2000);
+        CHECK(result.outcome == CommitOutcome::updated);
+        REQUIRE(result.confirmed_slots.size() == 1);
+        CHECK(result.confirmed_slots.front() == 0);
+        CHECK(centre_lab_distance(*router.slot_at(0), reshow) == 0.0F);
+    }
+
+    SECTION("identity routing a different face's colours there quarantines") {
+        const auto result = router.commit(Face::F, solid(kGreen), 2000);
+        CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK_FALSE(result.force_lost);
+        // Slot content untouched, conflict recorded.
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+        CHECK(router.strikes_at(0) == 1);
+    }
+
+    SECTION("the per-face holdoff pauses even a verified re-commit") {
+        const auto early = router.commit(Face::F, drifted(solid(kRed), 3.0F), 400);
+        CHECK(early.outcome == CommitOutcome::holdoff);
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+        const auto later = router.commit(Face::F, drifted(solid(kRed), 3.0F), 900);
+        CHECK(later.outcome == CommitOutcome::updated);
+    }
+}
+
+TEST_CASE("solved-cube centre alias quarantines instead of overwriting", "[routing]") {
+    // The primary reported bug, replayed against the new store: red is
+    // captured; a DIFFERENT physical face (tracked as body U) washes out
+    // to a solid red reading whose centre sits on top of the red slot's.
+    // The legacy centre-keyed store executed slots_[red] = orange here.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::R, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    const auto result = router.commit(Face::U, solid(kWashedOrangeAsRed), 2000);
+    CHECK(result.outcome == CommitOutcome::quarantined);
+    CHECK(result.confirmed_slots.empty());
+    // ZERO wrong-face commits: the red slot still holds red, and no new
+    // slot was written either.
+    CHECK(router.filled_count() == 1);
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+}
+
+TEST_CASE("two strikes on one face force-lose the track with slots preserved", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::R, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    const auto first = router.commit(Face::R, solid(kGreen), 2000);
+    CHECK(first.outcome == CommitOutcome::quarantined);
+    CHECK_FALSE(first.force_lost);
+    CHECK(router.strikes_at(0) == 1);
+
+    const auto second = router.commit(Face::R, solid(kGreen), 4000);
+    CHECK(second.outcome == CommitOutcome::quarantined);
+    CHECK(second.force_lost);
+    CHECK_FALSE(second.layer_turn);
+    // Slots preserved - they were verified when written; the TRACK is the
+    // suspect.
+    CHECK(router.filled_count() == 1);
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+
+    // The re-anchor that follows starts a new epoch; strikes are scoped to
+    // the dead locked segment.
+    router.on_epoch(2);
+    CHECK(router.strikes_at(0) == 0);
+}
+
+TEST_CASE("census conflicts on two distinct faces diagnose a layer turn", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::F, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+
+    SECTION("two conflicting faces inside the window clear every capture") {
+        CHECK(router.commit(Face::U, solid(kBlue), 5000).outcome == CommitOutcome::quarantined);
+        const auto second = router.commit(Face::R, solid(kYellow), 6000);
+        CHECK(second.layer_turn);
+        // Full capture reset - the sanctioned response to the static-
+        // stickers premise being violated.
+        CHECK(router.filled_count() == 0);
+    }
+
+    SECTION("conflicts further apart than the window stay independent strikes") {
+        CHECK(router.commit(Face::U, solid(kBlue), 5000).outcome == CommitOutcome::quarantined);
+        const auto late = router.commit(Face::R, solid(kYellow), 11000);
+        CHECK(late.outcome == CommitOutcome::quarantined);
+        CHECK_FALSE(late.layer_turn);
+        CHECK(router.filled_count() == 3);
+    }
+
+    SECTION("a verified re-show clears its face's conflict evidence") {
+        CHECK(router.commit(Face::U, solid(kBlue), 5000).outcome == CommitOutcome::quarantined);
+        // U verifies fine on the next commit - the earlier conflict was a
+        // slip, not a layer turn...
+        CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 6000).outcome == CommitOutcome::updated);
+        // ...so a later conflict on R alone must NOT complete a layer-turn
+        // pair with the withdrawn U event.
+        const auto conflict = router.commit(Face::R, solid(kYellow), 7000);
+        CHECK(conflict.outcome == CommitOutcome::quarantined);
+        CHECK_FALSE(conflict.layer_turn);
+        CHECK(router.filled_count() == 3);
+    }
+}
+
+TEST_CASE("property: slot censuses never change beyond verify drift without escalation", "[routing]") {
+    // The invariant, stated as the plan's property test: NO capture
+    // sequence may change a slot's census by more than kVerifyCensusDrift
+    // unless the change went through quarantine/invalidation (i.e. content
+    // only ever changes via the verified update, which bounds the drift).
+    CaptureRouter router;
+    const RoutingConfig config;
+    router.on_epoch(1);
+    std::mt19937 rng(20260720);
+    const std::array<cv::Vec3f, 8> pool{kWhite, kYellow, kRed,  kOrange,
+                                        kGreen, kBlue,   kWashedOrangeAsRed, cv::Vec3f{70.0F, 30.0F, 40.0F}};
+    std::uniform_int_distribution<std::size_t> pick_face(0, 5);
+    std::uniform_int_distribution<std::size_t> pick_colour(0, pool.size() - 1);
+    std::uniform_int_distribution<int> pick_dt(0, 1200);
+    std::uniform_int_distribution<int> pick_swaps(0, 2);
+
+    std::int64_t t = 0;
+    for (int iteration = 0; iteration < 500; ++iteration) {
+        // Snapshot the store, keyed by fill index.
+        std::vector<ColorCensus> before;
+        for (int i = 0; i < router.filled_count(); ++i) {
+            before.push_back(color_census(*router.slot_at(i)));
+        }
+
+        CapturedFace captured = solid(pool[pick_colour(rng)]);
+        for (int swap = pick_swaps(rng); swap > 0; --swap) {
+            captured = with_sticker(captured, static_cast<std::size_t>(pick_colour(rng) % 9),
+                                    pool[pick_colour(rng)]);
+        }
+        t += pick_dt(rng);
+        const auto result = router.commit(static_cast<Face>(pick_face(rng)), captured, t);
+
+        if (result.layer_turn) {
+            CHECK(router.filled_count() == 0);  // sanctioned full reset
+            continue;
+        }
+        // Every surviving pre-existing slot: content either untouched or
+        // changed within the verified-update drift bound.
+        for (std::size_t i = 0; i < before.size(); ++i) {
+            REQUIRE(static_cast<int>(i) < router.filled_count());
+            const int drift = census_l1_distance(before[i], color_census(*router.slot_at(static_cast<int>(i))));
+            CHECK(drift <= config.verify_census_drift);
+        }
+    }
+}
+
+TEST_CASE("epoch recovery re-registers a permuted epoch by content", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::F, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+
+    SECTION("corner-triple correspondence resolves once two faces pin it") {
+        // The regrip rotated the cube 120 degrees about the URF corner:
+        // physical white (stored at U) now tracks as body F, red (stored
+        // R) as body U, green (stored F) as body R - the face 3-cycle a
+        // real rotation produces.
+        const auto first = router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000);
+        // One pinned face cannot resolve the gauge: the tied candidates
+        // would file OTHER faces onto materially different slots, so
+        // nothing may commit yet.
+        CHECK(first.outcome == CommitOutcome::deferred);
+        CHECK(first.confirmed_slots.empty());
+        CHECK(router.reorienting());
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
+
+        const auto second = router.commit(Face::U, drifted(solid(kRed), 3.0F), 11000);
+        // Two pins determine the rotation uniquely: both buffered faces
+        // flush onto their true slots as verified updates.
+        CHECK(second.outcome == CommitOutcome::updated);
+        REQUIRE(second.confirmed_slots.size() == 2);
+        CHECK_FALSE(router.reorienting());
+        CHECK(router.filled_count() == 3);
+        CHECK(centre_lab_distance(*router.slot_at(0), drifted(solid(kWhite), 3.0F)) == 0.0F);
+        CHECK(centre_lab_distance(*router.slot_at(1), drifted(solid(kRed), 3.0F)) == 0.0F);
+
+        // And the resolved gauge routes the epoch's remaining faces
+        // directly: green (body R this epoch) lands on its stored slot.
+        const auto third = router.commit(Face::R, drifted(solid(kGreen), 3.0F), 12000);
+        CHECK(third.outcome == CommitOutcome::updated);
+        CHECK(centre_lab_distance(*router.slot_at(2), drifted(solid(kGreen), 3.0F)) == 0.0F);
+    }
+
+    SECTION("two epoch faces claiming the same stored slot are refused") {
+        // Glare washes TWO different epoch faces to readings that both
+        // tightly match the stored white slot. The pins contradict (a
+        // permutation cannot send two faces to one slot), the candidate
+        // set goes empty, and NOTHING commits - the router refuses to pick
+        // a claimant, however good each single match looks.
+        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+        const auto second = router.commit(Face::D, drifted(solid(kWhite), 5.0F), 11000);
+        CHECK(second.outcome == CommitOutcome::deferred);
+        CHECK(router.reorienting());
+        CHECK(router.filled_count() == 3);
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
+    }
+
+    SECTION("a brand-new face defers until other faces are recognised") {
+        // Nothing stored looks like blue: committing it to an empty slot
+        // now would gamble on an unresolved gauge, so it buffers...
+        const auto unknown = router.commit(Face::D, solid(kBlue), 10000);
+        CHECK(unknown.outcome == CommitOutcome::deferred);
+        CHECK(router.filled_count() == 3);
+        // ...until positive re-associations resolve the gauge (identity
+        // here), at which point the buffered new face flushes into an
+        // empty slot alongside the updates.
+        CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 11000).outcome == CommitOutcome::deferred);
+        const auto resolved = router.commit(Face::R, drifted(solid(kRed), 3.0F), 12000);
+        CHECK(resolved.outcome == CommitOutcome::updated);
+        REQUIRE(resolved.confirmed_slots.size() == 3);
+        CHECK(router.filled_count() == 4);
+        CHECK_FALSE(router.reorienting());
+    }
+}
+
+TEST_CASE("content-equivalent slots break registration ties harmlessly", "[routing]") {
+    // Solved-cube termination guarantee: red and orange washed to
+    // IDENTICAL censuses with centres inside the resolver's own seed
+    // floor, stored on opposite slots (R and L), likewise the green pair
+    // on F and B. A one-pin recovery leaves a 180-degree ambiguity about
+    // the pinned axis - but every difference between the tied candidates
+    // maps equivalent content onto equivalent content, so registration
+    // picks one deterministically instead of wedging.
+    //
+    // The duplicate-centre rule (correctly) refuses to FILL two slots this
+    // similar, so equivalent pairs only ever arise the way they do live:
+    // filled far enough apart, then pulled together by verified re-show
+    // updates as the lighting drifts.
+    const CapturedFace red_a = solid(kRed);
+    const CapturedFace red_b = drifted(solid(kRed), 8.0F);   // centres 8 apart: equivalent
+    const CapturedFace green_a = solid(kGreen);
+    const CapturedFace green_b = drifted(solid(kGreen), 8.0F);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, red_a, 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::L, drifted(solid(kRed), 20.0F), 2000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
+    REQUIRE(router.commit(Face::F, green_a, 4000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::B, drifted(solid(kGreen), 20.0F), 5000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::B, green_b, 6000).outcome == CommitOutcome::updated);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+    // White pins U; the red probe matches BOTH red slots (the aliased
+    // pair), pinning nothing - the residual candidates differ only by the
+    // 180-degree turn that swaps R/L and F/B, all equivalent pairs.
+    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+    const auto resolved = router.commit(Face::R, drifted(red_a, 2.0F), 11000);
+    CHECK(resolved.outcome == CommitOutcome::updated);
+    CHECK_FALSE(router.reorienting());
+    CHECK(router.filled_count() == 5);
+}
+
+TEST_CASE("an aliased pair with distinguishable content refuses to guess", "[routing]") {
+    // Same shape as the tie-break case, but the two red-ish slots are NOT
+    // content-equivalent (centres past the equivalence floor): picking
+    // either would materially decide which face gets overwritten later, so
+    // registration must stay ambiguous.
+    const CapturedFace red_a = solid(kRed);
+    const CapturedFace red_b = drifted(solid(kRed), 14.0F);  // tight-matchable, NOT equivalent
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, red_a, 1000).outcome == CommitOutcome::filled);
+    // Filled outside the duplicate radius, then pulled to 14 apart by a
+    // verified update - the same live path the tie-break test uses.
+    REQUIRE(router.commit(Face::L, drifted(solid(kRed), 20.0F), 2000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
+
+    router.on_epoch(2);
+    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+    const auto probe = router.commit(Face::R, drifted(red_a, 2.0F), 11000);
+    CHECK(probe.outcome == CommitOutcome::deferred);
+    CHECK(router.reorienting());
+    // Nothing written anywhere.
+    CHECK(centre_lab_distance(*router.slot_at(1), red_a) == 0.0F);
+    CHECK(centre_lab_distance(*router.slot_at(2), red_b) == 0.0F);
+}
+
+TEST_CASE("an epoch change with at most one slot re-associates immediately", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    // Loss and re-anchor with one slot: no recovery buffering (identity is
+    // definitional), the next commit adopts a gauge on the spot.
+    router.on_epoch(2);
+    CHECK_FALSE(router.reorienting());
+
+    SECTION("a tight content match re-keys the stored slot under the new frame") {
+        const auto result = router.commit(Face::U, drifted(solid(kRed), 3.0F), 2000);
+        CHECK(result.outcome == CommitOutcome::updated);
+        REQUIRE(result.confirmed_slots.size() == 1);
+        CHECK(result.confirmed_slots.front() == 0);
+        CHECK(router.filled_count() == 1);
+    }
+
+    SECTION("a clearly different face files beside the stored slot, not on it") {
+        const auto result = router.commit(Face::F, solid(kBlue), 2000);
+        CHECK(result.outcome == CommitOutcome::filled);
+        CHECK(router.filled_count() == 2);
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+    }
+
+    SECTION("a near-duplicate centre that fails the tight match quarantines") {
+        // Centre within the duplicate radius of the stored red, but three
+        // stickers read green (census L1 = 6, past the re-association
+        // drift): could be the stored face badly lit, could be a different
+        // face aliasing it - the router adopts nothing and writes nothing.
+        CapturedFace suspect = solid(kWashedOrangeAsRed);
+        suspect = with_sticker(suspect, 0, kGreen);
+        suspect = with_sticker(suspect, 1, kGreen);
+        suspect = with_sticker(suspect, 2, kGreen);
+        const auto result = router.commit(Face::U, suspect, 2000);
+        CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK(router.filled_count() == 1);
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+    }
+}
+
+TEST_CASE("retake clears exactly one slot by fill index", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::F, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+
+    CHECK_FALSE(router.clear_slot(3));
+    REQUIRE(router.clear_slot(1));
+    CHECK(router.filled_count() == 2);
+    // Fill order compacts; remaining slots keep their content.
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
+    CHECK(centre_lab_distance(*router.slot_at(1), solid(kGreen)) == 0.0F);
+
+    // The cleared face can be captured again (fresh fill at the end).
+    const auto refill = router.commit(Face::R, drifted(solid(kRed), 2.0F), 4000);
+    CHECK(refill.outcome == CommitOutcome::filled);
+    CHECK(router.filled_count() == 3);
+}

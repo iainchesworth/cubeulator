@@ -460,6 +460,17 @@ float frontal_deg(const Quat& q) noexcept {
     return std::acos(clamped) * 57.29577951308232F;
 }
 
+float face_frontal_deg(const Quat& q, cube::model::Face face) noexcept {
+    const float zx = 2.0F * (q[1] * q[3] - q[0] * q[2]);
+    const float zy = 2.0F * (q[2] * q[3] + q[0] * q[1]);
+    const float zz = 1.0F - 2.0F * (q[1] * q[1] + q[2] * q[2]);
+    // cos(angle to viewer) = z component of the rotated outward normal;
+    // kFaceNormal order U(+y), R(+x), F(+z), D(-y), L(-x), B(-z).
+    const std::array<float, 6> facing = {zy, zx, zz, -zy, -zx, -zz};
+    const float cosine = std::clamp(facing[static_cast<std::size_t>(face)], -1.0F, 1.0F);
+    return std::acos(cosine) * 57.29577951308232F;
+}
+
 cube::model::Face nearest_face(const Quat& q) noexcept {
     const float zx = 2.0F * (q[1] * q[3] - q[0] * q[2]);
     const float zy = 2.0F * (q[2] * q[3] + q[0] * q[1]);

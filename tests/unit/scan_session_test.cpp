@@ -43,3 +43,26 @@ TEST_CASE("ScanSession::progressCenters starts as six empty entries", "[qt][cont
         REQUIRE_FALSE(entry.toBool());
     }
 }
+
+TEST_CASE("ScanSession identity-routing state starts empty and honest", "[qt][controllers]") {
+    ScanSession session;
+
+    // The tracker has never anchored: no orientation, no identity claims,
+    // no recovery in progress, no capture states to report.
+    REQUIRE(session.trackingState() == QStringLiteral("lost"));
+    REQUIRE(session.cubeOrientation().isEmpty());
+    REQUIRE_FALSE(session.reorienting());
+    REQUIRE(session.faceCaptureStates().isEmpty());
+    REQUIRE(session.slotSummaries().isEmpty());
+    REQUIRE(session.captureProgress() == 0.0);
+}
+
+TEST_CASE("ScanSession::retakeSlot ignores indices that name no slot", "[qt][controllers]") {
+    ScanSession session;
+
+    session.retakeSlot(0);
+    session.retakeSlot(-1);
+    session.retakeSlot(5);
+
+    REQUIRE(session.facesScanned() == 0);
+}

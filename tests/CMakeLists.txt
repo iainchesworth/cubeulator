@@ -17,6 +17,7 @@ add_executable(cube_unit_tests
     unit/corner_observation_test.cpp
     unit/orientation_lattice_test.cpp
     unit/orientation_tracker_test.cpp
+    unit/capture_routing_test.cpp
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
     unit/frame_recording_test.cpp

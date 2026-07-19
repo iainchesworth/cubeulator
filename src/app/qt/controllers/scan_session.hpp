@@ -6,9 +6,11 @@
 #include <cube/model/facelet.hpp>
 #include <cube/model/scan_progress.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/vision/capture_routing.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/hand_presence.hpp>
+#include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
 #include <cube/vision/stability.hpp>
@@ -50,27 +52,32 @@ namespace cube::app {
 // serialized by the same single-in-flight gate.
 //
 // Capture is driven by temporal fusion, not per-frame gating: each
-// observation feeds a FaceAggregator (one for the single-face view, three
-// for the corner view) and a face is captured only once its per-cell
-// colours have converged across frames - cross-frame variance subsumes the
-// old steadiness/hand gates, which remain exposed purely as advisory UI
-// hints. After any capture a re-arm guard swallows observations until the
-// cube has visibly left the frame (several consecutive no-detection polls)
-// or a short timeout passes, so the same face can't be captured twice
-// while the user is still rotating to the next one.
+// observation feeds a FaceAggregator and a face is captured only once its
+// per-cell colours have converged across frames - cross-frame variance
+// subsumes the old steadiness/hand gates, which remain exposed purely as
+// advisory UI hints.
 //
-// Capture is FREE-FORM: no prompt sequence and no holding convention.
-// The user shows faces in any order, at any rotation. Each converged
-// capture is keyed into one of up to six slots by its centre colour: a
-// capture whose centre Lab reading matches an existing slot's centre
-// updates that slot in place (the user re-showed a face), otherwise it
-// fills a new slot. A corner capture slots its three visible faces
-// independently the same way, so corner views are usable at ANY point in
-// the scan, not just at fixed regrip counts. Which cube face a slot is,
-// and how it is rotated, is never guessed during capture - once the sixth
-// distinct slot fills, resolve_colors() clusters all 54 stickers globally
-// and cube::solver::assemble_scanned_faces() searches per-face rotations
-// for the arrangement that forms a physically buildable cube.
+// Capture is FREE-FORM and IDENTITY-KEYED: no prompt sequence, no holding
+// convention - the user shows faces in any order, at any rotation, and the
+// OrientationTracker decides which physical face every observation belongs
+// to. Six FaceAggregators are keyed by tracked body face; each pass's
+// observation routes into the right one with its cells permuted to solver
+// order via the resolved lattice element (orientation_lattice.hpp's
+// obs_to_body tables - the same face keeps aggregating into the same
+// window across in-plane re-keying, corner/face view changes and detection
+// gaps). A converged window commits through CaptureRouter under the plan's
+// identity policy: IDENTITY DECIDES WHERE A CAPTURE GOES, CENSUS DECIDES
+// WHETHER IT MAY LAND - the only way slot content is ever replaced is the
+// verified in-place update, conflicts quarantine (and escalate to a force-
+// lost track, or to full scan invalidation on the two-faces-conflicting
+// layer-turn signature), and a post-loss epoch re-associates against the
+// store by content before anything commits ("re-orienting"). Commits are
+// additionally gated on frontal-ness, per-pass rotation, motion score,
+// fully-in-frame quads, no unknown-classed cells, and a per-face holdoff -
+// so mid-rotation, occluded or edge-clipped windows keep accumulating
+// instead of landing. Once the sixth distinct slot fills, resolve_colors()
+// clusters all 54 stickers globally and assemble_scanned_faces() remains
+// the acceptance oracle exactly as before.
 //
 // Completion / recovery contract: on assembly SUCCESS the assembled Cube
 // is exposed via assembledCube(), the legacy ScanProgress is rewritten
@@ -113,6 +120,7 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList cubeVertexPoints READ cubeVertexPoints NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeOrientation READ cubeOrientation NOTIFY readingChanged)
     Q_PROPERTY(QString trackingState READ trackingState NOTIFY readingChanged)
+    Q_PROPERTY(bool reorienting READ reorienting NOTIFY readingChanged)
     Q_PROPERTY(qreal overlayFreshness READ overlayFreshness NOTIFY readingChanged)
     Q_PROPERTY(qreal captureProgress READ captureProgress NOTIFY readingChanged)
     Q_PROPERTY(bool autoAdvance READ autoAdvance WRITE setAutoAdvance NOTIFY autoAdvanceChanged)
@@ -122,6 +130,7 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList progressCentersConfirmed READ progressCentersConfirmed NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList progressFacelets READ progressFacelets NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList slotSummaries READ slotSummaries NOTIFY facesScannedChanged)
+    Q_PROPERTY(QVariantList faceCaptureStates READ faceCaptureStates NOTIFY facesScannedChanged)
 
 public:
     explicit ScanSession(QObject* parent = nullptr);
@@ -174,6 +183,11 @@ public:
     // upcoming lost/coasting UI affordances. Shadow-mode observability for
     // now: nothing but the 3D cube consumes tracker output yet.
     [[nodiscard]] QString trackingState() const;
+    // True while a post-loss epoch is buffering converged captures against
+    // an unresolved store gauge (see CaptureRouter) - the UI's
+    // "re-orienting" chip: captures are being held, not lost, and nothing
+    // needs re-showing yet.
+    [[nodiscard]] bool reorienting() const;
     // 1.0 while the overlay geometry is from a fresh detection, decaying
     // toward 0 over the hold window after detection drops - QML fades the
     // AR overlay by this instead of strobing it at the per-frame detection
@@ -207,12 +221,17 @@ public:
     //             Red -> R); "?" when the centre classifies as unknown.
     //   "colors": 9 CSS colour strings (provisional classify_lab), the
     //             slot's stickers row-major as the camera saw them.
-    // Display-only preview: the facelet ROTATION within each face is
-    // uncorrected until final assembly (the camera saw the face at an
-    // arbitrary quarter-turn; assemble_scanned_faces() fixes rotations
-    // mathematically at six slots), and the "face" letter is likewise
-    // provisional until global colour resolution confirms the centres.
+    // Display-only preview: slot content is now stored in solver facelet
+    // order (the obs_to_body routing tables permute cells at aggregation
+    // time), and the "face" letter stays a centre-colour GUESS until
+    // global colour resolution confirms the centres - the shape and
+    // meaning of each entry is unchanged from the centre-keyed store.
     [[nodiscard]] QVariantList slotSummaries() const;
+    // One string per FILLED slot, aligned with slotSummaries: "ok", or
+    // "conflict" while the slot has an outstanding verification strike
+    // (identity routed a capture there but its colours disagreed) - the
+    // UI's cue that a face may need re-showing or an explicit retake.
+    [[nodiscard]] QVariantList faceCaptureStates() const;
 
     // The most recently delivered frame (BGR), or an empty Mat if none has
     // arrived yet. Used by FrameImageProvider, not exposed to QML directly.
@@ -237,6 +256,13 @@ public slots:
     void stop();
     void confirmFace();
     void retakeFace();
+    // Clears ONE captured slot (fill-order index, as shown by
+    // slotSummaries) so the user can re-scan that face - the sanctioned
+    // way a persistently conflicted capture is ever emptied. Distinct name
+    // rather than a retakeFace(int) overload: QML overload resolution on
+    // slots is unreliable, and the no-argument retakeFace() contract
+    // (reset the current reading, keep all slots) must not change.
+    void retakeSlot(int slotIndex);
 
     // Discards every capture slot (and any assembled cube) and starts the
     // scan over, without touching camera running/starting state - start()'s
@@ -262,6 +288,13 @@ signals:
     // the class comment's recovery contract) - facesScanned is back to 5
     // and scanning simply continues. `reason` is cube::to_string(CubeError).
     void scanNeedsRetry(QString reason);
+    // Census conflicts landed on two DISTINCT captured faces within the
+    // layer-turn window: the cube's stickers changed mid-scan (a layer was
+    // turned), so every capture predating the turn is unusable. ALL slots
+    // have already been cleared - facesScanned is 0 - and scanning simply
+    // continues against the cube's new state; tracking itself keeps
+    // running (the turn broke the sticker premise, not the pose).
+    void scanInvalidated(QString reason);
 
 private slots:
     void poll();
@@ -326,21 +359,20 @@ private:
                                          bool run_hand_detector);
 
     [[nodiscard]] bool cornerScanArmed() const;
-    [[nodiscard]] bool faceCaptureReady() const;
-    [[nodiscard]] bool cornerCaptureReady() const;
-    void captureGuidedFace();
-    void captureCornerFaces();
-    // Routes one converged capture into the slot store by centre colour:
-    // update the matching slot, else fill a new one, else (six filled, no
-    // tight match) update the nearest slot within a looser radius, else
-    // drop the capture. Emits faceConfirmed/facesScannedChanged when a
-    // slot changed.
-    void slotCapture(const cube::vision::CapturedFace& captured);
+    // True when some aggregator's window has converged AND the last pass
+    // satisfied the primary commit gate (locked + identity-certain +
+    // accept streak) - what readyToConfirm and the auto-advance path share.
+    [[nodiscard]] bool anyCaptureReady() const;
+    // Walks every converged aggregator through the commit gates and routes
+    // the survivors into the CaptureRouter, handling every policy outcome
+    // (fill/update signals, quarantine, force-lost escalation, layer-turn
+    // invalidation) and finalizing at six slots. The single capture path -
+    // auto-advance and the manual Confirm button both land here.
+    void tryCommitConverged();
     // The recovery half of the completion contract: erase the slot with
     // the lowest mean confidence so the user only re-shows one face.
     void dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence);
     void finalizeIfComplete();
-    void armRearmGuard();
     void resetAggregators();
     void resetReading();
 
@@ -436,36 +468,53 @@ private:
     bool is_steady_ = false;
     bool hand_present_ = false;
 
-    // Temporal fusion state (GUI thread only). face_aggregator_ drives the
-    // one-face-at-a-time view; corner_aggregators_ (slot order top,
-    // lower_left, lower_right) drive the three-faces-at-once corner view.
-    cube::vision::FaceAggregator face_aggregator_;
-    std::array<cube::vision::FaceAggregator, 3> corner_aggregators_{};
+    // Temporal fusion state (GUI thread only), keyed by tracked body face:
+    // aggregators_[f] accumulates every observation the tracker attributes
+    // to body face f - across face/corner views, in-plane re-keying and
+    // detection gaps - with cells already permuted to solver order by the
+    // resolved lattice element's obs_to_body table. The AggregatorMeta
+    // sidecar carries the per-window facts the commit gates need but the
+    // (unchanged) FaceAggregator doesn't track: which cell permutation the
+    // window was built under (a change means the resolution flipped
+    // mid-window - the window resets rather than mix permutations), when
+    // it was last fed (per-identity staleness replaces the old global
+    // 700 ms reset), whether every contributing pass had fully-in-frame
+    // quads, and whether any sample came from a corner view (which loosens
+    // the frontal-ness gate to the corner-flank bound).
+    struct AggregatorMeta {
+        std::array<int, 9> window_map{};
+        bool has_window = false;
+        std::int64_t last_add_ms = 0;
+        bool full_quads = true;
+        bool corner_fed = false;
+    };
+    std::array<cube::vision::FaceAggregator, cube::model::face_count> aggregators_{};
+    std::array<AggregatorMeta, cube::model::face_count> metas_{};
+    // The tracker epoch the aggregator keys belong to: body labels die
+    // with their epoch, so a change resets every window before anything
+    // mis-keyed could accumulate.
+    int agg_epoch_ = -1;
+    // Commit-gate context sampled from the LAST analysis pass (gate 1 and
+    // the per-pass motion facts), shared by auto-advance and the manual
+    // Confirm path so both apply identical policy.
+    bool capture_gate_ok_ = false;
+    cube::vision::Quat capture_q_{1.0F, 0.0F, 0.0F, 0.0F};
+    float capture_motion_score_ = 0.0F;
+    float pass_rotation_deg_ = 0.0F;
+    std::int64_t last_frame_ms_ = 0;
+    int consec_accepts_ = 0;
+    cube::vision::Quat last_track_q_{1.0F, 0.0F, 0.0F, 0.0F};
+    bool has_last_track_q_ = false;
 
-    // The centre-keyed slot store (see the class comment): up to six
-    // captured faces in ARBITRARY order with NO face identity - slot order
-    // is simply fill order, which is fine because resolve_colors() and
-    // assemble_scanned_faces() are both order-agnostic. facesScanned() is
-    // this vector's size.
-    std::vector<cube::vision::CapturedFace> slots_;
+    // The identity-keyed slot store and its full commit policy (verified
+    // updates, quarantine, strikes, layer-turn detection, epoch recovery)
+    // - see capture_routing.hpp. GUI thread only.
+    cube::vision::CaptureRouter router_;
+
     // Set by finalizeIfComplete() on a successful assembly; cleared by
     // restartScan(). progress_ is populated (assembled positions) at the
     // same moment, purely for the legacy display properties.
     std::optional<cube::solver::Cube> assembled_cube_;
-
-    // Post-capture re-arm guard: while active, observations are dropped
-    // instead of aggregated, until either enough consecutive analysis
-    // passes see no cube at all (the user moved it away to rotate) or a
-    // timeout elapses (they re-aimed faster than detection dropped out).
-    bool rearm_guard_active_ = false;
-    int rearm_quiet_polls_ = 0;
-    QElapsedTimer rearm_timer_;
-
-    // Aggregator staleness (see kAggregatorStaleMs in the .cpp): a long gap
-    // between observations resets the corresponding aggregator so sporadic
-    // detections spread over minutes can never fake convergence.
-    QElapsedTimer face_add_gap_timer_;
-    QElapsedTimer corner_add_gap_timer_;
 
     // AR-overlay persistence clock (see kOverlayHoldMs): restarted on every
     // fresh detection; held display geometry clears once it expires.

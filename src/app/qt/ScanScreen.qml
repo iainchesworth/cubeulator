@@ -76,6 +76,36 @@ Rectangle {
         }
     }
 
+    // Tracking-state chip: capture is identity-driven now, so the states
+    // where commits silently pause deserve honest, low-key feedback - the
+    // tracker lost the cube mid-scan (only worth saying once captures
+    // exist to protect), it is coasting through a detection gap, or a
+    // recovered track is re-associating its captures ("re-orienting").
+    // Advisory styling like the quality hints: no warning colour, no alert
+    // icon - nothing is wrong, scanning just needs the cube back.
+    Rectangle {
+        id: trackingChip
+        visible: ScanSession.running && (ScanSession.reorienting
+            || (ScanSession.facesScanned > 0
+                && (ScanSession.trackingState === "lost" || ScanSession.trackingState === "coasting")))
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: scanErrorBanner.visible ? scanErrorBanner.bottom : parent.top
+        anchors.topMargin: Theme.space2
+        width: trackingChipText.width + 24
+        height: 24
+        radius: 12
+        color: Qt.rgba(0, 0, 0, 0.55)
+        z: 9
+        Text {
+            id: trackingChipText
+            anchors.centerIn: parent
+            text: ScanSession.reorienting ? "Re-orienting — hold the cube in view"
+                : ScanSession.trackingState === "lost" ? "Tracking lost — show the cube again"
+                : "Re-acquiring…"
+            color: "#F3F2F2"; font.pixelSize: 11; font.family: Theme.fontHeading
+        }
+    }
+
     // Capture celebration: a capture used to reset the whole overlay in a
     // single frame - a confusing flash. A deliberate green pulse plus a
     // lingering "captured" chip makes the moment legible. Multiple

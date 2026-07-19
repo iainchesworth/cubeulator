@@ -527,3 +527,66 @@ TEST_CASE("frontal_deg and nearest_face report the camera-facing face and its ti
     REQUIRE(nearest_face(yawed) == Face::L);
     REQUIRE(std::abs(frontal_deg(yawed) - 40.0F) < 0.1F);
 }
+
+TEST_CASE("face_frontal_deg reports each body face's own tilt from the viewer", "[lattice]") {
+    // At identity: F dead-on, its four neighbours edge-on, B facing away.
+    const Quat identity = {1.0F, 0.0F, 0.0F, 0.0F};
+    REQUIRE(face_frontal_deg(identity, Face::F) < 0.1F);
+    REQUIRE(std::abs(face_frontal_deg(identity, Face::U) - 90.0F) < 0.1F);
+    REQUIRE(std::abs(face_frontal_deg(identity, Face::R) - 90.0F) < 0.1F);
+    REQUIRE(std::abs(face_frontal_deg(identity, Face::B) - 180.0F) < 0.1F);
+
+    // Consistency with the aggregate helpers: the nearest face's own angle
+    // IS frontal_deg, at every lattice element and under arbitrary tilt.
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<double> unit(-1.0, 1.0);
+    std::uniform_real_distribution<double> angle(0.0, 179.0);
+    for (int i = 0; i < 200; ++i) {
+        const Quat q = axis_angle({unit(rng), unit(rng), unit(rng) + 1.5}, angle(rng));
+        const Face front = nearest_face(q);
+        REQUIRE(std::abs(face_frontal_deg(q, front) - frontal_deg(q)) < 0.1F);
+        for (std::size_t f = 0; f < 6; ++f) {
+            REQUIRE(face_frontal_deg(q, static_cast<Face>(f)) >= frontal_deg(q) - 0.1F);
+        }
+    }
+}
+
+TEST_CASE("face-path cell routing is constant across in-plane re-key boundaries", "[lattice]") {
+    // The M5 boundary-sweep property: as the cube turns IN-PLANE through a
+    // full revolution, the detector re-keys its row-major labelling at
+    // every 45-degree boundary, and the resolved element's obs_to_body map
+    // must exactly cancel each re-key - every physical sticker keeps ONE
+    // body cell index for the whole sweep. The harness is an independent
+    // screen-space model of the detector: physical sticker p (solver
+    // row-major on F at theta = 0) sits at display (x, y) =
+    // (p % 3 - 1, 1 - p / 3); at cube angle theta the detector labels the
+    // quad at the nearest quarter turn k = round(theta / 90) with residual
+    // in-plane pose q_obs = Rz(theta - 90k), so observed cell o shows the
+    // physical sticker at R(-90k)(x_o, y_o). theta = 0 anchors the map to
+    // the identity, so constancy here IS correctness everywhere.
+    const auto rz = [](float deg) {
+        const float half = deg * std::numbers::pi_v<float> / 360.0F;
+        return Quat{std::cos(half), 0.0F, 0.0F, std::sin(half)};
+    };
+    for (int theta = 0; theta < 360; ++theta) {
+        CAPTURE(theta);
+        const int nearest_quarter = (theta + 45) / 90;
+        const int k = nearest_quarter % 4;
+        const float phi = static_cast<float>(theta) - 90.0F * static_cast<float>(nearest_quarter);
+        const auto res = resolve_alignment(rz(phi), rz(static_cast<float>(theta)));
+        const FaceCellMap& map = kFaceObsToBody[static_cast<std::size_t>(res.lattice_index)];
+        REQUIRE(map.body_face == Face::F);
+        for (int o = 0; o < 9; ++o) {
+            int x = o % 3 - 1;
+            int y = 1 - o / 3;
+            for (int turn = 0; turn < k; ++turn) {
+                const int rotated_x = y;  // R(-90): (x, y) -> (y, -x)
+                const int rotated_y = -x;
+                x = rotated_x;
+                y = rotated_y;
+            }
+            const int physical = 3 * (1 - y) + (x + 1);
+            REQUIRE(map.cell[static_cast<std::size_t>(o)] == physical);
+        }
+    }
+}
