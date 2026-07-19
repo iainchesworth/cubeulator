@@ -24,4 +24,13 @@ void stop() {}
 // interfaces/camera.hpp for what this needs to do once that lands.
 void open_permission_settings() {}
 
+std::optional<cv::Mat> try_pop_latest_frame() {
+    // Native capture (AVFoundation) lands with the vision pipeline spec.
+    return std::nullopt;
+}
+
+bool is_capturing() noexcept {
+    return false;
+}
+
 }  // namespace cube::platform::camera

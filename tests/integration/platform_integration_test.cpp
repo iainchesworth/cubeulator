@@ -84,6 +84,17 @@ TEST_CASE("starting a camera without a real device reports an error, not a crash
     cube::platform::camera::stop();
 }
 
+TEST_CASE("try_pop_latest_frame and is_capturing are safe before any start() and after stop()",
+          "[integration][platform]") {
+    REQUIRE_FALSE(cube::platform::camera::is_capturing());
+    REQUIRE_FALSE(cube::platform::camera::try_pop_latest_frame().has_value());
+
+    cube::platform::camera::stop();
+
+    REQUIRE_FALSE(cube::platform::camera::is_capturing());
+    REQUIRE_FALSE(cube::platform::camera::try_pop_latest_frame().has_value());
+}
+
 TEST_CASE("gpu_surface::current wraps a native handle without crashing",
           "[integration][platform]") {
     int fake_native_window = 0;

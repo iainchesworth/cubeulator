@@ -8,7 +8,27 @@
   "builtin-baseline": "5b698638c97b4610044a254347d571f823e56557",
   "dependencies": [
     "fmt",
-    "opencv4",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "calib3d",
+        { "name": "dshow", "platform": "windows & !uwp" },
+        "fs",
+        { "name": "gtk", "platform": "linux" },
+        "highgui",
+        "intrinsics",
+        "jpeg",
+        { "name": "msmf", "platform": "windows & !uwp & !mingw" },
+        "png",
+        "quirc",
+        "thread",
+        "tiff",
+        { "name": "v4l", "platform": "linux" },
+        "webp",
+        { "name": "win32ui", "platform": "windows & !uwp" }
+      ]
+    },
     "onnxruntime",
     "bgfx"
   ],

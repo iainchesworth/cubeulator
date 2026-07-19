@@ -9,10 +9,29 @@ Rectangle {
     readonly property int sc: AppState.scanned
     readonly property var curFace: AppState.faceDefs[Math.min(sc, 5)]
 
+    // Predicted-but-unconfirmed centers render at reduced alpha so they
+    // read as a hint, not a real reading - no CubeView changes needed
+    // (that file is what the sibling ui-polish-flow worktree is about to
+    // replace), a cell is just passed a translucent color instead of null.
+    function withAlpha(hex, alpha) {
+        if (!hex) return null;
+        var a = Math.round(alpha * 255).toString(16).padStart(2, "0");
+        return "#" + a + hex.substring(1);
+    }
+
+    function faceCells(index) {
+        var color = ScanSession.progressCenters[index];
+        if (!color) return null;
+        var confirmed = ScanSession.progressCentersConfirmed[index];
+        return Array(9).fill(confirmed ? color : root.withAlpha(color, 0.35));
+    }
+
+    // top/right/left = U/R/F: the only three faces this isometric view ever
+    // shows, and (by construction) always the first three scanned in order.
     property var progressCube: ({
-        top: sc >= 1 ? Array(9).fill(Theme.faceU) : null,
-        right: sc >= 2 ? Array(9).fill(Theme.faceR) : null,
-        left: sc >= 3 ? Array(9).fill(Theme.faceF) : null
+        top: root.faceCells(0),
+        right: root.faceCells(1),
+        left: root.faceCells(2)
     })
 
     Component {
@@ -38,6 +57,31 @@ Rectangle {
             Item { anchors.bottom: parent.bottom; anchors.right: parent.right; width: bracket; height: bracket
                 Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 3; color: "#F3F2F2" }
                 Rectangle { anchors.right: parent.right; width: 3; height: parent.height; color: "#F3F2F2" } }
+
+            // Real per-cell grid overlay, tinted by classification and
+            // dimmed by confidence - laid out over the same square the
+            // reticle brackets frame, independent of whether OpenCV's own
+            // detected grid lines up with it (this is a framing guide, not
+            // a projection of the actual detected geometry).
+            Grid {
+                anchors.fill: parent
+                anchors.margins: parent.bracket * 0.6
+                columns: 3; rows: 3
+                visible: ScanSession.cubeDetected
+                Repeater {
+                    model: 9
+                    delegate: Rectangle {
+                        readonly property string cellColor: ScanSession.cellColors[index] || "#00000000"
+                        readonly property real cellConfidence: ScanSession.cellConfidence[index] || 0
+                        width: (parent.width - 4) / 3
+                        height: (parent.height - 4) / 3
+                        color: cellColor
+                        opacity: 0.25 + cellConfidence * 0.55
+                        border.width: 1
+                        border.color: Qt.rgba(1, 1, 1, 0.3)
+                    }
+                }
+            }
         }
     }
 
@@ -58,9 +102,23 @@ Rectangle {
                     anchors.centerIn: parent
                     spacing: 6
                     Icon { name: "alert-triangle"; color: "white"; width: 14; height: 14; strokeWidth: 2.4 }
-                    Text { text: "Hold steady — reading colours"; color: "white"; font.pixelSize: 12; font.family: Theme.fontHeading }
+                    Text {
+                        text: !ScanSession.cubeDetected ? "Show the whole cube"
+                            : !ScanSession.isSteady ? "Hold steady — reading colours"
+                            : "Move your hand out of frame"
+                        color: "white"; font.pixelSize: 12; font.family: Theme.fontHeading
+                    }
                 }
             }
+        }
+    }
+
+    Component {
+        id: confirmRetakeRow
+        Row {
+            spacing: Theme.space2
+            AppButton { variant: "secondary"; text: "Retake"; onClicked: ScanSession.retakeFace() }
+            AppButton { variant: "primary"; text: "Confirm"; trailingIcon: "chevron-right"; onClicked: ScanSession.confirmFace() }
         }
     }
 
@@ -103,6 +161,20 @@ Rectangle {
         Item {
             width: parent.width
             height: root.height - 40 - 130
+            clip: true
+            Image {
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                cache: false
+                visible: ScanSession.running
+                source: ScanSession.running ? "image://scanFrame/latest#" + ScanSession.frameSeq : ""
+            }
+            Text {
+                anchors.centerIn: parent
+                visible: ScanSession.starting
+                text: "Connecting to camera…"
+                color: "#F3F2F2"; font.family: Theme.fontMono; font.pixelSize: 13
+            }
             Loader { anchors.centerIn: parent; sourceComponent: reticle }
             CubeView {
                 width: 74; height: 78
@@ -116,7 +188,10 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Theme.space3
-                sourceComponent: missingHint
+                sourceComponent: ScanSession.starting ? null
+                    : (ScanSession.readyToConfirm && !ScanSession.autoAdvance) ? confirmRetakeRow
+                    : (!ScanSession.cubeDetected || !ScanSession.isSteady || ScanSession.handPresent) ? missingHint
+                    : null
             }
         }
 
@@ -148,11 +223,19 @@ Rectangle {
                     Row {
                         width: parent.width - 90
                         spacing: 4
-                        Rectangle { width: (parent.width - 8) / 3; height: 6; color: "#C07C12" }
-                        Rectangle { width: (parent.width - 8) / 3; height: 6; color: "#C07C12" }
-                        Rectangle { width: (parent.width - 8) / 3; height: 6; color: "#4B4747" }
+                        Repeater {
+                            model: 3
+                            delegate: Rectangle {
+                                readonly property real threshold: (index + 1) / 3
+                                width: (parent.width - 8) / 3; height: 6
+                                color: ScanSession.overallConfidence >= threshold ? Theme.warning : "#4B4747"
+                            }
+                        }
                     }
-                    Text { text: "shaky"; color: "#C07C12"; font.family: Theme.fontMono; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter }
+                    Text {
+                        text: !ScanSession.isSteady ? "shaky" : ScanSession.handPresent ? "hand in frame" : ""
+                        color: "#C07C12"; font.family: Theme.fontMono; font.pixelSize: 11; anchors.verticalCenter: parent.verticalCenter
+                    }
                 }
             }
         }
@@ -166,11 +249,25 @@ Rectangle {
         Item {
             width: parent.width - 250
             height: parent.height
+            clip: true
 
+            Image {
+                anchors.fill: parent
+                fillMode: Image.PreserveAspectCrop
+                cache: false
+                visible: ScanSession.running
+                source: ScanSession.running ? "image://scanFrame/latest#" + ScanSession.frameSeq : ""
+            }
             Text {
                 anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space4
                 text: "Show the " + root.curFace.name + " face"
                 color: "#F3F2F2"; font.family: Theme.fontMono; font.pixelSize: 13
+            }
+            Text {
+                anchors.centerIn: parent
+                visible: ScanSession.starting
+                text: "Connecting to camera…"
+                color: "#F3F2F2"; font.family: Theme.fontMono; font.pixelSize: 14
             }
             Loader { anchors.centerIn: parent; sourceComponent: reticle
                 onLoaded: item.size = 250 }
@@ -178,7 +275,10 @@ Rectangle {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
                 anchors.bottomMargin: Theme.space4
-                sourceComponent: missingHint
+                sourceComponent: ScanSession.starting ? null
+                    : (ScanSession.readyToConfirm && !ScanSession.autoAdvance) ? confirmRetakeRow
+                    : (!ScanSession.cubeDetected || !ScanSession.isSteady || ScanSession.handPresent) ? missingHint
+                    : null
             }
         }
 
@@ -228,12 +328,21 @@ Rectangle {
                 Row {
                     width: parent.width
                     spacing: 5
-                    Rectangle { width: (parent.width - 10) / 3; height: 8; color: "#C07C12" }
-                    Rectangle { width: (parent.width - 10) / 3; height: 8; color: "#C07C12" }
-                    Rectangle { width: (parent.width - 10) / 3; height: 8; color: "#4B4747" }
+                    Repeater {
+                        model: 3
+                        delegate: Rectangle {
+                            readonly property real threshold: (index + 1) / 3
+                            width: (parent.width - 10) / 3; height: 8
+                            color: ScanSession.overallConfidence >= threshold ? Theme.warning : "#4B4747"
+                        }
+                    }
                 }
                 Text {
-                    text: "Current face reading shaky — steady the cube."
+                    text: !ScanSession.cubeDetected ? "Show the whole cube to the camera."
+                        : !ScanSession.isSteady ? "Current face reading shaky — steady the cube."
+                        : ScanSession.handPresent ? "A hand is blocking the view — move it aside."
+                        : ScanSession.readyToConfirm && ScanSession.autoAdvance ? "Reading confirmed — advancing…"
+                        : ""
                     color: "#C07C12"; font.pixelSize: 12; font.family: Theme.fontHeading
                     width: parent.width; wrapMode: Text.WordWrap
                 }

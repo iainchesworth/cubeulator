@@ -34,6 +34,8 @@ add_library(cube_platform
     interfaces/gpu_surface.hpp
     interfaces/inference_env.hpp
     interfaces/paths.hpp
+    platform/detail/opencv_capture_loop.hpp
+    platform/detail/opencv_capture_loop.cpp
     "${CUBEULATOR_PLATFORM_DIR}/camera_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
     "${CUBEULATOR_PLATFORM_DIR}/gpu_surface_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
     "${CUBEULATOR_PLATFORM_DIR}/inference_env_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
@@ -58,6 +60,15 @@ target_link_libraries(cube_platform
         cube::sanitizers
         cube::coverage)
 
+# camera_windows.cpp enumerates via native Media Foundation
+# (MFEnumDeviceSources) rather than OpenCvCaptureLoop's generic probe - see
+# its own comment for why. mf/mfplat provide MFStartup/MFEnumDeviceSources/
+# MFShutdown; mfuuid provides the MF_DEVSOURCE_ATTRIBUTE_* GUID constants'
+# definitions (declared extern in the SDK headers, defined only in this lib).
+if(WIN32)
+    target_link_libraries(cube_platform PRIVATE mf mfplat mfuuid)
+endif()
+
 # ---------------------------------------------------------------------------
 # cube_app - the Qt6 Quick (QML) GUI shell, shared across every platform (see
 # docs/architecture.md). The ios-clang preset still sets
@@ -65,7 +76,7 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Quick Gui QuickControls2 Quick3D ShaderTools LabsSettings)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Quick Qml Gui QuickControls2 Quick3D ShaderTools LabsSettings)
     qt_standard_project_setup(REQUIRES 6.5)
 
     # camera_android.cpp uses QJniObject/QNativeInterface for the
@@ -78,6 +89,53 @@ if(CUBEULATOR_BUILD_APP)
     if(ANDROID)
         target_link_libraries(cube_platform PRIVATE Qt6::Core)
     endif()
+
+    # ---------------------------------------------------------------------
+    # cube_app_controllers - QObject-derived bridge types exposed to QML
+    # (CameraController etc.). A separate target from cube_app_qml so it's
+    # linkable into a Catch2 test binary without pulling in QQmlEngine;
+    # registered into the "Cubeulator" QML module imperatively via
+    # qmlRegisterSingletonInstance in main.cpp rather than QML_ELEMENT,
+    # since QML_ELEMENT's compile-time registration only works for sources
+    # compiled directly into a qt_add_qml_module target.
+    # ---------------------------------------------------------------------
+    add_library(cube_app_controllers STATIC
+        qt/controllers/camera_controller.hpp
+        qt/controllers/camera_controller.cpp
+        qt/controllers/scan_session.hpp
+        qt/controllers/scan_session.cpp
+        qt/controllers/settings_model.hpp
+        qt/controllers/settings_model.cpp
+        qt/controllers/bundled_models.hpp
+        qt/controllers/bundled_models.cpp
+        qt/controllers/frame_image_provider.hpp
+        qt/controllers/frame_image_provider.cpp)
+
+    target_include_directories(cube_app_controllers PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
+
+    # Embeds the hand-detection ONNX model directly into cube_app_controllers'
+    # object code as a Qt resource (:/models/...) rather than relying on it
+    # being deployed as a loose file next to the executable - see
+    # bundled_models.cpp. cube_deploy_vision_assets() (VisionAssets.cmake)
+    # still separately copies the same file next to cube_app.exe/the test
+    # binaries, which cube::vision's own filesystem-path-based tests
+    # (tests/integration/hand_presence_integration_test.cpp) still rely on -
+    # that's a Qt-free cube_lib API and can't read a Qt resource.
+    qt_add_resources(cube_app_controllers "cube_app_models"
+        PREFIX "/models"
+        BASE "${PROJECT_SOURCE_DIR}/assets/models"
+        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
+
+    target_link_libraries(cube_app_controllers
+        PUBLIC
+            cube::platform
+            Qt6::Core
+            Qt6::Concurrent
+            Qt6::Quick
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
     # (via WHOLE_ARCHIVE below), not loaded as a runtime plugin from a
@@ -118,8 +176,6 @@ if(CUBEULATOR_BUILD_APP)
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml
         SOURCES
-            qt/CameraDeviceModel.hpp
-            qt/CameraDeviceModel.cpp
             qt/CameraPermission.hpp
             qt/CameraPermission.cpp
             qt/SystemTheme.hpp
@@ -132,13 +188,15 @@ if(CUBEULATOR_BUILD_APP)
     # Qt6::Gui: SystemTheme.cpp uses QGuiApplication/QStyleHints, which live
     # in Gui, not Core (unlike QCameraPermission, added to Core specifically
     # so apps didn't need to link Gui/Multimedia just to ask permission).
+    # cube::platform: CameraPermission.cpp calls
+    # cube::platform::camera::open_permission_settings().
     target_link_libraries(cube_app_qml PRIVATE cube::platform Qt6::Gui)
 
     # The generated cube_app_qml_qmltyperegistrations.cpp includes QML_ELEMENT
-    # headers as "#include <CameraDeviceModel.hpp>" (bare filename, no qt/
+    # headers as "#include <CameraPermission.hpp>" (bare filename, no qt/
     # prefix) - qt/ itself needs to be on the include path for that to
     # resolve, not just this directory (confirmed: fails with "undeclared
-    # identifier 'CameraDeviceModel'" otherwise).
+    # identifier 'CameraPermission'" otherwise).
     target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
     qt_add_executable(cube_app
@@ -158,11 +216,13 @@ if(CUBEULATOR_BUILD_APP)
     target_link_libraries(cube_app
         PRIVATE
             $<LINK_LIBRARY:WHOLE_ARCHIVE,cube_app_qml>
+            cube_app_controllers
             cube::platform
             cube::warnings
             cube::sanitizers
             cube::coverage
             Qt6::Quick
+            Qt6::Qml
             Qt6::Gui
             Qt6::QuickControls2
             Qt6::Quick3D
@@ -171,6 +231,7 @@ if(CUBEULATOR_BUILD_APP)
     add_dependencies(cube_app cube_version)
 
     cube_deploy_sanitizer_runtime(cube_app)
+    cube_deploy_vision_assets(cube_app)
 
     set_target_properties(cube_app PROPERTIES
         WIN32_EXECUTABLE ON

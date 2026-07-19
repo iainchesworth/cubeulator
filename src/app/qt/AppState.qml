@@ -2,11 +2,9 @@ pragma Singleton
 import QtQuick
 import Cubeulator
 
-// Demo/mock state for the scan -> solve -> complete flow. The real
-// camera/vision/solver pipeline is not implemented yet (see
-// docs/architecture.md - Spec 00 skeleton); this drives the UI the same
-// way the design prototype's own demo state did, so the screens are fully
-// navigable ahead of that backend work landing.
+// Scan-phase state delegates to CameraController/ScanSession. Solve phase
+// (step/steps/elapsedSeconds/etc.) stays a demo mock - solving itself isn't
+// implemented yet (see docs/architecture.md - Spec 00 skeleton).
 QtObject {
     id: state
 
@@ -24,8 +22,32 @@ QtObject {
 
     property string previousScreen: "launch"
 
-    property int scanned: 0
-    readonly property int totalFaces: 6
+    // Kicks off device enumeration immediately at startup rather than
+    // waiting for a "grant access" button press: on desktop, beginScan()
+    // goes straight to "scan" without ever visiting the permission screen
+    // (see isMobile above), so nothing else would trigger it in time for
+    // ScanSession.start() to have a selectedDeviceId ready.
+    Component.onCompleted: CameraController.refreshDevices()
+
+    // Starts/stops the live capture to match the screen shown.
+    onScreenChanged: {
+        if (screen === "scan") {
+            ScanSession.start(CameraController.selectedDeviceId);
+        } else if (ScanSession.running || ScanSession.starting) {
+            ScanSession.stop();
+        }
+    }
+
+    // ScanSession reports scanCompleted once all 6 faces are confirmed
+    // (manually via confirmFace(), or automatically when autoAdvance is on).
+    property var scanSessionConnections: Connections {
+        target: ScanSession
+        function onScanCompleted() {
+            state.screen = "solve";
+        }
+    }
+
+    readonly property int scanned: ScanSession.facesScanned
 
     readonly property var faceDefs: [
         { code: "U", name: "top", color: Theme.faceU },
@@ -48,18 +70,6 @@ QtObject {
 
     property int moveCount: 42
     property int elapsedSeconds: 0
-
-    property var scanTimer: Timer {
-        interval: 1300; repeat: true; running: state.screen === "scan"
-        onTriggered: {
-            if (state.scanned < state.totalFaces)
-                state.scanned += 1;
-            if (state.scanned >= state.totalFaces) {
-                stop();
-                state.screen = "solve";
-            }
-        }
-    }
 
     property var clockTimer: Timer {
         interval: 1000; repeat: true
@@ -87,7 +97,6 @@ QtObject {
 
     function beginScan() {
         if (cameraGranted || !isMobile) {
-            scanned = 0;
             elapsedSeconds = 0;
             screen = "scan";
         } else {
@@ -99,7 +108,6 @@ QtObject {
     // screen is up (see its Connections block) - moves on to scanning the
     // same way beginScan() does when permission was already granted.
     function proceedToScan() {
-        scanned = 0;
         elapsedSeconds = 0;
         screen = "scan";
     }
@@ -117,14 +125,12 @@ QtObject {
     }
 
     function restart() {
-        scanned = 0;
         step = 0;
         elapsedSeconds = 0;
         screen = "launch";
     }
 
     function scanAnother() {
-        scanned = 0;
         step = 0;
         elapsedSeconds = 0;
         screen = "scan";

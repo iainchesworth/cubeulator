@@ -4,13 +4,11 @@ import Qt.labs.settings
 import Cubeulator
 
 // Demo/mock settings state, following the same pattern as AppState. Camera
-// devices themselves come from the real CameraDeviceModel (backed by
-// cube::platform::camera::enumerate_devices()) - this just tracks which one
-// is selected, by index into that live list.
+// device selection lives on CameraController (selectedDeviceId/
+// selectDevice()), not here - it's the same controller ScanSession.start()
+// reads from, so there's a single source of truth for which device is live.
 QtObject {
     id: settings
-
-    property int cameraDeviceIndex: 0
 
     readonly property var languages: ["English"]
     property int languageIndex: 0

@@ -44,4 +44,13 @@ void open_permission_settings() {
     context.callMethod<void>("startActivity", "(Landroid/content/Intent;)V", intent.object());
 }
 
+std::optional<cv::Mat> try_pop_latest_frame() {
+    // Native capture (Camera2/CameraX) lands with the vision pipeline spec.
+    return std::nullopt;
+}
+
+bool is_capturing() noexcept {
+    return false;
+}
+
 }  // namespace cube::platform::camera

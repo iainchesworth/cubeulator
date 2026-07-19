@@ -8,8 +8,12 @@ same reasons CountdownSolver keeps it out of vcpkg (build size, Windows
 `MAX_PATH`).
 
 All five vcpkg dependencies - including OpenCV, ONNX Runtime, and bgfx - are
-plain, unscoped entries in `vcpkg.json`: they resolve the same way on every
-triplet vcpkg supports, `arm64-android`/`arm64-ios` included. The
+unscoped entries in `vcpkg.json`: they resolve the same way on every triplet
+vcpkg supports, `arm64-android`/`arm64-ios` included (`opencv4` pins an
+explicit feature list rather than taking the port's defaults, and `onnx`
+is overridden via a `vcpkg-overlay-ports/` entry - see "onnxruntime + onnx:
+a static-registration collision, and the overlay-port fix" below - but
+neither carries any platform restriction of its own). The
 `android-clang-*`/`ios-clang-*` presets chainload vcpkg's toolchain on top of
 the NDK/iOS toolchain (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) so every dependency
 resolves the same way everywhere.
@@ -69,6 +73,59 @@ default parallelism once its build reached compilation.
 
 Because these jobs are `continue-on-error: true`, a build failure won't turn
 CI red; check the job logs directly rather than relying on the checkmark.
+
+## onnxruntime + onnx: a static-registration collision, and the overlay-port fix
+
+The first `Ort::Session` construction in the hand-presence detector
+(`cube::vision::OnnxHandPresenceDetector`) failed with "invalid model"
+errors against a well-formed `.onnx` file, preceded by a wall of
+`Schema error: Trying to register schema ... already registered` and a
+`SchemasRegisterer` assertion ("4 schema were exposed ... 741 were
+expected") — not a build failure, so it only surfaced at runtime, the
+first time anything actually called into `Ort::Session`.
+
+The initial hypothesis was OpenCV: `opencv4`'s `dnn` module (plus the
+`directml` feature that only accelerates it) and its `gapi` module can
+both import/run `.onnx` models and vendor their own ONNX operator-schema
+registration to do it - `gapi` even auto-enables an ONNX backend via
+`find_package(ONNX)` with no explicit vcpkg feature gating it, whenever a
+standalone `onnx` install is visible in the same vcpkg tree (which it
+always is here, since `cube::onnxruntime` depends on it too). Both were
+disabled (`vcpkg.json` pins `opencv4`'s feature list explicitly - default
+features minus `dnn`/`directml`/`gapi` - since nothing in this codebase
+uses `cv::dnn` or `cv::gapi` anyway; `cube::vision`'s edge-AI code goes
+through `cube::onnxruntime` directly). **That trim was worth keeping as
+dependency hygiene, but it didn't fix the collision** - confirmed with a
+minimal repro (`Ort::Env` + `Ort::Session` in a standalone .cpp linking
+only `onnxruntime.lib`, no OpenCV, no `cube_lib`, nothing else from this
+project) that reproduced the identical schema errors on its own.
+
+The real cause: `onnxruntime`'s own vcpkg port
+(`deps/vcpkg/ports/onnxruntime/portfile.cmake`) prints
+`message(WARNING "The port requires 'onnx' port build with CMake option
+ONNX_DISABLE_STATIC_REGISTRATION=ON")` - but the vendored `onnx` port
+(`deps/vcpkg/ports/onnx/portfile.cmake`) doesn't set it, and exposes no
+feature to opt in. Without that flag, ONNX's own static initializers
+register its operator schemas automatically at library-load time; then
+onnxruntime registers the *same* schemas itself, explicitly, the first
+time an `Ort::Env`/`Ort::Session` is created - a warned-about, known gap
+between these two specific port versions
+(`onnx` 1.19.0 / `onnxruntime` 1.23.2 at this repo's pinned vcpkg
+baseline), not anything specific to how this project links or uses
+either library.
+
+Fixed via a vcpkg overlay port rather than editing the pinned
+`deps/vcpkg` submodule directly (which would leave it in a dirty,
+unreproducible state): `vcpkg-configuration.json` registers
+`vcpkg-overlay-ports/` as an overlay-ports root, and
+`vcpkg-overlay-ports/onnx/` is a copy of the vendored `onnx` port (same
+patches, same version, `port-version` bumped to 1) with
+`-DONNX_DISABLE_STATIC_REGISTRATION=ON` added to its
+`vcpkg_cmake_configure()` call. This is the standard, version-controlled
+way to override a single port's build flags without touching the pinned
+submodule - reproducible for CI and every worktree, and easy to drop once
+(if) a future vcpkg baseline bump pulls in `onnx`/`onnxruntime` port
+versions where this is already fixed upstream.
 
 ## Fallback: native SDKs per platform
 

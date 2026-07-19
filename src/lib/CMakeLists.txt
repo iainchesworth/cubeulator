@@ -41,8 +41,15 @@ add_custom_target(cube_version ALL
 target_sources(cube_lib
     PRIVATE
         src/version.cpp
+        src/model/scan_progress.cpp
+        src/model/color_scheme.cpp
         src/solver/solver.cpp
         src/vision/vision.cpp
+        src/vision/grid_detection.cpp
+        src/vision/color_classification.cpp
+        src/vision/stability.cpp
+        src/vision/auto_advance.cpp
+        src/vision/hand_presence.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 
@@ -57,7 +64,10 @@ target_include_directories(cube_lib
 target_compile_features(cube_lib PUBLIC cxx_std_23)
 
 target_link_libraries(cube_lib
+    PUBLIC
+        cube::opencv
     PRIVATE
+        cube::onnxruntime
         cube::warnings
         cube::sanitizers
         cube::coverage
