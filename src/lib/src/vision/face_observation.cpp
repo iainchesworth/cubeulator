@@ -135,6 +135,37 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
     return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation, max_aspect);
 }
 
+// A THIRD saturation cut at a PERMISSIVE floor, contoured independently
+// (live1 F4): warm dim indoor light washes matte tiles to S 20-35, under
+// the standard 40 floor, and the frontal-but-failed census class was
+// starving right here - sharp frontal frames with 0-6 candidates while
+// the cube filled the view. The extra low-saturation clutter this admits
+// (more skin, more wood) is filtered where it always was: the shape
+// gates, the lattice residual and the completion/phase gates - acceptance
+// thresholds are unchanged, only candidate SUPPLY grows.
+constexpr int kPermissiveStickerSaturation = 25;
+
+[[nodiscard]] std::vector<StickerCandidate> find_permissive_saturation_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kPermissiveStickerSaturation, max_aspect);
+}
+
+// A FOURTH cut at a HIGH floor (live1 F4, frame 448 class): under warm
+// dim light the cube's WHITE tiles pick up enough colour cast to clear
+// even the strict floor (measured S 57-73 on a real frame), so every
+// saturation mask below this welds the whole face - tiles, lattice and
+// white cells - into one blob the shape gates reject, and the face
+// produces ZERO candidates while filling the view sharply. At 100 the
+// colour-cast whites and the washed lattice drop out and the six-plus
+// genuinely chromatic tiles (S 103-189 on the same frame) segment
+// individually. Purely additive supply, like every other source.
+constexpr int kVeryStrictStickerSaturation = 100;
+
+[[nodiscard]] std::vector<StickerCandidate> find_very_strict_saturation_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kVeryStrictStickerSaturation, max_aspect);
+}
+
 // A SECOND saturation cut at a stricter floor, contoured independently:
 // the permissive floor exists to catch washed-out pastel tiles, but on a
 // sheen-heavy frame it can also grow a tile's blob until it merges with
@@ -488,6 +519,8 @@ namespace {
                              detail::find_dark_square_candidates(bgr_frame, max_aspect),
                              find_saturation_candidates(hsv_channels, max_aspect),
                              find_strict_saturation_candidates(hsv_channels, max_aspect),
+                             find_very_strict_saturation_candidates(hsv_channels, max_aspect),
+                             find_permissive_saturation_candidates(hsv_channels, max_aspect),
                              find_white_candidates(hsv_channels, max_aspect)});
 }
 

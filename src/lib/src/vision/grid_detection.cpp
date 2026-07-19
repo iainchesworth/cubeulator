@@ -47,6 +47,20 @@ constexpr int kClaheTileGrid = 8;
 constexpr std::array<int, 3> kAdaptiveBlockDivisors = {4, 8, 16};
 constexpr int kAdaptiveBlockMin = 7;  // adaptiveThreshold requires odd, > 1
 constexpr double kAdaptiveThresholdC = 5.0;
+// Starved-frame retry (live1 F4): in warm dim light a matte tile's local
+// contrast against the lattice drops under the standard C, and sharp
+// frontal frames measured ZERO to six candidates while the cube filled the
+// view. When the standard pass (both polarities are separate calls, each
+// retries itself) yields fewer than the lattice fitter's own acceptance
+// floor could ever use, ONE more threshold pass runs at a permissive C and
+// the results merge - conditional, so the extra cost lands only on frames
+// that were about to produce nothing anyway. Acceptance thresholds
+// downstream are unchanged: the retry adds candidates, the lattice
+// residual and photometric gates still decide.
+constexpr double kAdaptiveThresholdCLow = 2.0;
+constexpr std::size_t kStarvedCandidateFloor = 6;
+// Fill-ratio floor for candidate contours (see candidates_from_binary_mask).
+constexpr double kMinFillRatioLow = 0.55;
 // adaptiveThreshold's local-mean comparison degenerates inside uniform
 // regions: any flat area trivially satisfies src > mean - C, so deep
 // background floods the mask as foreground - connecting stickers to the
@@ -520,12 +534,13 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         std::vector<cv::Point> approx;
         const double epsilon = kApproxPolyEpsilonFraction * cv::arcLength(contour, true);
         cv::approxPolyDP(contour, approx, epsilon, true);
-        // 4-6 vertices, not exactly 4: real stickers have rounded corners
-        // and webcam blur, so their contours routinely approximate to 5 or
-        // 6 points - demanding a perfect quadrilateral was a major reason
-        // detection only worked at one exact distance. The fill-ratio check
-        // below carries the "actually box-like" discrimination instead.
-        if (approx.size() < 4 || approx.size() > 6 || !cv::isContourConvex(approx)) {
+        // 4-8 vertices, not exactly 4: real stickers have rounded corners
+        // and webcam blur, so their contours routinely approximate to 5-6
+        // points - and warm DIM light rounds them further still, to 7-8
+        // (live1's frontal-but-failed frames lost most of their tiles right
+        // here). The fill-ratio check below carries the "actually box-like"
+        // discrimination instead.
+        if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
             continue;
         }
 
@@ -540,9 +555,13 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         }
         // A convex blob that fills most of its own minAreaRect is box-like;
         // crescents/wedges that sneak through the relaxed vertex bound do
-        // not.
+        // not. 0.55, down from 0.65: dim blur erodes a tile's blob toward
+        // an ellipse (fill ~0.6) before it stops being a tile - the corner
+        // replica funnel measured on live1 lost its cells at exactly this
+        // gate. Convexity plus the squareness bound still exclude the
+        // crescent/wedge shapes the ratio exists to kill.
         const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
-        if (rect_area <= 0.0 || area / rect_area < 0.65) {
+        if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
             continue;
         }
 
@@ -595,27 +614,38 @@ namespace {
 
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 
-    std::vector<StickerCandidate> candidates;
-    for (const int divisor : kAdaptiveBlockDivisors) {
-        int block_size = std::min(bgr_frame.cols, bgr_frame.rows) / divisor;
-        if (block_size % 2 == 0) {
-            ++block_size;
+    const auto threshold_pass = [&](double threshold_c, std::vector<StickerCandidate>& candidates) {
+        for (const int divisor : kAdaptiveBlockDivisors) {
+            int block_size = std::min(bgr_frame.cols, bgr_frame.rows) / divisor;
+            if (block_size % 2 == 0) {
+                ++block_size;
+            }
+            block_size = std::max(block_size, kAdaptiveBlockMin);
+
+            cv::Mat binary;
+            cv::adaptiveThreshold(v_eq, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, threshold_type, block_size,
+                                   threshold_c);
+            cv::bitwise_and(binary, value_floor, binary);
+
+            // Close first to bridge small internal gaps (glare/seam noise
+            // on a single sticker), then open to remove speckle and cut
+            // any thin bridge left between adjacent stickers.
+            cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kernel);
+            cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel);
+
+            auto scale_candidates = candidates_from_binary_mask(binary, max_aspect);
+            candidates.insert(candidates.end(), scale_candidates.begin(), scale_candidates.end());
         }
-        block_size = std::max(block_size, kAdaptiveBlockMin);
+    };
 
-        cv::Mat binary;
-        cv::adaptiveThreshold(v_eq, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, threshold_type, block_size,
-                               kAdaptiveThresholdC);
-        cv::bitwise_and(binary, value_floor, binary);
-
-        // Close first to bridge small internal gaps (glare/seam noise on a
-        // single sticker), then open to remove speckle and cut any thin
-        // bridge left between adjacent stickers.
-        cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, kernel);
-        cv::morphologyEx(binary, binary, cv::MORPH_OPEN, kernel);
-
-        auto scale_candidates = candidates_from_binary_mask(binary, max_aspect);
-        candidates.insert(candidates.end(), scale_candidates.begin(), scale_candidates.end());
+    std::vector<StickerCandidate> candidates;
+    threshold_pass(kAdaptiveThresholdC, candidates);
+    // Starved-frame retry at the permissive C (see kAdaptiveThresholdCLow):
+    // cost lands only on frames the standard pass left near-empty, and the
+    // pooled duplicates collapse in the callers' dedupe exactly like the
+    // multi-scale ones.
+    if (candidates.size() < kStarvedCandidateFloor) {
+        threshold_pass(kAdaptiveThresholdCLow, candidates);
     }
     return candidates;
 }

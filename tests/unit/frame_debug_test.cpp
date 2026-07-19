@@ -118,7 +118,7 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
     cv::threshold(hsv_channels[2], value_floor, 44, 255, cv::THRESH_BINARY);
     cv::bitwise_and(brightness_mask, value_floor, brightness_mask);
     cv::Mat saturated_mask;
-    cv::threshold(hsv_channels[1], saturated_mask, 59, 255, cv::THRESH_BINARY);
+    cv::threshold(hsv_channels[1], saturated_mask, 39, 255, cv::THRESH_BINARY);
     cv::Mat white_mask;
     cv::threshold(hsv_channels[2], white_mask, 179, 255, cv::THRESH_BINARY);
     cv::Mat mask = brightness_mask | saturated_mask | white_mask;
@@ -140,7 +140,9 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
         ++pass_area;
         std::vector<cv::Point> approx;
         cv::approxPolyDP(contour, approx, 0.04 * cv::arcLength(contour, true), true);
-        if (approx.size() != 4 || !cv::isContourConvex(approx)) {
+        // Sync: corner_observation relaxed to 4-8 vertices + fill >= 0.55
+        // (the F4 low-light recovery).
+        if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
             std::printf("  corner-candidate reject poly: area=%.0f vertices=%zu\n", area, approx.size());
             continue;
         }
@@ -153,6 +155,12 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
                              std::min(min_rect.size.width, min_rect.size.height);
         if (aspect > 3.0F) {
             std::printf("  corner-candidate reject aspect: area=%.0f aspect=%.2f\n", area, aspect);
+            continue;
+        }
+        const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
+        if (rect_area <= 0.0 || area / rect_area < 0.55) {
+            std::printf("  corner-candidate reject fill: area=%.0f fill=%.2f\n", area,
+                        rect_area > 0.0 ? area / rect_area : 0.0);
             continue;
         }
         ++final_count;

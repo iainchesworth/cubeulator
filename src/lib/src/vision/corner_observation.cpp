@@ -64,6 +64,10 @@ constexpr int kMinBrightPathValue = 45;
 // toward pastel, and the corner view needs every cell it can get.
 constexpr int kMinStickerSaturation = 40;
 constexpr int kMinWhiteValue = 180;
+// Fill-ratio floor for candidate contours, matching grid_detection.cpp's
+// kMinFillRatioLow: dim blur erodes a tile toward an ellipse (~0.6 fill)
+// long before it stops being a tile.
+constexpr double kMinFillRatioLow = 0.55;
 
 // --- corner-view plausibility ---------------------------------------------
 
@@ -220,11 +224,14 @@ struct Candidate {
             std::vector<cv::Point> approx;
             const double epsilon = kApproxPolyEpsilonFraction * cv::arcLength(contour, true);
             cv::approxPolyDP(contour, approx, epsilon, true);
-            // 4-6 vertices plus a fill-ratio floor, not exactly 4: real
+            // 4-8 vertices plus a fill-ratio floor, not exactly 4: real
             // stickers' rounded corners and webcam blur routinely
-            // approximate to 5-6 points (same relaxation as
-            // grid_detection.cpp's candidate filter).
-            if (approx.size() < 4 || approx.size() > 6 || !cv::isContourConvex(approx)) {
+            // approximate to 5-6 points, and warm dim light rounds them to
+            // 7-8 (same relaxation as grid_detection.cpp's candidate
+            // filter - the live1 corner replica funnel lost its 27-41
+            // area-passing cells to exactly these two gates, collapsing to
+            // 0-8 against the 18-candidate floor).
+            if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
                 continue;
             }
 
@@ -238,7 +245,7 @@ struct Candidate {
                 continue;
             }
             const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
-            if (rect_area <= 0.0 || area / rect_area < 0.65) {
+            if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
                 continue;
             }
 
