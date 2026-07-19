@@ -244,6 +244,29 @@ TEST_CASE("locate_edge tracks a piece through a move", "[cube]") {
     REQUIRE(loc.face_b == Face::R);
 }
 
+TEST_CASE("from_facelets round-trips a physically valid cube's own facelets", "[cube]") {
+    const Cube original = Cube::solved().apply(Move{Face::R, 1}).apply(Move{Face::U, 2});
+    std::array<std::array<Color, 9>, 6> facelets{};
+    for (Face face : kAllFaces) {
+        facelets[static_cast<std::size_t>(face)] = original.face(face);
+    }
+
+    const auto result = Cube::from_facelets(facelets);
+    REQUIRE(result.has_value());
+    REQUIRE(*result == original);
+}
+
+TEST_CASE("from_facelets rejects a malformed facelet arrangement", "[cube]") {
+    std::array<std::array<Color, 9>, 6> facelets{};
+    for (auto& face_facelets : facelets) {
+        face_facelets.fill(Color::White);  // 54 White stickers - not a real cube
+    }
+
+    const auto result = Cube::from_facelets(facelets);
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error() == cube::CubeError::invalid_cube_state);
+}
+
 TEST_CASE("locate_corner finds a solved cube's corners on all three of their faces", "[cube]") {
     const Cube solved = Cube::solved();
     const auto loc = solved.locate_corner(Color::Yellow, Color::Green, Color::Red);
@@ -253,4 +276,122 @@ TEST_CASE("locate_corner finds a solved cube's corners on all three of their fac
     REQUIRE(solved.at(loc.face_a, loc.index_a) == Color::Yellow);
     REQUIRE(solved.at(loc.face_b, loc.index_b) == Color::Green);
     REQUIRE(solved.at(loc.face_c, loc.index_c) == Color::Red);
+}
+
+namespace {
+
+// A solved cube's raw facelets, as a mutable starting point for the
+// is_solvable tests below that hand-tamper with individual stickers.
+std::array<std::array<Color, 9>, 6> solved_facelets() {
+    std::array<std::array<Color, 9>, 6> facelets{};
+    for (Face face : kAllFaces) {
+        facelets[static_cast<std::size_t>(face)] = Cube::solved().face(face);
+    }
+    return facelets;
+}
+
+}  // namespace
+
+TEST_CASE("solved and randomly scrambled cubes are solvable", "[cube]") {
+    REQUIRE(Cube::solved().is_solvable());
+
+    std::mt19937 rng{424242};
+    std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
+    std::uniform_int_distribution<int> turn_dist{1, 3};
+
+    Cube c = Cube::solved();
+    for (int i = 0; i < 200; ++i) {
+        c = c.apply(Move{kAllFaces[face_dist(rng)], turn_dist(rng)});
+        CAPTURE(i);
+        REQUIRE(c.is_solvable());
+    }
+}
+
+TEST_CASE("a single twisted corner is physically valid but not solvable", "[cube]") {
+    // The URF corner sits at (1, 1, 1); its three stickers are U index 8
+    // (= (z+1)*3 + (x+1)), R index 2 (= (1-y)*3 + (z+1)) and F index 2
+    // (= (1-y)*3 + (x+1)), holding Yellow/Red/Green on a solved cube.
+    // 3-cycling the three colours around those fixed positions is exactly
+    // a physical twist of that one cubie in place: the colour set stays
+    // {Yellow, Red, Green}, so the colour-count and axis-pair checks still
+    // pass, but the corner twist sum becomes 1 or 2 (mod 3).
+    for (bool clockwise : {false, true}) {
+        CAPTURE(clockwise);
+        auto facelets = solved_facelets();
+        auto& u = facelets[static_cast<std::size_t>(Face::U)];
+        auto& r = facelets[static_cast<std::size_t>(Face::R)];
+        auto& f = facelets[static_cast<std::size_t>(Face::F)];
+        if (clockwise) {
+            u[8] = Color::Green;
+            r[2] = Color::Yellow;
+            f[2] = Color::Red;
+        } else {
+            u[8] = Color::Red;
+            r[2] = Color::Green;
+            f[2] = Color::Yellow;
+        }
+
+        const auto result = Cube::from_facelets(facelets);
+        REQUIRE(result.has_value());           // passes every physical check...
+        REQUIRE_FALSE(result->is_solvable());  // ...but breaks the twist invariant
+    }
+}
+
+TEST_CASE("a single flipped edge is physically valid but not solvable", "[cube]") {
+    // The UF edge sits at (0, 1, 1): U index 7, F index 1 (same index
+    // formulas as above), Yellow/Green on a solved cube. Swapping the two
+    // stickers is a pure flip of that one cubie in place - colour counts
+    // and cubie colour-sets untouched - but the flip sum becomes 1 (mod 2).
+    auto facelets = solved_facelets();
+    facelets[static_cast<std::size_t>(Face::U)][7] = Color::Green;
+    facelets[static_cast<std::size_t>(Face::F)][1] = Color::Yellow;
+
+    const auto result = Cube::from_facelets(facelets);
+    REQUIRE(result.has_value());
+    REQUIRE_FALSE(result->is_solvable());
+}
+
+TEST_CASE("two swapped corners are not solvable but a single quarter turn is", "[cube]") {
+    // Exchanging the URF and ULF corner cubies while preserving their
+    // orientations touches only two stickers: the two cubies share Yellow
+    // on their U facets and Green on their F facets, so the whole swap
+    // reduces to exchanging the x-axis-facet stickers, R index 2 (Red)
+    // and L index 2 (Orange). That is a single corner transposition (odd
+    // permutation) with the edge permutation untouched (even) - unequal
+    // parities, unreachable.
+    auto facelets = solved_facelets();
+    facelets[static_cast<std::size_t>(Face::R)][2] = Color::Orange;
+    facelets[static_cast<std::size_t>(Face::L)][2] = Color::Red;
+
+    const auto result = Cube::from_facelets(facelets);
+    REQUIRE(result.has_value());
+    REQUIRE_FALSE(result->is_solvable());
+
+    // Whereas a quarter turn 4-cycles four corners AND four edges - both
+    // parities go odd together - so it must remain solvable.
+    for (Face face : kAllFaces) {
+        REQUIRE(Cube::solved().apply(Move{face, 1}).is_solvable());
+    }
+}
+
+TEST_CASE("centres permuted from canonical are not solvable", "[cube]") {
+    // A solved cube rotated bodily about the L-R axis: F's Green ends up
+    // on U, U's Yellow on B, B's Blue on D and D's White on F. Every face
+    // is still a perfect one-colour square - this is exactly what a
+    // free-form scan produces when correct faces are assembled into the
+    // wrong slots - so it sails through every physical check. But centres
+    // never move under face turns, so no move sequence reaches it from
+    // solved(): is_solvable() must reject it.
+    std::array<std::array<Color, 9>, 6> facelets{};
+    const auto fill = [&](Face face, Color color) { facelets[static_cast<std::size_t>(face)].fill(color); };
+    fill(Face::U, Color::Green);
+    fill(Face::B, Color::Yellow);
+    fill(Face::D, Color::Blue);
+    fill(Face::F, Color::White);
+    fill(Face::L, Color::Orange);
+    fill(Face::R, Color::Red);
+
+    const auto result = Cube::from_facelets(facelets);
+    REQUIRE(result.has_value());
+    REQUIRE_FALSE(result->is_solvable());
 }

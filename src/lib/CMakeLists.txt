@@ -44,6 +44,8 @@ target_sources(cube_lib
         src/model/scan_progress.cpp
         src/model/color_scheme.cpp
         src/solver/cube.cpp
+        src/solver/scan_conversion.cpp
+        src/solver/scan_assembly.cpp
         src/solver/notation.cpp
         src/solver/cross.cpp
         src/solver/corners.cpp
@@ -54,6 +56,11 @@ target_sources(cube_lib
         src/solver/stepped_solution.cpp
         src/vision/vision.cpp
         src/vision/grid_detection.cpp
+        src/vision/face_observation.cpp
+        src/vision/temporal_fusion.cpp
+        src/vision/color_resolution.cpp
+        src/vision/corner_observation.cpp
+        src/vision/pose_estimation.cpp
         src/vision/color_classification.cpp
         src/vision/stability.cpp
         src/vision/auto_advance.cpp

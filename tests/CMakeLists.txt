@@ -11,6 +11,12 @@ add_executable(cube_unit_tests
     unit/scan_session_config_test.cpp
     unit/model_test.cpp
     unit/grid_detection_test.cpp
+    unit/face_observation_test.cpp
+    unit/temporal_fusion_test.cpp
+    unit/color_resolution_test.cpp
+    unit/corner_observation_test.cpp
+    unit/pose_estimation_test.cpp
+    unit/frame_debug_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp
@@ -19,6 +25,8 @@ add_executable(cube_unit_tests
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
     unit/solver/last_layer_test.cpp
+    unit/solver/scan_conversion_test.cpp
+    unit/solver/scan_assembly_test.cpp
     unit/solver/notation_test.cpp
     unit/solver/cross_test.cpp
     unit/solver/corners_test.cpp
@@ -97,7 +105,8 @@ if(CUBEULATOR_BUILD_APP)
         qt_test_main.cpp
         unit/camera_controller_test.cpp
         unit/scan_session_test.cpp
-        unit/settings_model_test.cpp)
+        unit/settings_model_test.cpp
+        unit/solve_controller_test.cpp)
 
     target_link_libraries(cube_qt_controller_tests
         PRIVATE

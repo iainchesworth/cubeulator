@@ -42,27 +42,38 @@ iOS via Qt's Xcode integration, both loading the same `Main.qml`.
 
 ## What's implemented today vs. planned
 
-`src/lib/`'s solver and vision modules are both real. `cube::solver::solve()`
-solves a cube via the classic beginner (layer-by-layer) method - cross,
-white corners, middle edges, 2-look OLL, 2-look PLL - the same staged
-structure the app teaches. The first two layers are found by targeted
-per-piece search; the last layer composes the standard 2-look algorithms
-(edge flip, Sune, A-perm, U-perm), which keeps every solve bounded to
-seconds for interactive mobile use (see `src/lib/src/solver/`). `cube::vision` runs a full
-OpenCV capture-to-state pipeline - grid detection, colour classification,
+`src/lib/`'s solver and vision modules are both real, and now wired
+together end to end. `cube::solver::solve()` solves a cube via the classic
+beginner (layer-by-layer) method - cross, white corners, middle edges,
+2-look OLL, 2-look PLL - the same staged structure the app teaches. The
+first two layers are found by targeted per-piece search; the last layer
+composes the standard 2-look algorithms (edge flip, Sune, A-perm, U-perm),
+which keeps every solve bounded to seconds for interactive mobile use (see
+`src/lib/src/solver/`). `cube::vision` runs a full OpenCV capture-to-state
+pipeline - a RANSAC-style lattice fit for grid detection (tolerant of
+uneven lighting, background clutter, and a minority of missed/occluded
+cells, not just a clean dead-on shot), colour classification,
 stability/hand-presence gating, auto-advance - with manual per-face
-confirmation as the fallback (see `src/lib/src/vision/`). There's no wiring
-yet between the two: `src/app/qt/solve_controller.hpp` bridges the solver
-into QML off a `random_scramble()`'d cube rather than a real scan.
-`CubeView.qml` draws a per-move arrow (face + direction) accurate to the
-solver's actual output, with a hidden-face badge for moves on faces this
-fixed 3-face iso view doesn't show. `render` (bgfx) and `i18n` remain stub
-targets that compile and link but contain no real logic.
+confirmation as the fallback (see `src/lib/src/vision/`).
+`cube::solver::cube_from_scan()` (`src/lib/src/solver/scan_conversion.cpp`)
+bridges a completed `cube::model::ScanProgress` into a `cube::solver::Cube`
+under a fixed camera-holding convention (documented in
+`scan_conversion.hpp`, surfaced to the user as the "face up" hint on the
+scan screen), validated via `Cube::is_physically_valid()`.
+`src/app/qt/solve_controller.hpp` calls it once `ScanSession::scanCompleted`
+fires, feeding the solver the real scanned cube instead of a
+`random_scramble()`; a rejected scan (e.g. a colour misclassification)
+resets scanning back to face 1 rather than silently solving the wrong
+cube. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
+the solver's actual output, with a hidden-face badge for moves on faces
+this fixed 3-face iso view doesn't show. `render` (bgfx) and `i18n` remain
+stub targets that compile and link but contain no real logic.
 
 Planned, in order:
 
-1. Wire the real scan (`cube::vision`) into `SolveController` in place of
-   `random_scramble()`.
+1. A trained ML-based cube/sticker detector, as a more robust alternative
+   to the classical OpenCV lattice fit under messier backgrounds/lighting
+   than it was designed to tolerate.
 2. Real (not snap/no-op) `CubeView.qml` move animation, now that the
    separate fully-rendered 3D cube work has landed - it already has a
    single seam (`animateMove()`) for this to plug into.

@@ -11,10 +11,12 @@ import Cubeulator
 //    cubies under a temporary pivot, animate the pivot, then bake the
 //    result back into each cubie) - the foundation the solve-visualisation
 //    work needs to show "this section rotates like this".
-//  - individual cubies/stickers can be recoloured or highlighted later the
-//    way CubeView's progressCube does for the 2D technical sketch.
+//  - individual stickers can be recoloured per-facelet (faceletColors) -
+//    the scan screen paints captured faces onto a skeleton cube this way.
 // Whole-cube dragging still free-spins cubeRoot; releasing eases it back to
 // the presented orientation instead of leaving it wherever it was thrown.
+// When externalRotation is set (scan-screen pose tracking) drag and idle
+// spin are suspended and the cube follows the supplied quaternion instead.
 Item {
     id: root
 
@@ -32,6 +34,37 @@ Item {
     // 2 = Borderlands Cel-Shading
     property int shaderStyle: 0
     property bool showStats: false
+
+    // Per-facelet sticker painting: null keeps the uniform face colours
+    // above; otherwise a JS object mapping face letter -> 9 CSS colours,
+    // row-major in the faceletIndex() convention documented below, e.g.
+    // { "U": [...9...], "F": [...9...] }. Faces absent from the map (or
+    // null entries within an array) count as unpainted.
+    property var faceletColors: null
+
+    // Skeleton mode: unpainted stickers render as dim translucent
+    // placeholder panels instead of their uniform face colour, so a cube
+    // with a partial faceletColors map reads as "filling in" one captured
+    // face at a time. The dark cubie bodies stay visible either way.
+    property bool skeleton: false
+
+    // Live pose driving: a scalar-first [w, x, y, z] quaternion, or null.
+    // While set, drag and auto-rotate are suspended and the cube slerps
+    // after the supplied orientation - the scan screen feeds it the
+    // detected physical-cube pose so the render visibly tracks the real
+    // cube. Null restores the presented/drag behaviour exactly.
+    property var externalRotation: null
+    readonly property bool externallyDriven: externalRotation !== null
+        && externalRotation.length === 4
+
+    // The drag / idle-spin paths write cubeRoot.eulerRotation imperatively,
+    // so the pose hand-off is imperative too: zero the presentation tilt
+    // while a live pose drives the cube (otherwise homeRotation would
+    // compose with the pose), restore it when the pose goes away.
+    onExternallyDrivenChanged: {
+        springAnim.stop();
+        cubeRoot.eulerRotation = externallyDriven ? Qt.vector3d(0, 0, 0) : root.homeRotation;
+    }
 
     // Instructional Glow's active-layer highlight: which layer to call out,
     // or null for none. This is a placeholder hook - it's checked against
@@ -159,8 +192,32 @@ Item {
         turnState.active = false;
     }
 
+    // Facelet indexing convention (row-major 0-8 per face): each face is
+    // read looking at it from OUTSIDE the cube, rows top to bottom, columns
+    // left to right, with screen-up = +y on the four side faces (F/B/L/R),
+    // screen-up = -z (the B edge) on U, and screen-up = +z (the F edge) on
+    // D; columns follow the right-handed cross product of view direction
+    // and screen-up. The scan assembler corrects per-face rotations
+    // mathematically, so the load-bearing contract here is only that this
+    // mapping is FIXED and shared by every caller, not that it matches any
+    // printed cube notation.
+    function faceletIndex(letter, xi, yi, zi) {
+        if (letter === "U") return (zi + 1) * 3 + (xi + 1);
+        if (letter === "D") return (1 - zi) * 3 + (xi + 1);
+        if (letter === "F") return (1 - yi) * 3 + (xi + 1);
+        if (letter === "B") return (1 - yi) * 3 + (1 - xi);
+        if (letter === "L") return (1 - yi) * 3 + (zi + 1);
+        return (1 - yi) * 3 + (1 - zi); // R
+    }
+
     // 26 cubies (skip the fully-hidden centre). Each keeps its stickers on
     // fixed local faces forever; only pos/orientation change as layers turn.
+    // Each sticker resolves its colour per-facelet from faceletColors when
+    // an entry exists, falling back to the uniform face colour; `painted`
+    // records which case so skeleton mode knows which stickers to dim.
+    // Referencing root.faceletColors here means a new map re-evaluates the
+    // whole binding and the Repeater3D rebuilds - fine at scan cadence (a
+    // handful of captures), not something to drive per-frame.
     property var cubieDefs: {
         var defs = [];
         for (var xi = -1; xi <= 1; xi++) {
@@ -168,13 +225,24 @@ Item {
                 for (var zi = -1; zi <= 1; zi++) {
                     if (xi === 0 && yi === 0 && zi === 0)
                         continue;
+                    var faces = [];
+                    if (yi === 1) faces.push({ key: "py", letter: "U", uniform: root.topColor });
+                    if (yi === -1) faces.push({ key: "ny", letter: "D", uniform: root.bottomColor });
+                    if (zi === 1) faces.push({ key: "pz", letter: "F", uniform: root.frontColor });
+                    if (zi === -1) faces.push({ key: "nz", letter: "B", uniform: root.backColor });
+                    if (xi === -1) faces.push({ key: "nx", letter: "L", uniform: root.leftColor });
+                    if (xi === 1) faces.push({ key: "px", letter: "R", uniform: root.rightColor });
                     var stickers = [];
-                    if (yi === 1) stickers.push({ face: "py", color: root.topColor });
-                    if (yi === -1) stickers.push({ face: "ny", color: root.bottomColor });
-                    if (zi === 1) stickers.push({ face: "pz", color: root.frontColor });
-                    if (zi === -1) stickers.push({ face: "nz", color: root.backColor });
-                    if (xi === -1) stickers.push({ face: "nx", color: root.leftColor });
-                    if (xi === 1) stickers.push({ face: "px", color: root.rightColor });
+                    for (var f = 0; f < faces.length; f++) {
+                        var arr = root.faceletColors ? root.faceletColors[faces[f].letter] : undefined;
+                        var over = (arr && arr.length === 9)
+                            ? arr[root.faceletIndex(faces[f].letter, xi, yi, zi)] : undefined;
+                        stickers.push({
+                            face: faces[f].key,
+                            color: over ? over : faces[f].uniform,
+                            painted: !!over
+                        });
+                    }
                     defs.push({ home: [xi, yi, zi], stickers: stickers });
                 }
             }
@@ -192,7 +260,14 @@ Item {
             states.push({ pos: cubieDefs[i].home.slice(), orientation: matIdentity() });
         cubieStates = states;
     }
-    Component.onCompleted: resetCubieStates()
+    Component.onCompleted: {
+        resetCubieStates();
+        // A view created with a live pose already bound never sees an
+        // externallyDrivenChanged edge, so clear the presentation tilt
+        // here too.
+        if (externallyDriven)
+            cubeRoot.eulerRotation = Qt.vector3d(0, 0, 0);
+    }
 
     readonly property var stickerOrientation: ({
         py: { rx: -90, ry: 0 },
@@ -268,136 +343,189 @@ Item {
             brightness: 1.6
         }
 
+        // Pose-follow stage: externalRotation lands on this dedicated
+        // parent, NOT on cubeRoot, because the drag / idle-spin / spring
+        // paths all write cubeRoot.eulerRotation imperatively - keeping the
+        // quaternion on its own node means neither side ever clobbers the
+        // other. The Behavior slerps between successive detections so
+        // camera-rate pose updates read as smooth tracking, not stepping.
         Node {
-            id: cubeRoot
-            eulerRotation: root.homeRotation
+            id: poseNode
+            rotation: root.externallyDriven
+                ? Qt.quaternion(root.externalRotation[0], root.externalRotation[1],
+                                root.externalRotation[2], root.externalRotation[3])
+                : Qt.quaternion(1, 0, 0, 0)
+            Behavior on rotation {
+                QuaternionAnimation { duration: 120; type: QuaternionAnimation.Slerp }
+            }
 
-            Node { id: pivot }
+            Node {
+                id: cubeRoot
+                eulerRotation: root.homeRotation
 
-            Repeater3D {
-                id: cubieRepeater
-                model: root.cubieDefs
+                Node { id: pivot }
 
-                Node {
-                    id: cubieNode
-                    required property var modelData
+                Repeater3D {
+                    id: cubieRepeater
+                    model: root.cubieDefs
 
-                    position: Qt.vector3d(modelData.home[0] * root.step, modelData.home[1] * root.step, modelData.home[2] * root.step)
+                    Node {
+                        id: cubieNode
+                        required property var modelData
 
-                    Model {
-                        source: "#Cube"
-                        scale: Qt.vector3d(root.cubieSize / 100, root.cubieSize / 100, root.cubieSize / 100)
-                        materials: PrincipledMaterial { baseColor: "#1B1A1A"; roughness: 1.0; metalness: 0.0 }
-                    }
-
-                    // Style 2's inverted-hull ink outline. A cube's faces
-                    // are all axis-aligned, so a uniformly-scaled duplicate
-                    // mesh rendered front-face-culled (only its backfaces,
-                    // poking out past the real mesh, are visible) gives an
-                    // exact outline with no custom vertex shader needed.
-                    // +1 total (0.5 per side) stays well clear of
-                    // root.cubieGap (2, i.e. a 1-unit half-gap to the next
-                    // cubie) so neighbouring cubies' outlines don't fuse
-                    // into one blob.
-                    Model {
-                        visible: root.shaderStyle === 2
-                        source: "#Cube"
-                        scale: Qt.vector3d((root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100)
-                        materials: PrincipledMaterial {
-                            baseColor: "black"
-                            lighting: PrincipledMaterial.NoLighting
-                            cullMode: Material.FrontFaceCulling
-                        }
-                    }
-
-                    // Style 0: Physically-Based Realism (default). Roughness/
-                    // metalness/specular/clearcoat tuned for real textured
-                    // ABS plastic with a light lacquer coat - not the bare
-                    // flat PrincipledMaterial default, and not the old
-                    // "glossy studio" chrome-like look either (that used
-                    // metalness 0.35, too metallic for a plastic sticker).
-                    // Environment reflections come from the shared
-                    // lightProbe set on `environment` below.
-                    Repeater3D {
-                        model: cubieNode.modelData.stickers
-                        visible: root.shaderStyle === 0
+                        position: Qt.vector3d(modelData.home[0] * root.step, modelData.home[1] * root.step, modelData.home[2] * root.step)
 
                         Model {
-                            required property var modelData
-                            readonly property var orient: root.stickerOrientation[modelData.face]
-                            readonly property var axisVec: root.stickerAxis[modelData.face]
-                            source: "#Rectangle"
-                            scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                            eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                            readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                            position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                            source: "#Cube"
+                            scale: Qt.vector3d(root.cubieSize / 100, root.cubieSize / 100, root.cubieSize / 100)
+                            materials: PrincipledMaterial { baseColor: "#1B1A1A"; roughness: 1.0; metalness: 0.0 }
+                        }
 
+                        // Style 2's inverted-hull ink outline. A cube's faces
+                        // are all axis-aligned, so a uniformly-scaled duplicate
+                        // mesh rendered front-face-culled (only its backfaces,
+                        // poking out past the real mesh, are visible) gives an
+                        // exact outline with no custom vertex shader needed.
+                        // +1 total (0.5 per side) stays well clear of
+                        // root.cubieGap (2, i.e. a 1-unit half-gap to the next
+                        // cubie) so neighbouring cubies' outlines don't fuse
+                        // into one blob.
+                        Model {
+                            visible: root.shaderStyle === 2
+                            source: "#Cube"
+                            scale: Qt.vector3d((root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100)
                             materials: PrincipledMaterial {
-                                baseColor: modelData.color
-                                roughness: 0.35
-                                metalness: 0.0
-                                specularAmount: 0.6
-                                specularTint: 0.1
-                                clearcoatAmount: 0.35
-                                clearcoatRoughnessAmount: 0.12
+                                baseColor: "black"
+                                lighting: PrincipledMaterial.NoLighting
+                                cullMode: Material.FrontFaceCulling
                             }
                         }
-                    }
 
-                    // Style 1: Instructional Glow. Quantized-band diffuse +
-                    // fresnel rim (toon.frag) plus an emissive boost on
-                    // stickers belonging to root.highlightedLayer.
-                    Repeater3D {
-                        model: cubieNode.modelData.stickers
-                        visible: root.shaderStyle === 1
+                        // Style 0: Physically-Based Realism (default). Roughness/
+                        // metalness/specular/clearcoat tuned for real textured
+                        // ABS plastic with a light lacquer coat - not the bare
+                        // flat PrincipledMaterial default, and not the old
+                        // "glossy studio" chrome-like look either (that used
+                        // metalness 0.35, too metallic for a plastic sticker).
+                        // Environment reflections come from the shared
+                        // lightProbe set on `environment` below.
+                        Repeater3D {
+                            model: cubieNode.modelData.stickers
+                            visible: root.shaderStyle === 0
 
-                        Model {
-                            required property var modelData
-                            readonly property var orient: root.stickerOrientation[modelData.face]
-                            readonly property var axisVec: root.stickerAxis[modelData.face]
-                            source: "#Rectangle"
-                            scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                            eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                            readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                            position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                            Model {
+                                required property var modelData
+                                // Skeleton mode hands unpainted stickers to the
+                                // shared placeholder repeater below.
+                                visible: !root.skeleton || modelData.painted
+                                readonly property var orient: root.stickerOrientation[modelData.face]
+                                readonly property var axisVec: root.stickerAxis[modelData.face]
+                                source: "#Rectangle"
+                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
+                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
 
-                            readonly property bool inHighlightedLayer: root.highlightedLayer !== null
-                                && cubieNode.modelData.home[root.axisIndex(root.highlightedLayer.axis)] === root.highlightedLayer.layer
-
-                            materials: CustomMaterial {
-                                shadingMode: CustomMaterial.Shaded
-                                fragmentShader: "shaders/toon.frag"
-                                property color uBaseColor: modelData.color
-                                property color uRimColor: Theme.accent
-                                property real uRimPower: 2.2
-                                property real uGlowStrength: inHighlightedLayer ? 1.0 : 0.0
+                                materials: PrincipledMaterial {
+                                    baseColor: modelData.color
+                                    roughness: 0.35
+                                    metalness: 0.0
+                                    specularAmount: 0.6
+                                    specularTint: 0.1
+                                    clearcoatAmount: 0.35
+                                    clearcoatRoughnessAmount: 0.12
+                                }
                             }
                         }
-                    }
 
-                    // Style 2: Borderlands Cel-Shading. Hard 2-step banding
-                    // (cel.frag, no colour rim - the outline mesh above
-                    // provides the silhouette line instead); the
-                    // halftone/grunge/vignette look is a screen-space post
-                    // pass on `environment`, not per-sticker.
-                    Repeater3D {
-                        model: cubieNode.modelData.stickers
-                        visible: root.shaderStyle === 2
+                        // Style 1: Instructional Glow. Quantized-band diffuse +
+                        // fresnel rim (toon.frag) plus an emissive boost on
+                        // stickers belonging to root.highlightedLayer.
+                        Repeater3D {
+                            model: cubieNode.modelData.stickers
+                            visible: root.shaderStyle === 1
 
-                        Model {
-                            required property var modelData
-                            readonly property var orient: root.stickerOrientation[modelData.face]
-                            readonly property var axisVec: root.stickerAxis[modelData.face]
-                            source: "#Rectangle"
-                            scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                            eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                            readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                            position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                            Model {
+                                required property var modelData
+                                visible: !root.skeleton || modelData.painted
+                                readonly property var orient: root.stickerOrientation[modelData.face]
+                                readonly property var axisVec: root.stickerAxis[modelData.face]
+                                source: "#Rectangle"
+                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
+                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
 
-                            materials: CustomMaterial {
-                                shadingMode: CustomMaterial.Shaded
-                                fragmentShader: "shaders/cel.frag"
-                                property color uBaseColor: modelData.color
+                                readonly property bool inHighlightedLayer: root.highlightedLayer !== null
+                                    && cubieNode.modelData.home[root.axisIndex(root.highlightedLayer.axis)] === root.highlightedLayer.layer
+
+                                materials: CustomMaterial {
+                                    shadingMode: CustomMaterial.Shaded
+                                    fragmentShader: "shaders/toon.frag"
+                                    property color uBaseColor: modelData.color
+                                    property color uRimColor: Theme.accent
+                                    property real uRimPower: 2.2
+                                    property real uGlowStrength: inHighlightedLayer ? 1.0 : 0.0
+                                }
+                            }
+                        }
+
+                        // Style 2: Borderlands Cel-Shading. Hard 2-step banding
+                        // (cel.frag, no colour rim - the outline mesh above
+                        // provides the silhouette line instead); the
+                        // halftone/grunge/vignette look is a screen-space post
+                        // pass on `environment`, not per-sticker.
+                        Repeater3D {
+                            model: cubieNode.modelData.stickers
+                            visible: root.shaderStyle === 2
+
+                            Model {
+                                required property var modelData
+                                visible: !root.skeleton || modelData.painted
+                                readonly property var orient: root.stickerOrientation[modelData.face]
+                                readonly property var axisVec: root.stickerAxis[modelData.face]
+                                source: "#Rectangle"
+                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
+                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+
+                                materials: CustomMaterial {
+                                    shadingMode: CustomMaterial.Shaded
+                                    fragmentShader: "shaders/cel.frag"
+                                    property color uBaseColor: modelData.color
+                                }
+                            }
+                        }
+
+                        // Skeleton placeholders: unpainted stickers render as
+                        // this ONE style-independent dim translucent panel
+                        // (the styled repeaters above skip them) rather than
+                        // three per-style variants - the custom toon/cel
+                        // shaders have no alpha path, and an "empty socket
+                        // awaiting a face" should look identical under every
+                        // shader style anyway. NoLighting keeps the dimness
+                        // constant as the cube rotates under the pose feed.
+                        Repeater3D {
+                            model: cubieNode.modelData.stickers
+                            visible: root.skeleton
+
+                            Model {
+                                required property var modelData
+                                visible: !modelData.painted
+                                readonly property var orient: root.stickerOrientation[modelData.face]
+                                readonly property var axisVec: root.stickerAxis[modelData.face]
+                                source: "#Rectangle"
+                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
+                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+
+                                materials: PrincipledMaterial {
+                                    baseColor: "#C9C5C5"
+                                    lighting: PrincipledMaterial.NoLighting
+                                    opacity: 0.16
+                                }
                             }
                         }
                     }
@@ -427,7 +555,7 @@ Item {
     DragHandler {
         id: dragHandler
         target: null
-        enabled: root.interactive
+        enabled: root.interactive && !root.externallyDriven
         property real lastX: 0
         property real lastY: 0
         onActiveChanged: {
@@ -462,7 +590,7 @@ Item {
     Timer {
         interval: 16
         repeat: true
-        running: root.autoRotate && !dragHandler.active && !springAnim.running
+        running: root.autoRotate && !root.externallyDriven && !dragHandler.active && !springAnim.running
         onTriggered: cubeRoot.eulerRotation.y = cubeRoot.eulerRotation.y + root.autoRotateSpeed
     }
 }

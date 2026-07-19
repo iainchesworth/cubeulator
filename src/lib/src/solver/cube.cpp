@@ -256,6 +256,15 @@ Cube Cube::solved() noexcept {
     return c;
 }
 
+Result<Cube> Cube::from_facelets(const std::array<std::array<Color, 9>, 6>& facelets) noexcept {
+    Cube c;
+    c.facelets_ = facelets;
+    if (!c.is_physically_valid()) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    return c;
+}
+
 Color Cube::at(Face face, int index) const noexcept {
     return facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
 }
@@ -399,6 +408,226 @@ bool Cube::is_physically_valid() const noexcept {
     }
 
     return true;
+}
+
+namespace {
+
+// Inverse of canonical_color: the face a colour belongs to under the fixed
+// centre scheme. Only meaningful once the caller has verified the centres
+// actually follow that scheme - is_solvable() checks this before anything
+// else for precisely that reason.
+constexpr Face canonical_face_of(Color color) noexcept {
+    for (Face face : kAllFaces) {
+        if (canonical_color(face) == color) {
+            return face;
+        }
+    }
+    return Face::U;  // unreachable: canonical_color covers all six colours
+}
+
+// Dense 0..7 index for a corner position (all coordinates in {-1, 1}).
+constexpr int corner_slot(Vec3 pos) noexcept {
+    return ((pos.x + 1) / 2) * 4 + ((pos.y + 1) / 2) * 2 + (pos.z + 1) / 2;
+}
+
+// Dense 0..11 index for an edge position (exactly one coordinate 0),
+// grouped by which axis holds the zero.
+constexpr int edge_slot(Vec3 pos) noexcept {
+    if (pos.x == 0) {
+        return ((pos.y + 1) / 2) * 2 + (pos.z + 1) / 2;
+    }
+    if (pos.y == 0) {
+        return 4 + ((pos.x + 1) / 2) * 2 + (pos.z + 1) / 2;
+    }
+    return 8 + ((pos.x + 1) / 2) * 2 + (pos.y + 1) / 2;
+}
+
+// Parity (0 = even, 1 = odd) of a permutation given as slot -> home-slot,
+// by cycle decomposition: a k-cycle equals k-1 transpositions, so the
+// parity is the XOR of (k - 1) over all cycles.
+template <std::size_t N>
+constexpr int permutation_parity(const std::array<int, N>& perm) noexcept {
+    std::array<bool, N> visited{};
+    int parity = 0;
+    for (std::size_t i = 0; i < N; ++i) {
+        int length = 0;
+        for (std::size_t j = i; !visited[j]; j = static_cast<std::size_t>(perm[j])) {
+            visited[j] = true;
+            ++length;
+        }
+        if (length != 0) {
+            parity ^= (length - 1) & 1;
+        }
+    }
+    return parity;
+}
+
+}  // namespace
+
+bool Cube::is_solvable() const noexcept {
+    // Piece identity below is looked up through canonical_color's fixed
+    // centre scheme, so that scheme must actually hold. A physically valid
+    // cube always has one centre of each colour but possibly permuted vs
+    // canonical - e.g. a free-form scan whose six faces were assembled
+    // into the wrong slots. Centres never move under face turns, so such a
+    // state is unreachable from solved() and is rightly "not solvable" -
+    // exactly the rejection the free-form assembly search relies on.
+    for (Face face : kAllFaces) {
+        if (at(face, 4) != canonical_color(face)) {
+            return false;
+        }
+    }
+    if (!is_physically_valid()) {
+        return false;
+    }
+
+    // --- Corners: twist sum and permutation --------------------------------
+    //
+    // Twist convention: the corner at diagonal d (all coordinates +-1) has
+    // its three stickers on the facets whose outward normals are the three
+    // axis components of d. Its twist is how many CLOCKWISE 120-degree
+    // steps - viewed from outside, i.e. looking back along d at the corner
+    // - separate the facet carrying the cubie's White/Yellow sticker from
+    // the U/D (y-axis) facet: 0 when it is already there. "Facet m is one
+    // clockwise step from facet n" is detected by the sign of the scalar
+    // triple product dot(cross(n, m), d): positive means n -> m is a
+    // counter-clockwise step about d by the right-hand rule, negative
+    // means clockwise. Cross-checked by hand at corner (1, 1, 1): the
+    // 120-degree counter-clockwise rotation about (1,1,1) is the cyclic
+    // axis map x -> y -> z (its matrix is the cyclic permutation, and the
+    // initial velocity cross((1,1,1), e_x) = (0,1,-1) does point from e_x
+    // towards e_y), so U's clockwise neighbour there is R - and indeed
+    // dot(cross(e_y, e_x), (1,1,1)) = dot(-e_z, (1,1,1)) = -1 < 0.
+    //
+    // Invariance: U/D turns keep every White/Yellow sticker on a y facet
+    // and rotate the other two facets with the piece, preserving each
+    // corner's twist individually; each of the other faces' quarter turns
+    // changes the four moved corners' twists by amounts summing to 0 mod 3
+    // (hand-checked for F on solved(): URF/ULF/DLF/DRF pick up 2+1+2+1 =
+    // 6). So the sum mod 3 is invariant, and it is 0 on solved() - the
+    // first classical invariant. Axis-pair uniqueness (already enforced by
+    // is_physically_valid) guarantees exactly one White/Yellow sticker per
+    // corner, so the lookup is total.
+    int twist_sum = 0;
+    std::array<int, 8> corner_perm{};
+    std::array<bool, 8> corner_home_seen{};
+    for (int cx : {-1, 1}) {
+        for (int cy : {-1, 1}) {
+            for (int cz : {-1, 1}) {
+                const Vec3 pos{cx, cy, cz};
+                Vec3 ud_facet{};  // outward normal of the facet holding White/Yellow
+                Vec3 home{};      // sum of the three colours' canonical-face normals
+                for (Face face : kAllFaces) {
+                    const Vec3 fn = face_normal(face);
+                    if (dot(fn, pos) != 1) {
+                        continue;  // this face doesn't touch this corner
+                    }
+                    const Color color = at(face, index_on_face(face, pos));
+                    home = home + face_normal(canonical_face_of(color));
+                    if (axis_pair_of(color) == 1) {
+                        ud_facet = fn;
+                    }
+                }
+
+                if (ud_facet.y == 0) {  // not already on the U/D facet
+                    twist_sum += dot(cross(Vec3{0, cy, 0}, ud_facet), pos) < 0 ? 1 : 2;
+                }
+
+                // The three canonical normals are mutually orthogonal
+                // (axis-pair uniqueness again), so their sum is exactly
+                // the corner position this cubie occupies on a solved
+                // cube: its home slot.
+                const int target = corner_slot(home);
+                if (corner_home_seen[static_cast<std::size_t>(target)]) {
+                    return false;  // the same cubie twice: no real cube has that
+                }
+                corner_home_seen[static_cast<std::size_t>(target)] = true;
+                corner_perm[static_cast<std::size_t>(corner_slot(pos))] = target;
+            }
+        }
+    }
+    if (twist_sum % 3 != 0) {
+        return false;
+    }
+
+    // --- Edges: flip sum and permutation -----------------------------------
+    //
+    // Flip convention (the classic ZZ/EO definition, phrased for this
+    // representation): an edge's "primary" facet is its U/D (y-axis) facet
+    // if it has one, otherwise its F/B (z-axis) facet (the E-layer case).
+    // The edge is unflipped iff the primary facet shows a White/Yellow
+    // sticker, or shows a Green/Blue sticker while the other facet shows
+    // Orange/Red - the usual "placeable without F/B quarter turns" rule.
+    // Invariance was hand-checked against one representative edge per
+    // interesting move class: F sends good UF to bad (Green primary,
+    // Yellow secondary at FR) and good FR to bad (Red primary at DF); B
+    // sends good UB to bad; L preserves good UL (Yellow lands on FL's
+    // primary z facet) and good FL (Green lands on DL's primary y facet
+    // with Orange secondary); R preserves good UR; F2 trivially preserves
+    // (stickers return to same-axis facets). So U/D/L/R turns and F2/B2
+    // preserve every edge's flip while F/B quarter turns flip exactly the
+    // four edges they move: the sum mod 2 is invariant and 0 on solved() -
+    // the second classical invariant.
+    int flip_sum = 0;
+    std::array<int, 12> edge_perm{};
+    std::array<bool, 12> edge_home_seen{};
+    for (int axis0 = 0; axis0 < 3; ++axis0) {
+        for (int axis1 = axis0 + 1; axis1 < 3; ++axis1) {
+            for (int s0 : {-1, 1}) {
+                for (int s1 : {-1, 1}) {
+                    Vec3 pos{};
+                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
+                    *comps[axis0] = s0;
+                    *comps[axis1] = s1;
+
+                    Color primary{};
+                    Color secondary{};
+                    Vec3 home{};
+                    for (Face face : kAllFaces) {
+                        const Vec3 fn = face_normal(face);
+                        if (dot(fn, pos) != 1) {
+                            continue;
+                        }
+                        const Color color = at(face, index_on_face(face, pos));
+                        home = home + face_normal(canonical_face_of(color));
+                        const bool is_primary = (pos.y != 0) ? (fn.y != 0) : (fn.z != 0);
+                        (is_primary ? primary : secondary) = color;
+                    }
+
+                    if (axis_pair_of(primary) != 1 && axis_pair_of(secondary) != 0) {
+                        ++flip_sum;
+                    }
+
+                    // As for corners: the two canonical normals lie on
+                    // different axes, so their sum is the cubie's solved
+                    // position.
+                    const int target = edge_slot(home);
+                    if (edge_home_seen[static_cast<std::size_t>(target)]) {
+                        return false;  // duplicated edge cubie
+                    }
+                    edge_home_seen[static_cast<std::size_t>(target)] = true;
+                    edge_perm[static_cast<std::size_t>(edge_slot(pos))] = target;
+                }
+            }
+        }
+    }
+    if (flip_sum % 2 != 0) {
+        return false;
+    }
+
+    // --- Permutation parity ------------------------------------------------
+    //
+    // Every quarter turn 4-cycles four corners and 4-cycles four edges,
+    // and a 4-cycle is an odd permutation - so the corner and edge
+    // permutation parities always flip together and their EQUALITY is
+    // invariant (both are the even identity on solved()). The third
+    // classical invariant, and with the previous two it is sufficient:
+    // the duplicate checks above ensured all 8 corner colour-triples and
+    // all 12 edge colour-pairs are distinct, and since a valid triple/pair
+    // draws at most one colour per axis-pair there are exactly 8 and 12
+    // possible ones - every real cubie is present exactly once, which is
+    // when the classical theorem applies.
+    return permutation_parity(corner_perm) == permutation_parity(edge_perm);
 }
 
 Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {

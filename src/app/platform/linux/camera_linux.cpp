@@ -12,6 +12,9 @@ detail::OpenCvCaptureLoop& loop() {
 
 }  // namespace
 
+// OpenCvCaptureLoop leaves DeviceInfo::facing at its unknown default, which
+// is correct here: desktop webcams face the user, and unknown already gets
+// the selfie-mirror treatment (see Facing in interfaces/camera.hpp).
 Result<std::vector<DeviceInfo>> enumerate_devices() {
     return loop().enumerate_devices();
 }

@@ -4,7 +4,12 @@ namespace cube::platform::camera {
 
 Result<std::vector<DeviceInfo>> enumerate_devices() {
     // Real enumeration (AVFoundation, Objective-C++ bridge) lands with the
-    // vision pipeline spec.
+    // vision pipeline spec. TODO: when it does, each DeviceInfo::facing
+    // must be queried per device from AVCaptureDevice.position, falling
+    // back to Facing::rear - not unknown - when the position is
+    // unspecified: on a phone the rear camera is the one pointed at the
+    // cube, and unknown's selfie-mirror default would flip its preview
+    // (see Facing in interfaces/camera.hpp).
     return std::vector<DeviceInfo>{};
 }
 

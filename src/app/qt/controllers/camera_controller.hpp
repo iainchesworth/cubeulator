@@ -29,6 +29,13 @@ class CameraController : public QObject {
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString selectedDeviceId READ selectedDeviceId NOTIFY selectedDeviceIdChanged)
     Q_PROPERTY(QString lastError READ lastError NOTIFY errorOccurred)
+    // Derived from the selected device's facing: true (selfie-mirror) for
+    // front and unknown, false for rear - see Facing in interfaces/camera.hpp
+    // for why rear previews must stay un-mirrored. NOTIFY rides
+    // selectedDeviceIdChanged because selection is what changes the value;
+    // handleEnumerationFinished re-emits that signal when a refresh flips
+    // the facing recorded for an unchanged selection.
+    Q_PROPERTY(bool previewMirrored READ previewMirrored NOTIFY selectedDeviceIdChanged)
 
 public:
     explicit CameraController(QObject* parent = nullptr);
@@ -37,6 +44,7 @@ public:
     [[nodiscard]] bool busy() const;
     [[nodiscard]] QString selectedDeviceId() const;
     [[nodiscard]] QString lastError() const;
+    [[nodiscard]] bool previewMirrored() const;
 
 public slots:
     void refreshDevices();
@@ -53,6 +61,10 @@ private slots:
 
 private:
     QVariantList devices_;
+    // Keeps the platform-level enumeration result (facing included) beside
+    // the QML-facing QVariantList so previewMirrored() can resolve the
+    // selected id without round-tripping through QVariant.
+    std::vector<platform::camera::DeviceInfo> deviceInfos_;
     QString selectedDeviceId_;
     QString lastError_;
     QFutureWatcher<Result<std::vector<platform::camera::DeviceInfo>>> watcher_;

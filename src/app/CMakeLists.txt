@@ -97,7 +97,11 @@ if(CUBEULATOR_BUILD_APP)
     # registered into the "Cubeulator" QML module imperatively via
     # qmlRegisterSingletonInstance in main.cpp rather than QML_ELEMENT,
     # since QML_ELEMENT's compile-time registration only works for sources
-    # compiled directly into a qt_add_qml_module target.
+    # compiled directly into a qt_add_qml_module target. SolveController
+    # lives here (not in cube_app_qml, unlike before) for the same reason:
+    # it needs a real C++ reference to the live ScanSession instance
+    # (cube::model::ScanProgress can't cross into QML), which only works if
+    # both are constructed and wired together directly in main.cpp.
     # ---------------------------------------------------------------------
     add_library(cube_app_controllers STATIC
         qt/controllers/camera_controller.hpp
@@ -109,7 +113,9 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/bundled_models.hpp
         qt/controllers/bundled_models.cpp
         qt/controllers/frame_image_provider.hpp
-        qt/controllers/frame_image_provider.cpp)
+        qt/controllers/frame_image_provider.cpp
+        qt/solve_controller.hpp
+        qt/solve_controller.cpp)
 
     target_include_directories(cube_app_controllers PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
@@ -180,8 +186,6 @@ if(CUBEULATOR_BUILD_APP)
             qt/CameraPermission.cpp
             qt/SystemTheme.hpp
             qt/SystemTheme.cpp
-            qt/solve_controller.hpp
-            qt/solve_controller.cpp
         RESOURCES
             qt/shaders/toon.frag
             qt/shaders/cel.frag
@@ -191,24 +195,18 @@ if(CUBEULATOR_BUILD_APP)
     # in Gui, not Core (unlike QCameraPermission, added to Core specifically
     # so apps didn't need to link Gui/Multimedia just to ask permission).
     # cube::platform: CameraPermission.cpp calls
-    # cube::platform::camera::open_permission_settings().
-    # cube::lib + Qt6::Qml: solve_controller.cpp needs cube::lib's include
-    # paths at its own compile step, and QML_ELEMENT/QML_SINGLETON (used by
-    # SolveController) need Qt6::Qml's qqmlregistration.h visible here too.
-    # Qt6::Concurrent: solve_controller.cpp's restart() runs
-    # cube::solver::solve() via QtConcurrent::run() to keep it off the UI
-    # thread - cube_app_controllers already links Concurrent, but only
-    # transitively at cube_app's final link step, too late for this
-    # target's own compile step to see <QtConcurrentRun>.
-    target_link_libraries(cube_app_qml PRIVATE cube::platform cube::lib Qt6::Gui Qt6::Qml Qt6::Concurrent)
+    # cube::platform::camera::open_permission_settings(). Qt6::Qml: needed
+    # for CameraPermission's own QML_ELEMENT registration (SolveController
+    # moved to cube_app_controllers - see the comment there - and no longer
+    # needs anything from this target).
+    target_link_libraries(cube_app_qml PRIVATE cube::platform Qt6::Gui Qt6::Qml)
 
-    # The generated cube_app_qml_qmltyperegistrations.cpp includes QML_ELEMENT
-    # headers via "#include <CameraPermission.hpp>" (bare filename) and
-    # "#if __has_include(<solve_controller.hpp>)" (angle brackets) - both
-    # resolve via the include *path*, not relative to the source file's own
-    # directory - so qt/ itself needs to be on the include path for either
-    # to resolve, not just this directory (confirmed: fails with "undeclared
-    # identifier" otherwise, for both CameraPermission and SolveController).
+    # The generated cube_app_qml_qmltyperegistrations.cpp includes
+    # CameraPermission's QML_ELEMENT header via "#include <CameraPermission.hpp>"
+    # (bare filename), which resolves via the include *path*, not relative
+    # to the source file's own directory - so qt/ itself needs to be on the
+    # include path, not just this directory (confirmed: fails with
+    # "undeclared identifier" otherwise).
     target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
     qt_add_executable(cube_app
