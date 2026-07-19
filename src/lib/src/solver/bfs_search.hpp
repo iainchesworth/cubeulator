@@ -172,18 +172,22 @@ Result<std::vector<Move>> commutator_search(const Cube& start, const std::vector
 
     std::vector<Move> p;
 
-    std::function<Result<std::vector<Move>>(int)> try_from = [&](int remaining) -> Result<std::vector<Move>> {
-        Cube after_p = start;
-        for (const Move& m : p) {
-            after_p = after_p.apply(m);
-        }
-        std::vector<Move> p_inverse;
-        p_inverse.reserve(p.size());
-        for (auto it = p.rbegin(); it != p.rend(); ++it) {
-            p_inverse.push_back(it->inverse());
-        }
-
+    // `after_p` is threaded through as a parameter (the state p already
+    // produces) rather than replayed from `start` via `p` on every call, and
+    // `p_inverse` is only built once a node actually needs it (the
+    // f2l_pieces_off_u branch) rather than on every call regardless of
+    // whether it's used - replaying/rebuilding unconditionally on every one
+    // of an exponential search's nodes turned an O(branching^depth) search
+    // into O(branching^depth * depth); this restores the former without
+    // changing which solution (if any) is found.
+    std::function<Result<std::vector<Move>>(int, const Cube&)> try_from =
+        [&](int remaining, const Cube& after_p) -> Result<std::vector<Move>> {
         if (f2l_pieces_off_u(after_p)) {
+            std::vector<Move> p_inverse;
+            p_inverse.reserve(p.size());
+            for (auto it = p.rbegin(); it != p.rend(); ++it) {
+                p_inverse.push_back(it->inverse());
+            }
             for (int n = 1; n <= 3; ++n) {
                 Cube candidate = after_p.apply(Move{Face::U, n});
                 for (const Move& m : p_inverse) {
@@ -207,7 +211,7 @@ Result<std::vector<Move>> commutator_search(const Cube& start, const std::vector
             }
             for (int turns = 1; turns <= 3; ++turns) {
                 p.push_back(Move{face, turns});
-                Result<std::vector<Move>> found = try_from(remaining - 1);
+                Result<std::vector<Move>> found = try_from(remaining - 1, after_p.apply(Move{face, turns}));
                 if (found.has_value()) {
                     return found;
                 }
@@ -217,7 +221,7 @@ Result<std::vector<Move>> commutator_search(const Cube& start, const std::vector
         return std::unexpected(CubeError::no_solution);
     };
 
-    return try_from(max_p_length);
+    return try_from(max_p_length, start);
 }
 
 // Composes two independent commutators in sequence: [P1,U^n1,inverse(P1)]
@@ -239,18 +243,17 @@ Result<std::vector<Move>> two_commutator_search(const Cube& start, const std::ve
 
     std::vector<Move> p1;
 
-    std::function<Result<std::vector<Move>>(int)> try_first = [&](int remaining) -> Result<std::vector<Move>> {
-        Cube after_p1 = start;
-        for (const Move& m : p1) {
-            after_p1 = after_p1.apply(m);
-        }
-        std::vector<Move> p1_inverse;
-        p1_inverse.reserve(p1.size());
-        for (auto it = p1.rbegin(); it != p1.rend(); ++it) {
-            p1_inverse.push_back(it->inverse());
-        }
-
+    // See commutator_search's try_from above for why after_p1 is threaded
+    // through as a parameter and p1_inverse built lazily, rather than both
+    // being recomputed from `start`/`p1` on every call.
+    std::function<Result<std::vector<Move>>(int, const Cube&)> try_first =
+        [&](int remaining, const Cube& after_p1) -> Result<std::vector<Move>> {
         if (f2l_pieces_off_u(after_p1)) {
+            std::vector<Move> p1_inverse;
+            p1_inverse.reserve(p1.size());
+            for (auto it = p1.rbegin(); it != p1.rend(); ++it) {
+                p1_inverse.push_back(it->inverse());
+            }
             for (int n1 = 1; n1 <= 3; ++n1) {
                 Cube intermediate = after_p1.apply(Move{Face::U, n1});
                 for (const Move& m : p1_inverse) {
@@ -278,7 +281,7 @@ Result<std::vector<Move>> two_commutator_search(const Cube& start, const std::ve
             }
             for (int turns = 1; turns <= 3; ++turns) {
                 p1.push_back(Move{face, turns});
-                Result<std::vector<Move>> found = try_first(remaining - 1);
+                Result<std::vector<Move>> found = try_first(remaining - 1, after_p1.apply(Move{face, turns}));
                 if (found.has_value()) {
                     return found;
                 }
@@ -288,7 +291,7 @@ Result<std::vector<Move>> two_commutator_search(const Cube& start, const std::ve
         return std::unexpected(CubeError::no_solution);
     };
 
-    return try_first(max_length_each);
+    return try_first(max_length_each, start);
 }
 
 // As commutator_search, but for the (common) cases a single conjugate can't

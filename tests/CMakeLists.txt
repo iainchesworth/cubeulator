@@ -43,7 +43,13 @@ cube_deploy_sanitizer_runtime(cube_unit_tests)
 # tests, which collides with CodeQL's manual build-mode analysis (its own
 # LD_PRELOAD trace library must load first). PRE_TEST defers discovery to
 # `ctest` invocation instead.
-catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST)
+#
+# ADD_TAGS_AS_LABELS: promotes each TEST_CASE's Catch2 tags to CTest LABELS,
+# so the handful of solver corpus tests tagged "[slow]" (they search many
+# random scrambles - see solve_pll's comment on why that can occasionally
+# take tens of minutes) can be excluded from a quick local loop with
+# `ctest -LE slow`, or run on their own with `ctest -L slow`.
+catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
 
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests

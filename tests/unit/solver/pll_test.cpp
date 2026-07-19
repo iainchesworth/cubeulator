@@ -49,7 +49,7 @@ TEST_CASE("a solved cube's PLL is already solved", "[pll]") {
     REQUIRE(solution->empty());
 }
 
-TEST_CASE("solve_pll fully solves the cube for a corpus of random scrambles", "[pll]") {
+TEST_CASE("solve_pll fully solves the cube for a corpus of random scrambles", "[pll][slow]") {
     // Capped small: some scrambles turn out to need a much longer
     // corners/edges-permuting commutator than others (seed 3, tried up to
     // length 7 + a two-commutator composition up to length 5 each + a

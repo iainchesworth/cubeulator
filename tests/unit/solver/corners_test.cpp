@@ -35,7 +35,7 @@ TEST_CASE("a solved cube's first layer is already solved", "[corners]") {
     REQUIRE(solution->empty());
 }
 
-TEST_CASE("solve_corners completes the first layer for a corpus of random scrambles", "[corners]") {
+TEST_CASE("solve_corners completes the first layer for a corpus of random scrambles", "[corners][slow]") {
     for (unsigned seed = 0; seed < 40; ++seed) {
         CAPTURE(seed);
         Cube cube = scramble(seed, 25);

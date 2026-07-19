@@ -49,7 +49,7 @@ TEST_CASE("a solved cube's OLL is already solved", "[oll]") {
     REQUIRE(solution->empty());
 }
 
-TEST_CASE("solve_oll orients the last layer for a corpus of random scrambles", "[oll]") {
+TEST_CASE("solve_oll orients the last layer for a corpus of random scrambles", "[oll][slow]") {
     for (unsigned seed = 0; seed < 25; ++seed) {
         CAPTURE(seed);
         Cube cube = scramble(seed, 25);

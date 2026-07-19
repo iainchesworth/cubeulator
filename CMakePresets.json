@@ -31,6 +31,13 @@
       }
     },
     {
+      "name": "fastdebug",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
       "name": "windows-msvc-base",
       "hidden": true,
       "inherits": ["base"],
@@ -52,6 +59,11 @@
       "name": "windows-msvc-release",
       "displayName": "Windows (MSVC, Release)",
       "inherits": ["windows-msvc-base", "release"]
+    },
+    {
+      "name": "windows-msvc-fastdebug",
+      "displayName": "Windows (MSVC, Fast Debug - optimized, no sanitizers, debug info)",
+      "inherits": ["windows-msvc-base", "fastdebug"]
     },
     {
       "name": "linux-gcc-base",
@@ -76,6 +88,11 @@
       "name": "linux-gcc-release",
       "displayName": "Linux (GCC, Release)",
       "inherits": ["linux-gcc-base", "release"]
+    },
+    {
+      "name": "linux-gcc-fastdebug",
+      "displayName": "Linux (GCC, Fast Debug - optimized, no sanitizers, debug info)",
+      "inherits": ["linux-gcc-base", "fastdebug"]
     },
     {
       "name": "linux-gcc-coverage",
@@ -108,6 +125,11 @@
       "name": "macos-clang-release",
       "displayName": "macOS (AppleClang, Release)",
       "inherits": ["macos-clang-base", "release"]
+    },
+    {
+      "name": "macos-clang-fastdebug",
+      "displayName": "macOS (AppleClang, Fast Debug - optimized, no sanitizers, debug info)",
+      "inherits": ["macos-clang-base", "fastdebug"]
     },
     {
       "name": "android-clang-base",
@@ -173,11 +195,14 @@
   "buildPresets": [
     { "name": "windows-msvc-debug", "configurePreset": "windows-msvc-debug" },
     { "name": "windows-msvc-release", "configurePreset": "windows-msvc-release" },
+    { "name": "windows-msvc-fastdebug", "configurePreset": "windows-msvc-fastdebug" },
     { "name": "linux-gcc-debug", "configurePreset": "linux-gcc-debug" },
     { "name": "linux-gcc-release", "configurePreset": "linux-gcc-release" },
+    { "name": "linux-gcc-fastdebug", "configurePreset": "linux-gcc-fastdebug" },
     { "name": "linux-gcc-coverage", "configurePreset": "linux-gcc-coverage" },
     { "name": "macos-clang-debug", "configurePreset": "macos-clang-debug" },
     { "name": "macos-clang-release", "configurePreset": "macos-clang-release" },
+    { "name": "macos-clang-fastdebug", "configurePreset": "macos-clang-fastdebug" },
     { "name": "android-clang-debug", "configurePreset": "android-clang-debug" },
     { "name": "android-clang-release", "configurePreset": "android-clang-release" },
     { "name": "ios-clang-debug", "configurePreset": "ios-clang-debug" },
@@ -197,10 +222,13 @@
     },
     { "name": "windows-msvc-debug", "inherits": "base", "configurePreset": "windows-msvc-debug" },
     { "name": "windows-msvc-release", "inherits": "base", "configurePreset": "windows-msvc-release" },
+    { "name": "windows-msvc-fastdebug", "inherits": "base", "configurePreset": "windows-msvc-fastdebug" },
     { "name": "linux-gcc-debug", "inherits": "base", "configurePreset": "linux-gcc-debug" },
     { "name": "linux-gcc-release", "inherits": "base", "configurePreset": "linux-gcc-release" },
+    { "name": "linux-gcc-fastdebug", "inherits": "base", "configurePreset": "linux-gcc-fastdebug" },
     { "name": "linux-gcc-coverage", "inherits": "base", "configurePreset": "linux-gcc-coverage" },
     { "name": "macos-clang-debug", "inherits": "base", "configurePreset": "macos-clang-debug" },
-    { "name": "macos-clang-release", "inherits": "base", "configurePreset": "macos-clang-release" }
+    { "name": "macos-clang-release", "inherits": "base", "configurePreset": "macos-clang-release" },
+    { "name": "macos-clang-fastdebug", "inherits": "base", "configurePreset": "macos-clang-fastdebug" }
   ]
 }

@@ -19,7 +19,7 @@ SteppedSolution stepped_for(unsigned seed) {
 
 }  // namespace
 
-TEST_CASE("SteppedSolution starts at the scrambled state, not yet at the end", "[stepped_solution]") {
+TEST_CASE("SteppedSolution starts at the scrambled state, not yet at the end", "[stepped_solution][slow]") {
     const SteppedSolution stepped = stepped_for(0);
     REQUIRE(stepped.at_start());
     REQUIRE(stepped.current_index() == 0);
@@ -28,7 +28,7 @@ TEST_CASE("SteppedSolution starts at the scrambled state, not yet at the end", "
     }
 }
 
-TEST_CASE("stepping forward through every move reaches a solved cube", "[stepped_solution]") {
+TEST_CASE("stepping forward through every move reaches a solved cube", "[stepped_solution][slow]") {
     SteppedSolution stepped = stepped_for(0);
     const int total = stepped.move_count();
 
@@ -41,7 +41,7 @@ TEST_CASE("stepping forward through every move reaches a solved cube", "[stepped
     REQUIRE(stepped.current_cube().is_solved());
 }
 
-TEST_CASE("next then previous returns to the same cube state", "[stepped_solution]") {
+TEST_CASE("next then previous returns to the same cube state", "[stepped_solution][slow]") {
     SteppedSolution stepped = stepped_for(1);
     REQUIRE(stepped.move_count() > 0);
 
@@ -53,7 +53,7 @@ TEST_CASE("next then previous returns to the same cube state", "[stepped_solutio
     REQUIRE(stepped.current_cube() == before);
 }
 
-TEST_CASE("next and previous are no-ops past the ends", "[stepped_solution]") {
+TEST_CASE("next and previous are no-ops past the ends", "[stepped_solution][slow]") {
     SteppedSolution stepped = stepped_for(2);
     stepped.previous();
     REQUIRE(stepped.at_start());
@@ -67,7 +67,7 @@ TEST_CASE("next and previous are no-ops past the ends", "[stepped_solution]") {
     REQUIRE(stepped.current_cube() == solved_state);
 }
 
-TEST_CASE("current_move applied to current_cube reproduces the next cube in sequence", "[stepped_solution]") {
+TEST_CASE("current_move applied to current_cube reproduces the next cube in sequence", "[stepped_solution][slow]") {
     SteppedSolution stepped = stepped_for(0);
     REQUIRE(stepped.move_count() > 0);
 
@@ -77,7 +77,7 @@ TEST_CASE("current_move applied to current_cube reproduces the next cube in sequ
     REQUIRE(stepped.current_cube() == before.apply(move));
 }
 
-TEST_CASE("stage_ranges cover every move exactly once, in order, with no gaps", "[stepped_solution]") {
+TEST_CASE("stage_ranges cover every move exactly once, in order, with no gaps", "[stepped_solution][slow]") {
     const SteppedSolution stepped = stepped_for(0);
     int expected_start = 0;
     for (const auto& range : stepped.stage_ranges()) {

@@ -33,7 +33,7 @@ TEST_CASE("a solved cube's cross is already solved", "[cross]") {
     REQUIRE(solution->empty());
 }
 
-TEST_CASE("solve_cross solves the cross for a corpus of random scrambles", "[cross]") {
+TEST_CASE("solve_cross solves the cross for a corpus of random scrambles", "[cross][slow]") {
     for (unsigned seed = 0; seed < 60; ++seed) {
         CAPTURE(seed);
         Cube cube = scramble(seed, 25);

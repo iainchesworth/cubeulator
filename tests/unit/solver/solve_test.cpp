@@ -7,7 +7,7 @@ using cube::solver::random_scramble;
 using cube::solver::solve;
 using cube::solver::Stage;
 
-TEST_CASE("solve fully solves a corpus of random scrambles via the beginner method", "[solve]") {
+TEST_CASE("solve fully solves a corpus of random scrambles via the beginner method", "[solve][slow]") {
     for (unsigned seed = 0; seed < 3; ++seed) {
         CAPTURE(seed);
         const Cube scrambled = random_scramble(seed, 25);
@@ -24,7 +24,7 @@ TEST_CASE("solve fully solves a corpus of random scrambles via the beginner meth
     }
 }
 
-TEST_CASE("solve produces every stage in order for a scramble that needs each one", "[solve]") {
+TEST_CASE("solve produces every stage in order for a scramble that needs each one", "[solve][slow]") {
     const Cube scrambled = random_scramble(0, 25);
     const auto solution = solve(scrambled);
     REQUIRE(solution.has_value());
