@@ -52,6 +52,16 @@ constexpr qint64 kAnalysisOverrunWarnMs = 2000;
 // observation and the resulting geometry scaled back up for the overlay.
 constexpr int kAnalysisWidth = 640;
 
+// Hand-presence ONNX inference runs on the FULL frame and dominates the
+// analysis pass's budget, yet its output is a purely advisory UI hint -
+// a hand arriving or leaving is a many-hundred-millisecond event, so
+// sampling it every fourth pass (~7-8 Hz at the poll rate) loses nothing
+// a user can perceive while reclaiming the worker time that pose seeding
+// and (later) tracking spend. The GUI holds the last verdict across
+// skipped passes (see AnalysisResult::hand_checked) so the hint doesn't
+// strobe at the decimation duty cycle.
+constexpr int kHandOnnxDecimation = 4;
+
 // Re-arm guard bounds (see the class comment): the cube leaving detection
 // for this many consecutive analysis passes, or this much wall time,
 // re-enables aggregation after a capture.
@@ -753,12 +763,23 @@ void ScanSession::poll() {
     // Sampled here (GUI thread) rather than inside analyze() so the worker
     // never reads the slot store concurrently with a capture mutating it.
     const bool corner_armed = cornerScanArmed();
+    // Pose continuity prior, sampled by the same GUI-thread-at-queue-time
+    // rule from the held pose. cube_pose_'s own hold-and-clear lifecycle
+    // (kOverlayHoldMs) bounds the seed's staleness for free - a pose the
+    // overlay already dropped is too old to bias arbitration with. Gated
+    // on orientation_valid because an invalid corner pose carries zeroed
+    // extrinsics (a model AT the camera), which as a seed would be poison.
+    std::optional<cube::vision::PoseSeed> pose_prior;
+    if (cube_pose_ && cube_pose_->orientation_valid) {
+        pose_prior = cube::vision::PoseSeed{cube_pose_->rvec, cube_pose_->tvec};
+    }
+    const bool run_hand_detector = (analysis_pass_seq_++ % kHandOnnxDecimation) == 0;
     analysis_inflight_ = true;
     analysis_inflight_timer_.restart();
     analysis_overrun_logged_ = false;
-    analysis_watcher_.setFuture(
-        QtConcurrent::run([this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed]() {
-            return analyze(captured_frame, t_ms, corner_armed);
+    analysis_watcher_.setFuture(QtConcurrent::run(
+        [this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed, pose_prior, run_hand_detector]() {
+            return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector);
         }));
 }
 
@@ -851,7 +872,11 @@ void ScanSession::handleAnalysisFinished() {
     }
 
     is_steady_ = result.is_steady;
-    hand_present_ = result.hand_present;
+    // Held across decimation-skipped passes: an unchecked pass says
+    // nothing about the hand either way (see kHandOnnxDecimation).
+    if (result.hand_checked) {
+        hand_present_ = result.hand_present;
+    }
 
     if (face_observation_) {
         facelets_ = provisional_facelets(face_observation_->lab);
@@ -915,8 +940,11 @@ void ScanSession::handleAnalysisFinished() {
     }
 }
 
-ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed) {
+ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
+                                                 std::optional<cube::vision::PoseSeed> pose_prior,
+                                                 bool run_hand_detector) {
     AnalysisResult result;
+    result.frame_ms = frame_t_ms;
 
     // Steadiness and hand presence stay on the full frame - both are
     // advisory hint signals now (cross-frame variance in the aggregators
@@ -924,9 +952,18 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     const auto stability = stability_.update(frame);
     result.is_steady = stability.is_steady;
 
-    if (hand_detector_ && hand_detection_enabled_.load()) {
-        const auto hand_result = hand_detector_->hand_present(frame);
-        result.hand_present = hand_result.has_value() && *hand_result;
+    // Decimated (see kHandOnnxDecimation): the verdict was decided on the
+    // GUI thread at queue time, so the worker stays counter-free. A pass
+    // that was ELECTED to check reports hand_checked even when detection
+    // is off or unavailable - "checked, no hand" - so toggling the setting
+    // off clears the UI hint within a decimation period instead of
+    // freezing a stale "hand present".
+    if (run_hand_detector) {
+        result.hand_checked = true;
+        if (hand_detector_ && hand_detection_enabled_.load()) {
+            const auto hand_result = hand_detector_->hand_present(frame);
+            result.hand_present = hand_result.has_value() && *hand_result;
+        }
     }
 
     cv::Mat analysis_frame = frame;
@@ -995,6 +1032,28 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         }
     }
 
+    // Strict full-visibility flag for capture-time policy (see the field's
+    // comment in the header): every accepted observation's every cell quad
+    // must have ALL FOUR corners in-frame, not just its centre. Computed
+    // here where the geometry is already in full-frame pixels; false when
+    // nothing was accepted (there is nothing to capture from anyway).
+    const auto quad_fully_in_frame = [&frame](const cube::vision::StickerQuad& cell) {
+        return std::ranges::all_of(cell.corners, [&frame](const cv::Point2f& corner) {
+            return corner.x >= 0.0F && corner.y >= 0.0F && corner.x < static_cast<float>(frame.cols) &&
+                   corner.y < static_cast<float>(frame.rows);
+        });
+    };
+    bool full_quads = result.face.has_value() || result.corner.has_value();
+    if (result.face) {
+        full_quads = full_quads && std::ranges::all_of(result.face->cells, quad_fully_in_frame);
+    }
+    if (result.corner) {
+        full_quads = full_quads && std::ranges::all_of(result.corner->top.cells, quad_fully_in_frame) &&
+                     std::ranges::all_of(result.corner->lower_left.cells, quad_fully_in_frame) &&
+                     std::ranges::all_of(result.corner->lower_right.cells, quad_fully_in_frame);
+    }
+    result.full_quads_in_frame = full_quads;
+
     // 3D pose for the wireframe overlay, from whichever observation
     // survived its gates - corner first, since three pinned face quads
     // constrain the pose far better than one. Runs on the scaled-BACK
@@ -1002,16 +1061,24 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // in full-frame pixel coordinates like every other overlay quad (the
     // projection's approximate intrinsics derive from the frame size, so
     // geometry and size must describe the same coordinate space). A
-    // degenerate pose estimate just means no wireframe this reading.
+    // degenerate pose estimate just means no wireframe this reading. The
+    // GUI-sampled prior seeds both projectors toward temporal continuity;
+    // the projectors gate every seeded acceptance themselves, so a stale
+    // prior degrades to the unseeded answer rather than a wrong one.
     const cv::Size full_size(frame.cols, frame.rows);
+    const cube::vision::PoseSeed* seed = pose_prior ? &*pose_prior : nullptr;
     if (result.corner) {
-        const auto pose = cube::vision::project_cube_from_corner(*result.corner, full_size);
+        const auto pose = cube::vision::project_cube_from_corner(*result.corner, full_size, seed);
         if (pose.has_value()) {
+            result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::corner_seeded
+                                                 : AnalysisResult::PoseSource::corner;
             result.pose = *pose;
         }
     } else if (result.face) {
-        const auto pose = cube::vision::project_cube_from_face(*result.face, full_size);
+        const auto pose = cube::vision::project_cube_from_face(*result.face, full_size, seed);
         if (pose.has_value()) {
+            result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::face_seeded
+                                                 : AnalysisResult::PoseSource::face;
             result.pose = *pose;
         }
     }

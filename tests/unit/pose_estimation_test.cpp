@@ -2,6 +2,7 @@
 
 #include <cube/vision/pose_estimation.hpp>
 
+#include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 
 #include <algorithm>
@@ -9,6 +10,7 @@
 #include <cmath>
 #include <cstddef>
 #include <numbers>
+#include <vector>
 
 using namespace cube::vision;
 
@@ -345,6 +347,239 @@ TEST_CASE("project_cube_from_corner recovers orientation from a true perspective
     for (const auto& axis : basis) {
         const cv::Vec3d expected = display_rotation * axis;
         REQUIRE(angle_between(rotate_by_quaternion(projection->orientation, axis), expected) < 3.0 * kDegree);
+    }
+}
+
+TEST_CASE("approximate_camera_matrix exposes the documented approximate intrinsics", "[vision]") {
+    // The hoisted camera model must stay byte-for-byte the projectors'
+    // documented one (fx = fy = width, principal point at the centre) -
+    // seeds and reprojection checks built on it are only commensurable
+    // with the projectors' output if the model never drifts.
+    const cv::Matx33d camera = approximate_camera_matrix(kFrame);
+    REQUIRE(camera(0, 0) == static_cast<double>(kFrame.width));
+    REQUIRE(camera(1, 1) == static_cast<double>(kFrame.width));
+    REQUIRE(camera(0, 2) == 0.5 * kFrame.width);
+    REQUIRE(camera(1, 2) == 0.5 * kFrame.height);
+    REQUIRE(camera(2, 2) == 1.0);
+    REQUIRE(camera(0, 1) == 0.0);
+    REQUIRE(camera(1, 0) == 0.0);
+    REQUIRE(camera(2, 0) == 0.0);
+    REQUIRE(camera(2, 1) == 0.0);
+}
+
+TEST_CASE("display_quaternion and opencv_rotation_from_display are mutual inverses", "[vision]") {
+    // A generic display-frame rotation (nothing axis-aligned): 35 degrees
+    // of pitch after -40 of yaw, same construction as the corner test.
+    const double yaw = -40.0 * kDegree;
+    const double pitch = 35.0 * kDegree;
+    const cv::Matx33d rot_y(std::cos(yaw), 0.0, std::sin(yaw), 0.0, 1.0, 0.0, -std::sin(yaw), 0.0,
+                            std::cos(yaw));
+    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0, std::sin(pitch),
+                            std::cos(pitch));
+    const cv::Matx33d display_rotation = rot_x * rot_y;
+
+    // Display -> OpenCV -> display must reproduce the rotation's ACTION
+    // (basis-vector comparison per the helper comment, never raw
+    // components).
+    const std::array<float, 4> via_opencv = display_quaternion(
+        opencv_rotation_from_display(display_quaternion(
+            cv::Matx33d(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0) * display_rotation *
+            cv::Matx33d(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0))));
+    const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
+    for (const auto& axis : basis) {
+        const cv::Vec3d expected = display_rotation * axis;
+        REQUIRE(angle_between(rotate_by_quaternion(via_opencv, axis), expected) < 0.1 * kDegree);
+    }
+
+    // And the inverse composed the other way is the identity map on any
+    // pose the face path actually produces.
+    const auto projection = project_cube_from_face(rendered_face_yawed(25.0 * kDegree, {0.0, 0.0, 3.0}), kFrame);
+    REQUIRE(projection.has_value());
+    cv::Matx33d recovered;
+    cv::Rodrigues(projection->rvec, recovered);
+    const std::array<float, 4> round_tripped = display_quaternion(
+        opencv_rotation_from_display(projection->orientation));
+    for (const auto& axis : basis) {
+        REQUIRE(angle_between(rotate_by_quaternion(round_tripped, axis),
+                              rotate_by_quaternion(projection->orientation, axis)) < 0.1 * kDegree);
+    }
+    // opencv_rotation_from_display really is the solvePnP-frame rotation:
+    // it must match the exported rvec's matrix.
+    const cv::Matx33d from_display = opencv_rotation_from_display(projection->orientation);
+    for (int r = 0; r < 3; ++r) {
+        for (int c = 0; c < 3; ++c) {
+            REQUIRE(std::abs(from_display(r, c) - recovered(r, c)) < 1e-4);
+        }
+    }
+}
+
+TEST_CASE("project_cube_from_face exports reusable extrinsics and a clean residual", "[vision]") {
+    const FaceObservation observation = rendered_face(20.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    const auto projection = project_cube_from_face(observation, kFrame);
+    REQUIRE(projection.has_value());
+    REQUIRE(projection->orientation_valid);
+    REQUIRE_FALSE(projection->from_seed);
+
+    // The exported rvec/tvec must reproject the model onto the returned
+    // vertices under the shared camera model - that identity is what makes
+    // them usable as the next pass's PoseSeed.
+    const std::vector<cv::Point3d> model(kCube.begin(), kCube.end());
+    std::vector<cv::Point2d> reprojected;
+    cv::projectPoints(model, projection->rvec, projection->tvec, approximate_camera_matrix(kFrame),
+                      cv::noArray(), reprojected);
+    for (std::size_t i = 0; i < 8; ++i) {
+        REQUIRE(distance(projection->vertices[i],
+                         cv::Point2f(static_cast<float>(reprojected[i].x),
+                                     static_cast<float>(reprojected[i].y))) < 0.01F);
+    }
+    // Exact synthetic input: the residual must be numerically nil.
+    REQUIRE(projection->max_reproj_fraction >= 0.0);
+    REQUIRE(projection->max_reproj_fraction < 0.01);
+}
+
+TEST_CASE("project_cube_from_face seeded with its own pose keeps the unseeded answer", "[vision]") {
+    // A consistent seed must be a no-op: IPPE agrees with history, so
+    // arbitration never fires and the exported pose is the primary one.
+    const FaceObservation observation = rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    const auto unseeded = project_cube_from_face(observation, kFrame);
+    REQUIRE(unseeded.has_value());
+
+    const PoseSeed seed{unseeded->rvec, unseeded->tvec};
+    const auto seeded = project_cube_from_face(observation, kFrame, &seed);
+    REQUIRE(seeded.has_value());
+    REQUIRE_FALSE(seeded->from_seed);
+    const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
+    for (const auto& axis : basis) {
+        REQUIRE(angle_between(rotate_by_quaternion(seeded->orientation, axis),
+                              rotate_by_quaternion(unseeded->orientation, axis)) < 0.1 * kDegree);
+    }
+    for (std::size_t i = 0; i < 8; ++i) {
+        REQUIRE(distance(seeded->vertices[i], unseeded->vertices[i]) < 0.01F);
+    }
+}
+
+TEST_CASE("project_cube_from_face mirror arbitration prefers the seed-consistent twin", "[vision]") {
+    // The planar two-fold ambiguity in its near-affine regime: a face
+    // tilted +50 degrees at z = 9 subtends little perspective, so the
+    // mirror pose (-50 degrees) reprojects the same quad almost exactly -
+    // precisely the frames where IPPE's choice of twin is luck. A seed on
+    // the mirror side is >90 degrees from IPPE's answer (100 degrees of
+    // relative rotation), which must trip arbitration; the seeded solve
+    // settles in the seed's basin, passes the gates, and wins - temporal
+    // continuity overriding the single-frame coin flip.
+    const double tilt = 50.0 * kDegree;
+    const cv::Vec3d translation(0.0, 0.0, 9.0);
+    const FaceObservation observation = rendered_face(tilt, translation);
+
+    // Build the mirror-side seed from a genuinely rendered mirror view so
+    // it is a realistic previous-pass pose, not a hand-crafted matrix.
+    const auto mirror_pose = project_cube_from_face(rendered_face(-tilt, translation), kFrame);
+    REQUIRE(mirror_pose.has_value());
+    const PoseSeed seed{mirror_pose->rvec, mirror_pose->tvec};
+
+    const auto unseeded = project_cube_from_face(observation, kFrame);
+    REQUIRE(unseeded.has_value());
+
+    const auto seeded = project_cube_from_face(observation, kFrame, &seed);
+    REQUIRE(seeded.has_value());
+    REQUIRE(seeded->orientation_valid);
+    REQUIRE(seeded->from_seed);
+    // The arbitrated pose sits on the seed's side of the ambiguity, far
+    // from IPPE's twin (they are ~100 degrees apart)...
+    const cv::Vec3d probe(0.0, 1.0, 0.0);
+    const double to_seed = angle_between(rotate_by_quaternion(seeded->orientation, probe),
+                                         rotate_by_quaternion(mirror_pose->orientation, probe));
+    const double to_ippe = angle_between(rotate_by_quaternion(seeded->orientation, probe),
+                                         rotate_by_quaternion(unseeded->orientation, probe));
+    REQUIRE(to_seed < to_ippe);
+    REQUIRE(to_seed < 25.0 * kDegree);
+    // ...and it genuinely explains the observed quad (the gate that keeps
+    // arbitration honest).
+    REQUIRE(seeded->max_reproj_fraction <= 0.15);
+}
+
+TEST_CASE("project_cube_from_face survives a wild seed unharmed", "[vision]") {
+    // A garbage seed (cube behind the camera, upside down) must never
+    // corrupt a confident estimate: whichever solve wins the arbitration,
+    // the exported ORIENTATION must match the unseeded answer.
+    const FaceObservation observation = rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    const auto unseeded = project_cube_from_face(observation, kFrame);
+    REQUIRE(unseeded.has_value());
+
+    const PoseSeed seed{cv::Vec3d(std::numbers::pi, 0.0, 0.0), cv::Vec3d(0.0, 0.0, -5.0)};
+    const auto seeded = project_cube_from_face(observation, kFrame, &seed);
+    REQUIRE(seeded.has_value());
+    REQUIRE(seeded->orientation_valid);
+    const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
+    for (const auto& axis : basis) {
+        REQUIRE(angle_between(rotate_by_quaternion(seeded->orientation, axis),
+                              rotate_by_quaternion(unseeded->orientation, axis)) < 3.0 * kDegree);
+    }
+}
+
+TEST_CASE("project_cube_from_corner seeded with its own pose reproduces the unseeded answer", "[vision]") {
+    // Same true-perspective corner construction as the orientation test
+    // above, reduced to its essentials.
+    const double yaw = -40.0 * kDegree;
+    const double pitch = 35.0 * kDegree;
+    const cv::Matx33d rot_y(std::cos(yaw), 0.0, std::sin(yaw), 0.0, 1.0, 0.0, -std::sin(yaw), 0.0,
+                            std::cos(yaw));
+    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0, std::sin(pitch),
+                            std::cos(pitch));
+    const cv::Matx33d flip(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0);
+    const cv::Matx33d camera_rotation = flip * (rot_x * rot_y) * flip;
+    const std::array<cv::Point3d, 7> display_corners = {{
+        {-0.5, 0.5, -0.5},  // UBL
+        {0.5, 0.5, -0.5},   // UBR
+        {0.5, 0.5, 0.5},    // URF
+        {-0.5, 0.5, 0.5},   // UFL
+        {0.5, -0.5, -0.5},  // DRB
+        {0.5, -0.5, 0.5},   // DRF
+        {-0.5, -0.5, 0.5},  // DLF
+    }};
+    std::array<cv::Point2f, 7> projected{};
+    const cv::Vec3d translation(0.0, 0.0, 4.0);
+    for (std::size_t i = 0; i < display_corners.size(); ++i) {
+        const auto& corner = display_corners[i];
+        const cv::Vec3d model_cv = flip * cv::Vec3d(corner.x, corner.y, corner.z);
+        const cv::Vec3d in_camera = camera_rotation * model_cv + translation;
+        const double focal = static_cast<double>(kFrame.width);
+        projected[i] = {static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * kFrame.width),
+                        static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * kFrame.height)};
+    }
+    CornerObservation observation;
+    observation.top.quad = {projected[0], projected[1], projected[2], projected[3]};
+    observation.lower_left.quad = {projected[3], projected[2], projected[5], projected[6]};
+    observation.lower_right.quad = {projected[2], projected[1], projected[4], projected[5]};
+    observation.geometry_confidence = 1.0F;
+
+    const auto unseeded = project_cube_from_corner(observation, kFrame);
+    REQUIRE(unseeded.has_value());
+    REQUIRE(unseeded->orientation_valid);
+    REQUIRE_FALSE(unseeded->from_seed);
+    REQUIRE(unseeded->max_reproj_fraction <= 0.15);
+
+    const PoseSeed seed{unseeded->rvec, unseeded->tvec};
+    const auto seeded = project_cube_from_corner(observation, kFrame, &seed);
+    REQUIRE(seeded.has_value());
+    REQUIRE(seeded->orientation_valid);
+    // The seeded attempt runs first and its own gates accepted it.
+    REQUIRE(seeded->from_seed);
+    const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
+    for (const auto& axis : basis) {
+        REQUIRE(angle_between(rotate_by_quaternion(seeded->orientation, axis),
+                              rotate_by_quaternion(unseeded->orientation, axis)) < 0.5 * kDegree);
+    }
+
+    // A garbage seed falls back to the cold-start solve rather than
+    // failing or drifting: same orientation, just not seed-flagged.
+    const PoseSeed garbage{cv::Vec3d(std::numbers::pi, 0.0, 0.0), cv::Vec3d(0.0, 0.0, -5.0)};
+    const auto recovered = project_cube_from_corner(observation, kFrame, &garbage);
+    REQUIRE(recovered.has_value());
+    REQUIRE(recovered->orientation_valid);
+    for (const auto& axis : basis) {
+        REQUIRE(angle_between(rotate_by_quaternion(recovered->orientation, axis),
+                              rotate_by_quaternion(unseeded->orientation, axis)) < 0.5 * kDegree);
     }
 }
 

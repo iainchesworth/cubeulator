@@ -10,6 +10,44 @@
 
 namespace cube::vision {
 
+// The previous pass's accepted pose in OpenCV extrinsic form (model->
+// camera Rodrigues rotation + translation), handed back into the
+// projectors to bias the CURRENT pass toward temporal continuity. Two
+// distinct mechanisms hang off it: (1) the generic-PnP solves initialise
+// from it (useExtrinsicGuess), which keeps the iterative optimiser in the
+// basin the cube actually occupied a frame ago instead of whatever local
+// minimum a cold start finds; (2) the face path uses it to ARBITRATE the
+// planar-square two-fold ambiguity - IPPE occasionally hands back the
+// mirror solution, and only history can tell the two apart (a single
+// frame cannot). Callers own staleness policy: a seed should come from
+// the immediately preceding pass (or a short hold window), never from an
+// old pose, because a wildly wrong seed downgrades gracefully (the seeded
+// solve fails its gates and the unseeded result stands) but a subtly
+// stale one biases the arbitration for nothing.
+struct PoseSeed {
+    cv::Vec3d rvec;
+    cv::Vec3d tvec;
+};
+
+// Intrinsics approximated per the projector contracts: fx = fy = frame
+// width (a typical webcam's ~53 degree horizontal FOV gives tan(hfov/2)
+// ~= 0.5, i.e. f ~= width), principal point at the frame centre, no
+// distortion. Good enough for an overlay to track convincingly; not
+// metrology. Exposed so everything that reasons about these poses -
+// seeding, reprojection checks, predicted-pose hints - shares the ONE
+// camera model the projectors used, byte for byte.
+[[nodiscard]] cv::Matx33d approximate_camera_matrix(cv::Size frame_size);
+
+// Converts a solvePnP model->camera rotation (OpenCV-style axes: +y down,
+// +z into the screen) into the display-frame quaternion convention
+// CubePoseProjection exports ({w,x,y,z}, +y up, +z toward the viewer), and
+// back. The two frames differ by conjugation with F = diag(1,-1,-1); the
+// pair is exposed so trackers can round-trip display-frame predictions
+// into OpenCV extrinsics (PoseSeed rvec via cv::Rodrigues) without
+// re-deriving the axis reconciliation and silently disagreeing with it.
+[[nodiscard]] std::array<float, 4> display_quaternion(const cv::Matx33d& opencv_rotation);
+[[nodiscard]] cv::Matx33d opencv_rotation_from_display(const std::array<float, 4>& display_orientation);
+
 // The cube's eight corners projected into frame pixels - what a 3D AR
 // wireframe overlay draws so the user sees the cube tracked as an object
 // in space rather than a flat alignment target. Vertex order: 0-3 the
@@ -42,6 +80,36 @@ struct CubePoseProjection {
     // false as "no tracking this reading" (the UI falls back to its idle
     // rotation); vertices remain valid either way.
     bool orientation_valid = true;
+
+    // The accepted solve's raw OpenCV extrinsics - exactly what the next
+    // pass feeds back as a PoseSeed. Deliberately the UNRECONCILED
+    // model->camera form (not the display quaternion): seeding re-enters
+    // solvePnP, which speaks this frame, and converting out and back in
+    // would only launder float error through two basis changes. Left at
+    // zero whenever orientation_valid is false (the corner path can return
+    // drawable vertices without ever completing a solve) - a zero tvec
+    // puts the model AT the camera, so consumers must gate seeding on
+    // orientation_valid, never on the fields themselves.
+    cv::Vec3d rvec{};
+    cv::Vec3d tvec{};
+
+    // Worst single-corner reprojection error of the accepted solve, as a
+    // fraction of the observation's apparent (on-screen) radius - the same
+    // scale-free residual the corner path has always gated on at 0.15.
+    // Now measured on BOTH paths and exported as pose-quality evidence:
+    // near zero for a self-consistent detection, creeping up as the quads
+    // stop describing any true cube projection. 0 when orientation_valid
+    // is false.
+    double max_reproj_fraction = 0.0;
+
+    // True when the exported pose came out of a seed-initialised solve
+    // (the face path's mirror arbitration chose the seeded solution over
+    // IPPE's, the IPPE-failure fallback started from the seed, or the
+    // corner path's seeded solve passed its gates). Telemetry for tuning
+    // the tracker - how often continuity actually overrode or rescued the
+    // single-frame estimate - not a quality judgement: both sources pass
+    // identical acceptance gates.
+    bool from_seed = false;
 };
 
 // Estimates the cube's 3D pose from a single detected face and projects
@@ -50,8 +118,22 @@ struct CubePoseProjection {
 // not for metrology) and the face is modelled as the unit square of a
 // cube extending away from the camera. Fails (no_valid_cube_detected) when
 // the pose estimate degenerates.
+//
+// With a null seed the behaviour is EXACTLY the historical single-frame
+// estimate (IPPE, generic-iterative fallback, cheirality gate). A seed
+// adds continuity in two ways, both bounded at one extra solvePnP call:
+// the fallback initialises from it instead of cold-starting, and when
+// IPPE's answer sits more than 90 degrees from the seed - the signature
+// of the planar two-fold ambiguity resolving to the mirror, since a cube
+// cannot half-turn between consecutive passes - a seed-initialised
+// iterative solve is arbitrated in IF it passes the same cheirality gate
+// plus the corner path's reprojection bar. A seed can therefore rescue or
+// override a mirror flip but never degrade a healthy estimate: when the
+// seeded solve cannot explain the observed quad, the unseeded result
+// stands untouched.
 [[nodiscard]] Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation,
-                                                                 cv::Size frame_size);
+                                                                 cv::Size frame_size,
+                                                                 const PoseSeed* seed = nullptr);
 
 // As above from a corner view, where the three visible face quads pin
 // seven of the eight corners directly; the hidden eighth is completed by
@@ -68,7 +150,17 @@ struct CubePoseProjection {
 // with any true cube projection), orientation_valid is false and
 // orientation is identity - honestly reported rather than guessed, and
 // the vertices are still returned for the 2D wireframe.
+//
+// With a null seed the behaviour is EXACTLY the historical estimate. A
+// seed makes the orientation solve TRY a seed-initialised iterative fit
+// first (the seven-point problem has local minima the cold start can land
+// in when the constructed quads are noisy); it is held to the identical
+// cheirality + reprojection gates, and on any failure the unseeded solve
+// runs as before - so a seed can only convert an invalid-orientation
+// reading into a valid one or steer between gate-passing solutions, never
+// weaken the gates.
 [[nodiscard]] Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation,
-                                                                   cv::Size frame_size);
+                                                                   cv::Size frame_size,
+                                                                   const PoseSeed* seed = nullptr);
 
 }  // namespace cube::vision

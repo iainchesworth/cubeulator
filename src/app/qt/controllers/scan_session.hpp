@@ -262,11 +262,40 @@ private slots:
 
 private:
     struct AnalysisResult {
+        // Which estimator produced `pose`, and whether the accepted solve
+        // was seed-initialised (CubePoseProjection::from_seed) - the
+        // tracker's provenance signal: a corner pose constrains all three
+        // axes from seven pinned points while a face pose carries the
+        // planar ambiguity, and seeded acceptances measure how often
+        // continuity is doing real work.
+        enum class PoseSource { none, face, face_seeded, corner, corner_seeded };
+
         std::optional<cube::vision::FaceObservation> face;
         std::optional<cube::vision::CornerObservation> corner;
         std::optional<cube::vision::CubePoseProjection> pose;
+        PoseSource pose_source = PoseSource::none;
+        // True when EVERY cell quad of every accepted observation this
+        // pass has all four corners inside the frame (false when nothing
+        // was accepted). Stricter than the centre-only visibility gate the
+        // observations themselves passed: a cell whose centre is in-frame
+        // but whose quad straddles the border samples clamped border
+        // pixels that are perfectly stable frame to frame - stable enough
+        // to converge and capture as a real sticker. Carried as gate DATA
+        // for capture-time policy (the identity-routing milestone), not
+        // applied to observation acceptance here, so display overlays and
+        // aggregation cadence are unchanged.
+        bool full_quads_in_frame = false;
+        // The analysed frame's TimedFrame mailbox timestamp, echoed
+        // through so GUI-side consumers get pose and time base from the
+        // same pass without correlating queues.
+        std::int64_t frame_ms = 0;
         bool is_steady = false;
+        // hand_present is only meaningful when hand_checked is true: ONNX
+        // inference is decimated (see kHandOnnxDecimation) and skipped
+        // passes must not read as "hand gone" - the GUI holds the previous
+        // value across unchecked passes.
         bool hand_present = false;
+        bool hand_checked = false;
     };
 
     // corner_armed is captured on the GUI thread when the pass is queued so
@@ -274,7 +303,15 @@ private:
     // frame_t_ms is the frame's TimedFrame mailbox timestamp (see
     // interfaces/camera.hpp) - the analysis pass's time base for anything
     // motion-derived, since the poll cadence says nothing about frame age.
-    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed);
+    // pose_prior is the previous pass's accepted pose, likewise sampled on
+    // the GUI thread at queue time (by value - the worker must never read
+    // GUI-owned pose state) and threaded into the projectors as their
+    // continuity seed; nullopt runs the bit-identical unseeded path.
+    // run_hand_detector is the GUI-thread-decided decimation verdict for
+    // this pass (the worker holds no pass counter of its own).
+    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
+                                         std::optional<cube::vision::PoseSeed> pose_prior,
+                                         bool run_hand_detector);
 
     [[nodiscard]] bool cornerScanArmed() const;
     [[nodiscard]] bool faceCaptureReady() const;
@@ -341,6 +378,13 @@ private:
     bool analysis_inflight_ = false;
     QElapsedTimer analysis_inflight_timer_;
     bool analysis_overrun_logged_ = false;
+    // Monotone count of QUEUED analysis passes (GUI thread only), the
+    // clock behind hand-inference decimation: poll() derives this pass's
+    // run_hand_detector from it and hands the verdict into the worker
+    // lambda by value, keeping the worker free of its own cross-pass
+    // counters. Never reset - decimation only needs the modulus, and a
+    // phase discontinuity across restarts is meaningless.
+    int analysis_pass_seq_ = 0;
 
     // Opening the real capture device (cube::platform::camera::start()) is a
     // genuine multi-second hardware operation on Windows (MSMF device open),
