@@ -18,6 +18,7 @@ add_executable(cube_unit_tests
     unit/hand_presence_capability_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
+    unit/solver/last_layer_test.cpp
     unit/solver/notation_test.cpp
     unit/solver/cross_test.cpp
     unit/solver/corners_test.cpp
@@ -36,6 +37,14 @@ target_link_libraries(cube_unit_tests
         cube::coverage
         Catch2::Catch2WithMain)
 
+# White-box include path for last_layer_test.cpp only: it includes
+# cube::lib's private last_layer.hpp directly, because the F2L-preservation
+# invariant it verifies is a property of the alphabet *constants*
+# themselves (deliberately not public API) - testing separately-written
+# copies of the algorithms would not catch a typo in the real ones.
+target_include_directories(cube_unit_tests
+    PRIVATE "${CMAKE_SOURCE_DIR}/src/lib/src/solver")
+
 cube_deploy_sanitizer_runtime(cube_unit_tests)
 
 # DISCOVERY_MODE PRE_TEST: default POST_BUILD discovery runs the freshly
@@ -45,10 +54,10 @@ cube_deploy_sanitizer_runtime(cube_unit_tests)
 # `ctest` invocation instead.
 #
 # ADD_TAGS_AS_LABELS: promotes each TEST_CASE's Catch2 tags to CTest LABELS,
-# so the handful of solver corpus tests tagged "[slow]" (they search many
-# random scrambles - see solve_pll's comment on why that can occasionally
-# take tens of minutes) can be excluded from a quick local loop with
-# `ctest -LE slow`, or run on their own with `ctest -L slow`.
+# so the solver tests tagged "[slow]" (each drives many random scrambles
+# through the searched first-two-layer stages - see docs/testing.md) can be
+# excluded from a quick local loop with `ctest -LE slow`, or run on their
+# own with `ctest -L slow`.
 catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
 
 # --- Integration tests: exercise several components together --------------

@@ -13,9 +13,11 @@ namespace cube::solver {
 
 // A move sequence that orients the last layer (U face solid), assuming
 // f2l_solved(start) already holds. Solved in two passes - edges into a
-// cross first, then corners - matching the standard 2-look technique,
-// though (like every other stage) the exact sequence is discovered by
-// search rather than a memorised algorithm table.
+// cross first, then corners - via the standard 2-look algorithms (edge
+// flip, Sune/Anti-Sune) composed by a bounded search over whole
+// algorithms; see src/lib/src/solver/last_layer.hpp for why this is
+// guaranteed to finish in milliseconds on any input (the app solves
+// interactively on a phone).
 [[nodiscard]] Result<std::vector<Move>> solve_oll(const Cube& start);
 
 }  // namespace cube::solver

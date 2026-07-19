@@ -50,18 +50,15 @@ TEST_CASE("a solved cube's PLL is already solved", "[pll]") {
 }
 
 TEST_CASE("solve_pll fully solves the cube for a corpus of random scrambles", "[pll][slow]") {
-    // Capped small: some scrambles turn out to need a much longer
-    // corners/edges-permuting commutator than others (seed 3, tried up to
-    // length 7 + a two-commutator composition up to length 5 each + a
-    // nested commutator up to 4/4, took 80+ minutes and still didn't
-    // resolve) - solve_pll's search is still correct (every case that DOES
-    // finish is verified below via a real is_solved() check, not just "a
-    // sequence was found"), just occasionally slow to search for. A real
-    // solve only has to succeed once per actual use, so this is left as a
-    // known follow-up rather than chasing worst-case search performance
-    // here; a handful of scrambles is enough to keep this test fast while
-    // still exercising solve_pll for real.
-    for (unsigned seed = 0; seed < 3; ++seed) {
+    // This corpus was once capped at 3 seeds because the old per-scramble
+    // commutator search could run 80+ minutes on a hard corner permutation
+    // (seed 3 was the documented offender). solve_pll now composes fixed
+    // 2-look algorithms (see last_layer.hpp) and takes milliseconds on
+    // every last-layer state, seed 3 included - the corpus cost below is
+    // entirely the earlier searched stages (cross/corners/middle edges)
+    // needed to reach a valid PLL start, which is why this stays
+    // [slow]-tagged despite PLL itself now being fast.
+    for (unsigned seed = 0; seed < 10; ++seed) {
         CAPTURE(seed);
         Cube cube = scramble(seed, 25);
 
