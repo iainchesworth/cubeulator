@@ -91,6 +91,15 @@ constexpr float kCompletionMinCellLightnessRatio = 0.35F;
 // not end where the placement claims the cube does).
 constexpr float kCompletionMinBoundaryContrast = 10.0F;
 
+// Inlier floor for the pose-only fallback (see observe_face's tail): four
+// residual-gated anchors match the lattice fitter's own acceptance floor,
+// and fewer could not pin the plane's basis vectors against noise. Kept as
+// a named constant (rather than reusing the fitter's) because the two
+// gates protect different outputs - the fitter's floor guards capture
+// candidacy, this one guards a pose - and the calibration sweeps may want
+// to move them independently.
+constexpr int kPoseOnlyMinInliers = 4;
+
 // Degenerate-transform guard bounds (see transform_grid_sane): adjacent
 // projected cell centers closer than this are a collapsed fit (observed
 // live: a 4-point homography through 3 true tiles plus one noise blob
@@ -778,6 +787,29 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         if (transform_grid_sane(*transform, bgr_frame.size())) {
             auto observation = build_observation(bgr_frame, *transform, 0.4F);
             if (grid_phase_plausible(bgr_frame, *transform, observation)) {
+                return observation;
+            }
+        }
+    }
+
+    // Last resort, ORIENTATION-ONLY: a real lattice fit whose anchors span
+    // only two rows (or columns) failed the translation pin above, and the
+    // photometric completion/outline paths could not rescue a capture-grade
+    // placement either - but the fit's PLANE is still good. Its basis
+    // vectors are measured from real tile centres, so the face quad's
+    // orientation is right even if the whole grid sits one pitch off, and
+    // orientation is all the tracker needs (see FaceObservation::pose_only:
+    // these observations are barred from aggregation and capture by
+    // contract). Held to the same sanity + phase gates as every accepted
+    // transform - a degenerate or phase-inverted fit describes no real
+    // plane and must not emit a pose either.
+    if (fit && !translation_pinned && fit->inlier_count >= kPoseOnlyMinInliers) {
+        const cv::Mat transform = lattice_to_frame_transform(*fit);
+        if (transform_grid_sane(transform, bgr_frame.size())) {
+            auto observation = build_observation(
+                bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
+            if (grid_phase_plausible(bgr_frame, transform, observation)) {
+                observation.pose_only = true;
                 return observation;
             }
         }

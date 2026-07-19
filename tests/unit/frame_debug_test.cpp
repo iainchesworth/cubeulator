@@ -369,7 +369,7 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
     std::printf(
         "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
-        "state,gate,front,epoch\n");
+        "state,gate,front,epoch,src\n");
 
     // The newest pass determines which older rows' ring slots have provably
     // been rewritten on disk (see frame_overwritten) - must be known before
@@ -475,11 +475,19 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                                [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
         };
 
+        // Pose-only fits are split off exactly as analyze() splits them:
+        // they may produce a pose (and feed the tracker colour-free) but
+        // never count as a capture-grade face detection.
         const auto observed = observe_face(frame);
         const bool face_gated = observed.has_value() && !all_cells_in_frame(observed->cells);
         std::optional<cube::vision::FaceObservation> face;
+        std::optional<cube::vision::FaceObservation> pose_only_face;
         if (observed.has_value() && !face_gated) {
-            face = *observed;
+            if (observed->pose_only) {
+                pose_only_face = *observed;
+            } else {
+                face = *observed;
+            }
         }
         // Same all-27-cells gate as the live worker: a corner view with any
         // cell off-frame samples fabricated colour and never reaches the
@@ -506,13 +514,22 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         // constrain the pose far better than one. Both solves take the held
         // seed the way analyze() passes it.
         std::optional<cube::vision::CubePoseProjection> pose;
+        const char* pose_src = "none";
         if (corner.has_value()) {
             if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
+                pose_src = "corner";
             }
         } else if (face.has_value()) {
             if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
+                pose_src = "face";
+            }
+        } else if (pose_only_face.has_value()) {
+            if (const auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed);
+                projected.has_value()) {
+                pose = *projected;
+                pose_src = "face-pose-only";
             }
         }
         const bool corner_pose = corner.has_value() && pose.has_value();
@@ -564,7 +581,7 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             std::printf(",,,,");
         }
         const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
-        std::printf("%s,%s,%c,%d\n", state_name(track.state), gate_name(track.gate), front, track.epoch);
+        std::printf("%s,%s,%c,%d,%s\n", state_name(track.state), gate_name(track.gate), front, track.epoch, pose_src);
         ++replayed;
     }
 

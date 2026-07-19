@@ -27,6 +27,20 @@ struct FaceObservation {
     std::array<cv::Vec3f, 9> lab{};          // OpenCV float Lab (L in [0,100])
     std::array<cv::Point2f, 4> face_quad{};  // outer face boundary, same corner order
     float geometry_confidence = 0.0F;        // fraction of cells matched by a real contour
+    // ORIENTATION-ONLY observation: the lattice fit was geometrically sane
+    // and phase-plausible but its anchors spanned fewer than three rows or
+    // columns, so the grid's TRANSLATION is ambiguous - the cells (and
+    // therefore the lab samples) may sit one pitch off the true stickers.
+    // Translation ambiguity is irrelevant to the pose's ORIENTATION (a
+    // pitch-shifted quad of the same planar grid solves to the same
+    // rotation up to perspective noise), which is exactly what the
+    // orientation tracker consumes - so these observations feed
+    // project_cube_from_face and the tracker, and MUST NOT feed colour
+    // aggregation, facelet display or capture. Live1 measured ~25-35
+    // frames per session dying solely on the translation pin while the
+    // tracker starved for poses; this flag recovers them without touching
+    // capture-grade acceptance.
+    bool pose_only = false;
 };
 
 // Locates a cube face's 3x3 sticker grid and samples its colours.

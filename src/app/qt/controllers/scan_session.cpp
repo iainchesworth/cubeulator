@@ -973,7 +973,13 @@ void ScanSession::handleAnalysisFinished() {
     } else if (cube_pose_ && overlay_hold_timer_.isValid() && overlay_hold_timer_.elapsed() > kOverlayHoldMs) {
         cube_pose_.reset();
     }
-    if (fresh_face || fresh_corner) {
+    // A fresh pose restarts the hold too: pose-only face fits (and later
+    // pose-only paths) legitimately produce a wireframe pose with NO
+    // family observation, and without this the wireframe would go stale
+    // mid-stream while being replaced every pass. Today a pose implies a
+    // fresh family observation, so the extra clause is behaviour-identical
+    // for the historical paths.
+    if (fresh_face || fresh_corner || result.pose.has_value()) {
         overlay_hold_timer_.restart();
     }
 
@@ -1268,14 +1274,25 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
 
     VisionDebugStats debug_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
 
+    // Pose-only face observations (translation-ambiguous lattice fits, see
+    // FaceObservation::pose_only) are held OUT of result.face on purpose:
+    // result.face is what feeds facelet display, colour aggregation and
+    // capture, and a pitch-shifted grid's lab samples must never reach any
+    // of those. The observation's only legitimate consumer is the pose
+    // projector below, so it lives in a local that goes out of scope with
+    // this pass.
+    std::optional<cube::vision::FaceObservation> pose_only_face;
     auto face = cube::vision::observe_face(analysis_frame);
     if (face.has_value()) {
         scale_observation(*face, scale_back);
-        if (std::ranges::all_of(face->cells, cell_in_frame)) {
+        if (!std::ranges::all_of(face->cells, cell_in_frame)) {
+            debug_stats.face_status = "gated-offframe";
+        } else if (face->pose_only) {
+            debug_stats.face_status = "pose-only conf=" + std::to_string(face->geometry_confidence);
+            pose_only_face = std::move(*face);
+        } else {
             debug_stats.face_status = "ok conf=" + std::to_string(face->geometry_confidence);
             result.face = std::move(*face);
-        } else {
-            debug_stats.face_status = "gated-offframe";
         }
     } else {
         debug_stats.face_status = "none";
@@ -1360,6 +1377,20 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         }
     } else if (result.face) {
         const auto pose = cube::vision::project_cube_from_face(*result.face, full_size, seed);
+        if (pose.has_value()) {
+            result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::face_seeded
+                                                 : AnalysisResult::PoseSource::face;
+            result.pose = *pose;
+        }
+    } else if (pose_only_face) {
+        // The translation-ambiguous fit's orientation is as good as any
+        // face pose (a pitch-shifted quad of the same planar grid solves
+        // to the same rotation), so it keeps the tracker fed on frames the
+        // capture pipeline rightly refuses. The observation itself is NOT
+        // exported: handleAnalysisFinished sees a face-sourced pose with
+        // result.face empty and therefore attaches no colour evidence and
+        // aggregates nothing - the tracker's documented colour-free pass.
+        const auto pose = cube::vision::project_cube_from_face(*pose_only_face, full_size, seed);
         if (pose.has_value()) {
             result.pose_source = pose->from_seed ? AnalysisResult::PoseSource::face_seeded
                                                  : AnalysisResult::PoseSource::face;

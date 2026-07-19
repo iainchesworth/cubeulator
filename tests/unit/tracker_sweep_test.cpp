@@ -246,9 +246,16 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
             return std::all_of(cells.begin(), cells.end(),
                                [&](const StickerQuad& cell) { return cell_in_frame(cell, frame); });
         };
+        // Pose-only fits split off exactly as analyze() splits them: pose
+        // yes, colour evidence and capture-grade detection no.
         std::optional<FaceObservation> face;
+        std::optional<FaceObservation> pose_only_face;
         if (auto observed = observe_face(frame); observed.has_value() && all_cells_in_frame(observed->cells)) {
-            face = std::move(*observed);
+            if (observed->pose_only) {
+                pose_only_face = std::move(*observed);
+            } else {
+                face = std::move(*observed);
+            }
         }
         // Hinted from the held pose exactly as the live worker hints it
         // (M7): off the isometric pose an unhinted detector simply stops
@@ -279,6 +286,10 @@ std::vector<TrackerPassInput> load_clip_passes(const std::filesystem::path& dir)
             }
         } else if (face.has_value()) {
             if (auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+                pose = *projected;
+            }
+        } else if (pose_only_face.has_value()) {
+            if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed); projected.has_value()) {
                 pose = *projected;
             }
         }
