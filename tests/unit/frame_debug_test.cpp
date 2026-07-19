@@ -25,12 +25,15 @@
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
+#include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
+#include <cube/vision/stability.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -364,7 +367,9 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
 
     const auto rows = recording::read_index(index_stream);
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
-    std::printf("pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz\n");
+    std::printf(
+        "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
+        "state,gate,front,epoch\n");
 
     // The newest pass determines which older rows' ring slots have provably
     // been rewritten on disk (see frame_overwritten) - must be known before
@@ -392,6 +397,43 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     constexpr std::int64_t kSeedHoldMs = 450;
     std::optional<cube::vision::PoseSeed> seed_prior;
     std::int64_t seed_t_ms = 0;
+
+    // The tracker rides along at its default config, fed the exact
+    // TrackerPassInput handleAnalysisFinished would build for each pass -
+    // q_obs only from the pose-producing family, centre labs from that same
+    // family, the stability tracker's motion score (comparable to live: it
+    // normalises internally). The per-pass state/gate columns plus the
+    // summary histograms below are the acceptance metric for the live1
+    // detection-recovery work: state distribution before/after must come
+    // from ONE harness or the numbers aren't comparable.
+    cube::vision::StabilityTracker stability;
+    cube::vision::OrientationTracker tracker;
+    const auto state_name = [](cube::vision::TrackState state) {
+        switch (state) {
+            case cube::vision::TrackState::lost: return "lost";
+            case cube::vision::TrackState::acquiring: return "acquiring";
+            case cube::vision::TrackState::locked: return "locked";
+            case cube::vision::TrackState::coasting: return "coasting";
+        }
+        return "?";
+    };
+    const auto gate_name = [](cube::vision::TrackGate gate) {
+        switch (gate) {
+            case cube::vision::TrackGate::accepted: return "accepted";
+            case cube::vision::TrackGate::anchored: return "anchored";
+            case cube::vision::TrackGate::no_observation: return "no-obs";
+            case cube::vision::TrackGate::basin: return "basin";
+            case cube::vision::TrackGate::margin: return "margin";
+            case cube::vision::TrackGate::omega_outlier: return "omega-outlier";
+            case cube::vision::TrackGate::implausible: return "implausible";
+            case cube::vision::TrackGate::slip_evidence: return "slip-evidence";
+        }
+        return "?";
+    };
+    std::array<int, 4> state_counts{};  // lost, acquiring, locked, coasting
+    std::array<int, 8> gate_counts{};   // TrackGate enum order
+    int observation_passes = 0;
+    int accepted_passes = 0;
 
     std::int64_t previous_t_ms = 0;
     bool have_previous = false;
@@ -473,10 +515,42 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                 pose = *projected;
             }
         }
+        const bool corner_pose = corner.has_value() && pose.has_value();
         if (pose.has_value() && pose->orientation_valid) {
             seed_prior = cube::vision::PoseSeed{pose->rvec, pose->tvec};
             seed_t_ms = row.t_ms;
         }
+
+        // Tracker pass, mirroring handleAnalysisFinished: q_obs only when
+        // the pose is valid, colour evidence only from the pose-producing
+        // family, motion score from the same pass's frame.
+        cube::vision::TrackerPassInput track_in;
+        track_in.t_ms = row.t_ms;
+        track_in.motion_score = stability.update(frame).motion_score;
+        if (pose.has_value() && pose->orientation_valid) {
+            track_in.q_obs = pose->orientation;
+            track_in.corner_view = corner_pose;
+            const auto lab_entry = [](const cv::Vec3f& lab) {
+                return std::array<float, 3>{lab[0], lab[1], lab[2]};
+            };
+            if (corner_pose && corner.has_value()) {
+                track_in.centre_lab_count = 3;
+                track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+            } else if (!corner_pose && face.has_value()) {
+                track_in.centre_lab_count = 1;
+                track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
+            }
+        }
+        const auto track = tracker.on_pass(track_in);
+        ++state_counts[static_cast<std::size_t>(track.state)];
+        ++gate_counts[static_cast<std::size_t>(track.gate)];
+        observation_passes += track_in.q_obs.has_value() ? 1 : 0;
+        accepted_passes += (track.gate == cube::vision::TrackGate::accepted ||
+                            track.gate == cube::vision::TrackGate::anchored)
+                               ? 1
+                               : 0;
 
         std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),
                     static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
@@ -484,14 +558,24 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                     corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0, corner_gated ? 1 : 0,
                     pose.has_value() && pose->orientation_valid ? 1 : 0);
         if (pose.has_value() && pose->orientation_valid) {
-            std::printf("%.5f,%.5f,%.5f,%.5f\n", pose->orientation[0], pose->orientation[1], pose->orientation[2],
+            std::printf("%.5f,%.5f,%.5f,%.5f,", pose->orientation[0], pose->orientation[1], pose->orientation[2],
                         pose->orientation[3]);
         } else {
-            std::printf(",,,\n");
+            std::printf(",,,,");
         }
+        const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
+        std::printf("%s,%s,%c,%d\n", state_name(track.state), gate_name(track.gate), front, track.epoch);
         ++replayed;
     }
 
     std::printf("replayed %zu of %zu passes\n", replayed, rows.size());
+    std::printf("# observations: %d of %zu passes; accepted (incl. anchors): %d\n", observation_passes, replayed,
+                accepted_passes);
+    std::printf("# states: lost=%d acquiring=%d locked=%d coasting=%d\n", state_counts[0], state_counts[1],
+                state_counts[2], state_counts[3]);
+    std::printf("# gates: accepted=%d anchored=%d no-obs=%d basin=%d margin=%d omega-outlier=%d implausible=%d "
+                "slip-evidence=%d\n",
+                gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4], gate_counts[5],
+                gate_counts[6], gate_counts[7]);
     CHECK(replayed > 0);
 }
