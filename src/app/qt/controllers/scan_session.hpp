@@ -72,10 +72,11 @@ namespace cube::app {
 // lost track, or to full scan invalidation on the two-faces-conflicting
 // layer-turn signature), and a post-loss epoch re-associates against the
 // store by content before anything commits ("re-orienting"). Commits are
-// additionally gated on frontal-ness, per-pass rotation, motion score,
-// fully-in-frame quads, no unknown-classed cells, and a per-face holdoff -
-// so mid-rotation, occluded or edge-clipped windows keep accumulating
-// instead of landing. Once the sixth distinct slot fills, resolve_colors()
+// additionally gated on frontal-ness, per-pass rotation, motion score, no
+// unknown-classed cells, and a per-face holdoff - so mid-rotation or
+// occluded windows keep accumulating instead of landing - while an edge-
+// clipped observation (any quad corner out of frame) never enters a
+// window at all, so a converged window is fully-visible by construction. Once the sixth distinct slot fills, resolve_colors()
 // clusters all 54 stickers globally and assemble_scanned_faces() remains
 // the acceptance oracle exactly as before.
 //
@@ -286,7 +287,9 @@ signals:
     // Six slots filled but the captures didn't resolve/assemble into a
     // buildable cube. The most-suspect slot has already been dropped (see
     // the class comment's recovery contract) - facesScanned is back to 5
-    // and scanning simply continues. `reason` is cube::to_string(CubeError).
+    // and scanning simply continues. `reason` is cube::to_string(CubeError)
+    // plus a re-show hint naming the dropped capture by its centre-colour
+    // guess (still one plain QString - the payload shape is unchanged).
     void scanNeedsRetry(QString reason);
     // Census conflicts landed on two DISTINCT captured faces within the
     // layer-turn window: the cube's stickers changed mid-scan (a layer was
@@ -315,17 +318,20 @@ private:
         std::optional<cube::vision::CornerObservation> corner;
         std::optional<cube::vision::CubePoseProjection> pose;
         PoseSource pose_source = PoseSource::none;
-        // True when EVERY cell quad of every accepted observation this
-        // pass has all four corners inside the frame (false when nothing
-        // was accepted). Stricter than the centre-only visibility gate the
-        // observations themselves passed: a cell whose centre is in-frame
-        // but whose quad straddles the border samples clamped border
-        // pixels that are perfectly stable frame to frame - stable enough
-        // to converge and capture as a real sticker. Carried as gate DATA
-        // for capture-time policy (the identity-routing milestone), not
-        // applied to observation acceptance here, so display overlays and
-        // aggregation cadence are unchanged.
-        bool full_quads_in_frame = false;
+        // True when EVERY cell quad of the family's accepted observation
+        // this pass has all four corners inside the frame (false when the
+        // family produced nothing). Stricter than the centre-only
+        // visibility gate the observations themselves passed: a cell whose
+        // centre is in-frame but whose quad straddles the border samples
+        // clamped border pixels that are perfectly stable frame to frame -
+        // stable enough to converge and capture as a real sticker. Carried
+        // as gate DATA for capture-time policy (a clipped observation is
+        // withheld from the aggregators, never from display), and kept PER
+        // FAMILY because only the pose-producing family is aggregated: the
+        // other family's incidental clipping says nothing about the
+        // observation that actually feeds the windows.
+        bool face_full_quads = false;
+        bool corner_full_quads = false;
         // The analysed frame's TimedFrame mailbox timestamp, echoed
         // through so GUI-side consumers get pose and time base from the
         // same pass without correlating queues.
@@ -371,7 +377,13 @@ private:
     void tryCommitConverged();
     // The recovery half of the completion contract: erase the slot with
     // the lowest mean confidence so the user only re-shows one face.
-    void dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence);
+    // Returns a short user-facing description of the dropped capture ("the
+    // red-centred face"), built from its centre-colour guess BEFORE the
+    // clear - the scanNeedsRetry banner appends it so the user knows WHICH
+    // face to re-show, not just that one was dropped. Empty when nothing
+    // was dropped.
+    [[nodiscard]] QString dropMostSuspectSlot(
+        const std::array<float, cube::model::face_count>& mean_confidence);
     void finalizeIfComplete();
     void resetAggregators();
     void resetReading();
@@ -478,14 +490,18 @@ private:
     // window was built under (a change means the resolution flipped
     // mid-window - the window resets rather than mix permutations), when
     // it was last fed (per-identity staleness replaces the old global
-    // 700 ms reset), whether every contributing pass had fully-in-frame
-    // quads, and whether any sample came from a corner view (which loosens
-    // the frontal-ness gate to the corner-flank bound).
+    // 700 ms reset), and whether any sample came from a corner view (which
+    // loosens the frontal-ness gate to the corner-flank bound). The fully-
+    // in-frame-quads commit gate carries NO per-window state: clipped
+    // observations are refused at add time, so every sample in a window
+    // has full quads by construction - a sticky per-window flag here would
+    // let one clipped pass wedge a face uncommittable for as long as it
+    // stayed observed (nothing could ever clear the flag while adds kept
+    // refreshing the staleness clock).
     struct AggregatorMeta {
         std::array<int, 9> window_map{};
         bool has_window = false;
         std::int64_t last_add_ms = 0;
-        bool full_quads = true;
         bool corner_fed = false;
     };
     std::array<cube::vision::FaceAggregator, cube::model::face_count> aggregators_{};

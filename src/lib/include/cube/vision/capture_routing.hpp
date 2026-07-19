@@ -82,7 +82,9 @@ struct RoutingConfig {
     // New-face duplicate check: a commit routed to an EMPTY slot whose
     // centre sits within this radius of some occupied slot's is slip
     // evidence (tracked identity claims a new face while colour claims a
-    // captured one) - quarantined, never written.
+    // captured one) - quarantined, never written, and counted: repeats on
+    // one claimed face escalate to force-lost at the conflict_strikes
+    // threshold (identity-policy rule 3's belief penalty).
     float duplicate_centre_radius = 18.0F;
     // Repeated verification failures on ONE face within a locked segment:
     // the track itself is suspect, force-lose it (slots preserved - they
@@ -178,10 +180,20 @@ struct CommitResult {
     std::vector<int> confirmed_slots;
     // Escalations, valid whichever face tripped them: layer_turn means the
     // store already cleared itself (the caller invalidates the scan);
-    // force_lost means the strike limit was hit (the caller force-loses
-    // the tracker - slots are PRESERVED here).
+    // force_lost means a strike limit was hit - repeated verification
+    // conflicts on one occupied slot OR repeated duplicate-centre
+    // quarantines on one claimed empty slot (the caller force-loses the
+    // tracker - slots are PRESERVED here).
     bool layer_turn = false;
     bool force_lost = false;
+    // The quarantine was the duplicate-centre kind: tracked identity
+    // claimed a NEW face while colour claimed a captured one (identity-
+    // policy rule 3 - slip evidence). Surfaced distinctly because it is
+    // the only signature a wrong epoch-boundary gauge ever produces: the
+    // caller's log must be able to tell it from an occupied-slot
+    // verification conflict, and repeats escalate through force_lost
+    // above.
+    bool duplicate_centre = false;
 };
 
 class CaptureRouter {
@@ -215,7 +227,10 @@ public:
 
     // User-driven per-slot retake (fill-order index): the sanctioned way a
     // persistently conflicted slot is emptied - explicitly, never
-    // silently. Returns false when the index names no filled slot.
+    // silently. Returns false when the index names no filled slot. If a
+    // retake drops the store to <= 1 slot mid-recovery, recovery ends
+    // (identity is definitional again, matching on_epoch's own rule) -
+    // registration can never resolve against a store it cannot score.
     bool clear_slot(int fill_index);
 
     [[nodiscard]] int filled_count() const noexcept { return static_cast<int>(fill_order_.size()); }
@@ -266,6 +281,11 @@ private:
     // Layer-turn detector: (store face, time) of recent verification
     // conflicts; pruned to the window on every new conflict.
     std::vector<std::pair<cube::model::Face, std::int64_t>> conflict_events_;
+    // Duplicate-centre quarantines per CLAIMED (empty) store face this
+    // epoch - the strike counter behind rule 3's escalation. Epoch-scoped
+    // like slot strikes: a new gauge means the old accusations were
+    // against labels that no longer exist.
+    std::array<int, 6> duplicate_quarantines_{};
 };
 
 }  // namespace cube::vision

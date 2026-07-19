@@ -100,7 +100,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         float mean_score = std::numeric_limits<float>::max();
         int pairs = 0;
     };
-    std::vector<Candidate> eligible;
+    std::vector<Candidate> candidates;
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
         const auto& perm = kFacePermutation[static_cast<std::size_t>(g)];
         const bool satisfies_pins = std::ranges::all_of(pins, [&](const Pin& pin) {
@@ -119,30 +119,23 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
                 score += registration_pair_score(sample.captured, *slot, config);
             }
         }
+        // Every pin-satisfying hypothesis with at least one induced pair
+        // stays in the running here, HOWEVER badly it scores: the commit
+        // bar applies to the winner only, further down. Filtering by the
+        // bar before measuring the margin would silently discard a
+        // runner-up scoring just above it (winner 5.5, runner-up 6.5,
+        // margin 4) - exactly the near-miss the margin exists to refuse -
+        // and commit the winner while a barely-worse hypothesis was still
+        // alive.
         if (pairs > 0) {
-            const float mean = score / static_cast<float>(pairs);
-            if (mean <= config.epoch_register_max_score) {
-                eligible.push_back({g, mean, pairs});
-            }
+            candidates.push_back({g, score / static_cast<float>(pairs), pairs});
         }
-    }
-
-    if (eligible.empty()) {
-        // Distinguish "nothing recognised yet" (no epoch face tightly
-        // matches any stored slot - the deferral that keeps a brand-new
-        // face out of an empty slot until something is positively
-        // recognised) from "evidence exists but contradicts itself"
-        // (contradictory pins, or every induced overlap scores as a
-        // conflict). Both defer; the status split is diagnostic.
-        out.status = any_tight_match ? EpochRegistration::Status::ambiguous
-                                     : EpochRegistration::Status::insufficient;
-        return out;
     }
 
     // Deterministic preference among equal scores: the identity relabel
     // first (the commonest physical reality - the user re-showed the cube
     // roughly as before), then the lowest index.
-    std::ranges::sort(eligible, [](const Candidate& a, const Candidate& b) {
+    std::ranges::sort(candidates, [](const Candidate& a, const Candidate& b) {
         if (a.mean_score != b.mean_score) {
             return a.mean_score < b.mean_score;
         }
@@ -153,9 +146,23 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         }
         return a.index < b.index;
     });
-    const Candidate& best = eligible.front();
+
+    if (candidates.empty() || candidates.front().mean_score > config.epoch_register_max_score) {
+        // Distinguish "nothing recognised yet" (no epoch face tightly
+        // matches any stored slot - the deferral that keeps a brand-new
+        // face out of an empty slot until something is positively
+        // recognised) from "evidence exists but contradicts itself"
+        // (contradictory pins, every induced overlap scoring as a
+        // conflict, or even the best hypothesis failing the commit bar).
+        // Both defer; the status split is diagnostic.
+        out.status = any_tight_match ? EpochRegistration::Status::ambiguous
+                                     : EpochRegistration::Status::insufficient;
+        return out;
+    }
+
+    const Candidate& best = candidates.front();
     std::vector<const Candidate*> tied;
-    for (const Candidate& candidate : eligible) {
+    for (const Candidate& candidate : candidates) {
         if (candidate.mean_score - best.mean_score < config.epoch_register_margin) {
             tied.push_back(&candidate);
         }
@@ -222,6 +229,7 @@ void CaptureRouter::on_epoch(int epoch) {
     epoch_faces_ = {};
     epoch_order_.clear();
     conflict_events_.clear();
+    duplicate_quarantines_ = {};
     for (auto& slot : slots_) {
         if (slot) {
             slot->strikes = 0;
@@ -269,6 +277,7 @@ void CaptureRouter::clear() {
     epoch_faces_ = {};
     epoch_order_.clear();
     conflict_events_.clear();
+    duplicate_quarantines_ = {};
 }
 
 bool CaptureRouter::clear_slot(int fill_index) {
@@ -282,6 +291,19 @@ bool CaptureRouter::clear_slot(int fill_index) {
     // them toward a later layer-turn diagnosis would double-charge the
     // face the user already resolved by hand.
     std::erase_if(conflict_events_, [face](const auto& event) { return event.first == face; });
+    // Retakes during a re-orienting window can empty the store below what
+    // registration needs: with <= 1 slot left, every hypothesis induces at
+    // most one pair, so recovery could never resolve again this epoch and
+    // commits would defer forever. But <= 1 slot is exactly on_epoch's own
+    // "identity is definitional" regime - there is no second slot for the
+    // gauge to be wrong against - so drop out of recovery (buffered epoch
+    // faces included: they will re-converge and re-commit within a pass or
+    // two) and let the next commit adopt a gauge directly.
+    if (recovering_ && filled_count() <= 1) {
+        recovering_ = false;
+        epoch_faces_ = {};
+        epoch_order_.clear();
+    }
     return true;
 }
 
@@ -377,10 +399,21 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
     // Empty target. Duplicate-centre check first: the tracked identity
     // claims a NEW face while its centre colour sits on top of a captured
     // one - slip evidence, and writing it would seed the exact duplicate-
-    // slot wedge the legacy store suffered. Quarantine instead.
+    // slot wedge the legacy store suffered. Quarantine instead, and make
+    // the slip evidence COUNT (identity-policy rule 3: "belief
+    // penalized"): a wrong gauge adopted at an epoch boundary produces
+    // exactly this signature on every pass and never trips the occupied-
+    // slot strike path, so repeated duplicate quarantines on one claimed
+    // face escalate to force-lost just like verification strikes do - the
+    // honest way to penalize a belief the router cannot reach directly.
     for (const Face filled : fill_order_) {
         if (centre_lab_distance(captured, slots_[static_cast<std::size_t>(filled)]->captured) <
             config_.duplicate_centre_radius) {
+            result.duplicate_centre = true;
+            if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >=
+                config_.conflict_strikes) {
+                result.force_lost = true;
+            }
             return {CommitOutcome::quarantined};
         }
     }
@@ -432,7 +465,13 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             return result;
         }
         if (!adopt_gauge_direct(epoch_face, captured)) {
+            // The adopt-time refusal is the same duplicate-centre
+            // signature (near-miss centre on the one stored slot without a
+            // tight match); no counter here - the gauge stays unknown, so
+            // each retry re-tests genuinely fresh evidence rather than
+            // re-accusing a fixed claimed face.
             result.outcome = CommitOutcome::quarantined;
+            result.duplicate_centre = true;
             return result;
         }
         gauge_known_ = true;

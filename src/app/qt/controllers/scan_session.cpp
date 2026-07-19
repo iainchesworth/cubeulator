@@ -268,6 +268,30 @@ void log_track_pass(const cube::vision::TrackerPassOutput& track) {
     }
 }
 
+// English colour name for user-facing text (the scanNeedsRetry re-show
+// hint). Empty for unknown - callers fall back to a colourless phrasing
+// rather than telling the user to find an "unknown-centred" face.
+[[nodiscard]] QString facet_color_display_name(cube::model::FacetColor color) {
+    using cube::model::FacetColor;
+    switch (color) {
+        case FacetColor::white:
+            return QStringLiteral("white");
+        case FacetColor::yellow:
+            return QStringLiteral("yellow");
+        case FacetColor::red:
+            return QStringLiteral("red");
+        case FacetColor::orange:
+            return QStringLiteral("orange");
+        case FacetColor::green:
+            return QStringLiteral("green");
+        case FacetColor::blue:
+            return QStringLiteral("blue");
+        case FacetColor::unknown:
+        default:
+            return {};
+    }
+}
+
 // The same centre-colour -> cube-position anchor the assembler stands on
 // (scan_assembly.hpp: centres never move, so under Cube::solved()'s scheme
 // White -> D, Yellow -> U, Green -> F, Blue -> B, Orange -> L, Red -> R).
@@ -1080,7 +1104,21 @@ void ScanSession::handleAnalysisFinished() {
     if (capture_gate_ok_ && router_.filled_count() < static_cast<int>(cube::model::face_count)) {
         const auto lattice = static_cast<std::size_t>(track.lattice_index);
         const auto add_keyed = [&](const cube::vision::FaceCellMap& map,
-                                   const cube::vision::FaceObservation& observation, bool from_corner) {
+                                   const cube::vision::FaceObservation& observation, bool from_corner,
+                                   bool full_quads) {
+            // Gate 4 (fully-in-frame quads) is enforced HERE, per
+            // observation, by refusing the add: a quad clipped by the
+            // frame edge samples clamped border colour, so letting it into
+            // the ring would pollute the fused capture, while tracking it
+            // as window state would have to be un-set again somehow - a
+            // sticky flag provably wedged a face for as long as it stayed
+            // observed (adds kept refreshing the staleness clock that was
+            // supposed to clear it). Skipping keeps the window's clean
+            // samples intact, so one clipped pan costs nothing, and a face
+            // that stays clipped simply goes stale and restarts.
+            if (!full_quads) {
+                return;
+            }
             const auto face_index = static_cast<std::size_t>(map.body_face);
             auto& aggregator = aggregators_[face_index];
             auto& meta = metas_[face_index];
@@ -1108,19 +1146,24 @@ void ScanSession::handleAnalysisFinished() {
             meta.has_window = true;
             meta.window_map = map.cell;
             meta.last_add_ms = result.frame_ms;
-            meta.full_quads = meta.full_quads && result.full_quads_in_frame;
             meta.corner_fed = meta.corner_fed || from_corner;
         };
+        // Each family carries its OWN full-quads verdict: only the routed
+        // family's observation reaches the aggregators, so the other
+        // family's incidental clipping must not withhold it (a face
+        // observation grazing the border says nothing about the corner
+        // views a corner-pose pass is actually feeding).
         if (corner_pose && fresh_corner) {
             const std::array<const cube::vision::CornerFaceView*, 3> views{
                 &result.corner->top, &result.corner->lower_left, &result.corner->lower_right};
             for (std::size_t view = 0; view < views.size(); ++view) {
                 add_keyed(cube::vision::kCornerObsToBody[lattice][view],
                           slot_observation(*views[view], result.corner->geometry_confidence),
-                          /*from_corner=*/true);
+                          /*from_corner=*/true, result.corner_full_quads);
             }
         } else if (!corner_pose && fresh_face) {
-            add_keyed(cube::vision::kFaceObsToBody[lattice], *result.face, /*from_corner=*/false);
+            add_keyed(cube::vision::kFaceObsToBody[lattice], *result.face, /*from_corner=*/false,
+                      result.face_full_quads);
         }
     }
 
@@ -1228,27 +1271,28 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         }
     }
 
-    // Strict full-visibility flag for capture-time policy (see the field's
-    // comment in the header): every accepted observation's every cell quad
-    // must have ALL FOUR corners in-frame, not just its centre. Computed
-    // here where the geometry is already in full-frame pixels; false when
-    // nothing was accepted (there is nothing to capture from anyway).
+    // Strict full-visibility flags for capture-time policy (see the
+    // fields' comment in the header): every cell quad of the family's
+    // accepted observation must have ALL FOUR corners in-frame, not just
+    // its centre. Computed here where the geometry is already in
+    // full-frame pixels; false when the family produced nothing. Kept PER
+    // FAMILY: only the pose-producing family feeds the aggregators, and
+    // AND-ing both families together let the non-routed one's clipping
+    // veto observations it had nothing to do with.
     const auto quad_fully_in_frame = [&frame](const cube::vision::StickerQuad& cell) {
         return std::ranges::all_of(cell.corners, [&frame](const cv::Point2f& corner) {
             return corner.x >= 0.0F && corner.y >= 0.0F && corner.x < static_cast<float>(frame.cols) &&
                    corner.y < static_cast<float>(frame.rows);
         });
     };
-    bool full_quads = result.face.has_value() || result.corner.has_value();
     if (result.face) {
-        full_quads = full_quads && std::ranges::all_of(result.face->cells, quad_fully_in_frame);
+        result.face_full_quads = std::ranges::all_of(result.face->cells, quad_fully_in_frame);
     }
     if (result.corner) {
-        full_quads = full_quads && std::ranges::all_of(result.corner->top.cells, quad_fully_in_frame) &&
-                     std::ranges::all_of(result.corner->lower_left.cells, quad_fully_in_frame) &&
-                     std::ranges::all_of(result.corner->lower_right.cells, quad_fully_in_frame);
+        result.corner_full_quads = std::ranges::all_of(result.corner->top.cells, quad_fully_in_frame) &&
+                                   std::ranges::all_of(result.corner->lower_left.cells, quad_fully_in_frame) &&
+                                   std::ranges::all_of(result.corner->lower_right.cells, quad_fully_in_frame);
     }
-    result.full_quads_in_frame = full_quads;
 
     // 3D pose for the wireframe overlay, from whichever observation
     // survived its gates - corner first, since three pinned face quads
@@ -1360,9 +1404,9 @@ void ScanSession::tryCommitConverged() {
         if (pass_rotation_deg_ > kMaxCaptureRotDeg || capture_motion_score_ >= kMaxCaptureMotionScore) {
             continue;
         }
-        if (!meta.full_quads) {
-            continue;
-        }
+        // Gate 4 (fully-in-frame quads) needs no check here: clipped
+        // observations were refused at aggregation time, so a converged
+        // window is fully-visible by construction (see add_keyed).
         const auto captured = aggregator.capture();
         // Unknown-cell rule (the stationary-finger defeat): a cell whose
         // fused colour classifies as no sticker colour at all is something
@@ -1380,6 +1424,7 @@ void ScanSession::tryCommitConverged() {
         log_slot_decision("commit face=" + std::string(1, "URFDLB"[f]) +
                           " outcome=" + commit_outcome_name(commit.outcome) +
                           " confirmed=" + std::to_string(commit.confirmed_slots.size()) +
+                          (commit.duplicate_centre ? " DUP-CENTRE" : "") +
                           (commit.layer_turn ? " LAYER-TURN" : "") +
                           (commit.force_lost ? " FORCE-LOST" : ""));
 
@@ -1427,10 +1472,10 @@ void ScanSession::tryCommitConverged() {
     }
 }
 
-void ScanSession::dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence) {
+QString ScanSession::dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence) {
     const int filled = router_.filled_count();
     if (filled == 0) {
-        return;
+        return {};
     }
     int worst = 0;
     for (int i = 1; i < filled; ++i) {
@@ -1438,13 +1483,26 @@ void ScanSession::dropMostSuspectSlot(const std::array<float, cube::model::face_
             worst = i;
         }
     }
-    // Cleared BY KEY through the router, so the routing log can name the
-    // dropped body face even though the signal payload keeps the legacy
-    // generic reason (the QML contract).
+    // Cleared BY KEY through the router so both the routing log AND the
+    // scanNeedsRetry banner can name the dropped capture - the whole point
+    // of clearing by key is that "re-show a face" becomes "re-show the red
+    // one". The user-facing name is the centre-colour GUESS (body-face
+    // letters mean nothing to a user, and resolution just failed, so the
+    // provisional classification is the best name available); it must be
+    // read BEFORE clear_slot destroys the content.
     const auto face = router_.face_at(worst);
+    const cube::vision::CapturedFace* content = router_.slot_at(worst);
+    QString colour;
+    if (content != nullptr) {
+        colour = facet_color_display_name(
+            cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
+    }
     log_slot_decision("drop-suspect slot=" + std::to_string(worst) + " face=" +
-                      std::string(1, face ? "URFDLB"[static_cast<std::size_t>(*face)] : '?'));
+                      std::string(1, face ? "URFDLB"[static_cast<std::size_t>(*face)] : '?') +
+                      " centre=" + (colour.isEmpty() ? "?" : colour.toStdString()));
     router_.clear_slot(worst);
+    return colour.isEmpty() ? QStringLiteral("the least confident face")
+                            : QStringLiteral("the %1-centred face").arg(colour);
 }
 
 void ScanSession::finalizeIfComplete() {
@@ -1468,9 +1526,10 @@ void ScanSession::finalizeIfComplete() {
 
     const auto resolved = cube::vision::resolve_colors(captured);
     if (!resolved.has_value()) {
-        dropMostSuspectSlot(confidence);
+        const QString dropped = dropMostSuspectSlot(confidence);
         emit facesScannedChanged();
-        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(resolved.error()))));
+        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(resolved.error()))) +
+                            QStringLiteral(" - re-show ") + dropped);
         return;
     }
     for (std::size_t i = 0; i < resolved->size(); ++i) {
@@ -1479,9 +1538,10 @@ void ScanSession::finalizeIfComplete() {
 
     const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
     if (!assembled.has_value()) {
-        dropMostSuspectSlot(confidence);
+        const QString dropped = dropMostSuspectSlot(confidence);
         emit facesScannedChanged();
-        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(assembled.error()))));
+        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(assembled.error()))) +
+                            QStringLiteral(" - re-show ") + dropped);
         return;
     }
 

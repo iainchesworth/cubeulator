@@ -3,6 +3,7 @@
 #include <cube/model/face.hpp>
 #include <cube/vision/capture_routing.hpp>
 #include <cube/vision/color_resolution.hpp>
+#include <cube/vision/orientation_lattice.hpp>
 
 #include <opencv2/core.hpp>
 
@@ -150,6 +151,7 @@ TEST_CASE("solved-cube centre alias quarantines instead of overwriting", "[routi
 
     const auto result = router.commit(Face::U, solid(kWashedOrangeAsRed), 2000);
     CHECK(result.outcome == CommitOutcome::quarantined);
+    CHECK(result.duplicate_centre);
     CHECK(result.confirmed_slots.empty());
     // ZERO wrong-face commits: the red slot still holds red, and no new
     // slot was written either.
@@ -442,9 +444,136 @@ TEST_CASE("an epoch change with at most one slot re-associates immediately", "[r
         suspect = with_sticker(suspect, 2, kGreen);
         const auto result = router.commit(Face::U, suspect, 2000);
         CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK(result.duplicate_centre);
         CHECK(router.filled_count() == 1);
         CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
     }
+}
+
+TEST_CASE("registration margin counts runner-ups above the commit bar", "[routing]") {
+    // The header contract is "winner at most epoch_register_max_score AND
+    // runner-up worse by at least the margin". A runner-up scoring just
+    // above the bar (winner 4.25, runner-up 6.25, bar 6, margin 4) is
+    // still a live alternative hypothesis about where the epoch's faces
+    // belong - filtering it out by the bar BEFORE the margin check would
+    // commit the winner as "unique" while the evidence could not actually
+    // separate them.
+    const RoutingConfig config;
+
+    std::array<std::optional<CapturedFace>, 6> slots{};
+    slots[static_cast<std::size_t>(Face::U)] = solid(kWhite);
+    slots[static_cast<std::size_t>(Face::R)] = solid(kRed);
+    // Occupied so the rotations mapping the probe here score far outside
+    // the margin instead of escaping to a cheap empty target.
+    slots[static_cast<std::size_t>(Face::L)] = solid(kGreen);
+    slots[static_cast<std::size_t>(Face::B)] = solid(kYellow);
+    // The runner-up target: same census distance from the probe as the
+    // stored R slot (L1 6) but three times the centre drift, scoring
+    // 6 + 2*36/12 = 12 -> candidate mean (0.5 + 12)/2 = 6.25: above the
+    // 6-point bar, within 4 of the winner's 4.25.
+    CapturedFace f_slot = drifted(solid(kRed), 48.0F);
+    f_slot = with_sticker(f_slot, 0, kBlue);
+    f_slot = with_sticker(f_slot, 1, kBlue);
+    f_slot = with_sticker(f_slot, 2, kBlue);
+
+    // The white sample tight-matches the stored U slot ONLY, pinning the
+    // candidates to the four rotations fixing U; the red-ish probe (census
+    // L1 6 from solid red - too drifted to pin anything itself) then maps
+    // onto R (winner: 6 + 2*12/12 = 8, mean 4.25), F (runner-up), L and B
+    // (both far outside the margin).
+    CapturedFace probe = solid(kRed);
+    probe = with_sticker(probe, 0, kGreen);
+    probe = with_sticker(probe, 1, kGreen);
+    probe = with_sticker(probe, 2, kGreen);
+    probe = drifted(probe, 12.0F);
+
+    std::vector<EpochFaceSample> samples;
+    samples.push_back({Face::U, drifted(solid(kWhite), 3.0F)});
+    samples.push_back({Face::R, probe});
+
+    SECTION("a runner-up above the bar but inside the margin defers") {
+        slots[static_cast<std::size_t>(Face::F)] = f_slot;
+        const auto registration = register_epoch_gauge(samples, slots, config);
+        CHECK(registration.status == EpochRegistration::Status::ambiguous);
+    }
+
+    SECTION("pushing the runner-up past the margin resolves uniquely") {
+        // Three more swapped stickers (centre cell 4 untouched): census L1
+        // vs the probe becomes 12, score 18, mean 9.25 - a genuine unique
+        // win 5 points clear of the margin.
+        f_slot = with_sticker(f_slot, 3, kBlue);
+        f_slot = with_sticker(f_slot, 5, kBlue);
+        f_slot = with_sticker(f_slot, 6, kBlue);
+        slots[static_cast<std::size_t>(Face::F)] = f_slot;
+        const auto registration = register_epoch_gauge(samples, slots, config);
+        REQUIRE(registration.status == EpochRegistration::Status::resolved);
+        CHECK(registration.lattice_index == kIdentityLatticeIndex);
+    }
+}
+
+TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]") {
+    // A user may retakeSlot() every filled slot inside a re-orienting
+    // window. Registration needs occupied slots to score against, so
+    // staying in recovery past that point would defer every commit for the
+    // rest of the epoch ("re-orienting forever"); <= 1 slot is exactly
+    // on_epoch's own identity-is-definitional regime, so recovery must end
+    // there too.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+    // A buffered epoch face is already pending when the user starts
+    // retaking - it is dropped with the recovery state and simply
+    // re-commits on a later pass.
+    CHECK(router.commit(Face::F, solid(kBlue), 10000).outcome == CommitOutcome::deferred);
+
+    SECTION("down to one slot: identity is definitional again") {
+        REQUIRE(router.clear_slot(0));  // retake white
+        CHECK_FALSE(router.reorienting());
+        const auto result = router.commit(Face::F, solid(kBlue), 11000);
+        CHECK(result.outcome == CommitOutcome::filled);
+        CHECK(router.filled_count() == 2);
+        // The surviving slot's content was never touched by the exit.
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+    }
+
+    SECTION("down to zero slots: everything is fresh") {
+        REQUIRE(router.clear_slot(0));
+        REQUIRE(router.clear_slot(0));
+        CHECK_FALSE(router.reorienting());
+        const auto result = router.commit(Face::F, solid(kBlue), 11000);
+        CHECK(result.outcome == CommitOutcome::filled);
+        CHECK(router.filled_count() == 1);
+    }
+}
+
+TEST_CASE("repeated duplicate-centre quarantines escalate to force-lost", "[routing]") {
+    // Identity-policy rule 3 calls the duplicate-centre quarantine slip
+    // evidence with a belief penalty. A wrong gauge adopted at an epoch
+    // boundary produces exactly this signature on every pass - and never a
+    // verification strike, because the mis-claimed slot is EMPTY - so the
+    // quarantines themselves must escalate, or the wrong gauge would only
+    // ever surface as silent per-pass drops.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::R, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    const auto first = router.commit(Face::U, solid(kWashedOrangeAsRed), 2000);
+    CHECK(first.outcome == CommitOutcome::quarantined);
+    CHECK(first.duplicate_centre);
+    CHECK_FALSE(first.force_lost);
+
+    const auto second = router.commit(Face::U, solid(kWashedOrangeAsRed), 4000);
+    CHECK(second.outcome == CommitOutcome::quarantined);
+    CHECK(second.duplicate_centre);
+    CHECK(second.force_lost);
+    CHECK_FALSE(second.layer_turn);
+    // Slots preserved - the escalation accuses the TRACK, not the store.
+    CHECK(router.filled_count() == 1);
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
 }
 
 TEST_CASE("retake clears exactly one slot by fill index", "[routing]") {
