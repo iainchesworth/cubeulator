@@ -115,10 +115,11 @@ QtObject {
 
     // Cycles through a small set of seeds confirmed (during this feature's
     // development) to solve quickly - solve_pll's search can occasionally
-    // take a very long time on an arbitrary scramble (seed 3, notably -
-    // see pll.cpp's history), and there's no real vision pipeline yet to
-    // source a scramble from anyway, so picking from known-fast seeds
-    // avoids freezing the UI on solve()'s still-synchronous call.
+    // take a very long time on an arbitrary scramble (seed 3, notably - see
+    // pll.cpp's history), and there's no real vision pipeline yet to source
+    // a scramble from anyway. restart() now solves off the UI thread (see
+    // solve_controller.cpp) so a slow seed wouldn't freeze the app, but
+    // sticking to known-fast ones still keeps "scan another" feeling snappy.
     property int nextScrambleSeed: 1
 
     function scanAnother() {

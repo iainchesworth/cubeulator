@@ -195,7 +195,12 @@ if(CUBEULATOR_BUILD_APP)
     # cube::lib + Qt6::Qml: solve_controller.cpp needs cube::lib's include
     # paths at its own compile step, and QML_ELEMENT/QML_SINGLETON (used by
     # SolveController) need Qt6::Qml's qqmlregistration.h visible here too.
-    target_link_libraries(cube_app_qml PRIVATE cube::platform cube::lib Qt6::Gui Qt6::Qml)
+    # Qt6::Concurrent: solve_controller.cpp's restart() runs
+    # cube::solver::solve() via QtConcurrent::run() to keep it off the UI
+    # thread - cube_app_controllers already links Concurrent, but only
+    # transitively at cube_app's final link step, too late for this
+    # target's own compile step to see <QtConcurrentRun>.
+    target_link_libraries(cube_app_qml PRIVATE cube::platform cube::lib Qt6::Gui Qt6::Qml Qt6::Concurrent)
 
     # The generated cube_app_qml_qmltyperegistrations.cpp includes QML_ELEMENT
     # headers via "#include <CameraPermission.hpp>" (bare filename) and

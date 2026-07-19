@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QFutureWatcher>
 #include <QObject>
 #include <QQmlEngine>
 #include <QString>
@@ -46,6 +47,12 @@ class SolveController : public QObject {
     Q_PROPERTY(QVariantList stageRanges READ stageRanges CONSTANT)
     Q_PROPERTY(int currentStageIndex READ currentStageIndex NOTIFY stateChanged)
 
+    // True from restart() until its background solve() (see
+    // solve_controller.cpp) delivers a result. SolveScreen.qml shows a
+    // spinner instead of the previous solve's now-stale move data while
+    // this is set.
+    Q_PROPERTY(bool isSolving READ isSolving NOTIFY stateChanged)
+
 public:
     explicit SolveController(QObject* parent = nullptr);
 
@@ -65,6 +72,8 @@ public:
     [[nodiscard]] QVariantList stageRanges() const;
     [[nodiscard]] int currentStageIndex() const;
 
+    [[nodiscard]] bool isSolving() const;
+
 public slots:
     void nextMove();
     void previousMove();
@@ -78,5 +87,11 @@ signals:
     void stateChanged();
 
 private:
+    // Invoked on the UI thread once solveWatcher_'s background solve()
+    // (kicked off from restart()) finishes.
+    void applySolveResult();
+
     cube::solver::SteppedSolution stepped_;
+    QFutureWatcher<cube::solver::SteppedSolution> solveWatcher_;
+    bool isSolving_ = false;
 };
