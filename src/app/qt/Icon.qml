@@ -67,6 +67,9 @@ Canvas {
         case "chevron-right":
             polyline([[9, 6], [15, 12], [9, 18]]);
             break;
+        case "chevron-left":
+            polyline([[15, 6], [9, 12], [15, 18]]);
+            break;
         case "check":
             polyline([[20, 6], [9, 17], [4, 12]]);
             break;

@@ -63,6 +63,7 @@ Rectangle {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
                     variant: "ghost"; text: "Settings"; leadingIcon: "menu"
+                    onClicked: AppState.goSettings()
                 }
             }
         }
@@ -124,7 +125,7 @@ Rectangle {
             Row {
                 spacing: Theme.space6
                 AppButton { variant: "ghost"; text: "English"; leadingIcon: "globe" }
-                AppButton { variant: "ghost"; text: "Settings"; leadingIcon: "menu" }
+                AppButton { variant: "ghost"; text: "Settings"; leadingIcon: "menu"; onClicked: AppState.goSettings() }
             }
         }
 

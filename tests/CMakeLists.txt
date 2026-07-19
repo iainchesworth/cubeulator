@@ -9,6 +9,13 @@ add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
     unit/scan_session_config_test.cpp
+    unit/model_test.cpp
+    unit/grid_detection_test.cpp
+    unit/color_classification_test.cpp
+    unit/stability_test.cpp
+    unit/auto_advance_test.cpp
+    unit/vision_facade_test.cpp
+    unit/hand_presence_capability_test.cpp
     unit/lib_stub_functions_test.cpp)
 
 target_link_libraries(cube_unit_tests
@@ -31,7 +38,8 @@ catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST)
 
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
-    integration/platform_integration_test.cpp)
+    integration/platform_integration_test.cpp
+    integration/hand_presence_integration_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -43,5 +51,42 @@ target_link_libraries(cube_integration_tests
         Catch2::Catch2WithMain)
 
 cube_deploy_sanitizer_runtime(cube_integration_tests)
+cube_deploy_vision_assets(cube_integration_tests)
 
-catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST)
+# WORKING_DIRECTORY: cube_deploy_vision_assets() copies model assets next to
+# the built executable (CMAKE_RUNTIME_OUTPUT_DIRECTORY), so the ONNX
+# integration tests' relative model path only resolves if ctest actually
+# runs the binary from there rather than its own invocation directory.
+catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST
+    WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_integration_tests>")
+
+# --- Qt controller tests: needs a QCoreApplication for Qt's meta-object
+# machinery (signals/slots, NOTIFY properties), so it can't use
+# Catch2::Catch2WithMain's auto-generated main() like the two binaries
+# above - see qt_test_main.cpp. Gated behind CUBEULATOR_BUILD_APP since
+# cube_app_controllers only exists then; doesn't affect the coverage gate
+# (linux-gcc-coverage builds with CUBEULATOR_BUILD_APP=OFF).
+if(CUBEULATOR_BUILD_APP)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core)
+
+    add_executable(cube_qt_controller_tests
+        qt_test_main.cpp
+        unit/camera_controller_test.cpp
+        unit/scan_session_test.cpp
+        unit/settings_model_test.cpp)
+
+    target_link_libraries(cube_qt_controller_tests
+        PRIVATE
+            cube_app_controllers
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Qt6::Core
+            Catch2::Catch2)
+
+    cube_deploy_sanitizer_runtime(cube_qt_controller_tests)
+    cube_deploy_vision_assets(cube_qt_controller_tests)
+
+    catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")
+endif()

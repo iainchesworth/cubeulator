@@ -58,7 +58,8 @@ Rectangle {
             spacing: Theme.space2
             AppButton {
                 width: parent.width; height: 46; variant: "primary"; block: true
-                text: "Enable camera"
+                enabled: !CameraController.busy
+                text: CameraController.busy ? "Checking for a camera…" : "Enable camera"
                 onClicked: AppState.grantCamera()
             }
             AppButton {
@@ -94,7 +95,12 @@ Rectangle {
             Row {
                 spacing: Theme.space3
                 topPadding: Theme.space3
-                AppButton { height: 46; variant: "primary"; text: "Enable camera"; onClicked: AppState.grantCamera() }
+                AppButton {
+                    height: 46; variant: "primary"
+                    enabled: !CameraController.busy
+                    text: CameraController.busy ? "Checking for a camera…" : "Enable camera"
+                    onClicked: AppState.grantCamera()
+                }
                 AppButton { height: 46; variant: "secondary"; text: "Not now"; onClicked: AppState.goLaunch() }
             }
         }

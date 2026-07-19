@@ -14,4 +14,13 @@ Result<void> start(const DeviceInfo& /*device*/) {
 
 void stop() {}
 
+std::optional<cv::Mat> try_pop_latest_frame() {
+    // Native capture (Camera2/CameraX) lands with the vision pipeline spec.
+    return std::nullopt;
+}
+
+bool is_capturing() noexcept {
+    return false;
+}
+
 }  // namespace cube::platform::camera

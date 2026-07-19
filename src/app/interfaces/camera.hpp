@@ -2,6 +2,9 @@
 
 #include <cube/error.hpp>
 
+#include <opencv2/core.hpp>
+
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -19,5 +22,12 @@ struct DeviceInfo {
 [[nodiscard]] Result<std::vector<DeviceInfo>> enumerate_devices();
 [[nodiscard]] Result<void> start(const DeviceInfo& device);
 void stop();
+
+// The most recently captured frame (BGR) not yet returned by a previous
+// call, or nullopt if nothing new has arrived since the last call or no
+// capture is running. Desktop platforms back this with a single-slot
+// mailbox fed by a capture thread; mobile stubs always return nullopt.
+[[nodiscard]] std::optional<cv::Mat> try_pop_latest_frame();
+[[nodiscard]] bool is_capturing() noexcept;
 
 }  // namespace cube::platform::camera
