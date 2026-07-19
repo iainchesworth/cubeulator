@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cube/error.hpp>
+
 #include <array>
 #include <cstdint>
 
@@ -71,6 +73,15 @@ class Cube {
 public:
     [[nodiscard]] static Cube solved() noexcept;
 
+    // Builds a Cube from raw per-face sticker data, row-major per the
+    // layout documented above (the caller is responsible for correct
+    // facelet ordering - see cube::solver::cube_from_scan(), which derives
+    // it from a camera-oriented scan). Fails with
+    // CubeError::invalid_cube_state if the result doesn't pass
+    // is_physically_valid() - the guard against a malformed vision-pipeline
+    // read this class's own is_physically_valid() doc comment anticipated.
+    [[nodiscard]] static Result<Cube> from_facelets(const std::array<std::array<Color, 9>, 6>& facelets) noexcept;
+
     // row, col in [0,3).
     [[nodiscard]] Color at(Face face, int row, int col) const noexcept { return at(face, row * 3 + col); }
     [[nodiscard]] Color at(Face face, int index) const noexcept;
@@ -93,6 +104,22 @@ public:
     // a future vision pipeline); every Cube built via solved()+apply() in
     // this codebase already satisfies it by construction.
     [[nodiscard]] bool is_physically_valid() const noexcept;
+
+    // The full reachability test: true iff this facelet state can be
+    // produced from solved() by some sequence of face turns. Like solved()
+    // itself, this is defined w.r.t. the fixed centre scheme
+    // (canonical_color): a physically valid cube always carries one centre
+    // of each colour but possibly permuted vs canonical - exactly what a
+    // free-form scan produces when its six faces are assembled into the
+    // wrong slots - and since face turns never move centres, such a state
+    // is unreachable and reported as not solvable (checked first). On top
+    // of is_physically_valid() (checked next; false -> false) this
+    // enforces the three classical invariants: corner twist sum = 0
+    // (mod 3), edge flip sum = 0 (mod 2), and equal corner/edge
+    // permutation parities - together necessary AND sufficient for
+    // reachability once every real cubie is present exactly once (see
+    // cube.cpp for the conventions and their derivations).
+    [[nodiscard]] bool is_solvable() const noexcept;
 
     // Where the edge cubie carrying colours `a` and `b` (in either order)
     // currently sits: face_a/index_a is wherever `a` landed, face_b/index_b
