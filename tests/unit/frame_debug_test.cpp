@@ -178,7 +178,8 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
 
     const cv::Mat frame = cv::imread(path, cv::IMREAD_COLOR);
     REQUIRE_FALSE(frame.empty());
-    std::printf("frame: %s (%dx%d)\n", path, frame.cols, frame.rows);
+    std::printf("frame: %s (%dx%d) cool_hue=%d\n", path, frame.cols, frame.rows,
+                cube::vision::count_cool_hue_pixels(frame));
 
     // Stage 1a: brightness-path candidates (the shared detail:: seam).
     const auto bright = detail::find_square_candidates(frame);

@@ -2,7 +2,12 @@
 
 #include <cube/vision/idle_gate.hpp>
 
+#include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
+
+#include <cstdio>
+#include <cstdlib>
+#include <string>
 
 using namespace cube::vision;
 
@@ -94,6 +99,41 @@ TEST_CASE("IdleGate reset restarts a fresh scan detecting", "[vision]") {
     CHECK_FALSE(gate.skip_next());
     gate.on_pass(0, true);
     CHECK_FALSE(gate.skip_next());  // streak restarted too
+}
+
+// Calibration scan - hidden, corpus-driven: prints per-pass cool-hue
+// counts (and a few candidate alternative bands) over a recording so the
+// idle gate's floor can be set against measured bimodality instead of
+// guessed. Usage: CUBE_TRACK_REPLAY_DIR=<recording> "[.cool-hue-scan]".
+#ifdef _MSC_VER
+#pragma warning(disable : 4996)
+#endif
+TEST_CASE("scan a recording's cool-hue statistics", "[.cool-hue-scan]") {
+    const char* dir = std::getenv("CUBE_TRACK_REPLAY_DIR");
+    if (dir == nullptr) {
+        SKIP("CUBE_TRACK_REPLAY_DIR not set");
+    }
+    const auto band_count = [](const cv::Mat& bgr, int h0, int h1, int s0, int v0) {
+        cv::Mat small;
+        cv::resize(bgr, small, cv::Size(160, 120), 0.0, 0.0, cv::INTER_AREA);
+        cv::Mat hsv;
+        cv::cvtColor(small, hsv, cv::COLOR_BGR2HSV);
+        cv::Mat mask;
+        cv::inRange(hsv, cv::Scalar(h0, s0, v0), cv::Scalar(h1, 255, 255), mask);
+        return cv::countNonZero(mask);
+    };
+    std::printf("pass,production,s80v60,s100v60,s120v80\n");
+    for (int pass = 0;; ++pass) {
+        char name[32];
+        std::snprintf(name, sizeof name, "rec_%06d.jpg", pass);
+        const cv::Mat frame = cv::imread(std::string(dir) + "/" + name, cv::IMREAD_COLOR);
+        if (frame.empty()) {
+            break;
+        }
+        std::printf("%d,%d,%d,%d,%d\n", pass, count_cool_hue_pixels(frame), band_count(frame, 35, 135, 80, 60),
+                    band_count(frame, 35, 135, 100, 60), band_count(frame, 35, 135, 120, 80));
+    }
+    SUCCEED();
 }
 
 TEST_CASE("count_cool_hue_pixels separates cube tiles from warm clutter", "[vision]") {

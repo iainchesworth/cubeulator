@@ -15,11 +15,13 @@ namespace cube::vision {
 //
 // The presence signal is a COOL-HUE pixel count on a fixed 160x120
 // downsample: a matte tile cube always shows green/blue/cyan tiles at
-// meaningful saturation, while the cube-absent scenes that fooled looser
+// strong saturation, while the cube-absent scenes that fooled looser
 // gates (face, forehead, warm curtain, wooden desk) are warm-hued or
-// unsaturated. Measured on the live1 session this statistic is bimodal -
-// <= 11 on cube-absent passes vs >= 60 with the cube in frame - so the
-// floor of 20 sits in an empty band on both sides.
+// unsaturated. Measured over the full live1 recording ([.cool-hue-scan]
+// in idle_gate_test.cpp) the statistic is cleanly bimodal - cube-absent
+// p90 = 6 (boundary frames where the cube is entering/leaving account
+// for every higher value) vs cube-present p05 = 103 - so the floor of 20
+// sits in an empty band with wide margin on both sides.
 //
 // Threading contract: this class is a plain state machine owned by the
 // GUI thread and mutated once per completed pass (handleAnalysisFinished),

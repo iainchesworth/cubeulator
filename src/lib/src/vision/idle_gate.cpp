@@ -16,12 +16,18 @@ int count_cool_hue_pixels(const cv::Mat& bgr_frame) {
     cv::resize(bgr_frame, small, cv::Size(160, 120), 0.0, 0.0, cv::INTER_AREA);
     cv::Mat hsv;
     cv::cvtColor(small, hsv, cv::COLOR_BGR2HSV);
-    // Green through blue at meaningful saturation and brightness: tiles a
-    // matte cube always shows some of, and the warm/unsaturated clutter
-    // that produced live1's false candidates (skin, forehead, curtain,
-    // desk) never does - see idle_gate.hpp's bimodal measurement.
+    // Green through blue at STRONG saturation and moderate brightness:
+    // tiles a matte cube always shows some of, and the warm/unsaturated
+    // clutter that produced live1's false candidates (skin, forehead,
+    // curtain, desk) never does. S >= 100 / V >= 60, not the softer cut
+    // first drafted: measured over the full live1 recording (the
+    // [.cool-hue-scan] harness), dim bluish shadow pixels kept a softer
+    // band at 39-169 on cube-absent frames - above any usable floor -
+    // while this band is cleanly bimodal: cube-absent p90 = 6, max 6 away
+    // from span boundaries, vs cube-present p05 = 103. See
+    // idle_gate.hpp's floor.
     cv::Mat mask;
-    cv::inRange(hsv, cv::Scalar(35, 60, 40), cv::Scalar(135, 255, 255), mask);
+    cv::inRange(hsv, cv::Scalar(35, 100, 60), cv::Scalar(135, 255, 255), mask);
     return cv::countNonZero(mask);
 }
 
