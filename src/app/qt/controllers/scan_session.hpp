@@ -330,7 +330,12 @@ private:
     // queue time would no longer correspond to the result being handled.
     // The flag guarantees queue -> handle -> queue -> handle alternation,
     // which per-pass sampled priors (this feature's whole data flow) depend
-    // on. The timer feeds poll()'s watchdog log for a pass that never
+    // on. The flag is NOT sufficient alone: stop()/start() force-clear it
+    // so a wedged pass can't lock analysis out of the next session, and
+    // that pass may still be executing when the next session's poll timer
+    // starts - so poll() gates on (flag || isRunning()), each half covering
+    // the other's blind spot, preserving single-in-flight across restarts.
+    // The timer feeds poll()'s watchdog log for a pass that never
     // delivered; the logged flag keeps that log at one line per episode
     // instead of one per poll.
     bool analysis_inflight_ = false;

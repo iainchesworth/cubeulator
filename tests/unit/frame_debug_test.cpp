@@ -300,11 +300,15 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
 //   cube_unit_tests.exe "[.track-replay]"
 //
 // Every recorded pass is driven through the same detector cascade the live
-// worker runs - observe_face with the fully-visible-cells gate, then
-// observe_corner, then the corner-first pose projection - and emitted as one
-// CSV row per pass on stdout, ready for offline metric extraction (theta
-// histograms, gap lengths, identity stability) as the tracker milestones
-// land. Skips (never fails) when no recording is present: the corpus is
+// worker runs - observe_face and observe_corner each behind the live
+// fully-visible-cells gate, then the corner-first pose projection over
+// whatever survived - and emitted as one CSV row per pass on stdout, ready
+// for offline metric extraction (theta histograms, gap lengths, identity
+// stability) as the tracker milestones land. Detections the gate discards
+// are reported in the face_gated/corner_gated columns so a metric can
+// distinguish "detector missed" from "detected but partially off-frame" -
+// conflating them would misattribute gate losses to detector losses.
+// Skips (never fails) when no recording is present: the corpus is
 // recorded on demand from live hardware and does not ship with the repo.
 //
 // Fidelity notes, so numbers from this harness can be trusted against live
@@ -320,7 +324,16 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
 //  - The live cell_in_frame gate compares full-frame geometry against
 //    full-frame bounds; comparing analysis-scale geometry against
 //    analysis-scale bounds is the same predicate under that uniform scale,
-//    so gating decisions match too.
+//    so gating decisions match too. It is applied to BOTH detector paths
+//    exactly as analyze() applies it: a face is accepted only when all 9
+//    cells are in frame, a corner only when all 27 cells across its three
+//    views are, and only a surviving corner (falling back to a surviving
+//    face) feeds pose projection.
+//  - Index rows at least one full ring lap older than the newest row are
+//    excluded as overwritten (frame_overwritten in frame_recording.hpp):
+//    their filename slot provably holds a later pass's pixels, and within
+//    one run the resolution never changes, so the size cross-check alone
+//    would silently pair those rows' timestamps with late-clip images.
 //  - JPEG q=90 recompression perturbs Lab samples slightly relative to the
 //    live pass; geometry/pose are unaffected and colour deltas are far
 //    below classification margins.
@@ -339,7 +352,15 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
 
     const auto rows = recording::read_index(index_stream);
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
-    std::printf("pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,pose,qw,qx,qy,qz\n");
+    std::printf("pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz\n");
+
+    // The newest pass determines which older rows' ring slots have provably
+    // been rewritten on disk (see frame_overwritten) - must be known before
+    // the replay loop touches any file.
+    int max_pass = 0;
+    for (const auto& row : rows) {
+        max_pass = std::max(max_pass, row.pass);
+    }
 
     // Same fully-visible gate as the live worker (scan_session.cpp), at
     // analysis scale per the fidelity note above.
@@ -357,14 +378,21 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     bool have_previous = false;
     std::size_t replayed = 0;
     for (const auto& row : rows) {
+        if (recording::frame_overwritten(row.pass, max_pass)) {
+            // Ring wrap: a recording longer than the file ring overwrites
+            // its oldest frames, and within one run they are the SAME
+            // resolution as their replacements - only the index reveals
+            // the wrap. Report and carry on; the surviving final lap is
+            // still a valid contiguous clip.
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            continue;
+        }
         const cv::Mat frame = cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
-            // Ring wrap: a recording longer than the file ring overwrites
-            // its oldest frames, so early index rows may point at newer
-            // images (caught by the size check when resolutions differ) or
-            // at nothing. Report and carry on - the surviving tail is
-            // still a valid contiguous clip.
-            std::printf("%d,%lld,,overwritten,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            // Secondary guard for a file that is missing outright or was
+            // left behind by an earlier run at a different resolution
+            // (the fresh-truncated index doesn't describe those frames).
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
             continue;
         }
 
@@ -372,14 +400,30 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         previous_t_ms = row.t_ms;
         have_previous = true;
 
+        const auto all_cells_in_frame = [&](const auto& cells) {
+            return std::all_of(cells.begin(), cells.end(),
+                               [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
+        };
+
         const auto observed = observe_face(frame);
+        const bool face_gated = observed.has_value() && !all_cells_in_frame(observed->cells);
         std::optional<cube::vision::FaceObservation> face;
-        if (observed.has_value() &&
-            std::all_of(observed->cells.begin(), observed->cells.end(),
-                        [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); })) {
+        if (observed.has_value() && !face_gated) {
             face = *observed;
         }
-        const auto corner = observe_corner(frame);
+        // Same all-27-cells gate as the live worker: a corner view with any
+        // cell off-frame samples fabricated colour and never reaches the
+        // live pipeline's aggregation OR pose projection, so it must not
+        // count as a detection (or seed a pose) here either.
+        const auto observed_corner = observe_corner(frame);
+        const bool corner_gated =
+            observed_corner.has_value() &&
+            !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
+              all_cells_in_frame(observed_corner->lower_right.cells));
+        std::optional<cube::vision::CornerObservation> corner;
+        if (observed_corner.has_value() && !corner_gated) {
+            corner = *observed_corner;
+        }
 
         // Corner-first, exactly like the live pass: three pinned quads
         // constrain the pose far better than one.
@@ -394,10 +438,10 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             }
         }
 
-        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,", row.pass, static_cast<long long>(row.t_ms),
+        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),
                     static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
                     face.has_value() ? face->geometry_confidence : 0.0F, corner.has_value() ? 1 : 0,
-                    corner.has_value() ? corner->geometry_confidence : 0.0F,
+                    corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0, corner_gated ? 1 : 0,
                     pose.has_value() && pose->orientation_valid ? 1 : 0);
         if (pose.has_value() && pose->orientation_valid) {
             std::printf("%.5f,%.5f,%.5f,%.5f\n", pose->orientation[0], pose->orientation[1], pose->orientation[2],

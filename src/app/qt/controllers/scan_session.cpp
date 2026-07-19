@@ -620,10 +620,13 @@ void ScanSession::start(const QString& deviceId) {
     restartScan();
 
     // A stale gate can only be held here if a pre-stop() pass never
-    // delivered at all (its handler would have cleared it); dropping it
-    // matches stop()'s reset and can't double-queue - poll() doesn't run
-    // again until handleStartFinished() restarts the timer, long after any
-    // such pass has drained.
+    // delivered at all; dropping it matches stop()'s reset so a wedged
+    // worker can't lock analysis out of the new session forever. Dropping
+    // it does NOT assert the pass has drained - the watchdog's own premise
+    // is that a pass can outlive a stop()/start() cycle - so poll() gates
+    // on isRunning() as well: until the orphan actually finishes, no new
+    // pass is queued beside it (two concurrent analyze() calls would race
+    // the lock-free worker-side per-pass state).
     analysis_inflight_ = false;
 
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
@@ -644,8 +647,9 @@ void ScanSession::stop() {
     // The gate is deliberately released even if a pass is still in flight:
     // its late-delivered result is discarded by handleAnalysisFinished()'s
     // !running_ guard (clearing an already-clear flag there is harmless),
-    // and no new pass can race it because the poll timer is stopped until
-    // the next start() completes.
+    // and no new pass can race it - the poll timer is stopped until the
+    // next start() completes, and if the pass is STILL executing by then,
+    // poll()'s isRunning() gate keeps skipping until it drains.
     analysis_inflight_ = false;
 
     running_ = false;
@@ -720,10 +724,19 @@ void ScanSession::poll() {
     ++frame_seq_;
     emit frameUpdated();
 
-    if (analysis_inflight_) {
+    if (analysis_inflight_ || analysis_watcher_.isRunning()) {
         // Still analyzing a previous frame (or its result is queued but not
-        // yet handled - see analysis_inflight_ in the header); the live
-        // image above still updated, just skip queuing another pass. A pass
+        // yet handled - see analysis_inflight_ in the header). The two
+        // halves cover each other's blind spot: the flag closes
+        // isRunning()'s finished-but-unhandled window, while isRunning()
+        // covers the one window where the flag is deliberately
+        // force-cleared with a pass possibly still executing - a wedged or
+        // long pass straddling a stop()/start() cycle (futures are
+        // uncancelable, so it keeps running on the pool after the restart,
+        // and queuing a second pass beside it would race the lock-free
+        // worker-side per-pass state: the StabilityTracker history, the
+        // recorder statics). The live image above still updated, just skip
+        // queuing another pass. A pass
         // should take tens of milliseconds; one that has held the gate for
         // seconds means a wedged worker (driver stall, debugger break) and
         // deserves a trace, since the only visible symptom is the overlay

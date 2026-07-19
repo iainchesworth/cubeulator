@@ -17,10 +17,14 @@
 // Ring behavior: frame files wrap at kRecordRingFrames (filename is
 // pass % kRecordRingFrames) so an accidentally-left-on recorder bounds its
 // disk use, while index.csv keeps appending - a replay of a wrapped
-// recording finds rows whose file has been overwritten by a later pass,
-// detectable because the stored (w, h) no longer match the image on disk.
-// At the ~30 Hz analysis ceiling the ring holds the most recent ~2 minutes,
-// comfortably longer than any single scripted corpus clip.
+// recording finds rows whose file has been overwritten by a later pass.
+// The index itself is the authoritative wrap detector (frame_overwritten
+// below): within one app run the analysis resolution never changes, so the
+// obvious (w, h)-vs-disk cross-check would silently pair a stale row's
+// timestamp with a later lap's same-sized image; the size check survives
+// only as a secondary guard against cross-run leftovers. At the ~30 Hz
+// analysis ceiling the ring holds the most recent ~2 minutes, comfortably
+// longer than any single scripted corpus clip.
 
 #include <charconv>
 #include <cstdint>
@@ -65,6 +69,18 @@ struct RecordedFrameInfo {
     return name;
 }
 
+// True when a row's frame file has provably been replaced on disk: rows a
+// full ring lap (or more) older than the newest row in the same index share
+// a filename slot with a later pass that has already overwritten it (the
+// recorder writes the JPEG before appending the row, so the newest row's
+// whole lap is on disk). Callers should compute max_pass over the rows they
+// read and drop these - the file that loads at that name holds a LATER
+// frame's pixels, and pairing them with this row's timestamp corrupts every
+// downstream metric without any size mismatch to betray it.
+[[nodiscard]] inline bool frame_overwritten(int pass, int max_pass) {
+    return max_pass - pass >= kRecordRingFrames;
+}
+
 // Parses one CSV row; nullopt for the header row, blank lines, or anything
 // malformed (a recording truncated mid-write ends with a partial line -
 // replay must shrug that off, not die on it).
@@ -73,6 +89,14 @@ struct RecordedFrameInfo {
         line.remove_suffix(1);
     }
     if (line.empty() || line == kIndexCsvHeader) {
+        return std::nullopt;
+    }
+    if (line.back() == ',') {
+        // A trailing delimiter would otherwise slip through: the sixth
+        // field parse swallows it as a separator, leaving an empty view
+        // that the leftover-text check below can't tell from a clean
+        // end-of-line. No recorder output ever ends with one, so it's
+        // malformed.
         return std::nullopt;
     }
 
