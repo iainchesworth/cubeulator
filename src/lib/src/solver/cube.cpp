@@ -15,8 +15,6 @@ struct Vec3 {
     int x = 0;
     int y = 0;
     int z = 0;
-
-    friend constexpr bool operator==(const Vec3&, const Vec3&) = default;
 };
 
 constexpr Vec3 operator+(Vec3 a, Vec3 b) noexcept { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
@@ -104,6 +102,147 @@ constexpr int index_on_face(Face face, Vec3 pos) noexcept {
     return 0;
 }
 
+// ---------------------------------------------------------------------------
+// Precomputed tables.
+//
+// The geometric derivation above stays the single source of truth, but
+// re-running it per sticker per call made Cube::apply ~272ns and
+// locate_edge ~125ns (measured, MSVC /O2) - and the solver's F2L searches
+// execute those primitives millions of times per solve, which was the
+// dominant cost of the whole pipeline once the last layer went
+// algorithmic (see last_layer.hpp; solve() must stay interactive on a
+// phone). Everything below is evaluated at compile time FROM the same
+// constexpr geometry, so the tables cannot drift from the derivation, and
+// the runtime functions become small table scans with byte-identical
+// results.
+// ---------------------------------------------------------------------------
+
+struct StickerMove {
+    Face dst_face;
+    std::uint8_t dst_index;
+    Face src_face;
+    std::uint8_t src_index;
+};
+
+// A single-face turn (any number of quarter turns) moves exactly 20
+// stickers: the 21 in the turned layer minus that face's own centre, which
+// a rotation about its own normal fixes.
+using MoveTable = std::array<StickerMove, 20>;
+
+constexpr MoveTable make_move_table(Face turned, int turns) {
+    MoveTable table{};
+    std::size_t count = 0;
+    const Vec3 n = face_normal(turned);
+    for (Face face : kAllFaces) {
+        for (int index = 0; index < 9; ++index) {
+            const Vec3 pos = position_of(face, index);
+            if (dot(pos, n) != 1) {
+                continue;  // not in the turned layer
+            }
+            Vec3 new_pos = pos;
+            Vec3 new_normal = face_normal(face);
+            for (int t = 0; t < turns; ++t) {
+                new_pos = rotate_quarter(new_pos, n);
+                new_normal = rotate_quarter(new_normal, n);
+            }
+            const Face new_face = face_from_normal(new_normal);
+            const int new_index = index_on_face(new_face, new_pos);
+            if (new_face == face && new_index == index) {
+                continue;  // the turned face's own centre
+            }
+            table[count++] = StickerMove{new_face, static_cast<std::uint8_t>(new_index), face,
+                                          static_cast<std::uint8_t>(index)};
+        }
+    }
+    if (count != table.size()) {
+        throw "a face turn must move exactly 20 stickers";  // constexpr: compile error if ever hit
+    }
+    return table;
+}
+
+// [face][turns - 1] for turns in 1..3.
+constexpr auto kMoveTables = [] {
+    std::array<std::array<MoveTable, 3>, 6> tables{};
+    for (Face face : kAllFaces) {
+        for (int turns = 1; turns <= 3; ++turns) {
+            tables[static_cast<std::size_t>(face)][static_cast<std::size_t>(turns - 1)] =
+                make_move_table(face, turns);
+        }
+    }
+    return tables;
+}();
+
+struct EdgePosition {
+    Face face_a;
+    std::uint8_t index_a;
+    Face face_b;
+    std::uint8_t index_b;
+};
+
+struct CornerPosition {
+    std::array<Face, 3> faces;
+    std::array<std::uint8_t, 3> indices;
+};
+
+// The 12 edge and 8 corner positions, enumerated in EXACTLY the order the
+// original locate_edge/locate_corner loops visited them (axis pairs then
+// signs for edges; corner octants for corners; faces in kAllFaces order
+// within each) - locate results must stay byte-identical, including which
+// sticker lands in face_a vs face_b.
+constexpr auto kEdgePositions = [] {
+    std::array<EdgePosition, 12> positions{};
+    std::size_t count = 0;
+    for (int axis0 = 0; axis0 < 3; ++axis0) {
+        for (int axis1 = axis0 + 1; axis1 < 3; ++axis1) {
+            for (int s0 : {-1, 1}) {
+                for (int s1 : {-1, 1}) {
+                    Vec3 pos{};
+                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
+                    *comps[axis0] = s0;
+                    *comps[axis1] = s1;
+                    Face faces[2]{};
+                    std::uint8_t indices[2]{};
+                    int n = 0;
+                    for (Face face : kAllFaces) {
+                        if (dot(face_normal(face), pos) != 1) {
+                            continue;
+                        }
+                        faces[n] = face;
+                        indices[n] = static_cast<std::uint8_t>(index_on_face(face, pos));
+                        ++n;
+                    }
+                    positions[count++] = EdgePosition{faces[0], indices[0], faces[1], indices[1]};
+                }
+            }
+        }
+    }
+    return positions;
+}();
+
+constexpr auto kCornerPositions = [] {
+    std::array<CornerPosition, 8> positions{};
+    std::size_t count = 0;
+    for (int cx : {-1, 1}) {
+        for (int cy : {-1, 1}) {
+            for (int cz : {-1, 1}) {
+                CornerPosition corner{};
+                int n = 0;
+                for (Face face : kAllFaces) {
+                    if (dot(face_normal(face), Vec3{cx, cy, cz}) != 1) {
+                        continue;
+                    }
+                    corner.faces[static_cast<std::size_t>(n)] = face;
+                    corner.indices[static_cast<std::size_t>(n)] =
+                        static_cast<std::uint8_t>(index_on_face(face, Vec3{cx, cy, cz}));
+                    ++n;
+                }
+                positions[count++] = corner;
+            }
+        }
+    }
+    return positions;
+}();
+
 }  // namespace
 
 Cube Cube::solved() noexcept {
@@ -117,31 +256,26 @@ Cube Cube::solved() noexcept {
     return c;
 }
 
-Color Cube::at(Face face, int index) const noexcept { return facelets_[static_cast<std::size_t>(face)][index]; }
+Color Cube::at(Face face, int index) const noexcept {
+    return facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
+}
 
 std::array<Color, 9> Cube::face(Face face) const noexcept { return facelets_[static_cast<std::size_t>(face)]; }
 
 Cube Cube::apply(Move move) const noexcept {
     Cube result = *this;
-    const Vec3 n = face_normal(move.face);
-
-    for (Face face : kAllFaces) {
-        for (int index = 0; index < 9; ++index) {
-            const Vec3 pos = position_of(face, index);
-            if (dot(pos, n) != 1) {
-                continue;  // not in the turned layer
-            }
-
-            Vec3 new_pos = pos;
-            Vec3 new_normal = face_normal(face);
-            for (int t = 0; t < move.turns; ++t) {
-                new_pos = rotate_quarter(new_pos, n);
-                new_normal = rotate_quarter(new_normal, n);
-            }
-            const Face new_face = face_from_normal(new_normal);
-            const int new_index = index_on_face(new_face, new_pos);
-            result.set(new_face, new_index, facelets_[static_cast<std::size_t>(face)][index]);
-        }
+    // Move documents turns in 1..3 and Face's six enumerators, and every
+    // constructor in the codebase honours both; guard anyway so a malformed
+    // value (e.g. a hypothetical future vision-pipeline read of a raw byte,
+    // the same class of input is_physically_valid guards against) degrades
+    // to a no-op copy - as the old geometric implementation did - instead
+    // of indexing out of the tables.
+    if (move.turns < 1 || move.turns > 3 || static_cast<std::size_t>(move.face) >= kMoveTables.size()) {
+        return result;
+    }
+    for (const StickerMove& sticker :
+         kMoveTables[static_cast<std::size_t>(move.face)][static_cast<std::size_t>(move.turns - 1)]) {
+        result.set(sticker.dst_face, sticker.dst_index, at(sticker.src_face, sticker.src_index));
     }
     return result;
 }
@@ -217,12 +351,12 @@ bool Cube::is_physically_valid() const noexcept {
                         continue;  // this face doesn't touch this corner
                     }
                     const int index = index_on_face(face, Vec3{cx, cy, cz});
-                    colors[n] = at(face, index);
+                    colors[static_cast<std::size_t>(n)] = at(face, index);
                     ++n;
                 }
                 std::array<bool, 3> seen_pair{false, false, false};
                 for (int i = 0; i < 3; ++i) {
-                    const int pair = axis_pair_of(colors[i]);
+                    const int pair = axis_pair_of(colors[static_cast<std::size_t>(i)]);
                     if (pair < 0 || seen_pair[static_cast<std::size_t>(pair)]) {
                         return false;  // duplicate axis-pair on one corner: impossible
                     }
@@ -248,7 +382,7 @@ bool Cube::is_physically_valid() const noexcept {
                             continue;
                         }
                         const int index = index_on_face(face, pos);
-                        colors[n] = at(face, index);
+                        colors[static_cast<std::size_t>(n)] = at(face, index);
                         ++n;
                     }
                     if (n != 2) {
@@ -268,76 +402,41 @@ bool Cube::is_physically_valid() const noexcept {
 }
 
 Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
-    for (int axis0 = 0; axis0 < 3; ++axis0) {
-        for (int axis1 = axis0 + 1; axis1 < 3; ++axis1) {
-            for (int s0 : {-1, 1}) {
-                for (int s1 : {-1, 1}) {
-                    Vec3 pos{};
-                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
-                    *comps[axis0] = s0;
-                    *comps[axis1] = s1;
-
-                    Face faces[2]{};
-                    int indices[2]{};
-                    int n = 0;
-                    for (Face face : kAllFaces) {
-                        const Vec3 fn = face_normal(face);
-                        if (dot(fn, pos) != 1) {
-                            continue;
-                        }
-                        faces[n] = face;
-                        indices[n] = index_on_face(face, pos);
-                        ++n;
-                    }
-                    const Color c0 = at(faces[0], indices[0]);
-                    const Color c1 = at(faces[1], indices[1]);
-                    if (c0 == a && c1 == b) {
-                        return {faces[0], indices[0], faces[1], indices[1]};
-                    }
-                    if (c0 == b && c1 == a) {
-                        return {faces[1], indices[1], faces[0], indices[0]};
-                    }
-                }
-            }
+    for (const EdgePosition& position : kEdgePositions) {
+        const Color c0 = at(position.face_a, position.index_a);
+        const Color c1 = at(position.face_b, position.index_b);
+        if (c0 == a && c1 == b) {
+            return {position.face_a, position.index_a, position.face_b, position.index_b};
+        }
+        if (c0 == b && c1 == a) {
+            return {position.face_b, position.index_b, position.face_a, position.index_a};
         }
     }
     return {};  // unreachable for a physically valid cube
 }
 
 Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexcept {
-    for (int cx : {-1, 1}) {
-        for (int cy : {-1, 1}) {
-            for (int cz : {-1, 1}) {
-                Face faces[3]{};
-                int indices[3]{};
-                Color colors[3]{};
-                int n = 0;
-                for (Face face : kAllFaces) {
-                    const Vec3 fn = face_normal(face);
-                    if (dot(fn, Vec3{cx, cy, cz}) != 1) {
-                        continue;
-                    }
-                    faces[n] = face;
-                    indices[n] = index_on_face(face, Vec3{cx, cy, cz});
-                    colors[n] = at(face, indices[n]);
-                    ++n;
-                }
-
-                auto slot_of = [&](Color target) -> int {
-                    for (int i = 0; i < 3; ++i) {
-                        if (colors[i] == target) {
-                            return i;
-                        }
-                    }
-                    return -1;
-                };
-                const int ia = slot_of(a);
-                const int ib = slot_of(b);
-                const int ic = slot_of(c);
-                if (ia >= 0 && ib >= 0 && ic >= 0 && ia != ib && ib != ic && ia != ic) {
-                    return {faces[ia], indices[ia], faces[ib], indices[ib], faces[ic], indices[ic]};
+    for (const CornerPosition& position : kCornerPositions) {
+        const std::array<Color, 3> colors = {at(position.faces[0], position.indices[0]),
+                                              at(position.faces[1], position.indices[1]),
+                                              at(position.faces[2], position.indices[2])};
+        auto slot_of = [&](Color target) -> int {
+            for (int i = 0; i < 3; ++i) {
+                if (colors[static_cast<std::size_t>(i)] == target) {
+                    return i;
                 }
             }
+            return -1;
+        };
+        const int ia = slot_of(a);
+        const int ib = slot_of(b);
+        const int ic = slot_of(c);
+        if (ia >= 0 && ib >= 0 && ic >= 0 && ia != ib && ib != ic && ia != ic) {
+            const auto fa = static_cast<std::size_t>(ia);
+            const auto fb = static_cast<std::size_t>(ib);
+            const auto fc = static_cast<std::size_t>(ic);
+            return {position.faces[fa], position.indices[fa], position.faces[fb],
+                    position.indices[fb], position.faces[fc], position.indices[fc]};
         }
     }
     return {};  // unreachable for a physically valid cube

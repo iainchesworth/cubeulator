@@ -123,7 +123,9 @@ public:
     friend bool operator==(const Cube&, const Cube&) = default;
 
 private:
-    void set(Face face, int index, Color color) noexcept { facelets_[static_cast<std::size_t>(face)][index] = color; }
+    void set(Face face, int index, Color color) noexcept {
+        facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)] = color;
+    }
 
     std::array<std::array<Color, 9>, 6> facelets_{};
 };
