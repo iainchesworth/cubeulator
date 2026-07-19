@@ -13,4 +13,6 @@ Result<void> start(const DeviceInfo& /*device*/) {
 
 void stop() {}
 
+void open_permission_settings() {}
+
 }  // namespace cube::platform::camera

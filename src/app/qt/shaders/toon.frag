@@ -1,5 +1,6 @@
-// Cel-shaded fragment snippet for CubeFaceMaterial's "Toon outline" style:
-// quantised diffuse bands plus a rim highlight, instead of PBR shading. See
+// Fragment snippet for Instructional Glow: quantised diffuse bands plus a
+// rim highlight, instead of PBR shading, with an additive emissive boost for
+// stickers in the active-layer highlight. See
 // https://doc.qt.io/qt-6/qtquick3d-custom.html for the MAIN()/AMBIENT_LIGHT()/
 // DIRECTIONAL_LIGHT() shader model this plugs into.
 
@@ -13,6 +14,11 @@ void MAIN()
     vec3 viewDir = normalize(CAMERA_POSITION - VAR_WORLD_POSITION);
     float rim = 1.0 - max(dot(normalize(NORMAL), viewDir), 0.0);
     EMISSIVE_COLOR = uRimColor.rgb * pow(rim, uRimPower);
+
+    // Instructional Glow's active-layer highlight: a flat additive boost
+    // across the whole sticker, not just the rim, so a highlighted layer
+    // reads clearly even head-on rather than only at grazing angles.
+    EMISSIVE_COLOR += uRimColor.rgb * uGlowStrength * 0.6;
 }
 
 void AMBIENT_LIGHT()

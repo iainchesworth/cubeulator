@@ -57,16 +57,67 @@ Rectangle {
             width: parent.width
             spacing: Theme.space2
             SectionLabel { text: "CAMERA" }
-            Text {
-                text: "Choose which device Cubeulator reads the cube's faces from."
-                font.family: Theme.fontHeading; font.pixelSize: 12
-                color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
-                width: parent.width; wrapMode: Text.WordWrap
+
+            // Desktop: pick from whatever's actually plugged in.
+            Column {
+                visible: !AppState.isMobile
+                width: parent.width
+                spacing: Theme.space2
+                Text {
+                    text: CameraDeviceModel.devices.length > 0
+                        ? "Choose which device Cubeulator reads the cube's faces from."
+                        : "No camera was detected. Plug one in, then refresh."
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: Theme.inkMuted(0.6)
+                    width: parent.width; wrapMode: Text.WordWrap
+                }
+                ChipRow {
+                    visible: CameraDeviceModel.devices.length > 0
+                    options: CameraDeviceModel.devices.map(function (d) { return d.name; })
+                    currentIndex: SettingsState.cameraDeviceIndex
+                    onSelected: (index) => SettingsState.cameraDeviceIndex = index
+                }
+                AppButton {
+                    variant: "ghost"; leadingIcon: "refresh"; text: "Refresh"
+                    onClicked: CameraDeviceModel.refresh()
+                }
             }
+
+            // Mobile: one camera, so this is about permission, not choice.
+            Column {
+                visible: AppState.isMobile
+                width: parent.width
+                spacing: Theme.space2
+                Row {
+                    spacing: Theme.space2
+                    Icon {
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: AppState.cameraGranted ? "check" : "alert-triangle"
+                        color: AppState.cameraGranted ? Theme.detected : Theme.warning
+                        width: 16; height: 16; strokeWidth: 2.4
+                    }
+                    Text {
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: AppState.cameraGranted ? "Camera access granted" : "Camera access not granted"
+                        font.family: Theme.fontHeading; font.pixelSize: 13; color: Theme.ink
+                    }
+                }
+                AppButton {
+                    visible: !AppState.cameraGranted
+                    variant: "secondary"; text: "Grant camera access"
+                    onClicked: AppState.requestPermission()
+                }
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: Theme.space2
+            SectionLabel { text: "APPEARANCE" }
             ChipRow {
-                options: SettingsState.cameraDevices
-                currentIndex: SettingsState.cameraDeviceIndex
-                onSelected: (index) => SettingsState.cameraDeviceIndex = index
+                options: SettingsState.themeModes.map(function (m) { return m.label; })
+                currentIndex: SettingsState.themeModes.findIndex(function (m) { return m.key === SettingsState.themeMode; })
+                onSelected: (index) => SettingsState.themeMode = SettingsState.themeModes[index].key
             }
         }
 
@@ -88,7 +139,7 @@ Rectangle {
             Text {
                 text: "Shader style for the 3D cube shown around the app."
                 font.family: Theme.fontHeading; font.pixelSize: 12
-                color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
+                color: Theme.inkMuted(0.6)
                 width: parent.width; wrapMode: Text.WordWrap
             }
             ChipRow {
@@ -113,6 +164,44 @@ Rectangle {
                 onSelected: (index) => SettingsState.rotateSpeedIndex = index
                 opacity: SettingsState.cubeAutoRotate ? 1.0 : 0.4
                 enabled: SettingsState.cubeAutoRotate
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: Theme.space2
+            SectionLabel { text: "RENDERING" }
+            readonly property string currentBackendName: SettingsState.graphicsApiNames[GraphicsInfo.api] || ("API " + GraphicsInfo.api)
+            readonly property bool pendingRestart: SettingsState.graphicsBackend !== "auto"
+                && SettingsState.graphicsBackendKeyNames[SettingsState.graphicsBackend] !== currentBackendName
+            Text {
+                text: "Graphics backend. Currently running " + parent.currentBackendName + "."
+                font.family: Theme.fontHeading; font.pixelSize: 12
+                color: Theme.inkMuted(0.6)
+                width: parent.width; wrapMode: Text.WordWrap
+            }
+            ChipRow {
+                options: SettingsState.availableGraphicsBackends.map(function (b) { return b.label; })
+                currentIndex: SettingsState.availableGraphicsBackends.findIndex(function (b) { return b.key === SettingsState.graphicsBackend; })
+                onSelected: (index) => SettingsState.graphicsBackend = SettingsState.availableGraphicsBackends[index].key
+            }
+            Text {
+                visible: parent.pendingRestart
+                text: "Restart Cubeulator to switch to this backend."
+                font.family: Theme.fontHeading; font.pixelSize: 12
+                color: Theme.warning
+                width: parent.width; wrapMode: Text.WordWrap
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: Theme.space3
+            SectionLabel { text: "DEVELOPER" }
+            Toggle {
+                checked: SettingsState.statsForNerds
+                label: "Stats for nerds (FPS, render backend)"
+                onToggled: SettingsState.statsForNerds = !SettingsState.statsForNerds
             }
         }
     }
@@ -180,6 +269,7 @@ Rectangle {
                     shaderStyle: SettingsState.shaderStyleIndex
                     autoRotate: SettingsState.cubeAutoRotate
                     autoRotateSpeed: SettingsState.rotateSpeedValue
+                    showStats: SettingsState.statsForNerds
                 }
 
                 AppButton {
@@ -189,7 +279,14 @@ Rectangle {
                     onClicked: {
                         var axes = ["x", "y", "z"];
                         var layers = [-1, 0, 1];
-                        previewCube.turnLayer(axes[Math.floor(Math.random() * 3)], layers[Math.floor(Math.random() * 3)], true);
+                        var axis = axes[Math.floor(Math.random() * 3)];
+                        var layer = layers[Math.floor(Math.random() * 3)];
+                        // Demonstrates Instructional Glow's active-layer hook
+                        // using the same layer being turned - a stand-in for
+                        // "this is the layer you're about to move" until the
+                        // solve-visualisation session wires up real data.
+                        previewCube.highlightedLayer = { axis: axis, layer: layer };
+                        previewCube.turnLayer(axis, layer, true);
                     }
                 }
             }

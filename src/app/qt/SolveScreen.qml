@@ -72,7 +72,7 @@ Rectangle {
                         visible: isCurrent
                         text: s ? s.detail : ""
                         font.family: Theme.fontHeading; font.pixelSize: 12
-                        color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
+                        color: Theme.inkMuted(0.6)
                         width: parent.width; wrapMode: Text.WordWrap
                     }
                     Text {
@@ -129,7 +129,7 @@ Rectangle {
                 anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: Theme.space3
                 text: "orthographic · no perspective"
                 font.family: Theme.fontHeading; font.pixelSize: 11
-                color: Qt.rgba(0.125, 0.117, 0.113, 0.55)
+                color: Theme.inkMuted(0.55)
             }
         }
         Rectangle { width: parent.width; height: 2; color: Theme.divider }
@@ -147,7 +147,7 @@ Rectangle {
             Text {
                 text: root.curStep.detail
                 font.family: Theme.fontHeading; font.pixelSize: 13
-                color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
+                color: Theme.inkMuted(0.6)
                 width: parent.width - Theme.space8; wrapMode: Text.WordWrap
             }
             Item { width: 1; height: Theme.space4 }
@@ -164,7 +164,7 @@ Rectangle {
                     width: 16; height: 16; border.width: 1.5; border.color: Theme.divider
                     Icon { anchors.centerIn: parent; name: "check"; color: Theme.accent; width: 12; height: 12; strokeWidth: 3 }
                 }
-                Text { text: "Auto-advance from camera"; font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); font.family: Theme.fontHeading }
+                Text { text: "Auto-advance from camera"; font.pixelSize: 12; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
             }
         }
     }
@@ -177,7 +177,7 @@ Rectangle {
         Row {
             width: parent.width
             padding: Theme.space3
-            Text { text: "Solving — beginner method"; font.family: Theme.fontMono; font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.6); width: parent.width - 160 }
+            Text { text: "Solving — beginner method"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.inkMuted(0.6); width: parent.width - 160 }
             Text { text: AppState.elapsedLabel() + " · " + root.step + "/42"; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
         }
         Rectangle { width: parent.width; height: 2; color: Theme.divider }
@@ -219,7 +219,7 @@ Rectangle {
                 Text {
                     anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.margins: Theme.space4
                     text: "Orthographic · arrows show the exact turn"
-                    font.pixelSize: 12; color: Qt.rgba(0.125, 0.117, 0.113, 0.55); font.family: Theme.fontHeading
+                    font.pixelSize: 12; color: Theme.inkMuted(0.55); font.family: Theme.fontHeading
                 }
                 Rectangle { anchors.right: parent.right; width: 2; height: parent.height; color: Theme.divider }
             }
@@ -233,7 +233,7 @@ Rectangle {
                     padding: Theme.space3
                     text: "STEPS"
                     font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
-                    color: Qt.rgba(0.125, 0.117, 0.113, 0.6)
+                    color: Theme.inkMuted(0.6)
                 }
                 Rectangle { width: parent.width; height: 2; color: Theme.divider }
 

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick3D
+import QtQuick3D.Helpers
 import Cubeulator
 
 // GPU-rendered Rubik's cube built from 26 individually-positioned "cubies"
@@ -27,8 +28,18 @@ Item {
     property bool interactive: true
     property bool autoRotate: true
     property real autoRotateSpeed: 0.35 // degrees per animation tick while idle
-    // 0 = modernist flat, 1 = glossy studio, 2 = toon outline (custom shader)
+    // 0 = Physically-Based Realism (default), 1 = Instructional Glow,
+    // 2 = Borderlands Cel-Shading
     property int shaderStyle: 0
+    property bool showStats: false
+
+    // Instructional Glow's active-layer highlight: which layer to call out,
+    // or null for none. This is a placeholder hook - it's checked against
+    // each cubie's *home* position, not its live position after turns, which
+    // is enough for a stationary demo highlight. The solve-visualisation
+    // session owns wiring this to the real "which layer moves next" solver
+    // output.
+    property var highlightedLayer: null // { axis: "x"|"y"|"z", layer: -1|0|1 } | null
 
     readonly property bool dragging: dragHandler.active
     readonly property bool turning: turnState.active
@@ -200,10 +211,37 @@ Item {
         anchors.fill: parent
         camera: camera
 
-        environment: SceneEnvironment {
+        environment: ExtendedSceneEnvironment {
             backgroundMode: SceneEnvironment.Transparent
             antialiasingMode: SceneEnvironment.MSAA
             antialiasingQuality: SceneEnvironment.High
+
+            // Physically-Based Realism's environment reflections: a small
+            // procedural sky used purely as a light probe (backgroundMode
+            // stays Transparent, so it's never actually painted as a visible
+            // sky) - a real photographed HDRI would look better but there
+            // isn't one in the repo's assets yet.
+            lightProbe: Texture {
+                textureData: ProceduralSkyTextureData {}
+            }
+
+            // Borderlands Cel-Shading's vignette + halftone/grunge post
+            // pass. Both come from ExtendedSceneEnvironment/Effect, which is
+            // why this is that type rather than a plain SceneEnvironment
+            // even though the other two styles don't use either property.
+            vignetteEnabled: root.shaderStyle === 2
+            vignetteStrength: 10
+            effects: root.shaderStyle === 2 ? [celShadePost] : []
+        }
+
+        Effect {
+            id: celShadePost
+            passes: Pass {
+                shaders: Shader {
+                    stage: Shader.Fragment
+                    shader: "shaders/celshade_post.frag"
+                }
+            }
         }
 
         PerspectiveCamera {
@@ -219,6 +257,15 @@ Item {
         DirectionalLight {
             eulerRotation: Qt.vector3d(40, 150, 0)
             brightness: 0.35
+        }
+        // A tight, bright third light only for Physically-Based Realism -
+        // the clearcoat/specular/reflection tuning alone still reads flat
+        // without a sharp catch-light to actually bounce off it, which is
+        // what a real studio product-shot key light gives you.
+        DirectionalLight {
+            visible: root.shaderStyle === 0
+            eulerRotation: Qt.vector3d(-60, 20, 0)
+            brightness: 1.6
         }
 
         Node {
@@ -243,9 +290,37 @@ Item {
                         materials: PrincipledMaterial { baseColor: "#1B1A1A"; roughness: 1.0; metalness: 0.0 }
                     }
 
+                    // Style 2's inverted-hull ink outline. A cube's faces
+                    // are all axis-aligned, so a uniformly-scaled duplicate
+                    // mesh rendered front-face-culled (only its backfaces,
+                    // poking out past the real mesh, are visible) gives an
+                    // exact outline with no custom vertex shader needed.
+                    // +1 total (0.5 per side) stays well clear of
+                    // root.cubieGap (2, i.e. a 1-unit half-gap to the next
+                    // cubie) so neighbouring cubies' outlines don't fuse
+                    // into one blob.
+                    Model {
+                        visible: root.shaderStyle === 2
+                        source: "#Cube"
+                        scale: Qt.vector3d((root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100)
+                        materials: PrincipledMaterial {
+                            baseColor: "black"
+                            lighting: PrincipledMaterial.NoLighting
+                            cullMode: Material.FrontFaceCulling
+                        }
+                    }
+
+                    // Style 0: Physically-Based Realism (default). Roughness/
+                    // metalness/specular/clearcoat tuned for real textured
+                    // ABS plastic with a light lacquer coat - not the bare
+                    // flat PrincipledMaterial default, and not the old
+                    // "glossy studio" chrome-like look either (that used
+                    // metalness 0.35, too metallic for a plastic sticker).
+                    // Environment reflections come from the shared
+                    // lightProbe set on `environment` below.
                     Repeater3D {
                         model: cubieNode.modelData.stickers
-                        visible: root.shaderStyle !== 2
+                        visible: root.shaderStyle === 0
 
                         Model {
                             required property var modelData
@@ -259,13 +334,52 @@ Item {
 
                             materials: PrincipledMaterial {
                                 baseColor: modelData.color
-                                roughness: root.shaderStyle === 1 ? 0.15 : 1.0
-                                metalness: root.shaderStyle === 1 ? 0.35 : 0.0
-                                specularAmount: root.shaderStyle === 1 ? 1.0 : 0.0
+                                roughness: 0.35
+                                metalness: 0.0
+                                specularAmount: 0.6
+                                specularTint: 0.1
+                                clearcoatAmount: 0.35
+                                clearcoatRoughnessAmount: 0.12
                             }
                         }
                     }
 
+                    // Style 1: Instructional Glow. Quantized-band diffuse +
+                    // fresnel rim (toon.frag) plus an emissive boost on
+                    // stickers belonging to root.highlightedLayer.
+                    Repeater3D {
+                        model: cubieNode.modelData.stickers
+                        visible: root.shaderStyle === 1
+
+                        Model {
+                            required property var modelData
+                            readonly property var orient: root.stickerOrientation[modelData.face]
+                            readonly property var axisVec: root.stickerAxis[modelData.face]
+                            source: "#Rectangle"
+                            scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                            eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+                            readonly property real faceOffset: root.cubieSize / 2 + 0.75
+                            position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+
+                            readonly property bool inHighlightedLayer: root.highlightedLayer !== null
+                                && cubieNode.modelData.home[root.axisIndex(root.highlightedLayer.axis)] === root.highlightedLayer.layer
+
+                            materials: CustomMaterial {
+                                shadingMode: CustomMaterial.Shaded
+                                fragmentShader: "shaders/toon.frag"
+                                property color uBaseColor: modelData.color
+                                property color uRimColor: Theme.accent
+                                property real uRimPower: 2.2
+                                property real uGlowStrength: inHighlightedLayer ? 1.0 : 0.0
+                            }
+                        }
+                    }
+
+                    // Style 2: Borderlands Cel-Shading. Hard 2-step banding
+                    // (cel.frag, no colour rim - the outline mesh above
+                    // provides the silhouette line instead); the
+                    // halftone/grunge/vignette look is a screen-space post
+                    // pass on `environment`, not per-sticker.
                     Repeater3D {
                         model: cubieNode.modelData.stickers
                         visible: root.shaderStyle === 2
@@ -282,10 +396,8 @@ Item {
 
                             materials: CustomMaterial {
                                 shadingMode: CustomMaterial.Shaded
-                                fragmentShader: "shaders/toon.frag"
+                                fragmentShader: "shaders/cel.frag"
                                 property color uBaseColor: modelData.color
-                                property color uRimColor: Theme.accent
-                                property real uRimPower: 2.2
                             }
                         }
                     }
@@ -293,6 +405,8 @@ Item {
             }
         }
     }
+
+    StatsOverlay { active: root.showStats }
 
     QtObject {
         id: turnState

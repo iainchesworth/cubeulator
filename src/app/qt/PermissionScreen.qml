@@ -6,6 +6,20 @@ Rectangle {
     color: Theme.paper
     readonly property bool wide: width >= Theme.wideBreakpoint
 
+    // Qt::PermissionStatus::Denied - see CameraPermission.hpp. Once denied,
+    // the OS may or may not show the prompt again on request() (Android
+    // stops after "don't ask again"; Qt's API doesn't expose which), so
+    // both a re-ask and the OS-settings escape hatch are offered.
+    readonly property bool denied: CameraPermission.status === 1
+
+    Connections {
+        target: CameraPermission
+        function onStatusChanged() {
+            if (CameraPermission.status === 2)
+                AppState.proceedToScan();
+        }
+    }
+
     readonly property var reassurances: [
         "Frames are processed on-device, in real time.",
         "Nothing is stored, uploaded, or shared.",
@@ -58,8 +72,14 @@ Rectangle {
             spacing: Theme.space2
             AppButton {
                 width: parent.width; height: 46; variant: "primary"; block: true
-                text: "Enable camera"
-                onClicked: AppState.grantCamera()
+                text: root.denied ? "Try again" : "Enable camera"
+                onClicked: CameraPermission.request()
+            }
+            AppButton {
+                visible: root.denied
+                width: parent.width; height: 40; variant: "ghost"
+                text: "Open Settings"
+                onClicked: CameraPermission.openSettings()
             }
             AppButton {
                 width: parent.width; height: 40; variant: "ghost"
@@ -94,7 +114,12 @@ Rectangle {
             Row {
                 spacing: Theme.space3
                 topPadding: Theme.space3
-                AppButton { height: 46; variant: "primary"; text: "Enable camera"; onClicked: AppState.grantCamera() }
+                AppButton {
+                    height: 46; variant: "primary"
+                    text: root.denied ? "Try again" : "Enable camera"
+                    onClicked: CameraPermission.request()
+                }
+                AppButton { visible: root.denied; height: 46; variant: "ghost"; text: "Open Settings"; onClicked: CameraPermission.openSettings() }
                 AppButton { height: 46; variant: "secondary"; text: "Not now"; onClicked: AppState.goLaunch() }
             }
         }

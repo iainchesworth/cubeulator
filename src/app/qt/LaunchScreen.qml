@@ -30,6 +30,7 @@ Rectangle {
                 shaderStyle: SettingsState.shaderStyleIndex
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue
+                showStats: SettingsState.statsForNerds && !root.wide
             }
         }
 
@@ -115,7 +116,7 @@ Rectangle {
                 }
                 Text {
                     text: "Point the camera, turn the cube through six faces, follow the moves."
-                    color: Qt.rgba(0.125, 0.117, 0.113, 0.55)
+                    color: Theme.inkMuted(0.55)
                     font.family: Theme.fontHeading
                     font.pixelSize: 15
                     width: 340
@@ -156,6 +157,7 @@ Rectangle {
                 shaderStyle: SettingsState.shaderStyleIndex
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue
+                showStats: SettingsState.statsForNerds && root.wide
             }
         }
     }
