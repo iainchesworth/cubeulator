@@ -406,13 +406,20 @@ struct SweepMetrics {
     // with a low certainty bar; certain alone with a track that never
     // locks).
     int commit = 0;
-    // THE disqualifier: slip_evidence force-losses inside an epoch that
-    // had ALREADY reached commit-grade certainty at least once. Colour
-    // evidence proved wrong an identity the tracker would have let commit
-    // - a wrong-identity event, however the aggregates look. A slip in a
-    // never-certain epoch is the opposite: the veto doing its job on a
-    // track that was never granted authority. Any config with
-    // certain_slip > 0 is rejected outright, whatever its lock rate.
+    // THE disqualifier: slip_evidence force-losses where the face being
+    // contradicted (the front face at the kill) had ITSELF reached
+    // commit-grade certainty in this epoch. Colour evidence proved wrong
+    // an identity the tracker would have let commit - a wrong-identity
+    // event, however the aggregates look. Face-specific on purpose: with
+    // the face-scoped bar, most epochs certify SOME face during a frontal
+    // burst, so "slip anywhere in an ever-certain epoch" would flag the
+    // benign sequence the veto exists to produce (certify F frontally,
+    // turn, colour catches post-turn trouble on the still-uncertain new
+    // face before it ever gains authority). A slip on a never-certified
+    // face is the veto doing its job; a slip on a certified one means
+    // commit authority was granted to an identity colour later refuted.
+    // Any config with certain_slip > 0 is rejected outright, whatever its
+    // lock rate.
     int certain_slip = 0;
     // Detector passes the (simulated) idle gate suppressed - the worker
     // budget the gate reclaims; the probe-cadence axis trades this against
@@ -457,7 +464,13 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
     IdleGate gate(settings.idle_escape_every);
     SweepMetrics m;
     int prev_epoch = -1;
-    bool epoch_was_certain = false;
+    // Wrong-identity bookkeeping (see SweepMetrics::certain_slip), reset
+    // when an anchor starts a new epoch: which faces have reached commit
+    // grade, and the last front face reported (the slip pass itself
+    // reports lost with no front, so the face colour refuted is the one
+    // the track last claimed).
+    std::array<bool, 6> epoch_certified{};
+    int last_front = -1;
     for (const auto& cached : inputs) {
         TrackerPassInput input = cached.input;
         if (gate.skip_next()) {
@@ -469,21 +482,25 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
         const auto out = tracker.on_pass(input);
         ++m.passes;
         m.observations += input.q_obs.has_value() ? 1 : 0;
-        // Wrong-identity bookkeeping (see SweepMetrics::certain_slip): the
-        // certainty flag is tracked per epoch, reset when an anchor starts
-        // a new one.
         if (out.epoch != prev_epoch) {
             prev_epoch = out.epoch;
-            epoch_was_certain = false;
+            epoch_certified.fill(false);
+            last_front = -1;
         }
         // Commit grade = the capture layer's actual bar: locked, with the
         // FRONT face's face-scoped certainty (see identity_certain_for).
         const bool commit_grade = out.state == TrackState::locked && out.front_face &&
                                   out.identity_certain_face[static_cast<std::size_t>(*out.front_face)];
-        if (out.gate == TrackGate::slip_evidence && epoch_was_certain) {
+        if (out.gate == TrackGate::slip_evidence && last_front >= 0 &&
+            epoch_certified[static_cast<std::size_t>(last_front)]) {
             ++m.certain_slip;
         }
-        epoch_was_certain = epoch_was_certain || commit_grade;
+        if (commit_grade) {
+            epoch_certified[static_cast<std::size_t>(*out.front_face)] = true;
+        }
+        if (out.front_face) {
+            last_front = static_cast<int>(*out.front_face);
+        }
         switch (out.gate) {
             case TrackGate::accepted:
                 ++m.accepted;
