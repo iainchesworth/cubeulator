@@ -1,5 +1,7 @@
 #include <cube/vision/corner_observation.hpp>
 
+#include <cube/vision/face_grid_fit.hpp>
+
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -28,6 +30,17 @@ constexpr double kMaxCellAreaFraction = 0.05;
 // 1.6 - the per-face lattice fits, not per-contour squareness, carry the
 // discrimination burden in this mode.
 constexpr double kMaxParallelogramAspect = 3.0;
+// Under a hint the bound relaxes further: the prompted pose keeps every
+// face within ~55 degrees of frontal, but a tracked corner presentation
+// legitimately shows a flank face out toward the capture gates' 70-degree
+// frontal bound, where a cell's sheared parallelogram measures 4-5:1 under
+// minAreaRect (a 66-degree flank already hits 4.3). The looser bound
+// admits more elongated clutter as candidates, which is acceptable
+// PRECISELY because a hint exists: the pose-predicted sectors and bases
+// plus the unchanged 6-of-9 lattice inlier floors reject what the
+// squareness proxy would have, and kMaxCandidatesConsidered still bounds
+// the O(n^2) pitch work either way.
+constexpr double kMaxHintedParallelogramAspect = 6.0;
 constexpr double kApproxPolyEpsilonFraction = 0.04;
 
 // Same CLAHE + locally-adaptive brightness strategy as grid_detection.cpp
@@ -51,6 +64,10 @@ constexpr int kMinBrightPathValue = 45;
 // toward pastel, and the corner view needs every cell it can get.
 constexpr int kMinStickerSaturation = 40;
 constexpr int kMinWhiteValue = 180;
+// Fill-ratio floor for candidate contours, matching grid_detection.cpp's
+// kMinFillRatioLow: dim blur erodes a tile toward an ellipse (~0.6 fill)
+// long before it stops being a tile.
+constexpr double kMinFillRatioLow = 0.55;
 
 // --- corner-view plausibility ---------------------------------------------
 
@@ -73,19 +90,25 @@ constexpr float kMinInteriorFraction = 0.30F;
 // near-central candidate is not a corner-on cube.
 constexpr float kMaxCentroidGapPitchRatio = 1.25F;
 
-// Sector boundaries for partitioning candidates into the three faces: the
-// bisectors between the face-centroid directions of the documented poses
-// (top face at -90 deg, lower-right at +30 deg, lower-left at +150 deg, in
-// y-down screen angles measured from the candidate centroid).
+// Sector boundaries for partitioning candidates into the three faces on
+// the NO-HINT path: the bisectors between the face-centroid directions of
+// the documented poses (top face at -90 deg, lower-right at +30 deg,
+// lower-left at +150 deg, in y-down screen angles measured from the
+// candidate centroid). A hint replaces these with its own sector centre
+// directions (nearest-direction assignment - the same bisector partition,
+// just rotated to wherever the predicted pose puts the faces).
 constexpr float kTopSectorMin = -5.0F * std::numbers::pi_v<float> / 6.0F;
 constexpr float kTopSectorMax = -std::numbers::pi_v<float> / 6.0F;
 constexpr float kRightSectorMax = std::numbers::pi_v<float> / 2.0F;
 
 // --- per-face lattice fit ---------------------------------------------------
 
-constexpr std::size_t kMinFaceCandidates = 6;
-constexpr int kMinFaceInliers = 6;  // of 9, matching grid_detection's floor
-constexpr float kMaxLatticeResidualRatio = 0.35F;
+// Face-fit floors and residual tolerance now live in face_grid_fit.hpp as
+// the fitter's DEFAULTS (kDefaultMinFaceCandidates / kDefaultMinFaceInliers
+// / kMaxLatticeResidualRatio) - this path calls fit_face_grid without
+// overriding them, so its acceptance behaviour is exactly the historical
+// one. Only the sector floor below stays local.
+constexpr std::size_t kMinFaceCandidates = detail::kDefaultMinFaceCandidates;
 // Sample only the inner 60% of each cell so gap/neighbour bleed and the
 // soft contour edge never contaminate the patch median.
 constexpr float kStickerSampleHalfSpan = 0.30F;
@@ -100,7 +123,10 @@ constexpr float kCos30 = 0.86602540F;
 // basis pair per visible face (the same on-screen cell order
 // corner_slot_mappings() below derives its tables for). Fixed rather than
 // searched: the capture UI prompts exactly this pose, and the affine
-// least-squares refit absorbs the residual hand-held tilt.
+// least-squares refit absorbs the residual hand-held tilt. These are the
+// NO-HINT defaults; a CornerHint substitutes pose-predicted directions in
+// the same role slots (compute_corner_hint reproduces exactly these values
+// at the isometric pose, so the hinted path is a strict generalisation).
 const cv::Point2f kTopColDir(kCos30, 0.5F);        // top face: down-right edge
 const cv::Point2f kTopRowDir(-kCos30, 0.5F);       // top face: down-left edge
 const cv::Point2f kSideColRightDir(kCos30, 0.5F);  // lower-left face: shared top edge
@@ -112,7 +138,7 @@ struct Candidate {
     double area = 0.0;
 };
 
-[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame) {
+[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame, double max_aspect) {
     cv::Mat blurred;
     cv::GaussianBlur(bgr_frame, blurred, cv::Size(5, 5), 0);
 
@@ -198,11 +224,14 @@ struct Candidate {
             std::vector<cv::Point> approx;
             const double epsilon = kApproxPolyEpsilonFraction * cv::arcLength(contour, true);
             cv::approxPolyDP(contour, approx, epsilon, true);
-            // 4-6 vertices plus a fill-ratio floor, not exactly 4: real
+            // 4-8 vertices plus a fill-ratio floor, not exactly 4: real
             // stickers' rounded corners and webcam blur routinely
-            // approximate to 5-6 points (same relaxation as
-            // grid_detection.cpp's candidate filter).
-            if (approx.size() < 4 || approx.size() > 6 || !cv::isContourConvex(approx)) {
+            // approximate to 5-6 points, and warm dim light rounds them to
+            // 7-8 (same relaxation as grid_detection.cpp's candidate
+            // filter - the live1 corner replica funnel lost its 27-41
+            // area-passing cells to exactly these two gates, collapsing to
+            // 0-8 against the 18-candidate floor).
+            if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
                 continue;
             }
 
@@ -212,11 +241,11 @@ struct Candidate {
             }
             const float aspect = std::max(min_rect.size.width, min_rect.size.height) /
                                  std::min(min_rect.size.width, min_rect.size.height);
-            if (aspect > kMaxParallelogramAspect) {
+            if (aspect > max_aspect) {
                 continue;
             }
             const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
-            if (rect_area <= 0.0 || area / rect_area < 0.65) {
+            if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
                 continue;
             }
 
@@ -263,186 +292,10 @@ struct Candidate {
     return unique;
 }
 
-// Median nearest-neighbour distance - the same robust pitch estimate
-// grid_detection.cpp uses.
-[[nodiscard]] float estimate_pitch(const std::vector<cv::Point2f>& centers) {
-    if (centers.size() < 2) {
-        return 0.0F;
-    }
-    std::vector<float> nearest_distances;
-    nearest_distances.reserve(centers.size());
-    for (std::size_t i = 0; i < centers.size(); ++i) {
-        float best = std::numeric_limits<float>::max();
-        for (std::size_t j = 0; j < centers.size(); ++j) {
-            if (i == j) {
-                continue;
-            }
-            const cv::Point2f diff = centers[i] - centers[j];
-            best = std::min(best, std::hypot(diff.x, diff.y));
-        }
-        nearest_distances.push_back(best);
-    }
-    const auto mid = nearest_distances.begin() + static_cast<std::ptrdiff_t>(nearest_distances.size() / 2);
-    std::ranges::nth_element(nearest_distances, mid);
-    return *mid;
-}
-
-struct SlotAssignment {
-    std::array<int, 9> slots{};
-    int inlier_count = 0;
-};
-
-// Nearest-integer-lattice-slot assignment under (anchor, col_step,
-// row_step), keeping the closer of any two candidates competing for one
-// slot - the same scheme grid_detection.cpp's classify_candidates() uses.
-[[nodiscard]] SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Point2f anchor,
-                                               cv::Point2f col_step, cv::Point2f row_step) {
-    SlotAssignment assignment;
-    assignment.slots.fill(-1);
-    std::array<float, 9> residuals{};
-    residuals.fill(std::numeric_limits<float>::max());
-
-    const double det = static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
-    if (std::abs(det) < 1e-6) {
-        return assignment;
-    }
-
-    for (std::size_t idx = 0; idx < centers.size(); ++idx) {
-        const cv::Point2f d = centers[idx] - anchor;
-        const double u = (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v = (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
-        const double ru = std::round(u);
-        const double rv = std::round(v);
-        if (ru < -1.0 || ru > 1.0 || rv < -1.0 || rv > 1.0) {
-            continue;
-        }
-        const auto residual = static_cast<float>(std::hypot(u - ru, v - rv));
-        if (residual > kMaxLatticeResidualRatio) {
-            continue;
-        }
-        const auto slot = static_cast<std::size_t>((static_cast<int>(rv) + 1) * 3 + (static_cast<int>(ru) + 1));
-        if (residual < residuals[slot]) {
-            residuals[slot] = residual;
-            assignment.slots[slot] = static_cast<int>(idx);
-        }
-    }
-    for (const int idx : assignment.slots) {
-        if (idx >= 0) {
-            ++assignment.inlier_count;
-        }
-    }
-    return assignment;
-}
-
-struct FaceFit {
-    cv::Point2f anchor;    // centre-cell (row=1, col=1) position
-    cv::Point2f col_step;  // +1 column basis vector
-    cv::Point2f row_step;  // +1 row basis vector
-    int inlier_count = 0;
-};
-
-[[nodiscard]] double det3(const std::array<double, 9>& m) {
-    return m[0] * (m[4] * m[8] - m[5] * m[7]) - m[1] * (m[3] * m[8] - m[5] * m[6]) +
-           m[2] * (m[3] * m[7] - m[4] * m[6]);
-}
-
-// Full 6-parameter affine least squares over the matched slots (anchor +
-// both basis vectors), rather than grid_detection's anchor-only recentre:
-// a hand-held corner pose shears and scales each face's lattice away from
-// the fixed nominal directions, and the basis must be allowed to follow or
-// cell projection/sampling drifts off the outer stickers.
-[[nodiscard]] std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers,
-                                                  const std::array<int, 9>& slots) {
-    double n = 0;
-    double su = 0;
-    double sv = 0;
-    double suu = 0;
-    double suv = 0;
-    double svv = 0;
-    std::array<double, 3> bx{};
-    std::array<double, 3> by{};
-
-    for (int slot = 0; slot < 9; ++slot) {
-        const int idx = slots[static_cast<std::size_t>(slot)];
-        if (idx < 0) {
-            continue;
-        }
-        const double u = (slot % 3) - 1;
-        const double v = (slot / 3) - 1;
-        const cv::Point2f p = centers[static_cast<std::size_t>(idx)];
-        n += 1.0;
-        su += u;
-        sv += v;
-        suu += u * u;
-        suv += u * v;
-        svv += v * v;
-        bx[0] += p.x;
-        bx[1] += u * p.x;
-        bx[2] += v * p.x;
-        by[0] += p.y;
-        by[1] += u * p.y;
-        by[2] += v * p.y;
-    }
-
-    const std::array<double, 9> m = {n, su, sv, su, suu, suv, sv, suv, svv};
-    const double det = det3(m);
-    if (std::abs(det) < 1e-9) {
-        return std::nullopt;
-    }
-
-    const auto solve = [&](const std::array<double, 3>& rhs) {
-        const std::array<double, 9> m0 = {rhs[0], su, sv, rhs[1], suu, suv, rhs[2], suv, svv};
-        const std::array<double, 9> m1 = {n, rhs[0], sv, su, rhs[1], suv, sv, rhs[2], svv};
-        const std::array<double, 9> m2 = {n, su, rhs[0], su, suu, rhs[1], sv, suv, rhs[2]};
-        return std::array<double, 3>{det3(m0) / det, det3(m1) / det, det3(m2) / det};
-    };
-    const auto x = solve(bx);
-    const auto y = solve(by);
-
-    return FaceFit{
-        .anchor = cv::Point2f(static_cast<float>(x[0]), static_cast<float>(y[0])),
-        .col_step = cv::Point2f(static_cast<float>(x[1]), static_cast<float>(y[1])),
-        .row_step = cv::Point2f(static_cast<float>(x[2]), static_cast<float>(y[2])),
-    };
-}
-
-// Fits one visible face's 3x3 parallelogram lattice: nominal pose-derived
-// basis scaled by the sector's own pitch, provisional classification,
-// affine refit, final classification.
-[[nodiscard]] std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv::Point2f col_dir,
-                                                   cv::Point2f row_dir) {
-    if (centers.size() < kMinFaceCandidates) {
-        return std::nullopt;
-    }
-    const float pitch = estimate_pitch(centers);
-    if (pitch <= 0.0F) {
-        return std::nullopt;
-    }
-
-    cv::Point2f anchor(0.0F, 0.0F);
-    for (const auto& center : centers) {
-        anchor += center;
-    }
-    anchor /= static_cast<float>(centers.size());
-
-    const cv::Point2f col_step = pitch * col_dir;
-    const cv::Point2f row_step = pitch * row_dir;
-    const auto provisional = classify_to_slots(centers, anchor, col_step, row_step);
-    if (provisional.inlier_count < 3) {
-        return std::nullopt;
-    }
-
-    FaceFit fit{.anchor = anchor, .col_step = col_step, .row_step = row_step};
-    if (auto refined = refit_affine(centers, provisional.slots)) {
-        fit = *refined;
-    }
-    const auto final_assignment = classify_to_slots(centers, fit.anchor, fit.col_step, fit.row_step);
-    if (final_assignment.inlier_count < kMinFaceInliers) {
-        return std::nullopt;
-    }
-    fit.inlier_count = final_assignment.inlier_count;
-    return fit;
-}
+// The per-face fitting pipeline (pitch estimate, slot classification,
+// affine refit - detail::fit_face_grid and friends) lives in
+// face_grid_fit.hpp, shared with the edge-view detector.
+using detail::FaceFit;
 
 // Patch-median float Lab over a grid of sample points inside the inner 60%
 // of the cell: convert the gathered BGR pixels to CV_32FC3 in [0,1] then
@@ -516,12 +369,13 @@ struct FaceFit {
 
 }  // namespace
 
-Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
+Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerHint* hint) {
     if (bgr_frame.empty() || bgr_frame.type() != CV_8UC3) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    auto candidates = find_sticker_candidates(bgr_frame);
+    auto candidates = find_sticker_candidates(
+        bgr_frame, hint != nullptr ? kMaxHintedParallelogramAspect : kMaxParallelogramAspect);
     if (candidates.size() < kMinTotalCandidates) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -538,7 +392,7 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
         centers.push_back(candidate.center);
     }
 
-    const float pitch = estimate_pitch(centers);
+    const float pitch = detail::estimate_face_pitch(centers);
     if (pitch <= 0.0F) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -581,13 +435,34 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
     std::vector<cv::Point2f> lower_right_centers;
     for (const auto& center : centers) {
         const cv::Point2f rel = center - centroid;
-        const float angle = std::atan2(rel.y, rel.x);
-        if (angle >= kTopSectorMin && angle < kTopSectorMax) {
-            top_centers.push_back(center);
-        } else if (angle >= kTopSectorMax && angle < kRightSectorMax) {
-            lower_right_centers.push_back(center);
+        if (hint != nullptr) {
+            // Nearest hinted sector direction wins: maximising the dot
+            // product against unit sector directions minimises the angular
+            // distance (rel's own magnitude scales all three candidates
+            // identically), which is the same bisector partition the fixed
+            // path draws - just rotated to where the pose actually put the
+            // faces.
+            const std::array<std::vector<cv::Point2f>*, 3> sectors{&top_centers, &lower_left_centers,
+                                                                   &lower_right_centers};
+            std::size_t best = 0;
+            float best_dot = std::numeric_limits<float>::lowest();
+            for (std::size_t role = 0; role < sectors.size(); ++role) {
+                const float dot = rel.x * hint->face_dir[role].x + rel.y * hint->face_dir[role].y;
+                if (dot > best_dot) {
+                    best_dot = dot;
+                    best = role;
+                }
+            }
+            sectors[best]->push_back(center);
         } else {
-            lower_left_centers.push_back(center);
+            const float angle = std::atan2(rel.y, rel.x);
+            if (angle >= kTopSectorMin && angle < kTopSectorMax) {
+                top_centers.push_back(center);
+            } else if (angle >= kTopSectorMax && angle < kRightSectorMax) {
+                lower_right_centers.push_back(center);
+            } else {
+                lower_left_centers.push_back(center);
+            }
         }
     }
     if (top_centers.size() < kMinFaceCandidates || lower_left_centers.size() < kMinFaceCandidates ||
@@ -595,9 +470,14 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    const auto top_fit = fit_face_grid(top_centers, kTopColDir, kTopRowDir);
-    const auto lower_left_fit = fit_face_grid(lower_left_centers, kSideColRightDir, kSideRowDir);
-    const auto lower_right_fit = fit_face_grid(lower_right_centers, kSideColUpDir, kSideRowDir);
+    const auto top_fit = detail::fit_face_grid(top_centers, hint != nullptr ? hint->col_dir[0] : kTopColDir,
+                                               hint != nullptr ? hint->row_dir[0] : kTopRowDir);
+    const auto lower_left_fit =
+        detail::fit_face_grid(lower_left_centers, hint != nullptr ? hint->col_dir[1] : kSideColRightDir,
+                              hint != nullptr ? hint->row_dir[1] : kSideRowDir);
+    const auto lower_right_fit =
+        detail::fit_face_grid(lower_right_centers, hint != nullptr ? hint->col_dir[2] : kSideColUpDir,
+                              hint != nullptr ? hint->row_dir[2] : kSideRowDir);
     if (!top_fit || !lower_left_fit || !lower_right_fit) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }

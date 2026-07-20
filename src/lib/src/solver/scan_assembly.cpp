@@ -2,6 +2,7 @@
 
 #include <cube/model/face.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -78,6 +79,11 @@ constexpr std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& fac
 
 Result<AssembledScan> assemble_scanned_faces_with_mapping(
     const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
+    return assemble_scanned_faces_with_mapping(faces, nullptr);
+}
+
+Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces, const RotationHint* hint) noexcept {
     // Step 1: convert colours and identify each input face's cube position
     // by its centre. Six inputs against six distinct-centre slots means a
     // collision check alone proves the mapping is a bijection.
@@ -114,12 +120,48 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         }
     }
 
+    // Re-key the hint from input indices to solver-face digit positions
+    // (the combo's base-4 digits are indexed by solver Face below), and
+    // decide whether it is USABLE - carrying at least one 0-3 entry.
+    // Out-of-range entries degrade to "no expectation" per the header. An
+    // unusable hint must take the exact unhinted code path, early-exit
+    // included, so passing nullptr and passing an empty hint cannot ever
+    // diverge in behaviour.
+    std::array<int, 6> hint_digit_of_face{};
+    hint_digit_of_face.fill(RotationHint::kNoHint);
+    bool hint_usable = false;
+    if (hint != nullptr) {
+        for (std::size_t face_index = 0; face_index < hint_digit_of_face.size(); ++face_index) {
+            const int digit = hint->quarter_turns[input_index_of_face[face_index]];
+            if (digit >= 0 && digit < 4) {
+                hint_digit_of_face[face_index] = digit;
+                hint_usable = true;
+            }
+        }
+    }
+
     // Step 3: exhaustive search over all 4^6 per-face rotation
     // combinations, encoded as six base-4 digits of `combo`. from_facelets
     // is the cheap physical-validity pre-filter; is_solvable is the
     // authority. Distinct-cube deduplication (rather than counting raw
     // combinations) is what makes rotationally symmetric faces - every
     // face of a solved cube - degenerate instead of ambiguous.
+    //
+    // Hinted mode collects EVERY distinct survivor with its best hint
+    // score instead of failing at the second one: the hint's whole job is
+    // to pick among genuinely distinct solvable assemblies, which only
+    // near-solved cubes can produce at all - so the survivor set is tiny
+    // in practice, and the fixed cap below both bounds memory and encodes
+    // "more ambiguity than a hint can honestly arbitrate" (overflow fails
+    // exactly like the unhinted ambiguity, same user remedy).
+    struct Survivor {
+        Cube cube;
+        int best_score;
+    };
+    constexpr std::size_t kMaxHintSurvivors = 8;
+    std::array<std::optional<Survivor>, kMaxHintSurvivors> survivors{};
+    std::size_t survivor_count = 0;
+
     std::optional<Cube> found;
     for (unsigned combo = 0; combo < 4096; ++combo) {
         std::array<std::array<Color, 9>, 6> candidate{};
@@ -133,13 +175,68 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         if (!cube || !cube->is_solvable()) {
             continue;
         }
-        if (!found) {
-            found = *cube;
-        } else if (*found != *cube) {
-            // Two distinct solvable assemblies - see the header for why
-            // this shares invalid_cube_state with the zero-survivor case.
+
+        if (!hint_usable) {
+            if (!found) {
+                found = *cube;
+            } else if (*found != *cube) {
+                // Two distinct solvable assemblies - see the header for why
+                // this shares invalid_cube_state with the zero-survivor case.
+                return std::unexpected(CubeError::invalid_cube_state);
+            }
+            continue;
+        }
+
+        // Hinted bookkeeping: score = matched hinted digits. Per-cube MAX
+        // over combinations, because a rotationally symmetric face reaches
+        // the same cube through several digits and the hint should judge
+        // the friendliest reading, not an arbitrary one.
+        int score = 0;
+        digits = combo;
+        for (std::size_t face_index = 0; face_index < candidate.size(); ++face_index) {
+            if (hint_digit_of_face[face_index] == static_cast<int>(digits & 3U)) {
+                ++score;
+            }
+            digits >>= 2U;
+        }
+        bool merged = false;
+        for (std::size_t i = 0; i < survivor_count; ++i) {
+            if (survivors[i]->cube == *cube) {
+                survivors[i]->best_score = std::max(survivors[i]->best_score, score);
+                merged = true;
+                break;
+            }
+        }
+        if (!merged) {
+            if (survivor_count == kMaxHintSurvivors) {
+                return std::unexpected(CubeError::invalid_cube_state);
+            }
+            survivors[survivor_count++] = Survivor{*cube, score};
+        }
+    }
+
+    if (hint_usable) {
+        if (survivor_count == 0) {
             return std::unexpected(CubeError::invalid_cube_state);
         }
+        // A unique survivor wins regardless of its score - the hint only
+        // ever SELECTS among ambiguity, it never vetoes a determined scan.
+        std::size_t best = 0;
+        bool tie = false;
+        for (std::size_t i = 1; i < survivor_count; ++i) {
+            if (survivors[i]->best_score > survivors[best]->best_score) {
+                best = i;
+                tie = false;
+            } else if (survivors[i]->best_score == survivors[best]->best_score) {
+                tie = true;
+            }
+        }
+        if (survivor_count > 1 && tie) {
+            // The hint could not strictly separate the survivors: the
+            // ambiguity stands, same failure and remedy as unhinted.
+            return std::unexpected(CubeError::invalid_cube_state);
+        }
+        return AssembledScan{survivors[best]->cube, input_index_of_face};
     }
 
     if (!found) {

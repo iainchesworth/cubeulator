@@ -76,6 +76,15 @@ QtObject {
             scanRetryMessage = "One face looked misread — keep scanning, show faces again";
             scanRetryTimer.restart();
         }
+        // A layer was turned mid-scan: every capture predating it described
+        // a sticker arrangement that no longer exists, so ScanSession
+        // cleared ALL slots (facesScanned is back to 0). Same transient
+        // banner strip; the wording explains the reset so the emptied
+        // progress row doesn't read as a bug.
+        function onScanInvalidated(reason) {
+            scanRetryMessage = "Cube changed mid-scan — starting the capture over";
+            scanRetryTimer.restart();
+        }
     }
     property var scanRetryTimer: Timer {
         interval: 6000

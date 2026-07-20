@@ -15,13 +15,23 @@ add_executable(cube_unit_tests
     unit/temporal_fusion_test.cpp
     unit/color_resolution_test.cpp
     unit/corner_observation_test.cpp
+    unit/edge_observation_test.cpp
+    unit/orientation_lattice_test.cpp
+    unit/orientation_tracker_test.cpp
+    unit/tracker_sweep_test.cpp
+    unit/capture_routing_test.cpp
+    unit/crash_hunt_test.cpp
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
+    unit/cross_session_test.cpp
+    unit/union_assembly_test.cpp
+    unit/frame_recording_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp
     unit/vision_facade_test.cpp
     unit/hand_presence_capability_test.cpp
+    unit/idle_gate_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
     unit/solver/last_layer_test.cpp
@@ -99,12 +109,16 @@ catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST
 # cube_app_controllers only exists then; doesn't affect the coverage gate
 # (linux-gcc-coverage builds with CUBEULATOR_BUILD_APP=OFF).
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core)
+    # Qml as well as Core: scan_session_binding_test drives the controllers
+    # through real QML bindings, which is the only way to cover the
+    # property-notification path the scan screen actually depends on.
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Qml)
 
     add_executable(cube_qt_controller_tests
         qt_test_main.cpp
         unit/camera_controller_test.cpp
         unit/scan_session_test.cpp
+        unit/scan_session_binding_test.cpp
         unit/settings_model_test.cpp
         unit/solve_controller_test.cpp)
 
@@ -115,6 +129,7 @@ if(CUBEULATOR_BUILD_APP)
             cube::sanitizers
             cube::coverage
             Qt6::Core
+            Qt6::Qml
             Catch2::Catch2)
 
     cube_deploy_sanitizer_runtime(cube_qt_controller_tests)

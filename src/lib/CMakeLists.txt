@@ -57,14 +57,20 @@ target_sources(cube_lib
         src/vision/vision.cpp
         src/vision/grid_detection.cpp
         src/vision/face_observation.cpp
+        src/vision/face_grid_fit.cpp
+        src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
+        src/vision/orientation_lattice.cpp
+        src/vision/orientation_tracker.cpp
+        src/vision/capture_routing.cpp
         src/vision/pose_estimation.cpp
         src/vision/color_classification.cpp
         src/vision/stability.cpp
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
+        src/vision/idle_gate.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 

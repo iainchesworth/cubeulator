@@ -70,6 +70,53 @@ struct AssembledScan {
 [[nodiscard]] Result<AssembledScan> assemble_scanned_faces_with_mapping(
     const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept;
 
+// Externally-known per-face rotation expectations for the hinted overload
+// below. `quarter_turns[input_index]` is the number of CLOCKWISE quarter
+// turns (0-3, the same screen-plane direction the assembler's own search
+// steps in - see kClockwiseSource in scan_assembly.cpp) the caller expects
+// the search to apply to the captured face at that INPUT index to reach
+// its assembled orientation; kNoHint means no expectation for that face.
+// Indexed by input position rather than cube face because that is what a
+// caller actually has before assembly runs: rotation knowledge attaches to
+// each captured face as it was captured, while which cube position it
+// lands on is exactly what assembly is about to decide.
+//
+// The intended producer is the orientation tracker: a tracked scan knows
+// the in-plane quarter turn every capture was taken at, and those six
+// digits are the one extra bit of evidence that can separate the
+// near-solved assemblies that are genuinely distinct cubes yet all pass
+// solvability. Out-of-range values are treated as kNoHint (defensive - a
+// hint is advice, malformed advice must degrade to no advice, never to UB).
+struct RotationHint {
+    static constexpr int kNoHint = -1;
+    std::array<int, 6> quarter_turns{kNoHint, kNoHint, kNoHint, kNoHint, kNoHint, kNoHint};
+};
+
+// As assemble_scanned_faces_with_mapping(), plus an OPTIONAL rotation hint
+// consulted only to break ties among MULTIPLE already-passing survivors.
+//
+// The contract, deliberately conservative so the hint cannot weaken the
+// acceptance oracle:
+//   - The search itself is unchanged: all 4096 combinations, every
+//     survivor still has to pass Cube::from_facelets AND is_solvable. The
+//     hint filters NOTHING before that bar.
+//   - A UNIQUE survivor is returned regardless of the hint - even one the
+//     hint contradicts. Geometry outvotes advice: a wrong hint must never
+//     turn a perfectly determined scan into a failure.
+//   - With several distinct solvable survivors (the near-solved ambiguity
+//     the unhinted call rejects), each survivor is scored by how many
+//     hinted faces' rotation digits match the hint (a survivor reachable
+//     through several combinations takes its best-scoring one, since
+//     rotationally symmetric faces make digits non-unique per cube). A
+//     STRICTLY best-scoring survivor is returned; a tie - including the
+//     no-usable-hint degenerate case - fails with invalid_cube_state
+//     exactly as the unhinted call does, because the ambiguity genuinely
+//     stands and the remedy (rescan) is unchanged.
+//   - hint == nullptr (or a hint with no 0-3 entries) is bit-identical to
+//     the unhinted overload, early-exit behaviour included.
+[[nodiscard]] Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces, const RotationHint* hint) noexcept;
+
 // As assemble_scanned_faces_with_mapping(), for callers (the solver
 // pipeline) that only need the cube and not the input-index bookkeeping.
 [[nodiscard]] Result<Cube> assemble_scanned_faces(

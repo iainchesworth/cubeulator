@@ -91,6 +91,15 @@ constexpr float kCompletionMinCellLightnessRatio = 0.35F;
 // not end where the placement claims the cube does).
 constexpr float kCompletionMinBoundaryContrast = 10.0F;
 
+// Inlier floor for the pose-only fallback (see observe_face's tail): four
+// residual-gated anchors match the lattice fitter's own acceptance floor,
+// and fewer could not pin the plane's basis vectors against noise. Kept as
+// a named constant (rather than reusing the fitter's) because the two
+// gates protect different outputs - the fitter's floor guards capture
+// candidacy, this one guards a pose - and the calibration sweeps may want
+// to move them independently.
+constexpr int kPoseOnlyMinInliers = 4;
+
 // Degenerate-transform guard bounds (see transform_grid_sane): adjacent
 // projected cell centers closer than this are a collapsed fit (observed
 // live: a 4-point homography through 3 true tiles plus one noise blob
@@ -115,14 +124,46 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
 // into narrow gaps to bridge adjacent cells - a ~20% colour mix over a dark
 // gap still reads strongly saturated), and only open (no close) runs so
 // preserved separations aren't re-sealed.
-[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask) {
+[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask, double max_aspect) {
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
-    return detail::candidates_from_binary_mask(mask);
+    return detail::candidates_from_binary_mask(mask, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(const std::vector<cv::Mat>& hsv_channels) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation);
+[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(const std::vector<cv::Mat>& hsv_channels,
+                                                                       double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation, max_aspect);
+}
+
+// A THIRD saturation cut at a PERMISSIVE floor, contoured independently
+// (live1 F4): warm dim indoor light washes matte tiles to S 20-35, under
+// the standard 40 floor, and the frontal-but-failed census class was
+// starving right here - sharp frontal frames with 0-6 candidates while
+// the cube filled the view. The extra low-saturation clutter this admits
+// (more skin, more wood) is filtered where it always was: the shape
+// gates, the lattice residual and the completion/phase gates - acceptance
+// thresholds are unchanged, only candidate SUPPLY grows.
+constexpr int kPermissiveStickerSaturation = 25;
+
+[[nodiscard]] std::vector<StickerCandidate> find_permissive_saturation_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kPermissiveStickerSaturation, max_aspect);
+}
+
+// A FOURTH cut at a HIGH floor (live1 F4, frame 448 class): under warm
+// dim light the cube's WHITE tiles pick up enough colour cast to clear
+// even the strict floor (measured S 57-73 on a real frame), so every
+// saturation mask below this welds the whole face - tiles, lattice and
+// white cells - into one blob the shape gates reject, and the face
+// produces ZERO candidates while filling the view sharply. At 100 the
+// colour-cast whites and the washed lattice drop out and the six-plus
+// genuinely chromatic tiles (S 103-189 on the same frame) segment
+// individually. Purely additive supply, like every other source.
+constexpr int kVeryStrictStickerSaturation = 100;
+
+[[nodiscard]] std::vector<StickerCandidate> find_very_strict_saturation_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kVeryStrictStickerSaturation, max_aspect);
 }
 
 // A SECOND saturation cut at a stricter floor, contoured independently:
@@ -136,14 +177,15 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
 constexpr int kStrictStickerSaturation = 60;
 
 [[nodiscard]] std::vector<StickerCandidate> find_strict_saturation_candidates(
-    const std::vector<cv::Mat>& hsv_channels) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kStrictStickerSaturation);
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
+    return candidates_from_condition_mask(hsv_channels[1] >= kStrictStickerSaturation, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(const std::vector<cv::Mat>& hsv_channels) {
+[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(const std::vector<cv::Mat>& hsv_channels,
+                                                                  double max_aspect) {
     cv::Mat white_mask;
     cv::bitwise_and(hsv_channels[2] >= kMinWhiteValue, hsv_channels[1] < kMinStickerSaturation, white_mask);
-    return candidates_from_condition_mask(std::move(white_mask));
+    return candidates_from_condition_mask(std::move(white_mask), max_aspect);
 }
 
 // Unions the strategies' candidates, collapsing near-coincident pairs (the
@@ -470,11 +512,16 @@ namespace {
     return std::sqrt(dl * dl + da * da + db * db);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame,
-                                                                    const std::vector<cv::Mat>& hsv_channels) {
-    return merge_candidates({detail::find_square_candidates(bgr_frame), detail::find_dark_square_candidates(bgr_frame),
-                             find_saturation_candidates(hsv_channels), find_strict_saturation_candidates(hsv_channels),
-                             find_white_candidates(hsv_channels)});
+[[nodiscard]] std::vector<StickerCandidate> merged_face_candidate_union(
+    const cv::Mat& bgr_frame, const std::vector<cv::Mat>& hsv_channels,
+    double max_aspect = detail::kDefaultMaxCandidateAspect) {
+    return merge_candidates({detail::find_square_candidates(bgr_frame, max_aspect),
+                             detail::find_dark_square_candidates(bgr_frame, max_aspect),
+                             find_saturation_candidates(hsv_channels, max_aspect),
+                             find_strict_saturation_candidates(hsv_channels, max_aspect),
+                             find_very_strict_saturation_candidates(hsv_channels, max_aspect),
+                             find_permissive_saturation_candidates(hsv_channels, max_aspect),
+                             find_white_candidates(hsv_channels, max_aspect)});
 }
 
 // Partial-lattice completion, the fallback for frames where too few cells
@@ -709,7 +756,7 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
 
-    const auto candidates = merged_face_candidates(bgr_frame, hsv_channels);
+    const auto candidates = merged_face_candidate_union(bgr_frame, hsv_channels);
     const auto fit = detail::fit_lattice_detailed(candidates, bgr_frame.size());
     // The fit alone earns a direct accept only when its matched slots pin
     // the TRANSLATION: anchors in the first and last row AND the first and
@@ -783,10 +830,44 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         }
     }
 
+    // Last resort, ORIENTATION-ONLY: a real lattice fit whose anchors span
+    // only two rows (or columns) failed the translation pin above, and the
+    // photometric completion/outline paths could not rescue a capture-grade
+    // placement either - but the fit's PLANE is still good. Its basis
+    // vectors are measured from real tile centres, so the face quad's
+    // orientation is right even if the whole grid sits one pitch off, and
+    // orientation is all the tracker needs (see FaceObservation::pose_only:
+    // these observations are barred from aggregation and capture by
+    // contract). Held to the same sanity + phase gates as every accepted
+    // transform - a degenerate or phase-inverted fit describes no real
+    // plane and must not emit a pose either.
+    if (fit && !translation_pinned && fit->inlier_count >= kPoseOnlyMinInliers) {
+        const cv::Mat transform = lattice_to_frame_transform(*fit);
+        if (transform_grid_sane(transform, bgr_frame.size())) {
+            auto observation = build_observation(
+                bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
+            if (grid_phase_plausible(bgr_frame, transform, observation)) {
+                observation.pose_only = true;
+                return observation;
+            }
+        }
+    }
+
     return std::unexpected(CubeError::no_valid_cube_detected);
 }
 
 namespace detail {
+
+std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame, double max_aspect) {
+    if (bgr_frame.empty()) {
+        return {};
+    }
+    cv::Mat hsv;
+    cv::cvtColor(bgr_frame, hsv, cv::COLOR_BGR2HSV);
+    std::vector<cv::Mat> hsv_channels;
+    cv::split(hsv, hsv_channels);
+    return merged_face_candidate_union(bgr_frame, hsv_channels, max_aspect);
+}
 
 std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame) {
     if (bgr_frame.empty()) {
@@ -796,7 +877,7 @@ std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame) 
     cv::cvtColor(bgr_frame, hsv, cv::COLOR_BGR2HSV);
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
-    return score_placements(bgr_frame, merged_face_candidates(bgr_frame, hsv_channels));
+    return score_placements(bgr_frame, merged_face_candidate_union(bgr_frame, hsv_channels));
 }
 
 }  // namespace detail

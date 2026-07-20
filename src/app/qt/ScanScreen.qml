@@ -40,6 +40,38 @@ Rectangle {
     readonly property var liveOrientation: (ScanSession.cubeOrientation
         && ScanSession.cubeOrientation.length === 4) ? ScanSession.cubeOrientation : null
 
+    // The video/AR layer mirrors via the Scale transforms below; the 3D
+    // progress cube can't be x-scaled the same way (a mirrored render of a
+    // rotating cube is geometrically wrong, not just flipped), so
+    // ScanSession conjugates the pose quaternion into the mirrored frame
+    // instead - this binding is where the two singletons meet (ScanSession
+    // deliberately has no CameraController dependency in C++).
+    Binding {
+        target: ScanSession
+        property: "previewMirrored"
+        value: CameraController.previewMirrored
+    }
+
+    // Per-face fill rings for the progress cube: face letter -> "ok" |
+    // "conflict", from the same slotSummaries the paint map uses plus the
+    // index-aligned faceCaptureStates. Everything here notifies on
+    // facesScannedChanged ONLY - capture events - so the ring Repeater3D
+    // in Cube3DView rebuilds a handful of times per scan, never per frame
+    // (its cubie-rebuild cousin is explicitly not per-frame safe).
+    readonly property var scanFaceRings: {
+        var rings = {};
+        var slots = ScanSession.slotSummaries;
+        var states = ScanSession.faceCaptureStates;
+        for (var i = 0; i < slots.length; i++) {
+            if (slots[i] && slots[i].face && slots[i].face !== "?"
+                    && slots[i].colors && slots[i].colors.length === 9) {
+                rings[slots[i].face] = (i < states.length && states[i] === "conflict")
+                    ? "conflict" : "ok";
+            }
+        }
+        return rings;
+    }
+
     // Check-glyph colour for a capture chip: slot centre colours span
     // near-white (U) to dark blue (B), so one fixed glyph colour would be
     // illegible on one end or the other.
@@ -73,6 +105,36 @@ Rectangle {
                     : "Scan didn't look right — keep scanning, show faces again"
                 color: "white"; font.pixelSize: 12; font.family: Theme.fontHeading
             }
+        }
+    }
+
+    // Tracking-state chip: capture is identity-driven now, so the states
+    // where commits silently pause deserve honest, low-key feedback - the
+    // tracker lost the cube mid-scan (only worth saying once captures
+    // exist to protect), it is coasting through a detection gap, or a
+    // recovered track is re-associating its captures ("re-orienting").
+    // Advisory styling like the quality hints: no warning colour, no alert
+    // icon - nothing is wrong, scanning just needs the cube back.
+    Rectangle {
+        id: trackingChip
+        visible: ScanSession.running && (ScanSession.reorienting
+            || (ScanSession.facesScanned > 0
+                && (ScanSession.trackingState === "lost" || ScanSession.trackingState === "coasting")))
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: scanErrorBanner.visible ? scanErrorBanner.bottom : parent.top
+        anchors.topMargin: Theme.space2
+        width: trackingChipText.width + 24
+        height: 24
+        radius: 12
+        color: Qt.rgba(0, 0, 0, 0.55)
+        z: 9
+        Text {
+            id: trackingChipText
+            anchors.centerIn: parent
+            text: ScanSession.reorienting ? "Re-orienting — hold the cube in view"
+                : ScanSession.trackingState === "lost" ? "Tracking lost — show the cube again"
+                : "Re-acquiring…"
+            color: "#F3F2F2"; font.pixelSize: 11; font.family: Theme.fontHeading
         }
     }
 
@@ -485,6 +547,7 @@ Rectangle {
                 autoRotate: root.liveOrientation === null
                 externalRotation: root.liveOrientation
                 faceletColors: root.scanFaceletColors
+                faceRings: root.scanFaceRings
             }
             Loader {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -659,6 +722,7 @@ Rectangle {
                     autoRotate: root.liveOrientation === null
                     externalRotation: root.liveOrientation
                     faceletColors: root.scanFaceletColors
+                    faceRings: root.scanFaceRings
                 }
 
                 // Chips keyed on slotSummaries order: slots fill in capture

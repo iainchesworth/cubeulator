@@ -23,13 +23,25 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
+#include <cube/vision/idle_gate.hpp>
+#include <cube/vision/orientation_tracker.hpp>
+#include <cube/vision/pose_estimation.hpp>
+#include <cube/vision/stability.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
+#include <array>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <fstream>
+#include <map>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -108,7 +120,7 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
     cv::threshold(hsv_channels[2], value_floor, 44, 255, cv::THRESH_BINARY);
     cv::bitwise_and(brightness_mask, value_floor, brightness_mask);
     cv::Mat saturated_mask;
-    cv::threshold(hsv_channels[1], saturated_mask, 59, 255, cv::THRESH_BINARY);
+    cv::threshold(hsv_channels[1], saturated_mask, 39, 255, cv::THRESH_BINARY);
     cv::Mat white_mask;
     cv::threshold(hsv_channels[2], white_mask, 179, 255, cv::THRESH_BINARY);
     cv::Mat mask = brightness_mask | saturated_mask | white_mask;
@@ -130,7 +142,9 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
         ++pass_area;
         std::vector<cv::Point> approx;
         cv::approxPolyDP(contour, approx, 0.04 * cv::arcLength(contour, true), true);
-        if (approx.size() != 4 || !cv::isContourConvex(approx)) {
+        // Sync: corner_observation relaxed to 4-8 vertices + fill >= 0.55
+        // (the F4 low-light recovery).
+        if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
             std::printf("  corner-candidate reject poly: area=%.0f vertices=%zu\n", area, approx.size());
             continue;
         }
@@ -143,6 +157,12 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
                              std::min(min_rect.size.width, min_rect.size.height);
         if (aspect > 3.0F) {
             std::printf("  corner-candidate reject aspect: area=%.0f aspect=%.2f\n", area, aspect);
+            continue;
+        }
+        const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
+        if (rect_area <= 0.0 || area / rect_area < 0.55) {
+            std::printf("  corner-candidate reject fill: area=%.0f fill=%.2f\n", area,
+                        rect_area > 0.0 ? area / rect_area : 0.0);
             continue;
         }
         ++final_count;
@@ -160,7 +180,8 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
 
     const cv::Mat frame = cv::imread(path, cv::IMREAD_COLOR);
     REQUIRE_FALSE(frame.empty());
-    std::printf("frame: %s (%dx%d)\n", path, frame.cols, frame.rows);
+    std::printf("frame: %s (%dx%d) cool_hue=%d\n", path, frame.cols, frame.rows,
+                cube::vision::count_cool_hue_pixels(frame));
 
     // Stage 1a: brightness-path candidates (the shared detail:: seam).
     const auto bright = detail::find_square_candidates(frame);
@@ -282,5 +303,522 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
         corner.has_value() ? "OK conf=" + std::to_string(corner->geometry_confidence) : std::string("FAILED");
     std::printf("observe_corner: %s\n", corner_status.c_str());
 
+    // Stage 5: the two-face edge path with its funnel exposed - candidate
+    // count, split search, per-side inliers and the consistency-gate facts
+    // of the best pairing, then the pose verdict when the fit survived.
+    detail::EdgeDiagnostics edge_diag;
+    const auto edge = detail::observe_edge_diagnosed(frame, nullptr, &edge_diag);
+    std::printf(
+        "observe_edge: %s candidates=%zu splits=%d basis_sets=%d best[split_x=%.0f L=%d R=%d pitch_ratio=%.2f "
+        "shared_px=%.1f]\n",
+        edge.has_value() ? "OK" : "FAILED", edge_diag.candidate_count, edge_diag.splits_evaluated,
+        edge_diag.basis_sets, edge_diag.best_split_x, edge_diag.best_left_inliers, edge_diag.best_right_inliers,
+        edge_diag.best_pitch_ratio, edge_diag.best_shared_edge_px);
+    if (edge.has_value()) {
+        const auto edge_pose = project_cube_from_edge(*edge, frame.size());
+        if (edge_pose.has_value()) {
+            std::printf("  edge pose: q=(%.3f,%.3f,%.3f,%.3f) reproj=%.3f\n", edge_pose->orientation[0],
+                        edge_pose->orientation[1], edge_pose->orientation[2], edge_pose->orientation[3],
+                        edge_pose->max_reproj_fraction);
+        } else {
+            std::printf("  edge pose: FAILED\n");
+        }
+    }
+
     SUCCEED();
+}
+
+// Sequence replay harness for whole recorded clips - hidden tag, never part
+// of the normal suite. Point CUBE_TRACK_REPLAY_DIR at a directory recorded
+// by ScanSession's CUBE_VISION_RECORD_DIR hook (see record_vision_frame in
+// scan_session.cpp; on-disk format shared via cube/vision/frame_recording.hpp)
+// and run:
+//
+//   cube_unit_tests.exe "[.track-replay]"
+//
+// Every recorded pass is driven through the same detector cascade the live
+// worker runs - observe_face and observe_corner each behind the live
+// fully-visible-cells gate, then the corner-first pose projection over
+// whatever survived - and emitted as one CSV row per pass on stdout, ready
+// for offline metric extraction (theta histograms, gap lengths, identity
+// stability) as the tracker milestones land. Detections the gate discards
+// are reported in the face_gated/corner_gated columns so a metric can
+// distinguish "detector missed" from "detected but partially off-frame" -
+// conflating them would misattribute gate losses to detector losses.
+// Skips (never fails) when no recording is present: the corpus is
+// recorded on demand from live hardware and does not ship with the repo.
+//
+// Fidelity notes, so numbers from this harness can be trusted against live
+// behavior:
+//  - Frames are replayed at the recorded analysis scale rather than
+//    re-upscaled to full-frame coordinates. Orientation quaternions are
+//    IDENTICAL either way: the pose projectors derive their approximate
+//    intrinsics from the frame size (fx=fy=width, centred principal point,
+//    pose_estimation.cpp), so uniformly scaling both the geometry and the
+//    frame size leaves the normalized camera rays - and hence the rotation
+//    - unchanged. Only the translation magnitude differs, and nothing here
+//    consumes it.
+//  - The live cell_in_frame gate compares full-frame geometry against
+//    full-frame bounds; comparing analysis-scale geometry against
+//    analysis-scale bounds is the same predicate under that uniform scale,
+//    so gating decisions match too. It is applied to BOTH detector paths
+//    exactly as analyze() applies it: a face is accepted only when all 9
+//    cells are in frame, a corner only when all 27 cells across its three
+//    views are, and only a surviving corner (falling back to a surviving
+//    face) feeds pose projection.
+//  - Pose continuity is mirrored too: the previous pass's accepted pose is
+//    held under the live 450 ms overlay/seed window (kOverlayHoldMs,
+//    scan_session.cpp), and while live it both seeds the projectors' solves
+//    (M3 arbitration) and hints observe_corner via compute_corner_hint
+//    (M7's pose-derived sectors/bases). Without the hint, corner detections
+//    stop firing off the isometric pose and the replay understates exactly
+//    the detection cadence these CSV rows exist to measure. The hint is
+//    derived from the seed's ROTATION only, so replaying at analysis scale
+//    (which shrinks the held translation along with the frame) cannot skew
+//    it; the seeded solves are self-consistent for the same reason the
+//    first bullet gives. Null seed -> null hint -> the historical
+//    fixed-pose detector, exactly as live.
+//  - Index rows at least one full ring lap older than the newest row are
+//    excluded as overwritten (frame_overwritten in frame_recording.hpp):
+//    their filename slot provably holds a later pass's pixels, and within
+//    one run the resolution never changes, so the size cross-check alone
+//    would silently pair those rows' timestamps with late-clip images.
+//  - JPEG q=90 recompression perturbs Lab samples slightly relative to the
+//    live pass; geometry/pose are unaffected and colour deltas are far
+//    below classification margins.
+TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]") {
+    namespace recording = cube::vision::recording;
+
+    const char* dir = std::getenv("CUBE_TRACK_REPLAY_DIR");
+    if (dir == nullptr) {
+        SKIP("CUBE_TRACK_REPLAY_DIR not set - record a clip via CUBE_VISION_RECORD_DIR first");
+    }
+    const std::string dir_path(dir);
+    std::ifstream index_stream(dir_path + "/" + std::string(recording::kIndexCsvName));
+    if (!index_stream) {
+        SKIP("no " << recording::kIndexCsvName << " under " << dir_path << " - not a recording directory");
+    }
+
+    const auto rows = recording::read_index(index_stream);
+    std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
+    std::printf(
+        "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
+        "state,gate,front,epoch,src,belief,certain,certain_front,"
+        // Refusal forensics, appended so existing column-index parsers are
+        // unaffected. theta/margin are the tracker's own resolved numbers;
+        // r0/r1 are this harness's independent recomputation of the best
+        // and RUNNER-UP lattice residual against the same prediction (the
+        // tracker only reports their difference), l0/l1 the elements that
+        // produced them, and accept_deg the rotation from the last
+        // ACCEPTED absolute orientation to the best-composed observation -
+        // the "how big a turn was refused" quantity. sigma and thresh give
+        // the acceptance bar the refusal was judged against.
+        "theta,margin,r0,r1,l0,l1,accept_deg,sigma,thresh\n");
+
+    // The newest pass determines which older rows' ring slots have provably
+    // been rewritten on disk (see frame_overwritten) - must be known before
+    // the replay loop touches any file.
+    int max_pass = 0;
+    for (const auto& row : rows) {
+        max_pass = std::max(max_pass, row.pass);
+    }
+
+    // Same fully-visible gate as the live worker (scan_session.cpp), at
+    // analysis scale per the fidelity note above.
+    const auto cell_in_frame = [](const cube::vision::StickerQuad& cell, const cv::Mat& bounds) {
+        cv::Point2f center(0.0F, 0.0F);
+        for (const auto& corner : cell.corners) {
+            center += corner;
+        }
+        center *= 0.25F;
+        return center.x >= 0.0F && center.y >= 0.0F && center.x < static_cast<float>(bounds.cols) &&
+               center.y < static_cast<float>(bounds.rows);
+    };
+
+    // Matches the live overlay/seed hold window (kOverlayHoldMs in
+    // scan_session.cpp), same constant tracker_sweep_test.cpp keeps: a pose
+    // the overlay already dropped is too stale to hint or seed with.
+    constexpr std::int64_t kSeedHoldMs = 450;
+    std::optional<cube::vision::PoseSeed> seed_prior;
+    std::int64_t seed_t_ms = 0;
+
+    // The tracker rides along at its default config, fed the exact
+    // TrackerPassInput handleAnalysisFinished would build for each pass -
+    // q_obs only from the pose-producing family, centre labs from that same
+    // family, the stability tracker's motion score (comparable to live: it
+    // normalises internally). The per-pass state/gate columns plus the
+    // summary histograms below are the acceptance metric for the live1
+    // detection-recovery work: state distribution before/after must come
+    // from ONE harness or the numbers aren't comparable.
+    cube::vision::StabilityTracker stability;
+    cube::vision::OrientationTracker tracker;
+    const auto state_name = [](cube::vision::TrackState state) {
+        switch (state) {
+            case cube::vision::TrackState::lost: return "lost";
+            case cube::vision::TrackState::acquiring: return "acquiring";
+            case cube::vision::TrackState::locked: return "locked";
+            case cube::vision::TrackState::coasting: return "coasting";
+        }
+        return "?";
+    };
+    const auto gate_name = [](cube::vision::TrackGate gate) {
+        switch (gate) {
+            case cube::vision::TrackGate::accepted: return "accepted";
+            case cube::vision::TrackGate::anchored: return "anchored";
+            case cube::vision::TrackGate::no_observation: return "no-obs";
+            case cube::vision::TrackGate::basin: return "basin";
+            case cube::vision::TrackGate::margin: return "margin";
+            case cube::vision::TrackGate::omega_outlier: return "omega-outlier";
+            case cube::vision::TrackGate::implausible: return "implausible";
+            case cube::vision::TrackGate::slip_evidence: return "slip-evidence";
+        }
+        return "?";
+    };
+    std::array<int, 4> state_counts{};  // lost, acquiring, locked, coasting
+    std::array<int, 8> gate_counts{};   // TrackGate enum order
+    int observation_passes = 0;
+    int accepted_passes = 0;
+    // Capture-conversion metrics (the live3 acceptance numbers): passes at
+    // the full-24 certainty bar, at the face-scoped bar for the front
+    // face, and at commit grade (locked AND front-face certain - the
+    // conjunction the capture layer requires); which distinct front faces
+    // ever reached commit grade; and per-epoch front diversity while
+    // locked (an epoch with more than one locked front face carried its
+    // identity across a turn).
+    int certain_passes = 0;
+    int certain_front_passes = 0;
+    int commit_grade_passes = 0;
+    std::array<bool, 6> commit_faces{};
+    std::map<int, std::set<char>> locked_fronts_by_epoch;
+
+    // Idle-gate shadow simulation: the live worker SKIPS the detectors on
+    // gate-approved passes; here every pass still runs them (this harness
+    // is the gate-off reference), and the gate merely records what it
+    // WOULD have skipped. The safety assertion at the bottom is the
+    // spec'd diff: no pass the gate would skip may be one the tracker
+    // accepted - i.e. gate-on and gate-off accepted-pass sets must be
+    // identical.
+    cube::vision::IdleGate idle_gate;
+    int would_skip_passes = 0;
+    int idle_violations = 0;
+
+    // Epoch-boundary attribution. Each boundary is charged to what the
+    // track was DOING in the run of passes between its last accepted
+    // measurement and the re-anchor: a boundary preceded only by no-obs
+    // passes is a genuine detection loss (cube out of frame / occluded),
+    // one preceded by refusals is the tracker declining evidence it had.
+    // Counting the run rather than just the last pass matters because the
+    // final pass before a re-anchor is ALWAYS an anchor - the cause is
+    // upstream of it.
+    struct BoundaryRun {
+        int no_obs = 0;
+        int basin = 0;
+        int margin = 0;
+        int omega = 0;
+        int implausible = 0;
+        int slip = 0;
+        int passes = 0;
+    };
+    BoundaryRun run;
+    int previous_epoch = 0;
+    // Last ACCEPTED absolute orientation, mirrored from the harness side
+    // (the tracker keeps its own copy private): every accept/anchor sets
+    // q_track to the adopted measurement, so this is exactly q_last_accept.
+    std::optional<cube::vision::Quat> last_accept_q;
+    const cube::vision::TrackerConfig cfg;
+
+    std::int64_t previous_t_ms = 0;
+    bool have_previous = false;
+    std::size_t replayed = 0;
+    for (const auto& row : rows) {
+        if (recording::frame_overwritten(row.pass, max_pass)) {
+            // Ring wrap: a recording longer than the file ring overwrites
+            // its oldest frames, and within one run they are the SAME
+            // resolution as their replacements - only the index reveals
+            // the wrap. Report and carry on; the surviving final lap is
+            // still a valid contiguous clip.
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            continue;
+        }
+        const cv::Mat frame = cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
+        if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
+            // Secondary guard for a file that is missing outright or was
+            // left behind by an earlier run at a different resolution
+            // (the fresh-truncated index doesn't describe those frames).
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            continue;
+        }
+
+        const std::int64_t dt_ms = have_previous ? row.t_ms - previous_t_ms : 0;
+        previous_t_ms = row.t_ms;
+        have_previous = true;
+
+        // Expired BEFORE the detector stage: the live pass samples ONE
+        // prior at queue time and derives both the corner hint and the
+        // solve seed from it, so a pose the live worker would already have
+        // dropped must not hint observe_corner here either.
+        if (seed_prior && row.t_ms - seed_t_ms > kSeedHoldMs) {
+            seed_prior.reset();
+        }
+        const cube::vision::PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
+
+        const auto all_cells_in_frame = [&](const auto& cells) {
+            return std::all_of(cells.begin(), cells.end(),
+                               [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
+        };
+
+        // Pose-only fits are split off exactly as analyze() splits them:
+        // they may produce a pose (and feed the tracker colour-free) but
+        // never count as a capture-grade face detection.
+        const auto observed = observe_face(frame);
+        const bool face_gated = observed.has_value() && !all_cells_in_frame(observed->cells);
+        std::optional<cube::vision::FaceObservation> face;
+        std::optional<cube::vision::FaceObservation> pose_only_face;
+        if (observed.has_value() && !face_gated) {
+            if (observed->pose_only) {
+                pose_only_face = *observed;
+            } else {
+                face = *observed;
+            }
+        }
+        // Same all-27-cells gate as the live worker: a corner view with any
+        // cell off-frame samples fabricated colour and never reaches the
+        // live pipeline's aggregation OR pose projection, so it must not
+        // count as a detection (or seed a pose) here either. Hinted from
+        // the held pose exactly as analyze() hints it (see the fidelity
+        // note above): a frontal/edge-on prediction yields no hint and the
+        // detector runs the historical fixed-pose way.
+        std::optional<cube::vision::CornerHint> corner_hint;
+        if (seed_prior) {
+            corner_hint = cube::vision::compute_corner_hint(*seed_prior);
+        }
+        const auto observed_corner = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
+        const bool corner_gated =
+            observed_corner.has_value() &&
+            !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
+              all_cells_in_frame(observed_corner->lower_right.cells));
+        std::optional<cube::vision::CornerObservation> corner;
+        if (observed_corner.has_value() && !corner_gated) {
+            corner = *observed_corner;
+        }
+
+        // Corner-first, exactly like the live pass: three pinned quads
+        // constrain the pose far better than one. Both solves take the held
+        // seed the way analyze() passes it.
+        std::optional<cube::vision::CubePoseProjection> pose;
+        const char* pose_src = "none";
+        bool face_pose = false;
+        if (corner.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+                pose = *projected;
+                pose_src = "corner";
+            }
+        } else if (face.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+                pose = *projected;
+                pose_src = "face";
+                face_pose = true;
+            }
+        } else if (pose_only_face.has_value()) {
+            if (const auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed);
+                projected.has_value()) {
+                pose = *projected;
+                pose_src = "face-pose-only";
+            }
+        }
+        // Edge fallback exactly as analyze() runs it: only when every
+        // richer estimator produced no pose at all (an invalid-orientation
+        // corner pose still counts as a pose and suppresses it, as live).
+        if (!pose.has_value()) {
+            std::optional<cube::vision::EdgeHint> edge_hint;
+            if (seed_prior) {
+                edge_hint = cube::vision::compute_edge_hint(*seed_prior);
+            }
+            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
+                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
+                    pose = *projected;
+                    pose_src = "edge";
+                }
+            }
+        }
+        const bool corner_pose = corner.has_value() && pose.has_value();
+        if (pose.has_value() && pose->orientation_valid) {
+            seed_prior = cube::vision::PoseSeed{pose->rvec, pose->tvec};
+            seed_t_ms = row.t_ms;
+        }
+
+        // Tracker pass, mirroring handleAnalysisFinished: q_obs only when
+        // the pose is valid, colour evidence only from the pose-producing
+        // family, motion score from the same pass's frame.
+        cube::vision::TrackerPassInput track_in;
+        track_in.t_ms = row.t_ms;
+        track_in.motion_score = stability.update(frame).motion_score;
+        if (pose.has_value() && pose->orientation_valid) {
+            track_in.q_obs = pose->orientation;
+            track_in.corner_view = corner_pose;
+            const auto lab_entry = [](const cv::Vec3f& lab) {
+                return std::array<float, 3>{lab[0], lab[1], lab[2]};
+            };
+            if (corner_pose && corner.has_value()) {
+                track_in.centre_lab_count = 3;
+                track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+            } else if (face_pose && face.has_value()) {
+                // Positive face-family provenance, as live: an edge pose
+                // coexisting with a pose-failed face observation must not
+                // borrow that observation's colour.
+                track_in.centre_lab_count = 1;
+                track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
+            }
+        }
+        const bool would_idle_skip = idle_gate.skip_next();  // verdict sampled pre-pass, as live
+        const auto track = tracker.on_pass(track_in);
+        ++state_counts[static_cast<std::size_t>(track.state)];
+        ++gate_counts[static_cast<std::size_t>(track.gate)];
+        observation_passes += track_in.q_obs.has_value() ? 1 : 0;
+        const bool pass_accepted = track.gate == cube::vision::TrackGate::accepted ||
+                                   track.gate == cube::vision::TrackGate::anchored;
+        accepted_passes += pass_accepted ? 1 : 0;
+        would_skip_passes += would_idle_skip ? 1 : 0;
+        // A violation = the gate would have skipped a pass that anchored
+        // or accepted ON A FRAME THE STATISTIC CALLS CUBE-PRESENT. The
+        // count qualifier matters: the gate only ever skips while LOST, so
+        // a skipped "accept" can only be an ANCHOR, and an anchor on a
+        // frame with essentially no cube-coloured pixels is a detector
+        // false positive (live1 pass 513: a pose-only fit on the user's
+        // face mid-absence) - the gate suppressing it is the desired
+        // behaviour, not a loss. Genuine cube-return frames clear the gate
+        // through their own count within one pass, which is inside the
+        // design's reacquisition budget.
+        const int cool_hue = cube::vision::count_cool_hue_pixels(frame);
+        idle_violations += (would_idle_skip && pass_accepted &&
+                            cool_hue >= cube::vision::IdleGate::kIdlePixelFloor)
+                               ? 1
+                               : 0;
+        idle_gate.on_pass(cool_hue, track.state == cube::vision::TrackState::lost);
+
+        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),
+                    static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
+                    face.has_value() ? face->geometry_confidence : 0.0F, corner.has_value() ? 1 : 0,
+                    corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0, corner_gated ? 1 : 0,
+                    pose.has_value() && pose->orientation_valid ? 1 : 0);
+        if (pose.has_value() && pose->orientation_valid) {
+            std::printf("%.5f,%.5f,%.5f,%.5f,", pose->orientation[0], pose->orientation[1], pose->orientation[2],
+                        pose->orientation[3]);
+        } else {
+            std::printf(",,,,");
+        }
+        const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
+        const bool certain_front =
+            track.front_face && track.identity_certain_face[static_cast<std::size_t>(*track.front_face)];
+        const bool commit_grade = track.state == cube::vision::TrackState::locked && certain_front;
+        certain_passes += track.identity_certain ? 1 : 0;
+        certain_front_passes += certain_front ? 1 : 0;
+        commit_grade_passes += commit_grade ? 1 : 0;
+        if (commit_grade) {
+            commit_faces[static_cast<std::size_t>(*track.front_face)] = true;
+        }
+        if (track.state == cube::vision::TrackState::locked && track.front_face) {
+            locked_fronts_by_epoch[track.epoch].insert(front);
+        }
+        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d,", state_name(track.state), gate_name(track.gate), front, track.epoch,
+                    pose_src, track.belief_margin, track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
+
+        // Independent best/runner-up recomputation over the full lattice.
+        // The tracker reports only theta and their DIFFERENCE, but the
+        // safety question - "would exactly one element have explained this
+        // observation" - needs both absolute residuals and both element
+        // indices, and needs them on REFUSED passes where the tracker
+        // adopted nothing.
+        float r0 = -1.0F;
+        float r1 = -1.0F;
+        int l0 = -1;
+        int l1 = -1;
+        float accept_deg = -1.0F;
+        if (track_in.q_obs) {
+            for (std::size_t j = 0; j < cube::vision::kLatticeSize; ++j) {
+                const cube::vision::Quat composed =
+                    cube::vision::quat_multiply(*track_in.q_obs, cube::vision::kLattice24[j]);
+                const float residual = cube::vision::quat_angle_deg(composed, track.q_pred);
+                if (r0 < 0.0F || residual < r0) {
+                    r1 = r0;
+                    l1 = l0;
+                    r0 = residual;
+                    l0 = static_cast<int>(j);
+                } else if (r1 < 0.0F || residual < r1) {
+                    r1 = residual;
+                    l1 = static_cast<int>(j);
+                }
+            }
+            if (last_accept_q && l0 >= 0) {
+                accept_deg = cube::vision::quat_angle_deg(
+                    cube::vision::quat_multiply(*track_in.q_obs,
+                                                cube::vision::kLattice24[static_cast<std::size_t>(l0)]),
+                    *last_accept_q);
+            }
+        }
+        const float thresh = std::min(cfg.basin_ceiling_deg, track.sigma_deg + cfg.max_interframe_deg);
+        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n", track.theta_deg, track.margin_deg, r0, r1, l0, l1,
+                    accept_deg, track.sigma_deg, thresh);
+
+        // Boundary attribution + accept mirror, after the row is emitted.
+        if (track.epoch != previous_epoch) {
+            std::printf("# boundary epoch %d->%d at pass %d: run=%d no-obs=%d basin=%d margin=%d omega=%d "
+                        "implausible=%d slip=%d\n",
+                        previous_epoch, track.epoch, row.pass, run.passes, run.no_obs, run.basin, run.margin, run.omega,
+                        run.implausible, run.slip);
+            previous_epoch = track.epoch;
+            run = BoundaryRun{};
+        }
+        if (pass_accepted) {
+            last_accept_q = track.q_track;
+            run = BoundaryRun{};
+        } else {
+            ++run.passes;
+            switch (track.gate) {
+                case cube::vision::TrackGate::no_observation: ++run.no_obs; break;
+                case cube::vision::TrackGate::basin: ++run.basin; break;
+                case cube::vision::TrackGate::margin: ++run.margin; break;
+                case cube::vision::TrackGate::omega_outlier: ++run.omega; break;
+                case cube::vision::TrackGate::implausible: ++run.implausible; break;
+                case cube::vision::TrackGate::slip_evidence: ++run.slip; break;
+                default: break;
+            }
+        }
+        ++replayed;
+    }
+
+    std::printf("replayed %zu of %zu passes\n", replayed, rows.size());
+    std::printf("# observations: %d of %zu passes; accepted (incl. anchors): %d\n", observation_passes, replayed,
+                accepted_passes);
+    std::printf("# states: lost=%d acquiring=%d locked=%d coasting=%d\n", state_counts[0], state_counts[1],
+                state_counts[2], state_counts[3]);
+    std::printf("# gates: accepted=%d anchored=%d no-obs=%d basin=%d margin=%d omega-outlier=%d implausible=%d "
+                "slip-evidence=%d\n",
+                gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4], gate_counts[5],
+                gate_counts[6], gate_counts[7]);
+    std::printf("# idle-gate: would-skip=%d violations=%d\n", would_skip_passes, idle_violations);
+    std::string commit_face_letters;
+    for (std::size_t f = 0; f < commit_faces.size(); ++f) {
+        if (commit_faces[f]) {
+            commit_face_letters += "URFDLB"[f];
+        }
+    }
+    int multi_front_epochs = 0;
+    for (const auto& [epoch, fronts] : locked_fronts_by_epoch) {
+        multi_front_epochs += fronts.size() > 1 ? 1 : 0;
+    }
+    std::printf("# certainty: full24=%d front-scoped=%d commit-grade=%d faces=%s\n", certain_passes,
+                certain_front_passes, commit_grade_passes,
+                commit_face_letters.empty() ? "-" : commit_face_letters.c_str());
+    std::printf("# identity carry: epochs with >1 locked front = %d of %zu\n", multi_front_epochs,
+                locked_fronts_by_epoch.size());
+    // The gate-on and gate-off accepted-pass sets must agree on every
+    // cube-present frame: the gate may only ever discard passes that
+    // would have produced nothing (or a false positive on an empty frame
+    // - see the violation qualifier above).
+    CHECK(idle_violations == 0);
+    CHECK(replayed > 0);
 }

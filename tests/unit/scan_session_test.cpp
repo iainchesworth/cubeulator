@@ -43,3 +43,48 @@ TEST_CASE("ScanSession::progressCenters starts as six empty entries", "[qt][cont
         REQUIRE_FALSE(entry.toBool());
     }
 }
+
+TEST_CASE("ScanSession identity-routing state starts empty and honest", "[qt][controllers]") {
+    ScanSession session;
+
+    // The tracker has never anchored: no orientation, no identity claims,
+    // no recovery in progress, no capture states to report.
+    REQUIRE(session.trackingState() == QStringLiteral("lost"));
+    REQUIRE(session.cubeOrientation().isEmpty());
+    REQUIRE_FALSE(session.reorienting());
+    REQUIRE(session.faceCaptureStates().isEmpty());
+    REQUIRE(session.slotSummaries().isEmpty());
+    REQUIRE(session.captureProgress() == 0.0);
+}
+
+TEST_CASE("ScanSession::retakeSlot ignores indices that name no slot", "[qt][controllers]") {
+    ScanSession session;
+
+    session.retakeSlot(0);
+    session.retakeSlot(-1);
+    session.retakeSlot(5);
+
+    REQUIRE(session.facesScanned() == 0);
+}
+
+TEST_CASE("ScanSession::previewMirrored defaults off and round-trips", "[qt][controllers]") {
+    ScanSession session;
+
+    // Default must be the unmirrored camera frame: the mirror conjugation
+    // in cubeOrientation() is display-only compensation that QML opts into
+    // by binding CameraController.previewMirrored - a session nobody bound
+    // must behave exactly like the pre-mirror-aware code.
+    REQUIRE_FALSE(session.previewMirrored());
+
+    session.setPreviewMirrored(true);
+    REQUIRE(session.previewMirrored());
+    session.setPreviewMirrored(true);  // idempotent re-set must be safe
+    REQUIRE(session.previewMirrored());
+    session.setPreviewMirrored(false);
+    REQUIRE_FALSE(session.previewMirrored());
+
+    // The flag alone must not conjure an orientation: cubeOrientation
+    // stays empty (tracker lost) whichever way the mirror points.
+    session.setPreviewMirrored(true);
+    REQUIRE(session.cubeOrientation().isEmpty());
+}

@@ -166,6 +166,42 @@ TEST_CASE("observe_face extrapolates a missing sticker's quad", "[vision]") {
     REQUIRE(point_distance(quad_centroid(observation->cells[4]), flat_cell_center(1, 1)) < 12.0F);
 }
 
+TEST_CASE("a two-row-span fit yields a pose-only observation, never capture-grade", "[vision]") {
+    // Only the top two rows drawn: six genuine anchors spanning two rows
+    // fit a clean lattice whose TRANSLATION is ambiguous (the third row
+    // could extend either way) and the completion scorer rejects every
+    // placement (whichever way the missing row extends it lands on black
+    // background and fails the cell-lightness gate). The canvas is
+    // enlarged well past the face so the outline fallback cannot fire
+    // either: a lone 60px tile then sits under the outline's 2%-of-frame
+    // area floor (on a tight canvas it passes, and the outline happily
+    // returns one uniform tile as a 'face' - gap and cell chroma are equal
+    // there, so the phase check cannot object). The plane itself is real,
+    // so the observation must come back pose_only - orientation for the
+    // tracker, nothing for capture.
+    constexpr int kWideFrameSize = 430;
+    cv::Mat frame = cv::Mat::zeros(kWideFrameSize, kWideFrameSize, CV_8UC3);
+    const auto& layout = face_layout();
+    for (int row = 0; row < 2; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const int x = kMargin + col * (kCell + kGap);
+            const int y = kMargin + row * (kCell + kGap);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell),
+                          layout[static_cast<std::size_t>(row * 3 + col)].bgr, cv::FILLED);
+        }
+    }
+
+    const auto observation = observe_face(frame);
+    REQUIRE(observation.has_value());
+    CHECK(observation->pose_only);
+
+    // And the flag defaults false on a full capture-grade read - the
+    // pose-only fallback must never relabel the ordinary path.
+    const auto full = observe_face(synthetic_face_frame());
+    REQUIRE(full.has_value());
+    CHECK_FALSE(full->pose_only);
+}
+
 TEST_CASE("observe_face reports no_valid_cube_detected for a blank frame", "[vision]") {
     const auto blank = observe_face(cv::Mat::zeros(200, 200, CV_8UC3));
     REQUIRE_FALSE(blank.has_value());

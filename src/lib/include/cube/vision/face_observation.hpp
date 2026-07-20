@@ -1,10 +1,12 @@
 #pragma once
 
 #include <cube/error.hpp>
+#include <cube/vision/grid_detection.hpp>
 
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <vector>
 
 namespace cube::vision {
 
@@ -27,6 +29,20 @@ struct FaceObservation {
     std::array<cv::Vec3f, 9> lab{};          // OpenCV float Lab (L in [0,100])
     std::array<cv::Point2f, 4> face_quad{};  // outer face boundary, same corner order
     float geometry_confidence = 0.0F;        // fraction of cells matched by a real contour
+    // ORIENTATION-ONLY observation: the lattice fit was geometrically sane
+    // and phase-plausible but its anchors spanned fewer than three rows or
+    // columns, so the grid's TRANSLATION is ambiguous - the cells (and
+    // therefore the lab samples) may sit one pitch off the true stickers.
+    // Translation ambiguity is irrelevant to the pose's ORIENTATION (a
+    // pitch-shifted quad of the same planar grid solves to the same
+    // rotation up to perspective noise), which is exactly what the
+    // orientation tracker consumes - so these observations feed
+    // project_cube_from_face and the tracker, and MUST NOT feed colour
+    // aggregation, facelet display or capture. Live1 measured ~25-35
+    // frames per session dying solely on the translation pin while the
+    // tracker starved for poses; this flag recovers them without touching
+    // capture-grade acceptance.
+    bool pose_only = false;
 };
 
 // Locates a cube face's 3x3 sticker grid and samples its colours.
@@ -42,6 +58,18 @@ struct FaceObservation {
 // Diagnostics seam for the offline frame-replay harness. Not a stable API
 // for anything outside the vision module or its tests.
 namespace detail {
+
+// The full deduped union of every candidate source observe_face runs
+// (both brightness polarities at three scales, the saturation cuts, the
+// white mask). Exposed for the edge-view detector (edge_observation.cpp),
+// which partitions the same candidates across a two-face split instead of
+// fitting one planar lattice - running a second, divergent extraction
+// stack there is how the two paths would rot apart. max_aspect loosens
+// only the per-contour squareness gate (see kDefaultMaxCandidateAspect):
+// the edge path's obliquely foreshortened cells legitimately exceed the
+// frontal bound, while observe_face itself always uses the default.
+[[nodiscard]] std::vector<StickerCandidate> merged_face_candidates(
+    const cv::Mat& bgr_frame, double max_aspect = kDefaultMaxCandidateAspect);
 
 // One photometrically-scored placement of a partial lattice (see
 // grid_detection.hpp's partial_lattice_placements). Deviations are

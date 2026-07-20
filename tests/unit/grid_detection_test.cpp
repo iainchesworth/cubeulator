@@ -5,6 +5,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include <cmath>
+#include <vector>
 
 using namespace cube::vision;
 
@@ -230,4 +231,45 @@ TEST_CASE("detect_cube_grid tolerates a rotated grid", "[vision]") {
 
 TEST_CASE("detect_cube_grid rejects a grid with too few cells", "[vision]") {
     REQUIRE_FALSE(detect_cube_grid(synthetic_grid_frame_sparse()).has_value());
+}
+
+TEST_CASE("dim-blur rounded cells survive the relaxed candidate poly gate", "[vision]") {
+    // Octagonal cells stand in for tiles whose corners dim webcam blur has
+    // rounded away: approxPolyDP reads them as 7-8 vertices with fill
+    // ~0.83, which the historical 4-6-vertex / 0.65-fill gate accepted or
+    // rejected on luck. All nine must now come back as candidates.
+    cv::Mat mask = cv::Mat::zeros(230, 230, CV_8UC1);
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const int cx = kMargin + col * (kCell + kGap) + kCell / 2;
+            const int cy = kMargin + row * (kCell + kGap) + kCell / 2;
+            std::vector<cv::Point> octagon;
+            for (int vertex = 0; vertex < 8; ++vertex) {
+                const double angle = (static_cast<double>(vertex) + 0.5) * 2.0 * 3.14159265358979 / 8.0;
+                octagon.emplace_back(cx + static_cast<int>(std::lround(28.0 * std::cos(angle))),
+                                     cy + static_cast<int>(std::lround(28.0 * std::sin(angle))));
+            }
+            cv::fillConvexPoly(mask, octagon, cv::Scalar(255));
+        }
+    }
+    const auto candidates = detail::candidates_from_binary_mask(mask);
+    REQUIRE(candidates.size() >= 9);
+}
+
+TEST_CASE("a starved low-contrast frame recovers candidates via the permissive-C retry", "[vision]") {
+    // Tiles a whisker brighter than their surroundings: the standard
+    // adaptive-threshold C wipes most of them out (warm dim light on a
+    // matte cube - live1's frontal-but-failed class), and only the
+    // conditional low-C retry can supply the lattice fitter. The frame
+    // must yield at least the fitter's own acceptance floor of candidates.
+    cv::Mat frame(230, 230, CV_8UC3, cv::Scalar(58, 58, 58));
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const int x = kMargin + col * (kCell + kGap);
+            const int y = kMargin + row * (kCell + kGap);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(66, 66, 66), cv::FILLED);
+        }
+    }
+    const auto candidates = detail::find_square_candidates(frame);
+    REQUIRE(candidates.size() >= 6);
 }

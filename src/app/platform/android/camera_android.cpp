@@ -49,8 +49,13 @@ void open_permission_settings() {
     context.callMethod<void>("startActivity", "(Landroid/content/Intent;)V", intent.object());
 }
 
-std::optional<cv::Mat> try_pop_latest_frame() {
+std::optional<TimedFrame> try_pop_latest_frame() {
     // Native capture (Camera2/CameraX) lands with the vision pipeline spec.
+    // TODO: when it does, TimedFrame::t_ms must be stamped (steady_clock
+    // ms) at delivery into the mailbox - inside the ImageReader/analysis
+    // callback, NOT here in the poll - per the timestamp contract in
+    // interfaces/camera.hpp. Camera2's SENSOR_TIMESTAMP is a different
+    // (sometimes boottime) clock domain, so don't pass it through raw.
     return std::nullopt;
 }
 

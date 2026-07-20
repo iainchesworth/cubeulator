@@ -34,7 +34,7 @@ public:
     [[nodiscard]] Result<void> start(const DeviceInfo& device);
     void stop();
 
-    [[nodiscard]] std::optional<cv::Mat> try_pop_latest_frame();
+    [[nodiscard]] std::optional<TimedFrame> try_pop_latest_frame();
     [[nodiscard]] bool is_capturing() const noexcept;
 
 private:
@@ -44,7 +44,11 @@ private:
     cv::VideoCapture capture_;
     std::jthread capture_thread_;
     std::mutex mailbox_mutex_;
-    cv::Mat latest_frame_;
+    // The single-slot mailbox: an empty .frame means "nothing new". t_ms is
+    // stamped on the capture thread at push (see interfaces/camera.hpp for
+    // the timestamp contract) so the stamp reflects when the frame was
+    // captured, not when the GUI thread got around to polling for it.
+    TimedFrame latest_;
 };
 
 }  // namespace cube::platform::camera::detail

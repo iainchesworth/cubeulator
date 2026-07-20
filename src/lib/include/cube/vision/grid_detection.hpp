@@ -68,21 +68,35 @@ struct StickerCandidate {
     double area = 0.0;
 };
 
+// Default rotation-invariant squareness bound (max/min side of the
+// contour's minAreaRect) for candidate filtering - the historical value
+// every frontal-face caller keeps. Exposed as the default argument so the
+// edge-view detector can pass a looser bound: a 45-50-degree oblique face
+// legitimately foreshortens its cells to ~1.4-2.0 under perspective, which
+// this bound (tuned for near-frontal presentations) would reject wholesale
+// - measured on synthetic edge renders where 18 clean tiles yielded 6
+// candidates. The corner detector's own extraction already loosens to 3.0
+// for exactly the same reason.
+inline constexpr double kDefaultMaxCandidateAspect = 1.6;
+
 // The CLAHE + adaptive-threshold candidate extraction detect_cube_grid()
 // uses (see grid_detection.cpp for why that beats a global threshold).
-[[nodiscard]] std::vector<StickerCandidate> find_square_candidates(const cv::Mat& bgr_frame);
+[[nodiscard]] std::vector<StickerCandidate> find_square_candidates(
+    const cv::Mat& bgr_frame, double max_aspect = kDefaultMaxCandidateAspect);
 
 // The inverted twin: cells DARKER than their local surroundings, which is
 // what a cube with a light/white plastic lattice between tiles produces
 // (its coloured cells are local brightness minima the forward threshold
 // can never see). See grid_detection.cpp.
-[[nodiscard]] std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame);
+[[nodiscard]] std::vector<StickerCandidate> find_dark_square_candidates(
+    const cv::Mat& bgr_frame, double max_aspect = kDefaultMaxCandidateAspect);
 
 // Contour extraction + area/squareness filtering over a caller-built 8-bit
 // binary mask - the shared back half of find_square_candidates(), split out
 // so alternative segmentation strategies feed the same filters and produce
 // comparable candidates.
-[[nodiscard]] std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_mask);
+[[nodiscard]] std::vector<StickerCandidate> candidates_from_binary_mask(
+    const cv::Mat& binary_mask, double max_aspect = kDefaultMaxCandidateAspect);
 
 // The RANSAC-style 3x3 lattice fit over an arbitrary candidate set.
 // `frame_size` bounds extrapolated cell centers (an unmatched slot's
