@@ -720,6 +720,87 @@ TEST_CASE("a single epoch face registers its roll against two filled slots", "[r
     }
 }
 
+TEST_CASE("the roll tie-break cannot promote a candidate the score rejected", "[routing]") {
+    // The reachable case the earlier bar check missed. `tied` membership
+    // only required being within epoch_register_margin (4) of the best, so
+    // a tied member could score up to 10 against a 6 bar - and the roll
+    // sort, which ranks the tied set purely on ordered stickers, could
+    // return that member. The bar was tested against the best candidate
+    // only, which stopped being the returned one.
+    //
+    // Store: the true face (score at the bar, poor roll) on one slot, and
+    // a DIFFERENT physical face whose ring aliases the epoch face exactly
+    // (roll 0) but whose centre is a whole colour class away, on another.
+    // Registration must never adopt the aliasing face's gauge.
+    const RoutingConfig config;
+    const CapturedFace pattern = patterned();
+
+    // Some lattice element sending the epoch's F somewhere other than F -
+    // the wrong-face hypothesis whose gauge must not be adopted.
+    int wrong_gauge = -1;
+    for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
+        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::F)] == Face::U) {
+            wrong_gauge = g;
+            break;
+        }
+    }
+    REQUIRE(wrong_gauge >= 0);
+
+    std::vector<EpochFaceSample> samples;
+    samples.push_back({Face::F, pattern});
+
+    SECTION("an over-bar tied candidate with a perfect roll is refused") {
+        // Slot U: the epoch face's ring relabelled under wrong_gauge, so
+        // its oriented distance is exactly zero - but its centre is
+        // kBlue against the epoch face's kRed, a full class apart. That
+        // reclassification costs 2 census points and ~90 Lab of centre,
+        // putting the hypothesis above the commit bar.
+        std::array<std::optional<CapturedFace>, 6> slots{};
+        CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
+        aliasing.lab[cube::model::center_facelet_index] = kBlue;
+        slots[static_cast<std::size_t>(Face::U)] = aliasing;
+        // Slot F: the true face under the identity, honestly drifted by
+        // three sticker reclassifications - score at the bar, roll poor.
+        CapturedFace true_face = pattern;
+        true_face.lab[0] = kYellow;
+        true_face.lab[2] = kWhite;
+        true_face.lab[6] = kGreen;
+        slots[static_cast<std::size_t>(Face::F)] = true_face;
+
+        const auto registration = register_epoch_gauge(samples, slots, config);
+        // The safety property: whatever it decides, it must never adopt a
+        // gauge that files this epoch face onto the aliasing slot.
+        CHECK(registration.lattice_index != wrong_gauge);
+        if (registration.status == EpochRegistration::Status::resolved) {
+            CHECK(kFacePermutation[static_cast<std::size_t>(registration.lattice_index)]
+                                  [static_cast<std::size_t>(Face::F)] == Face::F);
+        }
+    }
+
+    SECTION("a bar-passing candidate whose centre is a class away is refused") {
+        // The centre-agreement gate on its own. Here the aliasing slot
+        // keeps the epoch face's census exactly (no reclassification) and
+        // its centre is only far enough to fail tight re-association, so
+        // the hypothesis passes the commit bar outright and still posts a
+        // perfect roll. Only the centre gate stands between it and a
+        // wrong-slot resolution.
+        std::array<std::optional<CapturedFace>, 6> slots{};
+        CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
+        // Same class as kRed, displaced past reassoc_centre_lab (25).
+        aliasing.lab[cube::model::center_facelet_index] =
+            pattern.lab[cube::model::center_facelet_index] + cv::Vec3f{-26.0F, 0.0F, 0.0F};
+        slots[static_cast<std::size_t>(Face::U)] = aliasing;
+        slots[static_cast<std::size_t>(Face::F)] = relabelled(pattern, Face::F, kIdentityLatticeIndex);
+
+        const auto registration = register_epoch_gauge(samples, slots, config);
+        CHECK(registration.lattice_index != wrong_gauge);
+        if (registration.status == EpochRegistration::Status::resolved) {
+            CHECK(kFacePermutation[static_cast<std::size_t>(registration.lattice_index)]
+                                  [static_cast<std::size_t>(Face::F)] == Face::F);
+        }
+    }
+}
+
 TEST_CASE("oriented cell distance reads zero only for the true relabel", "[routing]") {
     const CapturedFace pattern = patterned();
     for (int gauge = 0; gauge < static_cast<int>(kLatticeSize); ++gauge) {

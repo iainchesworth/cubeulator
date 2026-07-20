@@ -123,11 +123,25 @@ struct RoutingConfig {
     //
     // Bar: even the best roll must be this close in mean per-cell Lab, or
     // the hypothesis is matching the wrong face entirely and no roll of it
-    // deserves to win. 20 sits well above honest cross-epoch drift on a
+    // deserves to win. 20 sits above honest cross-epoch drift on a
     // re-shown face (exposure and white balance move a captured face by
-    // single-digit Lab) and well below a genuine sticker disagreement (two
-    // different cube colours are 40+ Lab apart), so the gap it must
-    // discriminate is roughly 2:1 either side.
+    // single-digit Lab) and below a genuine sticker disagreement (two
+    // different cube colours are 40+ Lab apart).
+    //
+    // EVIDENCE, stated precisely because it is weaker than the rest of
+    // this struct's. Every other constant here was swept over the recorded
+    // corpus; these two oriented constants were NOT, because the sweep
+    // harness (tracker_sweep_test.cpp) replays tracker pose metrics and
+    // has no routing surface at all - CaptureRouter lives behind
+    // ScanSession, so sweeping RoutingConfig needs a routing replay
+    // harness that does not yet exist. What backs them is the synthetic
+    // boundary tests below this file's tie-break tests plus two live5
+    // registrations (best/runner-up 5.28 vs 28.14 and 8.31 vs 47.56) -
+    // enough to show the separation is wide in practice, not enough to
+    // call the placement optimal. Treat as provisional until a routing
+    // replay can measure them; the safety of the tie-break does not rest
+    // on their exact values (the centre-agreement gate and the commit bar
+    // do), only its hit rate.
     float epoch_register_oriented_max_lab = 20.0F;
     // Margin: the winning roll must beat the runner-up by this much mean
     // Lab or the tie is NOT broken here and falls through to the existing
@@ -194,9 +208,10 @@ struct RoutingConfig {
 //
 //  1. Oriented roll tie-break: score the tied candidates by ordered
 //     sticker agreement (oriented_cell_lab_distance) and take the winner
-//     if it clears the absolute bar AND beats the runner-up by the
-//     margin. This is new evidence, not a loosened threshold: it consumes
-//     the cell ordering the rotation-invariant terms discard.
+//     if it clears the absolute bar, beats the runner-up by the margin,
+//     and its induced pairs agree on centre class and centre Lab. This is
+//     new evidence, not a loosened threshold: it consumes the cell
+//     ordering the rotation-invariant terms discard.
 //  2. Content equivalence (the solved-cube termination guarantee):
 //     candidates still tied are accepted anyway IF, for every epoch face,
 //     the slots they map it onto are all empty or all pairwise
@@ -205,11 +220,31 @@ struct RoutingConfig {
 //     on residual ties) is harmless for assembly and unwedges a cube whose
 //     faces genuinely cannot be told apart.
 //
-// Anything surviving both stays ambiguous and keeps buffering. Note the
-// asymmetry that keeps this safe: step 1 can only ever pick a DIFFERENT
-// member of a set the old code was already willing to treat as
-// interchangeable, or resolve a set it would have refused outright. It
-// cannot admit a candidate that failed the score bar or the margin.
+// Anything surviving both stays ambiguous and keeps buffering.
+//
+// The safety property, stated as the code actually enforces it. The commit
+// bar is applied to whichever candidate is RETURNED, not to the
+// best-scoring one: step 1 can return a tied member instead of
+// candidates.front(), and tie membership is only "within
+// epoch_register_margin of the best", which reaches well above the bar
+// whenever the best sits below it. Testing the bar on candidates.front()
+// alone was sound while the winner was always that candidate, and stopped
+// being sound the moment step 1 could change who the winner is. The bar
+// is deliberately NOT used to filter the tied set itself - an over-bar
+// member is still a live alternative hypothesis, and the margin exists to
+// refuse a winner it cannot separate from one.
+//
+// Step 1 also resolves WITHOUT step 2's all-six future-binding check,
+// which is a deliberate asymmetry rather than an omission. Step 2 accepts
+// a tie it cannot break, so it owes a proof that no member's future
+// assignments could matter; step 1 breaks the tie, eliminating the other
+// members on positive ordered-sticker evidence and leaving one surviving
+// hypothesis on exactly the footing of the `unique` basis, which binds the
+// future without a further check for the same reason. That argument is
+// only as good as the elimination, hence the three independent gates
+// above - in particular the centre-agreement gate, without which a
+// different physical face whose ring aliases the epoch face could win on
+// roll evidence alone while its centre sat a whole colour class away.
 struct EpochFaceSample {
     cube::model::Face epoch_face{};
     CapturedFace captured;

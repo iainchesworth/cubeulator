@@ -116,12 +116,6 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         int index = 0;
         float mean_score = std::numeric_limits<float>::max();
         int pairs = 0;
-        // Mean non-centre Lab over the same induced pairs. Carried
-        // alongside rather than folded into mean_score deliberately: it
-        // must not shift the commit bar or the margin, both of which are
-        // calibrated in census-L1 points against the rotation-invariant
-        // terms. It only ever adjudicates candidates those terms tied.
-        float oriented_lab = 0.0F;
     };
     std::vector<Candidate> candidates;
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
@@ -133,7 +127,6 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             continue;
         }
         float score = 0.0F;
-        float oriented = 0.0F;
         int pairs = 0;
         for (const auto& sample : epoch_faces) {
             const Face target = perm[static_cast<std::size_t>(sample.epoch_face)];
@@ -141,7 +134,6 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             if (slot) {
                 ++pairs;
                 score += registration_pair_score(sample.captured, *slot, config);
-                oriented += oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, g);
             }
         }
         // Every pin-satisfying hypothesis with at least one induced pair
@@ -153,8 +145,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         // and commit the winner while a barely-worse hypothesis was still
         // alive.
         if (pairs > 0) {
-            candidates.push_back({g, score / static_cast<float>(pairs), pairs,
-                                  oriented / static_cast<float>(pairs)});
+            candidates.push_back({g, score / static_cast<float>(pairs), pairs});
         }
     }
 
@@ -196,6 +187,14 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
     const Candidate& best = candidates.front();
     std::vector<const Candidate*> tied;
     for (const Candidate& candidate : candidates) {
+        // Margin only, deliberately: an over-bar member is still a LIVE
+        // ALTERNATIVE hypothesis about where this epoch's faces belong,
+        // and the margin exists precisely to refuse a winner it cannot
+        // separate from one (winner 4.25, runner-up 6.25, bar 6, margin
+        // 4). Filtering the bar in here would delete that runner-up and
+        // commit the winner as `unique`. The bar's proper job is to gate
+        // which member may WIN, and it is applied there - on the stage-1
+        // roll winner below, and on candidates.front() above.
         if (candidate.mean_score - best.mean_score < config.epoch_register_margin) {
             tied.push_back(&candidate);
         }
@@ -206,29 +205,91 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         // the structural four-fold degeneracy: every element fixing a
         // given face scores identically under census and centre colour,
         // both rotation-invariant. Ordered stickers are not, so rank the
-        // tied set by them and take the winner if it is both absolutely
-        // plausible and decisively better than the next.
+        // tied set by them and take the winner if it is absolutely
+        // plausible, decisively better than the next, AND agrees on the
+        // one signal the oriented comparison structurally cannot see.
         //
-        // Ordering by oriented distance ONLY within the already-tied set
-        // is what keeps this conservative: the score bar and margin have
-        // already had their say, so this can never promote a candidate
-        // they rejected - it only chooses among ones they could not
-        // separate.
-        std::vector<const Candidate*> by_roll = tied;
-        std::ranges::sort(by_roll, [](const Candidate* a, const Candidate* b) {
-            if (a->oriented_lab != b->oriented_lab) {
-                return a->oriented_lab < b->oriented_lab;
+        // Computed for the tied set only: the value is consumed nowhere
+        // else, so the recovery path's sqrt count follows the size of the
+        // tie rather than all 24 pin-satisfying hypotheses.
+        //
+        // Why this may resolve without the stage-2 future-binding check
+        // below, when stage 2 exists precisely because adopting a gauge
+        // binds every FUTURE commit of the epoch. Stage 2 accepts a tie it
+        // cannot break, so it must prove that no member's future
+        // assignments could matter. Stage 1 does not accept a tie: it
+        // BREAKS one, eliminating the other members on positive evidence
+        // (an ordered-sticker disagreement beyond the margin is a
+        // disagreement about the physical cube, not a preference), leaving
+        // a single surviving hypothesis exactly as the `unique` basis
+        // does - and `unique` binds the future on the same footing without
+        // a further check. The whole weight of that argument rests on the
+        // elimination being sound, which is why the winner must clear
+        // three independent gates and not merely rank first.
+        struct Roll {
+            const Candidate* candidate = nullptr;
+            float oriented_lab = 0.0F;
+            // Every induced pair's centres agree in class and are inside
+            // the tight re-association radius. oriented_cell_lab_distance
+            // deliberately EXCLUDES the centre (it is rotation-invariant
+            // and carries no roll information), which leaves the roll
+            // ranking blind to the single strongest face-identity signal:
+            // a DIFFERENT physical face whose eight-sticker ring happens
+            // to alias the epoch face would post a near-zero roll while
+            // its centre sat a whole colour class away. The score bar
+            // bounds that only in aggregate - one pair at census 0 admits
+            // a centre up to epoch_register_max_score * content_equiv_lab
+            // / 2 = 36 Lab - so the roll winner is gated on the centre
+            // directly. A candidate failing this is not re-ranked, it is
+            // refused: the tie falls through to stage 2 unbroken.
+            bool centres_agree = true;
+        };
+        std::vector<Roll> by_roll;
+        by_roll.reserve(tied.size());
+        for (const Candidate* candidate : tied) {
+            const auto& perm = kFacePermutation[static_cast<std::size_t>(candidate->index)];
+            float oriented = 0.0F;
+            int pairs = 0;
+            bool centres_agree = true;
+            for (const auto& sample : epoch_faces) {
+                const Face target = perm[static_cast<std::size_t>(sample.epoch_face)];
+                const auto& slot = slots[static_cast<std::size_t>(target)];
+                if (!slot) {
+                    continue;
+                }
+                ++pairs;
+                oriented +=
+                    oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, candidate->index);
+                centres_agree = centres_agree &&
+                                centre_lab_distance(sample.captured, *slot) < config.reassoc_centre_lab &&
+                                centre_class(sample.captured) == centre_class(*slot);
             }
-            return a->index < b->index;  // deterministic on exact ties
+            by_roll.push_back({candidate, pairs > 0 ? oriented / static_cast<float>(pairs) : 0.0F,
+                               centres_agree});
+        }
+        std::ranges::sort(by_roll, [](const Roll& a, const Roll& b) {
+            if (a.oriented_lab != b.oriented_lab) {
+                return a.oriented_lab < b.oriented_lab;
+            }
+            return a.candidate->index < b.candidate->index;  // deterministic on exact ties
         });
-        out.best_oriented_lab = by_roll.front()->oriented_lab;
-        out.runner_up_oriented_lab = by_roll[1]->oriented_lab;
-        if (by_roll.front()->oriented_lab <= config.epoch_register_oriented_max_lab &&
-            by_roll[1]->oriented_lab - by_roll.front()->oriented_lab >=
+        out.best_oriented_lab = by_roll.front().oriented_lab;
+        out.runner_up_oriented_lab = by_roll[1].oriented_lab;
+        // The bar applies to the candidate actually RETURNED, which the
+        // roll sort may make someone other than candidates.front(). Note
+        // this declines rather than ranking past an over-bar leader: if
+        // the best roll belongs to a hypothesis the score rejected, the
+        // roll evidence is pointing somewhere the score will not follow,
+        // and that disagreement is ambiguity to be deferred - not licence
+        // to hand the gauge to the second-best roll.
+        if (by_roll.front().candidate->mean_score <= config.epoch_register_max_score &&
+            by_roll.front().centres_agree &&
+            by_roll.front().oriented_lab <= config.epoch_register_oriented_max_lab &&
+            by_roll[1].oriented_lab - by_roll.front().oriented_lab >=
                 config.epoch_register_oriented_margin_lab) {
             out.status = EpochRegistration::Status::resolved;
             out.basis = EpochRegistration::Basis::oriented;
-            out.lattice_index = by_roll.front()->index;
+            out.lattice_index = by_roll.front().candidate->index;
             return out;
         }
 
