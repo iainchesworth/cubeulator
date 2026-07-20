@@ -249,6 +249,11 @@ constexpr int kStrictStickerSaturation = 60;
 // collapses the whole lattice (observed live: all nine cells projected to
 // one pixel). Below 4 (or if estimation degenerates) the lattice's own
 // affine frame is the best available model.
+// Diagnostic-only record of how the current thread's last observation was
+// placed. Written on every path, read only by the measurement harness via
+// detail::last_placement_diagnostic(); nothing branches on it.
+thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
+
 [[nodiscard]] cv::Mat lattice_to_frame_transform(const GridFitDetail& fit) {
     std::vector<cv::Point2f> lattice_points;
     std::vector<cv::Point2f> frame_points;
@@ -263,10 +268,13 @@ constexpr int kStrictStickerSaturation = 60;
         }
     }
 
+    g_placement_diagnostic.matched_cells = static_cast<int>(lattice_points.size());
+
     if (lattice_points.size() >= 5) {
         cv::Mat homography = cv::findHomography(lattice_points, frame_points, cv::RANSAC, kHomographyReprojThreshold);
         if (!homography.empty()) {
             homography.convertTo(homography, CV_64F);
+            g_placement_diagnostic.model = detail::TransformModel::homography;
             return homography;
         }
     }
@@ -278,10 +286,12 @@ constexpr int kStrictStickerSaturation = 60;
             cv::Mat affine = cv::Mat::eye(3, 3, CV_64F);
             affine2x3.convertTo(affine2x3, CV_64F);
             affine2x3.copyTo(affine(cv::Rect(0, 0, 3, 2)));
+            g_placement_diagnostic.model = detail::TransformModel::ls_affine;
             return affine;
         }
     }
 
+    g_placement_diagnostic.model = detail::TransformModel::basis_affine;
     return basis_affine(fit.anchor, fit.col_step, fit.row_step);
 }
 
@@ -378,8 +388,8 @@ struct PatchStats {
 // until they exceed half the patch. The patch bound is the projected
 // sample square's bounding rect clamped inside the frame (extrapolated
 // cells can project partially outside it), never smaller than one pixel.
-[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
-    const auto corners = project_quad(transform, cell_uv, kSampleHalfExtent);
+[[nodiscard]] PatchStats patch_stats_for_corners(const cv::Mat& bgr_frame,
+                                                 const std::array<cv::Point2f, 4>& corners) {
     float min_x = corners[0].x;
     float max_x = corners[0].x;
     float min_y = corners[0].y;
@@ -434,6 +444,10 @@ struct PatchStats {
     const float mad_b = channel_mad(b_values, stats.median[2]);
     stats.weighted_mad = std::sqrt(0.25F * mad_l * mad_l + mad_a * mad_a + mad_b * mad_b);
     return stats;
+}
+
+[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
+    return patch_stats_for_corners(bgr_frame, project_quad(transform, cell_uv, kSampleHalfExtent));
 }
 
 [[nodiscard]] cv::Vec3f sample_patch_lab(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
@@ -747,6 +761,7 @@ namespace {
 }  // namespace
 
 Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
+    g_placement_diagnostic = detail::PlacementDiagnostic{};
     if (bgr_frame.empty()) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -793,6 +808,7 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
             auto observation = build_observation(
                 bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
             if (grid_phase_plausible(bgr_frame, transform, observation)) {
+                g_placement_diagnostic.path = detail::PlacementPath::lattice_fit;
                 return observation;
             }
         }
@@ -817,6 +833,10 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
             build_observation(bgr_frame, scored.transform,
                               static_cast<float>(scored.inlier_count) / static_cast<float>(cells_per_grid));
         if (grid_phase_plausible(bgr_frame, scored.transform, observation)) {
+            // score_placements builds every placement with basis_affine.
+            g_placement_diagnostic.model = detail::TransformModel::basis_affine;
+            g_placement_diagnostic.path = detail::PlacementPath::completion;
+            g_placement_diagnostic.matched_cells = scored.inlier_count;
             return observation;
         }
     }
@@ -825,6 +845,11 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         if (transform_grid_sane(*transform, bgr_frame.size())) {
             auto observation = build_observation(bgr_frame, *transform, 0.4F);
             if (grid_phase_plausible(bgr_frame, *transform, observation)) {
+                // outline_transform builds an anchor/col_step/row_step
+                // affine off the outline's minAreaRect.
+                g_placement_diagnostic.model = detail::TransformModel::basis_affine;
+                g_placement_diagnostic.path = detail::PlacementPath::outline;
+                g_placement_diagnostic.matched_cells = 0;
                 return observation;
             }
         }
@@ -848,6 +873,7 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
                 bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
             if (grid_phase_plausible(bgr_frame, transform, observation)) {
                 observation.pose_only = true;
+                g_placement_diagnostic.path = detail::PlacementPath::pose_only;
                 return observation;
             }
         }
@@ -857,6 +883,8 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
 }
 
 namespace detail {
+
+PlacementDiagnostic last_placement_diagnostic() { return g_placement_diagnostic; }
 
 std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame, double max_aspect) {
     if (bgr_frame.empty()) {
@@ -878,6 +906,32 @@ std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame) 
     std::vector<cv::Mat> hsv_channels;
     cv::split(hsv, hsv_channels);
     return score_placements(bgr_frame, merged_face_candidate_union(bgr_frame, hsv_channels));
+}
+
+CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& cell) {
+    CellPatchSample sample;
+    if (bgr_frame.empty()) {
+        return sample;
+    }
+
+    cv::Point2f centroid(0.0F, 0.0F);
+    for (const auto& corner : cell.corners) {
+        centroid += corner;
+    }
+    centroid *= 0.25F;
+
+    constexpr float kShrink = kSampleHalfExtent / kCellQuadHalfExtent;
+    std::array<cv::Point2f, 4> sample_corners{};
+    for (std::size_t k = 0; k < 4; ++k) {
+        sample_corners[k] = centroid + (cell.corners[k] - centroid) * kShrink;
+    }
+
+    const auto stats = patch_stats_for_corners(bgr_frame, sample_corners);
+    sample.median = stats.median;
+    sample.weighted_mad = stats.weighted_mad;
+    sample.cell_quad_area_px = static_cast<float>(std::abs(cv::contourArea(
+        std::vector<cv::Point2f>(cell.corners.begin(), cell.corners.end()))));
+    return sample;
 }
 
 }  // namespace detail

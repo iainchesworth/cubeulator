@@ -109,6 +109,38 @@ const char* face_name(cube::model::Face face) {
     return kNames[static_cast<std::size_t>(face)];
 }
 
+const char* model_name(cube::vision::detail::TransformModel model) {
+    using cube::vision::detail::TransformModel;
+    switch (model) {
+        case TransformModel::homography:
+            return "homography";
+        case TransformModel::ls_affine:
+            return "ls_affine";
+        case TransformModel::basis_affine:
+            return "basis_affine";
+        case TransformModel::none:
+            break;
+    }
+    return "none";
+}
+
+const char* path_name(cube::vision::detail::PlacementPath path) {
+    using cube::vision::detail::PlacementPath;
+    switch (path) {
+        case PlacementPath::lattice_fit:
+            return "lattice_fit";
+        case PlacementPath::completion:
+            return "completion";
+        case PlacementPath::outline:
+            return "outline";
+        case PlacementPath::pose_only:
+            return "pose_only";
+        case PlacementPath::none:
+            break;
+    }
+    return "none";
+}
+
 // Same corpus-root convention as [.track-sweep]: a single recording dir,
 // or a directory of them.
 std::vector<std::filesystem::path> collect_clip_dirs(const std::filesystem::path& root) {
@@ -190,7 +222,11 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
 
         std::optional<FaceObservation> face;
         std::optional<FaceObservation> pose_only_face;
+        // Captured straight after the call: the detector's own record of
+        // which transform model placed these cells, not a re-derivation.
+        cube::vision::detail::PlacementDiagnostic placement{};
         if (auto observed = observe_face(frame); observed.has_value() && all_cells_in_frame(observed->cells)) {
+            placement = cube::vision::detail::last_placement_diagnostic();
             if (observed->pose_only) {
                 pose_only_face = std::move(*observed);
             } else {
@@ -281,6 +317,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
                      face_good ? 1 : 0, q[0], q[1], q[2], q[3], corner_pose ? 1 : 0, state_name(track.state),
                      track.front_face ? face_name(*track.front_face) : "-", track.epoch,
                      face_good ? static_cast<double>(face->geometry_confidence) : 0.0);
+        std::fprintf(out, ",%s,%s,%d", model_name(placement.model), path_name(placement.path),
+                     placement.matched_cells);
         // The two rotation-invariant BASELINES the ordered pattern must
         // beat, computed by production's own classifier rather than
         // re-derived in the analysis script: the census the router uses to
@@ -318,9 +356,33 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             std::fprintf(out, ",%s,%s,%c,%d", absolute.c_str(), session.c_str(),
                          color_letter(relative.facelets[cube::model::center_facelet_index].color),
                          relative.group_count);
+
+            // DISPERSION PROBE. Per cell: the chroma-weighted intra-patch
+            // MAD and the cell quad's screen area, plus the face quad's
+            // corners so the analysis can derive foreshortening. The MAD
+            // is not recomputed here - detail::cell_patch_sample runs the
+            // same patch_stats_for_corners body production's
+            // sample_patch_stats runs, off the stored cell quads.
+            for (const auto& quad_corner : face->face_quad) {
+                std::fprintf(out, ",%.2f,%.2f", static_cast<double>(quad_corner.x),
+                             static_cast<double>(quad_corner.y));
+            }
+            // rmL/rma/rmb is the median the SHRUNKEN-QUAD patch yields. It
+            // must reproduce the matching L/a/b column, which production
+            // sampled through the lattice transform - that equality is the
+            // proof the quad-shrink reconstructs production's sample square
+            // rather than some nearby one, and so that the MAD beside it
+            // describes the patch production actually read.
+            for (const auto& cell : face->cells) {
+                const auto sample = detail::cell_patch_sample(frame, cell);
+                std::fprintf(out, ",%.4f,%.1f,%.3f,%.3f,%.3f", static_cast<double>(sample.weighted_mad),
+                             static_cast<double>(sample.cell_quad_area_px),
+                             static_cast<double>(sample.median[0]), static_cast<double>(sample.median[1]),
+                             static_cast<double>(sample.median[2]));
+            }
         } else {
             std::fprintf(out, ",-1");
-            for (int blank = 0; blank < 7 + 27 + 4; ++blank) {
+            for (int blank = 0; blank < 7 + 27 + 4 + 8 + 18 + 27; ++blank) {
                 std::fprintf(out, ",");
             }
         }
@@ -388,12 +450,19 @@ TEST_CASE("PatternIdExtract", "[.pattern-id]") {
     std::FILE* out = stdout;
     std::fprintf(out,
                  "clip,pass,t_ms,pose_valid,face_good,qw,qx,qy,qz,corner_view,trk_state,trk_front,trk_epoch,"
-                 "geom_conf,"
+                 "geom_conf,tf_model,tf_path,tf_matched,"
                  "centre_class,cen0,cen1,cen2,cen3,cen4,cen5,cen6");
     for (int cell = 0; cell < 9; ++cell) {
         std::fprintf(out, ",L%d,a%d,b%d", cell, cell, cell);
     }
-    std::fprintf(out, ",abs_pattern,sess_pattern,sess_centre,sess_groups\n");
+    std::fprintf(out, ",abs_pattern,sess_pattern,sess_centre,sess_groups");
+    for (int corner = 0; corner < 4; ++corner) {
+        std::fprintf(out, ",fq%dx,fq%dy", corner, corner);
+    }
+    for (int cell = 0; cell < 9; ++cell) {
+        std::fprintf(out, ",mad%d,area%d,rmL%d,rma%d,rmb%d", cell, cell, cell, cell, cell);
+    }
+    std::fprintf(out, "\n");
 
     for (const auto& clip : clips) {
         emit_clip(clip, clip.filename().string(), out);
