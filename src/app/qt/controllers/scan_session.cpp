@@ -112,6 +112,11 @@ constexpr float kOverlaySmoothing = 0.6F;
 // than the 2D overlay's because a 3D cube rendering amplifies small
 // angular noise into very visible rocking.
 constexpr float kOrientationSmoothing = 0.35F;
+// How long the 3D view keeps showing the last known pose after the tracker
+// stops supplying one. Sized to outlast an ordinary detection gap (a regrip
+// or a mid-turn blur runs 5-8 passes at this corpus's ~100 ms cadence)
+// without outlasting a genuine put-down, where a frozen cube would be a lie.
+constexpr std::int64_t kOrientationHoldMs = 900;
 
 // --- live-pipeline observability -------------------------------------------
 // Set CUBE_VISION_DEBUG_DIR to a writable directory and the analysis worker
@@ -1251,6 +1256,9 @@ void ScanSession::handleAnalysisFinished() {
         // track's pose.
         if (track.state == cube::vision::TrackState::locked ||
             track.state == cube::vision::TrackState::coasting) {
+            // Stamped only for a REAL sample, never while holding one -
+            // refreshing it during the hold would make the hold immortal.
+            last_orientation_ms_ = result.frame_ms;
             const std::array<float, 4>& fresh = track.q_track;
             if (!has_smoothed_orientation_) {
                 smoothed_orientation_ = fresh;
@@ -1281,6 +1289,20 @@ void ScanSession::handleAnalysisFinished() {
                     component /= norm;
                 }
             }
+        } else if (has_smoothed_orientation_ && result.frame_ms - last_orientation_ms_ <= kOrientationHoldMs) {
+            // HOLD the last pose rather than dropping it. Dropping on ANY
+            // lost/acquiring pass made the 3D cube snap back to its idle
+            // presentation and then re-adopt from scratch: ScanScreen binds
+            // autoRotate to (liveOrientation === null), so an empty
+            // cubeOrientation re-imposes homeRotation on cubeRoot. live5
+            // spends 42 of its 373 passes lost or acquiring, scattered
+            // throughout, so the view was reset several times a second and
+            // never sustained a pose long enough to read as following the
+            // cube in hand - the user reported exactly this, as "3d cube
+            // barely moved". A brief detection gap is not evidence that the
+            // cube moved, so the last known pose remains the best available
+            // estimate and freezing it is the honest display; it is only
+            // abandoned once the gap outlasts any plausible coast, below.
         } else {
             has_smoothed_orientation_ = false;
         }
@@ -2003,6 +2025,9 @@ void ScanSession::resetReading() {
     // would visibly ease in from wherever the previous cube last pointed.
     smoothed_orientation_ = {1.0F, 0.0F, 0.0F, 0.0F};
     has_smoothed_orientation_ = false;
+    // Zeroed with it: a restarted scan must not hold the previous cube's
+    // pose through its first passes (see kOrientationHoldMs).
+    last_orientation_ms_ = 0;
     // Full tracker re-init (epoch counter included), for the same reason:
     // a scan restarted inside the coast window must not inherit the
     // previous scan's locked track - the user may well have put down a
