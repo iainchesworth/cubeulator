@@ -148,7 +148,12 @@ int index_of_matrix(const std::array<Mat3, kLatticeSize>& mats, const Mat3& want
             return static_cast<int>(i);
         }
     }
-    FAIL("matrix is not a lattice element");
+    // FAIL_CHECK rather than FAIL: FAIL throws, which makes the trailing
+    // return unreachable and trips C4702-as-error in the unoptimized Debug
+    // (sanitizer) config - the config that cannot otherwise build the unit
+    // tests at all. The non-fatal form reports the same failure and lets
+    // the sentinel return stand.
+    FAIL_CHECK("matrix is not a lattice element");
     return -1;
 }
 
