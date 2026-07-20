@@ -32,6 +32,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace cube::app {
 
@@ -193,6 +194,109 @@ void record_vision_frame(const cv::Mat& analysis_frame, std::int64_t frame_t_ms,
     index << pass << ',' << frame_t_ms << ',' << analysis_frame.cols << ',' << analysis_frame.rows << ','
           << full_size.width << ',' << full_size.height << '\n';
     ++pass;
+}
+
+// Set CUBE_VISION_REPLAY_DIR to a directory previously written by
+// CUBE_VISION_RECORD_DIR and poll() draws its frames from that clip instead
+// of the camera, at the clip's own recorded inter-frame timestamps, so the
+// entire live pipeline - detectors, tracker, slot router, and every
+// Q_PROPERTY the QML binds to - runs against a known scene with no webcam
+// and no cube in hand. This is a debug-only observation hook, and it exists
+// because the unit tests can all pass while the SCREEN stays dead: the only
+// thing that proves the presentation layer actually reflects backend state
+// is driving the real app and watching it.
+//
+// Fidelity: frames are replayed at their recorded (analysis) scale, the
+// same note the offline [.track-replay] harness carries. For a clip
+// recorded from a camera at or below kAnalysisWidth the replayed frame is
+// byte-for-byte what the detectors originally saw, since analyze()'s
+// downscale is a no-op at that width; for a wider original, geometry lands
+// in analysis-scale rather than full-frame pixels, which is a uniform
+// scale and so leaves the overlay's shape correct but its coordinates
+// smaller than a live run's.
+//
+// Unset - the normal case, including every shipped build - each function
+// here early-outs on an empty directory and the camera path is untouched.
+[[nodiscard]] const QString& replay_dir() {
+    static const QString dir = qEnvironmentVariable("CUBE_VISION_REPLAY_DIR");
+    return dir;
+}
+
+[[nodiscard]] bool replay_active() {
+    return !replay_dir().isEmpty();
+}
+
+// The clip's index rows, loaded once on first use and consumed in order.
+// Rows whose JPEG a later ring lap has already overwritten are dropped up
+// front (frame_overwritten): replaying one would pair this row's timestamp
+// with a later frame's pixels and quietly corrupt the tracker's dt.
+struct ReplayClip {
+    std::vector<cube::vision::recording::RecordedFrameInfo> rows;
+    std::size_t next = 0;
+    bool exhausted_logged = false;
+};
+
+[[nodiscard]] ReplayClip& replay_clip() {
+    static ReplayClip clip = []() {
+        namespace recording = cube::vision::recording;
+        ReplayClip loaded;
+        if (!replay_active()) {
+            return loaded;
+        }
+        const QDir dir(replay_dir());
+        const std::string index_path =
+            dir.absoluteFilePath(QString::fromUtf8(recording::kIndexCsvName.data(),
+                                                   static_cast<qsizetype>(recording::kIndexCsvName.size())))
+                .toStdString();
+        std::ifstream index(index_path);
+        if (!index) {
+            qWarning("ScanSession: CUBE_VISION_REPLAY_DIR set but no readable %s in it", index_path.c_str());
+            return loaded;
+        }
+        auto rows = recording::read_index(index);
+        int max_pass = 0;
+        for (const auto& row : rows) {
+            max_pass = std::max(max_pass, row.pass);
+        }
+        for (const auto& row : rows) {
+            if (!recording::frame_overwritten(row.pass, max_pass)) {
+                loaded.rows.push_back(row);
+            }
+        }
+        qInfo("ScanSession: replaying %lld recorded frames from %s (camera bypassed)",
+              static_cast<long long>(loaded.rows.size()), qUtf8Printable(replay_dir()));
+        return loaded;
+    }();
+    return clip;
+}
+
+// One recorded frame per poll, in pass order, carrying the recorded t_ms so
+// the tracker sees the clip's true inter-frame gaps rather than the wall
+// clock the replay happens to run at. Returns nullopt once the clip runs
+// out, which simply stops feeding poll() - the last frame's UI state stays
+// on screen, which is exactly what you want to photograph.
+[[nodiscard]] std::optional<cube::platform::camera::TimedFrame> try_pop_replay_frame() {
+    namespace recording = cube::vision::recording;
+    auto& clip = replay_clip();
+    if (clip.next >= clip.rows.size()) {
+        if (!clip.exhausted_logged) {
+            clip.exhausted_logged = true;
+            qInfo("ScanSession: replay clip exhausted after %lld frames; UI holds its final state",
+                  static_cast<long long>(clip.rows.size()));
+        }
+        return std::nullopt;
+    }
+    const auto& row = clip.rows[clip.next++];
+    const std::string path =
+        QDir(replay_dir())
+            .absoluteFilePath(QString::fromStdString(recording::frame_filename(row.pass)))
+            .toStdString();
+    cv::Mat frame = cv::imread(path, cv::IMREAD_COLOR);
+    if (frame.empty()) {
+        qWarning("ScanSession: replay frame %s missing or unreadable; skipping", path.c_str());
+        return std::nullopt;
+    }
+    return cube::platform::camera::TimedFrame{.frame = std::move(frame), .t_ms = row.t_ms};
 }
 
 // GUI-thread third leg of the shared observability log (worker per-pass
@@ -795,6 +899,18 @@ void ScanSession::start(const QString& deviceId) {
     // the lock-free worker-side per-pass state).
     analysis_inflight_ = false;
 
+    // Debug-only clip playback has no camera to open, so it skips the
+    // multi-second async start entirely and goes straight to running -
+    // the same terminal state handleStartFinished() reaches on success,
+    // set here in the same order so the QML sees no difference.
+    if (replay_active()) {
+        running_ = true;
+        emit runningChanged();
+        emit facesScannedChanged();
+        poll_timer_.start();
+        return;
+    }
+
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
                                                       .display_name = ""};
     start_watcher_.setFuture(QtConcurrent::run([device]() { return cube::platform::camera::start(device); }));
@@ -878,7 +994,12 @@ void ScanSession::restartScan() {
 }
 
 void ScanSession::poll() {
-    auto frame = cube::platform::camera::try_pop_latest_frame();
+    // Debug-only clip playback substitutes for the camera mailbox here and
+    // nowhere else, so everything downstream - analysis queueing, the
+    // tracker, the slot router, every Q_PROPERTY - runs the identical code
+    // path it runs live (see replay_dir()). Normal runs take the camera
+    // branch unconditionally.
+    auto frame = replay_active() ? try_pop_replay_frame() : cube::platform::camera::try_pop_latest_frame();
     if (!frame) {
         return;
     }
