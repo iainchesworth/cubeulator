@@ -552,8 +552,12 @@ private:
     int agg_epoch_ = -1;
     // Commit-gate context sampled from the LAST analysis pass (gate 1 and
     // the per-pass motion facts), shared by auto-advance and the manual
-    // Confirm path so both apply identical policy.
+    // Confirm path so both apply identical policy. capture_identity_ok_
+    // is gate 1's per-face half (the tracker's face-scoped certainty, or
+    // the <2-slots waiver), consulted wherever a body face is actually
+    // named: aggregation adds, commits, and readiness.
     bool capture_gate_ok_ = false;
+    std::array<bool, cube::model::face_count> capture_identity_ok_{};
     cube::vision::Quat capture_q_{1.0F, 0.0F, 0.0F, 0.0F};
     float capture_motion_score_ = 0.0F;
     float pass_rotation_deg_ = 0.0F;

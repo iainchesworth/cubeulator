@@ -73,6 +73,25 @@ bool OrientationTracker::identity_certain() const noexcept {
     return belief_margin() >= std::log(config_.posterior_lock_ratio);
 }
 
+float OrientationTracker::belief_margin_for(cube::model::Face face) const noexcept {
+    float best_mover = -config_.belief_clamp;
+    for (std::size_t j = 0; j < kLatticeSize; ++j) {
+        // face's stabilizer (identity included) is quotiented out: under
+        // those hypotheses a capture keyed to `face` still lands on the
+        // right physical face, merely rotated in-plane - which every
+        // downstream consumer is invariant to.
+        if (kFacePermutation[j][static_cast<std::size_t>(face)] == face) {
+            continue;
+        }
+        best_mover = std::max(best_mover, log_belief_[j]);
+    }
+    return log_belief_[static_cast<std::size_t>(kIdentityLatticeIndex)] - best_mover;
+}
+
+bool OrientationTracker::identity_certain_for(cube::model::Face face) const noexcept {
+    return belief_margin_for(face) >= std::log(config_.posterior_lock_ratio);
+}
+
 void OrientationTracker::reset() noexcept {
     to_lost();
     epoch_ = 0;
@@ -426,6 +445,9 @@ void OrientationTracker::finish_output(TrackerPassOutput& out) const noexcept {
     out.epoch = epoch_;
     out.belief_margin = belief_margin();
     out.identity_certain = identity_certain();
+    for (std::size_t f = 0; f < out.identity_certain_face.size(); ++f) {
+        out.identity_certain_face[f] = identity_certain_for(static_cast<cube::model::Face>(f));
+    }
     if (state_ == TrackState::locked || state_ == TrackState::coasting) {
         out.front_face = nearest_face(q_track_);
     }

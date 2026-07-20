@@ -269,6 +269,19 @@ struct TrackerPassOutput {
     // AGAINST the track.
     float belief_margin = 0.0F;
     bool identity_certain = false;
+    // Face-scoped certainty (see identity_certain_for), indexed by
+    // model::Face: identity leads every hypothesis that would MOVE body
+    // face f to a different face. THE commit bar for capturing face f -
+    // the full-24 bar above is structurally unreachable on single-centre
+    // evidence (the in-plane stabilizers of the one observed face score
+    // bit-identically to identity forever), while the quotiented bar is
+    // crossed by a few colour accepts of a single frontal burst, and the
+    // quotiented-out hypotheses are provably harmless to a commit of f
+    // (an in-plane slip only rotates f's stickers: aggregation keys cells
+    // through the resolved element, assembly searches all per-face
+    // rotations, and router verification - centre + census - is
+    // rotation-invariant).
+    std::array<bool, 6> identity_certain_face{};
     int epoch = 0;
     std::int64_t dt_ms = 0;  // since the previous pass (0 on the first)
 };
@@ -319,6 +332,16 @@ public:
     [[nodiscard]] int epoch() const noexcept { return epoch_; }
     [[nodiscard]] float belief_margin() const noexcept;
     [[nodiscard]] bool identity_certain() const noexcept;
+    // Face-scoped margin/certainty: identity minus the best hypothesis
+    // over {j : kFacePermutation[j][face] != face} - the hypotheses under
+    // which a capture keyed to `face` would land on the WRONG physical
+    // face. Quotients out `face`'s stabilizer (identity plus the three
+    // slips that only rotate it in-plane), which is exactly the subgroup
+    // single-centre evidence can never separate and exactly the one a
+    // commit of `face` is invariant to (see TrackerPassOutput's field
+    // comment for the harmlessness argument).
+    [[nodiscard]] float belief_margin_for(cube::model::Face face) const noexcept;
+    [[nodiscard]] bool identity_certain_for(cube::model::Face face) const noexcept;
 
 private:
     void anchor(const Quat& q_obs, const TrackerPassInput& input, TrackerPassOutput& out);

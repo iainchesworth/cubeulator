@@ -251,8 +251,18 @@ void log_track_pass(const cube::vision::TrackerPassOutput& track) {
         << ',' << track.q_track[1] << ',' << track.q_track[2] << ',' << track.q_track[3]
         << ") sigma=" << track.sigma_deg << " theta=" << track.theta_deg << " S=" << track.lattice_index
         << " margin=" << track.margin_deg << " front=" << front << " k=" << track.quarter_turn_k
-        << " belief=" << track.belief_margin << " certain=" << track.identity_certain << " epoch=" << track.epoch
-        << " dt=" << track.dt_ms << '\n';
+        << " belief=" << track.belief_margin << " certain=" << track.identity_certain << " certainF="
+        << [&track] {
+               // Face-scoped certainty as a URFDLB bit string ("010000" =
+               // R commit-grade) - the capture layer's actual bar now, so
+               // a post-mortem can see it without re-running the belief.
+               std::string bits(track.identity_certain_face.size(), '0');
+               for (std::size_t f = 0; f < track.identity_certain_face.size(); ++f) {
+                   bits[f] = track.identity_certain_face[f] ? '1' : '0';
+               }
+               return bits;
+           }()
+        << " epoch=" << track.epoch << " dt=" << track.dt_ms << '\n';
 }
 
 [[nodiscard]] QString facet_color_css(cube::model::FacetColor color) {
@@ -1151,14 +1161,23 @@ void ScanSession::handleAnalysisFinished() {
         consec_accepts_ = 0;
     }
 
-    // Gate 1 of the capture policy - the identity gate: locked track,
-    // commit-grade identity (belief margin, waived while fewer than two
-    // slots exist for it to be wrong against), and an accept streak.
-    // Failing THIS gate drops the pass's observations entirely (routing
-    // them anywhere would be a guess); the remaining gates are commit-time
-    // and merely pause the commit while the window keeps accumulating.
-    const bool identity_ok = track.identity_certain || router_.filled_count() < 2;
-    capture_gate_ok_ = track.state == cube::vision::TrackState::locked && identity_ok &&
+    // Gate 1 of the capture policy - the identity gate: locked track with
+    // an accept streak, plus commit-grade identity PER BODY FACE (the
+    // face-scoped belief margin, waived while fewer than two slots exist
+    // for it to be wrong against). Face-scoped because the full-24 margin
+    // is structurally capped at zero on single-centre evidence (live3: 0
+    // certain passes in 480 - the observed face's in-plane stabilizers
+    // score identically to identity forever), while quotienting out
+    // exactly those provably-harmless hypotheses makes the same bar
+    // reachable in one frontal burst. Failing the track-level half drops
+    // the pass's observations entirely (routing them anywhere would be a
+    // guess); the per-face half is applied where a face is actually
+    // named - aggregation adds and commits.
+    const bool identity_waived = router_.filled_count() < 2;
+    for (std::size_t f = 0; f < capture_identity_ok_.size(); ++f) {
+        capture_identity_ok_[f] = track.identity_certain_face[f] || identity_waived;
+    }
+    capture_gate_ok_ = track.state == cube::vision::TrackState::locked &&
                        consec_accepts_ >= kMinCaptureAccepts && pass_accepted && track.lattice_index >= 0;
     capture_q_ = track.q_track;
     capture_motion_score_ = result.motion_score;
@@ -1191,6 +1210,12 @@ void ScanSession::handleAnalysisFinished() {
                 return;
             }
             const auto face_index = static_cast<std::size_t>(map.body_face);
+            // Gate 1's per-face half: no commit-grade identity for THIS
+            // body face means the observation's routing key is a guess -
+            // drop it rather than accumulate under it.
+            if (!capture_identity_ok_[face_index]) {
+                return;
+            }
             auto& aggregator = aggregators_[face_index];
             auto& meta = metas_[face_index];
             // Per-identity staleness AND permutation consistency: a window
@@ -1522,7 +1547,15 @@ bool ScanSession::anyCaptureReady() const {
     if (!capture_gate_ok_) {
         return false;
     }
-    return std::ranges::any_of(aggregators_, [](const auto& aggregator) { return aggregator.converged(); });
+    for (std::size_t f = 0; f < aggregators_.size(); ++f) {
+        // Same per-face identity conjunction the commit itself applies: a
+        // window converged under a face whose identity is not (or no
+        // longer) commit-grade is not "ready", it is paused.
+        if (capture_identity_ok_[f] && aggregators_[f].converged()) {
+            return true;
+        }
+    }
+    return false;
 }
 
 namespace {
@@ -1575,6 +1608,12 @@ void ScanSession::tryCommitConverged() {
             continue;
         }
         const auto body_face = static_cast<cube::model::Face>(f);
+        // Gate 1's per-face half at commit time: the window may have
+        // converged under an earlier certain pass, but the WRITE happens
+        // now, under this pass's belief - an uncertain key must pause it.
+        if (!capture_identity_ok_[f]) {
+            continue;
+        }
         // Commit-time gates 2-5. Failing any of them leaves the window
         // accumulating - the user is mid-motion or the view is marginal,
         // and the capture will be better in a few hundred milliseconds.
@@ -1636,6 +1675,7 @@ void ScanSession::tryCommitConverged() {
             // fresh epoch whose identity must re-prove itself.
             tracker_.force_lost();
             capture_gate_ok_ = false;
+            capture_identity_ok_.fill(false);
             resetAggregators();
             emit readingChanged();
             return;
@@ -1772,6 +1812,7 @@ void ScanSession::resetReading() {
     // scan must start with the detectors running.
     idle_gate_.reset();
     capture_gate_ok_ = false;
+    capture_identity_ok_.fill(false);
     consec_accepts_ = 0;
     has_last_track_q_ = false;
     pass_rotation_deg_ = 0.0F;

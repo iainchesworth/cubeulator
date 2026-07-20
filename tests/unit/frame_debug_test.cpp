@@ -39,7 +39,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -401,7 +403,7 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
     std::printf(
         "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
-        "state,gate,front,epoch,src\n");
+        "state,gate,front,epoch,src,belief,certain,certain_front\n");
 
     // The newest pass determines which older rows' ring slots have provably
     // been rewritten on disk (see frame_overwritten) - must be known before
@@ -466,6 +468,18 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     std::array<int, 8> gate_counts{};   // TrackGate enum order
     int observation_passes = 0;
     int accepted_passes = 0;
+    // Capture-conversion metrics (the live3 acceptance numbers): passes at
+    // the full-24 certainty bar, at the face-scoped bar for the front
+    // face, and at commit grade (locked AND front-face certain - the
+    // conjunction the capture layer requires); which distinct front faces
+    // ever reached commit grade; and per-epoch front diversity while
+    // locked (an epoch with more than one locked front face carried its
+    // identity across a turn).
+    int certain_passes = 0;
+    int certain_front_passes = 0;
+    int commit_grade_passes = 0;
+    std::array<bool, 6> commit_faces{};
+    std::map<int, std::set<char>> locked_fronts_by_epoch;
 
     // Idle-gate shadow simulation: the live worker SKIPS the detectors on
     // gate-approved passes; here every pass still runs them (this harness
@@ -662,7 +676,20 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             std::printf(",,,,");
         }
         const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
-        std::printf("%s,%s,%c,%d,%s\n", state_name(track.state), gate_name(track.gate), front, track.epoch, pose_src);
+        const bool certain_front =
+            track.front_face && track.identity_certain_face[static_cast<std::size_t>(*track.front_face)];
+        const bool commit_grade = track.state == cube::vision::TrackState::locked && certain_front;
+        certain_passes += track.identity_certain ? 1 : 0;
+        certain_front_passes += certain_front ? 1 : 0;
+        commit_grade_passes += commit_grade ? 1 : 0;
+        if (commit_grade) {
+            commit_faces[static_cast<std::size_t>(*track.front_face)] = true;
+        }
+        if (track.state == cube::vision::TrackState::locked && track.front_face) {
+            locked_fronts_by_epoch[track.epoch].insert(front);
+        }
+        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d\n", state_name(track.state), gate_name(track.gate), front, track.epoch,
+                    pose_src, track.belief_margin, track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
         ++replayed;
     }
 
@@ -676,6 +703,21 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                 gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4], gate_counts[5],
                 gate_counts[6], gate_counts[7]);
     std::printf("# idle-gate: would-skip=%d violations=%d\n", would_skip_passes, idle_violations);
+    std::string commit_face_letters;
+    for (std::size_t f = 0; f < commit_faces.size(); ++f) {
+        if (commit_faces[f]) {
+            commit_face_letters += "URFDLB"[f];
+        }
+    }
+    int multi_front_epochs = 0;
+    for (const auto& [epoch, fronts] : locked_fronts_by_epoch) {
+        multi_front_epochs += fronts.size() > 1 ? 1 : 0;
+    }
+    std::printf("# certainty: full24=%d front-scoped=%d commit-grade=%d faces=%s\n", certain_passes,
+                certain_front_passes, commit_grade_passes,
+                commit_face_letters.empty() ? "-" : commit_face_letters.c_str());
+    std::printf("# identity carry: epochs with >1 locked front = %d of %zu\n", multi_front_epochs,
+                locked_fronts_by_epoch.size());
     // The gate-on and gate-off accepted-pass sets must agree on every
     // cube-present frame: the gate may only ever discard passes that
     // would have produced nothing (or a false positive on an empty frame

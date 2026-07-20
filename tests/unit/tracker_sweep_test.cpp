@@ -393,11 +393,13 @@ struct SweepMetrics {
     int coasting = 0;
     int lost = 0;
     int certain = 0;
-    // Commit opportunities: passes both locked AND identity_certain - the
-    // exact conjunction the capture layer requires before a facelet commit
-    // may fire. THE objective the calibration maximises (locked alone can
-    // be bought with a low certainty bar; certain alone with a track that
-    // never locks).
+    // Commit opportunities: passes both locked AND identity-certain FOR
+    // THE FRONT FACE (the face-scoped bar - the exact conjunction the
+    // capture layer requires before a facelet commit may fire; `certain`
+    // above keeps counting the strictly-harder full-24 bar). THE
+    // objective the calibration maximises (locked alone can be bought
+    // with a low certainty bar; certain alone with a track that never
+    // locks).
     int commit = 0;
     // THE disqualifier: slip_evidence force-losses inside an epoch that
     // had ALREADY reached commit-grade certainty at least once. Colour
@@ -469,10 +471,14 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
             prev_epoch = out.epoch;
             epoch_was_certain = false;
         }
+        // Commit grade = the capture layer's actual bar: locked, with the
+        // FRONT face's face-scoped certainty (see identity_certain_for).
+        const bool commit_grade = out.state == TrackState::locked && out.front_face &&
+                                  out.identity_certain_face[static_cast<std::size_t>(*out.front_face)];
         if (out.gate == TrackGate::slip_evidence && epoch_was_certain) {
             ++m.certain_slip;
         }
-        epoch_was_certain = epoch_was_certain || out.identity_certain;
+        epoch_was_certain = epoch_was_certain || commit_grade;
         switch (out.gate) {
             case TrackGate::accepted:
                 ++m.accepted;
@@ -515,7 +521,7 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
                 break;
         }
         m.certain += out.identity_certain ? 1 : 0;
-        m.commit += (out.state == TrackState::locked && out.identity_certain) ? 1 : 0;
+        m.commit += commit_grade ? 1 : 0;
         m.epochs = std::max(m.epochs, out.epoch);
         gate.on_pass(cached.cool_hue_pixels, out.state == TrackState::lost);
     }

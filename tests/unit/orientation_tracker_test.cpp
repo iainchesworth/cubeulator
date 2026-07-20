@@ -711,6 +711,61 @@ TEST_CASE("a single wild centre sample never vetoes; only ref-backed evidence ki
     }
 }
 
+TEST_CASE("face-scoped certainty is reachable on single-centre evidence; the full bar is not", "[tracker]") {
+    // The live3 deadlock in miniature: a frontal hold observing one face's
+    // centre. The observed face's in-plane stabilizers map it onto itself,
+    // so they receive bit-identical likelihood to identity on every
+    // observation - the full-24 margin is structurally capped at zero and
+    // ln(100) is unreachable IN PRINCIPLE (480/480 passes certain=0 live).
+    // Quotienting out exactly that stabilizer makes the bar a few colour
+    // accepts away, and the quotiented hypotheses cannot hurt a commit of
+    // that face (in-plane rotation only - assembly searches per-face
+    // rotations, router verification is rotation-invariant).
+    Sim sim;
+    sim.feed_labs = true;
+    sim.lock_on();
+    TrackerPassOutput out{};
+    for (int pass = 0; pass < 6; ++pass) {
+        out = sim.step_obs();
+        REQUIRE(out.state == TrackState::locked);
+        // Degeneracy regression: however long the frontal burst runs, the
+        // full-24 margin never rises above zero...
+        CHECK(out.belief_margin <= 0.0F);
+        CHECK_FALSE(out.identity_certain);
+    }
+    // ...while the face-scoped bar for the observed face crossed within
+    // the burst (the 20 moving hypotheses sit at the unknown floor, -2
+    // per colour accept: three accepts beat ln(100) = 4.6).
+    REQUIRE(out.front_face.has_value());
+    CHECK(*out.front_face == Face::F);
+    CHECK(out.identity_certain_face[static_cast<std::size_t>(Face::F)]);
+    CHECK(sim.tracker.identity_certain_for(Face::F));
+    CHECK(sim.tracker.belief_margin_for(Face::F) > sim.tracker.belief_margin());
+    // The certainty is scoped to the face the evidence is ABOUT: for any
+    // other face, F's zero-belief stabilizers are movers (a quarter turn
+    // about the F axis relocates U), so nothing else may reach the bar.
+    CHECK_FALSE(out.identity_certain_face[static_cast<std::size_t>(Face::U)]);
+    CHECK_FALSE(out.identity_certain_face[static_cast<std::size_t>(Face::R)]);
+
+    // Two-face evidence breaks the degeneracy for real: after touring to R
+    // and back (both references learned and repeatedly matched), even the
+    // full-24 bar is reachable - the scoped bar is a bridge for the
+    // single-face grip, not a lowered ceiling.
+    const std::array<float, 3> to_r{0.0F, -90.0F, 0.0F};
+    for (int pass = 0; pass < 30; ++pass) {
+        sim.advance(to_r);
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    const std::array<float, 3> back{0.0F, 90.0F, 0.0F};
+    for (int pass = 0; pass < 30; ++pass) {
+        sim.advance(back);
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    out = sim.step_obs();
+    CHECK(out.identity_certain);
+    CHECK(out.identity_certain_face[static_cast<std::size_t>(Face::F)]);
+}
+
 TEST_CASE("reset and force_lost drop state without leaking across scans", "[tracker]") {
     Sim sim;
     sim.lock_on();
