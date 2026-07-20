@@ -78,9 +78,20 @@ namespace cube::vision {
 // is worthless to the capture layer.
 struct TrackerConfig {
     // Acceptance ceiling on the resolved element's residual angle: the
-    // lattice basin half-width is 45 degrees, minus a 12-degree snap
-    // margin. Fixed by geometry, not sweepable.
-    float basin_ceiling_deg = 33.0F;
+    // lattice basin half-width is 45 degrees, minus a snap margin. The
+    // plan fixed this at 33 ("geometry, not sweepable"), but the live3
+    // post-mortem showed the 12-degree snap margin was buying safety the
+    // margin gate already provides while refusing exactly the poses a
+    // quarter turn transits: of 144 basin/margin refusals, 24 sat in the
+    // 30-40 degree bucket (per-gap steps of a casual turn resumed after a
+    // detection gap), and the 33-cap meant no amount of honest sigma
+    // could ever open the threshold to them. 40 keeps a 5-degree snap
+    // margin inside the basin, the runner-up margin gate still refuses
+    // every genuinely ambiguous resolution near the midpoint, and the
+    // sigma cap (35) still forces lost before the threshold could grow
+    // past this ceiling on its own. Sweepable now - the [.track-sweep]
+    // wrong-identity counter is the hard constraint on moving it.
+    float basin_ceiling_deg = 40.0F;
     // Per-pass motion budget: with sigma at zero (fresh accept last pass)
     // the acceptance threshold is min(basin_ceiling, sigma + this).
     // Calibrated 25->30 on live1: the plan's 25 assumed a ~33 ms frame
@@ -89,10 +100,9 @@ struct TrackerConfig {
     // accept chains with basin refusals (59 -> 49 on the clip). The knock-
     // on effect dominates the direct one: unbroken chains keep epochs
     // alive long enough for colour belief to reach the certainty bar
-    // (commit-grade passes 0 -> 56). Still 3 degrees under the 33-degree
-    // geometric ceiling, and the implied whole-cube rate at pass cadence
-    // (~310 deg/s) stays below the omega glitch gate, so every safety
-    // ordering is preserved.
+    // (commit-grade passes 0 -> 56). Still under the basin ceiling, and
+    // the implied whole-cube rate at pass cadence (~310 deg/s) stays
+    // below the omega glitch gate, so every safety ordering is preserved.
     float max_interframe_deg = 30.0F;
     // Refuse any resolution whose runner-up element is closer than this to
     // the best - the prediction cannot actually disambiguate them.

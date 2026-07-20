@@ -109,9 +109,12 @@ struct SweepAxis {
     void (*apply)(SweepSettings&, float);
 };
 
-// The sweepable knob set. Deliberately excluded: basin_ceiling_deg and
-// max_coast_sigma_deg (fixed by geometry/safety) and the belief clamps
-// (their failure modes need adversarial captures, not clips). One-factor-
+// The sweepable knob set. Deliberately excluded: max_coast_sigma_deg
+// (fixed by safety) and the belief clamps (their failure modes need
+// adversarial captures, not clips). basin_ceiling_deg joined the grid
+// with the live3 recalibration (33 -> 40): the snap margin it buys is
+// now a measured trade against quarter-turn transit, with the
+// wrong-identity counter as the hard constraint. One-factor-
 // at-a-time around the baseline rather than a cartesian product: the grid
 // stays bounded (a few dozen variants), each row is attributable to one
 // knob, and interactions worth chasing show up as two OFAT rows both
@@ -121,6 +124,8 @@ struct SweepAxis {
 // a local optimum with the same one-row-one-knob attribution.
 std::vector<SweepAxis> sweep_axes() {
     return {
+        {"basin_ceiling_deg", {40.0F, 33.0F, 36.0F, 43.0F},
+         [](SweepSettings& s, float v) { s.tracker.basin_ceiling_deg = v; }},
         {"max_interframe_deg", {30.0F, 15.0F, 25.0F, 33.0F},
          [](SweepSettings& s, float v) { s.tracker.max_interframe_deg = v; }},
         {"gauge_margin_deg", {15.0F, 10.0F, 20.0F, 25.0F},

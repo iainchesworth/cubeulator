@@ -131,7 +131,10 @@ TEST_CASE("TrackerConfig defaults hold the live1-calibrated constants", "[tracke
     // acquire_frames 3->2 are the calibrated values; everything else is
     // the table verbatim.
     const TrackerConfig config;
-    CHECK(config.basin_ceiling_deg == 33.0F);
+    // live3 recalibration: 40 (was the plan's 33) - see the config
+    // comment; the margin gate carries the ambiguity refusals the extra
+    // 7 degrees used to.
+    CHECK(config.basin_ceiling_deg == 40.0F);
     CHECK(config.max_interframe_deg == 30.0F);
     CHECK(config.gauge_margin_deg == 15.0F);
     CHECK(config.coast_sigma_rate_deg == 4.0F);
@@ -544,6 +547,35 @@ TEST_CASE("a mirror-flipped pose can neither anchor nor join an epoch", "[tracke
     const auto anchored = sim.step_obs();
     CHECK(anchored.gate == TrackGate::anchored);
     CHECK(anchored.epoch == 1);
+}
+
+TEST_CASE("the opened basin re-locks a per-gap step the old ceiling refused", "[tracker]") {
+    // live3's refused-pose histogram: 24 of 144 basin/margin refusals sat
+    // in the 30-40 degree bucket - a casual turn resumed after a short
+    // detection gap lands there, and the old 33-degree cap refused it no
+    // matter how honestly sigma had grown. About a CORNER axis the
+    // runner-up element is far away (the nearest non-identity candidates
+    // are the 120-degree corner rotations), so the margin gate has no
+    // ambiguity objection either: the step must be accepted, in-epoch.
+    Sim sim;
+    sim.noise_deg = 0.0F;
+    sim.lock_on();
+    for (int pass = 0; pass < 5; ++pass) {
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    for (int pass = 0; pass < 3; ++pass) {
+        REQUIRE(sim.step_miss().state == TrackState::coasting);  // sigma opens the threshold
+    }
+    // 38 degrees accumulated about (1,1,1) across the gap: past the old
+    // 33-degree ceiling, inside the new 40, and only ~290 deg/s over the
+    // real four-pass span.
+    const float component = 38.0F / std::sqrt(3.0F) / (4 * kDtS);
+    sim.advance({component, component, component}, 4 * kDtS);
+    const auto out = sim.step_obs();
+    CHECK(out.gate == TrackGate::accepted);
+    CHECK(out.state == TrackState::locked);
+    CHECK(out.epoch == 1);
+    CHECK(track_matches_truth(sim));
 }
 
 TEST_CASE("the implied-rate gate judges the span since the last accept, not one frame", "[tracker]") {
