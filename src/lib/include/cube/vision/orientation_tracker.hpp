@@ -276,6 +276,118 @@ struct TrackerConfig {
     // the reference follows) while refusing to be taught by any sample
     // that contradicts what it is the reference OF.
     float ref_consistency_sigma = 3.0F;
+    // --- Epoch bridging (see anchor()) -------------------------------------
+    // A re-anchor mints new body labels, so the capture layer must
+    // re-RECOGNISE a stored face before it may file a new one. That is the
+    // dominant refusal on the corpus: live5 registration insufficient 9 of
+    // 22 commit attempts, live4 4 of 12 - the user is forced to re-show a
+    // known face after every dropout before any new face can land. Bridging
+    // lets the GAUGE survive a loss the TRACK does not: at the anchor, the
+    // new epoch's labels are compared against the dying epoch's last
+    // accepted pose over the lattice, and when the geometry proves a unique
+    // relabelling the router folds it into its existing gauge instead of
+    // starting a registration search from nothing.
+    //
+    // WHERE THIS IS MEASURED AND WHY IT IS HERE AND NOT AT THE BASIN GATE.
+    // The obvious version of this idea - admit a refused observation as a
+    // continuation when some lattice element explains it - is BOTH a no-op
+    // and unsafe, and the boundary census says so twice over. It is a no-op
+    // because resolve_alignment already minimises over all 24 elements, so
+    // the theta the basin gate tests IS the best lattice-composed residual;
+    // there is no untried element. It is unsafe because best-vs-runner-up
+    // separation degrades monotonically with theta (adjacent elements are
+    // 90 degrees apart, so at the 45-degree basin midpoint the runner-up
+    // ties): over 351 measured basin refusals the median separation is 11.1
+    // degrees at theta 40-45 and 3.3 at 55-65, and only 42% clear the
+    // existing 15-degree margin bar. Admitting those is silent relabelling,
+    // which is strictly worse than a re-anchor. The premise was false as
+    // well: of 75 measured epoch boundaries, ZERO are a quarter turn, corner
+    // roll or flip - the maximum lattice-reduced rotation at any boundary is
+    // 59.9 degrees.
+    //
+    // At the RE-ANCHOR the same geometry is unambiguous, which is the whole
+    // reason the bridge lives here. Best/runner-up over the 75 boundaries:
+    //   best < 30 deg  (n=25): separation min 30.3, median 42.5
+    //   best 30-45 deg (n=33): separation min  0.7, median 22.0
+    //   best 45-60 deg (n=17): separation min  0.1, median  6.8
+    // Sub-basin boundaries are separable and the 45-60 band is a genuine
+    // tie that must be refused wholesale. Nothing here relaxes a gate: the
+    // track still loses and still re-anchors exactly as before, so every
+    // coast-through-dropout guarantee is untouched by construction. The
+    // bridge only ever carries a gauge across a boundary the geometry
+    // proves; when it cannot prove one it publishes nothing and the router
+    // falls back to the registration search unchanged.
+    //
+    // Ceiling: the basin half-width. Above it the runner-up separation
+    // collapses (median 6.8, and 0 of 17 boundaries clear any usable bar),
+    // so no amount of margin makes the 45-60 band safe.
+    float bridge_max_deg = 45.0F;
+    // Centre-Lab agreement radius for the bridge's colour check - the
+    // constant that makes bridging SOUND rather than merely unique, and the
+    // reason the geometry above is not shipped on its own.
+    //
+    // THE DEGENERACY, because it is subtle and it invalidates the obvious
+    // version of this feature. The 24 candidate orientations q_obs * L are
+    // pairwise at least 90 degrees apart (the lattice is, and left
+    // multiplication is an isometry), so AT MOST ONE can sit within 45
+    // degrees of the dying epoch's last accepted pose: the resolution is
+    // geometrically unique and its margin is enormous, essentially always
+    // near 90. That uniqueness is real and it is also not the property that
+    // matters. It says which lattice element best explains the observation
+    // ASSUMING the cube is still where the old epoch last saw it - and the
+    // assumption is the entire content of the claim. A cube that genuinely
+    // quarter-turned during the dropout lands exactly on another lattice
+    // element, so it presents an equally unique, equally wide-margin
+    // resolution that is confidently WRONG by 90 degrees.
+    //
+    // This is not a corner case. A quarter turn during a detection dropout
+    // is the single most likely thing to happen at a scan boundary - it is
+    // what the user does to show the next face, and the turn is exactly
+    // when tracking drops out. Nor can any measurement of boundary angles
+    // taken MODULO THE LATTICE see it: reducing mod 24 maps a genuine
+    // quarter turn onto zero, so a census of lattice-reduced boundary
+    // rotations reports "the cube barely moved" for precisely the case that
+    // breaks the method. Geometry alone cannot separate the two hypotheses,
+    // because the discriminating evidence - what the cube did while
+    // unobserved - is what the dropout destroyed.
+    //
+    // So the bridge asks colour, which is degenerate in a DIFFERENT
+    // direction and therefore actually independent: the candidate
+    // relabellings name different old-epoch faces, and the dying epoch has
+    // already learned centre-Lab references for the faces it saw. Geometry
+    // proposes the relabelling and colour may veto it - the same division
+    // of labour the rest of this class runs on (colour is verification
+    // evidence, never identity), and the same one the router applies on the
+    // write path. A bridge with no colour to check refuses.
+    //
+    // 25 Lab matches RoutingConfig::same_face_centre_lab and is bounded by
+    // the same argument: the closest legitimate centre pair on a cube
+    // (red/orange) is ~27 Lab apart, so a radius at or above that could not
+    // tell them apart and the check would stop discriminating exactly where
+    // it is needed.
+    float bridge_centre_lab = 25.0F;
+    // Uniqueness bar. At 20 degrees, 45 of the 75 boundaries bridge and
+    // every ambiguous one is refused; all 25 sub-30-degree boundaries clear
+    // it with at least 30.3 degrees to spare. This is the safety constant:
+    // a bridge that picked the wrong element would silently relabel every
+    // later capture of the epoch, so the bar refuses rather than guesses -
+    // the same policy the margin gate applies to acceptance.
+    float bridge_margin_deg = 20.0F;
+    // Wall-clock window since the dying epoch's last accepted measurement.
+    // Matches acquire_coast_timeout_ms: beyond it the "the cube is still
+    // roughly where the old epoch left it" premise the whole comparison
+    // rests on stops being a premise and becomes a guess. Of the 75
+    // boundaries, 37 fall within 1200 ms and 43 within 2000; started at
+    // 1200 deliberately, to be widened only on evidence.
+    //
+    // Note this window does NOT extend anyone's capture authority - the
+    // distinction from coast_timeout_ms, which is why that one stays at
+    // 700. A coast timeout bounds how long a STALE IDENTITY may keep
+    // authorising commits; this bounds how long a DEAD epoch's gauge may be
+    // used to interpret a FRESH anchor, and the fresh anchor re-earns
+    // acquisition and certainty from scratch either way.
+    std::int64_t bridge_window_ms = 1200;
+
     // Rate-math dt clamps (seconds): a duplicate timestamp must not divide
     // by zero and a multi-second stall must not extrapolate to nonsense.
     float min_dt_s = 0.005F;
@@ -344,6 +456,21 @@ struct TrackerPassOutput {
     std::array<bool, 6> identity_certain_face{};
     int epoch = 0;
     std::int64_t dt_ms = 0;  // since the previous pass (0 on the first)
+    // Epoch bridge, present ONLY on the pass that anchored a new epoch and
+    // only when the geometry proved a unique relabelling (see the bridge_*
+    // config constants). `bridge_relabel` is a kBodyRelabel/kFacePermutation
+    // index carrying THIS epoch's body labels into `bridge_from_epoch`'s:
+    // face f of the new epoch is face kFacePermutation[bridge_relabel][f] of
+    // the old one, and its stickers move by kBodyRelabel[bridge_relabel][f].
+    //
+    // Absent means "no claim", never "identity" - a consumer must treat the
+    // two differently, because identity is a positive assertion that the
+    // labels did not move and absence is the refusal to assert anything.
+    // The tracker's own state is entirely unaffected either way: the epoch
+    // really did die and really did re-anchor, and nothing downstream of
+    // this field can revive it.
+    std::optional<int> bridge_relabel;
+    int bridge_from_epoch = 0;
 };
 
 // One analysis pass's tracker-relevant facts, sampled by the caller from
@@ -408,6 +535,13 @@ private:
     void accept(const Quat& q_meas, int lattice_index, const TrackerPassInput& input, TrackerPassOutput& out);
     void miss(const Quat& q_pred, const TrackerPassInput& input, TrackerPassOutput& out, TrackGate gate);
     void to_lost() noexcept;
+    // Colour veto on a proposed epoch bridge (see bridge_centre_lab): does
+    // every face this observation shows, named through `relabel` in the
+    // DYING epoch's labels, agree with what that epoch learned those faces
+    // look like? Requires at least one face to be checkable against a
+    // learned reference - an unverifiable bridge is refused, not assumed.
+    // Must be called BEFORE anchor() clears the epoch-scoped references.
+    [[nodiscard]] bool bridge_colour_agrees(int relabel, const TrackerPassInput& input) const;
     // Returns false when the accumulated belief flipped against the track
     // (slip detected) - the caller must force-lose instead of promoting.
     [[nodiscard]] bool update_belief_and_refs(int lattice_index, const TrackerPassInput& input);

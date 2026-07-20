@@ -280,6 +280,49 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
 }
 
 void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input, TrackerPassOutput& out) {
+    // --- Epoch bridge, computed BEFORE anything is overwritten ------------
+    // q_last_accept_ and last_accept_t_ms_ still describe the DYING epoch at
+    // this point (to_lost() deliberately leaves them alone), and the lines
+    // below are about to replace both - so the comparison has to happen
+    // here or not at all.
+    //
+    // The claim being tested: this anchoring observation, composed with some
+    // lattice element, lands within the basin of where the old epoch last
+    // saw the cube. If exactly one element does that, the two body
+    // labellings differ by a rotation the geometry has just PROVEN, and the
+    // capture layer can carry its gauge across instead of demanding the user
+    // re-show a face it already has. If no element does, or two of them
+    // nearly tie, nothing is published and the router re-registers from
+    // content exactly as before - refusing to guess is the default, and the
+    // bridge is only ever an assertion the geometry supports.
+    //
+    // Direction matters and is easy to get backwards. resolve_alignment
+    // returns S with q_obs * S == the body orientation it was matched
+    // against, so S maps the NEW frame onto the OLD one as an ORIENTATION
+    // composition, and the corresponding body-to-body RELABELLING is its
+    // inverse (see kLatticeInverse's header note). Publishing S directly
+    // would transpose every relabelled capture.
+    if (epoch_ > 0) {
+        const std::int64_t since_accept_ms = input.t_ms - last_accept_t_ms_;
+        if (since_accept_ms >= 0 && since_accept_ms <= config_.bridge_window_ms) {
+            const AlignmentResolution bridge = resolve_alignment(q_obs, q_last_accept_);
+            if (bridge.theta_deg < config_.bridge_max_deg && bridge.margin_deg > config_.bridge_margin_deg) {
+                // Geometry has proposed; colour may veto. The margin above
+                // is nearly free - the 24 candidates are >= 90 degrees
+                // apart, so at most one can be within the basin at all -
+                // and that is exactly why it is not sufficient: a cube that
+                // quarter-turned during the dropout also presents a unique,
+                // wide-margin resolution, and it is wrong by 90 degrees.
+                // See bridge_centre_lab for the full argument.
+                const int relabel = kLatticeInverse[static_cast<std::size_t>(bridge.lattice_index)];
+                if (bridge_colour_agrees(relabel, input)) {
+                    out.bridge_from_epoch = epoch_;
+                    out.bridge_relabel = relabel;
+                }
+            }
+        }
+    }
+
     // The anchoring detection's model frame becomes the body frame, so the
     // gauge is the identity element BY DEFINITION - nothing to resolve.
     // Everything epoch-scoped restarts here: a new epoch means new body
@@ -301,6 +344,47 @@ void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input
     out.gate = TrackGate::anchored;
     out.lattice_index = kIdentityLatticeIndex;
     out.quarter_turn_k = 0;
+}
+
+bool OrientationTracker::bridge_colour_agrees(int relabel, const TrackerPassInput& input) const {
+    if (input.centre_lab_count <= 0) {
+        return false;  // nothing to verify with: refuse rather than assume
+    }
+    const std::size_t count =
+        std::min<std::size_t>(static_cast<std::size_t>(input.centre_lab_count), input.corner_view ? 3 : 1);
+    int verified = 0;
+    for (std::size_t obs = 0; obs < count; ++obs) {
+        // Which body face this observation slot shows, in the NEW epoch's
+        // labels. The new body frame IS this observation's model frame, so
+        // the identity element is the right gauge to read the obs->body
+        // tables at - reusing them rather than restating "face path shows
+        // F, corner path shows U/F/R" keeps the two paths' model-frame
+        // conventions in exactly one place.
+        const cube::model::Face new_face =
+            input.corner_view
+                ? kCornerObsToBody[static_cast<std::size_t>(kIdentityLatticeIndex)][obs].body_face
+                : kFaceObsToBody[static_cast<std::size_t>(kIdentityLatticeIndex)].body_face;
+        // The same physical face, named in the DYING epoch's labels - the
+        // frame face_ref_ is still expressed in at this point.
+        const auto old_face =
+            static_cast<std::size_t>(kFacePermutation[static_cast<std::size_t>(relabel)]
+                                                    [static_cast<std::size_t>(new_face)]);
+        if (!face_ref_known_[old_face]) {
+            continue;  // no opinion; neither confirms nor contradicts
+        }
+        if (lab_distance(input.centre_lab[obs], face_ref_[old_face]) > config_.bridge_centre_lab) {
+            // A learned reference actively contradicts the hypothesis. This
+            // is the quarter-turn case: the relabelling claims the cube is
+            // showing the face it was showing before, and that face's own
+            // colour says otherwise.
+            return false;
+        }
+        ++verified;
+    }
+    // At least one POSITIVE confirmation. An all-unknown result means the
+    // dying epoch never learned any face this observation can speak to, so
+    // there is no evidence either way - and no evidence is a refusal.
+    return verified > 0;
 }
 
 void OrientationTracker::accept(const Quat& q_meas, int lattice_index, const TrackerPassInput& input,
