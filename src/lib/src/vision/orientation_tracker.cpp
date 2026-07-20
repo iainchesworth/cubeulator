@@ -254,6 +254,7 @@ void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input
     outlier_count_ = 0;
     state_ = TrackState::acquiring;
     log_belief_.fill(0.0F);
+    hyp_ref_backed_.fill(false);
     face_ref_known_.fill(false);
     (void)update_belief_and_refs(kIdentityLatticeIndex, input);
     out.gate = TrackGate::anchored;
@@ -362,17 +363,29 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
                 if (face_ref_known_[hyp_face]) {
                     const float d = lab_distance(lab, face_ref_[hyp_face]) / config_.centre_sigma_lab;
                     log_lik = std::max(-config_.max_obs_log_penalty, -0.5F * d * d);
+                    // The hypothesis now carries real evidence (a score
+                    // against a learned reference), so it is eligible to
+                    // win the slip veto below.
+                    hyp_ref_backed_[j] = true;
                 }
                 log_belief_[j] += log_lik;
             }
             // Learn/refresh the no-slip reference only while the no-slip
             // hypothesis still leads: references taught by a slipped track
-            // would launder the slip into the evidence base.
+            // would launder the slip into the evidence base. The margin
+            // guard alone is not enough - the stabilizer degeneracy pins
+            // it at exactly zero on single-centre evidence - so a KNOWN
+            // reference additionally refuses samples that contradict it
+            // (see ref_consistency_sigma): drift may teach it stepwise,
+            // a different colour may not teach it at all.
             if (belief_margin() >= 0.0F) {
                 const auto ref_face = static_cast<std::size_t>(f0);
                 if (face_ref_known_[ref_face]) {
-                    for (std::size_t i = 0; i < 3; ++i) {
-                        face_ref_[ref_face][i] += config_.ref_blend * (lab[i] - face_ref_[ref_face][i]);
+                    if (lab_distance(lab, face_ref_[ref_face]) <=
+                        config_.ref_consistency_sigma * config_.centre_sigma_lab) {
+                        for (std::size_t i = 0; i < 3; ++i) {
+                            face_ref_[ref_face][i] += config_.ref_blend * (lab[i] - face_ref_[ref_face][i]);
+                        }
                     }
                 } else {
                     face_ref_[ref_face] = lab;
@@ -388,8 +401,22 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
         }
     }
     // Slip veto at the same ratio the lock uses, symmetric by design:
-    // colour needs as much evidence to kill a track as to certify one.
-    return belief_margin() > -std::log(config_.posterior_lock_ratio);
+    // colour needs as much evidence to kill a track as to certify one -
+    // but only a REF-BACKED hypothesis may win it (see hyp_ref_backed_).
+    // A single-face epoch therefore can never be colour-vetoed: every
+    // alternative that could outrun identity there is an unknown-floor
+    // hypothesis with zero positive evidence, and "identity's samples
+    // look noisy" must degrade certainty (it does - the margin getters
+    // see the full 24), never kill the track.
+    float best_backed_slip = -config_.belief_clamp;
+    for (std::size_t j = 0; j < kLatticeSize; ++j) {
+        if (j == static_cast<std::size_t>(kIdentityLatticeIndex) || !hyp_ref_backed_[j]) {
+            continue;
+        }
+        best_backed_slip = std::max(best_backed_slip, log_belief_[j]);
+    }
+    const float backed_margin = log_belief_[static_cast<std::size_t>(kIdentityLatticeIndex)] - best_backed_slip;
+    return backed_margin > -std::log(config_.posterior_lock_ratio);
 }
 
 void OrientationTracker::finish_output(TrackerPassOutput& out) const noexcept {

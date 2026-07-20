@@ -431,8 +431,8 @@ auto settings_fields(const SweepSettings& s) {
                            c.acquire_coast_timeout_ms, c.outlier_omega_deg_s, c.outlier_reanchor_count,
                            c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend, c.omega_decay,
                            c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab, c.unknown_face_log_likelihood,
-                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.min_dt_s, c.max_dt_s,
-                           s.idle_escape_every);
+                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.ref_consistency_sigma, c.min_dt_s,
+                           c.max_dt_s, s.idle_escape_every);
 }
 
 SweepMetrics run_variant(const SweepSettings& settings, const std::vector<CachedPass>& inputs) {

@@ -59,6 +59,10 @@ struct Sim {
     // the truly camera-facing face's - the injected colour/geometry
     // contradiction the slip belief must catch.
     std::optional<Face> lab_override;
+    // When set, the fed centre lab is this raw value - a wild sample
+    // matching NO face's palette (specular burn, motion blur), the noise
+    // the veto must ride out. Takes precedence over lab_override.
+    std::optional<std::array<float, 3>> lab_raw_override;
 
     explicit Sim(const TrackerConfig& config = {}) : tracker(config) {}
 
@@ -88,8 +92,12 @@ struct Sim {
         in.q_obs = forced ? *forced : observation();
         if (feed_labs) {
             in.centre_lab_count = 1;
-            const Face shown = lab_override ? *lab_override : nearest_face(q_true);
-            in.centre_lab[0] = kPalette[static_cast<std::size_t>(shown)];
+            if (lab_raw_override) {
+                in.centre_lab[0] = *lab_raw_override;
+            } else {
+                const Face shown = lab_override ? *lab_override : nearest_face(q_true);
+                in.centre_lab[0] = kPalette[static_cast<std::size_t>(shown)];
+            }
         }
         return tracker.on_pass(in);
     }
@@ -138,6 +146,10 @@ TEST_CASE("TrackerConfig defaults hold the live1-calibrated constants", "[tracke
     CHECK(config.acquire_frames == 2);
     CHECK(config.posterior_lock_ratio == 100.0F);
     CHECK(config.centre_sigma_lab == 12.0F);
+    // live3 recalibration: 8 let ONE >= 4-sigma Lab sample swing the
+    // margin past the +-ln(100) veto (8 - 2 = 6 > 4.6) - see the config
+    // comment. 4 bounds the single-observation swing strictly under it.
+    CHECK(config.max_obs_log_penalty == 4.0F);
 }
 
 TEST_CASE("lost claims no identity and anchoring starts an epoch as acquiring", "[tracker]") {
@@ -607,10 +619,96 @@ TEST_CASE("centre-colour belief certifies a clean track and vetoes a slipped one
     while (sim.tracker.state() != TrackState::lost) {
         out = sim.step_obs();
         ++passes_to_lost;
+        // Bounded, not instant: the per-observation swing cap (see
+        // max_obs_log_penalty) means a kill takes several consecutive
+        // contradicting samples - sustained evidence, never one noisy one.
         REQUIRE(passes_to_lost <= 15);
     }
     CHECK(out.gate == TrackGate::slip_evidence);
     CHECK_FALSE(out.front_face.has_value());
+}
+
+TEST_CASE("a single wild centre sample never vetoes; only ref-backed evidence kills", "[tracker]") {
+    // The live3 belief post-mortem: 21 of 43 epochs died to slip_evidence
+    // with only ONE face ever colour-observed and no slip anywhere - one
+    // blurred/specular Lab sample penalised identity to the clamp while
+    // the 20 unknown-face hypotheses took the flat floor, and that pure
+    // floor-arithmetic lead crossed the veto. Two properties fix it, each
+    // pinned here: the per-observation swing is bounded under the veto bar
+    // (max_obs_log_penalty), and an unknown-floor hypothesis - one never
+    // scored against a learned reference - can never win the veto at all.
+    SECTION("a single-face epoch survives sustained wild samples") {
+        Sim sim;
+        sim.feed_labs = true;
+        sim.lock_on();
+        for (int pass = 0; pass < 5; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        // Wild samples ~10 sigma from F's learned reference and matching
+        // no other face: identity takes the clamped penalty, every
+        // alternative is an unknown floor. Under the old arithmetic pass
+        // three force-lost the track; now nothing here may kill it, ever -
+        // the certainty margin degrades (that is honest) but the track
+        // holds.
+        sim.lab_raw_override = std::array<float, 3>{20.0F, 80.0F, -80.0F};
+        for (int pass = 0; pass < 6; ++pass) {
+            const auto out = sim.step_obs();
+            CHECK(out.gate == TrackGate::accepted);
+            REQUIRE(out.state == TrackState::locked);
+        }
+        // And clean samples recover the margin instead of re-anchoring.
+        sim.lab_raw_override.reset();
+        for (int pass = 0; pass < 6; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        CHECK(sim.tracker.epoch() == 1);
+    }
+    SECTION("with two learned references one wild sample survives, sustained contradiction kills") {
+        Sim sim;
+        sim.feed_labs = true;
+        sim.lock_on();
+        // Learn F, tour to R and back so a slip hypothesis IS ref-backed.
+        for (int pass = 0; pass < 10; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        const std::array<float, 3> to_r{0.0F, -90.0F, 0.0F};
+        for (int pass = 0; pass < 30; ++pass) {
+            sim.advance(to_r);
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        const std::array<float, 3> back{0.0F, 90.0F, 0.0F};
+        for (int pass = 0; pass < 30; ++pass) {
+            sim.advance(back);
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        REQUIRE(nearest_face(sim.q_true) == Face::F);
+
+        // One sample that reads exactly as R's reference while geometry
+        // shows F: the strongest possible single contradiction, against a
+        // ref-backed hypothesis - and still not enough on its own.
+        sim.lab_override = Face::R;
+        const auto contradicted = sim.step_obs();
+        CHECK(contradicted.gate == TrackGate::accepted);
+        REQUIRE(contradicted.state == TrackState::locked);
+        sim.lab_override.reset();
+        for (int pass = 0; pass < 4; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+
+        // The same contradiction SUSTAINED is a real slip signature and
+        // must still kill in bounded time - the veto lost none of its
+        // authority over evidence, only over noise.
+        sim.lab_override = Face::R;
+        int passes_to_lost = 0;
+        TrackerPassOutput out{};
+        while (sim.tracker.state() != TrackState::lost) {
+            out = sim.step_obs();
+            ++passes_to_lost;
+            REQUIRE(passes_to_lost <= 15);
+        }
+        CHECK(out.gate == TrackGate::slip_evidence);
+        CHECK(passes_to_lost >= 2);
+    }
 }
 
 TEST_CASE("reset and force_lost drop state without leaking across scans", "[tracker]") {

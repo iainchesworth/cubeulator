@@ -199,12 +199,33 @@ struct TrackerConfig {
     // Per-observation and total log-odds clamps: one wild Lab sample must
     // not decide the posterior alone, and a long clean run must not bank
     // so much evidence that a real slip takes seconds to surface.
-    float max_obs_log_penalty = 8.0F;
+    // The penalty ceiling must sit BELOW ln(posterior_lock_ratio) + the
+    // unknown-face floor or the first clamp is a dead letter: at the
+    // original 8, one >= 4-sigma centre sample (specular hit, motion blur)
+    // cost identity 8 while every unknown-face hypothesis took the flat -2,
+    // a -6 margin swing that crossed the +-ln(100) = 4.6 veto in a SINGLE
+    // observation - the live3 post-mortem's exact signature, killing 21 of
+    // 43 epochs that never slipped. At 4 the worst single-observation
+    // swing is 4 (against a perfectly matching learned slip reference), so
+    // a veto always needs at least two consecutive agreeing bad samples.
+    float max_obs_log_penalty = 4.0F;
     float belief_clamp = 30.0F;
     // EMA blend for the per-face centre-Lab references the likelihoods
     // compare against (learned online within the epoch - the tracker has
     // no access to, and must not depend on, the capture slot store).
     float ref_blend = 0.3F;
+    // A known reference only EMA-refreshes from samples within this many
+    // centre_sigma_lab of it. The belief-margin learning guard alone
+    // cannot stop laundering: the in-plane stabilizer hypotheses score
+    // bit-identically to identity on single-centre evidence, pinning the
+    // full margin at exactly zero, so under a sustained contradiction the
+    // guard kept learning and the reference EMA-walked toward the
+    // contradicting colour - geometrically shrinking identity's penalty
+    // and stretching the slip veto toward never firing. Three sigma
+    // tracks genuine gradual lighting drift (a bounded step per sample,
+    // the reference follows) while refusing to be taught by any sample
+    // that contradicts what it is the reference OF.
+    float ref_consistency_sigma = 3.0F;
     // Rate-math dt clamps (seconds): a duplicate timestamp must not divide
     // by zero and a multi-second stall must not extrapolate to nonsense.
     float min_dt_s = 0.005F;
@@ -336,6 +357,14 @@ private:
     // element j" - kIdentityLatticeIndex is the no-slip hypothesis. Kept
     // renormalised (max entry 0) and clamped (see belief_clamp).
     std::array<float, kLatticeSize> log_belief_{};
+    // Per-hypothesis "carries real evidence" bit: set once the hypothesis
+    // has been scored against a LEARNED face reference at least once. Only
+    // a ref-backed hypothesis may win the slip veto: an unknown-floor
+    // hypothesis's lead is pure floor arithmetic (identity got penalised,
+    // the unknown floor didn't), which is evidence that identity's samples
+    // were noisy, not that any particular slip happened - live3 lost 21
+    // epochs to exactly that non-evidence before the bit existed.
+    std::array<bool, kLatticeSize> hyp_ref_backed_{};
     // Per-body-face centre-Lab references learned within the epoch; the
     // likelihood evidence the belief update scores hypotheses against.
     std::array<std::array<float, 3>, 6> face_ref_{};
