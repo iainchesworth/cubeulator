@@ -277,6 +277,15 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
     int records = 0;
     int commits_attempted = 0;
     std::array<int, cube::model::face_count> records_per_face{};
+    // Outcome and registration histograms. Records alone show only what
+    // LANDED; a scan that cannot complete is characterised entirely by
+    // what it refused and why, and "deferred" without its registration
+    // status is the specific blindness that hid the four-fold roll tie.
+    std::array<int, 5> outcome_counts{};  // indexed by CommitOutcome
+    std::array<int, 3> registration_counts{};  // indexed by EpochRegistration::Status
+    std::array<int, 3> registration_basis{};   // indexed by EpochRegistration::Basis
+    int epochs_seen = 0;
+    int last_epoch = -1;
     std::size_t replayed = 0;
     std::int64_t previous_t_ms = 0;
     bool have_previous = false;
@@ -403,6 +412,10 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         ++replayed;
 
         // --- Capture layer, in handleAnalysisFinished's order --------------
+        if (track.epoch != last_epoch) {
+            last_epoch = track.epoch;
+            ++epochs_seen;
+        }
         router.on_epoch(track.epoch);
         if (track.epoch != agg_epoch) {
             agg_epoch = track.epoch;
@@ -519,6 +532,21 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             const bool corner_fed = meta.corner_fed;
             ++commits_attempted;
             const auto commit = router.commit(body_face, captured, row.t_ms);
+            ++outcome_counts[static_cast<std::size_t>(commit.outcome)];
+            if (commit.registration) {
+                const auto& reg = *commit.registration;
+                ++registration_counts[static_cast<std::size_t>(reg.status)];
+                if (reg.status == cube::vision::EpochRegistration::Status::resolved) {
+                    ++registration_basis[static_cast<std::size_t>(reg.basis)];
+                }
+                std::printf(
+                    "# reg clip=%s pass=%d epoch=%d face=%c status=%d cand=%d tied=%d score=%.2f/%.2f "
+                    "roll=%.2f/%.2f filled=%d\n",
+                    clip.c_str(), row.pass, track.epoch, "URFDLB"[f], static_cast<int>(reg.status), reg.candidates,
+                    reg.tied, static_cast<double>(reg.best_score), static_cast<double>(reg.runner_up_score),
+                    static_cast<double>(reg.best_oriented_lab), static_cast<double>(reg.runner_up_oriented_lab),
+                    router.filled_count());
+            }
 
             if (commit.outcome == cube::vision::CommitOutcome::holdoff) {
                 continue;
@@ -593,5 +621,12 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
     std::printf("# cross-session: clip=%s replayed=%zu commits-attempted=%d records=%d faces=%s filled-slots=%d\n",
                 clip.c_str(), replayed, commits_attempted, records,
                 face_letters.empty() ? "-" : face_letters.c_str(), router.filled_count());
+    std::printf(
+        "# cross-session: clip=%s epochs=%d outcomes filled=%d updated=%d quarantined=%d deferred=%d holdoff=%d"
+        " | registration resolved=%d ambiguous=%d insufficient=%d"
+        " | resolved-by unique=%d oriented=%d content-equiv=%d\n",
+        clip.c_str(), epochs_seen, outcome_counts[0], outcome_counts[1], outcome_counts[2], outcome_counts[3],
+        outcome_counts[4], registration_counts[0], registration_counts[1], registration_counts[2],
+        registration_basis[0], registration_basis[1], registration_basis[2]);
     CHECK(replayed > 0);
 }

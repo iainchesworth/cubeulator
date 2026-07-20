@@ -26,8 +26,10 @@
 #include <cmath>
 #include <cstddef>
 #include <fstream>
+#include <iomanip>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 
@@ -1590,6 +1592,46 @@ void log_slot_decision(const std::string& decision) {
     return "?";
 }
 
+// Registration detail for the slot log. A bare "deferred" says only that
+// the gauge did not resolve, never why - and the two reasons demand
+// opposite responses (keep showing faces, versus the roll is genuinely
+// undecidable and the scan needs a different face shown). Emitting the
+// candidate/tie counts and both score pairs is what makes a stuck
+// re-orientation diagnosable from a recorded clip alone.
+[[nodiscard]] std::string registration_detail(const cube::vision::EpochRegistration& registration) {
+    const auto status = [&]() -> const char* {
+        switch (registration.status) {
+            case cube::vision::EpochRegistration::Status::resolved:
+                return "resolved";
+            case cube::vision::EpochRegistration::Status::ambiguous:
+                return "ambiguous";
+            case cube::vision::EpochRegistration::Status::insufficient:
+                return "insufficient";
+        }
+        return "?";
+    }();
+    const auto basis = [&]() -> const char* {
+        switch (registration.basis) {
+            case cube::vision::EpochRegistration::Basis::unique:
+                return "unique";
+            case cube::vision::EpochRegistration::Basis::oriented:
+                return "oriented";
+            case cube::vision::EpochRegistration::Basis::content_equivalent:
+                return "content-equiv";
+        }
+        return "?";
+    }();
+    std::ostringstream detail;
+    detail << " reg=" << status << " cand=" << registration.candidates << " tied=" << registration.tied
+           << std::fixed << std::setprecision(2) << " score=" << registration.best_score << '/'
+           << registration.runner_up_score << " roll=" << registration.best_oriented_lab << '/'
+           << registration.runner_up_oriented_lab;
+    if (registration.status == cube::vision::EpochRegistration::Status::resolved) {
+        detail << " by=" << basis << " gauge=" << registration.lattice_index;
+    }
+    return detail.str();
+}
+
 }  // namespace
 
 void ScanSession::tryCommitConverged() {
@@ -1644,6 +1686,7 @@ void ScanSession::tryCommitConverged() {
         log_slot_decision("commit face=" + std::string(1, "URFDLB"[f]) +
                           " outcome=" + commit_outcome_name(commit.outcome) +
                           " confirmed=" + std::to_string(commit.confirmed_slots.size()) +
+                          (commit.registration ? registration_detail(*commit.registration) : std::string{}) +
                           (commit.duplicate_centre ? " DUP-CENTRE" : "") +
                           (commit.layer_turn ? " LAYER-TURN" : "") +
                           (commit.force_lost ? " FORCE-LOST" : ""));
