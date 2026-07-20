@@ -336,6 +336,33 @@ constexpr std::array<std::array<FaceCellMap, 3>, kLatticeSize> build_corner_obs_
     return out;
 }
 
+// Body-to-body sticker relabelling. Both frames name the SAME physical
+// cube, so element g relates them by its own matrix directly: a sticker at
+// body position p under the source labelling sits at M_g * p under the
+// target labelling. The face it lands on is the one whose normal is
+// M_g * normal(f) - exactly build_face_permutation's rule, so body_face
+// here agrees with kFacePermutation by construction (asserted below) - and
+// index_on_face names its solver facelet there.
+//
+// No transpose, unlike model_to_body above, and the difference is not
+// incidental: there the lattice element is the INVERSE of an unknown
+// model->body gauge, here it IS the source->target body rotation.
+constexpr std::array<std::array<FaceCellMap, 6>, kLatticeSize> build_body_relabel() noexcept {
+    std::array<std::array<FaceCellMap, 6>, kLatticeSize> out{};
+    for (std::size_t g = 0; g < kLatticeSize; ++g) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            const auto source = static_cast<Face>(f);
+            const Face target = face_from_normal(kLatticeMat[g].apply(kFaceNormal[f]));
+            out[g][f].body_face = target;
+            for (int k = 0; k < 9; ++k) {
+                out[g][f].cell[static_cast<std::size_t>(k)] =
+                    index_on_face(target, kLatticeMat[g].apply(position_of(source, k)));
+            }
+        }
+    }
+    return out;
+}
+
 // Compile-time soundness: every cell map must be a permutation of 0..8
 // fixing the centre (all are rigid in-plane images of a face grid), or a
 // derivation above mixed up a frame.
@@ -375,6 +402,55 @@ constexpr bool obs_tables_are_sound() noexcept {
 }
 static_assert(obs_tables_are_sound());
 
+constexpr bool body_relabel_is_sound() noexcept {
+    const auto relabel = build_body_relabel();
+    const auto permutation = build_face_permutation();
+    for (std::size_t g = 0; g < kLatticeSize; ++g) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            if (!cell_map_is_permutation(relabel[g][f])) {
+                return false;
+            }
+            // The cell map must refine kFacePermutation, never contradict
+            // it: registration picks a hypothesis by face permutation and
+            // then scores it cell-wise, so a disagreement here would score
+            // one hypothesis against another's face assignment.
+            if (relabel[g][f].body_face != permutation[g][f]) {
+                return false;
+            }
+        }
+        // The identity element must relabel nothing at all, or a stored
+        // face would fail to match a re-show of itself under the gauge
+        // that says "nothing moved".
+        if (g == static_cast<std::size_t>(kIdentityLatticeIndex)) {
+            for (std::size_t f = 0; f < 6; ++f) {
+                for (int k = 0; k < 9; ++k) {
+                    if (relabel[g][f].cell[static_cast<std::size_t>(k)] != k) {
+                        return false;
+                    }
+                }
+            }
+        }
+    }
+    // THE property epoch re-registration stands on: for any source face,
+    // all 24 elements produce DISTINCT (target face, cell map) pairs. The
+    // four elements sharing a target face differ only by roll, and it is
+    // precisely their cell maps that must differ - a rotation-invariant
+    // fingerprint cannot separate them, which is why single-face
+    // registration was structurally unable to resolve before this table.
+    for (std::size_t f = 0; f < 6; ++f) {
+        for (std::size_t a = 0; a < kLatticeSize; ++a) {
+            for (std::size_t b = a + 1; b < kLatticeSize; ++b) {
+                if (relabel[a][f].body_face == relabel[b][f].body_face &&
+                    relabel[a][f].cell == relabel[b][f].cell) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+static_assert(body_relabel_is_sound());
+
 // ---------------------------------------------------------------------------
 // Runtime float helpers.
 // ---------------------------------------------------------------------------
@@ -395,6 +471,7 @@ const std::array<Quat, kLatticeSize> kLattice24 = build_lattice_quats();
 const std::array<std::array<Face, 6>, kLatticeSize> kFacePermutation = build_face_permutation();
 const std::array<FaceCellMap, kLatticeSize> kFaceObsToBody = build_face_obs_to_body();
 const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBody = build_corner_obs_to_body();
+const std::array<std::array<FaceCellMap, 6>, kLatticeSize> kBodyRelabel = build_body_relabel();
 
 Quat quat_multiply(const Quat& a, const Quat& b) noexcept {
     return {a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],

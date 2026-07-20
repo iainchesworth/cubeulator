@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstddef>
 #include <numbers>
+#include <optional>
 #include <random>
 
 using namespace cube::vision;
@@ -587,6 +588,63 @@ TEST_CASE("face-path cell routing is constant across in-plane re-key boundaries"
             }
             const int physical = 3 * (1 - y) + (x + 1);
             REQUIRE(map.cell[static_cast<std::size_t>(o)] == physical);
+        }
+    }
+}
+
+TEST_CASE("kBodyRelabel maps stickers between two body labellings", "[lattice]") {
+    // The static_asserts in orientation_lattice.cpp already lock the
+    // structural invariants (permutation, centre fixed, agreement with
+    // kFacePermutation, identity is identity, and all 24 distinct per
+    // source face). What they cannot check is that the table means what
+    // epoch re-registration reads it as, so pin that here: one
+    // hand-derived element, and a round-trip that no single-formula error
+    // can survive.
+
+    SECTION("one screen-clockwise quarter turn about the F axis") {
+        // Element 4*Face::F + 1 - F stays the near face, the cube turns a
+        // quarter clockwise as seen on screen. F's top-left sticker must
+        // land top-right, top-right at bottom-right, and so on.
+        constexpr int kQuarterAboutF = 4 * 2 + 1;
+        const auto& map = kBodyRelabel[kQuarterAboutF][static_cast<std::size_t>(Face::F)];
+        REQUIRE(map.body_face == Face::F);
+        const std::array<int, 9> expected{2, 5, 8, 1, 4, 7, 0, 3, 6};
+        for (std::size_t k = 0; k < expected.size(); ++k) {
+            CHECK(map.cell[k] == expected[k]);
+        }
+    }
+
+    SECTION("relabelling by an element and by its inverse is the identity") {
+        // The face permutations are a faithful action, so the inverse
+        // element is the unique one undoing g on all six faces. Composing
+        // the two cell maps must return every sticker to its own index -
+        // the property epoch registration relies on when it compares a
+        // stored slot against a re-shown face under a candidate gauge.
+        for (std::size_t g = 0; g < kLatticeSize; ++g) {
+            std::optional<std::size_t> inverse;
+            for (std::size_t h = 0; h < kLatticeSize; ++h) {
+                bool undoes = true;
+                for (std::size_t f = 0; f < 6; ++f) {
+                    if (kFacePermutation[h][static_cast<std::size_t>(kFacePermutation[g][f])] !=
+                        static_cast<Face>(f)) {
+                        undoes = false;
+                        break;
+                    }
+                }
+                if (undoes) {
+                    inverse = h;
+                    break;
+                }
+            }
+            REQUIRE(inverse.has_value());
+            for (std::size_t f = 0; f < 6; ++f) {
+                const auto& forward = kBodyRelabel[g][f];
+                const auto& back = kBodyRelabel[*inverse][static_cast<std::size_t>(forward.body_face)];
+                REQUIRE(back.body_face == static_cast<Face>(f));
+                for (std::size_t k = 0; k < 9; ++k) {
+                    REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] == static_cast<int>(k));
+                }
+            }
         }
     }
 }

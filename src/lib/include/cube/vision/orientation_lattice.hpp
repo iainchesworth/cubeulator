@@ -135,6 +135,27 @@ extern const std::array<FaceCellMap, kLatticeSize> kFaceObsToBody;
 // function documents.
 extern const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBody;
 
+// Body-to-body sticker relabelling: the cell-level refinement of
+// kFacePermutation. Element g relates two BODY labellings of the same
+// physical cube - the epoch-boundary case, where the old frame's face
+// names and the new frame's differ by a whole-cube rotation - and
+// kFacePermutation[g][f] says only WHICH face f becomes. This says where
+// each of its nine stickers goes: kBodyRelabel[g][f].cell[k] is the
+// solver facelet index, on face kBodyRelabel[g][f].body_face (identically
+// kFacePermutation[g][f]), holding the sticker that face f's solver index
+// k holds in the source labelling.
+//
+// Why this cannot be kFaceObsToBody. That table maps a DETECTOR
+// observation's screen-order cells into a body frame, and the capture
+// path already applies it on the way in (scan_session.cpp's add_keyed
+// permutes to solver order before aggregating). A stored CapturedFace is
+// therefore ALREADY in solver order for its own body face; re-applying an
+// obs-to-body map to one would be a frame error. Comparing two body
+// labellings needs this map instead - and it is what lets epoch
+// re-registration tell the four ROLLS of a face apart, which no
+// rotation-invariant fingerprint (census, centre colour) can.
+extern const std::array<std::array<FaceCellMap, 6>, kLatticeSize> kBodyRelabel;
+
 // Nearest lattice element to an arbitrary orientation, with the residual
 // angle. Any orientation is within acos(...) <= 62 degrees of some element;
 // anything within 45 degrees of an element is unambiguously in its basin
