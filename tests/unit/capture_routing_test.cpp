@@ -633,6 +633,14 @@ namespace {
     return out;
 }
 
+// Near-boundary tiles, for building a face whose census has moved by a
+// known amount at a SMALL Lab cost - the combination the roll gates care
+// about, since the roll ranks Lab and the score ranks census. Each sits
+// just the wrong side of a classify_lab band edge from a `patterned()`
+// colour.
+const cv::Vec3f kWhiteJustRed{96.0F, 14.0F, 8.0F};     // chroma 16.1 -> red, 13.4 Lab from kWhite
+const cv::Vec3f kYellowJustOrange{88.0F, 23.0F, 80.0F};  // hue 74 -> orange, 18.0 Lab from kYellow
+
 }  // namespace
 
 TEST_CASE("a single epoch face registers its roll against two filled slots", "[routing]") {
@@ -749,55 +757,108 @@ TEST_CASE("the roll tie-break cannot promote a candidate the score rejected", "[
     std::vector<EpochFaceSample> samples;
     samples.push_back({Face::F, pattern});
 
-    SECTION("an over-bar tied candidate with a perfect roll is refused") {
-        // Slot U: the epoch face's ring relabelled under wrong_gauge, so
-        // its oriented distance is exactly zero - but its centre is
-        // kBlue against the epoch face's kRed, a full class apart. That
-        // reclassification costs 2 census points and ~90 Lab of centre,
-        // putting the hypothesis above the commit bar.
+    // Slot F in both sections: the true face under the identity, drifted
+    // by three sticker reclassifications ONTO ONE NEW COLOUR so the census
+    // moves by the full 6 rather than partly cancelling. That is
+    // deliberate twice over - it puts the correct hypothesis exactly AT
+    // the commit bar (census 6, centre unmoved), and it takes the pair
+    // past reassoc_census (4) so slot F does not tight-match the epoch
+    // face. A lone tight match would PIN F->F and drop the aliasing
+    // hypothesis before scoring, which is precisely how the previous
+    // version of this test managed to pass with the gates deleted.
+    CapturedFace true_face = pattern;
+    true_face.lab[0] = kOrange;
+    true_face.lab[2] = kOrange;
+    true_face.lab[6] = kOrange;
+
+    SECTION("an over-bar tied candidate with a plausible roll is refused") {
+        // The score-bar-on-the-winner gate on its own. Slot U holds a
+        // DIFFERENT physical face whose ring aliases the epoch face
+        // closely enough to win the roll sort outright, and whose centre
+        // agrees in class and sits well inside reassoc_centre_lab - so the
+        // oriented bar, the oriented margin and the centre gate all pass.
+        // Its census has moved by 6 though, which with the centre offset
+        // puts it ABOVE epoch_register_max_score while still inside
+        // epoch_register_margin of the winner, i.e. squarely in the tied
+        // set. Only the bar on by_roll.front() refuses it.
+        CapturedFace aliasing_source = pattern;
+        aliasing_source.lab[3] = kWhiteJustRed;
+        aliasing_source.lab[7] = kWhiteJustRed;
+        aliasing_source.lab[6] = kYellowJustOrange;
+        CapturedFace aliasing = relabelled(aliasing_source, Face::F, wrong_gauge);
+        // Same class, a sixth of the tight radius away: enough centre Lab
+        // to lift the pair score past the bar, nowhere near enough to
+        // trouble the centre gate.
+        aliasing.lab[cube::model::center_facelet_index] =
+            pattern.lab[cube::model::center_facelet_index] + cv::Vec3f{6.0F, 0.0F, 0.0F};
+
         std::array<std::optional<CapturedFace>, 6> slots{};
-        CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
-        aliasing.lab[cube::model::center_facelet_index] = kBlue;
         slots[static_cast<std::size_t>(Face::U)] = aliasing;
-        // Slot F: the true face under the identity, honestly drifted by
-        // three sticker reclassifications - score at the bar, roll poor.
-        CapturedFace true_face = pattern;
-        true_face.lab[0] = kYellow;
-        true_face.lab[2] = kWhite;
-        true_face.lab[6] = kGreen;
         slots[static_cast<std::size_t>(Face::F)] = true_face;
 
         const auto registration = register_epoch_gauge(samples, slots, config);
-        // The safety property: whatever it decides, it must never adopt a
-        // gauge that files this epoch face onto the aliasing slot.
+
+        // The configuration really is the one described: eight surviving
+        // hypotheses (four fixing F, four sending F to U), all tied.
+        REQUIRE(registration.candidates == 8);
+        REQUIRE(registration.tied == 8);
+        // A winner at the bar and a tied member above it - the shape the
+        // bar-on-the-best check could not see. (`runner_up_score` cannot
+        // show this: the four rolls fixing F all score identically, so
+        // candidates[1] is one of THEM, not the aliasing hypothesis. With
+        // a single epoch face the aliasing candidate's mean score is just
+        // its one pair score.)
+        REQUIRE(registration.best_score <= config.epoch_register_max_score);
+        const float aliasing_score = registration_pair_score(pattern, aliasing, config);
+        REQUIRE(aliasing_score > config.epoch_register_max_score);
+        REQUIRE(aliasing_score - registration.best_score < config.epoch_register_margin);
+        // ...and the over-bar member is the one the roll sort returns.
+        REQUIRE(registration.best_oriented_lab ==
+                oriented_cell_lab_distance(pattern, aliasing, Face::F, wrong_gauge));
+        // Every OTHER oriented gate passes, so nothing but the score bar
+        // is left to refuse.
+        REQUIRE(registration.best_oriented_lab <= config.epoch_register_oriented_max_lab);
+        REQUIRE(registration.runner_up_oriented_lab - registration.best_oriented_lab >=
+                config.epoch_register_oriented_margin_lab);
+
+        // The outcome the gate changes: without it this resolves onto the
+        // aliasing slot's gauge.
+        CHECK(registration.status != EpochRegistration::Status::resolved);
         CHECK(registration.lattice_index != wrong_gauge);
-        if (registration.status == EpochRegistration::Status::resolved) {
-            CHECK(kFacePermutation[static_cast<std::size_t>(registration.lattice_index)]
-                                  [static_cast<std::size_t>(Face::F)] == Face::F);
-        }
     }
 
     SECTION("a bar-passing candidate whose centre is a class away is refused") {
-        // The centre-agreement gate on its own. Here the aliasing slot
-        // keeps the epoch face's census exactly (no reclassification) and
-        // its centre is only far enough to fail tight re-association, so
-        // the hypothesis passes the commit bar outright and still posts a
-        // perfect roll. Only the centre gate stands between it and a
-        // wrong-slot resolution.
-        std::array<std::optional<CapturedFace>, 6> slots{};
+        // The centre-agreement gate on its own. Slot U holds the epoch
+        // face's ring relabelled under wrong_gauge, so its oriented
+        // distance is exactly zero - a perfect roll. Its centre is a
+        // WHOLE COLOUR CLASS away (hue 45, just over the red/orange
+        // boundary) yet only 18 Lab from the epoch centre, so the pair
+        // costs 2 census points plus 3 score points of centre and passes
+        // the commit bar comfortably. The class half of the centre gate is
+        // the only thing standing between it and a wrong-slot resolution.
         CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
-        // Same class as kRed, displaced past reassoc_centre_lab (25).
-        aliasing.lab[cube::model::center_facelet_index] =
-            pattern.lab[cube::model::center_facelet_index] + cv::Vec3f{-26.0F, 0.0F, 0.0F};
+        aliasing.lab[cube::model::center_facelet_index] = cv::Vec3f{45.0F, 50.0F, 50.0F};
+        REQUIRE(classify_lab(aliasing.lab[cube::model::center_facelet_index]).color == FacetColor::orange);
+        REQUIRE(centre_lab_distance(pattern, aliasing) < config.reassoc_centre_lab);
+
+        std::array<std::optional<CapturedFace>, 6> slots{};
         slots[static_cast<std::size_t>(Face::U)] = aliasing;
-        slots[static_cast<std::size_t>(Face::F)] = relabelled(pattern, Face::F, kIdentityLatticeIndex);
+        slots[static_cast<std::size_t>(Face::F)] = true_face;
 
         const auto registration = register_epoch_gauge(samples, slots, config);
+
+        REQUIRE(registration.candidates == 8);
+        REQUIRE(registration.tied == 8);
+        // The aliasing hypothesis is the best-scoring one AND is under the
+        // bar, so the score gate cannot be what refuses it.
+        REQUIRE(registration.best_score <= config.epoch_register_max_score);
+        // Its roll is perfect and clears the runner-up by more than the
+        // margin, so neither oriented gate can be what refuses it either.
+        REQUIRE(registration.best_oriented_lab == 0.0F);
+        REQUIRE(registration.runner_up_oriented_lab >= config.epoch_register_oriented_margin_lab);
+
+        CHECK(registration.status != EpochRegistration::Status::resolved);
         CHECK(registration.lattice_index != wrong_gauge);
-        if (registration.status == EpochRegistration::Status::resolved) {
-            CHECK(kFacePermutation[static_cast<std::size_t>(registration.lattice_index)]
-                                  [static_cast<std::size_t>(Face::F)] == Face::F);
-        }
     }
 }
 
