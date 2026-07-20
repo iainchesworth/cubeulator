@@ -14,11 +14,15 @@ add_executable(cube_unit_tests
     unit/face_observation_test.cpp
     unit/temporal_fusion_test.cpp
     unit/color_resolution_test.cpp
+    unit/session_color_model_test.cpp
     unit/corner_observation_test.cpp
     unit/edge_observation_test.cpp
     unit/orientation_lattice_test.cpp
     unit/orientation_tracker_test.cpp
     unit/tracker_sweep_test.cpp
+    unit/pattern_id_test.cpp
+    unit/centre_cluster_assembly_test.cpp
+    unit/centre_cluster_verify_test.cpp
     unit/capture_routing_test.cpp
     unit/crash_hunt_test.cpp
     unit/pose_estimation_test.cpp

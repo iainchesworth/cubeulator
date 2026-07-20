@@ -6,6 +6,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <cstdint>
 #include <vector>
 
 namespace cube::vision {
@@ -71,6 +72,24 @@ namespace detail {
 [[nodiscard]] std::vector<StickerCandidate> merged_face_candidates(
     const cv::Mat& bgr_frame, double max_aspect = kDefaultMaxCandidateAspect);
 
+// One cell's sample-patch statistics, re-derived from a stored cell quad
+// rather than from the (discarded) lattice transform. Exposed ONLY so the
+// measurement harness can ask whether intra-patch dispersion predicts
+// cross-reading colour instability; no production path reads it.
+struct CellPatchSample {
+    cv::Vec3f median;                // same statistic as FaceObservation::lab
+    float weighted_mad = 0.0F;       // chroma-weighted intra-patch MAD
+    float cell_quad_area_px = 0.0F;  // stored cell quad's screen area
+};
+
+// Recomputes the sample-patch statistics for `cell` straight off the
+// frame. The sample square is the cell quad shrunk about its centroid by
+// kSampleHalfExtent/kCellQuadHalfExtent - exact under an affine lattice
+// fit, and within a fraction of a pixel of project_quad's homography at
+// these cell sizes. The statistics themselves are NOT re-derived: this
+// calls the same body sample_patch_stats calls.
+[[nodiscard]] CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& cell);
+
 // One photometrically-scored placement of a partial lattice (see
 // grid_detection.hpp's partial_lattice_placements). Deviations are
 // chroma-weighted Lab distances from the placement's own lattice
@@ -92,6 +111,46 @@ struct ScoredPlacement {
 // first, then most anchors, then tightest gap deviation). Exposed so the
 // frame-debug harness can print the exact scores the production path saw.
 [[nodiscard]] std::vector<ScoredPlacement> score_partial_placements(const cv::Mat& bgr_frame);
+
+// Which geometric model placed the cells of the most recent observe_face()
+// call, and how many real contour centres backed it. PURELY DIAGNOSTIC:
+// no production path reads it and nothing branches on it - it exists so
+// the measurement harness can split readings by transform model without
+// recomputing a lookalike transform that might not match the one the
+// detector actually used.
+enum class TransformModel : std::uint8_t {
+    none,          // no observation produced
+    homography,    // >= 5 matched centres, cv::findHomography
+    ls_affine,     // exactly 4 matched centres, cv::estimateAffine2D
+    basis_affine,  // lattice's own anchor/col_step/row_step frame
+};
+
+enum class PlacementPath : std::uint8_t {
+    none,
+    lattice_fit,  // translation-pinned direct fit
+    completion,   // photometrically scored partial-lattice placement
+    outline,      // face-outline quad fallback
+    pose_only,    // un-pinned fit, orientation only
+};
+
+struct PlacementDiagnostic {
+    TransformModel model = TransformModel::none;
+    PlacementPath path = PlacementPath::none;
+    int matched_cells = 0;  // contour centres feeding the transform estimate
+
+    // Counterfactual placement. When the lattice fit had enough matched
+    // centres to use a homography, the SAME frame is also sampled with the
+    // lattice's own basis affine, so the harness can compare the two models
+    // on identical pixels and identical detections. Nothing in the detector
+    // reads these; they exist purely to separate the model's contribution
+    // from the frame quality that selects which model gets used.
+    bool has_counterfactual = false;
+    std::array<cv::Vec3f, cells_per_grid> counterfactual_lab{};
+};
+
+// The diagnostic for the calling thread's most recent observe_face().
+// Valid only immediately after that call returns.
+[[nodiscard]] PlacementDiagnostic last_placement_diagnostic();
 
 }  // namespace detail
 
