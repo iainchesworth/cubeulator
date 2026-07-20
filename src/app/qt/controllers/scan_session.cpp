@@ -547,6 +547,19 @@ ScanSession::ScanSession(QObject* parent) : QObject(parent) {
             &ScanSession::handleAnalysisFinished);
     connect(&start_watcher_, &QFutureWatcher<Result<void>>::finished, this, &ScanSession::handleStartFinished);
 
+    // Debug-only companion to CUBE_VISION_REPLAY_DIR: without it a replay
+    // run sits on the home screen and the analysis path never executes,
+    // because scanning only begins when the user navigates to the scan
+    // screen and start() fires. Setting CUBE_VISION_AUTOSTART_SCAN drives
+    // the whole capture pipeline unattended, which is what makes a crash
+    // that only appears mid-scan reproducible without a human and a cube in
+    // front of the camera. Queued, not called inline: start() expects a
+    // running event loop (it dispatches the camera open to a watcher).
+    if (!qEnvironmentVariable("CUBE_VISION_AUTOSTART_SCAN").isEmpty()) {
+        QMetaObject::invokeMethod(
+            this, [this]() { start(QString()); }, Qt::QueuedConnection);
+    }
+
     // Hand-detection AI is on by default; SettingsScreen's toggle flips
     // handDetectionEnabled_. make_hand_presence_detector_from_memory()
     // already falls back to the heuristic detector gracefully when the
@@ -1069,7 +1082,33 @@ void ScanSession::poll() {
     analysis_watcher_.setFuture(QtConcurrent::run(
         [this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed, pose_prior, run_hand_detector,
          skip_detectors]() {
-            return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector, skip_detectors);
+            // The analysis body must NEVER let an exception escape. A
+            // QtConcurrent future STORES a thrown exception and rethrows it
+            // at analysis_watcher_.result() in handleAnalysisFinished - on
+            // the GUI thread, where nothing catches it, so std::terminate
+            // kills the app mid-scan (observed live: an MSVC C++ runtime
+            // error, no Windows Error Reporting entry, process simply
+            // gone). OpenCV is the likeliest thrower - cv::Exception comes
+            // out of any ROI/resize/solve whose preconditions a degenerate
+            // frame or transform violates - but this guard is deliberately
+            // blanket: dropping one frame's analysis always beats losing
+            // the whole scan, and the logged message NAMES the thrower so
+            // the underlying precondition gets fixed rather than guessed.
+            try {
+                return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector, skip_detectors);
+            } catch (const cv::Exception& error) {
+                qWarning("ScanSession: OpenCV threw during analysis (frame dropped): %s", error.what());
+            } catch (const std::exception& error) {
+                qWarning("ScanSession: analysis threw during analysis (frame dropped): %s", error.what());
+            } catch (...) {
+                qWarning("ScanSession: analysis threw a non-std exception (frame dropped)");
+            }
+            // A default-constructed result reads as "this pass saw
+            // nothing": no face, no corner, no pose. The tracker treats it
+            // exactly like a detection miss and coasts, which is the
+            // correct degradation - the cube did not move just because one
+            // frame's maths failed.
+            return AnalysisResult{};
         }));
 }
 
