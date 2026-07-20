@@ -61,6 +61,7 @@ target_sources(cube_lib
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
         src/vision/color_resolution.cpp
+        src/vision/session_color_model.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
         src/vision/orientation_tracker.cpp
