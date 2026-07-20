@@ -137,6 +137,15 @@ struct PlacementDiagnostic {
     TransformModel model = TransformModel::none;
     PlacementPath path = PlacementPath::none;
     int matched_cells = 0;  // contour centres feeding the transform estimate
+
+    // Counterfactual placement. When the lattice fit had enough matched
+    // centres to use a homography, the SAME frame is also sampled with the
+    // lattice's own basis affine, so the harness can compare the two models
+    // on identical pixels and identical detections. Nothing in the detector
+    // reads these; they exist purely to separate the model's contribution
+    // from the frame quality that selects which model gets used.
+    bool has_counterfactual = false;
+    std::array<cv::Vec3f, cells_per_grid> counterfactual_lab{};
 };
 
 // The diagnostic for the calling thread's most recent observe_face().

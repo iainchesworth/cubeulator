@@ -809,6 +809,23 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
                 bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
             if (grid_phase_plausible(bgr_frame, transform, observation)) {
                 g_placement_diagnostic.path = detail::PlacementPath::lattice_fit;
+                // Counterfactual: re-sample this frame with the lattice's own
+                // affine frame, so the harness can compare both models on
+                // identical pixels and identical detections. Diagnostic only -
+                // the returned observation is untouched and still carries the
+                // transform the detector actually chose.
+                if (g_placement_diagnostic.model == detail::TransformModel::homography) {
+                    const cv::Mat affine = basis_affine(fit->anchor, fit->col_step, fit->row_step);
+                    for (int row = 0; row < grid_dimension; ++row) {
+                        for (int col = 0; col < grid_dimension; ++col) {
+                            const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
+                            const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
+                            g_placement_diagnostic.counterfactual_lab[slot] =
+                                sample_patch_lab(bgr_frame, affine, cell_uv);
+                        }
+                    }
+                    g_placement_diagnostic.has_counterfactual = true;
+                }
                 return observation;
             }
         }

@@ -319,6 +319,19 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
                      face_good ? static_cast<double>(face->geometry_confidence) : 0.0);
         std::fprintf(out, ",%s,%s,%d", model_name(placement.model), path_name(placement.path),
                      placement.matched_cells);
+        // Same frame, same detections, affine instead of the homography the
+        // detector chose - the paired arm of the model comparison. Empty
+        // when this reading was not placed by a homography.
+        std::fprintf(out, ",%d", placement.has_counterfactual ? 1 : 0);
+        for (int cell = 0; cell < 9; ++cell) {
+            const auto& lab = placement.counterfactual_lab[static_cast<std::size_t>(cell)];
+            if (placement.has_counterfactual) {
+                std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]), static_cast<double>(lab[1]),
+                             static_cast<double>(lab[2]));
+            } else {
+                std::fprintf(out, ",,,");
+            }
+        }
         // The two rotation-invariant BASELINES the ordered pattern must
         // beat, computed by production's own classifier rather than
         // re-derived in the analysis script: the census the router uses to
@@ -450,8 +463,11 @@ TEST_CASE("PatternIdExtract", "[.pattern-id]") {
     std::FILE* out = stdout;
     std::fprintf(out,
                  "clip,pass,t_ms,pose_valid,face_good,qw,qx,qy,qz,corner_view,trk_state,trk_front,trk_epoch,"
-                 "geom_conf,tf_model,tf_path,tf_matched,"
-                 "centre_class,cen0,cen1,cen2,cen3,cen4,cen5,cen6");
+                 "geom_conf,tf_model,tf_path,tf_matched,cf_valid");
+    for (int cell = 0; cell < 9; ++cell) {
+        std::fprintf(out, ",cfL%d,cfa%d,cfb%d", cell, cell, cell);
+    }
+    std::fprintf(out, ",centre_class,cen0,cen1,cen2,cen3,cen4,cen5,cen6");
     for (int cell = 0; cell < 9; ++cell) {
         std::fprintf(out, ",L%d,a%d,b%d", cell, cell, cell);
     }
