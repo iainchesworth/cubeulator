@@ -137,6 +137,9 @@ TEST_CASE("TrackerConfig defaults hold the live1-calibrated constants", "[tracke
     CHECK(config.basin_ceiling_deg == 40.0F);
     CHECK(config.max_interframe_deg == 30.0F);
     CHECK(config.gauge_margin_deg == 15.0F);
+    // Round-2 reconciliation: held at 4 (the sweep's 8 broke coasting and
+    // still left a live4 slip - see the config comment). At 4 the coast-
+    // through-dropout guarantee below holds.
     CHECK(config.coast_sigma_rate_deg == 4.0F);
     CHECK(config.acquire_sigma_rate_deg == 2.5F);
     CHECK(config.max_coast_sigma_deg == 35.0F);
@@ -144,14 +147,27 @@ TEST_CASE("TrackerConfig defaults hold the live1-calibrated constants", "[tracke
     CHECK(config.acquire_coast_timeout_ms == 1200);
     CHECK(config.outlier_omega_deg_s == 400.0F);
     CHECK(config.outlier_reanchor_count == 3);
-    CHECK(config.omega_blend == 0.3F);
-    CHECK(config.omega_decay == 0.9F);
+    // Round-2 reconciliation: 0.3->0.2 is the actual wrong-identity lever -
+    // a calmer rate EMA stops the post-turn overshoot that fed false slips
+    // (see the config comment). certain_slip is zero on all four clips.
+    CHECK(config.omega_blend == 0.2F);
+    // Round-2 corpus sweep: 0.8 bleeds coasted rate faster, trimming the
+    // post-turn overshoot that fed the omega gate's refusals.
+    CHECK(config.omega_decay == 0.8F);
     CHECK(config.acquire_frames == 2);
     CHECK(config.posterior_lock_ratio == 100.0F);
-    CHECK(config.centre_sigma_lab == 12.0F);
-    // live3 recalibration: 8 let ONE >= 4-sigma Lab sample swing the
-    // margin past the +-ln(100) veto (8 - 2 = 6 > 4.6) - see the config
-    // comment. 4 bounds the single-observation swing strictly under it.
+    // Round-2 corpus sweep COVERAGE levers: 16 tolerates the oblique grip's
+    // paler centre Lab samples; -3 makes unlearned faces cheaper to
+    // hypothesise so a quarter turn onto a fresh face does not lose to the
+    // incumbent. Safe (they certify, they do not veto) - the four-clip
+    // replay kept both.
+    CHECK(config.centre_sigma_lab == 16.0F);
+    CHECK(config.unknown_face_log_likelihood == -3.0F);
+    // Held at 4 (the sweep's 2 only SLOWED the veto): 8 - 2 = 6 crossed the
+    // +-ln(100) = 4.6 veto in ONE sample (the live3 post-mortem); 4 bounds
+    // the single-observation swing under it so a veto needs at least two
+    // consecutive agreeing ref-backed samples, while staying prompt on a
+    // real slip (see the config comment).
     CHECK(config.max_obs_log_penalty == 4.0F);
 }
 
@@ -808,11 +824,16 @@ TEST_CASE("a noise-suppressed margin does not wedge later reference learning", "
         REQUIRE(sim.step_obs().state == TrackState::locked);
     }
     // Wild samples matching no reference: identity takes the clamped
-    // penalty while the unknown floor doesn't, so once the run outlasts
-    // the clean head start the floor hypotheses lead and the full margin
-    // goes (honestly) negative.
+    // penalty (-max_obs_log_penalty = -4) while the unknown floor takes
+    // -3, so each wild pass closes the clean head start by only ~1 log unit
+    // (the round-2 unknown-face floor -2 -> -3 deliberately sits close to
+    // the penalty cap, so pure noise depresses the full margin far more
+    // slowly than a real slip does - the point of keeping the veto on
+    // ref-backed evidence). It still eventually inverts: enough wild passes
+    // outlast the head start and the floor hypotheses lead, driving the
+    // full margin (honestly) negative.
     sim.lab_raw_override = std::array<float, 3>{20.0F, 80.0F, -80.0F};
-    for (int pass = 0; pass < 10; ++pass) {
+    for (int pass = 0; pass < 24; ++pass) {
         REQUIRE(sim.step_obs().state == TrackState::locked);
     }
     sim.lab_raw_override.reset();
@@ -856,8 +877,9 @@ TEST_CASE("face-scoped certainty is reachable on single-centre evidence; the ful
         CHECK_FALSE(out.identity_certain);
     }
     // ...while the face-scoped bar for the observed face crossed within
-    // the burst (the 20 moving hypotheses sit at the unknown floor, -2
-    // per colour accept: three accepts beat ln(100) = 4.6).
+    // the burst (the 20 moving hypotheses sit at the unknown floor, -3
+    // per colour accept since the round-2 recalibration: two accepts beat
+    // ln(100) = 4.6, where the old -2 floor needed three).
     REQUIRE(out.front_face.has_value());
     CHECK(*out.front_face == Face::F);
     CHECK(out.identity_certain_face[static_cast<std::size_t>(Face::F)]);

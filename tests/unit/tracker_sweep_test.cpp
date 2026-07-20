@@ -144,13 +144,15 @@ std::vector<SweepAxis> sweep_axes() {
          [](SweepSettings& s, float v) { s.tracker.coast_timeout_ms = static_cast<std::int64_t>(v); }},
         {"outlier_omega_deg_s", {400.0F, 250.0F, 300.0F, 600.0F},
          [](SweepSettings& s, float v) { s.tracker.outlier_omega_deg_s = v; }},
-        {"omega_blend", {0.3F, 0.1F, 0.15F, 0.2F, 0.5F},
+        // First value is the shipped default (see the axis-anchor test):
+        // omega_blend 0.2 is the round-2 wrong-identity lever.
+        {"omega_blend", {0.2F, 0.1F, 0.15F, 0.3F, 0.5F},
          [](SweepSettings& s, float v) { s.tracker.omega_blend = v; }},
-        {"omega_decay", {0.9F, 0.7F, 0.8F, 0.95F},
+        {"omega_decay", {0.8F, 0.7F, 0.9F, 0.95F},
          [](SweepSettings& s, float v) { s.tracker.omega_decay = v; }},
         {"posterior_lock_ratio", {100.0F, 30.0F, 300.0F},
          [](SweepSettings& s, float v) { s.tracker.posterior_lock_ratio = v; }},
-        {"centre_sigma_lab", {12.0F, 8.0F, 16.0F, 20.0F},
+        {"centre_sigma_lab", {16.0F, 8.0F, 12.0F, 20.0F},
          [](SweepSettings& s, float v) { s.tracker.centre_sigma_lab = v; }},
         {"obs_pose_ceiling_deg", {100.0F, 85.0F, 115.0F},
          [](SweepSettings& s, float v) { s.tracker.obs_pose_ceiling_deg = v; }},

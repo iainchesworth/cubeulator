@@ -110,7 +110,17 @@ struct TrackerConfig {
     // Uncertainty inflation per pass without an accepted measurement, plus
     // a motion-score term (the stability tracker's score, ~0.02 when
     // steady): faster apparent scene motion means the coasted prediction
-    // decays faster.
+    // decays faster. Held at 4 - the round-2 corpus sweep briefly took this
+    // to 8 to mask a wrong-identity event, but the four-clip replay showed
+    // that was the wrong lever: 8 forces lost after ~4 missed passes, which
+    // discards the occlusion coasting the capture layer depends on (a hand
+    // regrip is a 5-8 pass dropout) AND still left one certain_slip on
+    // live4. The false slips are a COLOUR artefact, so the fix is the
+    // colour swing cap (see max_obs_log_penalty) plus a calmer rate
+    // estimate (see omega_blend); with those, 4 coasts through the measured
+    // dropouts and certain_slip is zero on all four clips. At 4 the sigma
+    // cap (35) is reached at ~9 quiet passes, still strictly before the
+    // basin threshold could open onto a neighbouring element.
     float coast_sigma_rate_deg = 4.0F;
     float motion_sigma_gain_deg = 40.0F;
     // Slower inflation rate used IN PLACE of coast_sigma_rate_deg while
@@ -177,8 +187,22 @@ struct TrackerConfig {
     // Angular-rate EMA: blend of each measured rate into omega, and
     // per-pass decay while coasting (an unobserved cube in a hand slows;
     // extrapolating full speed through a long gap overshoots).
-    float omega_blend = 0.3F;
-    float omega_decay = 0.9F;
+    // Calibrated 0.3->0.2 in the round-2 four-clip reconciliation: a less
+    // reactive rate EMA is the actual wrong-identity lever. An over-eager
+    // omega overshoots on the pass after a fast turn, so the next coasted
+    // prediction points slightly off the true pose, the resolution lands on
+    // an in-plane-rotated element, and its centre colour then contradicts
+    // the held face - a false slip against a commit-grade identity. 0.2
+    // keeps enough rate to extrapolate real turns (locked+coasting fraction
+    // and capture throughput hold) while calming that overshoot; combined
+    // with omega_decay 0.8 and the restored colour swing cap it takes
+    // certain_slip to zero on all four clips. 0.15 over-damps and lets a
+    // lagged prediction re-introduce a live4 slip; 0.3 leaves a live1 one.
+    float omega_blend = 0.2F;
+    // 0.9->0.8 in the round-2 sweep: bleeds the coasted rate faster, so a
+    // hand that slows behind an occluder is not extrapolated at full turn
+    // speed - trims the post-turn overshoot the omega EMA above fights.
+    float omega_decay = 0.8F;
     // ACCEPTED observations (anchor included) before acquiring promotes to
     // locked. Not consecutive PASSES: while acquiring, a miss coasts the
     // streak instead of killing it (see miss()), so the accepts may be
@@ -202,22 +226,38 @@ struct TrackerConfig {
     float posterior_lock_ratio = 100.0F;
     // Centre-Lab likelihood width for the belief update, and the fixed
     // per-observation log-likelihood granted to a hypothesis mapping onto
-    // a face with no learned reference yet (roughly a 2-sigma match:
-    // unknown faces neither win nor lose big against a well-matched one).
-    float centre_sigma_lab = 12.0F;
-    float unknown_face_log_likelihood = -2.0F;
+    // a face with no learned reference yet. These are the round-2 COVERAGE
+    // levers (12->16, -2->-3), and the four-clip replay confirms they are
+    // safe - they certify faces, they do not veto. 16 tolerates the oblique
+    // grip's paler, off-axis centre samples so a real face still matches
+    // its own reference; -3 makes an unlearned face cheaper to hypothesise,
+    // so the 20 in-plane-stabiliser hypotheses of the observed face sit at
+    // -3 each and a quarter turn onto a fresh face reaches face-scoped
+    // certainty in two colour accepts instead of three (distinct commit
+    // faces and capture-grade passes rise on every clip). The veto is
+    // governed separately (see max_obs_log_penalty); widening the floor
+    // here does not weaken it.
+    float centre_sigma_lab = 16.0F;
+    float unknown_face_log_likelihood = -3.0F;
     // Per-observation and total log-odds clamps: one wild Lab sample must
     // not decide the posterior alone, and a long clean run must not bank
     // so much evidence that a real slip takes seconds to surface.
-    // The penalty ceiling must sit BELOW ln(posterior_lock_ratio) + the
-    // unknown-face floor or the first clamp is a dead letter: at the
-    // original 8, one >= 4-sigma centre sample (specular hit, motion blur)
-    // cost identity 8 while every unknown-face hypothesis took the flat -2,
-    // a -6 margin swing that crossed the +-ln(100) = 4.6 veto in a SINGLE
-    // observation - the live3 post-mortem's exact signature, killing 21 of
-    // 43 epochs that never slipped. At 4 the worst single-observation
-    // swing is 4 (against a perfectly matching learned slip reference), so
-    // a veto always needs at least two consecutive agreeing bad samples.
+    // This is THE veto swing cap, and the round-2 four-clip replay pinned
+    // it back to 4 after the sweep briefly tried 2. It bounds the advantage
+    // one contradicting centre sample can grant a ref-backed slip
+    // hypothesis (its log-likelihood minus identity's - see slip_evidence_).
+    // The cap must sit under the veto bar ln(posterior_lock_ratio) = 4.6 so
+    // no single observation can veto: at the original 8, one >= 4-sigma
+    // sample cost identity 8 against a matched slip reference, crossing the
+    // veto in ONE observation (the live3 post-mortem, 21 of 43 clean epochs
+    // killed). At 4 the worst single swing is 4 < 4.6, so a veto always
+    // needs at least two consecutive agreeing ref-backed samples. Lowering
+    // it further to 2 does NOT buy safety - it SLOWS the veto (a real slip
+    // then takes ~2x the samples to surface), which is why the sweep had to
+    // over-inflate coasting to compensate; 4 keeps the veto both prompt on
+    // genuine slips and immune to single-sample noise, and with omega_blend
+    // 0.2 the false slips it was chasing never fire (certain_slip == 0 on
+    // all four clips).
     float max_obs_log_penalty = 4.0F;
     float belief_clamp = 30.0F;
     // EMA blend for the per-face centre-Lab references the likelihoods
