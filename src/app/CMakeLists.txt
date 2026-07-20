@@ -238,6 +238,13 @@ if(CUBEULATOR_BUILD_APP)
             Qt6::Quick3D
             Qt6::LabsSettings)
 
+    if(WIN32)
+        # DbgHelp backs main.cpp's unhandled-exception filter, which writes a
+        # minidump for the hard faults (access violation, stack overflow) that
+        # no C++ catch can see under MSVC's default /EHsc.
+        target_link_libraries(cube_app PRIVATE dbghelp)
+    endif()
+
     add_dependencies(cube_app cube_version)
 
     cube_deploy_sanitizer_runtime(cube_app)
