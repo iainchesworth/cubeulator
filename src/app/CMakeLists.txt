@@ -60,13 +60,16 @@ target_link_libraries(cube_platform
         cube::sanitizers
         cube::coverage)
 
-# camera_windows.cpp enumerates via native Media Foundation
-# (MFEnumDeviceSources) rather than OpenCvCaptureLoop's generic probe - see
-# its own comment for why. mf/mfplat provide MFStartup/MFEnumDeviceSources/
-# MFShutdown; mfuuid provides the MF_DEVSOURCE_ATTRIBUTE_* GUID constants'
-# definitions (declared extern in the SDK headers, defined only in this lib).
+# camera_windows.cpp enumerates via native DirectShow device enumeration
+# (ICreateDevEnum/IEnumMoniker) rather than OpenCvCaptureLoop's generic
+# probe - see its own comment for why, and for why DirectShow rather than
+# Media Foundation. strmiids provides the CLSID_SystemDeviceEnum/
+# CLSID_VideoInputDeviceCategory/IID_ICreateDevEnum GUID definitions; ole32
+# provides CoCreateInstance/CoInitializeEx; oleaut32 provides the
+# VARIANT/BSTR helpers (VariantInit/VariantClear) used to read each
+# device's friendly name.
 if(WIN32)
-    target_link_libraries(cube_platform PRIVATE mf mfplat mfuuid)
+    target_link_libraries(cube_platform PRIVATE strmiids ole32 oleaut32)
 endif()
 
 # ---------------------------------------------------------------------------

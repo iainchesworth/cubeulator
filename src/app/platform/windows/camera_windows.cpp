@@ -1,79 +1,144 @@
 #include "interfaces/camera.hpp"
 #include "platform/detail/opencv_capture_loop.hpp"
 
-#include <mfapi.h>
-#include <mfidl.h>
+#include <dshow.h>
 #include <objbase.h>
+
+#include <cstddef>
+#include <string>
 
 namespace cube::platform::camera {
 
 namespace {
 
+// enumerate_devices() below runs on a Qt thread-pool worker (see
+// CameraController), which carries no COM initialization of its own -
+// unlike opencv_capture_loop.cpp's ScopedCom (a different translation unit,
+// so not reusable here), MTA for the same reason: no message pump on this
+// thread to service STA marshaling, and nothing here is shared across
+// threads that would need it anyway.
+class ScopedCom {
+public:
+    ScopedCom() : hr_(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
+    ~ScopedCom() {
+        if (SUCCEEDED(hr_)) {
+            CoUninitialize();
+        }
+    }
+
+    ScopedCom(const ScopedCom&) = delete;
+    ScopedCom& operator=(const ScopedCom&) = delete;
+    ScopedCom(ScopedCom&&) = delete;
+    ScopedCom& operator=(ScopedCom&&) = delete;
+
+private:
+    HRESULT hr_;
+};
+
+std::string bstr_to_utf8(BSTR bstr) {
+    if (bstr == nullptr) {
+        return {};
+    }
+    const int len = ::WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) {
+        return {};
+    }
+    // len includes room for the trailing null; the std::string's own
+    // buffer already reserves that via its own null terminator.
+    std::string out(static_cast<std::size_t>(len - 1), '\0');
+    ::WideCharToMultiByte(CP_UTF8, 0, bstr, -1, out.data(), len, nullptr, nullptr);
+    return out;
+}
+
 detail::OpenCvCaptureLoop& loop() {
-    static detail::OpenCvCaptureLoop instance(cv::CAP_MSMF);
+    // DSHOW, not MSMF: measured on real hardware (Logitech StreamCam),
+    // cv::VideoCapture::open()+first frame via CAP_MSMF took ~9-10s cold,
+    // consistently, across repeated clean-process trials - not the
+    // close/reopen race this file already works around below, just the
+    // plain first open of a session. Neither disabling
+    // CAP_PROP_HW_ACCELERATION nor pre-selecting a smaller resolution (both
+    // plausible-looking fixes) helped; both made MSMF's negotiation slower
+    // still (up to ~33s). CAP_DSHOW opened the same device, cold, in
+    // ~1.0-1.4s open+first-frame - repeatably, on the same hardware.
+    // DirectShow lacks MSMF's async SourceReaderCB/D3D11 topology
+    // negotiation entirely, which is apparently where a UVC extension-unit-
+    // heavy device like this one pays most of its MSMF activation cost.
+    // enumerate_devices() below was switched to DirectShow's own device
+    // enumerator alongside this so the index space stays consistent
+    // between "which device the Settings list shows" and "which device
+    // start() actually opens" - see its own comment.
+    static detail::OpenCvCaptureLoop instance(cv::CAP_DSHOW);
     return instance;
 }
 
 }  // namespace
 
-// Native Media Foundation enumeration rather than OpenCvCaptureLoop's
-// generic open-a-cv::VideoCapture-and-check-isOpened() probe (still used
-// by the Linux/macOS platform files): MFEnumDeviceSources queries the
-// driver's registered device list without activating/streaming from any
-// of them, unlike opening a cv::VideoCapture per candidate index.
-//
-// That distinction matters here, not just as a performance nicety: opening
-// a real camera via MSMF (with D3D11 hardware acceleration negotiation),
-// then closing it again moments before start() reopens the very same
-// index, reliably reproduced multi-second stalls and process crashes on
-// real hardware - confirmed via cap_msmf's own internal logging, which
-// showed the SourceReaderCB teardown for the real device taking 14-24s
-// longer than for an empty index, with the process dying shortly after
-// start() reopened it. MFEnumDeviceSources sidesteps the double-open
-// entirely rather than working around the driver's teardown/reopen race.
+// Walks the SAME DirectShow video-capture-device enumeration that OpenCV's
+// CAP_DSHOW backend (see loop() above) resolves cv::VideoCapture::open's
+// index argument against: CLSID_SystemDeviceEnum's
+// CreateClassEnumerator(CLSID_VideoInputDeviceCategory) -> IEnumMoniker, in
+// registration order. This used to walk Media Foundation's
+// MFEnumDeviceSources instead - lighter-weight, and fine while start() also
+// opened through MSMF - but now that start() opens through DSHOW (see
+// loop()), enumerating through a DIFFERENT device-listing API would risk an
+// index mismatch on a machine where the two device trees disagree on
+// order: the Settings screen could label a camera "Camera 1" while start()
+// actually opens whatever DirectShow considers device 1, a different
+// physical camera. Keeping both on DirectShow's own listing closes that
+// gap. Like MFEnumDeviceSources, CreateClassEnumerator only walks the
+// registered device list - it never activates/streams from a candidate -
+// so this stays a cheap, hardware-safe probe, not the "open every index to
+// see what answers" probe the generic (Linux/macOS) fallback in
+// opencv_capture_loop.cpp uses.
 Result<std::vector<DeviceInfo>> enumerate_devices() {
-    if (FAILED(MFStartup(MF_VERSION, MFSTARTUP_LITE))) {
-        return std::unexpected(CubeError::camera_not_found);
-    }
+    const ScopedCom scoped_com;
 
-    IMFAttributes* attributes = nullptr;
-    HRESULT hr = MFCreateAttributes(&attributes, 1);
-    if (SUCCEEDED(hr)) {
-        hr = attributes->SetGUID(MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE,
-                                  MF_DEVSOURCE_ATTRIBUTE_SOURCE_TYPE_VIDCAP_GUID);
-    }
-
-    IMFActivate** raw_devices = nullptr;
-    UINT32 count = 0;
-    if (SUCCEEDED(hr)) {
-        hr = MFEnumDeviceSources(attributes, &raw_devices, &count);
-    }
-    if (attributes != nullptr) {
-        attributes->Release();
-    }
-
-    std::vector<DeviceInfo> devices;
-    if (SUCCEEDED(hr)) {
-        for (UINT32 i = 0; i < count; ++i) {
-            // facing stays at its unknown default: desktop webcams face the
-            // user, and unknown already gets the selfie-mirror treatment
-            // (see Facing in interfaces/camera.hpp).
-            devices.push_back(DeviceInfo{.identifier = std::to_string(i),
-                                          .display_name = "Camera " + std::to_string(i)});
-            if (raw_devices[i] != nullptr) {
-                raw_devices[i]->Release();
-            }
-        }
-    }
-    if (raw_devices != nullptr) {
-        CoTaskMemFree(raw_devices);
-    }
-
-    MFShutdown();
-
+    ICreateDevEnum* dev_enum = nullptr;
+    HRESULT hr = CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_ICreateDevEnum,
+                                   reinterpret_cast<void**>(&dev_enum));
     if (FAILED(hr)) {
         return std::unexpected(CubeError::camera_not_found);
     }
+
+    IEnumMoniker* enum_moniker = nullptr;
+    hr = dev_enum->CreateClassEnumerator(CLSID_VideoInputDeviceCategory, &enum_moniker, 0);
+    dev_enum->Release();
+
+    std::vector<DeviceInfo> devices;
+    // CreateClassEnumerator returns S_FALSE (and a null enum_moniker) when
+    // the category is registered but has zero devices - not a failure,
+    // just "no cameras", same empty-list outcome as a real error below.
+    if (hr != S_OK || enum_moniker == nullptr) {
+        return devices;
+    }
+
+    IMoniker* moniker = nullptr;
+    int index = 0;
+    while (enum_moniker->Next(1, &moniker, nullptr) == S_OK) {
+        std::string display_name = "Camera " + std::to_string(index);
+
+        IPropertyBag* property_bag = nullptr;
+        if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
+                                              reinterpret_cast<void**>(&property_bag)))) {
+            VARIANT name;
+            VariantInit(&name);
+            if (SUCCEEDED(property_bag->Read(L"FriendlyName", &name, nullptr)) && name.vt == VT_BSTR) {
+                display_name = bstr_to_utf8(name.bstrVal);
+            }
+            VariantClear(&name);
+            property_bag->Release();
+        }
+
+        // facing stays at its unknown default: desktop webcams face the
+        // user, and unknown already gets the selfie-mirror treatment (see
+        // Facing in interfaces/camera.hpp).
+        devices.push_back(DeviceInfo{.identifier = std::to_string(index), .display_name = display_name});
+
+        moniker->Release();
+        ++index;
+    }
+    enum_moniker->Release();
+
     return devices;
 }
 
