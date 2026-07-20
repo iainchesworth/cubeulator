@@ -653,3 +653,59 @@ TEST_CASE("kBodyRelabel maps stickers between two body labellings", "[lattice]")
         }
     }
 }
+
+TEST_CASE("kLatticeCompose folds two relabellings into one, stickers included", "[lattice]") {
+    // THE property epoch bridging stands on. The router holds a gauge in the
+    // dying epoch's body frame and the tracker hands it a relabelling from
+    // the new epoch's frame into that one; bridging folds them with
+    // kLatticeCompose and then routes the capture through the SINGLE folded
+    // element. That is only correct if folding and applying-in-sequence are
+    // the same operation all the way down to the nine stickers - the face
+    // permutation agreeing is not enough, because relabel_capture() writes
+    // cells, and a fold that got the face right and the roll wrong would
+    // store a rotated lie in a correctly labelled slot (exactly the
+    // corruption kBodyRelabel was put on the write path to end).
+    //
+    // The face-permutation half of this is static_asserted in
+    // orientation_lattice.cpp; the CELL half is checked only here, and it is
+    // the half the write path actually consumes.
+    for (std::size_t a = 0; a < kLatticeSize; ++a) {
+        for (std::size_t b = 0; b < kLatticeSize; ++b) {
+            const auto folded = static_cast<std::size_t>(kLatticeCompose[a][b]);
+            for (std::size_t f = 0; f < 6; ++f) {
+                // Sequential: relabel f by b, then relabel the result by a.
+                const auto& first = kBodyRelabel[b][f];
+                const auto& second = kBodyRelabel[a][static_cast<std::size_t>(first.body_face)];
+                // Folded: relabel f by the composite in one step.
+                const auto& once = kBodyRelabel[folded][f];
+                REQUIRE(once.body_face == second.body_face);
+                for (std::size_t k = 0; k < 9; ++k) {
+                    // Sticker at source cell k lands at first.cell[k] after
+                    // b, and at second.cell[that] after a.
+                    REQUIRE(once.cell[k] == second.cell[static_cast<std::size_t>(first.cell[k])]);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("kLatticeInverse is the relabelling that undoes an element", "[lattice]") {
+    // Bridging derives its relabelling from resolve_alignment, which returns
+    // the element S with q_obs * S == the body orientation - so the
+    // model->body gauge is S INVERSE, and a bridge that used S directly
+    // would transpose the relabelling. This locks the table that makes the
+    // direction explicit at the call site.
+    for (std::size_t i = 0; i < kLatticeSize; ++i) {
+        const auto inv = static_cast<std::size_t>(kLatticeInverse[i]);
+        REQUIRE(kLatticeCompose[i][inv] == kIdentityLatticeIndex);
+        REQUIRE(kLatticeCompose[inv][i] == kIdentityLatticeIndex);
+        for (std::size_t f = 0; f < 6; ++f) {
+            const auto& forward = kBodyRelabel[i][f];
+            const auto& back = kBodyRelabel[inv][static_cast<std::size_t>(forward.body_face)];
+            REQUIRE(back.body_face == static_cast<Face>(f));
+            for (std::size_t k = 0; k < 9; ++k) {
+                REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] == static_cast<int>(k));
+            }
+        }
+    }
+}

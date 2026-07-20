@@ -156,6 +156,32 @@ extern const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBo
 // rotation-invariant fingerprint (census, centre colour) can.
 extern const std::array<std::array<FaceCellMap, 6>, kLatticeSize> kBodyRelabel;
 
+// The lattice's group structure as index tables, derived at compile time
+// from the same exact integer matrices as everything above (and checked
+// there against the group axioms plus the face permutation they induce).
+//
+// kLatticeCompose[a][b] is the element whose rotation is M_a * M_b, i.e.
+// "apply b, then a". The identity it satisfies - and the only reason this
+// table exists - is
+//
+//   kFacePermutation[a][kFacePermutation[b][f]]
+//       == kFacePermutation[kLatticeCompose[a][b]][f]
+//
+// which is what lets a gauge expressed in one body frame be folded through
+// a relabelling into another WITHOUT re-deriving it from evidence. Epoch
+// bridging is the consumer: the router holds "dying epoch -> store" and the
+// tracker supplies "new epoch -> dying epoch", and their composite is the
+// new epoch's gauge.
+//
+// kLatticeInverse[i] undoes element i. Note the direction trap this exists
+// to make explicit: resolve_alignment returns the element S with
+// q_obs * S == body orientation, so the model->body GAUGE is S inverse (see
+// resolve_alignment's note) - a body-to-body relabelling derived from a
+// resolve therefore needs this table, and using S directly transposes the
+// relabelling silently.
+extern const std::array<std::array<int, kLatticeSize>, kLatticeSize> kLatticeCompose;
+extern const std::array<int, kLatticeSize> kLatticeInverse;
+
 // Nearest lattice element to an arbitrary orientation, with the residual
 // angle. Any orientation is within acos(...) <= 62 degrees of some element;
 // anything within 45 degrees of an element is unambiguously in its basin

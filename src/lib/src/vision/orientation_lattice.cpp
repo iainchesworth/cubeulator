@@ -363,6 +363,92 @@ constexpr std::array<std::array<FaceCellMap, 6>, kLatticeSize> build_body_relabe
     return out;
 }
 
+// ---------------------------------------------------------------------------
+// Group algebra: composition and inverse, as index tables.
+//
+// The lattice is a GROUP, and until now nothing needed to say so - every
+// consumer resolved one element against a prediction and used it alone.
+// Epoch bridging needs the group structure itself: it learns "new epoch's
+// labels relate to the dying epoch's by element g" and must fold that into
+// a gauge already expressed as "the dying epoch's labels relate to the
+// store's by element gauge". Composing the two is the whole operation, and
+// composing PERMUTATIONS by hand at the call site would silently pick an
+// order convention; a table derived from the exact integer matrices cannot.
+//
+// Both are exact: the matrices are signed permutations with determinant +1,
+// so a product is again one of the 24 and lookup is equality, never a
+// nearest-match over floats.
+constexpr int index_of_matrix(const Mat3& m) noexcept {
+    for (std::size_t i = 0; i < kLatticeSize; ++i) {
+        if (kLatticeMat[i] == m) {
+            return static_cast<int>(i);
+        }
+    }
+    return -1;  // caught by the closure static_assert below
+}
+
+constexpr std::array<std::array<int, kLatticeSize>, kLatticeSize> build_lattice_compose() noexcept {
+    std::array<std::array<int, kLatticeSize>, kLatticeSize> out{};
+    for (std::size_t a = 0; a < kLatticeSize; ++a) {
+        for (std::size_t b = 0; b < kLatticeSize; ++b) {
+            out[a][b] = index_of_matrix(kLatticeMat[a] * kLatticeMat[b]);
+        }
+    }
+    return out;
+}
+
+constexpr std::array<int, kLatticeSize> build_lattice_inverse() noexcept {
+    std::array<int, kLatticeSize> out{};
+    for (std::size_t i = 0; i < kLatticeSize; ++i) {
+        // For a rotation the transpose IS the inverse, so this needs no
+        // search over products - but it is verified as one below.
+        out[i] = index_of_matrix(kLatticeMat[i].transposed());
+    }
+    return out;
+}
+
+// The group axioms, checked on the shipped tables. Closure (no -1) is the
+// one that would bite first if a matrix derivation above were wrong; the
+// identity and inverse laws pin the index conventions the bridge relies on.
+constexpr bool lattice_group_is_sound() noexcept {
+    const auto compose = build_lattice_compose();
+    const auto inverse = build_lattice_inverse();
+    const auto permutation = build_face_permutation();
+    constexpr auto kId = static_cast<std::size_t>(kIdentityLatticeIndex);
+    for (std::size_t a = 0; a < kLatticeSize; ++a) {
+        if (inverse[a] < 0) {
+            return false;
+        }
+        // Identity acts as identity on both sides.
+        if (compose[a][kId] != static_cast<int>(a) || compose[kId][a] != static_cast<int>(a)) {
+            return false;
+        }
+        // Inverse really inverts, both sides.
+        if (compose[a][static_cast<std::size_t>(inverse[a])] != kIdentityLatticeIndex ||
+            compose[static_cast<std::size_t>(inverse[a])][a] != kIdentityLatticeIndex) {
+            return false;
+        }
+        for (std::size_t b = 0; b < kLatticeSize; ++b) {
+            if (compose[a][b] < 0) {
+                return false;  // closure
+            }
+            // Composition must agree with the face permutation it induces,
+            // because that agreement is exactly what the router's gauge
+            // fold relies on: store = perm[gauge][perm[g][f]] is only the
+            // same as perm[compose[gauge][g]][f] if this holds.
+            for (std::size_t f = 0; f < 6; ++f) {
+                const auto via_pair =
+                    permutation[a][static_cast<std::size_t>(permutation[b][f])];
+                if (permutation[static_cast<std::size_t>(compose[a][b])][f] != via_pair) {
+                    return false;
+                }
+            }
+        }
+    }
+    return true;
+}
+static_assert(lattice_group_is_sound());
+
 // Compile-time soundness: every cell map must be a permutation of 0..8
 // fixing the centre (all are rigid in-plane images of a face grid), or a
 // derivation above mixed up a frame.
@@ -472,6 +558,8 @@ const std::array<std::array<Face, 6>, kLatticeSize> kFacePermutation = build_fac
 const std::array<FaceCellMap, kLatticeSize> kFaceObsToBody = build_face_obs_to_body();
 const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBody = build_corner_obs_to_body();
 const std::array<std::array<FaceCellMap, 6>, kLatticeSize> kBodyRelabel = build_body_relabel();
+const std::array<std::array<int, kLatticeSize>, kLatticeSize> kLatticeCompose = build_lattice_compose();
+const std::array<int, kLatticeSize> kLatticeInverse = build_lattice_inverse();
 
 Quat quat_multiply(const Quat& a, const Quat& b) noexcept {
     return {a[0] * b[0] - a[1] * b[1] - a[2] * b[2] - a[3] * b[3],
