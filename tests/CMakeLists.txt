@@ -19,6 +19,7 @@ add_executable(cube_unit_tests
     unit/orientation_lattice_test.cpp
     unit/orientation_tracker_test.cpp
     unit/tracker_sweep_test.cpp
+    unit/pattern_id_test.cpp
     unit/capture_routing_test.cpp
     unit/crash_hunt_test.cpp
     unit/pose_estimation_test.cpp
