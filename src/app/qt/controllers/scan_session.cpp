@@ -2007,10 +2007,15 @@ void ScanSession::resetReading() {
     // a scan restarted inside the coast window must not inherit the
     // previous scan's locked track - the user may well have put down a
     // different cube. Routing consumes tracker identity now, so this is
-    // load-bearing: the epoch reset also invalidates the router's gauge on
-    // the next pass, and the commit-gate context must not let a stale
-    // "locked" verdict authorise a commit into the new scan.
+    // load-bearing, and the router must be told EXPLICITLY: reset restarts
+    // the epoch counter at zero, so the next anchor can hand back a number
+    // the router has already seen, whereupon on_epoch() early-returns and
+    // keeps a gauge describing the dead track's body frame. (retakeFace()
+    // reaches here without clearing the store, so that stale gauge then
+    // routes every later commit under a dead permutation - capture stalls
+    // into duplicate-centre quarantines and repeated force-lost.)
     tracker_.reset();
+    router_.on_tracker_reset();
     // The idle gate's streaks describe the previous scan's scene; a new
     // scan must start with the detectors running.
     idle_gate_.reset();

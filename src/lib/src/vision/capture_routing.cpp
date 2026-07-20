@@ -342,11 +342,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
 
 CaptureRouter::CaptureRouter(RoutingConfig config) : config_(config) {}
 
-void CaptureRouter::on_epoch(int epoch) {
-    if (epoch == current_epoch_) {
-        return;
-    }
-    current_epoch_ = epoch;
+void CaptureRouter::begin_epoch_scope() {
     // New epoch = new body labels: the old gauge describes a dead frame.
     // Strikes and the layer-turn window are scoped to one locked segment -
     // conflicts against a track that no longer exists are not evidence
@@ -362,6 +358,23 @@ void CaptureRouter::on_epoch(int epoch) {
             slot->strikes = 0;
         }
     }
+}
+
+void CaptureRouter::on_epoch(int epoch) {
+    if (epoch == current_epoch_) {
+        return;
+    }
+    current_epoch_ = epoch;
+    begin_epoch_scope();
+}
+
+void CaptureRouter::on_tracker_reset() {
+    // -1 is "no epoch seen yet", so the tracker's restarted counter cannot
+    // collide with it and the next on_epoch() is guaranteed to register.
+    // The scope is dropped HERE rather than deferred to that call, so a
+    // commit arriving in between can never be routed under the dead gauge.
+    current_epoch_ = -1;
+    begin_epoch_scope();
 }
 
 int CaptureRouter::fill_index_of(Face store_face) const {
@@ -399,6 +412,10 @@ int CaptureRouter::strikes_at(int fill_index) const {
 void CaptureRouter::clear() {
     slots_ = {};
     fill_order_.clear();
+    // A cleared router has seen no epoch: leaving the old number here would
+    // make on_epoch() early-return against a restarted tracker counter and
+    // skip registration entirely (see on_tracker_reset).
+    current_epoch_ = -1;
     gauge_known_ = false;
     recovering_ = false;
     epoch_faces_ = {};
