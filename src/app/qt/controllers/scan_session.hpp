@@ -510,6 +510,10 @@ private:
     // blend.
     std::array<float, 4> smoothed_orientation_{1.0F, 0.0F, 0.0F, 0.0F};
     bool has_smoothed_orientation_ = false;
+    // Frame time of the last REAL (locked/coasting) orientation sample, so a
+    // brief lost/acquiring gap can hold the last pose instead of resetting
+    // the 3D view to its idle presentation. See kOrientationHoldMs.
+    std::int64_t last_orientation_ms_ = 0;
     // Display-only mirror flag (see previewMirrored above). GUI thread
     // only, consumed at cubeOrientation() read time - it must never touch
     // tracker or routing state, whose geometry is defined by the CAMERA's
