@@ -22,8 +22,32 @@ using cube::model::Face;
 // must agree - the same live-tested triple the legacy centre-keyed store
 // used for "this is a re-show of that face".
 [[nodiscard]] bool tight_match(const CapturedFace& a, const CapturedFace& b, const RoutingConfig& config) {
-    return centre_lab_distance(a, b) < config.reassoc_centre_lab && centre_class(a) == centre_class(b) &&
+    return centre_lab_distance(a, b) < config.same_face_centre_lab && centre_class(a) == centre_class(b) &&
            census_l1_distance(color_census(a), color_census(b)) <= config.reassoc_census;
+}
+
+// "These two readings are of the same PHYSICAL face" - the predicate the
+// verified in-place update authenticates on.
+//
+// Centre class equality is the load-bearing term, not the radius. A cube's
+// six centres are six DISTINCT colours, so two readings that agree on
+// centre class either are the same face or are a classification failure;
+// the radius is then defence in depth against that failure, and is sized
+// against kClosestCentrePairLab (see RoutingConfig::same_face_centre_lab
+// and the static_assert beside it) so a red centre misread as orange still
+// cannot verify onto the orange slot. The class term is what refuses the
+// one measured breach in the corpus - live3 slot F yellow -> red at 28.1
+// Lab - and the radius is what refuses it a second time.
+//
+// Deliberately the same predicate the recovery path uses to say "this is a
+// re-show of that face" (tight_match), differing only in the census
+// allowance: two definitions of "same face" that could disagree is how a
+// verifier ends up admitting what registration would have refused.
+[[nodiscard]] bool verified_same_face(const CapturedFace& captured, const CapturedFace& stored,
+                                      const RoutingConfig& config) {
+    return centre_class(captured) == centre_class(stored) &&
+           centre_lab_distance(captured, stored) <= config.same_face_centre_lab &&
+           census_l1_distance(color_census(captured), color_census(stored)) <= config.verify_census_drift;
 }
 
 // Interchangeable-for-assembly: identical sticker population and centres
@@ -62,6 +86,17 @@ float centre_lab_distance(const CapturedFace& a, const CapturedFace& b) {
 float registration_pair_score(const CapturedFace& a, const CapturedFace& b, const RoutingConfig& config) {
     return static_cast<float>(census_l1_distance(color_census(a), color_census(b))) +
            2.0F * centre_lab_distance(a, b) / config.content_equiv_lab;
+}
+
+CapturedFace relabel_capture(const CapturedFace& captured, cube::model::Face epoch_body_face,
+                             int lattice_index) {
+    const auto& map =
+        kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(epoch_body_face)];
+    CapturedFace out;
+    for (std::size_t k = 0; k < captured.lab.size(); ++k) {
+        out.lab[static_cast<std::size_t>(map.cell[k])] = captured.lab[k];
+    }
+    return out;
 }
 
 float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
@@ -261,7 +296,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
                 oriented +=
                     oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, candidate->index);
                 centres_agree = centres_agree &&
-                                centre_lab_distance(sample.captured, *slot) < config.reassoc_centre_lab &&
+                                centre_lab_distance(sample.captured, *slot) < config.same_face_centre_lab &&
                                 centre_class(sample.captured) == centre_class(*slot);
             }
             by_roll.push_back({candidate, pairs > 0 ? oriented / static_cast<float>(pairs) : 0.0F,
@@ -439,10 +474,10 @@ bool CaptureRouter::clear_slot(int fill_index) {
     // registration needs: with <= 1 slot left, every hypothesis induces at
     // most one pair, so recovery could never resolve again this epoch and
     // commits would defer forever. But <= 1 slot is exactly on_epoch's own
-    // "identity is definitional" regime - there is no second slot for the
-    // gauge to be wrong against - so drop out of recovery (buffered epoch
-    // faces included: they will re-converge and re-commit within a pass or
-    // two) and let the next commit adopt a gauge directly.
+    // "labels are relative" regime - there is no second slot for the choice
+    // of permutation to be wrong against - so drop out of recovery
+    // (buffered epoch faces included: they will re-converge and re-commit
+    // within a pass or two) and let the next commit adopt a gauge directly.
     if (recovering_ && filled_count() <= 1) {
         recovering_ = false;
         epoch_faces_ = {};
@@ -452,14 +487,25 @@ bool CaptureRouter::clear_slot(int fill_index) {
 }
 
 bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& captured) {
-    // At most one slot is filled: identity is definitional (there is no
-    // second slot for the choice of permutation to be wrong against), so
-    // the epoch adopts a gauge immediately instead of buffering. The one
-    // stored slot still gets its say: a tight content match re-keys it
-    // under the new frame, a near-miss centre (could be the same face,
-    // colour drifted) refuses adoption so nothing lands on a guess, and a
-    // clearly different face picks any permutation that files the new
-    // capture beside - not on top of - the stored one.
+    // At most one slot is filled, so the store's LABELS are relative: with
+    // one stored face there is no second slot for a relabelling to
+    // contradict, and cross-session evidence confirms sessions legitimately
+    // disagree on names (slot F carries centre class green in live2, red in
+    // live3 and blue in live4 - three different physical faces under one
+    // name, by design). The epoch therefore adopts a gauge immediately
+    // instead of buffering.
+    //
+    // What is NOT relative is the ROLL, and that is what this function got
+    // wrong. Four of the 24 permutations send a given epoch face to a given
+    // store face; the old code took whichever came first in index order,
+    // and both the label and the roll fell out of iteration. While the
+    // write path ignored the gauge's cell component that was invisible -
+    // not one of the three roll corruptions measured on the corpus came
+    // through here. commit_direct now applies kBodyRelabel, so an arbitrary
+    // roll would misfile all nine stickers on every such adoption, and
+    // live3 alone ran 21 epochs with exactly one filled slot. The two fixes
+    // had to land together, which is why the roll is now chosen from the
+    // one piece of evidence this function always had and never read.
     if (fill_order_.empty()) {
         gauge_ = kIdentityLatticeIndex;
         return true;
@@ -470,10 +516,72 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
     if (!matches && centre_lab_distance(captured, stored) < config_.duplicate_centre_radius) {
         return false;
     }
-    const Face wanted = matches ? stored_face : Face{};
+
+    // The one case with real evidence: the capture IS the stored face, so
+    // it is about to overwrite that slot's nine cells and the roll decides
+    // which sticker lands where. Rank the four admissible permutations by
+    // ordered-sticker agreement - the same signal, through the same
+    // function, that register_epoch_gauge's stage-1 tie-break uses, because
+    // it is the only signal in the system that can tell rolls apart.
+    //
+    // No bar and no margin here, deliberately, and the asymmetry with
+    // registration is the point: registration must decide WHETHER these
+    // captures belong to this store at all, whereas tight_match has already
+    // decided that (centre class, centre Lab and census all agree) and the
+    // only open question is which of four rotations. One of the four is
+    // right; refusing the best-fitting one would leave the alternative of
+    // guessing, not of learning more. A rotationally symmetric face scores
+    // all four identically - correctly, since then the stored bytes are the
+    // same whichever wins - and the identity-first tie-break below picks
+    // the commonest physical reality, matching register_epoch_gauge's own
+    // preference.
+    if (matches) {
+        int best = -1;
+        float best_lab = std::numeric_limits<float>::max();
+        for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
+            if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)] !=
+                stored_face) {
+                continue;
+            }
+            const float lab = oriented_cell_lab_distance(captured, stored, epoch_face, g);
+            const bool better = lab < best_lab;
+            const bool identity_breaks_tie =
+                lab == best_lab && g == kIdentityLatticeIndex && best != kIdentityLatticeIndex;
+            if (better || identity_breaks_tie) {
+                best_lab = lab;
+                best = g;
+            }
+        }
+        if (best < 0) {
+            return false;  // unreachable: four permutations always qualify
+        }
+        gauge_ = best;
+        return true;
+    }
+
+    // A clearly different face. Nothing here constrains the gauge at all -
+    // neither label nor roll - because the store holds one face this epoch
+    // has not recognised, so the relative geometry of the two is simply not
+    // observable yet. Stated plainly because it is a real limit, not a
+    // solved problem: any permutation filing the newcomer BESIDE rather
+    // than on top of the stored slot is as defensible as any other, and
+    // requiring evidence instead cost 4 of the corpus's 11 captured slots
+    // when measured (live1 2->1, live2 3->1, live4 2->1) for no measured
+    // safety gain, because the never-overwrite invariant is not what is at
+    // stake on an empty target.
+    //
+    // Identity first, then lowest index. Identity is not evidence, it is
+    // the likeliest physical reality (the user re-anchored holding the cube
+    // roughly as before) and the same preference register_epoch_gauge
+    // applies to its own score ties; the old loop simply took index 0, a
+    // quarter turn about a face nobody was looking at.
+    if (kFacePermutation[kIdentityLatticeIndex][static_cast<std::size_t>(epoch_face)] != stored_face) {
+        gauge_ = kIdentityLatticeIndex;
+        return true;
+    }
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
-        const Face target = kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)];
-        if (matches ? target == wanted : target != stored_face) {
+        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)] !=
+            stored_face) {
             gauge_ = g;
             return true;
         }
@@ -491,6 +599,15 @@ void CaptureRouter::buffer_epoch_face(Face epoch_face, const CapturedFace& captu
 CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const CapturedFace& captured,
                                                          std::int64_t now_ms, CommitResult& result) {
     const Face store_face = kFacePermutation[static_cast<std::size_t>(gauge_)][static_cast<std::size_t>(epoch_face)];
+    // Into the STORE's frame before anything is compared or written. The
+    // gauge is a whole-cube rotation between two body labellings, so it
+    // moves stickers as well as face names; kFacePermutation above gave the
+    // name, this gives the nine cells (see relabel_capture's note for the
+    // three measured corruptions that came of storing the epoch-frame array
+    // verbatim). Both verification terms below are rotation-invariant, so
+    // relabelling cannot change ANY routing decision - it only makes the
+    // bytes that land match the slot they land in.
+    const CapturedFace stored_frame = relabel_capture(captured, epoch_face, gauge_);
     auto& slot = slots_[static_cast<std::size_t>(store_face)];
 
     if (slot) {
@@ -498,12 +615,11 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
             return {CommitOutcome::holdoff};
         }
         // The verified in-place update - the ONLY overwrite path in the
-        // system. Identity routed the capture here; centre and census must
-        // both agree it is the same physical face, or nothing is written.
-        if (centre_lab_distance(captured, slot->captured) <= config_.verify_centre_lab_radius &&
-            census_l1_distance(color_census(captured), color_census(slot->captured)) <=
-                config_.verify_census_drift) {
-            slot->captured = captured;
+        // system. Identity routed the capture here; centre class, centre
+        // Lab and census must all agree it is the same physical face, or
+        // nothing is written.
+        if (verified_same_face(stored_frame, slot->captured, config_)) {
+            slot->captured = stored_frame;
             slot->strikes = 0;
             slot->last_commit_ms = now_ms;
             // A verified re-show also clears the face's outstanding
@@ -551,7 +667,7 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
     // face escalate to force-lost just like verification strikes do - the
     // honest way to penalize a belief the router cannot reach directly.
     for (const Face filled : fill_order_) {
-        if (centre_lab_distance(captured, slots_[static_cast<std::size_t>(filled)]->captured) <
+        if (centre_lab_distance(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured) <
             config_.duplicate_centre_radius) {
             result.duplicate_centre = true;
             if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >=
@@ -561,7 +677,7 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
             return {CommitOutcome::quarantined};
         }
     }
-    slot = Slot{.captured = captured, .strikes = 0, .last_commit_ms = now_ms};
+    slot = Slot{.captured = stored_frame, .strikes = 0, .last_commit_ms = now_ms};
     fill_order_.push_back(store_face);
     return {CommitOutcome::filled, filled_count() - 1};
 }

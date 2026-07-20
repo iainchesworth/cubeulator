@@ -408,47 +408,13 @@ TEST_CASE("an aliased pair with distinguishable content refuses to guess", "[rou
     CHECK(centre_lab_distance(*router.slot_at(2), red_b) == 0.0F);
 }
 
-TEST_CASE("an epoch change with at most one slot re-associates immediately", "[routing]") {
-    CaptureRouter router;
-    router.on_epoch(1);
-    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
-
-    // Loss and re-anchor with one slot: no recovery buffering (identity is
-    // definitional), the next commit adopts a gauge on the spot.
-    router.on_epoch(2);
-    CHECK_FALSE(router.reorienting());
-
-    SECTION("a tight content match re-keys the stored slot under the new frame") {
-        const auto result = router.commit(Face::U, drifted(solid(kRed), 3.0F), 2000);
-        CHECK(result.outcome == CommitOutcome::updated);
-        REQUIRE(result.confirmed_slots.size() == 1);
-        CHECK(result.confirmed_slots.front() == 0);
-        CHECK(router.filled_count() == 1);
-    }
-
-    SECTION("a clearly different face files beside the stored slot, not on it") {
-        const auto result = router.commit(Face::F, solid(kBlue), 2000);
-        CHECK(result.outcome == CommitOutcome::filled);
-        CHECK(router.filled_count() == 2);
-        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
-    }
-
-    SECTION("a near-duplicate centre that fails the tight match quarantines") {
-        // Centre within the duplicate radius of the stored red, but three
-        // stickers read green (census L1 = 6, past the re-association
-        // drift): could be the stored face badly lit, could be a different
-        // face aliasing it - the router adopts nothing and writes nothing.
-        CapturedFace suspect = solid(kWashedOrangeAsRed);
-        suspect = with_sticker(suspect, 0, kGreen);
-        suspect = with_sticker(suspect, 1, kGreen);
-        suspect = with_sticker(suspect, 2, kGreen);
-        const auto result = router.commit(Face::U, suspect, 2000);
-        CHECK(result.outcome == CommitOutcome::quarantined);
-        CHECK(result.duplicate_centre);
-        CHECK(router.filled_count() == 1);
-        CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
-    }
-}
+// The former "an epoch change with at most one slot re-associates
+// immediately" case lived here. It pinned the loop-order gauge adoption
+// that is now gone (see "an epoch change with one filled slot registers
+// rather than guesses", below the oriented-roll helpers this file defines
+// later): one filled slot fixes a face but leaves four rolls, and a roll
+// chosen by iteration order misfiles all nine stickers once the write path
+// honours the gauge's cell component.
 
 TEST_CASE("registration margin counts runner-ups above the commit bar", "[routing]") {
     // The header contract is "winner at most epoch_register_max_score AND
@@ -516,7 +482,7 @@ TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]"
     // window. Registration needs occupied slots to score against, so
     // staying in recovery past that point would defer every commit for the
     // rest of the epoch ("re-orienting forever"); <= 1 slot is exactly
-    // on_epoch's own identity-is-definitional regime, so recovery must end
+    // on_epoch's own labels-are-relative regime, so recovery must end
     // there too.
     CaptureRouter router;
     router.on_epoch(1);
@@ -530,7 +496,7 @@ TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]"
     // re-commits on a later pass.
     CHECK(router.commit(Face::F, solid(kBlue), 10000).outcome == CommitOutcome::deferred);
 
-    SECTION("down to one slot: identity is definitional again") {
+    SECTION("down to one slot: labels are relative again") {
         REQUIRE(router.clear_slot(0));  // retake white
         CHECK_FALSE(router.reorienting());
         const auto result = router.commit(Face::F, solid(kBlue), 11000);
@@ -839,7 +805,7 @@ TEST_CASE("the roll tie-break cannot promote a candidate the score rejected", "[
         CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
         aliasing.lab[cube::model::center_facelet_index] = cv::Vec3f{45.0F, 50.0F, 50.0F};
         REQUIRE(classify_lab(aliasing.lab[cube::model::center_facelet_index]).color == FacetColor::orange);
-        REQUIRE(centre_lab_distance(pattern, aliasing) < config.reassoc_centre_lab);
+        REQUIRE(centre_lab_distance(pattern, aliasing) < config.same_face_centre_lab);
 
         std::array<std::optional<CapturedFace>, 6> slots{};
         slots[static_cast<std::size_t>(Face::U)] = aliasing;
@@ -914,4 +880,253 @@ TEST_CASE("a tracker reset re-opens registration on a two-face store", "[routing
     // distinguish from "nothing changed".
     router.on_epoch(7);
     CHECK(router.reorienting());
+}
+
+// ---------------------------------------------------------------------------
+// The capture ROUTING repair: what gets written, and under whose frame.
+//
+// Everything above this line tests where a capture is ROUTED. These test
+// what actually lands in the slot - the half of the gauge (kBodyRelabel,
+// the cell relabelling) that the write path used to discard, and the
+// same-face predicate that used to be unable to separate the closest
+// legitimate colour pair on a cube.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("relabel_capture is the write-path inverse of the oriented comparison", "[routing]") {
+    // Definitional, not a regression: it pins that the map the router
+    // WRITES through and the map it SCORES through are the same map, so a
+    // slot written under a gauge reads back as a perfect oriented match
+    // under that same gauge. If those two ever disagree, registration
+    // scores every subsequent hypothesis against bytes it did not expect.
+    const CapturedFace pattern = patterned();
+    for (int gauge = 0; gauge < static_cast<int>(kLatticeSize); ++gauge) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            const auto face = static_cast<Face>(f);
+            const CapturedFace stored = relabel_capture(pattern, face, gauge);
+            // Agrees with this file's own independently written relabeller.
+            const CapturedFace reference = relabelled(pattern, face, gauge);
+            for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
+                REQUIRE(cv::norm(stored.lab[cell] - reference.lab[cell]) == 0.0);
+            }
+            // And is exactly what the oriented comparison expects to find.
+            REQUIRE(oriented_cell_lab_distance(pattern, stored, face, gauge) == 0.0F);
+        }
+    }
+    // The centre is rotation-invariant: it must survive every relabelling
+    // in place, or centre_lab_distance would be comparing the wrong cells.
+    for (int gauge = 0; gauge < static_cast<int>(kLatticeSize); ++gauge) {
+        const CapturedFace stored = relabel_capture(pattern, Face::F, gauge);
+        REQUIRE(cv::norm(stored.lab[cube::model::center_facelet_index] -
+                         pattern.lab[cube::model::center_facelet_index]) == 0.0);
+    }
+}
+
+TEST_CASE("a recovery flush stores its captures in the store's frame", "[routing]") {
+    // THE D3 regression, at router level. All three corpus corruptions
+    // (live5 F pass 122 at a 90-degree roll, live5 L pass 250 and live1 D
+    // pass 236 at mirrored maps) came through this path: registration
+    // resolved the gauge correctly - its winning oriented reading matched
+    // the independently measured best dihedral fit to within 0.1 Lab every
+    // time - and commit_direct then stored the epoch-frame array verbatim,
+    // so the slot label was right and its nine cells were a rotated lie.
+    //
+    // Not merely an assembly bug: the corrupted slot then poisons
+    // oriented_cell_lab_distance for every later hypothesis, which is what
+    // drove live4 and live5 into the 30+ Lab readings that failed the
+    // 20-Lab bar and produced the corpus's dominant refusal (deferral).
+    const CapturedFace pattern = patterned();
+    constexpr int kTrueGauge = 4 * 2 + 1;  // quarter turn about the F axis
+    REQUIRE(kFacePermutation[kTrueGauge][static_cast<std::size_t>(Face::F)] == Face::F);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    // Two slots, so the epoch change enters recovery proper and the write
+    // under test is the registration flush.
+    REQUIRE(router.commit(Face::F, relabelled(pattern, Face::F, kTrueGauge), 0).outcome ==
+            CommitOutcome::filled);
+    REQUIRE(router.commit(Face::U, relabelled(solid(kOrange), Face::U, kTrueGauge), 1000).outcome ==
+            CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+    const auto result = router.commit(Face::F, pattern, 10000);
+    REQUIRE(result.registration.has_value());
+    REQUIRE(result.registration->status == EpochRegistration::Status::resolved);
+    CHECK(result.registration->lattice_index == kTrueGauge);
+    CHECK(result.outcome == CommitOutcome::updated);
+
+    const CapturedFace expected = relabelled(pattern, Face::F, kTrueGauge);
+    // Stated as the failure it replaces: under this gauge the epoch-frame
+    // array is NOT the store-frame array, so a verbatim write is
+    // detectable and this test cannot pass both ways.
+    bool differs = false;
+    for (std::size_t cell = 0; cell < expected.lab.size(); ++cell) {
+        differs = differs || cv::norm(expected.lab[cell] - pattern.lab[cell]) > 0.0;
+    }
+    REQUIRE(differs);
+
+    const CapturedFace* content = router.slot_at(0);
+    REQUIRE(content != nullptr);
+    for (std::size_t cell = 0; cell < expected.lab.size(); ++cell) {
+        CHECK(cv::norm(content->lab[cell] - expected.lab[cell]) == 0.0);
+    }
+}
+
+TEST_CASE("a one-slot epoch adoption picks its roll from the stickers", "[routing]") {
+    // D1. With at most one slot filled the epoch adopts a gauge on the spot
+    // rather than buffering, and the slot LABEL really is relative there -
+    // cross-session evidence confirms sessions legitimately disagree on
+    // names. The ROLL is not relative: four lattice elements send a given
+    // epoch face to a given store face, they are indistinguishable to every
+    // rotation-invariant signal, and the old adopt_gauge_direct took
+    // whichever came first in index order.
+    //
+    // That guess was invisible while the write path ignored the gauge's
+    // cell component - which is why not one of the three roll corruptions
+    // measured on the corpus came through here. It stops being invisible
+    // the moment commit_direct relabels, so this fix and the write-path fix
+    // are one change: live3 alone ran 21 epochs with exactly one filled
+    // slot, and every re-show in that regime would have been filed under a
+    // guessed rotation.
+    const CapturedFace pattern = patterned();
+    // Four elements fix F: 8, 9, 10, 11. Deliberately NOT the lowest, so
+    // loop-order adoption lands somewhere measurably different.
+    constexpr int kTrueGauge = 4 * 2 + 1;
+    REQUIRE(kFacePermutation[kTrueGauge][static_cast<std::size_t>(Face::F)] == Face::F);
+    REQUIRE(kIdentityLatticeIndex == 8);
+    const CapturedFace stored = relabelled(pattern, Face::F, kTrueGauge);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    // One slot: direct adoption, no buffering - the coverage-preserving
+    // regime, unchanged.
+    REQUIRE_FALSE(router.reorienting());
+
+    SECTION("a re-show is filed under the roll the stickers support") {
+        const auto result = router.commit(Face::F, pattern, 2000);
+        CHECK(result.outcome == CommitOutcome::updated);
+        REQUIRE(router.filled_count() == 1);
+
+        // The discriminator: under kTrueGauge the store-frame array is NOT
+        // the epoch-frame array, so a roll chosen by loop order (which
+        // would have taken the identity, index 8) writes detectably
+        // different bytes. This test cannot pass both ways.
+        bool differs = false;
+        for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
+            differs = differs || cv::norm(stored.lab[cell] - pattern.lab[cell]) > 0.0;
+        }
+        REQUIRE(differs);
+
+        const CapturedFace* content = router.slot_at(0);
+        REQUIRE(content != nullptr);
+        for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
+            CHECK(cv::norm(content->lab[cell] - stored.lab[cell]) == 0.0);
+        }
+    }
+
+    SECTION("every roll of the stored face is recoverable, not just one") {
+        // Sweep all four elements fixing F: the choice must track the
+        // evidence, not a fixed index. A loop-order adoption passes exactly
+        // one of these four by luck.
+        for (int roll = 0; roll < 4; ++roll) {
+            const int gauge = 4 * 2 + roll;
+            const CapturedFace rolled = relabelled(pattern, Face::F, gauge);
+            CaptureRouter fresh;
+            fresh.on_epoch(1);
+            REQUIRE(fresh.commit(Face::F, rolled, 0).outcome == CommitOutcome::filled);
+            fresh.on_epoch(2);
+            REQUIRE(fresh.commit(Face::F, pattern, 2000).outcome == CommitOutcome::updated);
+            const CapturedFace* content = fresh.slot_at(0);
+            REQUIRE(content != nullptr);
+            for (std::size_t cell = 0; cell < rolled.lab.size(); ++cell) {
+                REQUIRE(cv::norm(content->lab[cell] - rolled.lab[cell]) == 0.0);
+            }
+        }
+    }
+
+    SECTION("a clearly different face still files beside the stored slot") {
+        // Coverage guard. Nothing observable relates an unrecognised face
+        // to the one stored slot, so no evidence exists for EITHER half of
+        // the gauge here - and requiring evidence anyway was measured to
+        // cost 4 of the corpus's 11 captured slots (live1 2->1, live2 3->1,
+        // live4 2->1) while the never-overwrite invariant, which is what
+        // this repair is about, is not even at stake on an empty target.
+        // So the newcomer still lands beside the stored slot.
+        const auto result = router.commit(Face::U, solid(kBlue), 2000);
+        CHECK(result.outcome == CommitOutcome::filled);
+        CHECK(router.filled_count() == 2);
+        // And the stored slot is untouched, whichever label the newcomer got.
+        const CapturedFace* content = router.slot_at(0);
+        REQUIRE(content != nullptr);
+        for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
+            CHECK(cv::norm(content->lab[cell] - stored.lab[cell]) == 0.0);
+        }
+    }
+}
+
+TEST_CASE("a different physical face cannot verify into an occupied slot", "[routing]") {
+    // The never-overwrite invariant, and the user's original complaint.
+    // Measured breach: live3 slot F, pass 104 -> 112, BOTH inside epoch 6
+    // (no epoch change, no registration ran), centre class yellow -> red at
+    // 28.1 Lab and census L1 2, outcome `updated`. It was admitted because
+    // the verify radius was 30.0 while the CLOSEST LEGITIMATE centre pair
+    // on a cube (red/orange) is ~27 Lab apart - a radius that cannot
+    // separate red from orange is not a same-face test at all. All eight
+    // dihedral maps of the old content sat flat at 35.4-38.6 mean Lab, so
+    // no roll and no mirror explained the new stickers: it was another
+    // face, and it destroyed live3's only captured slot.
+    //
+    // Reconstructed at the same numbers: eight shared white stickers
+    // (census L1 2, well inside verify_census_drift) and a centre 27.9 Lab
+    // away in a DIFFERENT colour class.
+    const cv::Vec3f kOrangeNearRed{60.6F, 44.4F, 52.2F};  // hue ~50 -> orange
+    REQUIRE(cv::norm(kOrangeNearRed - kRed) > 25.0);
+    REQUIRE(cv::norm(kOrangeNearRed - kRed) < 30.0);
+    REQUIRE(classify_lab(kRed).color != classify_lab(kOrangeNearRed).color);
+
+    CapturedFace stored = solid(kWhite);
+    stored.lab[cube::model::center_facelet_index] = kRed;
+    CapturedFace intruder = solid(kWhite);
+    intruder.lab[cube::model::center_facelet_index] = kOrangeNearRed;
+    REQUIRE(census_l1_distance(color_census(stored), color_census(intruder)) == 2);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+
+    // Same epoch, same tracked face, past the recommit holdoff: identity
+    // routes it straight onto the occupied slot, so verification is the
+    // ONLY thing standing between it and the stored capture.
+    const auto result = router.commit(Face::F, intruder, 5000);
+    CHECK(result.outcome == CommitOutcome::quarantined);
+    CHECK(router.filled_count() == 1);
+    const CapturedFace* content = router.slot_at(0);
+    REQUIRE(content != nullptr);
+    CHECK(cv::norm(content->lab[cube::model::center_facelet_index] - kRed) == 0.0);
+}
+
+TEST_CASE("honest same-face drift still verifies after the radius tightened", "[routing]") {
+    // The other half of the D2 fix, and why the radius was not simply
+    // lowered below the breach. The corpus's largest HONEST same-face
+    // centre drift is 22.7 Lab (live3 slot F, pass 42 -> 104, yellow ->
+    // yellow); a radius under that refuses a legitimate update, and a
+    // refused update is not free - it takes a strike, and conflict_strikes
+    // = 2 escalates to force_lost, which costs coverage. Centre CLASS
+    // equality is what refuses the breach; the radius only has to clear
+    // real drift while staying inside the palette.
+    CapturedFace stored = solid(kWhite);
+    stored.lab[cube::model::center_facelet_index] = kYellow;
+    CapturedFace same_face_drifted = solid(kWhite);
+    same_face_drifted.lab[cube::model::center_facelet_index] = kYellow + cv::Vec3f{-16.0F, 8.0F, -14.0F};
+    REQUIRE(cv::norm(same_face_drifted.lab[cube::model::center_facelet_index] - kYellow) > 22.0);
+    REQUIRE(classify_lab(same_face_drifted.lab[cube::model::center_facelet_index]).color ==
+            classify_lab(kYellow).color);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+    CHECK(router.commit(Face::F, same_face_drifted, 5000).outcome == CommitOutcome::updated);
 }

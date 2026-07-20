@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cube/model/face.hpp>
+#include <cube/vision/color_resolution.hpp>
 #include <cube/vision/temporal_fusion.hpp>
 
 #include <array>
@@ -37,12 +38,20 @@ namespace cube::vision {
 // starts a new epoch whose faces have no a-priori relation to the store's
 // keys. The store therefore carries a GAUGE - the lattice face permutation
 // mapping current-epoch faces onto store keys - re-established per epoch:
-// trivially (identity is definitional) while fewer than two slots are
-// filled, and by content re-registration (register_epoch_gauge +
-// single-face tight re-association + content-equivalence tie-break)
-// afterwards, during which commits buffer instead of landing ("re-
-// orienting"). Ambiguity always defers; nothing is ever written on a
-// guess.
+// directly (labels are relative, the roll from ordered stickers - see
+// adopt_gauge_direct) while fewer than two slots are filled, and by content
+// re-registration (register_epoch_gauge + single-face tight re-association
+// + oriented roll and content-equivalence tie-breaks) afterwards, during
+// which commits buffer instead of landing ("re-orienting"). Ambiguity
+// always defers; nothing is ever written over on a guess.
+//
+// The gauge is a 24-element rotation, and BOTH of its components are
+// load-bearing on the write path: kFacePermutation says which slot a
+// capture belongs in, kBodyRelabel says where its nine stickers go inside
+// that slot (relabel_capture). Deciding the first from evidence and the
+// second by convenience is the same class of error as deciding neither -
+// a slot with the right label and rotated contents corrupts assembly and
+// poisons every later oriented comparison scored against it.
 //
 // Qt-free, stateful but single-threaded by contract: mutated only from the
 // GUI thread that serialises all scan state (ScanSession's threading
@@ -73,11 +82,32 @@ using ColorCensus = std::array<int, 7>;
 // transcribed verbatim; the calibration milestone sweeps them over the
 // recorded corpus).
 struct RoutingConfig {
-    // Verified in-place update - the ONLY overwrite path: a commit onto an
-    // occupied slot must have its centre within this Lab radius of the
-    // slot's AND its census within this drift, or it is a different
-    // physical face wearing a similar centre and the commit quarantines.
-    float verify_centre_lab_radius = 30.0F;
+    // The one "this is the same physical face" radius, shared by the
+    // verified in-place update (the ONLY overwrite path in the system) and
+    // by the recovery path's tight re-association. It was two separate
+    // numbers - a 30.0 verify radius and this 25.0 - and the 30.0 was the
+    // bug: red/orange centres are ~27 Lab apart
+    // (kClosestCentrePairLab), so the verifier's own predicate could not
+    // distinguish the closest legitimate colour pair on a cube and a
+    // DIFFERENT physical face could authenticate into an occupied slot.
+    // Measured on the corpus: live3 slot F, pass 104 -> 112, centre class
+    // yellow -> red at 28.1 Lab and census L1 2, admitted as `updated`; all
+    // eight dihedral cell maps of the old content sat flat at 35.4-38.6
+    // mean Lab, so no roll or mirror explained the new stickers - it was
+    // simply another face, and it destroyed live3's only captured slot.
+    //
+    // 25 is not a fresh guess: it is the live-tested legacy tight-match
+    // radius, and the corpus's largest HONEST same-face centre drift is
+    // 22.7 Lab (live3 slot F, pass 42 -> 104, yellow -> yellow), so it
+    // clears real drift while sitting structurally inside the palette. The
+    // static_assert below is the point of the exercise - the verifier is
+    // now incapable of accepting the closest legitimate pair no matter how
+    // this is retuned.
+    float same_face_centre_lab = 25.0F;
+    // Census drift allowed on an in-place update. Left at 6 deliberately:
+    // every measured update event in the corpus sat at census L1 <= 2, so
+    // the census term was never the deciding gate in either direction and
+    // tightening it would only cost coverage for no measured safety.
     int verify_census_drift = 6;
     // New-face duplicate check: a commit routed to an EMPTY slot whose
     // centre sits within this radius of some occupied slot's is slip
@@ -101,14 +131,18 @@ struct RoutingConfig {
     std::int64_t recommit_holdoff_ms = 800;
     // Single-face tight re-association (recovery): centre AND class AND
     // census must all match for an epoch face to adopt a stored slot -
-    // live-tested values inherited from the legacy tight-match path.
-    float reassoc_centre_lab = 25.0F;
+    // live-tested values inherited from the legacy tight-match path. The
+    // centre radius is same_face_centre_lab above; only the census
+    // allowance differs, because re-association is choosing between
+    // hypotheses rather than authenticating one.
     int reassoc_census = 4;
     // Content equivalence (recovery tie-break): identical census and
     // centres closer than resolve_colors' 12-Lab seed floor means the
     // slots are interchangeable for assembly, so a registration tie among
-    // them is harmless and must not wedge a solved/near-solved cube.
-    float content_equiv_lab = 12.0F;
+    // them is harmless and must not wedge a solved/near-solved cube. Taken
+    // from resolve_colors' own floor rather than re-stated, so the two can
+    // never drift apart.
+    float content_equiv_lab = kMinCentreSeedSeparationLab;
     // Epoch registration commit bar: winner's mean per-pair score at most
     // this, runner-up worse by at least the margin. Score units are census
     // L1 points (centre Lab folds in at 2 points per content_equiv_lab -
@@ -152,6 +186,49 @@ struct RoutingConfig {
     // interchangeable and content equivalence is the right adjudicator.
     float epoch_register_oriented_margin_lab = 6.0F;
 };
+
+// The structural guarantee behind the never-overwrite invariant, checked at
+// compile time on the shipped defaults so no future retune can quietly undo
+// it: a radius that reaches the closest legitimate centre pair cannot
+// distinguish two different physical faces, and the ONLY overwrite path in
+// the system is gated on exactly this radius. This is a stronger statement
+// than "the constant is currently 25" - it is the reason 25 is admissible.
+static_assert(RoutingConfig{}.same_face_centre_lab < kClosestCentrePairLab,
+              "same_face_centre_lab must sit strictly inside the closest legitimate centre pair "
+              "(red/orange, ~27 Lab): at or above it the verified in-place update can authenticate "
+              "a DIFFERENT physical face into an occupied slot");
+static_assert(RoutingConfig{}.duplicate_centre_radius < kClosestCentrePairLab,
+              "the duplicate-centre check would otherwise quarantine legitimate red-beside-orange "
+              "fills as slip evidence");
+static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_centre_lab,
+              "content equivalence is a strictly stronger claim than same-face: two slots declared "
+              "interchangeable must also be same-face admissible");
+
+// Re-express a capture from the epoch's body labelling into the store's,
+// under gauge `lattice_index`: the write-path counterpart of
+// oriented_cell_lab_distance's read-path comparison, and the operation
+// kBodyRelabel was declared for. Cell k of `captured` on body face
+// `epoch_body_face` becomes cell kBodyRelabel[lattice_index][epoch_body_face]
+// .cell[k] of the store face kFacePermutation[lattice_index][epoch_body_face].
+//
+// Why the write path needs this AT ALL, since the router's decisions are
+// made on rotation-invariant evidence: because the STORED BYTES are what
+// assembly consumes. A gauge says the epoch's frame and the store's frame
+// differ by a whole-cube rotation; kFacePermutation then says which slot the
+// capture belongs in, and this says which of its nine stickers goes where
+// inside that slot. Storing the epoch-frame array verbatim under a
+// non-identity gauge files all nine stickers in the wrong frame - the slot
+// label is right and its contents are a rotated lie, which corrupts assembly
+// and (worse) poisons every later oriented_cell_lab_distance scored against
+// that slot, so registration stops resolving and commits defer forever.
+// Measured on the corpus before this existed: live5 F at a clean 90-degree
+// roll error, live5 L and live1 D at mirrored maps, each confirmed as the
+// same physical face by census L1 0-2 and centre Lab 2.4-18.8, and in all
+// three cases registration's own winning oriented reading (5.28 / 8.31 /
+// 19.05) matched the independently measured best dihedral fit to within 0.1
+// Lab - the router chose the right permutation and the write discarded it.
+[[nodiscard]] CapturedFace relabel_capture(const CapturedFace& captured,
+                                           cube::model::Face epoch_body_face, int lattice_index);
 
 // Content distance used by epoch registration, in census-L1-equivalent
 // points: census L1 plus centre Lab scaled so one content_equiv_lab of
@@ -324,10 +401,10 @@ public:
     // counter. A change means the body labels commits arrive under are
     // NEW: with >= 2 slots filled the router enters recovery (commits
     // buffer until the gauge re-registers), otherwise the next commit
-    // re-derives the gauge directly (identity is definitional when there
-    // is at most one slot to disagree with). Conflict strikes and the
-    // layer-turn window are epoch-scoped ("within one locked segment") and
-    // reset here.
+    // re-derives the gauge directly (labels are relative when there is at
+    // most one slot to disagree with - but the ROLL is not, see
+    // adopt_gauge_direct). Conflict strikes and the layer-turn window are
+    // epoch-scoped ("within one locked segment") and reset here.
     void on_epoch(int epoch);
 
     // Call whenever the TRACKER is reset (not merely re-anchored). Its
@@ -362,7 +439,7 @@ public:
     // persistently conflicted slot is emptied - explicitly, never
     // silently. Returns false when the index names no filled slot. If a
     // retake drops the store to <= 1 slot mid-recovery, recovery ends
-    // (identity is definitional again, matching on_epoch's own rule) -
+    // (labels are relative again, matching on_epoch's own rule) -
     // registration can never resolve against a store it cannot score.
     bool clear_slot(int fill_index);
 
@@ -394,7 +471,11 @@ private:
     // The gauge-resolved commit core (rules 2-6 of the identity policy).
     DirectCommit commit_direct(cube::model::Face epoch_face, const CapturedFace& captured, std::int64_t now_ms,
                                CommitResult& result);
-    // Gauge adoption for the <= 1-filled-slot epoch change.
+    // Gauge adoption for the <= 1-filled-slot epoch change. The slot LABEL
+    // is relative in this regime and chosen by convention; the ROLL is not,
+    // and is chosen from ordered-sticker evidence whenever the capture
+    // re-associates with the stored slot (which is exactly when the roll
+    // decides what overwrites it).
     [[nodiscard]] bool adopt_gauge_direct(cube::model::Face epoch_face, const CapturedFace& captured);
     void buffer_epoch_face(cube::model::Face epoch_face, const CapturedFace& captured);
     [[nodiscard]] int fill_index_of(cube::model::Face store_face) const;
