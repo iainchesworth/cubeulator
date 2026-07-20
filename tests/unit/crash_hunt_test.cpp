@@ -8,7 +8,9 @@
 //   for every fill index i in [0, filled_count()):
 //     slots_[fill_order_[i]] is engaged
 //
-// That invariant is what makes commit_direct's duplicate-centre scan, commit()'s store_view build, and ScanSession::finalizeIfComplete's
+// That invariant is what makes adopt_gauge_direct's
+// `slots_[fill_order_.front()]->captured`, commit_direct's duplicate-centre
+// scan, commit()'s store_view build, and ScanSession::finalizeIfComplete's
 // `*router_.slot_at(i)` safe. slot_at() returns nullptr exactly when it is
 // violated, so probing every index is a direct, non-invasive witness.
 //

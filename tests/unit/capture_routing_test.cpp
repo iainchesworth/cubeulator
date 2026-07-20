@@ -409,12 +409,20 @@ TEST_CASE("an aliased pair with distinguishable content refuses to guess", "[rou
 }
 
 // The former "an epoch change with at most one slot re-associates
-// immediately" case lived here. It pinned the loop-order gauge adoption
-// that is now gone (see "an epoch change with one filled slot registers
-// rather than guesses", below the oriented-roll helpers this file defines
-// later): one filled slot fixes a face but leaves four rolls, and a roll
-// chosen by iteration order misfiles all nine stickers once the write path
-// honours the gauge's cell component.
+// immediately" case lived here. Only its two re-keying SECTIONs were
+// superseded: they pinned the loop-order gauge adoption that is now gone
+// (see "a one-slot epoch adoption picks its roll from the stickers", below
+// the oriented-roll helpers this file defines later), because one filled
+// slot fixes a face but leaves four rolls, and a roll chosen by iteration
+// order misfiles all nine stickers once the write path honours the gauge's
+// cell component.
+//
+// Its third SECTION was NOT superseded and is not about roll at all - it
+// is the only cover anywhere for adopt_gauge_direct's refusal branch and
+// the quarantine its caller reports. It has been carried over into that
+// same replacement case rather than dropped, with a retry added: its
+// original assertions turn out to hold with the refusal deleted, so they
+// never covered what they appeared to (see the comment there).
 
 TEST_CASE("registration margin counts runner-ups above the commit bar", "[routing]") {
     // The header contract is "winner at most epoch_register_max_score AND
@@ -1064,6 +1072,56 @@ TEST_CASE("a one-slot epoch adoption picks its roll from the stickers", "[routin
         for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
             CHECK(cv::norm(content->lab[cell] - stored.lab[cell]) == 0.0);
         }
+    }
+
+    SECTION("a near-duplicate centre that fails the tight match quarantines") {
+        // Restored from the retired "an epoch change with at most one slot
+        // re-associates immediately" case: this is the only place that
+        // reaches adopt_gauge_direct's refusal branch and its caller's
+        // quarantine/duplicate_centre reporting. It survives the D1 rewrite
+        // untouched because the refusal fires BEFORE any roll is ranked -
+        // the fixture below only needs the store's CENTRE, and the centre
+        // cell is rotation-invariant, so `patterned()` under kTrueGauge
+        // presents the same red centre the original solid store did.
+        //
+        // Centre within the duplicate radius of the stored red, but three
+        // stickers read green (census past the re-association drift): could
+        // be the stored face badly lit, could be a different face aliasing
+        // it - the router adopts nothing and writes nothing.
+        CapturedFace suspect = solid(kWashedOrangeAsRed);
+        suspect = with_sticker(suspect, 0, kGreen);
+        suspect = with_sticker(suspect, 1, kGreen);
+        suspect = with_sticker(suspect, 2, kGreen);
+        const auto result = router.commit(Face::U, suspect, 2000);
+        CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK(result.duplicate_centre);
+        CHECK(router.filled_count() == 1);
+        const CapturedFace* content = router.slot_at(0);
+        REQUIRE(content != nullptr);
+        for (std::size_t cell = 0; cell < stored.lab.size(); ++cell) {
+            CHECK(cv::norm(content->lab[cell] - stored.lab[cell]) == 0.0);
+        }
+
+        // The assertion that actually pins the refusal branch, and the
+        // reason the outcome checks above cannot do it alone: deleting the
+        // refusal lets the !matches path adopt a NON-COLLIDING gauge, so
+        // the capture reaches commit_direct against an EMPTY target, where
+        // the second duplicate-centre scan quarantines it with the same
+        // outcome and the same flag. The two are distinguishable only on
+        // retry. Refusing leaves gauge_known_ false and touches no counter
+        // (adopt has no strike state by design - see capture_routing.cpp,
+        // "each retry re-tests genuinely fresh evidence rather than
+        // re-accusing a fixed claimed face"), so a second identical pass
+        // must quarantine again WITHOUT escalating. Adopting instead pins
+        // the gauge and routes the retry through commit_direct's counter,
+        // which reaches conflict_strikes (2) on this very pass and
+        // force-loses a track on evidence the router explicitly declined
+        // to trust.
+        const auto retry = router.commit(Face::U, suspect, 4000);
+        CHECK(retry.outcome == CommitOutcome::quarantined);
+        CHECK(retry.duplicate_centre);
+        CHECK_FALSE(retry.force_lost);
+        CHECK(router.filled_count() == 1);
     }
 }
 
