@@ -546,6 +546,55 @@ TEST_CASE("a mirror-flipped pose can neither anchor nor join an epoch", "[tracke
     CHECK(anchored.epoch == 1);
 }
 
+TEST_CASE("the implied-rate gate judges the span since the last accept, not one frame", "[tracker]") {
+    SECTION("a displaced re-detection after coasting is refused by geometry, not rate") {
+        Sim sim;
+        sim.noise_deg = 0.0F;
+        sim.lock_on();
+        for (int pass = 0; pass < 5; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        const int epoch_before = sim.tracker.epoch();
+        // Five coasted misses at ~100 ms cadence: ~500 ms with nothing
+        // accepted, inside the coast timeout.
+        for (int pass = 0; pass < 5; ++pass) {
+            sim.t_ms += 67;  // step_miss adds the remaining 33
+            REQUIRE(sim.step_miss().state == TrackState::coasting);
+        }
+        // The cube turned 44 degrees DURING the gap - 88 deg/s over the
+        // real span, casual wrist speed. Dividing by the final 100 ms
+        // frame interval instead "implies" 440 deg/s, which the old
+        // per-dt denominator discarded as a flip glitch and chained
+        // toward a teleport re-anchor (live3's 45 omega-outlier refusals
+        // mid-turn). The honest verdict is the geometry one: the coasted
+        // prediction cannot vouch for a 44-degree residual, so the basin
+        // gate refuses it and the track keeps coasting in its epoch.
+        sim.t_ms += 67;
+        sim.advance({0.0F, 440.0F, 0.0F}, 0.1F);
+        const auto out = sim.step_obs();
+        CHECK(out.gate == TrackGate::basin);
+        CHECK(out.state == TrackState::coasting);
+        CHECK(sim.tracker.epoch() == epoch_before);
+    }
+    SECTION("a jump inside one frame interval still trips the gate") {
+        Sim sim;
+        sim.noise_deg = 0.0F;
+        sim.lock_on();
+        for (int pass = 0; pass < 5; ++pass) {
+            REQUIRE(sim.step_obs().state == TrackState::locked);
+        }
+        // Immediately after an accept the span IS the frame interval:
+        // a 30-degree jump in 33 ms (~900 deg/s) sits inside the basin
+        // threshold, so the rate gate is the only thing standing between
+        // this glitch and a wrongly adopted measurement - it must still
+        // fire exactly as before the denominator change.
+        const Quat glitch = quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 30.0F), sim.observation());
+        const auto out = sim.step_obs(glitch);
+        CHECK(out.gate == TrackGate::omega_outlier);
+        CHECK(out.state == TrackState::coasting);
+    }
+}
+
 TEST_CASE("three consistent outliers hard re-anchor into a new epoch", "[tracker]") {
     Sim sim;
     sim.lock_on();

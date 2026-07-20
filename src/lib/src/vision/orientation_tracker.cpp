@@ -206,7 +206,28 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // division of labour with the plausibility gate).
     const float omega_mag_deg_s = std::sqrt(omega_deg_s_[0] * omega_deg_s_[0] + omega_deg_s_[1] * omega_deg_s_[1] +
                                             omega_deg_s_[2] * omega_deg_s_[2]);
-    const float implied_deg_s = quat_angle_deg(q_meas, q_track_) / dt_s;
+    // The rate is judged over the span the jump actually ACCUMULATED - the
+    // wall time since the last accepted measurement - not this pass's
+    // frame interval. The residual to q_track_ is everything the coasted
+    // prediction failed to anticipate since that accept, so dividing it by
+    // one 65-130 ms dt manufactured impossible rates out of ordinary
+    // mid-turn re-detections (live3: 45 omega-outlier refusals, ~35 of
+    // which implied under the ceiling over their real span) and turned
+    // this gate into a duplicate basin refusal with a LOWER threshold on
+    // short-dt passes. Immediately after an accept the span IS the frame
+    // interval, so the single-interval glitch behaviour the gate exists
+    // for is unchanged. While an outlier CHAIN is active the per-pass dt
+    // stays the denominator: a chain means the last observation already
+    // implied an impossible rate over its own honest span, and letting
+    // the span dilute the follow-ups would launder a genuine teleport's
+    // gauge-absorbed residual (a 120-degree regrip resolves to a
+    // 30-degree residual on a 90-degree slip - a silently wrong identity)
+    // into an acceptable rate on the very pass that should have completed
+    // the chain and re-anchored.
+    const float accept_span_s = std::clamp(static_cast<float>(input.t_ms - last_accept_t_ms_) / 1000.0F,
+                                           config_.min_dt_s, config_.max_dt_s);
+    const float rate_span_s = outlier_count_ > 0 ? dt_s : accept_span_s;
+    const float implied_deg_s = quat_angle_deg(q_meas, q_track_) / rate_span_s;
     if (implied_deg_s > config_.outlier_omega_deg_s + omega_mag_deg_s) {
         bool chained = false;
         if (outlier_count_ > 0) {
