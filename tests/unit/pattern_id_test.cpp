@@ -57,6 +57,7 @@
 #include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
+#include <cube/vision/session_color_model.hpp>
 #include <cube/vision/stability.hpp>
 
 #include <opencv2/imgcodecs.hpp>
@@ -88,6 +89,19 @@ const char* state_name(TrackState state) {
         case TrackState::coasting: return "coasting";
     }
     return "?";
+}
+
+char color_letter(cube::model::FacetColor color) {
+    switch (color) {
+        case cube::model::FacetColor::white: return 'W';
+        case cube::model::FacetColor::yellow: return 'Y';
+        case cube::model::FacetColor::red: return 'R';
+        case cube::model::FacetColor::orange: return 'O';
+        case cube::model::FacetColor::green: return 'G';
+        case cube::model::FacetColor::blue: return 'B';
+        case cube::model::FacetColor::unknown: return '?';
+    }
+    return '?';
 }
 
 const char* face_name(cube::model::Face face) {
@@ -141,6 +155,13 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
 
     StabilityTracker stability;
     OrientationTracker tracker;
+    // One model per CLIP, because one clip is one session: the whole point
+    // of SessionColorModel is that its references belong to the session's
+    // light, not to a compile-time constant. Fed in pass order, so what the
+    // CSV records is what production would have seen live at that moment -
+    // an early face is named on the bootstrap prior alone, a late one on
+    // references the session itself supplied.
+    SessionColorModel session_colors;
     std::optional<PoseSeed> seed_prior;
     std::int64_t seed_t_ms = 0;
 
@@ -277,9 +298,29 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
                 std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]), static_cast<double>(lab[1]),
                              static_cast<double>(lab[2]));
             }
+
+            // The two nine-sticker strings whose reading-consistency is
+            // the measurement. Both are produced by PRODUCTION code, not
+            // re-derived in the analysis script: abs_pattern is
+            // classify_lab per sticker (the baseline), sess_pattern is
+            // SessionColorModel over the same nine Lab values.
+            // classify_and_observe, in pass order, so the session learns
+            // exactly and only from what it had already been shown.
+            std::string absolute;
+            for (const auto& lab : face->lab) {
+                absolute.push_back(color_letter(classify_lab(lab).color));
+            }
+            const SessionFaceReading relative = session_colors.classify_and_observe(face->lab);
+            std::string session;
+            for (const auto& facelet : relative.facelets) {
+                session.push_back(color_letter(facelet.color));
+            }
+            std::fprintf(out, ",%s,%s,%c,%d", absolute.c_str(), session.c_str(),
+                         color_letter(relative.facelets[cube::model::center_facelet_index].color),
+                         relative.group_count);
         } else {
             std::fprintf(out, ",-1");
-            for (int blank = 0; blank < 7 + 27; ++blank) {
+            for (int blank = 0; blank < 7 + 27 + 4; ++blank) {
                 std::fprintf(out, ",");
             }
         }
@@ -352,7 +393,7 @@ TEST_CASE("PatternIdExtract", "[.pattern-id]") {
     for (int cell = 0; cell < 9; ++cell) {
         std::fprintf(out, ",L%d,a%d,b%d", cell, cell, cell);
     }
-    std::fprintf(out, "\n");
+    std::fprintf(out, ",abs_pattern,sess_pattern,sess_centre,sess_groups\n");
 
     for (const auto& clip : clips) {
         emit_clip(clip, clip.filename().string(), out);
