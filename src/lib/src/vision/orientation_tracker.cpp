@@ -384,6 +384,25 @@ void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input,
 }
 
 bool OrientationTracker::update_belief_and_refs(int lattice_index, const TrackerPassInput& input) {
+    // The reference-learning guard, hoisted out of the loop: teaching is
+    // suspended while some REF-BACKED hypothesis strictly leads identity -
+    // a slip candidate with real evidence behind it may be the truth, and
+    // references taught under it would launder the slip into the evidence
+    // base. Deliberately NOT the full margin: on real frames a run of
+    // blurred/specular centre samples drives the full margin negative
+    // through unknown-floor arithmetic alone, and live3's replay showed
+    // the full-margin guard then wedging the epoch permanently - a newly
+    // shown face could never learn its first reference (11 colour accepts
+    // of U, belief flatlined), so no evidence could ever accumulate to
+    // recover. An unknown-floor lead means "identity's samples look
+    // noisy", which is a reason to stay uncertain, not to stop learning.
+    float best_backed = -config_.belief_clamp;
+    for (std::size_t j = 0; j < kLatticeSize; ++j) {
+        if (j != static_cast<std::size_t>(kIdentityLatticeIndex) && hyp_ref_backed_[j]) {
+            best_backed = std::max(best_backed, log_belief_[j]);
+        }
+    }
+    const bool may_learn = log_belief_[static_cast<std::size_t>(kIdentityLatticeIndex)] >= best_backed;
     if (input.centre_lab_count > 0) {
         const auto observed_faces = [&](std::size_t obs) {
             return input.corner_view ? kCornerObsToBody[static_cast<std::size_t>(lattice_index)][obs].body_face
@@ -410,15 +429,14 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
                 }
                 log_belief_[j] += log_lik;
             }
-            // Learn/refresh the no-slip reference only while the no-slip
-            // hypothesis still leads: references taught by a slipped track
-            // would launder the slip into the evidence base. The margin
-            // guard alone is not enough - the stabilizer degeneracy pins
-            // it at exactly zero on single-centre evidence - so a KNOWN
-            // reference additionally refuses samples that contradict it
-            // (see ref_consistency_sigma): drift may teach it stepwise,
+            // Learn/refresh the no-slip reference only while no ref-backed
+            // slip hypothesis leads (see may_learn above). The guard alone
+            // is not enough - the stabilizer degeneracy pins the backed
+            // margin at exactly zero on single-centre evidence - so a
+            // KNOWN reference additionally refuses samples that contradict
+            // it (see ref_consistency_sigma): drift may teach it stepwise,
             // a different colour may not teach it at all.
-            if (belief_margin() >= 0.0F) {
+            if (may_learn) {
                 const auto ref_face = static_cast<std::size_t>(f0);
                 if (face_ref_known_[ref_face]) {
                     if (lab_distance(lab, face_ref_[ref_face]) <=

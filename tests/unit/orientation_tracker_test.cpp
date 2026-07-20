@@ -792,6 +792,47 @@ TEST_CASE("a single wild centre sample never vetoes; only ref-backed evidence ki
     }
 }
 
+TEST_CASE("a noise-suppressed margin does not wedge later reference learning", "[tracker]") {
+    // The live3 replay's epoch-7 flatline: noisy centre samples drove the
+    // full margin negative through unknown-floor arithmetic, and the old
+    // full-margin learning guard then refused to learn ANY new reference
+    // for the rest of the epoch - a newly shown face collected 11 colour
+    // accepts and taught nothing, so no evidence could ever accumulate to
+    // recover. Learning is gated on ref-backed leads only (a slip
+    // candidate with real evidence), so a wild-sample dip must not stop a
+    // new face from certifying afterwards.
+    Sim sim;
+    sim.feed_labs = true;
+    sim.lock_on();
+    for (int pass = 0; pass < 4; ++pass) {
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    // Wild samples matching no reference: identity takes the clamped
+    // penalty while the unknown floor doesn't, so once the run outlasts
+    // the clean head start the floor hypotheses lead and the full margin
+    // goes (honestly) negative.
+    sim.lab_raw_override = std::array<float, 3>{20.0F, 80.0F, -80.0F};
+    for (int pass = 0; pass < 10; ++pass) {
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    sim.lab_raw_override.reset();
+    REQUIRE(sim.step_obs().belief_margin < 0.0F);
+    // Tour to R: its reference must still be learnable, and its
+    // face-scoped certainty reachable, despite the depressed full margin.
+    const std::array<float, 3> to_r{0.0F, -90.0F, 0.0F};
+    for (int pass = 0; pass < 30; ++pass) {
+        sim.advance(to_r);
+        REQUIRE(sim.step_obs().state == TrackState::locked);
+    }
+    REQUIRE(nearest_face(sim.q_true) == Face::R);
+    TrackerPassOutput out{};
+    for (int pass = 0; pass < 8; ++pass) {
+        out = sim.step_obs();
+        REQUIRE(out.state == TrackState::locked);
+    }
+    CHECK(out.identity_certain_face[static_cast<std::size_t>(Face::R)]);
+}
+
 TEST_CASE("face-scoped certainty is reachable on single-centre evidence; the full bar is not", "[tracker]") {
     // The live3 deadlock in miniature: a frontal hold observing one face's
     // centre. The observed face's in-plane stabilizers map it onto itself,
