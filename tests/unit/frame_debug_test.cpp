@@ -403,7 +403,17 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
     std::printf(
         "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
-        "state,gate,front,epoch,src,belief,certain,certain_front\n");
+        "state,gate,front,epoch,src,belief,certain,certain_front,"
+        // Refusal forensics, appended so existing column-index parsers are
+        // unaffected. theta/margin are the tracker's own resolved numbers;
+        // r0/r1 are this harness's independent recomputation of the best
+        // and RUNNER-UP lattice residual against the same prediction (the
+        // tracker only reports their difference), l0/l1 the elements that
+        // produced them, and accept_deg the rotation from the last
+        // ACCEPTED absolute orientation to the best-composed observation -
+        // the "how big a turn was refused" quantity. sigma and thresh give
+        // the acceptance bar the refusal was judged against.
+        "theta,margin,r0,r1,l0,l1,accept_deg,sigma,thresh\n");
 
     // The newest pass determines which older rows' ring slots have provably
     // been rewritten on disk (see frame_overwritten) - must be known before
@@ -491,6 +501,31 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     cube::vision::IdleGate idle_gate;
     int would_skip_passes = 0;
     int idle_violations = 0;
+
+    // Epoch-boundary attribution. Each boundary is charged to what the
+    // track was DOING in the run of passes between its last accepted
+    // measurement and the re-anchor: a boundary preceded only by no-obs
+    // passes is a genuine detection loss (cube out of frame / occluded),
+    // one preceded by refusals is the tracker declining evidence it had.
+    // Counting the run rather than just the last pass matters because the
+    // final pass before a re-anchor is ALWAYS an anchor - the cause is
+    // upstream of it.
+    struct BoundaryRun {
+        int no_obs = 0;
+        int basin = 0;
+        int margin = 0;
+        int omega = 0;
+        int implausible = 0;
+        int slip = 0;
+        int passes = 0;
+    };
+    BoundaryRun run;
+    int previous_epoch = 0;
+    // Last ACCEPTED absolute orientation, mirrored from the harness side
+    // (the tracker keeps its own copy private): every accept/anchor sets
+    // q_track to the adopted measurement, so this is exactly q_last_accept.
+    std::optional<cube::vision::Quat> last_accept_q;
+    const cube::vision::TrackerConfig cfg;
 
     std::int64_t previous_t_ms = 0;
     bool have_previous = false;
@@ -688,8 +723,70 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         if (track.state == cube::vision::TrackState::locked && track.front_face) {
             locked_fronts_by_epoch[track.epoch].insert(front);
         }
-        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d\n", state_name(track.state), gate_name(track.gate), front, track.epoch,
+        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d,", state_name(track.state), gate_name(track.gate), front, track.epoch,
                     pose_src, track.belief_margin, track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
+
+        // Independent best/runner-up recomputation over the full lattice.
+        // The tracker reports only theta and their DIFFERENCE, but the
+        // safety question - "would exactly one element have explained this
+        // observation" - needs both absolute residuals and both element
+        // indices, and needs them on REFUSED passes where the tracker
+        // adopted nothing.
+        float r0 = -1.0F;
+        float r1 = -1.0F;
+        int l0 = -1;
+        int l1 = -1;
+        float accept_deg = -1.0F;
+        if (track_in.q_obs) {
+            for (std::size_t j = 0; j < cube::vision::kLatticeSize; ++j) {
+                const cube::vision::Quat composed =
+                    cube::vision::quat_multiply(*track_in.q_obs, cube::vision::kLattice24[j]);
+                const float residual = cube::vision::quat_angle_deg(composed, track.q_pred);
+                if (r0 < 0.0F || residual < r0) {
+                    r1 = r0;
+                    l1 = l0;
+                    r0 = residual;
+                    l0 = static_cast<int>(j);
+                } else if (r1 < 0.0F || residual < r1) {
+                    r1 = residual;
+                    l1 = static_cast<int>(j);
+                }
+            }
+            if (last_accept_q && l0 >= 0) {
+                accept_deg = cube::vision::quat_angle_deg(
+                    cube::vision::quat_multiply(*track_in.q_obs,
+                                                cube::vision::kLattice24[static_cast<std::size_t>(l0)]),
+                    *last_accept_q);
+            }
+        }
+        const float thresh = std::min(cfg.basin_ceiling_deg, track.sigma_deg + cfg.max_interframe_deg);
+        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n", track.theta_deg, track.margin_deg, r0, r1, l0, l1,
+                    accept_deg, track.sigma_deg, thresh);
+
+        // Boundary attribution + accept mirror, after the row is emitted.
+        if (track.epoch != previous_epoch) {
+            std::printf("# boundary epoch %d->%d at pass %d: run=%d no-obs=%d basin=%d margin=%d omega=%d "
+                        "implausible=%d slip=%d\n",
+                        previous_epoch, track.epoch, row.pass, run.passes, run.no_obs, run.basin, run.margin, run.omega,
+                        run.implausible, run.slip);
+            previous_epoch = track.epoch;
+            run = BoundaryRun{};
+        }
+        if (pass_accepted) {
+            last_accept_q = track.q_track;
+            run = BoundaryRun{};
+        } else {
+            ++run.passes;
+            switch (track.gate) {
+                case cube::vision::TrackGate::no_observation: ++run.no_obs; break;
+                case cube::vision::TrackGate::basin: ++run.basin; break;
+                case cube::vision::TrackGate::margin: ++run.margin; break;
+                case cube::vision::TrackGate::omega_outlier: ++run.omega; break;
+                case cube::vision::TrackGate::implausible: ++run.implausible; break;
+                case cube::vision::TrackGate::slip_evidence: ++run.slip; break;
+                default: break;
+            }
+        }
         ++replayed;
     }
 

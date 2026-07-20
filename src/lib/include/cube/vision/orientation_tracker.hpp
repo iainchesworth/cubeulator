@@ -305,6 +305,16 @@ struct TrackerPassOutput {
     TrackState state = TrackState::lost;
     TrackGate gate = TrackGate::no_observation;
     Quat q_track{1.0F, 0.0F, 0.0F, 0.0F};
+    // The constant-omega prediction this pass's observation was gated
+    // AGAINST, before any adoption - diagnostics only, nothing in the
+    // pipeline steers on it. Exposed because every question about a
+    // REFUSAL ("how far off was it", "would some other lattice element
+    // have explained it") is a question about the prediction, and
+    // reconstructing it offline from the CSV is impossible: omega_ is an
+    // EMA over accepted measurements only, so a coasted prediction cannot
+    // be re-derived from the accepted poses alone. Equals q_track on the
+    // lost/anchor paths, where there is no prediction to speak of.
+    Quat q_pred{1.0F, 0.0F, 0.0F, 0.0F};
     float sigma_deg = 0.0F;
     int lattice_index = -1;    // (resolved) element S
     float theta_deg = 0.0F;    // (resolved) residual to prediction

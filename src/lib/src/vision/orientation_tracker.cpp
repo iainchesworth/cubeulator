@@ -168,6 +168,7 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     const float dt_s = std::clamp(static_cast<float>(out.dt_ms) / 1000.0F, config_.min_dt_s, config_.max_dt_s);
     const std::array<float, 3> step{omega_deg_s_[0] * dt_s, omega_deg_s_[1] * dt_s, omega_deg_s_[2] * dt_s};
     const Quat q_pred = normalized(quat_multiply(quat_from_rotvec_deg(step), q_track_));
+    out.q_pred = q_pred;
 
     if (!input.q_obs) {
         miss(q_pred, input, out, TrackGate::no_observation);
@@ -485,6 +486,12 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
 void OrientationTracker::finish_output(TrackerPassOutput& out) const noexcept {
     out.state = state_;
     out.q_track = q_track_;
+    if (out.q_pred[0] == 1.0F && out.q_pred[1] == 0.0F && out.q_pred[2] == 0.0F && out.q_pred[3] == 0.0F) {
+        // Never predicted this pass (lost branch, or anchored): report the
+        // adopted orientation so a consumer never mistakes the default for
+        // a real prediction of the frontal pose.
+        out.q_pred = q_track_;
+    }
     out.sigma_deg = sigma_deg_;
     out.epoch = epoch_;
     out.belief_margin = belief_margin();
