@@ -390,14 +390,23 @@ private:
     // element j" - kIdentityLatticeIndex is the no-slip hypothesis. Kept
     // renormalised (max entry 0) and clamped (see belief_clamp).
     std::array<float, kLatticeSize> log_belief_{};
-    // Per-hypothesis "carries real evidence" bit: set once the hypothesis
-    // has been scored against a LEARNED face reference at least once. Only
-    // a ref-backed hypothesis may win the slip veto: an unknown-floor
-    // hypothesis's lead is pure floor arithmetic (identity got penalised,
-    // the unknown floor didn't), which is evidence that identity's samples
-    // were noisy, not that any particular slip happened - live3 lost 21
-    // epochs to exactly that non-evidence before the bit existed.
-    std::array<bool, kLatticeSize> hyp_ref_backed_{};
+    // Per-hypothesis evidence-based advantage over identity, accumulated
+    // ONLY on observations where the hypothesis itself was scored against
+    // a LEARNED face reference (its log-likelihood minus identity's, both
+    // from the same sample; clamped to +-belief_clamp). This - not the
+    // log_belief_ margin - is what the slip veto judges: a hypothesis's
+    // log_belief_ lead can be built entirely from floor arithmetic
+    // (identity penalised by noisy samples while the unknown floor is
+    // not), which is evidence that identity's samples were noisy, not
+    // that any particular slip happened. live3 lost 21 epochs to exactly
+    // that non-evidence, and a mere scored-once eligibility bit was not
+    // enough either: a hypothesis whose lead accrued at the floor could
+    // become veto-eligible retroactively by ONE later ref scoring. The
+    // accumulator isolates the floor entirely - a real slip's signature
+    // (samples matching the slipped-to face's reference while mismatching
+    // identity's) earns positive advantage in two or three observations,
+    // while any amount of wild noise earns none.
+    std::array<float, kLatticeSize> slip_evidence_{};
     // Per-body-face centre-Lab references learned within the epoch; the
     // likelihood evidence the belief update scores hypotheses against.
     std::array<std::array<float, 3>, 6> face_ref_{};
