@@ -874,3 +874,44 @@ TEST_CASE("oriented cell distance reads zero only for the true relabel", "[routi
     const CapturedFace stored = relabelled(pattern, Face::F, 4 * 2 + 1);
     CHECK(oriented_cell_lab_distance(pattern, stored, Face::F, 4 * 2 + 2) > 0.0F);
 }
+
+TEST_CASE("a tracker reset re-opens registration on a two-face store", "[routing]") {
+    // The retake defect. ScanSession::retakeFace() re-inits the tracker -
+    // restarting its epoch counter at zero - but deliberately KEEPS the
+    // slot store, because a retake re-reads one face rather than discarding
+    // the scan. The router must be told, and told SEPARATELY from
+    // on_epoch(): the restarted counter can hand back a number the router
+    // has already seen, and on_epoch() early-returns on an unchanged
+    // number, leaving gauge_ describing the dead track's body frame while
+    // every later commit is routed under it.
+    //
+    // What this asserts is the observable consequence of the notification
+    // the buggy path omitted entirely: with two faces stored, a new locked
+    // segment must enter recovery (commits buffer until the gauge
+    // re-registers against stored content) rather than carrying on as
+    // though the old frame still applied.
+    const RoutingConfig config;
+    CaptureRouter router{config};
+
+    router.on_epoch(7);
+    REQUIRE(router.commit(Face::F, solid(kRed), 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::U, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+    REQUIRE(router.filled_count() == 2);
+    REQUIRE_FALSE(router.reorienting());
+
+    // The tracker was reset underneath us. Without this notification the
+    // router keeps a live gauge for a track that no longer exists; the
+    // subsequent on_epoch() cannot rescue it, because the restarted counter
+    // may reproduce an epoch number already seen.
+    router.on_tracker_reset();
+    CHECK(router.reorienting());
+    // Both captures survive - a retake must not discard the scan.
+    CHECK(router.filled_count() == 2);
+
+    // And the number really is forgotten: re-registration still happens
+    // even when the fresh anchor reproduces the pre-reset epoch number,
+    // which is precisely the collision on_epoch()'s early return could not
+    // distinguish from "nothing changed".
+    router.on_epoch(7);
+    CHECK(router.reorienting());
+}

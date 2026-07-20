@@ -330,6 +330,19 @@ public:
     // reset here.
     void on_epoch(int epoch);
 
+    // Call whenever the TRACKER is reset (not merely re-anchored). Its
+    // epoch counter restarts from zero, so the next anchor can hand back an
+    // epoch NUMBER this router has already seen - and on_epoch() early-
+    // returns on an unchanged number, silently keeping a gauge that
+    // describes the body frame of a track that no longer exists. Every
+    // later commit is then routed under a dead permutation, which surfaces
+    // as capture stalling into duplicate-centre quarantines and repeated
+    // force-lost after a retake. Forgetting the number restores the
+    // invariant that a gauge only ever outlives the track it was
+    // registered against. Slots are deliberately KEPT: a retake re-reads
+    // one face, it does not discard the faces already captured.
+    void on_tracker_reset();
+
     // True while a post-loss epoch is buffering against an unresolved
     // gauge - the UI's "re-orienting" chip.
     [[nodiscard]] bool reorienting() const noexcept { return recovering_; }
@@ -372,6 +385,11 @@ private:
         CommitOutcome outcome;
         int slot_index = -1;
     };
+
+    // Everything a new locked segment invalidates: the gauge, the buffered
+    // epoch faces, and the epoch-scoped conflict evidence. Shared by
+    // on_epoch() and on_tracker_reset() so the two can never drift.
+    void begin_epoch_scope();
 
     // The gauge-resolved commit core (rules 2-6 of the identity policy).
     DirectCommit commit_direct(cube::model::Face epoch_face, const CapturedFace& captured, std::int64_t now_ms,
