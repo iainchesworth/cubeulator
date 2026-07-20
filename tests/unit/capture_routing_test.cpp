@@ -595,3 +595,140 @@ TEST_CASE("retake clears exactly one slot by fill index", "[routing]") {
     CHECK(refill.outcome == CommitOutcome::filled);
     CHECK(router.filled_count() == 3);
 }
+
+// ---------------------------------------------------------------------------
+// Oriented roll registration. The structural gap these cover: census and
+// centre colour are both rotation-invariant, so the four lattice elements
+// fixing a face score IDENTICALLY under them. With one recognised epoch
+// face that tie is unbreakable by score, and it is broken here only by the
+// ordered stickers.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// A face with nine visually distinct cells, so every roll of it is
+// distinguishable - the ordinary scrambled-cube case.
+[[nodiscard]] CapturedFace patterned() {
+    CapturedFace face = solid(kRed);
+    face.lab[0] = kBlue;
+    face.lab[1] = kBlue;
+    face.lab[2] = kGreen;
+    face.lab[3] = kWhite;
+    face.lab[5] = kGreen;
+    face.lab[6] = kYellow;
+    face.lab[7] = kWhite;
+    face.lab[8] = kYellow;
+    return face;
+}
+
+// The same physical face as the store would hold it after a whole-cube
+// rotation by `lattice_index`: cell k of `source` on `source_face` becomes
+// cell kBodyRelabel[...][k] of the face it rotates onto.
+[[nodiscard]] CapturedFace relabelled(const CapturedFace& source, Face source_face, int lattice_index) {
+    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(source_face)];
+    CapturedFace out;
+    for (std::size_t k = 0; k < source.lab.size(); ++k) {
+        out.lab[static_cast<std::size_t>(map.cell[k])] = source.lab[k];
+    }
+    return out;
+}
+
+}  // namespace
+
+TEST_CASE("a single epoch face registers its roll against two filled slots", "[routing]") {
+    // THE live5 case, and the reason a six-face scan could not complete.
+    // The store holds two faces that are NOT opposites, and the epoch has
+    // recognised exactly one of them. Exactly four permutations send that
+    // epoch face to that slot; they score identically on every
+    // rotation-invariant term, so the runner-up margin can never separate
+    // them. Four times in five the second slot lands inside one of their
+    // 4-cycles, which used to make the outcome `ambiguous` with
+    // certainty - registration deferred forever and coverage stalled at
+    // two faces.
+    const RoutingConfig config;
+    const CapturedFace pattern = patterned();
+
+    // A true gauge that is NOT the identity, so a table that quietly
+    // ignored the roll could not pass by accident.
+    constexpr int kTrueGauge = 4 * 2 + 1;  // quarter turn about the F axis
+    const Face store_face = kFacePermutation[kTrueGauge][static_cast<std::size_t>(Face::F)];
+    REQUIRE(store_face == Face::F);
+
+    std::array<std::optional<CapturedFace>, 6> slots{};
+    slots[static_cast<std::size_t>(store_face)] = relabelled(pattern, Face::F, kTrueGauge);
+    // The second slot: a different physical face, NOT the opposite of the
+    // first (opposite is the one-in-five case that already resolved).
+    slots[static_cast<std::size_t>(Face::U)] = solid(kOrange);
+    REQUIRE(Face::U != Face::B);  // B is F's opposite
+
+    std::vector<EpochFaceSample> samples;
+    samples.push_back({Face::F, pattern});
+
+    SECTION("the correct roll is chosen, not merely the correct face") {
+        const auto registration = register_epoch_gauge(samples, slots, config);
+        REQUIRE(registration.status == EpochRegistration::Status::resolved);
+        CHECK(registration.basis == EpochRegistration::Basis::oriented);
+        CHECK(registration.lattice_index == kTrueGauge);
+        // The tie really was the structural four-fold one.
+        CHECK(registration.tied == 4);
+        CHECK(registration.best_oriented_lab < registration.runner_up_oriented_lab);
+    }
+
+    SECTION("every wrong roll of the right face is rejected") {
+        // Each of the other three rotations fixing F maps the epoch face
+        // onto the same slot with the same census and centre - only the
+        // sticker order tells them apart, so registration must land on
+        // exactly one of the four.
+        for (int roll = 0; roll < 4; ++roll) {
+            const int gauge = 4 * 2 + roll;
+            std::array<std::optional<CapturedFace>, 6> rolled{};
+            rolled[static_cast<std::size_t>(kFacePermutation[static_cast<std::size_t>(gauge)]
+                                                           [static_cast<std::size_t>(Face::F)])] =
+                relabelled(pattern, Face::F, gauge);
+            rolled[static_cast<std::size_t>(Face::U)] = solid(kOrange);
+            const auto registration = register_epoch_gauge(samples, rolled, config);
+            REQUIRE(registration.status == EpochRegistration::Status::resolved);
+            CHECK(registration.lattice_index == gauge);
+        }
+    }
+
+    SECTION("a rotationally symmetric face stays ambiguous") {
+        // A solid face reads the same under all four rolls, so the
+        // oriented margin is exactly zero and the tie-break must decline
+        // rather than invent a roll. Content equivalence then also
+        // declines (the second slot sits inside a 4-cycle whose other
+        // targets are empty), leaving the honest refusal.
+        std::array<std::optional<CapturedFace>, 6> symmetric{};
+        symmetric[static_cast<std::size_t>(Face::F)] = solid(kRed);
+        symmetric[static_cast<std::size_t>(Face::U)] = solid(kOrange);
+        std::vector<EpochFaceSample> solid_sample;
+        solid_sample.push_back({Face::F, solid(kRed)});
+        const auto registration = register_epoch_gauge(solid_sample, symmetric, config);
+        CHECK(registration.status == EpochRegistration::Status::ambiguous);
+    }
+
+    SECTION("a face matching no stored slot is refused, however its rolls rank") {
+        // The oriented tie-break may only adjudicate a tie the score
+        // already accepted; it must never rescue a hypothesis that failed
+        // the commit bar. A wholly unseen face is the `insufficient`
+        // deferral that keeps new content out of an occupied store.
+        std::array<std::optional<CapturedFace>, 6> unseen{};
+        unseen[static_cast<std::size_t>(Face::F)] = solid(kGreen);
+        unseen[static_cast<std::size_t>(Face::U)] = solid(kOrange);
+        const auto registration = register_epoch_gauge(samples, unseen, config);
+        CHECK(registration.status != EpochRegistration::Status::resolved);
+    }
+}
+
+TEST_CASE("oriented cell distance reads zero only for the true relabel", "[routing]") {
+    const CapturedFace pattern = patterned();
+    for (int gauge = 0; gauge < static_cast<int>(kLatticeSize); ++gauge) {
+        const CapturedFace stored = relabelled(pattern, Face::F, gauge);
+        // Under its own gauge every sticker lines up exactly.
+        CHECK(oriented_cell_lab_distance(pattern, stored, Face::F, gauge) == 0.0F);
+    }
+    // ...and under a different roll of the same face it does not. The
+    // centre is excluded, so this is purely the eight ring stickers.
+    const CapturedFace stored = relabelled(pattern, Face::F, 4 * 2 + 1);
+    CHECK(oriented_cell_lab_distance(pattern, stored, Face::F, 4 * 2 + 2) > 0.0F);
+}

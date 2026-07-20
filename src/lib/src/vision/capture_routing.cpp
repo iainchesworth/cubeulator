@@ -64,6 +64,23 @@ float registration_pair_score(const CapturedFace& a, const CapturedFace& b, cons
            2.0F * centre_lab_distance(a, b) / config.content_equiv_lab;
 }
 
+float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
+                                 cube::model::Face epoch_body_face, int lattice_index) {
+    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(epoch_body_face)];
+    float total = 0.0F;
+    int counted = 0;
+    for (std::size_t cell = 0; cell < epoch_face.lab.size(); ++cell) {
+        if (cell == cube::model::center_facelet_index) {
+            continue;  // rotation-invariant: carries no roll information
+        }
+        const auto target = static_cast<std::size_t>(map.cell[cell]);
+        const cv::Vec3f diff = epoch_face.lab[cell] - stored.lab[target];
+        total += std::sqrt(diff.dot(diff));
+        ++counted;
+    }
+    return counted > 0 ? total / static_cast<float>(counted) : 0.0F;
+}
+
 EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch_faces,
                                        const std::array<std::optional<CapturedFace>, 6>& slots,
                                        const RoutingConfig& config) {
@@ -99,6 +116,12 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         int index = 0;
         float mean_score = std::numeric_limits<float>::max();
         int pairs = 0;
+        // Mean non-centre Lab over the same induced pairs. Carried
+        // alongside rather than folded into mean_score deliberately: it
+        // must not shift the commit bar or the margin, both of which are
+        // calibrated in census-L1 points against the rotation-invariant
+        // terms. It only ever adjudicates candidates those terms tied.
+        float oriented_lab = 0.0F;
     };
     std::vector<Candidate> candidates;
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
@@ -110,6 +133,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             continue;
         }
         float score = 0.0F;
+        float oriented = 0.0F;
         int pairs = 0;
         for (const auto& sample : epoch_faces) {
             const Face target = perm[static_cast<std::size_t>(sample.epoch_face)];
@@ -117,6 +141,7 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             if (slot) {
                 ++pairs;
                 score += registration_pair_score(sample.captured, *slot, config);
+                oriented += oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, g);
             }
         }
         // Every pin-satisfying hypothesis with at least one induced pair
@@ -128,7 +153,8 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         // and commit the winner while a barely-worse hypothesis was still
         // alive.
         if (pairs > 0) {
-            candidates.push_back({g, score / static_cast<float>(pairs), pairs});
+            candidates.push_back({g, score / static_cast<float>(pairs), pairs,
+                                  oriented / static_cast<float>(pairs)});
         }
     }
 
@@ -146,6 +172,13 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
         }
         return a.index < b.index;
     });
+
+    out.candidates = static_cast<int>(candidates.size());
+    if (!candidates.empty()) {
+        out.best_score = candidates.front().mean_score;
+        out.runner_up_score =
+            candidates.size() > 1 ? candidates[1].mean_score : std::numeric_limits<float>::infinity();
+    }
 
     if (candidates.empty() || candidates.front().mean_score > config.epoch_register_max_score) {
         // Distinguish "nothing recognised yet" (no epoch face tightly
@@ -167,8 +200,39 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             tied.push_back(&candidate);
         }
     }
+    out.tied = static_cast<int>(tied.size());
     if (tied.size() > 1) {
-        // Content-equivalence tie-break: the tie is harmless exactly when
+        // Stage 1 - oriented roll tie-break. The tied set is dominated by
+        // the structural four-fold degeneracy: every element fixing a
+        // given face scores identically under census and centre colour,
+        // both rotation-invariant. Ordered stickers are not, so rank the
+        // tied set by them and take the winner if it is both absolutely
+        // plausible and decisively better than the next.
+        //
+        // Ordering by oriented distance ONLY within the already-tied set
+        // is what keeps this conservative: the score bar and margin have
+        // already had their say, so this can never promote a candidate
+        // they rejected - it only chooses among ones they could not
+        // separate.
+        std::vector<const Candidate*> by_roll = tied;
+        std::ranges::sort(by_roll, [](const Candidate* a, const Candidate* b) {
+            if (a->oriented_lab != b->oriented_lab) {
+                return a->oriented_lab < b->oriented_lab;
+            }
+            return a->index < b->index;  // deterministic on exact ties
+        });
+        out.best_oriented_lab = by_roll.front()->oriented_lab;
+        out.runner_up_oriented_lab = by_roll[1]->oriented_lab;
+        if (by_roll.front()->oriented_lab <= config.epoch_register_oriented_max_lab &&
+            by_roll[1]->oriented_lab - by_roll.front()->oriented_lab >=
+                config.epoch_register_oriented_margin_lab) {
+            out.status = EpochRegistration::Status::resolved;
+            out.basis = EpochRegistration::Basis::oriented;
+            out.lattice_index = by_roll.front()->index;
+            return out;
+        }
+
+        // Stage 2 - content-equivalence tie-break: the tie is harmless exactly when
         // no choice among the tied permutations changes what any epoch
         // face would MEAN to assembly - each face's possible targets are
         // all empty (fills an interchangeable empty key) or all mutually
@@ -209,6 +273,8 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
     }
 
     out.status = EpochRegistration::Status::resolved;
+    out.basis = tied.size() > 1 ? EpochRegistration::Basis::content_equivalent
+                                : EpochRegistration::Basis::unique;
     out.lattice_index = best.index;
     return out;
 }
@@ -438,6 +504,7 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
                 samples.push_back({face, *epoch_faces_[static_cast<std::size_t>(face)]});
             }
             const EpochRegistration registration = register_epoch_gauge(samples, store_view, config_);
+            result.registration = registration;
             if (registration.status != EpochRegistration::Status::resolved) {
                 result.outcome = CommitOutcome::deferred;
                 return result;

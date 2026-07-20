@@ -115,6 +115,28 @@ struct RoutingConfig {
     // see registration_pair_score).
     float epoch_register_max_score = 6.0F;
     float epoch_register_margin = 4.0F;
+    // Oriented roll tie-break (see oriented_cell_lab_distance). Applied
+    // ONLY to candidates already tied on the score above, and in raw mean
+    // Lab over the eight non-centre stickers - not score points, because
+    // it answers a different question (which ROLL) with evidence the
+    // score's rotation-invariant terms structurally cannot carry.
+    //
+    // Bar: even the best roll must be this close in mean per-cell Lab, or
+    // the hypothesis is matching the wrong face entirely and no roll of it
+    // deserves to win. 20 sits well above honest cross-epoch drift on a
+    // re-shown face (exposure and white balance move a captured face by
+    // single-digit Lab) and well below a genuine sticker disagreement (two
+    // different cube colours are 40+ Lab apart), so the gap it must
+    // discriminate is roughly 2:1 either side.
+    float epoch_register_oriented_max_lab = 20.0F;
+    // Margin: the winning roll must beat the runner-up by this much mean
+    // Lab or the tie is NOT broken here and falls through to the existing
+    // content-equivalence check. On a rotationally symmetric face (a
+    // solved face, or one whose pattern repeats under a quarter turn) all
+    // four rolls score identically and this margin is never met - which is
+    // the correct outcome, not a failure: the rolls really are
+    // interchangeable and content equivalence is the right adjudicator.
+    float epoch_register_oriented_margin_lab = 6.0F;
 };
 
 // Content distance used by epoch registration, in census-L1-equivalent
@@ -123,6 +145,27 @@ struct RoutingConfig {
 // both signals vote, neither can shout the other down.
 [[nodiscard]] float registration_pair_score(const CapturedFace& a, const CapturedFace& b,
                                             const RoutingConfig& config);
+
+// Mean Lab distance over the eight NON-CENTRE stickers between an epoch
+// face and a stored slot, once the epoch face's cells are relabelled into
+// the stored face's frame by hypothesis `lattice_index` (kBodyRelabel).
+// The centre is excluded because it is rotation-invariant - it says
+// nothing about roll and registration_pair_score already weighs it.
+//
+// This is the ONLY signal in the system that can tell the four rolls of a
+// face apart. Both census and centre colour are rotation-invariant by
+// construction, so exactly four of the 24 permutations (the stabiliser of
+// a face) score identically under them - a tie that is structural, not
+// noise, and that no amount of extra photometric evidence of the same
+// KIND could ever break. The ordered sticker array has carried the
+// information all along; nothing consumed it until now.
+//
+// Precondition: both faces are in solver order for their own body face
+// (as CapturedFace always is - see kBodyRelabel's note), `epoch_body_face`
+// is the epoch-frame face that `epoch_face` was captured on, and `stored`
+// is the slot at kFacePermutation[lattice_index][epoch_body_face].
+[[nodiscard]] float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
+                                               cube::model::Face epoch_body_face, int lattice_index);
 
 // 24-hypothesis photometric re-registration of a post-loss epoch against
 // the slot store (the recovery path that needs NO specific pose - any
@@ -141,24 +184,61 @@ struct RoutingConfig {
 //                 deferral that keeps a brand-new face out of an empty
 //                 slot until other epoch faces are positively recognised.
 //
-// Tie-break (the solved-cube termination guarantee): candidates tied
-// within the margin are accepted anyway IF, for every epoch face, the
-// slots the tied candidates map it onto are all empty or all pairwise
-// content-equivalent - the assignments differ only between interchangeable
-// content, so picking the best-scoring (lowest index on residual ties) is
-// harmless for assembly and unwedges a cube whose faces genuinely cannot
-// be told apart.
+// Tie-breaking, in the order applied. A tie here is usually the STRUCTURAL
+// four-fold one: the four lattice elements fixing a given face differ only
+// by roll, so every rotation-invariant score assigns them the same value.
+// With a single recognised epoch face and two filled slots that tie is
+// unbreakable by score alone unless the second slot happens to be the
+// opposite face - which is to say it is unbreakable four times in five, and
+// registration simply could not resolve.
+//
+//  1. Oriented roll tie-break: score the tied candidates by ordered
+//     sticker agreement (oriented_cell_lab_distance) and take the winner
+//     if it clears the absolute bar AND beats the runner-up by the
+//     margin. This is new evidence, not a loosened threshold: it consumes
+//     the cell ordering the rotation-invariant terms discard.
+//  2. Content equivalence (the solved-cube termination guarantee):
+//     candidates still tied are accepted anyway IF, for every epoch face,
+//     the slots they map it onto are all empty or all pairwise
+//     content-equivalent - the assignments differ only between
+//     interchangeable content, so picking the best-scoring (lowest index
+//     on residual ties) is harmless for assembly and unwedges a cube whose
+//     faces genuinely cannot be told apart.
+//
+// Anything surviving both stays ambiguous and keeps buffering. Note the
+// asymmetry that keeps this safe: step 1 can only ever pick a DIFFERENT
+// member of a set the old code was already willing to treat as
+// interchangeable, or resolve a set it would have refused outright. It
+// cannot admit a candidate that failed the score bar or the margin.
 struct EpochFaceSample {
     cube::model::Face epoch_face{};
     CapturedFace captured;
 };
 struct EpochRegistration {
     enum class Status : std::uint8_t { resolved, ambiguous, insufficient };
+    // How a resolution was reached, for the debug log. `unique` means the
+    // score alone separated the winner; the other two name the tie-break
+    // that did. Meaningless unless status == resolved.
+    enum class Basis : std::uint8_t { unique, oriented, content_equivalent };
     Status status = Status::insufficient;
     // The face permutation index (into kFacePermutation): store key =
     // kFacePermutation[lattice_index][epoch_face]. Valid only when
     // resolved.
     int lattice_index = 0;
+    Basis basis = Basis::unique;
+    // Diagnostics - always populated when any candidate survived pinning,
+    // so a deferral is explainable from the log alone. Without these a
+    // stuck scan reports only "deferred", which is exactly why the
+    // four-fold tie above went unnoticed for a whole milestone.
+    int candidates = 0;
+    int tied = 0;
+    float best_score = 0.0F;
+    float runner_up_score = 0.0F;
+    // Mean non-centre Lab of the best and runner-up TIED candidates under
+    // the oriented comparison; equal values mean the roll was genuinely
+    // undecidable from the stickers.
+    float best_oriented_lab = 0.0F;
+    float runner_up_oriented_lab = 0.0F;
 };
 [[nodiscard]] EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch_faces,
                                                      const std::array<std::optional<CapturedFace>, 6>& slots,
@@ -194,6 +274,11 @@ struct CommitResult {
     // verification conflict, and repeats escalate through force_lost
     // above.
     bool duplicate_centre = false;
+    // The registration attempt this commit made, when it made one (the
+    // recovery path only). Present on a deferral above all: "deferred" on
+    // its own cannot distinguish "nothing recognised yet" from "recognised
+    // but the roll is undecidable", and those call for opposite responses.
+    std::optional<EpochRegistration> registration;
 };
 
 class CaptureRouter {
