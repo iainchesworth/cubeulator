@@ -181,12 +181,13 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     }
 
     // The six centres seed the clusters, so they must be pairwise distinct.
-    // 12 Lab units sits comfortably below the closest legitimate centre pair
-    // (red/orange at ~27 even under aggressive chroma compression) and
-    // comfortably above the residual spread of a median-fused centre
-    // reading; two centres inside it means the same colour was scanned
-    // twice, which no real cube can produce.
-    constexpr float kMinSeedSeparation = 12.0F;
+    // The floor and the closest-pair measurement backing it are now declared
+    // in the header (kMinCentreSeedSeparationLab / kClosestCentrePairLab) so
+    // capture routing's same-face radii can be derived from the same
+    // numbers instead of restating an independent absolute - which is how
+    // verify_centre_lab_radius came to sit ABOVE the red/orange pair and let
+    // a different physical face verify into an occupied slot.
+    constexpr float kMinSeedSeparation = kMinCentreSeedSeparationLab;
     std::array<cv::Vec3f, face_count> means{};
     for (std::size_t face = 0; face < face_count; ++face) {
         means[face] = faces[face].lab[center_facelet_index];

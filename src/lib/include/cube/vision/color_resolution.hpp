@@ -11,6 +11,37 @@
 
 namespace cube::vision {
 
+// ---------------------------------------------------------------------------
+// Palette geometry: the two numbers every "are these two centres the same
+// physical face?" decision in the vision stack must be DERIVED from rather
+// than restate as an independent absolute.
+//
+// They live here, beside resolve_colors(), because this is where the
+// measurement was made and where the cube's own physics enters the system:
+// a standard cube carries six DISTINCT centre colours, so any predicate
+// able to answer "same face" for a pair drawn from two different centres is
+// wrong by construction, not merely mistuned. capture_routing.hpp's
+// verification radii are sized against kClosestCentrePairLab for exactly
+// that reason - see the static_asserts there.
+// ---------------------------------------------------------------------------
+
+// Closest legitimate centre pair on a standard cube: red against orange,
+// measured at ~27 Lab even under the aggressive chroma compression a
+// phone's auto-exposure applies to a glossy face. Every other centre pair
+// sits further apart, so this is the palette's minimum inter-centre
+// separation and the hard ceiling on any "same physical face" radius.
+inline constexpr float kClosestCentrePairLab = 27.0F;
+
+// Cluster seed separation: two captured centres closer than this are the
+// same colour scanned twice, which no real cube can produce. 12 sits
+// comfortably below kClosestCentrePairLab and comfortably above the
+// residual spread of a median-fused centre reading.
+inline constexpr float kMinCentreSeedSeparationLab = 12.0F;
+
+static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
+              "the seed floor must sit strictly inside the closest legitimate centre pair, or "
+              "resolve_colors would reject physically valid cubes");
+
 // Provisional single-sticker classification against the fixed reference
 // palette - used only for live UI display while scanning (overlay cell
 // tints, progress cube). The authoritative classification is
