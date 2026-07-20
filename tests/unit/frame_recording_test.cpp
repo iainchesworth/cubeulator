@@ -18,10 +18,59 @@
 #include <algorithm>
 #include <filesystem>
 #include <fstream>
+#include <random>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 using namespace cube::vision::recording;
+
+namespace {
+
+// A sharded run (CUBE_TRACK_SWEEP_SHARD=i/16) puts several
+// cube_unit_tests.exe processes in one %TEMP% at the same time, so a fixture
+// under a fixed name has concurrent shards overwriting each other's index.csv
+// and racing each other's remove_all. Claim a name no other process holds:
+// create_directory is atomic and reports false when the name already exists,
+// so the first candidate it creates is ours alone - random rather than
+// sequential suffixes so a leftover from a crashed run doesn't push every
+// later run's name further along.
+std::filesystem::path claim_fixture_dir(std::string_view stem) {
+    namespace fs = std::filesystem;
+    std::random_device entropy;
+    std::uniform_int_distribution<unsigned long long> pick;
+    for (int attempt = 0; attempt < 64; ++attempt) {
+        std::ostringstream name;
+        name << stem << '_' << std::hex << pick(entropy);
+        const fs::path candidate = fs::temp_directory_path() / name.str();
+        std::error_code ec;
+        if (fs::create_directory(candidate, ec)) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
+// Removes the fixture even when a REQUIRE aborts the test partway - otherwise
+// a single failure strands a directory of JPEGs in %TEMP% under a name no
+// later run will reuse. Non-throwing: this runs during stack unwinding.
+class FixtureDir {
+public:
+    explicit FixtureDir(std::string_view stem) : path_(claim_fixture_dir(stem)) {}
+    ~FixtureDir() {
+        std::error_code ec;
+        std::filesystem::remove_all(path_, ec);
+    }
+    FixtureDir(const FixtureDir&) = delete;
+    FixtureDir& operator=(const FixtureDir&) = delete;
+
+    [[nodiscard]] const std::filesystem::path& path() const { return path_; }
+
+private:
+    std::filesystem::path path_;
+};
+
+}  // namespace
 
 TEST_CASE("recording frame filenames are zero-padded and wrap at the ring size", "[replay]") {
     CHECK(frame_filename(0) == "rec_000000.jpg");
@@ -115,9 +164,9 @@ TEST_CASE("read_index keeps every parseable row and drops the rest", "[replay]")
 }
 
 TEST_CASE("a synthetic recording round-trips from disk via the shared format", "[replay]") {
-    namespace fs = std::filesystem;
-    const fs::path dir = fs::temp_directory_path() / "cube_frame_recording_test";
-    fs::create_directories(dir);
+    const FixtureDir fixture("cube_frame_recording_test");
+    const std::filesystem::path& dir = fixture.path();
+    REQUIRE_FALSE(dir.empty());
 
     // Write exactly what the app-side recorder writes: header + one row per
     // frame, frames named by the shared filename helper.
@@ -132,7 +181,7 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
         }
     }
 
-    // Scoped so the stream is closed before remove_all below - Windows
+    // Scoped so the stream is closed before FixtureDir's remove_all - Windows
     // refuses to delete a directory tree containing an open file.
     const auto rows = [&dir] {
         std::ifstream index_stream(dir / std::string(kIndexCsvName));
@@ -151,6 +200,4 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
         CHECK(frame.rows == row.h);
     }
     CHECK(rows[1].t_ms - rows[0].t_ms == 33);
-
-    fs::remove_all(dir);
 }
