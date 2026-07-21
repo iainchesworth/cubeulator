@@ -50,8 +50,17 @@ namespace cube::vision {
 // unresolved hypothesis, it is a face the scan has never seen, and it is
 // admitted straight to an EMPTY slot by the same direct adoption the
 // <= 1-slot regime uses. The invariant is untouched - the newcomer is only
-// ever routed to an empty key, and the duplicate-centre scan still refuses
-// it if its centre sits on a captured face's.
+// ever routed to an empty key, and it is refused outright if it reads as a
+// captured face (verified_same_face's own bar) or if its centre sits on
+// one (the duplicate-centre scan).
+//
+// That admission does NOT end the re-orienting window, and the distinction
+// is the whole safety of it. The lattice index it was filed under was
+// picked with no evidence at all, so it is used for that one empty-target
+// write and then dropped: the epoch stays in recovery, the slot is marked
+// provisional_ and withheld from registration, and every in-place update
+// for the rest of the epoch is still routed by a gauge register_epoch_gauge
+// resolved - roll included - against content that was never guessed.
 //
 // The gauge is a 24-element rotation, and BOTH of its components are
 // load-bearing on the write path: kFacePermutation says which slot a
@@ -519,6 +528,29 @@ private:
     // showed them.
     std::array<std::optional<CapturedFace>, 6> epoch_faces_{};
     std::vector<cube::model::Face> epoch_order_;
+    // Slots filled THIS epoch by the mid-recovery newcomer admission, i.e.
+    // under a gauge chosen with no evidence at all (registration came back
+    // `insufficient`, so nothing tight-matched anything and the lattice
+    // index was simply the first one landing the capture on an empty key).
+    //
+    // Their CONTENT is honest - the capture really is that physical face -
+    // but the FRAME they are written in is a guess, so they are not evidence
+    // about this epoch: register_epoch_gauge is shown the store WITHOUT
+    // them. Otherwise the guess pins the epoch to itself, registration
+    // resolves onto the very lattice index that was guessed, and the roll of
+    // every later in-place update follows a gauge nothing ever tested -
+    // measured on runD as a good capture rewritten 180 degrees out (see the
+    // insufficient branch in commit()).
+    //
+    // Epoch-scoped: a guess may not be used as evidence inside the epoch
+    // that made it. If that epoch later earns real evidence the guesses are
+    // discarded and re-derived under the resolved gauge (see the resolved
+    // branch in commit()); at the next epoch boundary they are ordinary
+    // stored content like anything else. The invariant this state carries:
+    // a face is flagged here only while recovering_ and only while its
+    // capture is still in epoch_faces_, so discarding a flagged slot can
+    // never lose a capture.
+    std::array<bool, 6> provisional_{};
 
     // Layer-turn detector: (store face, time) of recent verification
     // conflicts; pruned to the window on every new conflict.

@@ -345,7 +345,12 @@ TEST_CASE("epoch recovery re-registers a permuted epoch by content", "[routing]"
         REQUIRE(unknown.registration.has_value());
         CHECK(unknown.registration->status == EpochRegistration::Status::insufficient);
         CHECK(router.filled_count() == 4);
-        CHECK_FALSE(router.reorienting());
+        // Still re-orienting: admitting a newcomer fills a key, it does not
+        // resolve the epoch. The gauge that placed blue was chosen with no
+        // evidence at all, so it is used for this one empty-target write and
+        // then discarded rather than promoted to govern the rest of the
+        // epoch (see the runD 180-degree overwrite in commit()'s comment).
+        CHECK(router.reorienting());
         CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
         CHECK(centre_lab_distance(*router.slot_at(1), solid(kRed)) == 0.0F);
         CHECK(centre_lab_distance(*router.slot_at(2), solid(kGreen)) == 0.0F);
@@ -516,10 +521,11 @@ TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]"
     // re-commits on a later pass.
     //
     // The buffered face is a re-show of the stored white, NOT the brand-new
-    // blue it used to be. A never-seen face no longer buffers at all - it is
+    // blue it used to be. A never-seen face no longer merely waits - it is
     // admitted to an empty slot on the spot (registration `insufficient` is
-    // a new-face verdict, not an unresolved one), so it could not stand in
-    // for a pending commit here. A re-show still buffers for the right
+    // a new-face verdict, not an unresolved one), so although it does stay
+    // buffered it is no longer a PENDING commit and could not stand in for
+    // one here. A re-show still buffers unwritten for the right
     // reason: it tight-matches white, pinning F->U, and the four rotations
     // that satisfy that pin are indistinguishable on a solid face - a
     // genuine `ambiguous`, which is exactly the state this case needs the
@@ -1261,7 +1267,10 @@ TEST_CASE("a never-seen face fills an empty slot mid-recovery", "[routing]") {
     REQUIRE(result.registration.has_value());
     // The status the fix reinterprets: nothing tight-matched anything.
     CHECK(result.registration->status == EpochRegistration::Status::insufficient);
-    CHECK_FALSE(router.reorienting());
+    // The epoch stays in recovery: see "a brand-new face is admitted straight
+    // into an empty slot" above, and the runD overwrite the non-promotion
+    // exists to prevent.
+    CHECK(router.reorienting());
     REQUIRE(router.filled_count() == 3);
     REQUIRE(result.confirmed_slots.size() == 1);
     CHECK(result.confirmed_slots.front() == 2);
@@ -1351,19 +1360,35 @@ TEST_CASE("a mid-recovery newcomer only ever lands on an empty key", "[routing]"
 }
 
 TEST_CASE("admission does not open a back door onto an occupied slot", "[routing]") {
-    // (b), continued: once the newcomer's gauge is adopted the epoch is out
-    // of recovery and routing directly, which is precisely when a tracking
-    // slip could aim a DIFFERENT physical face at the slot the newcomer just
-    // filled. The verified in-place update is still the only way in.
+    // (b), continued: a newcomer's slot must be no easier to overwrite than
+    // any other, and the route to it is the verified in-place update or
+    // nothing. The epoch is walked to a RESOLVED gauge first, because that
+    // is now the only way out of recovery - admitting a newcomer fills a key
+    // and deliberately leaves the epoch re-orienting (its gauge was a guess
+    // and does not get to govern anything else).
+    const CapturedFace pattern = patterned();
     CaptureRouter router;
     router.on_epoch(1);
-    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::U, pattern, 0).outcome == CommitOutcome::filled);
     REQUIRE(router.commit(Face::R, solid(kGreen), 1000).outcome == CommitOutcome::filled);
 
     router.on_epoch(2);
+    REQUIRE(router.reorienting());
     REQUIRE(router.commit(Face::F, solid(kBlue), 10000).outcome == CommitOutcome::filled);
     REQUIRE(router.filled_count() == 3);
+    // Fails PRE-FIX, where the guessed gauge was promoted on the spot.
+    REQUIRE(router.reorienting());
+
+    // A re-show of the face captured at U pins the epoch against content the
+    // guess never touched, and the roll tie-break settles the rotation. Only
+    // now is the router routing directly.
+    const auto resolved = router.commit(Face::U, pattern, 11000);
+    REQUIRE(resolved.registration.has_value());
+    REQUIRE(resolved.registration->status == EpochRegistration::Status::resolved);
+    REQUIRE(resolved.outcome == CommitOutcome::updated);
     REQUIRE_FALSE(router.reorienting());
+    REQUIRE(router.filled_count() == 3);
+    REQUIRE(router.face_at(2) == Face::F);
 
     // Same tracked face, past the holdoff, now reading as a different
     // physical face: quarantined, slot preserved, strike recorded.
@@ -1376,6 +1401,93 @@ TEST_CASE("admission does not open a back door onto an occupied slot", "[routing
     const auto reshow = router.commit(Face::F, drifted(solid(kBlue), 4.0F), 14000);
     CHECK(reshow.outcome == CommitOutcome::updated);
     CHECK(router.filled_count() == 3);
+}
+
+TEST_CASE("a mid-recovery guess never decides the roll of a captured slot", "[routing]") {
+    // THE runD corruption, reproduced in the shape it actually took and then
+    // refused. Measured on the real clip before this guard existed: pass 129
+    // admitted body F into store key U on a guessed gauge; pass 188 then sent
+    // body U to store key F, where verified_same_face - centre class, centre
+    // Lab, census, every term rotation-invariant - waved it through (centre
+    // Lab 2.72, census L1 2) and rewrote a good capture 180 degrees out. Ring
+    // comparison against that slot's own earlier bytes: 2.13 mean Lab at 180,
+    // 54.84 at identity, with runB and runC corroborating the earlier bytes.
+    // Right label, rotated lie - exactly what relabel_capture's note warns of.
+    //
+    // The mechanism, and why the sweep: the guess is not merely used for the
+    // newcomer's own write (that lands on an empty key and is harmless). It
+    // becomes a PIN. One pass later the newcomer tight-matches its own slot,
+    // registration resolves onto the lattice index that was guessed - and
+    // with two consistent pins the candidate set is usually a singleton, so
+    // the oriented roll tie-break never runs to catch it - and the verified
+    // in-place update inherits a roll nothing ever tested. Withholding
+    // provisional slots from registration is what closes it.
+    //
+    // Swept over all 24 true gauges x 6 newcomer labels because which
+    // combinations turn into a silent roll rewrite depends on the arbitrary
+    // lattice index adopt_gauge_direct happens to return; sampling one would
+    // be sampling luck. Verified against pre-fix HEAD (10d2056): the sweep
+    // fails there - see the commit body for the count of corrupting
+    // combinations - and every combination leaves the slot byte-identical
+    // with the guard in place.
+    const CapturedFace epoch_u = patterned();
+    const CapturedFace epoch_r = solid(kOrange);
+    const CapturedFace newcomer = solid(kBlue);
+
+    for (int true_gauge = 0; true_gauge < static_cast<int>(kLatticeSize); ++true_gauge) {
+        // Build epoch 1's store as the epoch-2 readings would look after the
+        // whole-cube rotation `true_gauge`, so the epoch-2 captures below are
+        // the SAME physical faces seen from a different body frame - the only
+        // construction in which "the roll came out wrong" is a statement
+        // about the router rather than about the fixture.
+        const auto store_u =
+            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::U)];
+        const auto store_r =
+            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::R)];
+        const CapturedFace stored_u = relabelled(epoch_u, Face::U, true_gauge);
+        const CapturedFace stored_r = relabelled(epoch_r, Face::R, true_gauge);
+
+        for (std::size_t label = 0; label < 6; ++label) {
+            const auto newcomer_label = static_cast<Face>(label);
+            CaptureRouter router;
+            router.on_epoch(1);
+            // The first commit takes the identity gauge (empty store) and the
+            // second lands beside it, so both slots hold their bytes verbatim.
+            REQUIRE(router.commit(store_u, stored_u, 0).outcome == CommitOutcome::filled);
+            REQUIRE(router.commit(store_r, stored_r, 1000).outcome == CommitOutcome::filled);
+            REQUIRE(router.face_at(0) == store_u);
+
+            router.on_epoch(2);
+            REQUIRE(router.reorienting());
+            // A face the scan has never captured, admitted on a gauge chosen
+            // with no evidence whatever.
+            const auto admitted = router.commit(newcomer_label, newcomer, 10000);
+            REQUIRE(admitted.registration.has_value());
+            REQUIRE(admitted.registration->status == EpochRegistration::Status::insufficient);
+            REQUIRE(admitted.outcome == CommitOutcome::filled);
+
+            // ...and then the runD move: another tracked face carrying the
+            // physical face already captured at store_u. Whatever the router
+            // decides to do with it - update it in place at the roll the
+            // oriented evidence supports, or refuse - the one outcome that is
+            // not allowed is the slot changing to a rotation of itself.
+            const auto reshow = router.commit(Face::U, epoch_u, 12000);
+            REQUIRE(reshow.outcome != CommitOutcome::filled);  // no duplicate of a captured face
+
+            const CapturedFace* content = router.slot_at(0);
+            REQUIRE(content != nullptr);
+            REQUIRE(router.face_at(0) == store_u);
+            // One CHECK per combination rather than nine REQUIREs, so the
+            // sweep reports every corrupting (gauge, label) pair instead of
+            // aborting on the first.
+            bool unchanged = true;
+            for (std::size_t cell = 0; cell < stored_u.lab.size(); ++cell) {
+                unchanged = unchanged && cv::norm(content->lab[cell] - stored_u.lab[cell]) == 0.0;
+            }
+            INFO("true gauge " << true_gauge << ", newcomer label " << label);
+            CHECK(unchanged);
+        }
+    }
 }
 
 TEST_CASE("recovery still defers when the evidence contradicts itself", "[routing]") {
