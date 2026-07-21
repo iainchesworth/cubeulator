@@ -45,6 +45,14 @@ namespace cube::vision {
 // which commits buffer instead of landing ("re-orienting"). Ambiguity
 // always defers; nothing is ever written over on a guess.
 //
+// One case escapes the buffering, and it is the coverage case: a capture
+// that resembles NOTHING stored (registration `insufficient`) is not an
+// unresolved hypothesis, it is a face the scan has never seen, and it is
+// admitted straight to an EMPTY slot by the same direct adoption the
+// <= 1-slot regime uses. The invariant is untouched - the newcomer is only
+// ever routed to an empty key, and the duplicate-centre scan still refuses
+// it if its centre sits on a captured face's.
+//
 // The gauge is a 24-element rotation, and BOTH of its components are
 // load-bearing on the write path: kFacePermutation says which slot a
 // capture belongs in, kBodyRelabel says where its nine stickers go inside
@@ -271,9 +279,19 @@ static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_cen
 //   ambiguous:    evidence exists but cannot be disambiguated (aliased
 //                 pair, contradictory pins, a tie that would matter): keep
 //                 buffering, commit nothing.
-//   insufficient: no epoch face tightly matches anything stored yet - the
-//                 deferral that keeps a brand-new face out of an empty
-//                 slot until other epoch faces are positively recognised.
+//   insufficient: no epoch face tightly matches anything stored - there is
+//                 no hypothesis here to be wrong about, because this
+//                 function can only score permutations that map a visible
+//                 epoch face onto an ALREADY-FILLED slot (pairs > 0), and a
+//                 face the scan has never captured has no correct pairing
+//                 among them. It is therefore NOT a deferral verdict but a
+//                 "this is a new face" verdict, and CaptureRouter::commit
+//                 reads it that way: it hands the capture to the ordinary
+//                 empty-slot admission path (adopt_gauge_direct) instead of
+//                 buffering. Measured over runA..runD before that change:
+//                 never-seen faces scored 9.8-16.1 against the 6.0 commit
+//                 bar, insufficient 40 times in 79 attempts, and every clip
+//                 ceilinged at two filled slots.
 //
 // Tie-breaking, in the order applied. A tie here is usually the STRUCTURAL
 // four-fold one: the four lattice elements fixing a given face differ only
@@ -471,11 +489,16 @@ private:
     // The gauge-resolved commit core (rules 2-6 of the identity policy).
     DirectCommit commit_direct(cube::model::Face epoch_face, const CapturedFace& captured, std::int64_t now_ms,
                                CommitResult& result);
-    // Gauge adoption for the <= 1-filled-slot epoch change. The slot LABEL
-    // is relative in this regime and chosen by convention; the ROLL is not,
-    // and is chosen from ordered-sticker evidence whenever the capture
-    // re-associates with the stored slot (which is exactly when the roll
-    // decides what overwrites it).
+    // Gauge adoption for the <= 1-filled-slot epoch change, and for the
+    // never-seen face admitted mid-recovery (registration `insufficient`).
+    // The slot LABEL is relative in this regime and chosen by convention -
+    // subject to the one hard rule that an unrecognised capture is only ever
+    // routed to an EMPTY key; the ROLL is not relative, and is chosen from
+    // ordered-sticker evidence whenever the capture re-associates with a
+    // stored slot (which is exactly when the roll decides what overwrites
+    // it). Returns false when the capture must not be admitted at all: its
+    // centre aliases a captured face without authenticating as it, two
+    // stored slots both claim it, or the store is full.
     [[nodiscard]] bool adopt_gauge_direct(cube::model::Face epoch_face, const CapturedFace& captured);
     void buffer_epoch_face(cube::model::Face epoch_face, const CapturedFace& captured);
     [[nodiscard]] int fill_index_of(cube::model::Face store_face) const;

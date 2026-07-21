@@ -754,33 +754,89 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             }
             const EpochRegistration registration = register_epoch_gauge(samples, store_view, config_);
             result.registration = registration;
-            if (registration.status != EpochRegistration::Status::resolved) {
+            if (registration.status == EpochRegistration::Status::resolved) {
+                gauge_ = registration.lattice_index;
+                gauge_known_ = true;
+                recovering_ = false;
+                epoch_faces_ = {};
+                epoch_order_.clear();
+                // Flush every buffered face in arrival order through the
+                // normal policy - registration chose WHERE they go, the
+                // commit rules still decide WHETHER each may land.
+                for (const auto& sample : samples) {
+                    if (result.layer_turn) {
+                        break;  // the store just self-cleared; nothing else may land
+                    }
+                    const DirectCommit direct =
+                        commit_direct(sample.epoch_face, sample.captured, now_ms, result);
+                    if (direct.slot_index >= 0) {
+                        result.confirmed_slots.push_back(direct.slot_index);
+                    }
+                    if (sample.epoch_face == epoch_face) {
+                        result.outcome = direct.outcome;
+                    }
+                }
+                return result;
+            }
+            // `ambiguous` keeps buffering, unconditionally. That status
+            // means evidence EXISTS and contradicts itself - contradictory
+            // pins, an aliased pair, a tie the roll could not break - and it
+            // is the status that is measurably working: over runA..runD the
+            // true re-shows posted best-roll 2.0-10.2 mean Lab against false
+            // aliases at 38-56, so a deferral here is the router declining a
+            // choice it could genuinely get wrong.
+            if (registration.status != EpochRegistration::Status::insufficient) {
                 result.outcome = CommitOutcome::deferred;
                 return result;
             }
-            gauge_ = registration.lattice_index;
+            // `insufficient` is the opposite situation and had been sharing
+            // ambiguous's response for want of anywhere else to go. It means
+            // any_tight_match == false: not one buffered epoch face resembles
+            // ANY stored slot, so there is no hypothesis to be wrong about -
+            // this is a face the scan has never captured, and registration
+            // structurally cannot admit it. register_epoch_gauge only scores
+            // candidates with pairs > 0, i.e. permutations mapping a visible
+            // epoch face onto an ALREADY-FILLED slot, so a never-stored face
+            // is always scored against the wrong stored face: measured over
+            // runA..runD at 9.8-16.1 against a 6.0 commit bar, insufficient
+            // 40 times in 79 registration attempts, and the reason all four
+            // clips ceilinged at two filled slots while 70-85% of each run
+            // sat in recovery. runD is the sharpest case - four geom_conf 1.0
+            // nine-of-nine reads at passes 273-286, every one refused.
+            //
+            // So treat it as what it is, a NEW FACE, and hand it to the
+            // ordinary <= 1-slot admission path rather than to a registration
+            // that has nothing to register. This is not new policy: it is
+            // adopt_gauge_direct's own documented rule for an unrecognised
+            // face ("the never-overwrite invariant is not what is at stake on
+            // an empty target ... requiring evidence instead cost 4 of the
+            // corpus's 11 captured slots"), which recovering mode never
+            // inherited. Nothing about the invariant is weakened, because
+            // nothing about the WRITE changes: adopt_gauge_direct only ever
+            // picks a gauge landing this face on an EMPTY key, and
+            // commit_direct still runs the duplicate-centre scan over every
+            // filled slot before writing and still refuses to overwrite an
+            // occupied one except through the verified in-place update.
+            if (!adopt_gauge_direct(epoch_face, captured)) {
+                // Refused: the newcomer's centre sits on a captured face's
+                // without authenticating as it (or the store is full). That
+                // is slip evidence, not a new face - keep deferring, and keep
+                // the registration diagnostic that explains why.
+                result.outcome = CommitOutcome::deferred;
+                return result;
+            }
             gauge_known_ = true;
             recovering_ = false;
+            // The other buffered faces are dropped rather than flushed under
+            // this gauge. The gauge was chosen from ONE unrecognised face and
+            // is arbitrary for the rest, so flushing them would be a guess
+            // several slots wide; they re-converge and re-commit within a
+            // pass or two (the argument clear_slot() already makes), by which
+            // time gauge_known_ routes them directly and each is judged on
+            // its own duplicate-centre evidence.
             epoch_faces_ = {};
             epoch_order_.clear();
-            // Flush every buffered face in arrival order through the
-            // normal policy - registration chose WHERE they go, the commit
-            // rules still decide WHETHER each may land.
-            for (const auto& sample : samples) {
-                if (result.layer_turn) {
-                    break;  // the store just self-cleared; nothing else may land
-                }
-                const DirectCommit direct = commit_direct(sample.epoch_face, sample.captured, now_ms, result);
-                if (direct.slot_index >= 0) {
-                    result.confirmed_slots.push_back(direct.slot_index);
-                }
-                if (sample.epoch_face == epoch_face) {
-                    result.outcome = direct.outcome;
-                }
-            }
-            return result;
-        }
-        if (!adopt_gauge_direct(epoch_face, captured)) {
+        } else if (!adopt_gauge_direct(epoch_face, captured)) {
             // The adopt-time refusal is the same duplicate-centre
             // signature (near-miss centre on the one stored slot without a
             // tight match); no counter here - the gauge stays unknown, so
@@ -789,8 +845,9 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             result.outcome = CommitOutcome::quarantined;
             result.duplicate_centre = true;
             return result;
+        } else {
+            gauge_known_ = true;
         }
-        gauge_known_ = true;
     }
 
     const DirectCommit direct = commit_direct(epoch_face, captured, now_ms, result);
