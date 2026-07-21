@@ -9,6 +9,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <expected>
 #include <limits>
 #include <optional>
@@ -418,19 +419,59 @@ constexpr float kMinModeShare = 0.25F;
 constexpr int kMaxModeRounds = 4;
 constexpr float kModeSettledEpsilon = 0.05F;
 
+// WHAT A PATCH IS BEING SAMPLED FOR. The two uses want opposite things and
+// conflating them is what cost runA two faces in the first version of this
+// change (measured: URFDLB -> UFDL, filled slots 6 -> 4).
+//
+//   kCellColour  - "what colour is this sticker". Wants the quad mask and
+//                  the dominant-mode walk: every pixel that is not the
+//                  sticker is an error to be excluded.
+//   kMaterialMix - the completion scorer's structural probes (inter-tile
+//                  gaps, the anchor/lattice contrast, the inside-vs-outside
+//                  boundary strips) and the intra-patch MAD. These are
+//                  DELIBERATELY aimed at multi-material locations; their
+//                  whole signal is how much foreign material a patch
+//                  contains. Masking to the quad and then walking onto the
+//                  dominant mode reports the majority tile instead of the
+//                  mixture - it does not sharpen these probes, it deletes
+//                  what they measure. Bisected in a clean worktree: mask
+//                  alone -> runA 4, refinement alone -> runA 4, both off ->
+//                  runA 6, and the loss is NOT generic noise sensitivity (a
+//                  uniform L+1.0 and a per-cell jitter of the same 0.23
+//                  weighted-Lab mean magnitude as the mask both leave runA
+//                  at 6). It is these probes being fed a different kind of
+//                  statistic than they were calibrated on.
+//
+// So kMaterialMix reproduces the shipped rect-median exactly and placement
+// scoring is bit-identical to before this round; only the emitted cell
+// colour changes. Re-pointing the scorer at masked samples may well be
+// right, but it is a downstream-policy change and out of this round's scope.
+enum class PatchIntent : std::uint8_t { kCellColour, kMaterialMix };
+
 // Robust per-patch statistics: channel medians plus a chroma-weighted
 // median absolute deviation. The MAD is the completion scorer's structure
 // probe - a sample patch lying INSIDE one tile is uniform (small MAD)
 // while a patch straddling a tile boundary, the face's outer edge, or a
 // finger contour is not, which is exactly what separates a correctly
-// placed grid from one translated by a cell pitch.
+// placed grid from one translated by a cell pitch. The two statistics
+// deliberately have DIFFERENT footprints: `median` is masked to the quad
+// because it is a colour, `weighted_mad` spans the bounding rect because
+// the foreign material at the patch's corners is the very evidence it
+// exists to detect.
 struct PatchStats {
     cv::Vec3f median;
     float weighted_mad = 0.0F;
-    // Fraction of the in-quad pixels agreeing with the dominant mode. 1.0
-    // is a single-material patch; a value well below 1 means the sample
-    // straddles two materials and the colour returned is only one of them.
-    float purity = 1.0F;
+    // Fraction of the pixels behind `median` that agree with it, i.e. lie
+    // within kModeAgreementRadius of the colour returned. 1.0 is a
+    // single-material patch; well below 1 means the sample straddles two
+    // materials and the colour returned names only the larger. Read it with
+    // quad_px: when quad_px < kMinQuadPixels the sample fell back to the
+    // bounding rect and this is rect agreement, not in-quad agreement.
+    //
+    // Defaults to 0 ("unknown/unusable"), NOT 1: a reliability signal whose
+    // default means "maximally clean" fails open, which is the bug review
+    // found in the first version of this field.
+    float purity = 0.0F;
     int quad_px = 0;  // pixels genuinely inside the projected quad
 };
 
@@ -456,8 +497,12 @@ struct PatchStats {
 // constant, not a property of the sampler: 7.2% of the pixels read in the
 // 40-45 degree bucket DID leave the cell quad. Masking removes the
 // dependency.
+//
+// ...but ONLY for `intent == kCellColour`. See PatchIntent: the structural
+// probes must keep reading the mixture, so they take the rect median.
 [[nodiscard]] PatchStats patch_stats_for_corners(const cv::Mat& bgr_frame,
-                                                 const std::array<cv::Point2f, 4>& corners) {
+                                                 const std::array<cv::Point2f, 4>& corners,
+                                                 PatchIntent intent) {
     float min_x = corners[0].x;
     float max_x = corners[0].x;
     float min_y = corners[0].y;
@@ -486,9 +531,19 @@ struct PatchStats {
     // convex quad with its winding preserved, so a pixel is inside exactly
     // when it lies on the same side of all four directed edges - the same
     // predicate cv::fillConvexPoly rasterises, evaluated in place rather
-    // than through a mask Mat, because this runs 9 times per face per
-    // frame and the patches are ~25x25 px: an allocation would cost more
-    // than the test. The winding is read off the quad's own signed area
+    // than through a mask Mat: a mask would have to be rasterised and then
+    // scanned a second time to gather the pixels it selected, and that
+    // gather is the same loop this predicate already runs.
+    //
+    // The earlier "an allocation would cost more than the test" rationale
+    // did not survive review, and is withdrawn rather than patched up: the
+    // function allocated its vectors on every call regardless. When I
+    // hoisted them into thread_local scratch to make the claim true, the
+    // cost did not move (15.2 vs 15.1 us per cell, three runs each), so the
+    // allocations were never the cost - the extra passes over the pixels
+    // are. The vectors are plain locals and the claim is gone.
+    //
+    // The winding is read off the quad's own signed area
     // instead of assumed, so a mirrored transform cannot silently invert
     // the test and mask away the entire patch.
     float signed_area = 0.0F;
@@ -511,54 +566,85 @@ struct PatchStats {
     };
 
     const auto pixel_count = static_cast<std::size_t>(lab.rows) * static_cast<std::size_t>(lab.cols);
-    std::vector<cv::Vec3f> masked;
-    masked.reserve(pixel_count);
-    for (int y = 0; y < lab.rows; ++y) {
-        const float py = static_cast<float>(y0 + y) + 0.5F;
-        for (int x = 0; x < lab.cols; ++x) {
-            if (!inside_quad(static_cast<float>(x0 + x) + 0.5F, py)) {
-                continue;
-            }
-            masked.push_back(lab.at<cv::Vec3f>(y, x));
-        }
-    }
+    const bool mask_to_quad = intent == PatchIntent::kCellColour;
 
-    PatchStats stats;
-    stats.quad_px = static_cast<int>(masked.size());
-    // YIELD GUARD: a sub-pixel or degenerate quad must still produce a
-    // reading. Falling back to the rect reproduces exactly the pre-mask
-    // behaviour for those cells rather than dropping them.
-    if (stats.quad_px < kMinQuadPixels) {
-        masked.clear();
-        for (int y = 0; y < lab.rows; ++y) {
-            for (int x = 0; x < lab.cols; ++x) {
-                masked.push_back(lab.at<cv::Vec3f>(y, x));
-            }
-        }
-    }
-
+    // THE RECT PASS, run for both intents because the MAD needs it either
+    // way. This is verbatim the pre-fix function: one walk of the rect into
+    // three channel vectors, median, MAD. A kMaterialMix patch does this and
+    // NOTHING else, so the structural probes cost exactly what they always
+    // did - which matters, because they outnumber the cell colours by an
+    // order of magnitude per frame (12 gap + up to 9 anchor + 9 cell + 24
+    // boundary probes per SCORED PLACEMENT, against 9 cell colours per
+    // observation). An earlier revision of this change routed them through
+    // the masked path as well and put 58% on whole-clip replay to compute a
+    // statistic those callers then discarded.
     std::vector<float> l_values;
     std::vector<float> a_values;
     std::vector<float> b_values;
-    const auto fill_channels = [&](const std::vector<cv::Vec3f>& pixels) {
-        l_values.clear();
-        a_values.clear();
-        b_values.clear();
-        l_values.reserve(pixels.size());
-        a_values.reserve(pixels.size());
-        b_values.reserve(pixels.size());
-        for (const auto& pixel : pixels) {
+    l_values.reserve(pixel_count);
+    a_values.reserve(pixel_count);
+    b_values.reserve(pixel_count);
+    for (int y = 0; y < lab.rows; ++y) {
+        for (int x = 0; x < lab.cols; ++x) {
+            const auto& pixel = lab.at<cv::Vec3f>(y, x);
             l_values.push_back(pixel[0]);
             a_values.push_back(pixel[1]);
             b_values.push_back(pixel[2]);
         }
-    };
+    }
+    // channel_median permutes its argument, and the MAD below needs only the
+    // multiset, so taking the rect median here costs nothing extra.
+    const cv::Vec3f rect_median(channel_median(l_values), channel_median(a_values), channel_median(b_values));
+
+    PatchStats stats;
+    stats.median = rect_median;
+
+    // Everything from here down to the MAD is kCellColour-only.
+    std::vector<cv::Vec3f> masked;
+    std::vector<cv::Vec3f> mode_pixels;
+    std::vector<float> scratch_l;
+    std::vector<float> scratch_a;
+    std::vector<float> scratch_b;
     const auto medians_of = [&](const std::vector<cv::Vec3f>& pixels) {
-        fill_channels(pixels);
-        return cv::Vec3f(channel_median(l_values), channel_median(a_values), channel_median(b_values));
+        scratch_l.clear();
+        scratch_a.clear();
+        scratch_b.clear();
+        for (const auto& pixel : pixels) {
+            scratch_l.push_back(pixel[0]);
+            scratch_a.push_back(pixel[1]);
+            scratch_b.push_back(pixel[2]);
+        }
+        return cv::Vec3f(channel_median(scratch_l), channel_median(scratch_a), channel_median(scratch_b));
     };
 
-    stats.median = medians_of(masked);
+    if (mask_to_quad) {
+        masked.reserve(pixel_count);
+        mode_pixels.reserve(pixel_count);
+        scratch_l.reserve(pixel_count);
+        scratch_a.reserve(pixel_count);
+        scratch_b.reserve(pixel_count);
+        for (int y = 0; y < lab.rows; ++y) {
+            const float py = static_cast<float>(y0 + y) + 0.5F;
+            for (int x = 0; x < lab.cols; ++x) {
+                if (!inside_quad(static_cast<float>(x0 + x) + 0.5F, py)) {
+                    continue;
+                }
+                masked.push_back(lab.at<cv::Vec3f>(y, x));
+            }
+        }
+        stats.quad_px = static_cast<int>(masked.size());
+        // YIELD GUARD: a sub-pixel or degenerate quad must still produce a
+        // reading. Keeping the rect median already computed above reproduces
+        // the pre-mask behaviour for those cells exactly rather than dropping
+        // them; `masked` is emptied so the refinement and the purity figure
+        // below both stand down, leaving purity 0 - which for this cell means
+        // "not measurable", not "filthy". Read it together with quad_px.
+        if (stats.quad_px < kMinQuadPixels) {
+            masked.clear();
+        } else {
+            stats.median = medians_of(masked);
+        }
+    }
 
     // DOMINANT-MODE REFINEMENT. Masking bounds the GEOMETRIC contamination
     // but not the photometric kind - a cast shadow edge, a fingertip, a
@@ -577,25 +663,28 @@ struct PatchStats {
     // true tile centre of 60). The iteration is a median-of-window fixed
     // point: it moves monotonically toward the dense region and stops, so
     // the round cap is a safety bound rather than the usual exit.
-    std::vector<cv::Vec3f> mode_pixels;
-    mode_pixels.reserve(masked.size());
-    float mode_share = 1.0F;
-    for (int round = 0; round < kMaxModeRounds; ++round) {
+    const auto gather_mode = [&](const cv::Vec3f& centre) {
         mode_pixels.clear();
         for (const auto& pixel : masked) {
-            if (weighted_lab_distance(pixel, stats.median) <= kModeAgreementRadius) {
+            if (weighted_lab_distance(pixel, centre) <= kModeAgreementRadius) {
                 mode_pixels.push_back(pixel);
             }
         }
-        const float share = masked.empty()
-                                ? 0.0F
-                                : static_cast<float>(mode_pixels.size()) / static_cast<float>(masked.size());
+        return masked.empty() ? 0.0F
+                              : static_cast<float>(mode_pixels.size()) / static_cast<float>(masked.size());
+    };
+
+    for (int round = 0; !masked.empty() && round < kMaxModeRounds; ++round) {
+        const float share = gather_mode(stats.median);
         // A window holding almost nothing is not a mode; keep the plain
-        // masked median rather than chase a handful of pixels.
+        // masked median rather than chase a handful of pixels. Note this
+        // leaves `purity` to the recomputation below, which will report the
+        // genuinely low share - the previous code broke out of the loop
+        // without ever assigning it, so the patches with NO dominant mode
+        // (exactly the ones the signal exists to flag) reported 1.0.
         if (mode_pixels.empty() || share < kMinModeShare) {
             break;
         }
-        mode_share = share;
         const cv::Vec3f refined = medians_of(mode_pixels);
         const bool settled = weighted_lab_distance(refined, stats.median) < kModeSettledEpsilon;
         stats.median = refined;
@@ -603,6 +692,7 @@ struct PatchStats {
             break;
         }
     }
+
     // PER-CELL RELIABILITY: the share of in-quad pixels agreeing with the
     // colour finally returned. 1.0 is a patch of one material; well below 1
     // means the sample straddled two and `median` names only the larger.
@@ -610,33 +700,56 @@ struct PatchStats {
     // uniform and scores high, while a shadow boundary across a bright tile
     // scores low, which is exactly the distinction an L threshold cannot
     // make and the one a rejection policy would need.
-    stats.purity = mode_share;
+    //
+    // Recomputed HERE against the final median rather than carried out of
+    // the loop, so it describes the colour actually returned in all three
+    // exits: converged, no-dominant-mode, and the kMaxModeRounds cap (where
+    // the loop's last computed share belonged to the PREVIOUS estimate).
+    // When the quad was sub-pixel and the rect fallback fired
+    // (quad_px < kMinQuadPixels) this is agreement within the RECT, not
+    // within the quad - the caller must read it together with quad_px.
+    // A kMaterialMix patch reports purity 0: not "filthy", but "not asked".
+    // Its median is a rect statistic by design, so an in-quad agreement
+    // figure would be a category error dressed as a measurement. Likewise
+    // the sub-pixel fallback above.
+    stats.purity = masked.empty() ? 0.0F : gather_mode(stats.median);
 
-    // Dispersion stays a property of the WHOLE in-quad patch, not of the
-    // mode: it is the completion scorer's structure probe, and a probe
-    // computed after discarding the disagreeing pixels would report every
-    // patch as uniform and stop separating a correctly placed grid from a
-    // translated one.
-    fill_channels(masked);
+    // Dispersion stays a property of the whole BOUNDING RECT, deliberately
+    // NOT of the masked quad, for BOTH intents. It is not a colour estimate;
+    // it is the completion scorer's mis-registration probe, and what exposes
+    // a grid translated by a cell pitch is precisely the foreign material at
+    // the patch's corners - the pixels the mask exists to remove. Masking it
+    // measurably blunted the probe on the corpus (runA mean MAD 1.554 ->
+    // 1.461, sd 1.950 -> 1.593: the discriminating tail compressed 18% while
+    // the median barely moved), and cell_mad is the sort key that breaks
+    // ties between equally-acceptable placements.
     const auto channel_mad = [](std::vector<float>& values, float median) {
         for (auto& value : values) {
             value = std::abs(value - median);
         }
         return channel_median(values);
     };
-    const float mad_l = channel_mad(l_values, stats.median[0]);
-    const float mad_a = channel_mad(a_values, stats.median[1]);
-    const float mad_b = channel_mad(b_values, stats.median[2]);
+    // Centred on the RECT's own median, not on the masked/refined colour, so
+    // the probe is end-to-end identical to the shipped one and this round
+    // moves it by exactly zero.
+    const float mad_l = channel_mad(l_values, rect_median[0]);
+    const float mad_a = channel_mad(a_values, rect_median[1]);
+    const float mad_b = channel_mad(b_values, rect_median[2]);
     stats.weighted_mad = std::sqrt(0.25F * mad_l * mad_l + mad_a * mad_a + mad_b * mad_b);
     return stats;
 }
 
-[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
-    return patch_stats_for_corners(bgr_frame, project_quad(transform, cell_uv, kSampleHalfExtent));
+[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv,
+                                            PatchIntent intent) {
+    return patch_stats_for_corners(bgr_frame, project_quad(transform, cell_uv, kSampleHalfExtent), intent);
 }
 
+// Every caller of this overload is a STRUCTURAL probe - gap material, the
+// lattice reference, the inside/outside boundary strips - so it is fixed at
+// kMaterialMix rather than parameterised. A cell colour goes through
+// sample_patch_stats directly, where the intent has to be spelled out.
 [[nodiscard]] cv::Vec3f sample_patch_lab(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
-    return sample_patch_stats(bgr_frame, transform, cell_uv).median;
+    return sample_patch_stats(bgr_frame, transform, cell_uv, PatchIntent::kMaterialMix).median;
 }
 
 }  // namespace
@@ -651,7 +764,7 @@ namespace {
             const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
             const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
             observation.cells[slot].corners = project_quad(transform, cell_uv, kCellQuadHalfExtent);
-            const auto stats = sample_patch_stats(bgr_frame, transform, cell_uv);
+            const auto stats = sample_patch_stats(bgr_frame, transform, cell_uv, PatchIntent::kCellColour);
             observation.lab[slot] = stats.median;
             observation.cell_purity[slot] = stats.purity;
         }
@@ -798,7 +911,13 @@ namespace {
         for (int row = 0; row < grid_dimension; ++row) {
             for (int col = 0; col < grid_dimension; ++col) {
                 const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
-                const auto stats = sample_patch_stats(bgr_frame, entry.transform, cell_uv);
+                // kMaterialMix: this is placement scoring, not colour
+                // reporting. cell_mad and min_cell_lightness are the
+                // discriminators between a correct placement and one
+                // translated by a cell pitch, and they were calibrated on
+                // the rect statistic.
+                const auto stats =
+                    sample_patch_stats(bgr_frame, entry.transform, cell_uv, PatchIntent::kMaterialMix);
                 mad_sum += stats.weighted_mad;
                 cell_lightness.push_back(stats.median[0]);
             }
@@ -1118,7 +1237,7 @@ CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& c
         sample_corners[k] = centroid + (cell.corners[k] - centroid) * kShrink;
     }
 
-    const auto stats = patch_stats_for_corners(bgr_frame, sample_corners);
+    const auto stats = patch_stats_for_corners(bgr_frame, sample_corners, PatchIntent::kCellColour);
     sample.median = stats.median;
     sample.weighted_mad = stats.weighted_mad;
     sample.purity = stats.purity;
