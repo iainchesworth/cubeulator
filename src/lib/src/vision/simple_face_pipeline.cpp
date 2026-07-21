@@ -610,6 +610,13 @@ bool FaceStore::offer(const FaceReading& reading) {
     }
 
     ++slot.readings;
+    const auto existing = std::find_if(slot.tally.begin(), slot.tally.end(),
+                                       [&cells](const auto& entry) { return entry.first == cells; });
+    if (existing != slot.tally.end()) {
+        ++existing->second;
+    } else {
+        slot.tally.emplace_back(cells, 1);
+    }
     if (!slot.filled) {
         slot.filled = true;
         slot.cells = cells;
@@ -635,15 +642,25 @@ std::size_t FaceStore::filled_count() const {
         std::count_if(slots_.begin(), slots_.end(), [](const Slot& s) { return s.filled; }));
 }
 
-std::optional<std::array<std::array<cube::model::Facelet, kCellCount>, 6>> FaceStore::as_faces()
-    const {
+std::optional<std::array<std::array<cube::model::Facelet, kCellCount>, 6>> FaceStore::as_faces(
+    Selection selection) const {
     if (filled_count() != kSlotCount) {
         return std::nullopt;
     }
     std::array<std::array<cube::model::Facelet, kCellCount>, 6> faces{};
     for (std::size_t s = 0; s < kSlotCount; ++s) {
+        std::array<FacetColor, kCellCount> cells = slots_[s].cells;
+        if (selection == Selection::modal && !slots_[s].tally.empty()) {
+            // Ties keep the earliest-seen entry, since tally is in
+            // first-seen order and max_element returns the first maximum -
+            // so a tie degenerates to first_complete rather than to
+            // whichever reading the container happened to order last.
+            cells = std::max_element(slots_[s].tally.begin(), slots_[s].tally.end(),
+                                     [](const auto& a, const auto& b) { return a.second < b.second; })
+                        ->first;
+        }
         for (std::size_t i = 0; i < kCellCount; ++i) {
-            faces[s][i] = cube::model::Facelet{.color = slots_[s].cells[i], .confidence = 1.0F};
+            faces[s][i] = cube::model::Facelet{.color = cells[i], .confidence = 1.0F};
         }
     }
     return faces;

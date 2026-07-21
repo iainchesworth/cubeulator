@@ -69,6 +69,7 @@
 #include <cstddef>
 #include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace cube::vision::simple {
@@ -278,6 +279,25 @@ public:
         std::array<cube::model::FacetColor, kCellCount> cells{};
         int readings = 0;   // how many complete readings named this centre
         int conflicts = 0;  // how many of them disagreed with the kept one
+        // Every distinct nine-sticker string this centre produced, with its
+        // count. Carried so the modal rule below can be evaluated against
+        // the first-wins one on identical evidence, in one replay.
+        std::vector<std::pair<std::array<cube::model::FacetColor, kCellCount>, int>> tally;
+    };
+
+    // Which reading a slot contributes to as_faces().
+    enum class Selection : std::uint8_t {
+        // The first complete reading, and nothing after it. The strict
+        // reading of "one frame is enough": if it is, this wins outright.
+        first_complete,
+        // The most frequent reading. NOT tracking state coming back in - it
+        // registers nothing, propagates nothing between frames, and needs no
+        // notion of which face is which beyond the centre colour that
+        // already defines the slot. It is a tie-break over evidence already
+        // gathered, and it is offered because first-wins is a coin flip once
+        // a face's conflict count is high, and reporting only the coin flip
+        // would understate and overstate the design by turns.
+        modal,
     };
 
     // Files a reading under its centre colour. Ignores readings that are
@@ -296,7 +316,7 @@ public:
     // blue), shaped for cube::solver::assemble_scanned_faces_with_mapping.
     // nullopt unless all six are filled.
     [[nodiscard]] std::optional<std::array<std::array<cube::model::Facelet, kCellCount>, 6>>
-    as_faces() const;
+    as_faces(Selection selection = Selection::first_complete) const;
 
 private:
     static constexpr std::size_t kSlotCount = 6;

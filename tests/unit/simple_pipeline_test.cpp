@@ -145,6 +145,7 @@ struct ModeStats {
     int any_quads = 0;      // the combined path read_face() actually takes
     int complete = 0;       // quad found AND all nine cells committed
     int centre_unknown = 0; // quad found but the centre abstained
+    int identified_with_holes = 0;  // centre named, but not all nine cells
     long long unknown_cells = 0;
     long long cells_with_quad = 0;
     // Distinct nine-sticker strings per centre colour, over COMPLETE
@@ -290,6 +291,13 @@ TEST_CASE("replay a recorded clip through the stateless simple pipeline", "[.sim
                 stats.unknown_cells += reading.unknown_count;
                 if (reading.centre_color() == FacetColor::unknown) {
                     ++stats.centre_unknown;
+                } else if (reading.unknown_count > 0) {
+                    // Identified but holed. Counted because complete() is a
+                    // deliberately strict rule with nothing downstream yet
+                    // able to use holes, and this is exactly the headroom
+                    // that a census-constrained resolver treating unknowns
+                    // as free variables would be reaching for.
+                    ++stats.identified_with_holes;
                 }
             }
             if (reading.complete()) {
@@ -330,6 +338,7 @@ TEST_CASE("replay a recorded clip through the stateless simple pipeline", "[.sim
             "quad via sticker hull  %d (%.1f%%)\n"
             "quad via any route     %d (%.1f%%)\n"
             "complete readings      %d (%.1f%% of frames)\n"
+            "centre named, holed    %d (rejected only by the all-nine rule)\n"
             "centre abstained       %d frames with a quad\n"
             "unknown cells          %lld of %lld sampled (%.1f%%)\n",
             clip.c_str(), mode_name.c_str(), stats.frames, stats.lsd_candidates,
@@ -337,7 +346,8 @@ TEST_CASE("replay a recorded clip through the stateless simple pipeline", "[.sim
             stats.lsd_quads, pct(stats.lsd_quads),
             stats.canny_quads, pct(stats.canny_quads), stats.hull_quads, pct(stats.hull_quads),
             stats.any_quads, pct(stats.any_quads),
-            stats.complete, pct(stats.complete), stats.centre_unknown, stats.unknown_cells,
+            stats.complete, pct(stats.complete), stats.identified_with_holes, stats.centre_unknown,
+            stats.unknown_cells,
             stats.cells_with_quad,
             stats.cells_with_quad > 0
                 ? 100.0 * static_cast<double>(stats.unknown_cells) /
@@ -354,28 +364,49 @@ TEST_CASE("replay a recorded clip through the stateless simple pipeline", "[.sim
         for (const auto centre : {FacetColor::white, FacetColor::yellow, FacetColor::red,
                                   FacetColor::orange, FacetColor::green, FacetColor::blue}) {
             const auto& slot = store.slot(centre);
-            std::printf("  %c  %s  readings=%d conflicts=%d\n", color_letter(centre),
-                        slot.filled ? cells_string(slot.cells).c_str() : "---------", slot.readings,
-                        slot.conflicts);
+            std::string modal = "---------";
+            int modal_count = 0;
+            for (const auto& [cells, count] : slot.tally) {
+                if (count > modal_count) {
+                    modal_count = count;
+                    modal = cells_string(cells);
+                }
+            }
+            std::printf("  %c  first=%s modal=%s(%d/%d)  readings=%d conflicts=%d\n",
+                        color_letter(centre),
+                        slot.filled ? cells_string(slot.cells).c_str() : "---------", modal.c_str(),
+                        modal_count, slot.readings, slot.readings, slot.conflicts);
         }
 
         // --- the decisive metric ---------------------------------------
-        const auto faces = store.as_faces();
-        if (!faces) {
-            std::printf("VALIDITY: NOT ASSEMBLED - only %zu of 6 faces captured\n",
-                        store.filled_count());
-            continue;
+        //
+        // Reported under BOTH slot-selection rules on the same evidence.
+        // first_complete is the strict claim the design makes (one frame is
+        // enough); modal says whether the readings were mostly right and
+        // unluckily ordered. Reporting only the first would hide a pipeline
+        // that works, reporting only the second would overstate one that
+        // does not, and the gap between them is itself the measurement.
+        for (const auto selection : {simple::FaceStore::Selection::first_complete,
+                                     simple::FaceStore::Selection::modal}) {
+            const char* rule =
+                selection == simple::FaceStore::Selection::first_complete ? "first" : "modal";
+            const auto faces = store.as_faces(selection);
+            if (!faces) {
+                std::printf("VALIDITY[%s]: NOT ASSEMBLED - only %zu of 6 faces captured\n", rule,
+                            store.filled_count());
+                continue;
+            }
+            std::printf("census[%s]: %s\n", rule, census_string(*faces).c_str());
+            const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*faces);
+            if (!assembled) {
+                std::printf("VALIDITY[%s]: INVALID - assembler rejected (%s)\n", rule,
+                            std::string(cube::to_string(assembled.error())).c_str());
+                continue;
+            }
+            std::printf("VALIDITY[%s]: VALID and SOLVABLE (physically_valid=%d solvable=%d)\n", rule,
+                        assembled->cube.is_physically_valid() ? 1 : 0,
+                        assembled->cube.is_solvable() ? 1 : 0);
         }
-        std::printf("census: %s\n", census_string(*faces).c_str());
-        const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*faces);
-        if (!assembled) {
-            std::printf("VALIDITY: INVALID - assembler rejected (%s)\n",
-                        std::string(cube::to_string(assembled.error())).c_str());
-            continue;
-        }
-        std::printf("VALIDITY: VALID and SOLVABLE (physically_valid=%d solvable=%d)\n",
-                    assembled->cube.is_physically_valid() ? 1 : 0,
-                    assembled->cube.is_solvable() ? 1 : 0);
     }
 
     // The harness always passes: it is a measurement instrument, and a clip
