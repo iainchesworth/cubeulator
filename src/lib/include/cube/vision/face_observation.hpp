@@ -36,6 +36,14 @@ struct FaceObservation {
     // a low value means the sample straddled two, so `lab` names only the
     // larger of them and the cell should be weighed accordingly.
     //
+    // ZERO MEANS "NOT MEASURED", NOT "PERFECTLY CONTAMINATED": a cell whose
+    // projected quad comes out sub-pixel takes the bounding-rect fallback,
+    // where an in-quad agreement figure has no meaning. Anything reading
+    // this must treat 0 as absent. It deliberately does NOT default to 1 -
+    // a reliability signal that fails open reports the patches it exists to
+    // flag as the cleanest in the frame, which is exactly how the first
+    // version of this field was wrong (a 5-material patch scored 1.000).
+    //
     // MEASUREMENT-ONLY FOR NOW - nothing downstream reads it and no gate
     // branches on it. It is carried on the observation rather than left in
     // the detector because the aggregator and the router are where a

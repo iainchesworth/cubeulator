@@ -286,12 +286,18 @@ TEST_CASE("cell sampling reads the cell, not its bounding rect", "[vision][patch
 // material, but at the very bottom of its spread, a colour the tile is
 // nowhere. Walking the estimate onto the dense region fixes that.
 //
-// Verified to fail before the refinement: with the refinement compiled out
-// the masked median here is L 51.0, so the first CHECK fails by 4 L. It
-// also fails on the pre-mask sampler for the same reason (the mask is
-// nearly a no-op on this axis-aligned quad, so that build reads L 51.0
-// too) - this test isolates the estimator, and the sheared-quad test above
-// isolates the mask.
+// Verified to fail before the refinement, and the two stages really are
+// separately covered - the measured values on this quad are:
+//   full pre-fix build (no mask, no refinement) ... L 6.43, fails by 48.6
+//   mask on, refinement compiled out ............. L 51.04, fails by 4.0
+//   with both ..................................... inside the band below
+// An earlier version of this comment claimed the mask was "nearly a no-op
+// on this axis-aligned quad, so that build reads L 51.0 too". That is
+// wrong: the quad is axis-aligned but the sample quad is the SHRUNKEN one,
+// whose bounding rect reaches well into the black frame margin, so the
+// pre-mask build lands at L 6.4 - the mask is decisive here as well. The
+// isolation claim still holds via the middle row: with the mask on and the
+// refinement off this test fails on its own.
 TEST_CASE("cell sampling recentres on the dominant mode, not the split median", "[vision][patch-sampling]") {
     cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(0, 0, 0));
     const std::array<cv::Point2f, 4> sample{{{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
@@ -312,6 +318,43 @@ TEST_CASE("cell sampling recentres on the dominant mode, not the split median", 
     // 47.5% foreign must not claim to be pure.
     CHECK(stats.purity < 0.70F);
     CHECK(stats.purity > 0.40F);
+}
+
+// THE PURITY SIGNAL MUST FAIL CLOSED. The reliability field exists to flag
+// a patch whose pixels do NOT agree on a colour, so the one case it must
+// never get wrong is a patch with no dominant mode at all. Five equal-area
+// materials, each 20% of the patch and each more than kModeAgreementRadius
+// from its neighbours (BGR 40/80/120/160/210 -> L 16.1/34.0/50.0/65.9/84.2,
+// adjacent gaps 16-18 L against the radius's 12 L equivalent), so no window
+// reaches kMinModeShare and the refinement declines to move.
+//
+// VERIFIED TO FAIL PRE-FIX: the previous code initialised mode_share = 1.0
+// and took the `share < kMinModeShare` break WITHOUT assigning it, so this
+// patch reported purity = 1.000 - maximally clean, on the most contaminated
+// input in the suite. Reproduced against the built pre-fix binary
+// (purity=1.000, quad_px=1600) before the fix; it now reports 0.20, the
+// share genuinely behind the returned median.
+TEST_CASE("cell sampling reports low purity when no mode dominates", "[vision][patch-sampling]") {
+    cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(0, 0, 0));
+    const std::array<cv::Point2f, 4> sample{{{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
+    constexpr std::array<int, 5> kLevels{{40, 80, 120, 160, 210}};
+    for (std::size_t band = 0; band < kLevels.size(); ++band) {
+        const int top = 20 + static_cast<int>(band) * 8;
+        const auto level = static_cast<double>(kLevels[band]);
+        cv::rectangle(frame, cv::Rect(20, top, 40, 8), cv::Scalar(level, level, level), cv::FILLED);
+    }
+
+    const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
+
+    // The whole quad is read - this is not a coverage failure being reported
+    // as impurity.
+    CHECK(stats.quad_px > 1500);
+    // No material holds even a quarter of the patch, and the signal says so.
+    CHECK(stats.purity < 0.5F);
+    CHECK(stats.purity > 0.1F);
+    // And the colour returned is still the middle band, not a fabrication.
+    CHECK(stats.median[0] > 44.0F);
+    CHECK(stats.median[0] < 56.0F);
 }
 
 // YIELD GUARD. A cell projected only a few pixels across - a distant or
