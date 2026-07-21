@@ -487,13 +487,16 @@ bool CaptureRouter::clear_slot(int fill_index) {
 }
 
 bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& captured) {
-    // At most one slot is filled, so the store's LABELS are relative: with
-    // one stored face there is no second slot for a relabelling to
-    // contradict, and cross-session evidence confirms sessions legitimately
-    // disagree on names (slot F carries centre class green in live2, red in
-    // live3 and blue in live4 - three different physical faces under one
-    // name, by design). The epoch therefore adopts a gauge immediately
-    // instead of buffering.
+    // The caller has established that no stored slot has a claim on this
+    // capture - either at most one slot is filled (the epoch-change regime,
+    // where the store's LABELS are simply relative: with one stored face
+    // there is no second slot for a relabelling to contradict, and
+    // cross-session evidence confirms sessions legitimately disagree on
+    // names - slot F carries centre class green in live2, red in live3 and
+    // blue in live4, three different physical faces under one name, by
+    // design), or registration came back `insufficient`, which says the same
+    // thing on evidence rather than by counting. The epoch therefore adopts
+    // a gauge immediately instead of buffering.
     //
     // What is NOT relative is the ROLL, and that is what this function got
     // wrong. Four of the 24 permutations send a given epoch face to a given
@@ -510,11 +513,44 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
         gauge_ = kIdentityLatticeIndex;
         return true;
     }
-    const Face stored_face = fill_order_.front();
-    const CapturedFace& stored = slots_[static_cast<std::size_t>(stored_face)]->captured;
-    const bool matches = tight_match(captured, stored, config_);
-    if (!matches && centre_lab_distance(captured, stored) < config_.duplicate_centre_radius) {
+
+    // Which stored slots does this capture tightly re-associate with? With
+    // one filled slot this is the old `tight_match(captured, front)` test
+    // verbatim - fill_order_ holds exactly that one face - so nothing about
+    // the epoch-change regime changes. It is written over the whole store so
+    // that the function is correct for ANY store size, because that is what
+    // the recovery path needs from it: comparing only fill_order_.front()
+    // with two or more slots filled would let a re-show of the SECOND slot
+    // be mistaken for a newcomer and filed beside itself.
+    int matches = 0;
+    Face matched_face{};
+    for (const Face filled : fill_order_) {
+        if (tight_match(captured, slots_[static_cast<std::size_t>(filled)]->captured, config_)) {
+            ++matches;
+            matched_face = filled;
+        }
+    }
+    // Two stored slots both claim this reading (a photometrically aliased
+    // pair). Unreachable in the <= 1 slot regime, and in the recovery regime
+    // register_epoch_gauge has already declined to pin it for the same
+    // reason: forcing a choice between claimants is exactly the wrong-face
+    // overwrite this design forbids.
+    if (matches > 1) {
         return false;
+    }
+    // The duplicate-centre near-miss - centre on top of a captured face
+    // without the tight match that would authenticate it - measured against
+    // EVERY filled slot, matching the check commit_direct runs on an empty
+    // target (the centre cell is rotation-invariant, so testing it before the
+    // relabel and after are the same test). Identical to the old single-slot
+    // check when the store holds one face.
+    if (matches == 0) {
+        for (const Face filled : fill_order_) {
+            if (centre_lab_distance(captured, slots_[static_cast<std::size_t>(filled)]->captured) <
+                config_.duplicate_centre_radius) {
+                return false;
+            }
+        }
     }
 
     // The one case with real evidence: the capture IS the stored face, so
@@ -535,12 +571,13 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
     // same whichever wins - and the identity-first tie-break below picks
     // the commonest physical reality, matching register_epoch_gauge's own
     // preference.
-    if (matches) {
+    if (matches == 1) {
+        const CapturedFace& stored = slots_[static_cast<std::size_t>(matched_face)]->captured;
         int best = -1;
         float best_lab = std::numeric_limits<float>::max();
         for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
             if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)] !=
-                stored_face) {
+                matched_face) {
                 continue;
             }
             const float lab = oriented_cell_lab_distance(captured, stored, epoch_face, g);
@@ -560,33 +597,51 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
     }
 
     // A clearly different face. Nothing here constrains the gauge at all -
-    // neither label nor roll - because the store holds one face this epoch
-    // has not recognised, so the relative geometry of the two is simply not
-    // observable yet. Stated plainly because it is a real limit, not a
-    // solved problem: any permutation filing the newcomer BESIDE rather
-    // than on top of the stored slot is as defensible as any other, and
-    // requiring evidence instead cost 4 of the corpus's 11 captured slots
-    // when measured (live1 2->1, live2 3->1, live4 2->1) for no measured
-    // safety gain, because the never-overwrite invariant is not what is at
-    // stake on an empty target.
+    // neither label nor roll - because the store holds only faces this epoch
+    // has not recognised, so the relative geometry of them and the newcomer
+    // is simply not observable yet. Stated plainly because it is a real
+    // limit, not a solved problem: any permutation filing the newcomer
+    // BESIDE rather than on top of a stored slot is as defensible as any
+    // other, and requiring evidence instead cost 4 of the corpus's 11
+    // captured slots when measured (live1 2->1, live2 3->1, live4 2->1) for
+    // no measured safety gain, because the never-overwrite invariant is not
+    // what is at stake on an empty target.
+    //
+    // "Beside" is the whole of the choice, and it is expressed here as
+    // "onto an EMPTY store key" rather than "not onto fill_order_.front()".
+    // Those are the same predicate while one slot is filled; with two or
+    // more they are not, and the difference is load-bearing for any caller
+    // arriving with a fuller store. Landing a never-seen face on an
+    // OCCUPIED key would route it straight into commit_direct's verification
+    // conflict - a quarantine, a strike, and force-lost at the second one -
+    // which is the honest refusal for a wrong route but pure loss when an
+    // empty key was available and carried no claim to contradict.
     //
     // Identity first, then lowest index. Identity is not evidence, it is
     // the likeliest physical reality (the user re-anchored holding the cube
     // roughly as before) and the same preference register_epoch_gauge
     // applies to its own score ties; the old loop simply took index 0, a
     // quarter turn about a face nobody was looking at.
-    if (kFacePermutation[kIdentityLatticeIndex][static_cast<std::size_t>(epoch_face)] != stored_face) {
+    const auto lands_on_empty = [&](int lattice_index) {
+        const Face target = kFacePermutation[static_cast<std::size_t>(lattice_index)]
+                                            [static_cast<std::size_t>(epoch_face)];
+        return !slots_[static_cast<std::size_t>(target)].has_value();
+    };
+    if (lands_on_empty(kIdentityLatticeIndex)) {
         gauge_ = kIdentityLatticeIndex;
         return true;
     }
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
-        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)] !=
-            stored_face) {
+        if (lands_on_empty(g)) {
             gauge_ = g;
             return true;
         }
     }
-    return false;  // unreachable: the 24 permutations cover every mapping
+    // Only reachable with all six slots filled: there is no empty key left
+    // to file a newcomer into, and the scan is complete anyway. Refusing
+    // keeps the never-overwrite invariant unconditional here rather than
+    // resting on the caller never asking.
+    return false;
 }
 
 void CaptureRouter::buffer_epoch_face(Face epoch_face, const CapturedFace& captured) {
