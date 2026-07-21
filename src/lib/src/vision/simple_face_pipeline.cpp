@@ -126,11 +126,13 @@ using cube::model::FacetColor;
 // A dilation closes the one-pixel breaks every edge operator leaves at a
 // cube's rounded corners; without it approxPolyDP sees an open arc and the
 // contour wraps back on itself into an 8-gon.
-[[nodiscard]] std::optional<FaceQuad> quad_from_edge_mask(const cv::Mat& mask, QuadSource source,
-                                                          const PipelineParams& params) {
+[[nodiscard]] QuadCandidates quads_from_edge_mask(const cv::Mat& mask, QuadSource source,
+                                                 const PipelineParams& params) {
+    QuadCandidates found;
     cv::Mat closed;
     const cv::Mat kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::dilate(mask, closed, kernel, cv::Point(-1, -1), 2);
+    found.edge_mask = closed;
 
     std::vector<std::vector<cv::Point>> contours;
     // RETR_LIST, not RETR_EXTERNAL: with a hand and a busy background in
@@ -138,29 +140,41 @@ using cube::model::FacetColor;
     // blob, and RETR_EXTERNAL would discard exactly the one we want.
     cv::findContours(closed, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-    std::optional<FaceQuad> best;
-    float best_area = 0.0F;
+    // A SWEEP of approxPolyDP tolerances, not the single 0.02 the reference
+    // designs use. Measured reason: at a fixed 0.02*perimeter the face
+    // outline of runD never reduced to four vertices - a hand-held cube's
+    // rounded corners and the head/hand edges that touch its silhouette
+    // leave the contour with five or six significant turns - while every
+    // individual STICKER did, so the largest surviving candidate was always
+    // a sticker and all six stored faces came out uniform. Coarser
+    // tolerances collapse the extra turns; the shape gates below, not the
+    // tolerance, decide what is admissible.
+    constexpr std::array<double, 5> kApproxTolerances{0.02, 0.03, 0.05, 0.08, 0.12};
+
     for (const auto& contour : contours) {
         if (contour.size() < 4) {
             continue;
         }
         const double perimeter = cv::arcLength(contour, true);
-        std::vector<cv::Point> approx;
-        cv::approxPolyDP(contour, approx, 0.02 * perimeter, true);
-        if (approx.size() != 4 || !cv::isContourConvex(approx)) {
-            continue;
-        }
-        std::array<cv::Point2f, 4> corners{};
-        for (std::size_t i = 0; i < corners.size(); ++i) {
-            corners[i] = cv::Point2f(static_cast<float>(approx[i].x), static_cast<float>(approx[i].y));
-        }
-        auto candidate = accept_quad(corners, source, mask.size(), params);
-        if (candidate && candidate->area_fraction > best_area) {
-            best_area = candidate->area_fraction;
-            best = candidate;
+        for (const double tolerance : kApproxTolerances) {
+            std::vector<cv::Point> approx;
+            cv::approxPolyDP(contour, approx, tolerance * perimeter, true);
+            if (approx.size() != 4 || !cv::isContourConvex(approx)) {
+                continue;
+            }
+            std::array<cv::Point2f, 4> corners{};
+            for (std::size_t i = 0; i < corners.size(); ++i) {
+                corners[i] =
+                    cv::Point2f(static_cast<float>(approx[i].x), static_cast<float>(approx[i].y));
+            }
+            if (auto candidate = accept_quad(corners, source, mask.size(), params)) {
+                found.quads.push_back(*candidate);
+                break;  // one quad per contour: the finest tolerance that
+                        // yields an admissible 4-gon is the best fit to it
+            }
         }
     }
-    return best;
+    return found;
 }
 
 [[nodiscard]] cv::Mat to_gray(const cv::Mat& bgr) {
@@ -331,6 +345,8 @@ std::string_view to_string(QuadSource source) {
             return "lsd";
         case QuadSource::canny:
             return "canny";
+        case QuadSource::sticker_hull:
+            return "hull";
         case QuadSource::none:
             break;
     }
@@ -347,10 +363,9 @@ std::string_view to_string(ClassifierMode mode) {
     return "lab";
 }
 
-std::optional<FaceQuad> detect_quad_line_segments(const cv::Mat& bgr,
-                                                  const PipelineParams& params) {
+QuadCandidates quad_candidates_line_segments(const cv::Mat& bgr, const PipelineParams& params) {
     if (bgr.empty()) {
-        return std::nullopt;
+        return {};
     }
     const cv::Mat gray = to_gray(bgr);
 
@@ -378,19 +393,119 @@ std::optional<FaceQuad> detect_quad_line_segments(const cv::Mat& bgr,
         cv::line(mask, cv::Point(cvRound(a.x), cvRound(a.y)), cv::Point(cvRound(b.x), cvRound(b.y)),
                  cv::Scalar(255), 2);
     }
-    return quad_from_edge_mask(mask, QuadSource::line_segments, params);
+    return quads_from_edge_mask(mask, QuadSource::line_segments, params);
 }
 
-std::optional<FaceQuad> detect_quad_canny(const cv::Mat& bgr, const PipelineParams& params) {
+QuadCandidates quad_candidates_canny(const cv::Mat& bgr, const PipelineParams& params) {
     if (bgr.empty()) {
-        return std::nullopt;
+        return {};
     }
     cv::Mat gray = to_gray(bgr);
     cv::Mat blurred;
     cv::GaussianBlur(gray, blurred, cv::Size(5, 5), 0.0);
     cv::Mat edges;
     cv::Canny(blurred, edges, 50, 150);
-    return quad_from_edge_mask(edges, QuadSource::canny, params);
+    return quads_from_edge_mask(edges, QuadSource::canny, params);
+}
+
+// THE choice: the largest admissible quad. A face contains its stickers, so
+// on evidence that offers both, the face wins on area by roughly 9x. This is
+// only sound because the candidate list is now complete - when the face
+// outline was absent from it (the fixed-tolerance bug above) "largest" chose
+// confidently and wrongly, and reported full confidence while doing it.
+namespace {
+
+[[nodiscard]] std::optional<FaceQuad> largest_of(const QuadCandidates& candidates) {
+    if (candidates.quads.empty()) {
+        return std::nullopt;
+    }
+    return *std::max_element(candidates.quads.begin(), candidates.quads.end(),
+                             [](const FaceQuad& a, const FaceQuad& b) {
+                                 return a.area_fraction < b.area_fraction;
+                             });
+}
+
+}  // namespace
+
+std::optional<FaceQuad> detect_quad_sticker_hull(const cv::Mat& bgr, const PipelineParams& params) {
+    if (bgr.empty()) {
+        return std::nullopt;
+    }
+    const QuadCandidates candidates = quad_candidates_line_segments(bgr, params);
+    if (static_cast<int>(candidates.quads.size()) < params.min_hull_stickers) {
+        return std::nullopt;
+    }
+
+    // Sticker scale is taken from the MEDIAN candidate area, not the mean:
+    // one window pane or shirt panel among the candidates is many times a
+    // sticker's area and would drag a mean out of the sticker range
+    // entirely, taking the scale band with it.
+    std::vector<float> areas;
+    areas.reserve(candidates.quads.size());
+    for (const auto& quad : candidates.quads) {
+        areas.push_back(quad.area_fraction);
+    }
+    std::vector<float> sorted = areas;
+    const float median = median_of(sorted);
+    if (median <= 0.0F) {
+        return std::nullopt;
+    }
+
+    std::vector<cv::Point2f> points;
+    int kept = 0;
+    for (const auto& quad : candidates.quads) {
+        if (quad.area_fraction > median * params.sticker_area_tolerance ||
+            quad.area_fraction * params.sticker_area_tolerance < median) {
+            continue;
+        }
+        ++kept;
+        points.insert(points.end(), quad.corners.begin(), quad.corners.end());
+    }
+    if (kept < params.min_hull_stickers) {
+        return std::nullopt;
+    }
+
+    std::vector<cv::Point2f> hull;
+    cv::convexHull(points, hull);
+    if (hull.size() < 4) {
+        return std::nullopt;
+    }
+    const double perimeter = cv::arcLength(hull, true);
+
+    constexpr std::array<double, 6> kApproxTolerances{0.01, 0.02, 0.03, 0.05, 0.08, 0.12};
+    for (const double tolerance : kApproxTolerances) {
+        std::vector<cv::Point2f> approx;
+        cv::approxPolyDP(hull, approx, tolerance * perimeter, true);
+        if (approx.size() != 4) {
+            continue;
+        }
+        std::array<cv::Point2f, 4> corners{};
+        std::copy(approx.begin(), approx.end(), corners.begin());
+        auto quad = accept_quad(corners, QuadSource::sticker_hull, bgr.size(), params);
+        if (!quad) {
+            continue;
+        }
+        // THE self-validating test: nine stickers tile a face, so the
+        // enclosure must measure about nine of them. This is what refuses a
+        // hull over four stickers huddled in one corner - the exact sparse,
+        // lopsided evidence the production stack extrapolated confidently
+        // from - rather than emitting a well-formed quad in the wrong place.
+        const float ratio = quad->area_fraction / median;
+        if (ratio < params.min_hull_area_ratio || ratio > params.max_hull_area_ratio) {
+            return std::nullopt;
+        }
+        return quad;
+    }
+    return std::nullopt;
+}
+
+std::optional<FaceQuad> detect_quad_line_segments(const cv::Mat& bgr,
+                                                  const PipelineParams& params) {
+    return largest_of(quad_candidates_line_segments(bgr, params));
+}
+
+std::optional<FaceQuad> detect_quad_canny(const cv::Mat& bgr, const PipelineParams& params) {
+    return largest_of(quad_candidates_canny(bgr, params));
 }
 
 FaceReading read_face(const cv::Mat& bgr, const PipelineParams& params) {
@@ -399,14 +514,21 @@ FaceReading read_face(const cv::Mat& bgr, const PipelineParams& params) {
         return reading;
     }
 
-    // LSD first, Canny as the fallback, per the reference design. The
-    // harness measures each route's standalone recovery rate separately, so
-    // this ordering decides only which one a combined run uses, not what
-    // gets reported about either.
-    auto quad = detect_quad_line_segments(bgr, params);
-    if (!quad) {
-        quad = detect_quad_canny(bgr, params);
-    }
+    // ONLY the sticker-hull route, with NO fallback to the outline routes.
+    //
+    // The fallback was there first and it had to go, on measurement. On runD
+    // the outline routes return a 4-gon on 87.9% of frames and it is a
+    // single sticker every time, so falling back to them raised the quad
+    // rate from 32.9% to 88.2% while filling the store with faces read
+    // entirely inside one tile - five of the six came out uniform
+    // (YYYYYYYYY, OOOOOOOOO, ...) and were indistinguishable, from the
+    // outside, from six good captures. Coverage bought that way is negative
+    // value: FaceStore keeps the first complete reading, so one sticker-quad
+    // frame arriving before a good one permanently poisons that face.
+    //
+    // A frame the hull route declines is simply not read. That is the same
+    // trade the abstention rule makes per cell (M3), applied per frame.
+    const auto quad = detect_quad_sticker_hull(bgr, params);
     if (!quad) {
         return reading;
     }

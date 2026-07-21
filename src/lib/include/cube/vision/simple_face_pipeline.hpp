@@ -69,6 +69,7 @@
 #include <cstddef>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 namespace cube::vision::simple {
 
@@ -90,6 +91,18 @@ enum class QuadSource : std::uint8_t {
     // carries - if this wins outright, the LSD route buys nothing here and
     // that is a result worth reporting rather than hiding behind a blend.
     canny,
+    // The face quad as the convex enclosure of the SMALL quads the line
+    // evidence does return. Added after measurement, not by design: on runD
+    // the outline route recovered a 4-gon on 87.9% of frames and NOT ONCE
+    // was it the face - it was a single sticker (1.0-1.6% of frame area
+    // against the face's ~14%), so all six stored faces came out uniform
+    // (YYYYYYYYY, GGGGGGGGG, ...) and the store's conflict counter was the
+    // only thing that noticed. The dumped masks show why: LSD renders the
+    // 3x3 lattice cleanly, but the face SILHOUETTE merges with the window
+    // mullion behind the cube and with the head above it, so its contour
+    // never reduces to four vertices at any tolerance. What LSD recovers on
+    // this footage is stickers, so this route reads the face off those.
+    sticker_hull,
 };
 
 [[nodiscard]] std::string_view to_string(QuadSource source);
@@ -183,6 +196,19 @@ struct PipelineParams {
     // demanding the near-unanimity a glossy sticker's specular highlight
     // makes impossible.
     float min_purity = 0.60F;
+
+    // Sticker-hull route. The band is centred on the exact 9.0 the cube's
+    // own geometry dictates, and is wide only because a line-traced sticker
+    // quad sits slightly INSIDE its sticker (the median under-reads, so the
+    // ratio over-reads). Narrowing it toward 9 makes the route stricter,
+    // never more permissive, so it is not a knob a clip can be talked
+    // through.
+    int min_hull_stickers = 4;         // fewest that can span a face's corners
+    float min_hull_area_ratio = 5.5F;  // hull area / median candidate area
+    float max_hull_area_ratio = 14.0F;
+    // Sticker-scale band around the median candidate area, keeping a window
+    // pane or a shirt panel out of the hull before the ratio is measured.
+    float sticker_area_tolerance = 2.0F;
 };
 
 // The whole per-frame pipeline: quad, sample, classify, abstain. Pure -
@@ -191,6 +217,43 @@ struct PipelineParams {
 // `bgr` is a colour frame at whatever scale the caller has; nothing here
 // depends on resolution beyond the area fraction gate.
 [[nodiscard]] FaceReading read_face(const cv::Mat& bgr, const PipelineParams& params);
+
+// Everything one edge route found, before the single-quad choice is made.
+// Exposed because the first replay of runD showed the choice, not the
+// evidence, was wrong: quads were recovered on 87.3% of frames and every
+// one of them was a single STICKER (area 1.0-1.6% of frame, against ~14%
+// for the face), so all six stored faces came out uniform. A "did we get a
+// quad" rate cannot see that failure; the candidate list can.
+struct QuadCandidates {
+    std::vector<FaceQuad> quads;
+    cv::Mat edge_mask;  // the binary mask the contours were traced from
+};
+
+[[nodiscard]] QuadCandidates quad_candidates_line_segments(const cv::Mat& bgr,
+                                                           const PipelineParams& params);
+[[nodiscard]] QuadCandidates quad_candidates_canny(const cv::Mat& bgr,
+                                                   const PipelineParams& params);
+
+// The face quad enclosing a set of sticker-scale candidates, or nullopt.
+//
+// This is NOT the production pipeline's "fit a lattice to the anchors you
+// found" under a new name, and the difference is the whole point. That fit
+// solves for a grid and then EXTRAPOLATES the cells it never saw, which is
+// how peripheral cells came to land on neighbours and gaps (M2). Here the
+// candidates only ever set the OUTER BOUNDARY; all nine cells are then read
+// at fixed fractions of it, so a cell is never placed by inference from
+// other cells.
+//
+// It is also self-validating, which the lattice fit is not: a cube face is
+// exactly nine stickers, so the enclosure's area must come out near NINE
+// TIMES the median candidate's. Four stickers clustered in one corner
+// enclose about four times it and are REFUSED; a stray background rectangle
+// dragged into the hull inflates it past the band and is REFUSED. The gate
+// therefore fails closed on precisely the sparse, lopsided evidence that
+// produced the production stack's confident misreads, instead of quietly
+// producing a plausible-looking quad from it.
+[[nodiscard]] std::optional<FaceQuad> detect_quad_sticker_hull(const cv::Mat& bgr,
+                                                               const PipelineParams& params);
 
 // The two quad routes, exposed separately so the harness can report a
 // per-source recovery rate instead of only the combined one.
