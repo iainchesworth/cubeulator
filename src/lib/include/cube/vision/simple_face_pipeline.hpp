@@ -210,7 +210,22 @@ struct PipelineParams {
     // relative to the frame so it does not encode one clip's framing - but
     // it does encode an assumption about how big the cube is IN the frame,
     // which is a parameter precisely because that assumption is what the
-    // live1-5 clips break. See the [.simple-pipeline] sweep.
+    // live clips break.
+    //
+    // SWEPT, and the result cuts both ways, so the default stays at the
+    // value that was not chosen to win:
+    //   runD  0.06 -> 0.03: LSD candidates 4.2 -> 5.0 per frame, hull rate
+    //         32.9% -> 54.9%, complete readings 41 -> 75 (lab) and
+    //         57 -> 118 (hsv), unknown cells 11.5% -> 9.1%. Strictly more
+    //         evidence, and still 5 of 6 faces - the blue face is never
+    //         captured either way, so validity does not change.
+    //   live2 0.06 -> 0.03: LSD candidates 54 -> 16 in TOTAL over 386
+    //         frames, i.e. the lower floor made it WORSE. Below the floor
+    //         the curtain's weave enters the mask, the dilation fuses it
+    //         with the cube, and the sticker contours that survived at 0.06
+    //         stop existing. The floor was never what blocked live1-5.
+    // A value that helps one clip and harms another is not a tuning result,
+    // so 0.06 stands and the knob stays in the harness.
     float min_segment_frac = 0.06F;
 
     int min_hull_stickers = 4;         // fewest that can span a face's corners
