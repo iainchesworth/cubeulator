@@ -87,7 +87,11 @@ catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
     integration/platform_integration_test.cpp
-    integration/hand_presence_integration_test.cpp)
+    integration/hand_presence_integration_test.cpp
+    # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
+    # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
+    # camera-less machine) try to open a device. See the file header.
+    integration/camera_property_probe_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
