@@ -948,6 +948,7 @@ CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& c
     sample.weighted_mad = stats.weighted_mad;
     sample.cell_quad_area_px = static_cast<float>(std::abs(cv::contourArea(
         std::vector<cv::Point2f>(cell.corners.begin(), cell.corners.end()))));
+    sample.sample_quad = sample_corners;
     return sample;
 }
 

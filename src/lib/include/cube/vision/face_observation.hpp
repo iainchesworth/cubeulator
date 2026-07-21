@@ -80,6 +80,11 @@ struct CellPatchSample {
     cv::Vec3f median;                // same statistic as FaceObservation::lab
     float weighted_mad = 0.0F;       // chroma-weighted intra-patch MAD
     float cell_quad_area_px = 0.0F;  // stored cell quad's screen area
+    // The sample square production actually reads (the cell quad shrunk
+    // about its centroid), in frame pixels. Emitted so the sampling-purity
+    // harness can measure how much of the sampler's footprint falls outside
+    // this quad without re-deriving the shrink and drifting from it.
+    std::array<cv::Point2f, 4> sample_quad{};
 };
 
 // Recomputes the sample-patch statistics for `cell` straight off the
