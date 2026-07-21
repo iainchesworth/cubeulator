@@ -37,4 +37,23 @@ bool is_capturing() noexcept {
 
 void open_permission_settings() {}
 
+// Forwarded to the shared capture loop, which owns the device and the
+// capture thread - see interfaces/camera.hpp for what a lock is for and
+// what this backend was measured to support.
+bool photometry_control_supported() noexcept {
+    return loop().photometry_supported();
+}
+
+Result<void> request_photometry_lock(const PhotometryLockRequest& request) {
+    return loop().request_photometry_lock(request);
+}
+
+Result<void> request_photometry_restore() {
+    return loop().request_photometry_restore();
+}
+
+std::optional<PhotometryLockReport> take_photometry_report() {
+    return loop().take_photometry_report();
+}
+
 }  // namespace cube::platform::camera

@@ -134,6 +134,21 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList progressFacelets READ progressFacelets NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList slotSummaries READ slotSummaries NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList faceCaptureStates READ faceCaptureStates NOTIFY facesScannedChanged)
+    // Whether this scan is running under a camera whose photometry is
+    // locked, and a sentence saying so in the user's terms. Both exist
+    // because a failed lock MUST be visible: the failure mode it defends
+    // against (per-face exposure drift of 14-18 L points, blue and warm
+    // white overlapping in chroma) looks to the user like the scanner
+    // simply not working, and the only workaround left when the driver
+    // refuses is for them to fix their own lighting - which they can only
+    // do if they are told. See interfaces/camera.hpp.
+    Q_PROPERTY(bool cameraLocked READ cameraLocked NOTIFY cameraLockChanged)
+    Q_PROPERTY(QString cameraLockStatus READ cameraLockStatus NOTIFY cameraLockChanged)
+    // True when something the lock asked for did not happen - the platform
+    // has no control at all, or the driver refused a control. This is what
+    // the UI shows a chip for; a lock that fully succeeded is silent,
+    // because the user has nothing to do about it.
+    Q_PROPERTY(bool cameraLockWarning READ cameraLockWarning NOTIFY cameraLockChanged)
 
 public:
     explicit ScanSession(QObject* parent = nullptr);
@@ -156,6 +171,9 @@ public:
     [[nodiscard]] bool handPresent() const noexcept;
     [[nodiscard]] bool cubeDetected() const noexcept;
     [[nodiscard]] bool readyToConfirm() const noexcept;
+    [[nodiscard]] bool cameraLocked() const noexcept;
+    [[nodiscard]] bool cameraLockWarning() const noexcept;
+    [[nodiscard]] QString cameraLockStatus() const;
     // AR overlay geometry, full-frame pixel coordinates, flat
     // [x0,y0,x1,y1,...] with quad corners ordered tl,tr,br,bl. Empty lists
     // when nothing was detected on the latest reading.
@@ -292,6 +310,7 @@ signals:
     void autoAdvanceChanged();
     void handDetectionEnabledChanged();
     void previewMirroredChanged();
+    void cameraLockChanged();
     // faceIndex is the SLOT index that was filled or updated - slots carry
     // no face identity, so it only tells the UI "a capture landed", never
     // which cube face it was.
@@ -428,6 +447,14 @@ private:
     // instead, so the device never gets opened-then-immediately-abandoned
     // on a screen the user already navigated away from.
     bool stop_requested_while_starting_ = false;
+    // Latest photometry-lock outcome, refreshed from the capture thread's
+    // report during poll(). Empty status means "no answer yet" - the lock
+    // is applied a short settling run after the camera opens (see
+    // interfaces/camera.hpp), so there are always a few frames of scan with
+    // nothing to report.
+    bool camera_locked_ = false;
+    bool camera_lock_warning_ = false;
+    QString camera_lock_status_;
     int frame_seq_ = 0;
     int frame_width_ = 0;
     int frame_height_ = 0;

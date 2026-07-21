@@ -942,7 +942,18 @@ void ScanSession::stop() {
     }
 
     poll_timer_.stop();
+    // Puts the driver's photometry back as it was found on the way out -
+    // DirectShow property state outlives the process, so a scan's locked
+    // exposure would otherwise follow the user into every other camera app
+    // (see interfaces/camera.hpp: request_photometry_restore).
     cube::platform::camera::stop();
+
+    if (camera_locked_ || camera_lock_warning_ || !camera_lock_status_.isEmpty()) {
+        camera_locked_ = false;
+        camera_lock_warning_ = false;
+        camera_lock_status_.clear();
+        emit cameraLockChanged();
+    }
 
     // The gate is deliberately released even if a pass is still in flight:
     // its late-delivered result is discarded by handleAnalysisFinished()'s
@@ -973,6 +984,43 @@ void ScanSession::handleStartFinished() {
     emit runningChanged();
     emit facesScannedChanged();
     poll_timer_.start();
+
+    // Lock the camera's photometry for the whole scan, the moment the
+    // device is live. This is the point of the whole exercise: with the
+    // automatics running, mean L drifted 14-18 points BETWEEN FACES of a
+    // single scan and blue (chroma 18-24) overlapped warm-cast white
+    // (15.7-21.0), which no classifier can separate. Requested, not
+    // applied, here - the capture thread owns the device and applies it
+    // between grabs once the automatics have settled (see
+    // interfaces/camera.hpp). The outcome arrives via poll().
+    //
+    // Defaults are used deliberately: every value is frozen at whatever the
+    // camera's own automatics chose for THIS room, rather than at numbers
+    // measured on one developer's webcam.
+    const auto requested = cube::platform::camera::request_photometry_lock(
+        cube::platform::camera::PhotometryLockRequest{});
+    if (!requested) {
+        // Can only happen if the capture stopped between the future
+        // completing and this call. Nothing is broken - the scan runs on an
+        // unlocked camera - but the user must not be told otherwise.
+        camera_locked_ = false;
+        camera_lock_warning_ = true;
+        camera_lock_status_ =
+            QString::fromStdString(std::string(cube::to_string(requested.error())));
+        emit cameraLockChanged();
+    }
+}
+
+bool ScanSession::cameraLocked() const noexcept {
+    return camera_locked_;
+}
+
+bool ScanSession::cameraLockWarning() const noexcept {
+    return camera_lock_warning_;
+}
+
+QString ScanSession::cameraLockStatus() const {
+    return camera_lock_status_;
 }
 
 void ScanSession::confirmFace() {
@@ -1017,6 +1065,16 @@ void ScanSession::poll() {
     // tracker, the slot router, every Q_PROPERTY - runs the identical code
     // path it runs live (see replay_dir()). Normal runs take the camera
     // branch unconditionally.
+    // Checked before the frame gate below, not after: a report is published
+    // once per lock and would be dropped for a whole poll tick every time
+    // the mailbox happened to be empty.
+    if (auto report = cube::platform::camera::take_photometry_report()) {
+        camera_locked_ = report->exposure_locked();
+        camera_lock_warning_ = !report->fully_applied();
+        camera_lock_status_ = QString::fromStdString(report->summary());
+        emit cameraLockChanged();
+    }
+
     auto frame = replay_active() ? try_pop_replay_frame() : cube::platform::camera::try_pop_latest_frame();
     if (!frame) {
         return;

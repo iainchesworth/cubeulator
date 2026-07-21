@@ -91,7 +91,15 @@ add_executable(cube_integration_tests
     # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
     # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
     # camera-less machine) try to open a device. See the file header.
-    integration/camera_property_probe_test.cpp)
+    integration/camera_property_probe_test.cpp
+    # Runs everywhere, CI included: the lock's reporting/bookkeeping, with
+    # no device involved. Its one "no capture is running" case deliberately
+    # calls the real platform API to prove it fails without opening one.
+    integration/camera_photometry_test.cpp
+    # Hardware verification of the lock's effect on real pixels: hidden
+    # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
+    # double fence as the probe above.
+    integration/camera_lock_verification_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -101,6 +109,15 @@ target_link_libraries(cube_integration_tests
         cube::sanitizers
         cube::coverage
         Catch2::Catch2WithMain)
+
+# The two hardware tests read their opt-in env var with std::getenv, which
+# the MSVC CRT flags "unsafe" - and this build treats warnings as errors.
+# Same targeted silencing cube_platform already applies for the same call
+# (see src/app/CMakeLists.txt); the usage is correct and portable, and the
+# suggested _dupenv_s alternative is Windows-only. Also covers clang-cl,
+# which uses the same MSVC CRT headers.
+target_compile_definitions(cube_integration_tests PRIVATE
+    "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
 
 cube_deploy_sanitizer_runtime(cube_integration_tests)
 cube_deploy_vision_assets(cube_integration_tests)

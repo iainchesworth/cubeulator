@@ -17,6 +17,8 @@ TEST_CASE("to_string covers every CubeError value", "[error]") {
     REQUIRE(cube::to_string(CubeError::no_solution) == "no solution could be found");
     REQUIRE(cube::to_string(CubeError::camera_not_found) == "no camera device was found");
     REQUIRE(cube::to_string(CubeError::camera_start_failed) == "the camera could not be started");
+    REQUIRE(cube::to_string(CubeError::camera_control_unavailable) ==
+            "the camera's capture settings could not be controlled");
     REQUIRE(cube::to_string(CubeError::no_valid_cube_detected) ==
             "no valid cube was detected in the frame");
     REQUIRE(cube::to_string(CubeError::face_capture_incomplete) ==

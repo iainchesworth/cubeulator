@@ -51,6 +51,37 @@ ctest --preset <preset> -LE slow   # everything except the slow solver corpus te
 ctest --preset <preset> -L slow    # just the slow solver corpus tests
 ```
 
+## Hardware tests (camera)
+
+Two integration cases open a real camera, so they are fenced twice over: a
+leading dot in the tag hides them from a default Catch2 run (Catch2 only
+runs a hidden tag when it is named explicitly), *and* each SKIPs unless its
+own environment variable is set. Neither can run in CI or on a machine with
+no camera, and `ctest` never selects them.
+
+```
+set CUBE_CAMERA_PROBE=1      && cube_integration_tests "[.camera-probe]"
+set CUBE_CAMERA_LOCK_TEST=1  && cube_integration_tests "[.camera-lock]"
+```
+
+- `[.camera-probe]` reports what the camera driver will actually let the app
+  control: what each property reads, whether a write survives a read-back,
+  and - separately - whether it moves the pixels. A property that reads back
+  but leaves the image alone is a common DirectShow trap, and the report
+  distinguishes the two.
+- `[.camera-lock]` verifies the photometry lock (see
+  [`interfaces/camera.hpp`](../src/app/interfaces/camera.hpp)) on real
+  hardware: frame-to-frame drift of mean L/chroma with the automatics
+  running versus locked, the explicit-override path, that `stop()` puts the
+  driver's settings back, and open+first-frame latency before and after.
+  Point the camera at a lit, static scene first - on a dark or covered lens
+  both modes read zero and look equally stable, which the test warns about
+  rather than passing off as success.
+
+Neither asserts that the hardware supports anything: a driver is allowed to
+refuse, and reporting that honestly is the point. They fail only if the app
+itself misbehaves.
+
 ## Coverage gate
 
 CI's `Coverage (Linux, GCC)` job builds the `linux-gcc-coverage` preset
