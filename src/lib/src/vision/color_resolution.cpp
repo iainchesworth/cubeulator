@@ -5,10 +5,10 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
-#include <numbers>
 #include <cstddef>
 #include <expected>
 #include <limits>
+#include <numbers>
 #include <numeric>
 
 namespace cube::vision {
@@ -18,8 +18,8 @@ namespace {
 using cube::model::center_facelet_index;
 using cube::model::face_count;
 using cube::model::Facelet;
-using cube::model::FacetColor;
 using cube::model::facelets_per_face;
+using cube::model::FacetColor;
 
 constexpr std::size_t kSampleCount = face_count * facelets_per_face;
 
@@ -133,17 +133,11 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // the white reference than its own - observed live, where a whole
     // scanned face of salmon-red Lab(64,35,16) / washed-orange (75,21,24) /
     // teal-green (62,-21,-22) samples classified uniformly as white. A
-    // chroma floor separates true white (measured whites came in under 9);
-    // hue bands (degrees, atan2(b*, a*)) name the rest, with band edges
-    // placed midway between the hues measured on real washed tiles: red
-    // ~25, orange ~49, yellow ~97, green ~135 saturated / ~226 washed-teal,
-    // blue ~281.
+    // chroma floor separates true white; hue bands (degrees, atan2(b*, a*))
+    // name the rest, with band edges placed midway between the hues
+    // measured on real washed tiles: red ~25, orange ~49, yellow ~97, green
+    // ~135 saturated / ~226 washed-teal, blue ~281.
     const float chroma = std::hypot(lab[1], lab[2]);
-    constexpr float kWhiteChromaCeiling = 15.0F;
-    if (chroma < kWhiteChromaCeiling) {
-        const float confidence = std::clamp(1.0F - chroma / (2.0F * kWhiteChromaCeiling), 0.0F, 1.0F);
-        return Facelet{.color = FacetColor::white, .confidence = confidence};
-    }
 
     float hue = std::atan2(lab[2], lab[1]) * 180.0F / std::numbers::pi_v<float>;
     if (hue < 0.0F) {
@@ -153,8 +147,93 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // Red/orange boundary at 44: midway between the closest observed pair
     // (saturated red reference ~39.9, washed orange tile ~48.8) - the two
     // hues everything else stays far from.
+    constexpr float kOrangeHueMinDeg = 44.0F;
+    constexpr float kOrangeHueMaxDeg = 75.0F;
+
+    // WHITE, decided on chroma AND lightness AND hue, not chroma alone.
+    //
+    // The floor was originally the whole test, at 15, because the whites of
+    // the cube it was tuned on came in under chroma 9. On the cube and
+    // camera the corpus was recorded with, the white face's own nine
+    // stickers measure chroma 15.7 15.8 17.6 17.8 18.7 18.8 19.3 20.2 21.0
+    // (runD) - every one of them just ABOVE that floor - so all nine fell
+    // through to the hue path, landed in the orange band, and runD's
+    // captured cube censused O=21 W=2 where both must be 9. The camera's
+    // white balance is warm here: a neutral surface does not read as
+    // a*=b*=0, it reads as a small POSITIVE a*/b* pair, i.e. residual
+    // chroma pointing into the orange band.
+    //
+    // Raising the floor alone makes things WORSE, because chroma does not
+    // separate white from the rest on this cube:
+    //   green tiles       chroma 20.5 - 30.7  (runA R2 20.5, runD B1 25.8)
+    //   blue  tiles       chroma 17.6 - 24.3
+    //   the white face    chroma 15.7 - 21.0
+    // The three ranges overlap outright. Two further measurements say what
+    // does separate them:
+    //   1. LIGHTNESS. Every white sample in the corpus sits at L 66.6-87.2
+    //      (runA U8 is the darkest); the greens and blues sharing its
+    //      chroma range sit at L 18.6-48.8.
+    //   2. HUE. The whites all sit at hue 57.1-66.2 - inside the orange
+    //      band, which is exactly why orange is the colour that steals
+    //      them. Everything else in that chroma range points elsewhere.
+    // Lightness alone is not sufficient and cannot be made sufficient:
+    // runA F2 is a genuine BLUE tile at L 67.6, chroma 18.8, which is
+    // BRIGHTER and LESS chromatic than the palest true white in the corpus
+    // (runA U8, L 66.6, chroma 20.1). No rule monotone in (chroma,
+    // lightness) can admit U8 and refuse F2 - so the hue condition is not a
+    // convenience, it is the only thing that makes the pair separable.
+    // Measured: dropping it steals runA F2 (blue), live1 L4 and live1 D0
+    // (yellow, L 66.4-66.5 at chroma 16.7/19.3) and live2 F1/F3 (blue).
+    //
+    // So: an unconditional chroma floor (unchanged, for a genuinely neutral
+    // sample under any hue), plus a soft ceiling that only reopens the
+    // orange band, and only for a sample light enough to be a white tile.
+    //   soft ceiling 27  - midway across the measured 21.0 (palest white)
+    //                      to 33.6 (runA F7, the least chromatic true tile
+    //                      anywhere in the orange band) gap.
+    //   lightness floor 60 - midway across the 54.2 (that same runA F7) to
+    //                      66.6 (darkest white) gap.
+    // Both are set from the two-sided gaps this corpus actually shows, not
+    // from one side of one of them, which is how 15 came to be wrong here.
+    constexpr float kWhiteChromaFloor = 15.0F;
+    constexpr float kWhiteChromaSoftCeiling = 27.0F;
+    constexpr float kWhiteLightnessFloor = 60.0F;
+    static_assert(kWhiteChromaFloor < kWhiteChromaSoftCeiling,
+                  "the soft ceiling only ever widens the floor; inverting them would make the "
+                  "orange band's whites HARDER to reach than a neutral sample's");
+
+    if (chroma < kWhiteChromaFloor) {
+        const float confidence = std::clamp(1.0F - chroma / (2.0F * kWhiteChromaFloor), 0.0F, 1.0F);
+        return Facelet{.color = FacetColor::white, .confidence = confidence};
+    }
+    const bool warm_cast_white = chroma < kWhiteChromaSoftCeiling &&
+                                 lab[0] > kWhiteLightnessFloor && hue >= kOrangeHueMinDeg &&
+                                 hue < kOrangeHueMaxDeg;
+    if (warm_cast_white) {
+        // Confidence from BOTH admitting conditions, weakest-link, because
+        // either one failing would have changed the answer - the old
+        // chroma-only expression is not just miscalibrated up here, it goes
+        // negative for every sample this branch exists to catch.
+        //
+        // The chroma term is scaled to meet the floor branch's value at the
+        // boundary (1 - 15/30 = 0.5) so a sample does not gain confidence
+        // by becoming MORE chromatic as it crosses chroma 15. The lightness
+        // term ramps from 0 at the floor to 1 at 80, spanning the measured
+        // white range (66.6-87.2) so a barely-light-enough sample is
+        // reported as the marginal call it is.
+        constexpr float kFloorBranchBoundaryConfidence = 0.5F;
+        constexpr float kWhiteLightnessConfidenceSpan = 20.0F;
+        const float chroma_term = kFloorBranchBoundaryConfidence *
+                                  (kWhiteChromaSoftCeiling - chroma) /
+                                  (kWhiteChromaSoftCeiling - kWhiteChromaFloor);
+        const float lightness_term =
+            std::clamp((lab[0] - kWhiteLightnessFloor) / kWhiteLightnessConfidenceSpan, 0.0F, 1.0F);
+        return Facelet{.color = FacetColor::white,
+                       .confidence = std::clamp(std::min(chroma_term, lightness_term), 0.0F, 1.0F)};
+    }
+
     FacetColor color = FacetColor::red;  // [340, 44)
-    if (hue >= 44.0F && hue < 75.0F) {
+    if (hue >= kOrangeHueMinDeg && hue < kOrangeHueMaxDeg) {
         color = FacetColor::orange;
     } else if (hue >= 75.0F && hue < 120.0F) {
         color = FacetColor::yellow;
@@ -263,8 +342,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             hue_names[c] = static_cast<std::size_t>(color);
             ++name_counts[static_cast<std::size_t>(color)];
         }
-        const bool all_distinct =
-            std::all_of(name_counts.begin(), name_counts.end(), [](int count) { return count <= 1; });
+        const bool all_distinct = std::all_of(name_counts.begin(), name_counts.end(),
+                                              [](int count) { return count <= 1; });
         if (all_distinct) {
             for (std::size_t c = 0; c < face_count; ++c) {
                 for (std::size_t p = 0; p < face_count; ++p) {
@@ -295,8 +374,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             rival_distance > 0.0F
                 ? std::clamp((rival_distance - own_distance) / rival_distance, 0.0F, 1.0F)
                 : 0.0F;
-        resolved[s / facelets_per_face][s % facelets_per_face] =
-            Facelet{.color = palette.entries[best_permutation[own]].color, .confidence = confidence};
+        resolved[s / facelets_per_face][s % facelets_per_face] = Facelet{
+            .color = palette.entries[best_permutation[own]].color, .confidence = confidence};
     }
     return resolved;
 }
