@@ -138,6 +138,109 @@ TEST_CASE("classify_lab survives a +25 L cast and chroma washing", "[vision]") {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The warm-cast white rule. Every Lab triple below is a REAL measurement,
+// read out of the [.cross-session] slot rows for the named clip/face/cell,
+// not a constructed value - the whole point is that the boundary was set
+// from this cube's samples rather than guessed.
+// ---------------------------------------------------------------------------
+
+// Nine stickers of runD's white face plus runA's palest white. Their chroma
+// (15.7-21.0) sits ABOVE the old unconditional 15.0 floor, so before the
+// warm-cast branch existed every one of them fell through to the hue path
+// and came out ORANGE - runD censused O=21 W=2 where both must be 9. Fails
+// pre-fix on all ten samples.
+TEST_CASE("classify_lab names this cube's warm-cast white face white", "[vision]") {
+    struct Sample {
+        const char* where;
+        cv::Vec3f lab;
+    };
+    const std::array<Sample, 10> whites{{
+        {"runD U[3] chroma 15.7", {87.2F, 6.4F, 14.3F}},
+        {"runD B[7] chroma 15.8", {86.1F, 6.4F, 14.4F}},
+        {"runD D[2] chroma 17.6", {82.8F, 7.8F, 15.8F}},
+        {"runD B[2] chroma 17.8", {76.5F, 8.0F, 15.9F}},
+        {"runD R[7] chroma 18.7", {78.0F, 7.8F, 17.1F}},
+        {"runD L[6] chroma 18.8", {78.0F, 7.7F, 17.1F}},
+        {"runD D[4] chroma 19.3", {77.3F, 9.2F, 17.0F}},
+        {"runD R[1] chroma 20.2", {79.3F, 9.3F, 18.0F}},
+        {"runD F[2] chroma 21.0 - the most chromatic white measured", {69.0F, 9.7F, 18.6F}},
+        {"runA U[8] L 66.6 - the darkest white measured", {66.6F, 9.7F, 17.6F}},
+    }};
+    for (const auto& sample : whites) {
+        CAPTURE(sample.where);
+        const auto facelet = classify_lab(sample.lab);
+        REQUIRE(facelet.color == FacetColor::white);
+        // Confidence must come from the branch that made the call. The old
+        // chroma-only expression (1 - chroma/30) is NEGATIVE for every one
+        // of these, so a non-zero value here is itself evidence the
+        // lightness term is participating.
+        REQUIRE(facelet.confidence > 0.0F);
+        REQUIRE(facelet.confidence <= 1.0F);
+    }
+}
+
+// The theft guard. These are the samples that a white rule using chroma and
+// lightness ALONE - no hue condition - takes by mistake; each was checked
+// against the raw Lab and is a genuine coloured tile. runA F[2] is the
+// proof that the hue condition is load-bearing rather than decorative: at
+// L 67.6 / chroma 18.8 it is both lighter AND less chromatic than runA
+// U[8], the palest true white (L 66.6 / chroma 20.1), so no threshold pair
+// monotone in (chroma, lightness) can admit one and refuse the other.
+//
+// This case passes against the shipped classifier BOTH before and after the
+// warm-cast branch - by design, it pins an invariant across the change. It
+// was verified to FAIL against the rejected alternative (the same branch
+// with the hue condition deleted), which takes six of these nine.
+TEST_CASE("the warm-cast white rule steals no green, yellow or blue", "[vision]") {
+    struct Sample {
+        const char* where;
+        cv::Vec3f lab;
+        FacetColor expected;
+    };
+    const std::array<Sample, 9> tiles{{
+        {"runA R[2] green, chroma 20.5", {22.2F, -11.1F, 17.3F}, FacetColor::green},
+        {"runD B[1] green, chroma 25.8", {39.4F, -14.8F, 21.1F}, FacetColor::green},
+        {"runD D[3] green, chroma 30.7", {40.8F, -18.1F, 24.8F}, FacetColor::green},
+        {"live1 L[4] yellow washed to chroma 16.7 at L 66.4",
+         {66.4F, -1.1F, 16.7F},
+         FacetColor::yellow},
+        {"live1 D[0] yellow washed to chroma 19.3 at L 66.5",
+         {66.5F, 1.2F, 19.3F},
+         FacetColor::yellow},
+        {"runA D[1] yellow, chroma 52.8 at L 77.9", {77.9F, 3.5F, 52.7F}, FacetColor::yellow},
+        {"runA F[2] blue, L 67.6 chroma 18.8 - lighter and less chromatic than the palest white",
+         {67.6F, 3.1F, -18.6F},
+         FacetColor::blue},
+        {"live2 F[1] blue, L 64.1 chroma 21.6", {64.1F, 3.7F, -21.3F}, FacetColor::blue},
+        {"live2 F[3] blue, L 65.0 chroma 22.6", {65.0F, 3.9F, -22.2F}, FacetColor::blue},
+    }};
+    for (const auto& sample : tiles) {
+        CAPTURE(sample.where);
+        REQUIRE(classify_lab(sample.lab).color == sample.expected);
+    }
+}
+
+// The two ends the widened rule must not disturb: a genuinely neutral
+// sample still reaches white through the unconditional chroma floor, and a
+// true orange still reads orange. runA F[7] is the least chromatic tile
+// found anywhere in the orange band across the whole corpus (chroma 33.6),
+// so it - not a saturated reference - is what the soft ceiling of 27 has to
+// clear. Also an invariant pin: passes before and after.
+TEST_CASE("the neutral white floor and true oranges are undisturbed", "[vision]") {
+    // runA D[2]: chroma 9.7, already white before the change.
+    REQUIRE(classify_lab(cv::Vec3f{81.5F, 6.8F, 6.9F}).color == FacetColor::white);
+    // A dark neutral is still white on chroma alone - the floor branch is
+    // deliberately not given a lightness condition here.
+    REQUIRE(classify_lab(cv::Vec3f{30.0F, 2.0F, 2.0F}).color == FacetColor::white);
+    // runA F[7], chroma 33.6 at L 54.2: refused by BOTH soft conditions.
+    REQUIRE(classify_lab(cv::Vec3f{54.2F, 19.8F, 27.1F}).color == FacetColor::orange);
+    // runD D[8], chroma 73.7 - a saturated orange, far from any edge.
+    REQUIRE(classify_lab(cv::Vec3f{50.0F, 52.7F, 51.5F}).color == FacetColor::orange);
+    // A washed orange that is light enough but still too chromatic.
+    REQUIRE(classify_lab(cv::Vec3f{75.0F, 16.0F, 23.0F}).color == FacetColor::orange);
+}
+
 TEST_CASE("resolve_colors recovers an unperturbed scan", "[vision]") {
     const SyntheticScan scan = make_scan();
     require_recovered(scan);

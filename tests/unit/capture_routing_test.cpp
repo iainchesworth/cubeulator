@@ -323,21 +323,38 @@ TEST_CASE("epoch recovery re-registers a permuted epoch by content", "[routing]"
         CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
     }
 
-    SECTION("a brand-new face defers until other faces are recognised") {
-        // Nothing stored looks like blue: committing it to an empty slot
-        // now would gamble on an unresolved gauge, so it buffers...
+    SECTION("a brand-new face is admitted straight into an empty slot") {
+        // BEHAVIOUR CHANGE, and the whole coverage repair. This section
+        // used to assert that blue DEFERRED here and only landed once
+        // other faces were positively re-associated. That was never a
+        // safety property - it was register_epoch_gauge's shape leaking
+        // into policy. Registration scores only permutations that map a
+        // visible epoch face onto an ALREADY-FILLED slot, so a face the
+        // scan has never captured is always scored against the wrong
+        // stored face and can never clear the 6.0 commit bar (measured
+        // 9.8-16.1 over runA..runD). Waiting for "other faces to be
+        // recognised" therefore meant waiting for something that only
+        // happens on a re-show, which is why all four live clips ceilinged
+        // at exactly two filled slots with 70-85% of each run in recovery.
+        //
+        // The never-overwrite invariant is untouched here and is asserted
+        // below: blue can only land on an EMPTY key, and all three
+        // captured slots keep their content.
         const auto unknown = router.commit(Face::D, solid(kBlue), 10000);
-        CHECK(unknown.outcome == CommitOutcome::deferred);
-        CHECK(router.filled_count() == 3);
-        // ...until positive re-associations resolve the gauge (identity
-        // here), at which point the buffered new face flushes into an
-        // empty slot alongside the updates.
-        CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 11000).outcome == CommitOutcome::deferred);
-        const auto resolved = router.commit(Face::R, drifted(solid(kRed), 3.0F), 12000);
-        CHECK(resolved.outcome == CommitOutcome::updated);
-        REQUIRE(resolved.confirmed_slots.size() == 3);
+        CHECK(unknown.outcome == CommitOutcome::filled);
+        REQUIRE(unknown.registration.has_value());
+        CHECK(unknown.registration->status == EpochRegistration::Status::insufficient);
         CHECK(router.filled_count() == 4);
-        CHECK_FALSE(router.reorienting());
+        // Still re-orienting: admitting a newcomer fills a key, it does not
+        // resolve the epoch. The gauge that placed blue was chosen with no
+        // evidence at all, so it is used for this one empty-target write and
+        // then discarded rather than promoted to govern the rest of the
+        // epoch (see the runD 180-degree overwrite in commit()'s comment).
+        CHECK(router.reorienting());
+        CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
+        CHECK(centre_lab_distance(*router.slot_at(1), solid(kRed)) == 0.0F);
+        CHECK(centre_lab_distance(*router.slot_at(2), solid(kGreen)) == 0.0F);
+        CHECK(centre_lab_distance(*router.slot_at(3), solid(kBlue)) == 0.0F);
     }
 }
 
@@ -502,12 +519,24 @@ TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]"
     // A buffered epoch face is already pending when the user starts
     // retaking - it is dropped with the recovery state and simply
     // re-commits on a later pass.
-    CHECK(router.commit(Face::F, solid(kBlue), 10000).outcome == CommitOutcome::deferred);
+    //
+    // The buffered face is a re-show of the stored white, NOT the brand-new
+    // blue it used to be. A never-seen face no longer merely waits - it is
+    // admitted to an empty slot on the spot (registration `insufficient` is
+    // a new-face verdict, not an unresolved one), so although it does stay
+    // buffered it is no longer a PENDING commit and could not stand in for
+    // one here. A re-show still buffers unwritten for the right
+    // reason: it tight-matches white, pinning F->U, and the four rotations
+    // that satisfy that pin are indistinguishable on a solid face - a
+    // genuine `ambiguous`, which is exactly the state this case needs the
+    // retake to interrupt.
+    const CapturedFace pending = drifted(solid(kWhite), 3.0F);
+    CHECK(router.commit(Face::F, pending, 10000).outcome == CommitOutcome::deferred);
 
     SECTION("down to one slot: labels are relative again") {
         REQUIRE(router.clear_slot(0));  // retake white
         CHECK_FALSE(router.reorienting());
-        const auto result = router.commit(Face::F, solid(kBlue), 11000);
+        const auto result = router.commit(Face::F, pending, 11000);
         CHECK(result.outcome == CommitOutcome::filled);
         CHECK(router.filled_count() == 2);
         // The surviving slot's content was never touched by the exit.
@@ -518,7 +547,7 @@ TEST_CASE("retakes that empty the store mid-recovery exit recovery", "[routing]"
         REQUIRE(router.clear_slot(0));
         REQUIRE(router.clear_slot(0));
         CHECK_FALSE(router.reorienting());
-        const auto result = router.commit(Face::F, solid(kBlue), 11000);
+        const auto result = router.commit(Face::F, pending, 11000);
         CHECK(result.outcome == CommitOutcome::filled);
         CHECK(router.filled_count() == 1);
     }
@@ -1187,4 +1216,379 @@ TEST_CASE("honest same-face drift still verifies after the radius tightened", "[
     router.on_epoch(1);
     REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
     CHECK(router.commit(Face::F, same_face_drifted, 5000).outcome == CommitOutcome::updated);
+}
+
+// ---------------------------------------------------------------------------
+// Empty-slot admission during recovery: registration `insufficient` is a
+// NEW-FACE verdict, not an unresolved one.
+//
+// The measured defect these cover. Across four deliberate live scans of one
+// scramble (runA..runD, 8 face presentations covering all 6 faces), coverage
+// ceilinged at exactly two filled slots in every clip. begin_epoch_scope
+// enters recovery the moment the store holds two, all four runs reached two
+// within ~50 passes, and from there nothing could be written unless
+// register_epoch_gauge returned `resolved` - which it structurally cannot for
+// a face the scan has never captured, because it only scores permutations
+// mapping a visible epoch face onto an ALREADY-FILLED slot (pairs > 0). Every
+// such candidate scores the newcomer against the wrong stored face: measured
+// 9.8-16.1 against the 6.0 commit bar, `insufficient` 40 times in 79
+// registration attempts, 51 deferrals against 9 fills over the four runs, and
+// registration resolving only 3 times - always on a re-show, always in the
+// last 15% of a clip. runD is the sharpest: four geometry-confidence 1.0
+// nine-of-nine reads at passes 273-286, all refused at 10.55-12.62.
+//
+// What the fix does NOT change, asserted throughout below: the newcomer is
+// only ever routed to an EMPTY key, the duplicate-centre scan still refuses
+// it if its centre sits on a captured face's, an occupied slot still only
+// changes through the verified in-place update, and `ambiguous` still defers.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("a never-seen face fills an empty slot mid-recovery", "[routing]") {
+    // (a) The exact live scenario: two slots filled, a new epoch, and a face
+    // that resembles nothing stored. PRE-FIX this deferred forever - it is
+    // the assertion that separates this test from the old behaviour, and it
+    // fails on the old code at the very first CHECK.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kGreen), 1000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+
+    // Tracked as body U this epoch - the label the store's white already
+    // holds, so the identity gauge is NOT available and the router has to
+    // file the newcomer onto some other, empty key.
+    const CapturedFace newcomer = patterned();
+    REQUIRE(kFacePermutation[kIdentityLatticeIndex][static_cast<std::size_t>(Face::U)] == Face::U);
+
+    const auto result = router.commit(Face::U, newcomer, 10000);
+    CHECK(result.outcome == CommitOutcome::filled);
+    REQUIRE(result.registration.has_value());
+    // The status the fix reinterprets: nothing tight-matched anything.
+    CHECK(result.registration->status == EpochRegistration::Status::insufficient);
+    // The epoch stays in recovery: see "a brand-new face is admitted straight
+    // into an empty slot" above, and the runD overwrite the non-promotion
+    // exists to prevent.
+    CHECK(router.reorienting());
+    REQUIRE(router.filled_count() == 3);
+    REQUIRE(result.confirmed_slots.size() == 1);
+    CHECK(result.confirmed_slots.front() == 2);
+
+    // The invariant, stated as bytes: the two captured slots are untouched.
+    for (std::size_t cell = 0; cell < 9; ++cell) {
+        CHECK(cv::norm(router.slot_at(0)->lab[cell] - solid(kWhite).lab[cell]) == 0.0);
+        CHECK(cv::norm(router.slot_at(1)->lab[cell] - solid(kGreen).lab[cell]) == 0.0);
+    }
+    // ...and it landed on a key that was EMPTY, not on U or R.
+    const auto store_face = router.face_at(2);
+    REQUIRE(store_face.has_value());
+    CHECK(*store_face != Face::U);
+    CHECK(*store_face != Face::R);
+
+    // What LANDED is the capture relabelled into the store's frame under a
+    // gauge that really does send body U to that key - the same write path
+    // the resolved flush uses, not a verbatim copy filed under a rotated
+    // label (see relabel_capture's three measured corpus corruptions).
+    const CapturedFace* content = router.slot_at(2);
+    REQUIRE(content != nullptr);
+    bool consistent = false;
+    for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
+        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::U)] != *store_face) {
+            continue;
+        }
+        const CapturedFace expected = relabelled(newcomer, Face::U, g);
+        bool same = true;
+        for (std::size_t cell = 0; cell < expected.lab.size(); ++cell) {
+            same = same && cv::norm(content->lab[cell] - expected.lab[cell]) == 0.0;
+        }
+        consistent = consistent || same;
+    }
+    CHECK(consistent);
+    // Both halves of that: no sticker invented or lost (census), and the
+    // rotation-invariant centre survives in place.
+    CHECK(census_l1_distance(color_census(*content), color_census(newcomer)) == 0);
+    CHECK(cv::norm(content->lab[cube::model::center_facelet_index] -
+                   newcomer.lab[cube::model::center_facelet_index]) == 0.0);
+}
+
+TEST_CASE("a mid-recovery newcomer only ever lands on an empty key", "[routing]") {
+    // (b) The never-overwrite invariant on the new path, swept rather than
+    // sampled. Five slots are captured, leaving exactly ONE empty key; the
+    // sixth face then arrives tracked under every possible body label in
+    // turn. Whatever it is called, it must land in that one empty key - the
+    // "identity decides WHERE" rule cannot be allowed to point a never-seen
+    // face at an occupied slot just because the epoch's labels happen to
+    // line up that way.
+    //
+    // Fails PRE-FIX on the outcome (every iteration deferred). Fails against
+    // the obvious wrong implementation too - one that reused
+    // adopt_gauge_direct's old "not fill_order_.front()" rule, which with
+    // five filled slots leaves four occupied targets still available.
+    const std::array<std::pair<Face, cv::Vec3f>, 5> prefill{{{Face::U, kWhite},
+                                                             {Face::R, kYellow},
+                                                             {Face::F, kRed},
+                                                             {Face::D, kGreen},
+                                                             {Face::L, kOrange}}};
+    for (std::size_t label = 0; label < 6; ++label) {
+        const auto epoch_face = static_cast<Face>(label);
+        CaptureRouter router;
+        router.on_epoch(1);
+        std::int64_t t = 0;
+        for (const auto& entry : prefill) {
+            t += 1000;
+            REQUIRE(router.commit(entry.first, solid(entry.second), t).outcome == CommitOutcome::filled);
+        }
+        REQUIRE(router.filled_count() == 5);
+        REQUIRE(router.face_at(0) == Face::U);
+
+        router.on_epoch(2);
+        REQUIRE(router.reorienting());
+        const auto result = router.commit(epoch_face, solid(kBlue), 20000);
+        REQUIRE(result.registration.has_value());
+        CHECK(result.registration->status == EpochRegistration::Status::insufficient);
+        CHECK(result.outcome == CommitOutcome::filled);
+        REQUIRE(router.filled_count() == 6);
+        // B is the only key left, whatever the newcomer was tracked as.
+        CHECK(router.face_at(5) == Face::B);
+        // Every pre-existing capture still holds its own colour.
+        for (std::size_t i = 0; i < prefill.size(); ++i) {
+            REQUIRE(router.slot_at(static_cast<int>(i)) != nullptr);
+            CHECK(centre_lab_distance(*router.slot_at(static_cast<int>(i)), solid(prefill[i].second)) == 0.0F);
+        }
+    }
+}
+
+TEST_CASE("admission does not open a back door onto an occupied slot", "[routing]") {
+    // (b), continued: a newcomer's slot must be no easier to overwrite than
+    // any other, and the route to it is the verified in-place update or
+    // nothing. The epoch is walked to a RESOLVED gauge first, because that
+    // is now the only way out of recovery - admitting a newcomer fills a key
+    // and deliberately leaves the epoch re-orienting (its gauge was a guess
+    // and does not get to govern anything else).
+    const CapturedFace pattern = patterned();
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, pattern, 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kGreen), 1000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+    REQUIRE(router.commit(Face::F, solid(kBlue), 10000).outcome == CommitOutcome::filled);
+    REQUIRE(router.filled_count() == 3);
+    // Fails PRE-FIX, where the guessed gauge was promoted on the spot.
+    REQUIRE(router.reorienting());
+
+    // A re-show of the face captured at U pins the epoch against content the
+    // guess never touched, and the roll tie-break settles the rotation. Only
+    // now is the router routing directly.
+    const auto resolved = router.commit(Face::U, pattern, 11000);
+    REQUIRE(resolved.registration.has_value());
+    REQUIRE(resolved.registration->status == EpochRegistration::Status::resolved);
+    REQUIRE(resolved.outcome == CommitOutcome::updated);
+    REQUIRE_FALSE(router.reorienting());
+    REQUIRE(router.filled_count() == 3);
+    REQUIRE(router.face_at(2) == Face::F);
+
+    // Same tracked face, past the holdoff, now reading as a different
+    // physical face: quarantined, slot preserved, strike recorded.
+    const auto conflict = router.commit(Face::F, solid(kYellow), 12000);
+    CHECK(conflict.outcome == CommitOutcome::quarantined);
+    CHECK(router.filled_count() == 3);
+    CHECK(centre_lab_distance(*router.slot_at(2), solid(kBlue)) == 0.0F);
+    CHECK(router.strikes_at(2) == 1);
+    // And an honest re-show of the newcomer still verifies in place.
+    const auto reshow = router.commit(Face::F, drifted(solid(kBlue), 4.0F), 14000);
+    CHECK(reshow.outcome == CommitOutcome::updated);
+    CHECK(router.filled_count() == 3);
+}
+
+TEST_CASE("a mid-recovery guess never decides the roll of a captured slot", "[routing]") {
+    // THE runD corruption, reproduced in the shape it actually took and then
+    // refused. Measured on the real clip before this guard existed: pass 129
+    // admitted body F into store key U on a guessed gauge; pass 188 then sent
+    // body U to store key F, where verified_same_face - centre class, centre
+    // Lab, census, every term rotation-invariant - waved it through (centre
+    // Lab 2.72, census L1 2) and rewrote a good capture 180 degrees out. Ring
+    // comparison against that slot's own earlier bytes: 2.13 mean Lab at 180,
+    // 54.84 at identity, with runB and runC corroborating the earlier bytes.
+    // Right label, rotated lie - exactly what relabel_capture's note warns of.
+    //
+    // The mechanism, and why the sweep: the guess is not merely used for the
+    // newcomer's own write (that lands on an empty key and is harmless). It
+    // becomes a PIN. One pass later the newcomer tight-matches its own slot,
+    // registration resolves onto the lattice index that was guessed - and
+    // with two consistent pins the candidate set is usually a singleton, so
+    // the oriented roll tie-break never runs to catch it - and the verified
+    // in-place update inherits a roll nothing ever tested. Withholding
+    // provisional slots from registration is what closes it.
+    //
+    // Swept over all 24 true gauges x 6 newcomer labels because which
+    // combinations turn into a silent roll rewrite depends on the arbitrary
+    // lattice index adopt_gauge_direct happens to return; sampling one would
+    // be sampling luck. Verified against pre-fix HEAD (10d2056): the sweep
+    // fails there - see the commit body for the count of corrupting
+    // combinations - and every combination leaves the slot byte-identical
+    // with the guard in place.
+    const CapturedFace epoch_u = patterned();
+    const CapturedFace epoch_r = solid(kOrange);
+    const CapturedFace newcomer = solid(kBlue);
+
+    for (int true_gauge = 0; true_gauge < static_cast<int>(kLatticeSize); ++true_gauge) {
+        // Build epoch 1's store as the epoch-2 readings would look after the
+        // whole-cube rotation `true_gauge`, so the epoch-2 captures below are
+        // the SAME physical faces seen from a different body frame - the only
+        // construction in which "the roll came out wrong" is a statement
+        // about the router rather than about the fixture.
+        const auto store_u =
+            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::U)];
+        const auto store_r =
+            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::R)];
+        const CapturedFace stored_u = relabelled(epoch_u, Face::U, true_gauge);
+        const CapturedFace stored_r = relabelled(epoch_r, Face::R, true_gauge);
+
+        for (std::size_t label = 0; label < 6; ++label) {
+            const auto newcomer_label = static_cast<Face>(label);
+            CaptureRouter router;
+            router.on_epoch(1);
+            // The first commit takes the identity gauge (empty store) and the
+            // second lands beside it, so both slots hold their bytes verbatim.
+            REQUIRE(router.commit(store_u, stored_u, 0).outcome == CommitOutcome::filled);
+            REQUIRE(router.commit(store_r, stored_r, 1000).outcome == CommitOutcome::filled);
+            REQUIRE(router.face_at(0) == store_u);
+
+            router.on_epoch(2);
+            REQUIRE(router.reorienting());
+            // A face the scan has never captured, admitted on a gauge chosen
+            // with no evidence whatever.
+            const auto admitted = router.commit(newcomer_label, newcomer, 10000);
+            REQUIRE(admitted.registration.has_value());
+            REQUIRE(admitted.registration->status == EpochRegistration::Status::insufficient);
+            REQUIRE(admitted.outcome == CommitOutcome::filled);
+
+            // ...and then the runD move: another tracked face carrying the
+            // physical face already captured at store_u. Whatever the router
+            // decides to do with it - update it in place at the roll the
+            // oriented evidence supports, or refuse - the one outcome that is
+            // not allowed is the slot changing to a rotation of itself.
+            const auto reshow = router.commit(Face::U, epoch_u, 12000);
+            REQUIRE(reshow.outcome != CommitOutcome::filled);  // no duplicate of a captured face
+
+            const CapturedFace* content = router.slot_at(0);
+            REQUIRE(content != nullptr);
+            REQUIRE(router.face_at(0) == store_u);
+            // One CHECK per combination rather than nine REQUIREs, so the
+            // sweep reports every corrupting (gauge, label) pair instead of
+            // aborting on the first.
+            bool unchanged = true;
+            for (std::size_t cell = 0; cell < stored_u.lab.size(); ++cell) {
+                unchanged = unchanged && cv::norm(content->lab[cell] - stored_u.lab[cell]) == 0.0;
+            }
+            INFO("true gauge " << true_gauge << ", newcomer label " << label);
+            CHECK(unchanged);
+        }
+    }
+}
+
+TEST_CASE("recovery still defers when the evidence contradicts itself", "[routing]") {
+    // (c) The half of the old behaviour that is measurably RIGHT and must
+    // survive: `ambiguous` means evidence exists and disagrees with itself,
+    // and over runA..runD it separated true re-shows (best-roll 2.0-10.2
+    // mean Lab) from false aliases (38-56) cleanly. Only `insufficient` -
+    // no evidence at all, because the face was never captured - is
+    // reinterpreted.
+    //
+    // Honestly labelled: this case passes on the PRE-FIX code too, by
+    // construction. It is not a regression test for the fix, it is the
+    // boundary test for the fix's SCOPE - it fails against the over-broad
+    // implementation that treats every non-resolved status as a new face,
+    // which is the mistake worth guarding against here. Verified by building
+    // that variant (the `insufficient` test in commit() replaced by `false`):
+    // both sections fail on it - the first fills a fourth slot on a pinned
+    // but unresolved roll, the second fills and then quarantines the aliased
+    // pair it should have refused to adjudicate at all.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::F, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+
+    SECTION("a lone re-show pins a face but not a roll") {
+        // White tight-matches the stored white and nothing else, pinning
+        // U -> U; the four rotations fixing U are indistinguishable on a
+        // solid face, so the roll tie-break declines and content
+        // equivalence declines (the other slots are distinguishable).
+        const auto result = router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000);
+        CHECK(result.outcome == CommitOutcome::deferred);
+        REQUIRE(result.registration.has_value());
+        CHECK(result.registration->status == EpochRegistration::Status::ambiguous);
+        CHECK(router.reorienting());
+        CHECK(router.filled_count() == 3);
+    }
+
+    SECTION("two epoch faces claiming one stored slot pin nothing") {
+        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+        const auto second = router.commit(Face::D, drifted(solid(kWhite), 5.0F), 11000);
+        CHECK(second.outcome == CommitOutcome::deferred);
+        REQUIRE(second.registration.has_value());
+        CHECK(second.registration->status == EpochRegistration::Status::ambiguous);
+        CHECK(router.filled_count() == 3);
+    }
+}
+
+TEST_CASE("the duplicate-centre net still guards mid-recovery admission", "[routing]") {
+    // (d) The safety net that makes the new path admissible at all, and the
+    // reason `insufficient` is not simply "let it through". A face whose
+    // centre sits on a captured face's WITHOUT authenticating as it is slip
+    // evidence, not a new face - identity claims one thing and colour claims
+    // another - and writing it seeds the duplicate-slot wedge the legacy
+    // centre-keyed store suffered.
+    //
+    // This case is discriminating in BOTH directions, which is the point of
+    // pairing the two halves: the blue commit fails on the PRE-FIX code (it
+    // deferred), and the suspect commits fail on a fix that skipped the
+    // duplicate-centre guard (they would fill a third slot).
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kRed), 1000).outcome == CommitOutcome::filled);
+
+    router.on_epoch(2);
+    REQUIRE(router.reorienting());
+
+    // Centre inside the duplicate radius of the stored red, but three
+    // stickers read green so the census is past reassoc_census (4): could be
+    // the stored face badly lit, could be a different face aliasing it. Not
+    // admissible either way.
+    CapturedFace suspect = solid(kWashedOrangeAsRed);
+    suspect = with_sticker(suspect, 0, kGreen);
+    suspect = with_sticker(suspect, 1, kGreen);
+    suspect = with_sticker(suspect, 2, kGreen);
+    REQUIRE(centre_lab_distance(suspect, solid(kRed)) < RoutingConfig{}.duplicate_centre_radius);
+
+    const auto refused = router.commit(Face::F, suspect, 10000);
+    CHECK(refused.outcome == CommitOutcome::deferred);
+    REQUIRE(refused.registration.has_value());
+    CHECK(refused.registration->status == EpochRegistration::Status::insufficient);
+    CHECK(router.filled_count() == 2);
+    CHECK(router.reorienting());
+    // Refusing touches no strike counter and pins no gauge, so a second
+    // identical pass refuses again without escalating - the same property
+    // adopt_gauge_direct's refusal has in the <= 1-slot regime.
+    const auto retry = router.commit(Face::F, suspect, 12000);
+    CHECK(retry.outcome == CommitOutcome::deferred);
+    CHECK_FALSE(retry.force_lost);
+    CHECK(router.filled_count() == 2);
+
+    // The positive control, in the same fixture: a face that aliases NOTHING
+    // stored is admitted on the very next pass. Without this the refusals
+    // above would pass on the pre-fix code, which deferred everything.
+    const auto admitted = router.commit(Face::D, solid(kBlue), 14000);
+    CHECK(admitted.outcome == CommitOutcome::filled);
+    CHECK(router.filled_count() == 3);
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
+    CHECK(centre_lab_distance(*router.slot_at(1), solid(kRed)) == 0.0F);
 }

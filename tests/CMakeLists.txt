@@ -21,6 +21,7 @@ add_executable(cube_unit_tests
     unit/orientation_tracker_test.cpp
     unit/tracker_sweep_test.cpp
     unit/pattern_id_test.cpp
+    unit/patch_purity_test.cpp
     unit/centre_cluster_assembly_test.cpp
     unit/centre_cluster_verify_test.cpp
     unit/capture_routing_test.cpp

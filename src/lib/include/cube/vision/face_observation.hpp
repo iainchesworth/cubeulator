@@ -30,6 +30,19 @@ struct FaceObservation {
     std::array<cv::Vec3f, 9> lab{};          // OpenCV float Lab (L in [0,100])
     std::array<cv::Point2f, 4> face_quad{};  // outer face boundary, same corner order
     float geometry_confidence = 0.0F;        // fraction of cells matched by a real contour
+    // Per-cell sampling reliability: the fraction of the pixels inside the
+    // cell's projected sample quad that agreed with the colour returned in
+    // `lab` (see patch_stats_for_corners). 1.0 is a patch of one material;
+    // a low value means the sample straddled two, so `lab` names only the
+    // larger of them and the cell should be weighed accordingly.
+    //
+    // MEASUREMENT-ONLY FOR NOW - nothing downstream reads it and no gate
+    // branches on it. It is carried on the observation rather than left in
+    // the detector because the aggregator and the router are where a
+    // reliability weight would eventually have to be applied, and the
+    // signal has to be measurable there before any policy can be written
+    // against it.
+    std::array<float, 9> cell_purity{};
     // ORIENTATION-ONLY observation: the lattice fit was geometrically sane
     // and phase-plausible but its anchors spanned fewer than three rows or
     // columns, so the grid's TRANSLATION is ambiguous - the cells (and
@@ -80,6 +93,13 @@ struct CellPatchSample {
     cv::Vec3f median;                // same statistic as FaceObservation::lab
     float weighted_mad = 0.0F;       // chroma-weighted intra-patch MAD
     float cell_quad_area_px = 0.0F;  // stored cell quad's screen area
+    float purity = 0.0F;             // FaceObservation::cell_purity for this cell
+    int quad_px = 0;                 // pixels genuinely inside the projected sample quad
+    // The sample square production actually reads (the cell quad shrunk
+    // about its centroid), in frame pixels. Emitted so the sampling-purity
+    // harness can measure how much of the sampler's footprint falls outside
+    // this quad without re-deriving the shrink and drifting from it.
+    std::array<cv::Point2f, 4> sample_quad{};
 };
 
 // Recomputes the sample-patch statistics for `cell` straight off the
