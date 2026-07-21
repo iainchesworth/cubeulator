@@ -211,3 +211,132 @@ TEST_CASE("observe_face reports no_valid_cube_detected for a blank frame", "[vis
     REQUIRE_FALSE(empty.has_value());
     REQUIRE(empty.error() == cube::CubeError::no_valid_cube_detected);
 }
+
+// --- Per-cell sampling purity -------------------------------------------
+//
+// These exercise detail::cell_patch_sample, which runs the SAME
+// patch_stats_for_corners body observe_face's per-cell sampler runs, off a
+// caller-supplied quad - so a synthetic quad can put the sampler in
+// geometries a synthetic 3x3 face cannot reach (strong shear, a
+// contaminant filling most of the patch) and assert on what it returns.
+namespace {
+
+// The shrink cell_patch_sample applies to get from a CELL quad to the
+// SAMPLE quad (kSampleHalfExtent / kCellQuadHalfExtent). Transcribed, not
+// derived: if production's ratio moves, these tests must be re-measured
+// rather than silently following it.
+constexpr float kSampleShrink = 0.40F;
+
+// The cell quad whose shrunken sample quad is exactly `sample_corners`.
+StickerQuad cell_quad_for_sample(const std::array<cv::Point2f, 4>& sample_corners) {
+    cv::Point2f centroid(0.0F, 0.0F);
+    for (const auto& corner : sample_corners) {
+        centroid += corner;
+    }
+    centroid *= 0.25F;
+    StickerQuad cell;
+    for (std::size_t k = 0; k < 4; ++k) {
+        cell.corners[k] = centroid + (sample_corners[k] - centroid) / kSampleShrink;
+    }
+    return cell;
+}
+
+void fill_quad(cv::Mat& frame, const std::array<cv::Point2f, 4>& corners, const cv::Scalar& bgr) {
+    std::array<cv::Point, 4> points{};
+    for (std::size_t k = 0; k < 4; ++k) {
+        points[k] = cv::Point(cvRound(corners[k].x), cvRound(corners[k].y));
+    }
+    cv::fillConvexPoly(frame, points.data(), 4, bgr, cv::LINE_8);
+}
+
+}  // namespace
+
+// THE BOUNDING-RECT DEFECT. A sheared cell quad - what an obliquely viewed
+// face projects to - has a bounding rect far larger than itself: the
+// parallelogram below spans 16 px of base over a 20 px shear, so its
+// 48x20 bounding rect is 3x its own 320 px area and two thirds of every
+// pixel in that rect belongs to the NEIGHBOUR, not the cell. The sampler
+// used to median the whole rect, so it returned the neighbour's colour by
+// a 2:1 majority. Verified to fail before the mask: the pre-mask build
+// returns the background's Lab here (L ~ 88 for the light neighbour, vs
+// the cell's L ~ 32), so the first CHECK below fails by ~56 L.
+TEST_CASE("cell sampling reads the cell, not its bounding rect", "[vision][patch-sampling]") {
+    cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(230, 230, 230));  // light neighbour material
+    const std::array<cv::Point2f, 4> sample{{{10.0F, 10.0F}, {26.0F, 10.0F}, {58.0F, 30.0F}, {42.0F, 30.0F}}};
+    fill_quad(frame, sample, cv::Scalar(40, 40, 40));  // the cell itself: dark
+
+    const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
+
+    // The dark cell, not the light neighbour that fills most of the rect.
+    CHECK(stats.median[0] < 45.0F);
+    // And the mask really is the quad: the in-quad pixel count must be a
+    // small fraction of the 48x20 = 960 px rect the sampler indexes.
+    CHECK(stats.quad_px > 200);
+    CHECK(stats.quad_px < 420);
+    // A single-material patch reads as pure.
+    CHECK(stats.purity > 0.9F);
+}
+
+// THE DOMINANT-MODE REFINEMENT. A plain median is unbiased only while the
+// contaminant is a minority small enough to leave the median inside the
+// tile's own distribution. Here 47.5% of the patch is a far-away dark
+// colour and the tile's 52.5% carries the lightness ramp any real tile has
+// under directional light (L 50.5 at one edge, 65.9 at the other, centre
+// 58.2). The median INDEX then lands 2.5% into the tile's block - the right
+// material, but at the very bottom of its spread, a colour the tile is
+// nowhere. Walking the estimate onto the dense region fixes that.
+//
+// Verified to fail before the refinement: with the refinement compiled out
+// the masked median here is L 51.0, so the first CHECK fails by 4 L. It
+// also fails on the pre-mask sampler for the same reason (the mask is
+// nearly a no-op on this axis-aligned quad, so that build reads L 51.0
+// too) - this test isolates the estimator, and the sheared-quad test above
+// isolates the mask.
+TEST_CASE("cell sampling recentres on the dominant mode, not the split median", "[vision][patch-sampling]") {
+    cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(0, 0, 0));
+    const std::array<cv::Point2f, 4> sample{{{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
+    // Rows 20..38 (19 of the patch's 40 rows) are a dark contaminant; rows
+    // 39..59 are the tile, ramping across its own shading.
+    fill_quad(frame, sample, cv::Scalar(20, 20, 20));
+    for (int y = 39; y < 60; ++y) {
+        const int level = 120 + 2 * (y - 39);  // BGR 120..160, i.e. L 50.5..65.9
+        cv::rectangle(frame, cv::Rect(20, y, 41, 1), cv::Scalar(level, level, level), cv::FILLED);
+    }
+
+    const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
+
+    // The tile's centre, not the bottom edge of its ramp.
+    CHECK(stats.median[0] > 55.0F);
+    CHECK(stats.median[0] < 62.0F);
+    // And the contamination is reported rather than hidden: a patch that is
+    // 47.5% foreign must not claim to be pure.
+    CHECK(stats.purity < 0.70F);
+    CHECK(stats.purity > 0.40F);
+}
+
+// YIELD GUARD. A cell projected only a few pixels across - a distant or
+// steeply foreshortened face - has no usable in-quad pixel set, and a
+// sampler that refused those cells would buy purity with coverage. The
+// fallback must still return the material under the quad.
+TEST_CASE("cell sampling still reads a sub-pixel quad", "[vision][patch-sampling]") {
+    cv::Mat frame(40, 40, CV_8UC3, cv::Scalar(30, 30, 30));
+    cv::rectangle(frame, cv::Rect(18, 18, 3, 3), cv::Scalar(220, 220, 220), cv::FILLED);
+    const std::array<cv::Point2f, 4> sample{{{19.0F, 19.0F}, {20.0F, 19.0F}, {20.0F, 20.0F}, {19.0F, 20.0F}}};
+
+    const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
+
+    CHECK(stats.quad_px < 8);          // the mask alone would have yielded nothing usable
+    CHECK(stats.median[0] > 70.0F);    // yet the bright patch under it still reads
+}
+
+// The purity signal has to be carried on the observation, not just
+// available in the diagnostics seam, or no downstream stage can ever weigh
+// a contaminated cell. On a clean synthetic face every cell is one
+// material, so every cell must report near-total agreement.
+TEST_CASE("observe_face reports per-cell sampling purity", "[vision][patch-sampling]") {
+    const auto observation = observe_face(synthetic_face_frame());
+    REQUIRE(observation.has_value());
+    for (const float purity : observation->cell_purity) {
+        CHECK(purity > 0.9F);
+    }
+}

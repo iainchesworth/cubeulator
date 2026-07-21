@@ -371,6 +371,53 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
     return *mid;
 }
 
+// Chroma-weighted Lab distance: a and b at full weight, L at half. The
+// lattice's own lightness varies by 20+ across one face under directional
+// room light (shading, sheen), while its CHROMA is nearly constant - and
+// chroma is precisely what separates lattice from skin (b* +15..25), from
+// tiles (either axis, hugely), and from shadowed background. Hoisted above
+// the patch sampler because the same argument holds INSIDE one tile: the
+// dominant-mode test below must not call a shaded corner of a tile a
+// different material, and the patch MAD already weights L this way.
+[[nodiscard]] float weighted_lab_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
+    const float dl = (a[0] - b[0]) * 0.5F;
+    const float da = a[1] - b[1];
+    const float db = a[2] - b[2];
+    return std::sqrt(dl * dl + da * da + db * db);
+}
+
+// Agreement radius for the dominant-mode refinement below, in the same
+// chroma-weighted units. Measured over 8883 real cell samples from the
+// runA-D recordings: intra-patch MAD is 1.22 at the median and 2.0 at p90,
+// so a genuinely single-material patch has essentially all of its pixels
+// within 6 of its own median (purity ~1) - while the contrast that a
+// contaminant brings is an order of magnitude larger (a tile against the
+// dark background behind the cube measures 30+). The radius therefore has
+// to separate 2 from 30, and anywhere in the middle works; 6 is 3x the p90
+// dispersion of a clean patch, the loosest value that still excludes a
+// second material outright.
+constexpr float kModeAgreementRadius = 6.0F;
+// Below this many in-quad pixels the mask is not a usable sample - a
+// projected cell can be only a few pixels across on a distant or heavily
+// foreshortened face - so the sampler falls back to the whole bounding
+// rect rather than returning a statistic drawn from two or three pixels.
+// A sampler that rejects such cells would trade colour purity for
+// coverage, and coverage is the thing the scan cannot do without.
+constexpr int kMinQuadPixels = 8;
+// Likewise for the mode refinement: it may only ever REFINE a median that
+// a majority already supports. If fewer than this fraction of the in-quad
+// pixels agree with the current estimate, the patch has no dominant mode
+// and the plain masked median is kept (and the low purity says so).
+constexpr float kMinModeShare = 0.25F;
+// Mode-seek iteration bounds. Four rounds is a safety cap: on the corpus
+// the walk settles in one or two (patches are single-material - intra-patch
+// MAD is 1.22 at the median - so the very first window already holds
+// everything and the estimate does not move), and only a genuinely split
+// patch takes more. The settle epsilon is well under the 1.22 median
+// dispersion, so stopping on it cannot stop short of a real move.
+constexpr int kMaxModeRounds = 4;
+constexpr float kModeSettledEpsilon = 0.05F;
+
 // Robust per-patch statistics: channel medians plus a chroma-weighted
 // median absolute deviation. The MAD is the completion scorer's structure
 // probe - a sample patch lying INSIDE one tile is uniform (small MAD)
@@ -380,14 +427,35 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
 struct PatchStats {
     cv::Vec3f median;
     float weighted_mad = 0.0F;
+    // Fraction of the in-quad pixels agreeing with the dominant mode. 1.0
+    // is a single-material patch; a value well below 1 means the sample
+    // straddles two materials and the colour returned is only one of them.
+    float purity = 1.0F;
+    int quad_px = 0;  // pixels genuinely inside the projected quad
 };
 
-// Patch-median Lab statistics for the cell centered at `cell_uv`. Median,
-// not mean: a glare highlight or a few gap pixels leaking into the patch
-// shift a mean sample toward white/black but leave the median untouched
-// until they exceed half the patch. The patch bound is the projected
-// sample square's bounding rect clamped inside the frame (extrapolated
-// cells can project partially outside it), never smaller than one pixel.
+// Patch-median Lab statistics for the cell centered at `cell_uv`.
+//
+// Median, not mean: a glare highlight or a few gap pixels leaking into the
+// patch shift a mean sample toward white/black but leave the median
+// untouched until they exceed half the patch.
+//
+// MASKED to the projected quad, not medianed over its bounding rect. The
+// rect is what the frame can be indexed by; it is NOT the sample. For a
+// quad rotated in-plane by theta the rect's area grows as (cos + sin)^2 -
+// 2x at 45 degrees - and the excess sits at the CORNERS, where under a
+// cube face the inter-tile lattice, the neighbouring stickers and (on an
+// outer cell) the scene behind the cube live. Measured over the runA-D
+// recordings the rect carries 16.9% off-quad pixels on average, 55.7% in
+// the 40-45 degree rotation bucket, so under free rotation the shipped
+// statistic was drawn from a majority of pixels it never intended to read.
+// It survived only because kSampleHalfExtent shrinks the sample square to
+// 0.16 lattice units, whose bounding rect at 45 degrees still has a
+// half-diagonal of 0.226 - inside the 0.40 cell quad - so the stray pixels
+// happened to land on the same sticker. That is an accident of one
+// constant, not a property of the sampler: 7.2% of the pixels read in the
+// 40-45 degree bucket DID leave the cell quad. Masking removes the
+// dependency.
 [[nodiscard]] PatchStats patch_stats_for_corners(const cv::Mat& bgr_frame,
                                                  const std::array<cv::Point2f, 4>& corners) {
     float min_x = corners[0].x;
@@ -414,25 +482,142 @@ struct PatchStats {
     cv::Mat lab;
     cv::cvtColor(patch_float, lab, cv::COLOR_BGR2Lab);
 
+    // Point-in-convex-quad by edge sign. A homography maps a square to a
+    // convex quad with its winding preserved, so a pixel is inside exactly
+    // when it lies on the same side of all four directed edges - the same
+    // predicate cv::fillConvexPoly rasterises, evaluated in place rather
+    // than through a mask Mat, because this runs 9 times per face per
+    // frame and the patches are ~25x25 px: an allocation would cost more
+    // than the test. The winding is read off the quad's own signed area
+    // instead of assumed, so a mirrored transform cannot silently invert
+    // the test and mask away the entire patch.
+    float signed_area = 0.0F;
+    for (std::size_t k = 0; k < 4; ++k) {
+        const cv::Point2f& current = corners[k];
+        const cv::Point2f& next = corners[(k + 1) % 4];
+        signed_area += current.x * next.y - next.x * current.y;
+    }
+    const float winding = signed_area >= 0.0F ? 1.0F : -1.0F;
+    const auto inside_quad = [&](float px, float py) {
+        for (std::size_t k = 0; k < 4; ++k) {
+            const cv::Point2f& current = corners[k];
+            const cv::Point2f& next = corners[(k + 1) % 4];
+            const float cross = (next.x - current.x) * (py - current.y) - (next.y - current.y) * (px - current.x);
+            if (cross * winding < 0.0F) {
+                return false;
+            }
+        }
+        return true;
+    };
+
     const auto pixel_count = static_cast<std::size_t>(lab.rows) * static_cast<std::size_t>(lab.cols);
-    std::vector<float> l_values;
-    std::vector<float> a_values;
-    std::vector<float> b_values;
-    l_values.reserve(pixel_count);
-    a_values.reserve(pixel_count);
-    b_values.reserve(pixel_count);
+    std::vector<cv::Vec3f> masked;
+    masked.reserve(pixel_count);
     for (int y = 0; y < lab.rows; ++y) {
+        const float py = static_cast<float>(y0 + y) + 0.5F;
         for (int x = 0; x < lab.cols; ++x) {
-            const auto& pixel = lab.at<cv::Vec3f>(y, x);
-            l_values.push_back(pixel[0]);
-            a_values.push_back(pixel[1]);
-            b_values.push_back(pixel[2]);
+            if (!inside_quad(static_cast<float>(x0 + x) + 0.5F, py)) {
+                continue;
+            }
+            masked.push_back(lab.at<cv::Vec3f>(y, x));
         }
     }
 
     PatchStats stats;
-    stats.median = cv::Vec3f(channel_median(l_values), channel_median(a_values), channel_median(b_values));
+    stats.quad_px = static_cast<int>(masked.size());
+    // YIELD GUARD: a sub-pixel or degenerate quad must still produce a
+    // reading. Falling back to the rect reproduces exactly the pre-mask
+    // behaviour for those cells rather than dropping them.
+    if (stats.quad_px < kMinQuadPixels) {
+        masked.clear();
+        for (int y = 0; y < lab.rows; ++y) {
+            for (int x = 0; x < lab.cols; ++x) {
+                masked.push_back(lab.at<cv::Vec3f>(y, x));
+            }
+        }
+    }
 
+    std::vector<float> l_values;
+    std::vector<float> a_values;
+    std::vector<float> b_values;
+    const auto fill_channels = [&](const std::vector<cv::Vec3f>& pixels) {
+        l_values.clear();
+        a_values.clear();
+        b_values.clear();
+        l_values.reserve(pixels.size());
+        a_values.reserve(pixels.size());
+        b_values.reserve(pixels.size());
+        for (const auto& pixel : pixels) {
+            l_values.push_back(pixel[0]);
+            a_values.push_back(pixel[1]);
+            b_values.push_back(pixel[2]);
+        }
+    };
+    const auto medians_of = [&](const std::vector<cv::Vec3f>& pixels) {
+        fill_channels(pixels);
+        return cv::Vec3f(channel_median(l_values), channel_median(a_values), channel_median(b_values));
+    };
+
+    stats.median = medians_of(masked);
+
+    // DOMINANT-MODE REFINEMENT. Masking bounds the GEOMETRIC contamination
+    // but not the photometric kind - a cast shadow edge, a fingertip, a
+    // mis-registered grid landing the patch across a tile boundary - and a
+    // plain median is unbiased only while the minority is small enough to
+    // leave the median inside the tile's own distribution. At a 45-50%
+    // contaminant the median survives in the right material but sits at its
+    // extreme edge, which is a colour the tile never actually is.
+    //
+    // So the estimate is walked onto the dominant cluster: re-median over
+    // the pixels within kModeAgreementRadius of the current estimate, and
+    // repeat. ONE step is not enough - starting at the cluster's edge, a
+    // single re-median only reaches the middle of the half of the cluster
+    // the first window happened to admit (measured on the synthetic
+    // 48%-contaminant case in face_observation_test: 41 -> 47, against a
+    // true tile centre of 60). The iteration is a median-of-window fixed
+    // point: it moves monotonically toward the dense region and stops, so
+    // the round cap is a safety bound rather than the usual exit.
+    std::vector<cv::Vec3f> mode_pixels;
+    mode_pixels.reserve(masked.size());
+    float mode_share = 1.0F;
+    for (int round = 0; round < kMaxModeRounds; ++round) {
+        mode_pixels.clear();
+        for (const auto& pixel : masked) {
+            if (weighted_lab_distance(pixel, stats.median) <= kModeAgreementRadius) {
+                mode_pixels.push_back(pixel);
+            }
+        }
+        const float share = masked.empty()
+                                ? 0.0F
+                                : static_cast<float>(mode_pixels.size()) / static_cast<float>(masked.size());
+        // A window holding almost nothing is not a mode; keep the plain
+        // masked median rather than chase a handful of pixels.
+        if (mode_pixels.empty() || share < kMinModeShare) {
+            break;
+        }
+        mode_share = share;
+        const cv::Vec3f refined = medians_of(mode_pixels);
+        const bool settled = weighted_lab_distance(refined, stats.median) < kModeSettledEpsilon;
+        stats.median = refined;
+        if (settled) {
+            break;
+        }
+    }
+    // PER-CELL RELIABILITY: the share of in-quad pixels agreeing with the
+    // colour finally returned. 1.0 is a patch of one material; well below 1
+    // means the sample straddled two and `median` names only the larger.
+    // Deliberately NOT an absolute-lightness rule - a genuinely dark tile is
+    // uniform and scores high, while a shadow boundary across a bright tile
+    // scores low, which is exactly the distinction an L threshold cannot
+    // make and the one a rejection policy would need.
+    stats.purity = mode_share;
+
+    // Dispersion stays a property of the WHOLE in-quad patch, not of the
+    // mode: it is the completion scorer's structure probe, and a probe
+    // computed after discarding the disagreeing pixels would report every
+    // patch as uniform and stop separating a correctly placed grid from a
+    // translated one.
+    fill_channels(masked);
     const auto channel_mad = [](std::vector<float>& values, float median) {
         for (auto& value : values) {
             value = std::abs(value - median);
@@ -466,7 +651,9 @@ namespace {
             const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
             const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
             observation.cells[slot].corners = project_quad(transform, cell_uv, kCellQuadHalfExtent);
-            observation.lab[slot] = sample_patch_lab(bgr_frame, transform, cell_uv);
+            const auto stats = sample_patch_stats(bgr_frame, transform, cell_uv);
+            observation.lab[slot] = stats.median;
+            observation.cell_purity[slot] = stats.purity;
         }
     }
     observation.face_quad = project_quad(transform, cv::Point2f(0.0F, 0.0F), kFaceHalfExtent);
@@ -512,18 +699,6 @@ namespace {
     gap_chroma /= static_cast<float>(gap_midpoints().size());
 
     return gap_chroma <= cell_chroma + kInversionMargin;
-}
-
-// Chroma-weighted Lab distance: a and b at full weight, L at half. The
-// lattice's own lightness varies by 20+ across one face under directional
-// room light (shading, sheen), while its CHROMA is nearly constant - and
-// chroma is precisely what separates lattice from skin (b* +15..25), from
-// tiles (either axis, hugely), and from shadowed background.
-[[nodiscard]] float weighted_lab_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
-    const float dl = (a[0] - b[0]) * 0.5F;
-    const float da = a[1] - b[1];
-    const float db = a[2] - b[2];
-    return std::sqrt(dl * dl + da * da + db * db);
 }
 
 [[nodiscard]] std::vector<StickerCandidate> merged_face_candidate_union(
@@ -946,6 +1121,8 @@ CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& c
     const auto stats = patch_stats_for_corners(bgr_frame, sample_corners);
     sample.median = stats.median;
     sample.weighted_mad = stats.weighted_mad;
+    sample.purity = stats.purity;
+    sample.quad_px = stats.quad_px;
     sample.cell_quad_area_px = static_cast<float>(std::abs(cv::contourArea(
         std::vector<cv::Point2f>(cell.corners.begin(), cell.corners.end()))));
     sample.sample_quad = sample_corners;
