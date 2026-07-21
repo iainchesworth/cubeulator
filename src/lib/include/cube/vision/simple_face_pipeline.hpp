@@ -204,6 +204,15 @@ struct PipelineParams {
     // ratio over-reads). Narrowing it toward 9 makes the route stricter,
     // never more permissive, so it is not a knob a clip can be talked
     // through.
+    // Shortest line segment LSD may contribute, as a fraction of the
+    // frame's smaller dimension. It exists to drop texture (a curtain's
+    // weave, a fence, JPEG ringing along a highlight), and it is expressed
+    // relative to the frame so it does not encode one clip's framing - but
+    // it does encode an assumption about how big the cube is IN the frame,
+    // which is a parameter precisely because that assumption is what the
+    // live1-5 clips break. See the [.simple-pipeline] sweep.
+    float min_segment_frac = 0.06F;
+
     int min_hull_stickers = 4;         // fewest that can span a face's corners
     float min_hull_area_ratio = 5.5F;  // hull area / median candidate area
     float max_hull_area_ratio = 14.0F;

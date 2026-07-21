@@ -378,10 +378,13 @@ QuadCandidates quad_candidates_line_segments(const cv::Mat& bgr, const PipelineP
     detector->detect(gray, segments);
 
     // Short segments are texture - the shirt's weave, the fence behind the
-    // window, the JPEG ringing along a highlight. A cube face edge in this
-    // corpus is ~200 px; a sticker edge ~70. The floor is set relative to
-    // the frame so it does not encode this clip's framing.
-    const float min_length = 0.06F * static_cast<float>(std::min(gray.cols, gray.rows));
+    // window, the JPEG ringing along a highlight. A cube face edge in the
+    // runA-D clips is ~200 px and a sticker edge ~70, against a floor of
+    // 0.06 * 480 = 29 px. In live1-5 the cube is held one-handed at roughly
+    // half that linear size, which puts a sticker edge at ~40 px and much
+    // of the lattice under the floor - see the .cpp's parameter comment.
+    const float min_length =
+        params.min_segment_frac * static_cast<float>(std::min(gray.cols, gray.rows));
 
     cv::Mat mask = cv::Mat::zeros(gray.size(), CV_8UC1);
     for (const auto& segment : segments) {

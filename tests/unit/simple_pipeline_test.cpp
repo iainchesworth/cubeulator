@@ -212,10 +212,22 @@ TEST_CASE("replay a recorded clip through the stateless simple pipeline", "[.sim
     const std::array<simple::ClassifierMode, 2> modes{simple::ClassifierMode::lab_hue_bands,
                                                       simple::ClassifierMode::hsv_white_axis};
 
+    // CUBE_SIMPLE_MINSEG overrides PipelineParams::min_segment_frac, so the
+    // one assumption the pipeline makes about how big the cube is in frame
+    // can be swept from outside instead of edited and rebuilt. It is a sweep
+    // knob, NOT a tuning result: any value that helps has to be reported
+    // together with what it did to the clips it was not chosen on.
+    const char* minseg_env = std::getenv("CUBE_SIMPLE_MINSEG");
+    const float minseg = minseg_env != nullptr ? std::strtof(minseg_env, nullptr) : 0.0F;
+
     for (const auto mode : modes) {
         simple::PipelineParams params;
         params.classifier = mode;
+        if (minseg > 0.0F) {
+            params.min_segment_frac = minseg;
+        }
         const std::string mode_name(simple::to_string(mode));
+        std::printf("\n[params] min_segment_frac=%.4f\n", params.min_segment_frac);
 
         ModeStats stats;
         simple::FaceStore store;
