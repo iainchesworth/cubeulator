@@ -15,6 +15,16 @@ namespace {
 // negligible; values are taken by value so the caller's ring buffers keep
 // their eviction order.
 [[nodiscard]] float median(std::vector<float> values) {
+    // An empty window has no median. Every line below assumes at least one
+    // value: `values[0]` on an empty vector dereferences a null data()
+    // pointer, and the even-size branch then dereferences the end iterator
+    // std::max_element returns for an empty range. Reached whenever
+    // capture() is called before any add() or after reset() - a public,
+    // unguarded entry point whose documented precondition ("callers gate on
+    // converged()") only production callers happen to honour.
+    if (values.empty()) {
+        return 0.0F;
+    }
     const auto mid = static_cast<std::ptrdiff_t>(values.size() / 2);
     std::nth_element(values.begin(), values.begin() + mid, values.end());
     const float upper = values[static_cast<std::size_t>(mid)];

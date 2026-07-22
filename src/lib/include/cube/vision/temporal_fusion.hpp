@@ -61,6 +61,9 @@ public:
 
     // Per-cell median Lab over the window. Meaningful once
     // observation_count() >= kMinObservations; callers gate on converged().
+    // On an empty window it is defined but not meaningful: every cell reads
+    // Lab (0,0,0). It used to be undefined behaviour, which is a worse
+    // answer to an unmet precondition than a valueless one.
     [[nodiscard]] CapturedFace capture() const;
 
 private:

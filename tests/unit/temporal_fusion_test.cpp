@@ -216,3 +216,33 @@ TEST_CASE("FaceAggregator convergence grows from 0 to 1 on steady input", "[visi
     REQUIRE(aggregator.converged());
     REQUIRE(previous >= 1.0F - 1e-6F);
 }
+
+// capture() is public and [[nodiscard]] with no guard of its own. Before
+// this was fixed, calling it on a fresh (or just-reset) aggregator
+// dereferenced a default-constructed empty vector - whose data() is
+// nullptr - inside median(): `values[0]` on size 0, followed by
+// std::max_element over an empty range and a dereference of the returned
+// end iterator. Two out-of-bounds reads, the first of which faults.
+TEST_CASE("FaceAggregator::capture on an empty window is defined", "[vision]") {
+    const FaceAggregator fresh;
+    REQUIRE(fresh.observation_count() == 0);
+
+    const CapturedFace captured = fresh.capture();
+    for (const auto& lab : captured.lab) {
+        for (int channel = 0; channel < 3; ++channel) {
+            REQUIRE(std::isfinite(lab[channel]));
+            REQUIRE(lab[channel] == 0.0F);
+        }
+    }
+
+    // The same hazard after reset(), which is how a restarted scan reaches
+    // it in practice.
+    FaceAggregator aggregator;
+    aggregator.add(observation_with(base_colors()));
+    aggregator.reset();
+    REQUIRE(aggregator.observation_count() == 0);
+    const CapturedFace after_reset = aggregator.capture();
+    for (const auto& lab : after_reset.lab) {
+        REQUIRE(lab[0] == 0.0F);
+    }
+}
