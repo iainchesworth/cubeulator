@@ -68,7 +68,6 @@ target_sources(cube_lib
         src/vision/capture_routing.cpp
         src/vision/pose_estimation.cpp
         src/vision/color_classification.cpp
-        src/vision/simple_face_pipeline.cpp
         src/vision/stability.cpp
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
