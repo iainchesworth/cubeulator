@@ -409,6 +409,16 @@ static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_cen
 // above - in particular the centre-agreement gate, without which a
 // different physical face whose ring aliases the epoch face could win on
 // roll evidence alone while its centre sat a whole colour class away.
+//
+// The comparison to the `unique` basis used to be an argument FOR step 1's
+// safety, and it was pointing the wrong way: `unique` had no centre gate at
+// all, so "the same footing as `unique`" was a weaker claim than intended,
+// not a stronger one. The commit bar cannot substitute for it - a single
+// induced pair at census L1 0 admits a centre up to 36 Lab, and the score
+// carries no centre-CLASS term whatsoever - so a `unique` or
+// content-equivalent winner could bind the gauge across a whole colour
+// class. The centre-agreement gate is now applied to whichever candidate is
+// RETURNED, on every basis, and the sentence above is true as written.
 struct EpochFaceSample {
     cube::model::Face epoch_face{};
     CapturedFace captured;

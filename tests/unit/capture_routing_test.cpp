@@ -1779,3 +1779,64 @@ TEST_CASE("a genuinely new face is still admitted beside a captured one", "[rout
     CHECK(router.commit(Face::R, solid(kGreen), 2000).outcome == CommitOutcome::filled);
     CHECK(router.filled_count() == 2);
 }
+
+// ---------------------------------------------------------------------------
+// The centre-class gate belongs to every registration basis, not only to
+// the stage-1 roll tie-break.
+//
+// The commit bar is a mean of census L1 + 2 * centreLab / content_equiv_lab
+// (12), capped at epoch_register_max_score (6). One induced pair at census
+// L1 0 therefore admits a centre up to 36 Lab, and NO term in the score
+// looks at centre class at all. A `unique` winner could bind the epoch's
+// gauge - and so route every later commit of that epoch - on a pair whose
+// centres are two colour classes apart.
+// ---------------------------------------------------------------------------
+TEST_CASE("a unique registration still has to agree on centre colour", "[routing]") {
+    const RoutingConfig config;
+
+    // One filled slot and one buffered epoch face. Their sticker
+    // populations are IDENTICAL - the census term, which is the only term
+    // with real weight, contributes zero - but they are different physical
+    // faces: the centres are a whole colour class apart.
+    //
+    // Two solid faces of different colours have census L1 18, so the shared
+    // population is built explicitly: the same nine sticker colours, with
+    // only the centre cell differing between the two readings.
+    CapturedFace stored = solid(kGreen);
+    stored.lab[cube::model::center_facelet_index] = cv::Vec3f{50.0F, 55.0F, 40.0F};  // hue 36: red
+    CapturedFace probe = solid(kGreen);
+    probe.lab[cube::model::center_facelet_index] = cv::Vec3f{50.0F, 50.0F, 60.0F};  // hue 50: orange
+    // Aliased population, disagreeing centre CLASS: exactly the case the
+    // score is blind to. The centres are 20.6 Lab apart - close enough that
+    // the score's centre term stays small, which is the whole difficulty:
+    // distance says "plausible" while class says "different face".
+    REQUIRE(census_l1_distance(color_census(stored), color_census(probe)) == 2);
+    REQUIRE(classify_lab(stored.lab[cube::model::center_facelet_index]).color !=
+            classify_lab(probe.lab[cube::model::center_facelet_index]).color);
+    // And it clears the commit bar comfortably.
+    REQUIRE(registration_pair_score(probe, stored, config) <= config.epoch_register_max_score);
+
+    std::array<std::optional<CapturedFace>, 6> slots{};
+    slots[static_cast<std::size_t>(Face::F)] = stored;
+    std::vector<EpochFaceSample> samples;
+    samples.push_back({Face::F, probe});
+
+    const auto registration = register_epoch_gauge(samples, slots, config);
+    CHECK(registration.status == EpochRegistration::Status::ambiguous);
+}
+
+TEST_CASE("a registration whose centres do agree still resolves", "[routing]") {
+    // The other end: the gate must not refuse an honest registration. Same
+    // shape, but the epoch face is a genuine re-show of the stored one.
+    const RoutingConfig config;
+    const CapturedFace stored = solid(kGreen);
+    const CapturedFace probe = drifted(stored, 4.0F);
+
+    std::array<std::optional<CapturedFace>, 6> slots{};
+    slots[static_cast<std::size_t>(Face::F)] = stored;
+    std::vector<EpochFaceSample> samples;
+    samples.push_back({Face::F, probe});
+
+    const auto registration = register_epoch_gauge(samples, slots, config);
+    CHECK(registration.status == EpochRegistration::Status::resolved);
+}

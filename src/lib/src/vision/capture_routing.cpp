@@ -245,6 +245,40 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
     }
 
     const Candidate& best = candidates.front();
+
+    // "Every induced pair's centres agree in class and sit inside the tight
+    // re-association radius."
+    //
+    // This gate used to exist only inside the stage-1 roll tie-break, and
+    // the arithmetic that motivated it applies with EQUAL force to the
+    // candidate returned on every other path. The commit bar is a mean
+    // score of census L1 plus 2 * centreLab / content_equiv_lab, so a
+    // single induced pair at census L1 0 admits a centre up to
+    // epoch_register_max_score * content_equiv_lab / 2 = 36 Lab - far past
+    // the closest legitimate centre pair - and there is no centre-CLASS
+    // term in the score at all. A `unique` or `content_equivalent` winner
+    // could therefore bind the gauge for the whole epoch on a pair whose
+    // centres are two colour classes apart, which routes every later commit
+    // of that epoch through a wrong permutation.
+    //
+    // The header's safety argument for stage 1 was that breaking a tie
+    // leaves a hypothesis "on exactly the footing of the `unique` basis".
+    // That was true and was the problem: the `unique` footing was the
+    // weaker one. Applying the same predicate to whichever candidate is
+    // actually returned makes the claim true in the direction it was meant.
+    const auto centres_agree_for = [&](int lattice_index) {
+        const auto& perm = kFacePermutation[static_cast<std::size_t>(lattice_index)];
+        return std::ranges::all_of(epoch_faces, [&](const EpochFaceSample& sample) {
+            const Face target = perm[static_cast<std::size_t>(sample.epoch_face)];
+            const auto& slot = slots[static_cast<std::size_t>(target)];
+            if (!slot) {
+                return true;
+            }
+            return centre_lab_distance(sample.captured, *slot) < config.same_face_centre_lab &&
+                   centre_class(sample.captured) == centre_class(*slot);
+        });
+    };
+
     std::vector<const Candidate*> tied;
     for (const Candidate& candidate : candidates) {
         // Margin only, deliberately: an over-bar member is still a LIVE
@@ -310,7 +344,6 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
             const auto& perm = kFacePermutation[static_cast<std::size_t>(candidate->index)];
             float oriented = 0.0F;
             int pairs = 0;
-            bool centres_agree = true;
             for (const auto& sample : epoch_faces) {
                 const Face target = perm[static_cast<std::size_t>(sample.epoch_face)];
                 const auto& slot = slots[static_cast<std::size_t>(target)];
@@ -320,12 +353,9 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
                 ++pairs;
                 oriented +=
                     oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, candidate->index);
-                centres_agree = centres_agree &&
-                                centre_lab_distance(sample.captured, *slot) < config.same_face_centre_lab &&
-                                centre_class(sample.captured) == centre_class(*slot);
             }
             by_roll.push_back({candidate, pairs > 0 ? oriented / static_cast<float>(pairs) : 0.0F,
-                               centres_agree});
+                               centres_agree_for(candidate->index)});
         }
         std::ranges::sort(by_roll, [](const Roll& a, const Roll& b) {
             if (a.oriented_lab != b.oriented_lab) {
@@ -391,6 +421,15 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
                 }
             }
         }
+    }
+
+    // The gate the `unique` and `content_equivalent` bases never had. A
+    // hypothesis whose induced pairs disagree on centre colour is not a
+    // winner with a blemish, it is a hypothesis about a different physical
+    // face; defer and keep buffering rather than bind the epoch to it.
+    if (!centres_agree_for(best.index)) {
+        out.status = EpochRegistration::Status::ambiguous;
+        return out;
     }
 
     out.status = EpochRegistration::Status::resolved;
