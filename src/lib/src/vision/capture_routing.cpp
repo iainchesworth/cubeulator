@@ -833,6 +833,43 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
             }
         }
         if (static_cast<int>(distinct.size()) >= config_.layer_turn_conflict_faces) {
+            // Two conflicts on distinct faces inside the window is the
+            // layer-turn signature - but it is ALSO the signature of a
+            // wrong gauge, and the two demand opposite responses. A layer
+            // turn changes the physical stickers, so every capture
+            // predating it is worthless and clear() is right. A wrong gauge
+            // changes nothing physical: it mis-maps every face by
+            // construction, so it produces conflicts on distinct faces as
+            // fast as faces are shown, while the stored captures remain
+            // perfectly good. Clearing there destroys a correct scan and
+            // tells the user their cube changed.
+            //
+            // The discriminator is where the conflicting content belongs.
+            // If this capture authenticates against some OTHER filled slot,
+            // the store's contents are intact and consistent - it is the
+            // mapping from epoch faces to store keys that is wrong. A real
+            // layer turn cannot produce that: it changes the stickers, so
+            // the new reading matches no stored face at all.
+            //
+            // The response to a wrong gauge is to stop trusting the gauge,
+            // not the captures: force-lose the track so the next epoch
+            // re-registers from scratch, and keep every slot. All the terms
+            // used here are rotation-invariant, so this asks about the
+            // gauge without assuming one.
+            const bool belongs_to_another_slot = std::ranges::any_of(fill_order_, [&](const Face filled) {
+                return filled != store_face &&
+                       verified_same_face(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured,
+                                          config_);
+            });
+            if (belongs_to_another_slot) {
+                result.force_lost = true;
+                // The window is evidence about a gauge that is being
+                // abandoned; carrying it into the next epoch would let two
+                // pre-reset conflicts plus one fresh one read as a layer
+                // turn.
+                conflict_events_.clear();
+                return {CommitOutcome::quarantined};
+            }
             result.layer_turn = true;
             clear();
             return {CommitOutcome::quarantined};

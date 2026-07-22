@@ -195,6 +195,16 @@ struct RoutingConfig {
     // the mid-scan layer-turn signature (one conflict is more likely a
     // tracking slip): the static-stickers premise is void, so the whole
     // capture set is invalidated.
+    //
+    // The signature is necessary but NOT sufficient, and the difference is
+    // load-bearing because the response is destructive. A wrong gauge
+    // mis-maps every face by construction, so it generates conflicts on
+    // distinct faces at least as fast as a layer turn does - and answering
+    // that by clearing the store destroys a scan whose captures were all
+    // correct. commit_direct therefore checks whether the conflicting
+    // capture belongs to a DIFFERENT filled slot before concluding the
+    // stickers moved; if it does, the mapping is wrong rather than the
+    // cube, and the track is force-lost with every slot preserved.
     int layer_turn_conflict_faces = 2;
     std::int64_t layer_turn_window_ms = 5000;
     // Per-face refractory between commits: a still-converged aggregator
@@ -471,8 +481,9 @@ struct CommitResult {
     // store already cleared itself (the caller invalidates the scan);
     // force_lost means a strike limit was hit - repeated verification
     // conflicts on one occupied slot OR repeated duplicate-centre
-    // quarantines on one claimed empty slot (the caller force-loses the
-    // tracker - slots are PRESERVED here).
+    // quarantines on one claimed empty slot OR the layer-turn signature
+    // turning out to be a wrong gauge (the caller force-loses the tracker -
+    // slots are PRESERVED here).
     bool layer_turn = false;
     bool force_lost = false;
     // The quarantine was the duplicate-centre kind: tracked identity

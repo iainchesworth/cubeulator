@@ -1840,3 +1840,57 @@ TEST_CASE("a registration whose centres do agree still resolves", "[routing]") {
     const auto registration = register_epoch_gauge(samples, slots, config);
     CHECK(registration.status == EpochRegistration::Status::resolved);
 }
+
+// ---------------------------------------------------------------------------
+// A wrong gauge is not a layer turn, and the responses are opposite.
+//
+// Two conflicts on distinct faces inside the window is the mid-scan
+// layer-turn signature, answered with clear() - every capture dropped and
+// scanInvalidated("cube changed mid-scan") shown to the user. A wrong gauge
+// mis-maps every face by construction, so it produces the same signature as
+// fast as faces are shown, while the stored captures are all still good.
+// ---------------------------------------------------------------------------
+TEST_CASE("a mis-mapped gauge force-loses the track instead of clearing", "[routing]") {
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kGreen), 1000).outcome == CommitOutcome::filled);
+
+    // The gauge now sends body F to store R and body R to store F - a
+    // whole-cube relabelling the tracker got wrong. The cube has not
+    // changed: every capture arriving still IS one of the stored faces,
+    // just presented at the wrong key.
+    const auto first = router.commit(Face::F, solid(kGreen), 2000);
+    CHECK(first.outcome == CommitOutcome::quarantined);
+    CHECK_FALSE(first.layer_turn);
+
+    const auto second = router.commit(Face::R, solid(kRed), 3000);
+    CHECK(second.outcome == CommitOutcome::quarantined);
+    // Conflicts on two distinct faces inside the window - the layer-turn
+    // signature - but each conflicting capture authenticates against the
+    // OTHER filled slot, which a real layer turn cannot produce.
+    CHECK_FALSE(second.layer_turn);
+    CHECK(second.force_lost);
+    // Every capture preserved: they were verified when written and nothing
+    // about them has been contradicted.
+    REQUIRE(router.filled_count() == 2);
+    REQUIRE(router.slot_at(0) != nullptr);
+    REQUIRE(router.slot_at(1) != nullptr);
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+    CHECK(centre_lab_distance(*router.slot_at(1), solid(kGreen)) == 0.0F);
+}
+
+TEST_CASE("a genuine layer turn still invalidates the store", "[routing]") {
+    // The signature must still fire when the stickers really did move: the
+    // conflicting captures match NO stored face, which is what a layer turn
+    // does and a mis-mapping cannot.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::R, solid(kGreen), 1000).outcome == CommitOutcome::filled);
+
+    CHECK_FALSE(router.commit(Face::F, solid(kBlue), 2000).layer_turn);
+    const auto second = router.commit(Face::R, solid(kYellow), 3000);
+    CHECK(second.layer_turn);
+    CHECK(router.filled_count() == 0);
+}
