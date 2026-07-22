@@ -67,7 +67,17 @@ detail::OpenCvCaptureLoop& loop() {
     // enumerator alongside this so the index space stays consistent
     // between "which device the Settings list shows" and "which device
     // start() actually opens" - see its own comment.
-    static detail::OpenCvCaptureLoop instance(cv::CAP_DSHOW);
+    // Photometry::supported: DirectShow is also the reason the photometry
+    // lock (see interfaces/camera.hpp) can exist at all - it maps camera
+    // properties onto IAMVideoProcAmp (brightness/saturation/white balance)
+    // and IAMCameraControl (exposure), and the hardware probe in
+    // tests/integration/camera_property_probe_test.cpp verified against this
+    // very backend that exposure, brightness and saturation writes reach the
+    // sensor (monotone response curves) and that auto white balance
+    // round-trips 0/1. This is the ONLY backend given that flag, because it
+    // is the only one anyone has measured.
+    static detail::OpenCvCaptureLoop instance(cv::CAP_DSHOW,
+                                              detail::OpenCvCaptureLoop::Photometry::supported);
     return instance;
 }
 
@@ -159,5 +169,24 @@ bool is_capturing() noexcept {
 }
 
 void open_permission_settings() {}
+
+// Forwarded to the shared capture loop, which owns the device and the
+// capture thread - see interfaces/camera.hpp for what a lock is for and
+// what this backend was measured to support.
+bool photometry_control_supported() noexcept {
+    return loop().photometry_supported();
+}
+
+Result<void> request_photometry_lock(const PhotometryLockRequest& request) {
+    return loop().request_photometry_lock(request);
+}
+
+Result<void> request_photometry_restore() {
+    return loop().request_photometry_restore();
+}
+
+std::optional<PhotometryLockReport> take_photometry_report() {
+    return loop().take_photometry_report();
+}
 
 }  // namespace cube::platform::camera

@@ -63,4 +63,32 @@ bool is_capturing() noexcept {
     return false;
 }
 
+// No native capture backend exists here yet (see try_pop_latest_frame()
+// above), so there is nothing to lock. Reported honestly rather than
+// stubbed as success: interfaces/camera.hpp's whole contract is that a user
+// who cannot get an automatic lock is TOLD, so they fix their lighting by
+// hand instead of scanning under drifting automatics.
+//
+// TODO: when Camera2/CameraX (Android) / AVFoundation (iOS) capture lands,
+// this is where the equivalent of the DirectShow lock goes - Camera2's
+// CONTROL_AE_MODE_OFF + SENSOR_EXPOSURE_TIME and CONTROL_AWB_MODE_OFF, or
+// AVCaptureDevice's setExposureModeCustom/setWhiteBalanceModeLocked. Both
+// give a stronger guarantee than DirectShow does, including the deliberate
+// white-balance value this Windows hardware refuses to expose.
+bool photometry_control_supported() noexcept {
+    return false;
+}
+
+Result<void> request_photometry_lock(const PhotometryLockRequest& /*request*/) {
+    return std::unexpected(CubeError::camera_control_unavailable);
+}
+
+Result<void> request_photometry_restore() {
+    return std::unexpected(CubeError::camera_control_unavailable);
+}
+
+std::optional<PhotometryLockReport> take_photometry_report() {
+    return std::nullopt;
+}
+
 }  // namespace cube::platform::camera

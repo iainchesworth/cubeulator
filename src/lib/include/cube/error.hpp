@@ -20,6 +20,7 @@ enum class CubeError : std::uint8_t {
     // Vision / capture pipeline
     camera_not_found,
     camera_start_failed,
+    camera_control_unavailable,
     no_valid_cube_detected,
     face_capture_incomplete,
 
@@ -50,6 +51,8 @@ enum class CubeError : std::uint8_t {
             return "no camera device was found";
         case CubeError::camera_start_failed:
             return "the camera could not be started";
+        case CubeError::camera_control_unavailable:
+            return "the camera's capture settings could not be controlled";
         case CubeError::no_valid_cube_detected:
             return "no valid cube was detected in the frame";
         case CubeError::face_capture_incomplete:

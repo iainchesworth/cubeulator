@@ -138,6 +138,39 @@ Rectangle {
         }
     }
 
+    // Camera-lock chip. Shown ONLY when the lock did not fully succeed -
+    // a camera that accepted everything is silent, since there is nothing
+    // for the user to do. When it fails, this is the whole reason the
+    // status is plumbed up from the platform layer: the failure it defends
+    // against (exposure drifting 14-18 L points between faces, blue and
+    // warm white overlapping in chroma) shows up to the user as "the
+    // scanner is broken", and the workaround - fixed, front-on lighting -
+    // is theirs to apply. Advisory styling, wrapping text: this is a
+    // sentence of instruction, not a one-word state chip.
+    Rectangle {
+        id: cameraLockChip
+        visible: ScanSession.running && ScanSession.cameraLockWarning
+            && ScanSession.cameraLockStatus !== ""
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: trackingChip.visible ? trackingChip.bottom
+            : scanErrorBanner.visible ? scanErrorBanner.bottom : parent.top
+        anchors.topMargin: Theme.space2
+        width: Math.min(parent.width - 2 * Theme.space3, 420)
+        height: cameraLockText.implicitHeight + 16
+        radius: 12
+        color: Qt.rgba(0, 0, 0, 0.55)
+        z: 9
+        Text {
+            id: cameraLockText
+            anchors.centerIn: parent
+            width: parent.width - 24
+            text: ScanSession.cameraLockStatus
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
+            color: "#F3F2F2"; font.pixelSize: 11; font.family: Theme.fontHeading
+        }
+    }
+
     // Capture celebration: a capture used to reset the whole overlay in a
     // single frame - a confusing flash. A deliberate green pulse plus a
     // lingering "captured" chip makes the moment legible. Multiple

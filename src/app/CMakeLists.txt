@@ -36,6 +36,12 @@ add_library(cube_platform
     interfaces/paths.hpp
     platform/detail/opencv_capture_loop.hpp
     platform/detail/opencv_capture_loop.cpp
+    # Built on every platform, including the ones whose backend cannot
+    # control photometry: PhotometryLockReport::summary() and friends are
+    # pure bookkeeping, and the "this platform cannot" wording they produce
+    # is exactly what those platforms need.
+    platform/detail/photometry_lock.hpp
+    platform/detail/photometry_lock.cpp
     "${CUBEULATOR_PLATFORM_DIR}/camera_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
     "${CUBEULATOR_PLATFORM_DIR}/gpu_surface_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
     "${CUBEULATOR_PLATFORM_DIR}/inference_env_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
