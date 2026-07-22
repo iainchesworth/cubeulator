@@ -137,6 +137,30 @@ inline constexpr float kUpdateMarginDeg = 12.0F;
 // (kMinCentreSeedSeparationLab = 12) rather than restating an independent
 // absolute; the hue floor is the same idea on the axis the naming actually
 // decides on.
+//
+// WHY THE FLOOR SITS AT ROUGHLY HALF THE CLOSEST REAL PAIR, and not at it.
+// The closest two colours a real cube shows are red and orange, measured on
+// this corpus at 23.1 Lab between centres (the header above quotes 27 from
+// kClosestCentrePairLab, which is the design figure; 23.1 is what this
+// corpus actually delivers). A floor set AT 23 would therefore fire on
+// correct references: two references that have each tracked their own real
+// colour faithfully still sit only ~23 apart, and sampling noise routinely
+// puts a single face's estimate nearer than that. Since a breach rejects the
+// WHOLE batch, a floor at the true separation would reject legitimate
+// evidence continuously and the model would simply stop learning - failing
+// closed, but failing.
+//
+// So this is not a quality gate, and should not be read as one. It is a
+// last-resort backstop against the unrecoverable outcome (two references
+// naming the same region of Lab), sized to sit clearly below any legitimate
+// configuration while still being crossed long before an actual merge. The
+// gate that keeps references APART in normal operation is kUpdateMarginDeg
+// plus the bootstrap bands of unseeded colours, which anchor evidence
+// absolutely until a colour has been seen. A 40-face adversarial walk
+// stepping 2 degrees per face out of orange and into red moved the red
+// reference from hue 20 to 353 without ever breaching these floors and
+// without merging, which is the intended division of labour: the margin gate
+// did the work, and the floor was never the thing standing in the way.
 inline constexpr float kMinReferenceSeparationLab = 12.0F;
 inline constexpr float kMinReferenceHueSeparationDeg = 15.0F;
 

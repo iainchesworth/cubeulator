@@ -88,6 +88,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -612,6 +613,131 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                               "URFDLB"[static_cast<std::size_t>(*store_face)], slot_index, "final", -1, false, 0.0F,
                               0.0F, 0.0F, 0.0F, false, false, 0.0F, *content));
     }
+
+    // --- The verdict that actually counts ---------------------------------
+    //
+    // A nine-per-colour census proves NOTHING on its own: resolve_colors()
+    // forces exactly nine of each by construction, so a census of all-nines
+    // is a property of the resolver, not evidence about the scan. Cross-clip
+    // consistency proves nothing either - a systematically wrong reader is
+    // perfectly consistent with itself. The only external referent is
+    // PHYSICAL VALIDITY, so the oracle here is production's own completion
+    // path (ScanSession::finalizeIfComplete): resolve_colors() over the
+    // stored slots, then assemble_scanned_faces_with_mapping(), which
+    // succeeds only when some rotation combination builds a cube that
+    // Cube::from_facelets() accepts AND is_solvable() confirms. Deliberately
+    // called, never reimplemented - a private re-derivation of validity
+    // would just be a second thing to be wrong.
+    const int filled = router.filled_count();
+
+    // Provisional (classify_lab) census over the filled slots. Emitted as a
+    // DIAGNOSTIC beside the verdict - it says where the live classifier is
+    // over- and under-counting, which is what a failed assembly needs to be
+    // debugged against - and never as a pass criterion.
+    std::array<int, 7> live_census{};
+    for (int slot_index = 0; slot_index < filled; ++slot_index) {
+        const cube::vision::CapturedFace* content = router.slot_at(slot_index);
+        if (content == nullptr) {
+            continue;
+        }
+        for (const auto& lab : content->lab) {
+            ++live_census[static_cast<std::size_t>(cube::vision::classify_lab(lab).color)];
+        }
+    }
+    constexpr std::array<cube::model::FacetColor, 7> kCensusOrder{
+        cube::model::FacetColor::white,  cube::model::FacetColor::yellow,
+        cube::model::FacetColor::red,    cube::model::FacetColor::orange,
+        cube::model::FacetColor::green,  cube::model::FacetColor::blue,
+        cube::model::FacetColor::unknown};
+    std::string census_text;
+    for (const auto color : kCensusOrder) {
+        char cell[16];
+        std::snprintf(cell, sizeof(cell), "%c%d", color_letter(color),
+                      live_census[static_cast<std::size_t>(color)]);
+        census_text += cell;
+    }
+
+    // Distinct-centre count under the resolver's OWN seed floor
+    // (kMinCentreSeedSeparationLab), not an independently restated radius:
+    // this is precisely the predicate resolve_colors will apply, so a clip
+    // that fails it here is one resolve_colors is about to reject, and the
+    // report says so rather than leaving the rejection unexplained.
+    int distinct_centres = 0;
+    for (int a = 0; a < filled; ++a) {
+        const cube::vision::CapturedFace* first = router.slot_at(a);
+        if (first == nullptr) {
+            continue;
+        }
+        bool distinct = true;
+        for (int b = 0; b < a; ++b) {
+            const cube::vision::CapturedFace* second = router.slot_at(b);
+            if (second == nullptr) {
+                continue;
+            }
+            const cv::Vec3f diff = first->lab[cube::model::center_facelet_index] -
+                                   second->lab[cube::model::center_facelet_index];
+            if (std::sqrt(diff.dot(diff)) < cube::vision::kMinCentreSeedSeparationLab) {
+                distinct = false;
+            }
+        }
+        distinct_centres += distinct ? 1 : 0;
+    }
+
+    std::string resolve_text = "n/a";
+    std::string assemble_text = "n/a";
+    std::string resolved_census_text = "n/a";
+    if (filled == static_cast<int>(cube::model::face_count)) {
+        std::array<cube::vision::CapturedFace, cube::model::face_count> captured{};
+        for (std::size_t i = 0; i < captured.size(); ++i) {
+            captured[i] = *router.slot_at(static_cast<int>(i));
+        }
+        const auto resolved = cube::vision::resolve_colors(captured);
+        if (!resolved.has_value()) {
+            resolve_text = "FAIL";
+            assemble_text = "not-reached";
+        } else {
+            resolve_text = "ok";
+            std::array<int, 7> resolved_census{};
+            for (const auto& face : *resolved) {
+                for (const auto& facelet : face) {
+                    ++resolved_census[static_cast<std::size_t>(facelet.color)];
+                }
+            }
+            resolved_census_text.clear();
+            for (const auto color : kCensusOrder) {
+                char cell[16];
+                std::snprintf(cell, sizeof(cell), "%c%d", color_letter(color),
+                              resolved_census[static_cast<std::size_t>(color)]);
+                resolved_census_text += cell;
+            }
+            const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
+            assemble_text = assembled.has_value() ? "VALID" : "INVALID";
+
+            // The resolved faces themselves, one nine-letter string each.
+            //
+            // Worth emitting because of what the oracle does NOT depend on:
+            // assemble_scanned_faces_with_mapping keys each face to a cube
+            // position by CENTRE COLOUR alone and then tries all 4096
+            // per-face rotation combinations. Slot identity and roll are
+            // therefore both invisible to it - a capture filed under the
+            // wrong slot, or rotated by a guessed gauge, still assembles if
+            // its nine colours are right. An INVALID verdict consequently
+            // localises the fault precisely: the 54 resolved COLOURS are
+            // wrong, and no amount of routing or roll correction can move
+            // it. These strings are what a colour fix has to change.
+            for (std::size_t f = 0; f < resolved->size(); ++f) {
+                std::string letters;
+                for (const auto& facelet : (*resolved)[f]) {
+                    letters += color_letter(facelet.color);
+                }
+                std::printf("# resolved: clip=%s slot=%zu %s\n", clip.c_str(), f, letters.c_str());
+            }
+        }
+    }
+    std::printf("# verdict: clip=%s filled=%d distinct-centres=%d live-census=%s resolve=%s "
+                "resolved-census=%s assemble=%s\n",
+                clip.c_str(), filled, distinct_centres, census_text.c_str(), resolve_text.c_str(),
+                resolved_census_text.c_str(), assemble_text.c_str());
 
     std::string face_letters;
     for (std::size_t f = 0; f < records_per_face.size(); ++f) {
