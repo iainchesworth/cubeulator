@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <random>
@@ -230,15 +231,85 @@ TEST_CASE("the warm-cast white rule steals no green, yellow or blue", "[vision]"
 TEST_CASE("the neutral white floor and true oranges are undisturbed", "[vision]") {
     // runA D[2]: chroma 9.7, already white before the change.
     REQUIRE(classify_lab(cv::Vec3f{81.5F, 6.8F, 6.9F}).color == FacetColor::white);
-    // A dark neutral is still white on chroma alone - the floor branch is
-    // deliberately not given a lightness condition here.
-    REQUIRE(classify_lab(cv::Vec3f{30.0F, 2.0F, 2.0F}).color == FacetColor::white);
+    // A dark neutral is NOT white: see the dark-neutral case below. The
+    // sample that used to sit here (L 30, chroma 2.8) is now unknown.
+    REQUIRE(classify_lab(cv::Vec3f{30.0F, 2.0F, 2.0F}).color == FacetColor::unknown);
     // runA F[7], chroma 33.6 at L 54.2: refused by BOTH soft conditions.
     REQUIRE(classify_lab(cv::Vec3f{54.2F, 19.8F, 27.1F}).color == FacetColor::orange);
     // runD D[8], chroma 73.7 - a saturated orange, far from any edge.
     REQUIRE(classify_lab(cv::Vec3f{50.0F, 52.7F, 51.5F}).color == FacetColor::orange);
     // A washed orange that is light enough but still too chromatic.
     REQUIRE(classify_lab(cv::Vec3f{75.0F, 16.0F, 23.0F}).color == FacetColor::orange);
+}
+
+// ---------------------------------------------------------------------------
+// The dark-neutral reject. A near-achromatic sample carries no hue
+// information at all - a black inter-tile gap, a shadowed fingertip, an
+// unlit background wall and a genuinely white sticker are all a*=b*=0 and
+// differ ONLY in lightness. Naming them all white was the single largest
+// source of wrong colour in the corpus, and it did so at the HIGHEST
+// confidence the function can emit, which then inverted the retry logic
+// that ranks slots by mean confidence.
+//
+// Every Lab triple below is a real measurement, read out of the
+// [.cross-session] `slot` rows for the named clip/face/cell - i.e. cells
+// that the shipping capture layer actually committed and handed to
+// assembly, each of them classified WHITE at the time.
+// ---------------------------------------------------------------------------
+TEST_CASE("classify_lab refuses to name a dark neutral white", "[vision]") {
+    struct Sample {
+        const char* where;
+        cv::Vec3f lab;
+    };
+    const std::array<Sample, 8> darks{{
+        {"good1 D[3] L 1.2 chroma 2.1 - unlit background", {1.21F, -1.60F, 1.36F}},
+        {"good1 R[8] L 2.4 chroma 6.4", {2.36F, -3.03F, 5.64F}},
+        {"runD U[0] L 9.1 chroma 9.6 - one of runD's two dark 'whites'", {9.10F, 1.20F, 9.52F}},
+        {"runD U[2] L 13.0 chroma 10.6 - the other one", {13.00F, 1.60F, 10.48F}},
+        {"live1 D[8] L 15.2 chroma 3.6 - lattice gap", {15.20F, 0.90F, 3.49F}},
+        {"live1 L[2] L 28.9 chroma 12.5", {28.90F, 2.50F, 12.25F}},
+        {"good1 F[1] L 32.3 chroma 14.5 - just under the chroma floor", {32.30F, 3.00F, 14.19F}},
+        {"live5 U[6] L 42.1 chroma 13.1", {42.10F, 2.10F, 12.93F}},
+    }};
+    for (const auto& sample : darks) {
+        CAPTURE(sample.where);
+        const auto facelet = classify_lab(sample.lab);
+        REQUIRE(facelet.color == FacetColor::unknown);
+        // Confidence must be ZERO, not merely low. mean_confidence() over a
+        // face feeds ScanSession::dropMostSuspectSlot as an ARGMIN, so a
+        // face made of background has to rank worst, not best.
+        REQUIRE(facelet.confidence == 0.0F);
+    }
+}
+
+// The two sides of the lightness floor on the chroma-floor branch. The
+// floor is the same kWhiteLightnessFloor (60) the warm-cast branch already
+// applied; this pins that the neutral branch now applies it too, and that
+// it did not move.
+TEST_CASE("the neutral white branch takes its lightness floor at 60", "[vision]") {
+    const cv::Vec3f just_under{59.0F, 1.0F, 1.0F};
+    const cv::Vec3f just_over{61.0F, 1.0F, 1.0F};
+    REQUIRE(classify_lab(just_under).color == FacetColor::unknown);
+    REQUIRE(classify_lab(just_over).color == FacetColor::white);
+    // A neutral that clears the floor keeps the confidence it always had:
+    // the floor decides IF the branch fires, it does not re-price it.
+    REQUIRE(classify_lab(just_over).confidence > 0.9F);
+}
+
+// A dark neutral must not fall through to the hue bands either. Its hue is
+// the arctangent of two numbers that are both noise, so any band it lands
+// in is arbitrary - and the hue path's confidence is clamped to a 0.2
+// FLOOR, which would put a background cell above a genuine washed sticker
+// in exactly the ranking that matters.
+TEST_CASE("a dark neutral does not fall through into a hue band", "[vision]") {
+    // The same lightness and chroma, swept right around the hue circle:
+    // every one of them must reject, not scatter across six names.
+    for (int hue = 0; hue < 360; hue += 15) {
+        const auto radians = static_cast<float>(hue) * 3.14159265F / 180.0F;
+        const cv::Vec3f dark{20.0F, 6.0F * std::cos(radians), 6.0F * std::sin(radians)};
+        CAPTURE(hue);
+        REQUIRE(classify_lab(dark).color == FacetColor::unknown);
+    }
 }
 
 TEST_CASE("resolve_colors recovers an unperturbed scan", "[vision]") {

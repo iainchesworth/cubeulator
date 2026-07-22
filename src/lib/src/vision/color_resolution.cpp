@@ -202,7 +202,38 @@ Facelet classify_lab(const cv::Vec3f& lab) {
                   "the soft ceiling only ever widens the floor; inverting them would make the "
                   "orange band's whites HARDER to reach than a neutral sample's");
 
+    // The lightness floor applies to BOTH white branches, not just the
+    // warm-cast one below.
+    //
+    // Chroma alone cannot tell a white sticker from anything else that is
+    // near-achromatic, and the frame is full of things that are: the black
+    // inter-tile lattice, a shadowed fingertip, an unlit background wall.
+    // All of them read a*=b*=0 and differ from a white tile ONLY in
+    // lightness - which is the same argument the block above makes for the
+    // warm-cast branch, and it is no weaker here. Measured on the corpus'
+    // committed slots: 17 of the 73 cells this branch named white sat below
+    // L=60, the darkest at L=1.2, and runD contributed two at L 9.1 and
+    // 13.0 to a face that then censused W=11 where W must be 9.
+    //
+    // Below the floor the answer is UNKNOWN, not a hue-band guess. A sample
+    // this neutral has a hue that is the arctangent of two noise terms, so
+    // any band it lands in is arbitrary, and the hue path's confidence is
+    // clamped to a 0.2 FLOOR - which would rank a background cell above a
+    // genuine washed sticker. Unknown at confidence ZERO is what every
+    // consumer needs:
+    //   - color_census() has always had a slot for it (ColorCensus is
+    //     7-wide, unknown included, per its own header) and it has been
+    //     structurally zero until now;
+    //   - the commit-time unknown-cell gate ("the stationary-finger
+    //     defeat", scan_session.cpp) has been a constant-false branch for
+    //     the same reason and starts working;
+    //   - mean_confidence() feeds dropMostSuspectSlot as an ARGMIN, so a
+    //     face made of background must score WORST. At confidence ~1.0 it
+    //     scored best and a correctly-read face was dropped instead.
     if (chroma < kWhiteChromaFloor) {
+        if (lab[0] <= kWhiteLightnessFloor) {
+            return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
+        }
         const float confidence = std::clamp(1.0F - chroma / (2.0F * kWhiteChromaFloor), 0.0F, 1.0F);
         return Facelet{.color = FacetColor::white, .confidence = confidence};
     }
@@ -337,14 +368,24 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     {
         std::array<std::size_t, face_count> hue_names{};
         std::array<int, face_count + 1> name_counts{};
+        bool any_unknown = false;
         for (std::size_t c = 0; c < face_count; ++c) {
             const auto color = classify_lab(means[c]).color;
+            any_unknown = any_unknown || color == FacetColor::unknown;
             hue_names[c] = static_cast<std::size_t>(color);
             ++name_counts[static_cast<std::size_t>(color)];
         }
         const bool all_distinct = std::all_of(name_counts.begin(), name_counts.end(),
                                               [](int count) { return count <= 1; });
-        if (all_distinct) {
+        // An UNKNOWN cluster mean disqualifies the whole override, even
+        // when the six names are formally distinct. The palette has no
+        // `unknown` entry, so the lookup below would find no match for that
+        // cluster and silently leave it on the distance permutation while
+        // every other cluster moved to its hue name - which can land two
+        // clusters on the SAME palette colour and break the exactly-9
+        // census the assembler relies on. The exact global-distance
+        // matching is a complete answer; fall back to it wholesale.
+        if (all_distinct && !any_unknown) {
             for (std::size_t c = 0; c < face_count; ++c) {
                 for (std::size_t p = 0; p < face_count; ++p) {
                     if (static_cast<std::size_t>(palette.entries[p].color) == hue_names[c]) {
