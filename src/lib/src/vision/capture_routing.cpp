@@ -50,6 +50,31 @@ using cube::model::Face;
            census_l1_distance(color_census(captured), color_census(stored)) <= config.verify_census_drift;
 }
 
+// Best agreement between two faces' eight-sticker rings over the four
+// in-plane quarter turns, as mean per-cell Lab. The ring is the cells
+// around the centre in cyclic order; a quarter turn advances it by two
+// positions, so four shifts cover every way one face can be re-shown
+// against another. The centre is excluded because it is rotation-invariant
+// and is already tested separately.
+//
+// This is the same question oriented_cell_lab_distance asks, minimised over
+// rolls instead of evaluated at one lattice index, for callers that hold
+// two faces rather than a gauge hypothesis.
+[[nodiscard]] float best_roll_ring_lab(const CapturedFace& a, const CapturedFace& b) {
+    constexpr std::array<std::size_t, 8> kRing{0, 1, 2, 5, 8, 7, 6, 3};
+    float best = std::numeric_limits<float>::max();
+    for (std::size_t turn = 0; turn < 4; ++turn) {
+        float total = 0.0F;
+        for (std::size_t i = 0; i < kRing.size(); ++i) {
+            const cv::Vec3f diff =
+                a.lab[kRing[(i + 2 * turn) % kRing.size()]] - b.lab[kRing[i]];
+            total += std::sqrt(diff.dot(diff));
+        }
+        best = std::min(best, total / static_cast<float>(kRing.size()));
+    }
+    return best;
+}
+
 // Interchangeable-for-assembly: identical sticker population and centres
 // inside resolve_colors' own seed-separation floor, i.e. the resolver
 // itself could not tell these two slots apart either.
@@ -501,6 +526,50 @@ bool CaptureRouter::clear_slot(int fill_index) {
     return true;
 }
 
+bool CaptureRouter::reads_as_a_stored_face(const CapturedFace& captured) const {
+    // Centre class equality AND centre inside the refusal radius. Compared
+    // against every filled slot, and deliberately NOT conditioned on the
+    // census: the whole point is to catch a re-read whose census has moved
+    // (three sticker reclassifications is enough) while the face is still
+    // the same physical face. That census movement is exactly what makes it
+    // miss tight_match and arrive here looking like a newcomer.
+    //
+    // Three terms, and the third is what stops this from costing coverage.
+    //
+    // Centre class and centre distance say "this could be that face". They
+    // are not enough on their own: the centre classifier demonstrably puts
+    // two DIFFERENT physical faces in one class (measured on the corpus -
+    // runA finishes with slots U and R both named yellow while their
+    // centres sit 63.6 Lab apart), and refusing on that alone would block a
+    // genuinely new face from ever being captured, which no re-show can
+    // recover from.
+    //
+    // The ordered stickers decide. A re-show of a captured face reproduces
+    // that face's ring under one of the four quarter turns; a different
+    // face does not, and that is the one signal the rotation-invariant
+    // terms structurally cannot carry. It is the same evidence, and the
+    // same bar, the registration roll tie-break uses to say "no roll of
+    // this hypothesis matches, so it is the wrong face entirely".
+    //
+    // Worth stating for whoever tunes this next: on the eleven recordings
+    // the same-name slot pairs all DISAGREE on their rings (best-roll mean
+    // 33.5-38.4 Lab against a bar of 20), so this predicate refuses none of
+    // them. Those pairs are centre misclassification, not duplication. The
+    // window this closes is the structural one - a re-read whose census
+    // moved past reassoc_census while its stickers still match - and it is
+    // closed on all three admission paths rather than one.
+    //
+    // Centre terms are rotation-invariant (cell 4 stays put under every
+    // quarter turn) and the ring term minimises over rolls, so this gives
+    // the same answer before and after relabel_capture.
+    return std::ranges::any_of(fill_order_, [&](const Face filled) {
+        const CapturedFace& stored = slots_[static_cast<std::size_t>(filled)]->captured;
+        return centre_class(captured) == centre_class(stored) &&
+               centre_lab_distance(captured, stored) <= config_.self_duplication_centre_lab &&
+               best_roll_ring_lab(captured, stored) <= config_.epoch_register_oriented_max_lab;
+    });
+}
+
 bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& captured) {
     // The caller has established that no stored slot has a claim on this
     // capture - either at most one slot is filled (the epoch-change regime,
@@ -565,6 +634,16 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
                 config_.duplicate_centre_radius) {
                 return false;
             }
+        }
+        // The [18, 25) self-duplication window, closed here as well as in
+        // the recovery branch that first identified it. tight_match failing
+        // does NOT prove this is a new face: it also fails when a stored
+        // face is re-read badly enough to move its census past
+        // reassoc_census, and duplicate_centre_radius (18) is narrower than
+        // honest same-face drift (22.7), so such a re-read passed both nets
+        // and was adopted onto an empty key beside itself.
+        if (reads_as_a_stored_face(captured)) {
+            return false;
         }
     }
 
@@ -736,16 +815,27 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
     // slot strike path, so repeated duplicate quarantines on one claimed
     // face escalate to force-lost just like verification strikes do - the
     // honest way to penalize a belief the router cannot reach directly.
-    for (const Face filled : fill_order_) {
-        if (centre_lab_distance(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured) <
-            config_.duplicate_centre_radius) {
-            result.duplicate_centre = true;
-            if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >=
-                config_.conflict_strikes) {
-                result.force_lost = true;
-            }
-            return {CommitOutcome::quarantined};
+    //
+    // Two nets, both refusing: the narrow centre-alias net above, and the
+    // self-duplication net (centre CLASS equal and centre inside
+    // self_duplication_centre_lab). The second exists because the first is
+    // narrower than honest same-face drift - a re-read of a captured face
+    // that drifted 18-25 Lab and moved its census passed the 18-Lab net and
+    // was written as a NEW face, so one physical face ended up occupying
+    // two store keys. That is unfixable downstream: assembly can never
+    // produce a valid cube from a store holding a duplicate, and it is what
+    // leaves runA with six filled slots carrying four distinct centre
+    // names.
+    const bool centre_alias = std::ranges::any_of(fill_order_, [&](const Face filled) {
+        return centre_lab_distance(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured) <
+               config_.duplicate_centre_radius;
+    });
+    if (centre_alias || reads_as_a_stored_face(stored_frame)) {
+        result.duplicate_centre = true;
+        if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >= config_.conflict_strikes) {
+            result.force_lost = true;
         }
+        return {CommitOutcome::quarantined};
     }
     slot = Slot{.captured = stored_frame, .strikes = 0, .last_commit_ms = now_ms};
     fill_order_.push_back(store_face);
@@ -870,21 +960,26 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             // honest same-face centre drift is 22.7 Lab (see
             // RoutingConfig::same_face_centre_lab) - which leaves a [18, 25)
             // window in which a re-read could be filed BESIDE itself, one
-            // physical face duplicated across two keys. Incidence over
-            // runA..runD: zero (the closest new-path pair is runD L(O) vs
-            // R(R), 24.2 Lab apart but a different centre class). Latent
-            // rather than realised, and closed here anyway by admitting on
-            // the same bar verified_same_face uses instead of the narrower
-            // one: if the verifier itself would call this a re-show of a
-            // captured face, it may not be filed as a newcomer beside it,
-            // whatever the census says.
-            const auto reads_as_a_stored_face = [&] {
-                return std::ranges::any_of(fill_order_, [&](const Face filled) {
-                    const CapturedFace& stored = slots_[static_cast<std::size_t>(filled)]->captured;
-                    return centre_class(captured) == centre_class(stored) &&
-                           centre_lab_distance(captured, stored) <= config_.same_face_centre_lab;
-                });
-            };
+            // physical face duplicated across two keys. Closed here by
+            // admitting on the wider refusal bar instead of the narrower
+            // alias net: if this reads as a re-show of a captured face, it
+            // may not be filed as a newcomer beside it, whatever the census
+            // says.
+            //
+            // This comment used to record the incidence as ZERO over
+            // runA..runD, "latent rather than realised". That was measured
+            // on this branch alone, and it was the wrong conclusion to draw
+            // about the defect: the other two admission paths had no such
+            // check, and re-measuring across all eleven recordings finds it
+            // realised on them - runA ends with slots D and L both ORANGE
+            // 22.98 Lab apart, live2 with F and B both GREEN 24.67 apart.
+            // Now a member (CaptureRouter::reads_as_a_stored_face) rather
+            // than a lambda local to this branch, because the other two
+            // admission paths need the identical test - see the note there.
+            // One definition of "already stored", used by every path that
+            // can write, is the point: two definitions is how the window
+            // stayed open on two of three paths after being closed on the
+            // first.
             // Refused: the newcomer authenticates as a captured face without
             // tight-matching it, or its centre sits on one (adopt's own
             // narrower duplicate net), or the store is full. That is slip
@@ -898,7 +993,7 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             // stays unknown, so each retry re-tests genuinely fresh evidence
             // rather than re-accusing a fixed claimed face (the same
             // reasoning that branch states).
-            if (reads_as_a_stored_face() || !adopt_gauge_direct(epoch_face, captured)) {
+            if (reads_as_a_stored_face(captured) || !adopt_gauge_direct(epoch_face, captured)) {
                 result.outcome = CommitOutcome::deferred;
                 result.duplicate_centre = true;
                 return result;

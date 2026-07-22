@@ -56,6 +56,18 @@ const cv::Vec3f kWashedOrangeAsRed{50.0F, 55.0F, 40.0F};
     return out;
 }
 
+// A face with the same centre but a materially different RING: two
+// stickers replaced outright. The self-duplication screen admits a second
+// slot sharing a centre class only when the ordered stickers disagree, so
+// a test that needs two same-class slots to coexist must build the second
+// one as a genuinely different face rather than a copy of the first.
+[[nodiscard]] CapturedFace with_distinct_ring(const CapturedFace& face) {
+    CapturedFace out = face;
+    out.lab[0] = kWhite;
+    out.lab[8] = kBlue;
+    return out;
+}
+
 // One sticker swapped to a different class - census L1 moves by 2 per swap.
 [[nodiscard]] CapturedFace with_sticker(const CapturedFace& face, std::size_t cell, const cv::Vec3f& lab) {
     CapturedFace out = face;
@@ -380,10 +392,12 @@ TEST_CASE("content-equivalent slots break registration ties harmlessly", "[routi
     router.on_epoch(1);
     REQUIRE(router.commit(Face::U, solid(kWhite), 0).outcome == CommitOutcome::filled);
     REQUIRE(router.commit(Face::R, red_a, 1000).outcome == CommitOutcome::filled);
-    REQUIRE(router.commit(Face::L, drifted(solid(kRed), 20.0F), 2000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::L, with_distinct_ring(drifted(solid(kRed), 20.0F)), 2000).outcome ==
+            CommitOutcome::filled);
     REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
     REQUIRE(router.commit(Face::F, green_a, 4000).outcome == CommitOutcome::filled);
-    REQUIRE(router.commit(Face::B, drifted(solid(kGreen), 20.0F), 5000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::B, with_distinct_ring(drifted(solid(kGreen), 20.0F)), 5000).outcome ==
+            CommitOutcome::filled);
     REQUIRE(router.commit(Face::B, green_b, 6000).outcome == CommitOutcome::updated);
 
     router.on_epoch(2);
@@ -412,7 +426,8 @@ TEST_CASE("an aliased pair with distinguishable content refuses to guess", "[rou
     REQUIRE(router.commit(Face::R, red_a, 1000).outcome == CommitOutcome::filled);
     // Filled outside the duplicate radius, then pulled to 14 apart by a
     // verified update - the same live path the tie-break test uses.
-    REQUIRE(router.commit(Face::L, drifted(solid(kRed), 20.0F), 2000).outcome == CommitOutcome::filled);
+    REQUIRE(router.commit(Face::L, with_distinct_ring(drifted(solid(kRed), 20.0F)), 2000).outcome ==
+            CommitOutcome::filled);
     REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
 
     router.on_epoch(2);
@@ -1645,4 +1660,122 @@ TEST_CASE("an honest same-face drift inside the radius still updates", "[routing
     const CapturedFace reshow = drifted(solid(kRed), 20.0F);
     REQUIRE(centre_lab_distance(reshow, solid(kRed)) == 20.0F);
     CHECK(router.commit(Face::F, reshow, 2000).outcome == CommitOutcome::updated);
+}
+
+// ---------------------------------------------------------------------------
+// Self-duplication: one physical face occupying two store keys.
+//
+// The recovery `insufficient` branch was hardened against this; the other
+// two admission paths - commit_direct's empty-target screen and
+// adopt_gauge_direct's matches == 0 net - were not, and both screened only
+// on duplicate_centre_radius (18), which is narrower than honest same-face
+// drift. A re-read that drifted into the window and moved its census past
+// reassoc_census fails tight_match, passes the 18-Lab net, and is written
+// beside itself. Nothing downstream can recover: assembly cannot produce a
+// valid cube from a store holding one face twice.
+// ---------------------------------------------------------------------------
+namespace {
+
+// A sticker sitting just inside the red hue band, and the same physical
+// sticker read a shade warmer so it lands just inside the orange band. The
+// Lab move is small (16.9) - far smaller than the gap between two real
+// cube colours - which is the point: a census can move without the face
+// changing, because a hue-band edge is a cliff.
+const cv::Vec3f kBoundaryRed{50.0F, 55.0F, 40.0F};     // hue ~36, classifies red
+const cv::Vec3f kBoundaryOrange{50.0F, 55.0F, 56.9F};  // hue ~46, classifies orange
+
+}  // namespace
+
+TEST_CASE("a drifted re-show is not filed beside itself", "[routing]") {
+    // The physical situation: a captured face is shown again under drifted
+    // lighting. Its centre has moved 20 Lab - past the 18-Lab centre-alias
+    // net - and three stickers that sat against the red/orange hue boundary
+    // have tipped over it, moving the census by 6 (past reassoc_census = 4)
+    // while the face itself is unchanged. tight_match therefore refuses it,
+    // and it arrives at the admission screens looking like a newcomer.
+    CapturedFace stored = solid(kRed);
+    stored.lab[0] = kBoundaryRed;
+    stored.lab[1] = kBoundaryRed;
+    stored.lab[2] = kBoundaryRed;
+
+    CapturedFace reshow = stored;
+    reshow.lab[0] = kBoundaryOrange;
+    reshow.lab[1] = kBoundaryOrange;
+    reshow.lab[2] = kBoundaryOrange;
+    reshow.lab[cube::model::center_facelet_index] =
+        stored.lab[cube::model::center_facelet_index] + cv::Vec3f{20.0F, 0.0F, 0.0F};
+
+    // Outside the narrow net, inside the refusal radius, same centre class.
+    REQUIRE(centre_lab_distance(reshow, stored) == 20.0F);
+    REQUIRE(centre_lab_distance(reshow, stored) > RoutingConfig{}.duplicate_centre_radius);
+    REQUIRE(centre_lab_distance(reshow, stored) <= RoutingConfig{}.self_duplication_centre_lab);
+    REQUIRE(classify_lab(reshow.lab[cube::model::center_facelet_index]).color ==
+            classify_lab(stored.lab[cube::model::center_facelet_index]).color);
+    // Census has moved too far for tight_match - which is exactly what
+    // makes this look like a new face to a path screening on the narrow
+    // net alone.
+    REQUIRE(census_l1_distance(color_census(reshow), color_census(stored)) >
+            RoutingConfig{}.reassoc_census);
+
+    SECTION("commit_direct's empty-target screen refuses it") {
+        CaptureRouter router;
+        router.on_epoch(1);
+        REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+
+        // Identity says this is a different body face, so it routes to an
+        // EMPTY key - the admission path, not the verification path.
+        const auto result = router.commit(Face::R, reshow, 2000);
+        CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK(result.duplicate_centre);
+        CHECK(router.filled_count() == 1);
+    }
+
+    SECTION("adopt_gauge_direct refuses it at an epoch boundary") {
+        CaptureRouter router;
+        router.on_epoch(1);
+        REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+        // New epoch with one filled slot: the <= 1-slot direct-adoption
+        // regime, which reaches adopt_gauge_direct's matches == 0 net.
+        router.on_epoch(2);
+
+        const auto result = router.commit(Face::U, reshow, 4000);
+        CHECK(result.outcome == CommitOutcome::quarantined);
+        CHECK(result.duplicate_centre);
+        CHECK(router.filled_count() == 1);
+    }
+}
+
+TEST_CASE("a same-class face with different stickers is still admitted", "[routing]") {
+    // The coverage half, and the reason the refusal is not centre-only.
+    // The centre classifier demonstrably puts two DIFFERENT physical faces
+    // in one class (runA ends with slots U and R both named yellow, centres
+    // 63.6 Lab apart). Refusing on centre class and distance alone would
+    // block a genuinely new face permanently - no re-show recovers from it -
+    // so the ordered stickers have to agree as well.
+    CapturedFace stored = solid(kRed);
+    stored.lab[0] = kBoundaryRed;
+    // Same centre class, centre 20 Lab away, but a ring that no quarter
+    // turn reconciles with the stored face.
+    CapturedFace other = solid(kGreen);
+    other.lab[cube::model::center_facelet_index] =
+        stored.lab[cube::model::center_facelet_index] + cv::Vec3f{20.0F, 0.0F, 0.0F};
+    REQUIRE(classify_lab(other.lab[cube::model::center_facelet_index]).color ==
+            classify_lab(stored.lab[cube::model::center_facelet_index]).color);
+    REQUIRE(centre_lab_distance(other, stored) <= RoutingConfig{}.self_duplication_centre_lab);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, stored, 0).outcome == CommitOutcome::filled);
+    CHECK(router.commit(Face::R, other, 2000).outcome == CommitOutcome::filled);
+    CHECK(router.filled_count() == 2);
+}
+
+TEST_CASE("a genuinely new face is still admitted beside a captured one", "[routing]") {
+    // The refusal must not swallow ordinary coverage: a different centre
+    // class is a different physical face however close the centres sit.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+    CHECK(router.commit(Face::R, solid(kGreen), 2000).outcome == CommitOutcome::filled);
+    CHECK(router.filled_count() == 2);
 }

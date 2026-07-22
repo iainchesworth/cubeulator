@@ -155,6 +155,38 @@ struct RoutingConfig {
     // one claimed face escalate to force-lost at the conflict_strikes
     // threshold (identity-policy rule 3's belief penalty).
     float duplicate_centre_radius = 18.0F;
+    // Self-duplication refusal radius: paired with centre-CLASS equality,
+    // the bar at which a capture routed to an EMPTY key is refused because
+    // some filled slot already holds that physical face. Wider than
+    // same_face_centre_lab on purpose, and the asymmetry is the whole
+    // design:
+    //
+    //   - Authenticating a re-show OVERWRITES nine stored stickers. Getting
+    //     that wrong is unrecoverable, so its radius must sit inside the
+    //     palette floor (see same_face_centre_lab).
+    //   - Refusing an admission writes NOTHING. Getting that wrong costs
+    //     one deferred capture of a face the user can simply show again.
+    //
+    // Sizing the cheap decision by the expensive decision's constant is
+    // what left the [18, 25) window open: duplicate_centre_radius (18) is
+    // narrower than honest same-face drift (22.7), so a re-read that
+    // drifted into that band was filed BESIDE itself, one physical face
+    // occupying two store keys - after which no colour threshold downstream
+    // can produce a valid cube.
+    //
+    // Realised, not latent, and measured on the corpus rather than argued:
+    // runA finishes with slot D and slot L both carrying an ORANGE centre
+    // 22.98 Lab apart, and live2 with slot F and slot B both GREEN 24.67
+    // apart. Both sit above same_face_centre_lab and below this. (runA's
+    // six filled slots carrying only four distinct centre names is exactly
+    // this defect.)
+    //
+    // 25 is not a fresh number: it is the live-tested legacy tight-match
+    // radius this file used before the never-overwrite work moved
+    // authentication down. It is bounded above by needing to leave a
+    // genuinely new face admissible when the classifier puts it in the same
+    // class as a stored one.
+    float self_duplication_centre_lab = 25.0F;
     // Repeated verification failures on ONE face within a locked segment:
     // the track itself is suspect, force-lose it (slots preserved - they
     // were verified when written).
@@ -239,6 +271,12 @@ static_assert(RoutingConfig{}.same_face_centre_lab < kClosestCentrePairLab,
 static_assert(RoutingConfig{}.duplicate_centre_radius < kClosestCentrePairLab,
               "the duplicate-centre check would otherwise quarantine legitimate red-beside-orange "
               "fills as slip evidence");
+static_assert(RoutingConfig{}.self_duplication_centre_lab >= RoutingConfig{}.same_face_centre_lab,
+              "the refusal bar may never be narrower than the authentication bar: a reading the "
+              "verifier would call a re-show of a captured face must not be admissible as a "
+              "newcomer beside it, which is the [18, 25) self-duplication window");
+static_assert(RoutingConfig{}.self_duplication_centre_lab >= RoutingConfig{}.duplicate_centre_radius,
+              "the centre-alias net is a subset of the self-duplication net, not a wider one");
 static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_centre_lab,
               "content equivalence is a strictly stronger claim than same-face: two slots declared "
               "interchangeable must also be same-face admissible");
@@ -531,6 +569,12 @@ private:
     // centre aliases a captured face without authenticating as it, two
     // stored slots both claim it, or the store is full.
     [[nodiscard]] bool adopt_gauge_direct(cube::model::Face epoch_face, const CapturedFace& captured);
+    // "Some filled slot already holds this physical face." The refusal half
+    // of the same-face question, shared by ALL THREE admission paths so one
+    // physical face cannot be filed beside itself: see
+    // RoutingConfig::self_duplication_centre_lab for why the refusal bar is
+    // deliberately wider than the authentication bar.
+    [[nodiscard]] bool reads_as_a_stored_face(const CapturedFace& captured) const;
     void buffer_epoch_face(cube::model::Face epoch_face, const CapturedFace& captured);
     [[nodiscard]] int fill_index_of(cube::model::Face store_face) const;
 
