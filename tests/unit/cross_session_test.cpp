@@ -712,6 +712,26 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             }
             const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
             assemble_text = assembled.has_value() ? "VALID" : "INVALID";
+
+            // The resolved faces themselves, one nine-letter string each.
+            //
+            // Worth emitting because of what the oracle does NOT depend on:
+            // assemble_scanned_faces_with_mapping keys each face to a cube
+            // position by CENTRE COLOUR alone and then tries all 4096
+            // per-face rotation combinations. Slot identity and roll are
+            // therefore both invisible to it - a capture filed under the
+            // wrong slot, or rotated by a guessed gauge, still assembles if
+            // its nine colours are right. An INVALID verdict consequently
+            // localises the fault precisely: the 54 resolved COLOURS are
+            // wrong, and no amount of routing or roll correction can move
+            // it. These strings are what a colour fix has to change.
+            for (std::size_t f = 0; f < resolved->size(); ++f) {
+                std::string letters;
+                for (const auto& facelet : (*resolved)[f]) {
+                    letters += color_letter(facelet.color);
+                }
+                std::printf("# resolved: clip=%s slot=%zu %s\n", clip.c_str(), f, letters.c_str());
+            }
         }
     }
     std::printf("# verdict: clip=%s filled=%d distinct-centres=%d live-census=%s resolve=%s "
