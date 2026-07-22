@@ -55,6 +55,10 @@ uneven lighting, background clutter, and a minority of missed/occluded
 cells, not just a clean dead-on shot), colour classification,
 stability/hand-presence gating, auto-advance - with manual per-face
 confirmation as the fallback (see `src/lib/src/vision/`).
+The image pipeline end to end - capture, the per-pass analysis stages, the
+GUI-thread commit path, and where colour decisions are made - is diagrammed
+in [Vision pipeline](vision-pipeline.md), together with the measured
+weaknesses of each stage.
 `cube::solver::cube_from_scan()` (`src/lib/src/solver/scan_conversion.cpp`)
 bridges a completed `cube::model::ScanProgress` into a `cube::solver::Cube`
 under a fixed camera-holding convention (documented in

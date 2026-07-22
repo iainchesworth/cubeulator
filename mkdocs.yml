@@ -52,6 +52,7 @@ nav:
   - Building & packaging: building.md
   - Testing & coverage: testing.md
   - Architecture: architecture.md
+  - Vision pipeline: vision-pipeline.md
   - Dependency strategy: dependency-strategy.md
   - FAQ / troubleshooting: faq.md
   - Contributing: CONTRIBUTING.md
