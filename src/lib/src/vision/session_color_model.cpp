@@ -129,11 +129,10 @@ namespace {
 // between them, so every consumer applies classify_lab's conditional
 // widening identically and none of them has to know it exists.
 //
-// `warm` is subject to the SAME non-merging clamp as the adaptive base
-// (held under the least chromatic seeded colour), so evidence can only
-// tighten the widening, never let it climb over a real colour. With nothing
-// seeded the clamp is inert and `warm` is classify_lab's own 27, which is
-// what makes a cold start bit-identical.
+// `warm` carries a non-merging clamp of the same KIND as the adaptive
+// base's, but over a deliberately narrower set of references - see
+// white_ceilings() for why the base's "every seeded colour" set is the wrong
+// one here.
 struct WhiteCeilings {
     float base = kBootstrapWhiteChromaCeiling;
     float warm = kWarmCastWhiteChromaCeiling;
@@ -146,15 +145,45 @@ struct WhiteCeilings {
     }
 };
 
+// THE CLAMP'S SCOPE IS THE WHOLE POINT.
+//
+// The base ceiling applies to EVERY sample, so it is rightly held under
+// EVERY seeded colour (see observe()) - any colour at all can be swallowed
+// by a base that climbs. The widening is not like that. It only ever raises
+// the ceiling for samples whose hue lies inside [kWarmCastHueMinDeg,
+// kWarmCastHueMaxDeg), so the only references it can possibly swallow are
+// the ones that live in that window. A blue reference at hue 280 or a green
+// one at hue 180 is not reachable by the widening at any chroma.
+//
+// Clamping against those unreachable references was a measured bug, not a
+// harmless conservatism. This corpus's blue tiles read chroma 17.6-24.3
+// (classify_lab's own comment), so one blue face seeds blue near chroma 21,
+// dragged the widening to 0.75 x 21 = 15.6 - the flat base, i.e. no widening
+// at all - and runD's white face at chroma 15.7-21.0 went straight back to
+// censusing ORANGE. The commit that added the widening exists to prevent
+// exactly that census, and the clamp undid it one ordinary face into the
+// session.
+//
+// Lightness is deliberately NOT part of the test. The widening also requires
+// L > kWarmCastWhiteLightnessFloor, so filtering on it too would be
+// defensible, but a reference is a summary of a colour whose real tiles
+// straddle that floor (runA's F7 orange reads L 54.2 while other oranges of
+// the same cube read well above 60). Consulting a warm reference whatever
+// its mean lightness keeps the guard on the side that cannot lose a colour.
 [[nodiscard]] WhiteCeilings white_ceilings(
     float base, const std::array<SessionColorReference, kSessionColorCount>& references) {
     WhiteCeilings ceilings;
     ceilings.base = base;
     ceilings.warm = kWarmCastWhiteChromaCeiling;
     for (std::size_t c = 1; c < kSessionColorCount; ++c) {
-        if (references[c].seeded) {
-            ceilings.warm = std::min(ceilings.warm, 0.75F * chroma_of(references[c].lab));
+        if (!references[c].seeded) {
+            continue;
         }
+        const float hue = hue_degrees(references[c].lab);
+        if (hue < kWarmCastHueMinDeg || hue >= kWarmCastHueMaxDeg) {
+            continue;
+        }
+        ceilings.warm = std::min(ceilings.warm, 0.75F * chroma_of(references[c].lab));
     }
     // Never below the base: the widening may be clamped away entirely, but
     // it must not become a NARROWING, which would make a light warm sample

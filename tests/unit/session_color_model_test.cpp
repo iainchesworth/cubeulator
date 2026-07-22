@@ -65,6 +65,19 @@ std::string pattern(const SessionFaceReading& reading) {
     return out;
 }
 
+// Nine stickers of one physical colour spread evenly across a measured
+// chroma range at a fixed lightness and hue - what a real face of one colour
+// looks like once vignetting and viewing angle have had their say. The
+// spread stays well inside kIntraFaceMergeLab, so these group as one.
+std::array<cv::Vec3f, 9> graded_face(float lightness, float chroma_lo, float chroma_hi, float hue) {
+    std::array<cv::Vec3f, 9> face{};
+    for (std::size_t i = 0; i < face.size(); ++i) {
+        const float t = static_cast<float>(i) / static_cast<float>(face.size() - 1);
+        face[i] = polar_lab(lightness, chroma_lo + t * (chroma_hi - chroma_lo), hue);
+    }
+    return face;
+}
+
 }  // namespace
 
 // ---------------------------------------------------------------------------
@@ -161,6 +174,87 @@ TEST_CASE("SessionColorModel bootstraps the warm-cast white exclusions", "[visio
         REQUIRE(classify_lab(lab).color != FacetColor::white);
         REQUIRE(model.classify_face(uniform_face(lab)).facelets[0].color == classify_lab(lab).color);
     }
+}
+
+// THE OTHER HALF OF THE BOOTSTRAP CLAIM: the warm-cast widening must
+// SURVIVE ordinary evidence.
+//
+// The two cases above test a VIRGIN model, and a virgin model is the one
+// state in which the widening's non-merging clamp is inert. That made the
+// widening look correct while it was in fact destroyed by the very first
+// ordinary chromatic observation of a session.
+//
+// The clamp held the widening under 0.75x the chroma of the least chromatic
+// SEEDED colour, over every seeded colour. This corpus's blue tiles measure
+// chroma 17.6-24.3 (classify_lab's own comment), so one blue face seeds blue
+// at a group mean around chroma 21 and drags the widening to ~15.6 - i.e.
+// back to the flat base - and runD's white face, at chroma 15.7-21.0, falls
+// through to the hue path and censuses ORANGE again. That is precisely the
+// O=21 W=2 bug the widening was added to prevent, reinstated one face into
+// the session.
+//
+// The clamp was also unjustified on its own terms. The widening only ever
+// applies to samples whose hue is inside the orange band [44, 75) - a blue
+// reference at hue 280 or a green one at hue 180 is not a colour the
+// widening could ever swallow, yet either was enough to switch it off. The
+// clamp now consults only references that sit inside that window, which is
+// the set the widening could actually reach.
+TEST_CASE("SessionColorModel keeps the warm-cast white branch after evidence", "[vision][session-color]") {
+    SessionColorModel model;
+
+    // A virgin model reads runD's white face as white - this is the state
+    // the two cases above already pin, restated here as the precondition
+    // that the observations below must not destroy.
+    const auto white_face = graded_face(75.0F, 15.7F, 21.0F, 61.0F);
+    REQUIRE(pattern(model.classify_face(white_face)) == "WWWWWWWWW");
+
+    // Ordinary evidence, at the chroma and hue this corpus actually
+    // measures: one blue face, then one green face. Neither hue is anywhere
+    // near the warm-cast window.
+    REQUIRE(model.observe(graded_face(50.0F, 17.6F, 24.3F, 280.0F)));
+    REQUIRE(model.seeded(FacetColor::blue));
+    REQUIRE(pattern(model.classify_face(white_face)) == "WWWWWWWWW");
+
+    REQUIRE(model.observe(graded_face(55.0F, 20.5F, 30.7F, 180.0F)));
+    REQUIRE(model.seeded(FacetColor::green));
+    REQUIRE(pattern(model.classify_face(white_face)) == "WWWWWWWWW");
+}
+
+// The clamp is narrowed, not removed: a reference INSIDE the warm-cast
+// window still has to be protected from it, because that is the one
+// direction in which the widening can actually swallow a real colour.
+//
+// runA's F7 orange is the measured worst case - a genuine orange tile at the
+// least chromatic reading any real tile in that band produced (chroma 33.6,
+// hue 60). Seeding orange there must pull the widening down to 0.75 x 33.6 =
+// 25.2, below classify_lab's flat 27, and a warm sample above that must stop
+// being called white.
+//
+// DISCLOSURE: this case passes both before and after the narrowing, because
+// the wider clamp consulted orange too. It is a regression guard, not
+// evidence - it exists so a later "simplification" cannot delete the clamp
+// outright once the narrowing has made it look redundant. The case above is
+// the one that fails pre-change.
+TEST_CASE("SessionColorModel clamps the warm-cast widening under a warm reference",
+          "[vision][session-color]") {
+    SessionColorModel model;
+
+    // Chroma 26 at the warm hue and a white-ish lightness: inside
+    // classify_lab's 27 ceiling, so a virgin model calls it white.
+    const auto warm_face = graded_face(70.0F, 26.0F, 26.0F, 60.0F);
+    REQUIRE(pattern(model.classify_face(warm_face)) == "WWWWWWWWW");
+
+    // Seed orange from runA's F7 reading, which IS inside the window.
+    REQUIRE(model.observe(graded_face(54.2F, 33.6F, 33.6F, 60.0F)));
+    REQUIRE(model.seeded(FacetColor::orange));
+
+    // 26 is now above 0.75 x 33.6 = 25.2, so the widening no longer reaches
+    // it and the sample goes back to the hue path.
+    REQUIRE(pattern(model.classify_face(warm_face)) == "OOOOOOOOO");
+
+    // ...but runD's actual whites, at chroma 21.0 and below, are still
+    // comfortably under the clamped widening and still read white.
+    REQUIRE(pattern(model.classify_face(graded_face(75.0F, 15.7F, 21.0F, 61.0F))) == "WWWWWWWWW");
 }
 
 // COLD START IS BIT-IDENTICAL, swept rather than sampled.
