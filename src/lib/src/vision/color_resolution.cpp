@@ -75,6 +75,21 @@ constexpr std::size_t kSampleCount = face_count * facelets_per_face;
                     second = distance;
                 }
             }
+            // No open cluster produced a finite comparison. resolve_colors
+            // rejects non-finite input before calling this, so this is
+            // defence in depth rather than a live path - but the failure it
+            // guards is severe enough to be structural: with
+            // nearest_cluster still -1 the sample would win the margin
+            // argmax below with kInf, and the loop would then execute
+            // `++load[static_cast<std::size_t>(-1)]` (an out-of-bounds
+            // increment at index SIZE_MAX of a six-element array) and
+            // re-select the same sample forever, because `cluster[s]` was
+            // never set. Skipping it here means the loop can only ever
+            // commit a real cluster, and terminates because every
+            // iteration assigns exactly one sample.
+            if (nearest_cluster < 0) {
+                continue;
+            }
             // With one open cluster left the margin is effectively infinite:
             // the sample has no alternative, so it commits immediately.
             const float margin = (second == kInf) ? kInf : second - nearest;
@@ -290,6 +305,29 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         }
     }
 
+    // Finiteness first, before ANY comparison is made on this data. Every
+    // subsequent gate in this function is an inequality, and an inequality
+    // against NaN is false - so a single NaN does not merely produce a bad
+    // answer, it silently passes the centre-separation guard below (whose
+    // whole job is to reject implausible seeds) and then defeats the
+    // clustering: see assign_clusters' note for the out-of-bounds write and
+    // non-terminating loop that follow. inf reaches the same state because
+    // `inf < inf` is false too.
+    //
+    // These 54 values are caller-supplied on a public entry point and the
+    // producers upstream include divisions by sample counts and homography
+    // projections, either of which can emit a non-finite mean without any
+    // caller doing something unreasonable. Refusing the whole scan is the
+    // right answer rather than dropping the offending cell: a cell whose
+    // colour could not be measured is not evidence that can be clustered,
+    // and the exactly-9-per-cluster constraint has no meaning without all
+    // 54.
+    for (const cv::Vec3f& sample : samples) {
+        if (!std::isfinite(sample[0]) || !std::isfinite(sample[1]) || !std::isfinite(sample[2])) {
+            return std::unexpected(CubeError::no_valid_cube_detected);
+        }
+    }
+
     // The six centres seed the clusters, so they must be pairwise distinct.
     // The floor and the closest-pair measurement backing it are now declared
     // in the header (kMinCentreSeedSeparationLab / kClosestCentrePairLab) so
@@ -322,6 +360,13 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
 
         std::array<cv::Vec3f, face_count> sums{};
         for (std::size_t s = 0; s < kSampleCount; ++s) {
+            // assign_clusters assigns every sample given finite input, which
+            // the sweep above has established. Checked rather than assumed
+            // because the cost of being wrong here is an out-of-bounds write
+            // at index SIZE_MAX, not a wrong mean.
+            if (next[s] < 0) {
+                continue;
+            }
             sums[static_cast<std::size_t>(next[s])] += samples[s];
         }
         for (std::size_t c = 0; c < face_count; ++c) {

@@ -60,7 +60,15 @@ static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
 // Faces are indexed by cube::model::Face (U,R,F,D,L,B), matching
 // ScanProgress. Fails with CubeError::no_valid_cube_detected when the six
 // centre colours don't separate into six plausible clusters (e.g. two
-// centres read as the same colour - a physically impossible scan).
+// centres read as the same colour - a physically impossible scan), or when
+// any of the 54 Lab samples is non-finite.
+//
+// The finiteness rule is a precondition made into a checked failure rather
+// than left to the caller: every gate inside is an inequality, and an
+// inequality against NaN is false, so an unchecked NaN would pass the
+// centre-separation guard and then leave the clustering with no cluster to
+// commit a sample to - which was an out-of-bounds write and a
+// non-terminating loop, not a wrong answer.
 [[nodiscard]] Result<std::array<std::array<cube::model::Facelet, 9>, 6>> resolve_colors(
     const std::array<CapturedFace, 6>& faces);
 

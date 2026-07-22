@@ -9,6 +9,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <random>
 #include <utility>
 
@@ -356,6 +357,51 @@ TEST_CASE("resolve_colors survives shift, chroma compression, and noise combined
 TEST_CASE("resolve_colors rejects a scan with two identical centres", "[vision]") {
     SyntheticScan scan = make_scan();
     scan.faces[1].lab[4] = scan.faces[0].lab[4];
+
+    const auto resolved = resolve_colors(scan.faces);
+    REQUIRE_FALSE(resolved.has_value());
+    REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
+}
+
+// Non-finite input. Before the finiteness sweep this was not a wrong
+// answer, it was memory corruption plus a hang: every distance from a NaN
+// sample compares false, so assign_clusters' `nearest_cluster` stayed -1,
+// the sample won the margin argmax with kInf, and the loop executed
+// `++load[static_cast<std::size_t>(-1)]` - an increment at index SIZE_MAX
+// of a six-element stack array - then re-selected the same sample forever.
+// An inf sample reaches the identical state through `inf < inf` being
+// false. Every one of the 54 slots is a caller-supplied value on a public
+// entry point, so each is checked, not just the centres.
+TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[vision]") {
+    const auto nan_value = std::numeric_limits<float>::quiet_NaN();
+
+    SECTION("NaN in an off-centre sticker") {
+        SyntheticScan scan = make_scan();
+        scan.faces[2].lab[7][1] = nan_value;
+        const auto resolved = resolve_colors(scan.faces);
+        REQUIRE_FALSE(resolved.has_value());
+        REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
+    }
+
+    SECTION("NaN in a centre - the seed-separation guard cannot see it") {
+        SyntheticScan scan = make_scan();
+        scan.faces[0].lab[4][0] = nan_value;
+        // Proof the existing guard is defeated: every pairwise comparison
+        // against a NaN centre is false, so the loop that is supposed to
+        // reject implausible seeds passes it through.
+        for (std::size_t other = 1; other < 6; ++other) {
+            const cv::Vec3f diff = scan.faces[0].lab[4] - scan.faces[other].lab[4];
+            REQUIRE_FALSE(std::sqrt(diff.dot(diff)) < 12.0F);
+        }
+        const auto resolved = resolve_colors(scan.faces);
+        REQUIRE_FALSE(resolved.has_value());
+        REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
+    }
+}
+
+TEST_CASE("resolve_colors rejects an infinite sample instead of hanging", "[vision]") {
+    SyntheticScan scan = make_scan();
+    scan.faces[4].lab[0][2] = -std::numeric_limits<float>::infinity();
 
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());
