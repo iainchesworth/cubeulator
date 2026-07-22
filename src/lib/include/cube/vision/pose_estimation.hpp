@@ -154,7 +154,15 @@ struct CubePoseProjection {
 // cube extending away from the camera. Fails (no_valid_cube_detected) when
 // the pose estimate degenerates.
 //
-// With a null seed the behaviour is EXACTLY the historical single-frame
+// Every accepted pose - seeded or not, IPPE or fallback - must also
+// reproject the model corners to within kMaxReprojectionFraction of the
+// observation's apparent radius, the same bar the corner and edge paths
+// apply. That gate used to guard only the mirror-arbitration branch here,
+// which meant a sheared face quad (the lattice fitter is free to produce
+// one) could be fitted with a true square, post a large residual, and still
+// be returned as a valid orientation.
+//
+// With a null seed the behaviour is otherwise the historical single-frame
 // estimate (IPPE, generic-iterative fallback, cheirality gate). A seed
 // adds continuity in two ways, both bounded at one extra solvePnP call:
 // the fallback initialises from it instead of cold-starting, and when

@@ -596,3 +596,28 @@ TEST_CASE("project_cube_from_face rejects degenerate quads", "[vision]") {
     REQUIRE_FALSE(empty.has_value());
     REQUIRE(empty.error() == cube::CubeError::no_valid_cube_detected);
 }
+
+TEST_CASE("project_cube_from_face gates its accepted pose on reprojection", "[vision]") {
+    // A quad no square in perspective can explain. The lattice fitter is an
+    // AFFINE fit and is free to return a sheared face quad; IPPE_SQUARE
+    // fits a true square to whatever it is handed, so it produces a pose
+    // whose corners land far from the observation while still passing
+    // cheirality and on-screen plausibility. Before the gate was applied to
+    // the returned pose, that pose was accepted, marked orientation_valid,
+    // fed to the tracker as q_obs and reused as the next pass's seed.
+    const FaceObservation honest = rendered_face(20.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    std::array<cv::Point2f, 4> sheared = honest.face_quad;
+    sheared[1].x += 90.0F;
+    sheared[1].y -= 60.0F;
+    const auto projection = project_cube_from_face(observation_with_quad(sheared), kFrame);
+
+    INFO("sheared quad must not be accepted as a valid orientation");
+    REQUIRE_FALSE(projection.has_value());
+    REQUIRE(projection.error() == cube::CubeError::no_valid_cube_detected);
+
+    // The honest quad the shear was derived from is still accepted, so the
+    // gate is rejecting the residual rather than the geometry generally.
+    const auto clean = project_cube_from_face(honest, kFrame);
+    REQUIRE(clean.has_value());
+    REQUIRE(clean->max_reproj_fraction < 0.15);
+}

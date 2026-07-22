@@ -565,6 +565,26 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
     result.tvec = tvec;
     result.from_seed = from_seed;
     result.max_reproj_fraction = max_reprojection_fraction(object_points, image_points, rvec, tvec, camera);
+    // The reprojection gate, applied to the pose that is actually being
+    // returned. kMaxReprojectionFraction is documented as the acceptance
+    // "shared by every seeded/derived solve" and is enforced on the corner
+    // and edge paths, but on this path it only ever guarded the mirror
+    // arbitration branch - the primary IPPE answer and the unseeded
+    // iterative fallback were accepted on cheirality and on-screen
+    // plausibility alone, with the residual measured, exported, and never
+    // compared.
+    //
+    // What that let through: the lattice fitter is free to produce a
+    // sheared face quad (an affine fit of a face seen obliquely), and
+    // SOLVEPNP_IPPE_SQUARE fits a true square to whatever it is given, so
+    // the residual is large by construction while the pose still passes
+    // cheirality. It then sets orientation_valid, feeds the tracker as
+    // q_obs, and becomes the next pass's seed - a wrong orientation
+    // entering the lattice and gauge machinery with exactly the authority
+    // of a good one.
+    if (result.max_reproj_fraction > kMaxReprojectionFraction) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
     for (std::size_t i = 0; i < result.vertices.size(); ++i) {
         result.vertices[i] =
             cv::Point2f(static_cast<float>(projected[i].x), static_cast<float>(projected[i].y));
