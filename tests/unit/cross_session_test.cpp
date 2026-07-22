@@ -71,6 +71,7 @@
 
 #include <cube/model/face.hpp>
 #include <cube/model/facelet.hpp>
+#include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/capture_routing.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
@@ -628,5 +629,81 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         clip.c_str(), epochs_seen, outcome_counts[0], outcome_counts[1], outcome_counts[2], outcome_counts[3],
         outcome_counts[4], registration_counts[0], registration_counts[1], registration_counts[2],
         registration_basis[0], registration_basis[1], registration_basis[2]);
+
+    // T2's verdict, computed here rather than left to a downstream script,
+    // because the three numbers that decide whether a clip COULD have
+    // assembled are all derived from the same store dump and are all easy
+    // to get subtly wrong by hand:
+    //
+    //   census          the tally of classify_lab names over every cell of
+    //                   every filled slot. A correct six-slot scan reads
+    //                   9/9/9/9/9/9 and '?'=0; anything else names which
+    //                   colour is being over- or under-called.
+    //   centre NAMES    the set of DISTINCT classify_lab names over the six
+    //                   centres. Reported as names, not as a Lab-distance
+    //                   count: two centres 30 Lab apart that classify_lab
+    //                   nonetheless calls the same colour are a fatal
+    //                   collision for the assembler, and a distance-based
+    //                   "distinct centres" figure scores them as distinct.
+    //   assemble        the production chain verbatim - resolve_colors()
+    //                   then assemble_scanned_faces_with_mapping(), the
+    //                   two calls finalizeIfComplete() makes in that order
+    //                   (scan_session.cpp) - so a failure here is the
+    //                   failure the user would have seen, with the error
+    //                   code that produced it.
+    //
+    // Instrumentation only: no CHECK is attached to any of it, because a
+    // corpus clip failing to assemble is the state of the product, not a
+    // regression in this harness.
+    {
+        std::array<int, 7> census{};
+        std::string centre_names;
+        std::array<cube::vision::CapturedFace, cube::model::face_count> slots{};
+        const int filled = router.filled_count();
+        for (int slot_index = 0; slot_index < filled; ++slot_index) {
+            const cube::vision::CapturedFace* content = router.slot_at(slot_index);
+            if (content == nullptr) {
+                continue;
+            }
+            if (slot_index < static_cast<int>(slots.size())) {
+                slots[static_cast<std::size_t>(slot_index)] = *content;
+            }
+            for (const auto& lab : content->lab) {
+                ++census[static_cast<std::size_t>(cube::vision::classify_lab(lab).color)];
+            }
+            const char centre =
+                color_letter(cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
+            if (centre_names.find(centre) == std::string::npos) {
+                centre_names += centre;
+            }
+        }
+        std::printf("# cross-session: clip=%s census W=%d Y=%d R=%d O=%d G=%d B=%d ?=%d"
+                    " | centre-names=%s distinct-centre-names=%zu\n",
+                    clip.c_str(), census[static_cast<std::size_t>(cube::model::FacetColor::white)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::yellow)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::red)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::orange)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::green)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::blue)],
+                    census[static_cast<std::size_t>(cube::model::FacetColor::unknown)],
+                    centre_names.empty() ? "-" : centre_names.c_str(), centre_names.size());
+
+        if (filled < static_cast<int>(cube::model::face_count)) {
+            std::printf("# cross-session: clip=%s assemble=not-attempted (filled-slots=%d of 6)\n", clip.c_str(),
+                        filled);
+        } else {
+            const auto resolved = cube::vision::resolve_colors(slots);
+            if (!resolved.has_value()) {
+                std::printf("# cross-session: clip=%s assemble=NO resolve_colors=%s\n", clip.c_str(),
+                            std::string(cube::to_string(resolved.error())).c_str());
+            } else {
+                const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
+                std::printf("# cross-session: clip=%s assemble=%s\n", clip.c_str(),
+                            assembled.has_value()
+                                ? "YES"
+                                : ("NO " + std::string(cube::to_string(assembled.error()))).c_str());
+            }
+        }
+    }
     CHECK(replayed > 0);
 }
