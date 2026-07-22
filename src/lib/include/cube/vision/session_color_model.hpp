@@ -120,9 +120,11 @@ inline constexpr float kMaxWhiteChromaCeiling = 26.0F;
 // Within-face grouping threshold (complete-link, Lab). Complete-link, not
 // single-link: single-link chains, and a chain of intermediate samples
 // would let a red sticker and an orange sticker land in one group despite
-// being 27 Lab apart. 18 sits comfortably below kClosestCentrePairLab (27,
-// the red/orange pair - the closest two colours a real cube can show) and
-// comfortably above the cross-frame spread of one tile.
+// being a whole colour class apart. 18 sits below kClosestCentrePairLab
+// (22.9 as captured - the red/orange pair, the closest two colours a real
+// cube can show) and above the cross-frame spread of one tile. The margin
+// on the upper side is thinner than it reads: re-measuring the closest
+// legitimate pair moved that ceiling from 27 to 22.9.
 inline constexpr float kIntraFaceMergeLab = 18.0F;
 
 // A group must beat its runner-up name by this many degrees before it is

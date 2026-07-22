@@ -25,12 +25,30 @@ namespace cube::vision {
 // that reason - see the static_asserts there.
 // ---------------------------------------------------------------------------
 
-// Closest legitimate centre pair on a standard cube: red against orange,
-// measured at ~27 Lab even under the aggressive chroma compression a
-// phone's auto-exposure applies to a glossy face. Every other centre pair
-// sits further apart, so this is the palette's minimum inter-centre
-// separation and the hard ceiling on any "same physical face" radius.
-inline constexpr float kClosestCentrePairLab = 27.0F;
+// Closest legitimate centre pair on a standard cube: red against orange.
+// Every other centre pair sits further apart, so this is the palette's
+// minimum inter-centre separation and the hard ceiling on any "same
+// physical face" radius.
+//
+// MEASURED ON CAPTURED CENTRES, not on the reference palette, and the
+// difference is the whole point. The reference entries in
+// default_palette() put red and orange 30.4 Lab apart; the value that
+// matters is what the camera actually delivers after auto-exposure has
+// compressed the chroma of a glossy face, and that is materially smaller.
+// Over the eleven recordings, the closest pair of centres carrying
+// DIFFERENT colour names in a captured slot is 22.95 Lab (runD, slot L
+// orange against slot R red), with runA slot F green against slot U yellow
+// next at 23.52. The previous value of 27.0 was therefore above the real
+// separation, not below it - which mattered because it is the ceiling the
+// static_asserts in capture_routing.hpp certify the never-overwrite
+// guarantee against, so those asserts were certifying a bound the corpus
+// contradicts.
+//
+// 22.9 sits just inside the measured minimum. Deliberately not rounded
+// down further: this is a CEILING on other constants, and lowering it
+// beyond the evidence would force the same-face radii down to where honest
+// re-shows stop verifying, costing captures for no measured safety.
+inline constexpr float kClosestCentrePairLab = 22.9F;
 
 // Cluster seed separation: two captured centres closer than this are the
 // same colour scanned twice, which no real cube can produce. 12 sits

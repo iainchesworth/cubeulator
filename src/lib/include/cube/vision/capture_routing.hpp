@@ -103,7 +103,7 @@ struct RoutingConfig {
     // verified in-place update (the ONLY overwrite path in the system) and
     // by the recovery path's tight re-association. It was two separate
     // numbers - a 30.0 verify radius and this 25.0 - and the 30.0 was the
-    // bug: red/orange centres are ~27 Lab apart
+    // bug: red/orange centres are 22.9 Lab apart as captured
     // (kClosestCentrePairLab), so the verifier's own predicate could not
     // distinguish the closest legitimate colour pair on a cube and a
     // DIFFERENT physical face could authenticate into an occupied slot.
@@ -113,14 +113,36 @@ struct RoutingConfig {
     // mean Lab, so no roll or mirror explained the new stickers - it was
     // simply another face, and it destroyed live3's only captured slot.
     //
-    // 25 is not a fresh guess: it is the live-tested legacy tight-match
-    // radius, and the corpus's largest HONEST same-face centre drift is
-    // 22.7 Lab (live3 slot F, pass 42 -> 104, yellow -> yellow), so it
-    // clears real drift while sitting structurally inside the palette. The
-    // static_assert below is the point of the exercise - the verifier is
-    // now incapable of accepting the closest legitimate pair no matter how
-    // this is retuned.
-    float same_face_centre_lab = 25.0F;
+    // 25 was the live-tested legacy tight-match radius, chosen when
+    // kClosestCentrePairLab was believed to be 27. Re-measuring that
+    // constant on captured centres put it at 22.9 (see color_resolution.hpp
+    // for the corpus figures), so 25 no longer sits inside the palette at
+    // all and the static_assert below - which exists precisely to stop this
+    // from being true silently - now forces this down with it.
+    //
+    // 22.8 is the LARGEST value the corrected ceiling admits, and it is
+    // chosen as a maximum rather than picked: the corpus's largest HONEST
+    // same-face centre drift is 22.7 Lab (live3 slot F, pass 42 -> 104,
+    // yellow -> yellow), so anything lower starts refusing measured,
+    // legitimate updates - and a refused update is not free, it takes a
+    // strike and conflict_strikes = 2 escalates to force_lost. The
+    // remaining room either side is 0.1 Lab below and 0.15 above.
+    //
+    // Which is the reading that matters, and it is worth stating rather
+    // than burying: honest same-face drift (22.7) and the closest
+    // legitimate centre pair (22.95) now OVERLAP to within any reasonable
+    // measurement error. Centre Lab distance therefore cannot separate
+    // "this face again" from "a different face" at ANY threshold - there is
+    // no value of this constant that both admits real drift and excludes
+    // red-beside-orange. It survives as defence in depth only. The
+    // load-bearing term in verified_same_face is centre CLASS equality and
+    // the census is the third; that is what refuses the one measured breach
+    // (live3 slot F, yellow -> red at 28.1 Lab), not this radius.
+    //
+    // So: retuning this number is not a way to buy back capture rate, and
+    // widening it is not available at all. Improving the centre classifier
+    // is the only thing that moves this decision.
+    float same_face_centre_lab = 22.8F;
     // Census drift allowed on an in-place update. Left at 6 deliberately:
     // every measured update event in the corpus sat at census L1 <= 2, so
     // the census term was never the deciding gate in either direction and
@@ -212,8 +234,8 @@ struct RoutingConfig {
 // than "the constant is currently 25" - it is the reason 25 is admissible.
 static_assert(RoutingConfig{}.same_face_centre_lab < kClosestCentrePairLab,
               "same_face_centre_lab must sit strictly inside the closest legitimate centre pair "
-              "(red/orange, ~27 Lab): at or above it the verified in-place update can authenticate "
-              "a DIFFERENT physical face into an occupied slot");
+              "(red/orange, 22.9 Lab measured on captured centres): at or above it the verified "
+              "in-place update can authenticate a DIFFERENT physical face into an occupied slot");
 static_assert(RoutingConfig{}.duplicate_centre_radius < kClosestCentrePairLab,
               "the duplicate-centre check would otherwise quarantine legitimate red-beside-orange "
               "fills as slip evidence");

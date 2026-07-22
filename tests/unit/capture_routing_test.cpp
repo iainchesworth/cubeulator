@@ -1592,3 +1592,57 @@ TEST_CASE("the duplicate-centre net still guards mid-recovery admission", "[rout
     CHECK(centre_lab_distance(*router.slot_at(0), solid(kWhite)) == 0.0F);
     CHECK(centre_lab_distance(*router.slot_at(1), solid(kRed)) == 0.0F);
 }
+
+// ---------------------------------------------------------------------------
+// The never-overwrite guarantee against the RE-MEASURED palette floor.
+//
+// kClosestCentrePairLab was 27.0 - above the closest pair the camera
+// actually delivers (22.95 Lab, runD slot L orange against slot R red) - so
+// the static_assert certifying same_face_centre_lab was certifying it
+// against a bound the corpus contradicts, and the verifier's radius (25)
+// sat OUTSIDE the real palette floor rather than inside it. These cases pin
+// the corrected relationship at both ends.
+// ---------------------------------------------------------------------------
+TEST_CASE("the verify radius sits inside the measured closest centre pair", "[routing]") {
+    // The structural statement, independent of the current numbers: no
+    // centre offset can both authenticate an in-place update AND be a
+    // legitimate difference between two of the cube's own centres.
+    STATIC_REQUIRE(RoutingConfig{}.same_face_centre_lab < kClosestCentrePairLab);
+    STATIC_REQUIRE(RoutingConfig{}.duplicate_centre_radius < kClosestCentrePairLab);
+    STATIC_REQUIRE(kMinCentreSeedSeparationLab < kClosestCentrePairLab);
+    // The measurement itself: 22.95 is the closest DIFFERENT-name centre
+    // pair over the eleven recordings, so the ceiling may not exceed it.
+    STATIC_REQUIRE(kClosestCentrePairLab <= 22.95F);
+
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    // A re-show 24 Lab off the stored centre. Same centre class, identical
+    // census - so class and census both say "same face" - and 24 sits in
+    // the window the old radius admitted (24 <= 25) but the real palette
+    // floor does not (24 > 22.95). Under the stale ceiling this was an
+    // `updated`: nine stored stickers overwritten on an authentication the
+    // palette cannot support.
+    const CapturedFace far_reshow = drifted(solid(kRed), 24.0F);
+    REQUIRE(centre_lab_distance(far_reshow, solid(kRed)) == 24.0F);
+    REQUIRE(census_l1_distance(color_census(far_reshow), color_census(solid(kRed))) == 0);
+
+    const auto result = router.commit(Face::F, far_reshow, 2000);
+    CHECK(result.outcome == CommitOutcome::quarantined);
+    // The slot keeps what was verified when it was written.
+    CHECK(centre_lab_distance(*router.slot_at(0), solid(kRed)) == 0.0F);
+}
+
+TEST_CASE("an honest same-face drift inside the radius still updates", "[routing]") {
+    // The other end: tightening the radius must not have closed the ordinary
+    // re-show. 20 Lab of lighting drift is well inside real behaviour and
+    // still verifies.
+    CaptureRouter router;
+    router.on_epoch(1);
+    REQUIRE(router.commit(Face::F, solid(kRed), 0).outcome == CommitOutcome::filled);
+
+    const CapturedFace reshow = drifted(solid(kRed), 20.0F);
+    REQUIRE(centre_lab_distance(reshow, solid(kRed)) == 20.0F);
+    CHECK(router.commit(Face::F, reshow, 2000).outcome == CommitOutcome::updated);
+}
