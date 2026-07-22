@@ -57,7 +57,6 @@
 #include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pose_estimation.hpp>
-#include <cube/vision/session_color_model.hpp>
 #include <cube/vision/stability.hpp>
 
 #include <opencv2/imgcodecs.hpp>
@@ -193,7 +192,6 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
     // CSV records is what production would have seen live at that moment -
     // an early face is named on the bootstrap prior alone, a late one on
     // references the session itself supplied.
-    SessionColorModel session_colors;
     std::optional<PoseSeed> seed_prior;
     std::int64_t seed_t_ms = 0;
 
@@ -361,14 +359,15 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             for (const auto& lab : face->lab) {
                 absolute.push_back(color_letter(classify_lab(lab).color));
             }
-            const SessionFaceReading relative = session_colors.classify_and_observe(face->lab);
-            std::string session;
-            for (const auto& facelet : relative.facelets) {
-                session.push_back(color_letter(facelet.color));
-            }
+            // The session-relative column is retired with SessionColorModel:
+            // it was measured against this corpus and never beat classify_lab,
+            // and the model it came from had no production caller. The column
+            // is kept (echoing the absolute read) so existing analysis scripts
+            // that index by position still parse these CSVs.
+            const std::string& session = absolute;
             std::fprintf(out, ",%s,%s,%c,%d", absolute.c_str(), session.c_str(),
-                         color_letter(relative.facelets[cube::model::center_facelet_index].color),
-                         relative.group_count);
+                         color_letter(classify_lab(face->lab[cube::model::center_facelet_index]).color),
+                         1);
 
             // DISPERSION PROBE. Per cell: the chroma-weighted intra-patch
             // MAD and the cell quad's screen area, plus the face quad's

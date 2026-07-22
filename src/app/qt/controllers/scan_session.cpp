@@ -1915,10 +1915,28 @@ void ScanSession::tryCommitConverged() {
         // that isn't a sticker - a fingertip, deep shadow, specular burn.
         // Its cross-frame stability is exactly why convergence can't catch
         // it, so it blocks the commit here instead.
-        const bool has_unknown_cell = std::ranges::any_of(captured.lab, [](const cv::Vec3f& lab) {
-            return cube::vision::classify_lab(lab).color == cube::model::FacetColor::unknown;
-        });
-        if (has_unknown_cell) {
+        // Bounded, not absolute. This gate could never fire until
+        // classify_lab gained its lightness floor ("H1"), because the
+        // classifier had no unknown to return; the moment it could, an
+        // all-or-nothing rule discarded a whole face - eight sound
+        // stickers - for one contaminated cell, and runD's coverage fell
+        // from six faces to four. A face is not made unusable by one bad
+        // cell: the resolver assigns all 54 stickers under a global
+        // nine-per-colour constraint, so a single doubtful cell is the
+        // case it is best placed to settle by elimination, whereas a
+        // missing face gives it nothing to work with at all.
+        //
+        // The bound is the same shape and size as FaceAggregator's
+        // kMaxUnstableCells, and for the same reason: two cells is what a
+        // glare highlight or a fingertip covers, and beyond that the
+        // reading is not a face with a blemish, it is a view of something
+        // else - which is the stationary-finger case this gate exists to
+        // defeat, and which it still defeats.
+        const auto unknown_cells = static_cast<std::size_t>(
+            std::ranges::count_if(captured.lab, [](const cv::Vec3f& lab) {
+                return cube::vision::classify_lab(lab).color == cube::model::FacetColor::unknown;
+            }));
+        if (unknown_cells > cube::vision::FaceAggregator::kMaxUnstableCells) {
             continue;
         }
 
