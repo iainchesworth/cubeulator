@@ -1,5 +1,10 @@
 #include <cube/vision/session_color_model.hpp>
 
+// For kWhiteLightnessFloor: this model's white cost and classify_lab's
+// neutral branch must use the SAME floor, and a cold-start test asserts
+// the two agree sample for sample across Lab.
+#include <cube/vision/color_resolution.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -373,6 +378,24 @@ SessionFaceReading SessionColorModel::classify_face(const std::array<cv::Vec3f, 
         // consumer needs to know is how nearly this sticker was named
         // something else, and after grouping that question is answered per
         // group rather than per sticker.
+        // Dark achromatic samples are UNKNOWN, not the nearest colour.
+        // A lattice gap, a shadow, an unlit background or dark clothing
+        // behind the cube sits at a*~b*~0 and low L: it is not a sticker
+        // at all, and naming it costs more than abstaining. classify_lab's
+        // neutral branch makes exactly this call (color_resolution.cpp,
+        // "H1"), and this model is required to agree with it sample for
+        // sample - the cold-start test drives the whole Lab volume and
+        // caught the two diverging here at L 20.3 / chroma 0.4, first as
+        // white and then, once white was merely made expensive, as red.
+        // Merely penalising white is not enough: the pick falls through to
+        // whichever hue is nearest, and a black patch has one. The test
+        // has to be the same SHAPE as classify_lab's, not just the same
+        // constant.
+        const cv::Vec3f& cell = lab[i];
+        if (chroma_of(cell) < ceilings.of(cell) && cell[0] <= kWhiteLightnessFloor) {
+            reading.facelets[i] = Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
+            continue;
+        }
         const float confidence = std::clamp(picks[g].margin / 30.0F, 0.05F, 1.0F);
         reading.facelets[i] = Facelet{.color = kOrder[picks[g].best], .confidence = confidence};
     }

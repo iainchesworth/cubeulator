@@ -785,7 +785,11 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         std::array<int, 7> census{};
         std::string centre_names;
         std::array<cube::vision::CapturedFace, cube::model::face_count> slots{};
-        const int filled = router.filled_count();
+        // Deliberately reuses the enclosing scope's `filled` rather than
+        // re-reading filled_count(): two independent reads of the same
+        // router in one block invite the two halves of this report to
+        // disagree, and the merge that first introduced the shadowing
+        // copy is exactly how that happens.
         for (int slot_index = 0; slot_index < filled; ++slot_index) {
             const cube::vision::CapturedFace* content = router.slot_at(slot_index);
             if (content == nullptr) {

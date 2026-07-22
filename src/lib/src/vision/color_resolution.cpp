@@ -212,7 +212,6 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // from one side of one of them, which is how 15 came to be wrong here.
     constexpr float kWhiteChromaFloor = 15.0F;
     constexpr float kWhiteChromaSoftCeiling = 27.0F;
-    constexpr float kWhiteLightnessFloor = 60.0F;
     static_assert(kWhiteChromaFloor < kWhiteChromaSoftCeiling,
                   "the soft ceiling only ever widens the floor; inverting them would make the "
                   "orange band's whites HARDER to reach than a neutral sample's");

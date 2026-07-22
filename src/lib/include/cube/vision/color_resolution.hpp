@@ -50,6 +50,24 @@ namespace cube::vision {
 // re-shows stop verifying, costing captures for no measured safety.
 inline constexpr float kClosestCentrePairLab = 22.9F;
 
+// Below this lightness a sample is not a white tile whatever its chroma:
+// a lattice gap, a shadow, an unlit background or dark clothing behind the
+// cube all sit at a*~b*~0, and a chroma-only white test names every one of
+// them white at FULL confidence - which corrupted the census, the
+// provisional overlay, and (worst) dropMostSuspectSlot's argmin, so the
+// retry dropped the best-read face rather than the worst. Set midway
+// across the two-sided gap this corpus shows: 54.2 (runA F7, the darkest
+// true tile reaching the white branch) to 66.6 (the darkest genuine
+// white).
+//
+// EXPORTED, not file-local, because two classifiers must agree on it:
+// classify_lab's neutral branch and SessionColorModel::name_cost's white
+// cost. They were allowed to disagree once and the divergence was found by
+// a cold-start equivalence test at L 20.3 / chroma 0.4, not by a corpus
+// regression - a shared constant makes the agreement structural instead of
+// something a test has to keep catching.
+inline constexpr float kWhiteLightnessFloor = 60.0F;
+
 // Cluster seed separation: two captured centres closer than this are the
 // same colour scanned twice, which no real cube can produce. 12 sits
 // comfortably below kClosestCentrePairLab and comfortably above the
