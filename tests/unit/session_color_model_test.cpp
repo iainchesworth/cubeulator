@@ -98,6 +98,106 @@ TEST_CASE("SessionColorModel bootstraps white from the absolute chroma floor", "
     }
 }
 
+// The bootstrap claim where it is load-bearing and where the two sweeps
+// above do not reach.
+//
+// Those sweeps probe chroma 40 (every hue band, far above any white
+// ceiling) and chroma 4 (unambiguously neutral). The region that decides
+// real scans is neither: it is the WARM-CAST WHITE band between them, which
+// classify_lab grew a dedicated branch for after the corpus showed this
+// camera's white balance renders a neutral tile as a small POSITIVE a*/b*
+// pair pointing straight into the orange band. classify_lab's own comment
+// records the measurement - runD's white face reads chroma 15.7 to 21.0 at
+// L 66.6-87.2 and hue 57.1-66.2, every sample ABOVE the flat chroma-15
+// floor - and records the consequence of getting it wrong: all nine fell
+// through to the hue path, landed in orange, and runD censused O=21 W=2
+// where both must be 9.
+//
+// A model whose bootstrap does not reproduce that branch reintroduces
+// exactly that bug the moment it is wired in, on the very corpus this work
+// is measured against. Cold start must be bit-identical to today, so the
+// prior has to carry classify_lab's white predicate in full - the
+// sample-dependent ceiling, not just the flat floor.
+TEST_CASE("SessionColorModel bootstraps the warm-cast white branch", "[vision][session-color]") {
+    const SessionColorModel model;
+    // The measured runD white face: chroma spread across the whole observed
+    // range, at the observed lightness and hue.
+    for (const float chroma : {15.7F, 15.8F, 17.6F, 17.8F, 18.7F, 18.8F, 19.3F, 20.2F, 21.0F}) {
+        for (const float lightness : {66.6F, 75.0F, 87.2F}) {
+            for (const float hue : {57.1F, 61.0F, 66.2F}) {
+                const cv::Vec3f sample = polar_lab(lightness, chroma, hue);
+                INFO("L " << lightness << " chroma " << chroma << " hue " << hue);
+                // Production's absolute classifier calls these white...
+                REQUIRE(classify_lab(sample).color == FacetColor::white);
+                // ...so a virgin session model, whose whole bootstrap claim
+                // is that it IS that classifier, must agree.
+                REQUIRE(model.classify_face(uniform_face(sample)).facelets[0].color == FacetColor::white);
+            }
+        }
+    }
+}
+
+// The other side of the same branch: the widening is CONDITIONAL, and a
+// model that reproduced it by simply raising its flat ceiling to 27 would
+// swallow genuine tiles. classify_lab admits a warm-cast white only when
+// the sample is also LIGHT (L > 60) and in the orange band, precisely
+// because no rule monotone in (chroma, lightness) alone can admit runA's
+// palest white and refuse runA's F2 blue. These are the samples the branch
+// must NOT take, transcribed from that same comment.
+TEST_CASE("SessionColorModel bootstraps the warm-cast white exclusions", "[vision][session-color]") {
+    const SessionColorModel model;
+    struct Case {
+        float lightness;
+        float chroma;
+        float hue;
+    };
+    // runA F7: a true orange tile, light enough but only just, at the least
+    // chromatic reading any real tile in the orange band produced.
+    // runA F2 / U8: the blue-versus-white pair that forces the hue term.
+    for (const Case sample : {Case{54.2F, 33.6F, 60.0F}, Case{67.6F, 18.8F, 280.0F},
+                              Case{45.0F, 20.0F, 60.0F}}) {
+        const cv::Vec3f lab = polar_lab(sample.lightness, sample.chroma, sample.hue);
+        INFO("L " << sample.lightness << " chroma " << sample.chroma << " hue " << sample.hue);
+        REQUIRE(classify_lab(lab).color != FacetColor::white);
+        REQUIRE(model.classify_face(uniform_face(lab)).facelets[0].color == classify_lab(lab).color);
+    }
+}
+
+// COLD START IS BIT-IDENTICAL, swept rather than sampled.
+//
+// The three cases above pin the branch that was actually broken, but a
+// bootstrap claim tested at hand-picked points is a bootstrap claim tested
+// where someone already thought to look - and the warm-cast region got
+// missed exactly that way. This sweeps the Lab volume real stickers occupy
+// and requires the virgin model to agree with classify_lab on EVERY sample,
+// which is the constraint the whole design rests on: adaptation is only
+// safe to ship if a session with no evidence yet behaves precisely as
+// today's production classifier does.
+//
+// The steps are deliberately irrational-ish (2.5 / 0.7 / 3.1 from offset
+// origins) so no sample lands exactly on a decision edge. Edge coincidences
+// are measure-zero, genuinely ambiguous, and would be testing float
+// tie-breaking rather than the predicate.
+TEST_CASE("SessionColorModel cold start equals classify_lab across Lab", "[vision][session-color]") {
+    const SessionColorModel model;
+    int compared = 0;
+    for (float lightness = 20.3F; lightness < 95.0F; lightness += 2.5F) {
+        for (float chroma = 0.4F; chroma < 45.0F; chroma += 0.7F) {
+            for (float hue = 0.3F; hue < 360.0F; hue += 3.1F) {
+                const cv::Vec3f sample = polar_lab(lightness, chroma, hue);
+                const auto expected = classify_lab(sample).color;
+                const auto actual = model.classify_face(uniform_face(sample)).facelets[0].color;
+                if (actual != expected) {
+                    INFO("L " << lightness << " chroma " << chroma << " hue " << hue);
+                    REQUIRE(actual == expected);
+                }
+                ++compared;
+            }
+        }
+    }
+    REQUIRE(compared > 100000);
+}
+
 // ---------------------------------------------------------------------------
 // 2. Adaptation
 // ---------------------------------------------------------------------------
