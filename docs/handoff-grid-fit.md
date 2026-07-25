@@ -54,15 +54,47 @@ This was established by elimination, each step measured:
    already searches **all 4⁶ = 4096** per-face rotations and keys faces by
    centre colour. The INVALID verdict is the result of trying every roll.
    Empirically rolling a face 90° changes the distance by **zero**.
-4. Therefore: per-cell **geometric mislocalisation** — grid-fit / lattice
-   phase jitter under free rotation. The grid locks a cell off by roughly a
-   cell.
+4. Not a mid-scan layer turn — checked on live5 by grouping every good
+   per-frame read by centre colour and canonicalising the ring over the
+   four rolls. Every face has ONE dominant pattern spanning the whole clip
+   (yellow `BBRWYORWG`, 72 of 77 reads, passes 27–282); the multi-cell
+   variants are isolated 1–2 frame transients, never a persistent post-turn
+   regime. So the six faces are one cube configuration; the ≥4 error is in
+   the pipeline, not the user's hands.
+5. Therefore: per-cell **geometric mislocalisation** — a clean patch sits
+   on the wrong sticker.
 
-The stage to fix is **which sticker each quad sits on**:
-`grid_detection.cpp` (`fit_lattice_detailed`, acceptance floor
-`kMinInlierCells = 4`), `face_grid_fit.cpp` (`refit_affine`), and
-`face_observation.cpp` (`lattice_to_frame_transform`). NOT the sampling
-estimator, NOT colour, NOT the roll/gauge/routing stage.
+**And the error is SYSTEMATIC, not random jitter — this is the sharpest
+narrowing, and it corrects the "jitter" framing above.** Averaging is the
+test: if the mislocalisation were random per-frame grid jitter, fusing many
+frames would wash it out and the dominant per-face read would be correct.
+It is not. The *stable, noise-free dominant reads* — the most common ring
+per face, with transient misreads removed — are THEMSELVES ≥4 from solvable
+(0 hue-adjacent repairs to distance 4, `[.faces-confusable]`). So the same
+cells are read from a consistently-wrong position (or a consistently
+glare-corrupted one) in essentially every frame. You cannot average it
+away; you must correct a fixed geometric bias. This is the "stable-but-
+wrong trap": a systematically mislocated cell renders as a plausible real
+colour, so it never looks like an error.
+
+The stage to fix is **which sticker each quad sits on**, and specifically a
+CONSISTENT sub-cell offset in it: `grid_detection.cpp`
+(`fit_lattice_detailed`, acceptance floor `kMinInlierCells = 4`),
+`face_grid_fit.cpp` (`refit_affine`), and `face_observation.cpp`
+(`lattice_to_frame_transform`). Look for a fixed bias — a grid that sits
+slightly off the true lattice the same way every frame, an off-by-one cell
+indexing/phase error, or (on the backlit live5 clip) a specular-glare
+pattern that corrupts the same positions repeatedly. NOT the sampling
+estimator, NOT colour, NOT the roll/gauge/routing stage, and NOT temporal
+stabilisation of randomness (there is no randomness to stabilise).
+
+Caveats on the above, stated honestly: live5's orange face's best read
+carries one `unknown` cell (a second-best substitution was used to run the
+assembly test), and live5 is severely BACKLIT — some systematic error may
+be glare a front-lit capture would remove. The front-lit `good1/good2`
+clips were meant to test this but captured 0–1 faces, so the glare-vs-
+geometry split is not yet isolated. A clean front-lit six-face recording
+would settle how much of the systematic error is lighting.
 
 ## Dead ends already tried and measured — do not repeat
 
@@ -130,7 +162,16 @@ estimator, NOT colour, NOT the roll/gauge/routing stage.
     colours + 9 mean Lab, resolved faces, census, assembly verdict.
   - `[.pattern-id]` (`CUBE_PATTERN_ID_DIR=<dir>`): per reading 9 Lab triples,
     cell-quad corners, per-cell purity/MAD/area, anchor count.
-  - `[.assembly-probe]` (`CUBE_ASM_FACES=...`): the distance metric above.
+  - `[.assembly-probe]` (`CUBE_ASM_FACES=...`): the distance metric above —
+    single-relabel / two-swap / three-cycle distance of a resolved cube.
+  - `[.faces-confusable]` (`CUBE_ASM_FACES=...`): searches only HUE-ADJACENT
+    repairs (R↔O, Y↔O, G↔Y, W↔Y) to distance 4. If a scan is not repairable
+    by hue-adjacent flips, its errors are right-colour-wrong-cell (geometric),
+    not colour-naming. This is the tool that proved the fault is positional.
+  - `[.faces-probe]` (`CUBE_ASM_FACES=...`): assemble any six explicit face
+    strings through the real oracle — hand-driven companion to the above.
+  - `[.raw-probe]` (`CUBE_RAW_PROBE_DIR`): assembly distance on the RAW
+    per-cell reads, bypassing `resolve_colors`' 9-per-colour forcing.
   - `[.frame-debug]` (`CUBE_DEBUG_FRAME=<png>`, `CUBE_DEBUG_OVERLAY=<out.png>`):
     replay one frame through every stage; the overlay draws the fitted grid
     over the image — **this is your eyes on whether the grid is misplaced.**
