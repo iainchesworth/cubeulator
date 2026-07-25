@@ -313,6 +313,100 @@ TEST_CASE("a dark neutral does not fall through into a hue band", "[vision]") {
     }
 }
 
+// ---------------------------------------------------------------------------
+// The green-ward neutral reject. The chroma floor is an ABSOLUTE threshold,
+// so it is calibrated for one cube under one light; a clip whose greens are
+// crushed below it has its green stickers short-circuited to white before
+// hue is ever consulted. Both Lab triples below are real measurements read
+// out of the [.cross-session] slot rows, and both are cells the shipping
+// capture layer committed and handed to assembly as WHITE.
+// ---------------------------------------------------------------------------
+TEST_CASE("classify_lab names a crushed green sticker green, not white", "[vision]") {
+    struct Sample {
+        const char* where;
+        cv::Vec3f lab;
+    };
+    const std::array<Sample, 2> greens{{
+        // The named regression. live5 is backlit by a window: its own green
+        // CENTRE measures chroma 19.7, so this sticker at chroma 11.5 falls
+        // under a floor calibrated on a more chromatic cube. Its hue, 185.8,
+        // is dead centre of the 120-250 green band, and its distance to
+        // live5's own green centre (22.2) is shorter than to live5's own
+        // white centre (27.5). It appears in all six minimal census-fixing
+        // relabellings of the clip.
+        {"live5 F[5] chroma 11.5 hue 185.8 - the pinned defect", {61.39F, -11.46F, -1.16F}},
+        // The second one, and the reason a SESSION-relative floor could not
+        // have been the fix: live4 never captures a white centre, so it has
+        // no white reference to place a floor against. Its nearest captured
+        // centre is live4's own green at 15.8 Lab; every other centre it
+        // captured is 39+ away.
+        {"live4 L[6] chroma 9.0 hue 214.7 - no white reference in that clip",
+         {71.98F, -7.36F, -5.10F}},
+    }};
+    for (const auto& sample : greens) {
+        CAPTURE(sample.where);
+        const auto facelet = classify_lab(sample.lab);
+        REQUIRE(facelet.color == FacetColor::green);
+        // Named through the hue path, so priced by it: above the 0.2 floor
+        // it applies, and well below a saturated tile's. A zero here would
+        // mean the unknown branch answered instead.
+        REQUIRE(facelet.confidence >= 0.2F);
+        REQUIRE(facelet.confidence < 0.5F);
+    }
+}
+
+// The guard on the other side of the same gate: the whites the direction
+// test must NOT take. Passes before and after by design - it pins the
+// boundary rather than demonstrating the fix, and it was verified to FAIL
+// against the rejected variant of this change (the same gate at a* < 0),
+// which takes live4 L[0] on 1.15 units of noise.
+TEST_CASE("the green-ward reject steals no warm-cast or near-neutral white", "[vision]") {
+    struct Sample {
+        const char* where;
+        cv::Vec3f lab;
+    };
+    const std::array<Sample, 8> whites{{
+        // runD's warm-cast white face: the clip whose whites are the MOST
+        // chromatic in the corpus, reached through the soft ceiling. Every
+        // one of them points warm (a* +6.4 to +9.2), so the direction gate
+        // must be invisible to them.
+        {"runD U[1] chroma 15.8", {86.15F, 6.37F, 14.41F}},
+        {"runD D[2] chroma 17.6", {82.91F, 7.77F, 15.76F}},
+        {"runD U[8] chroma 17.8", {76.48F, 7.98F, 15.92F}},
+        {"runD L[6] chroma 18.8", {78.07F, 7.67F, 17.11F}},
+        {"runD F[2] chroma 18.9", {77.36F, 7.86F, 17.13F}},
+        {"runD D[4] chroma 19.3", {77.27F, 9.15F, 17.02F}},
+        // The most green-ward sample the neutral branch must KEEP, and the
+        // measurement that sets -4.0 rather than 0.0: a bright tile whose
+        // a* is at noise level and whose b* points hard at yellow.
+        {"live4 L[0] a* -1.15 - the closest retained white to the gate", {96.70F, -1.15F, 13.54F}},
+        // A near-neutral that clears the lightness floor by little: the
+        // gate must not be doing lightness's job.
+        {"live5 R[4] chroma 7.3 - live5's own white centre", {82.00F, 5.97F, 4.25F}},
+    }};
+    for (const auto& sample : whites) {
+        CAPTURE(sample.where);
+        REQUIRE(classify_lab(sample.lab).color == FacetColor::white);
+    }
+}
+
+// The ordering the direction gate must not disturb: the lightness reject
+// runs FIRST, so a DARK green-ward neutral is still unknown at confidence
+// zero and never reaches a hue band. Sweeping the whole circle at a chroma
+// under the floor is the same sweep the dark-neutral case above makes; it is
+// repeated here because the direction gate introduced a second way out of
+// that branch, and the commit-time unknown-cell gate depends on there being
+// none. Passes before and after by design.
+TEST_CASE("a dark green-ward neutral is still unknown, not green", "[vision]") {
+    for (int hue = 0; hue < 360; hue += 15) {
+        const auto radians = static_cast<float>(hue) * 3.14159265F / 180.0F;
+        const cv::Vec3f dark{55.0F, 12.0F * std::cos(radians), 12.0F * std::sin(radians)};
+        CAPTURE(hue);
+        REQUIRE(classify_lab(dark).color == FacetColor::unknown);
+        REQUIRE(classify_lab(dark).confidence == 0.0F);
+    }
+}
+
 TEST_CASE("resolve_colors recovers an unperturbed scan", "[vision]") {
     const SyntheticScan scan = make_scan();
     require_recovered(scan);

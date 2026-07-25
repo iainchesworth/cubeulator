@@ -200,9 +200,10 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // Measured: dropping it steals runA F2 (blue), live1 L4 and live1 D0
     // (yellow, L 66.4-66.5 at chroma 16.7/19.3) and live2 F1/F3 (blue).
     //
-    // So: an unconditional chroma floor (unchanged, for a genuinely neutral
-    // sample under any hue), plus a soft ceiling that only reopens the
-    // orange band, and only for a sample light enough to be a white tile.
+    // So: a chroma floor (for a genuinely neutral sample, subject to the
+    // direction gate documented with kNeutralWhiteMinA below), plus a soft
+    // ceiling that only reopens the orange band, and only for a sample light
+    // enough to be a white tile.
     //   soft ceiling 27  - midway across the measured 21.0 (palest white)
     //                      to 33.6 (runA F7, the least chromatic true tile
     //                      anywhere in the orange band) gap.
@@ -215,6 +216,62 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     static_assert(kWhiteChromaFloor < kWhiteChromaSoftCeiling,
                   "the soft ceiling only ever widens the floor; inverting them would make the "
                   "orange band's whites HARDER to reach than a neutral sample's");
+
+    // DIRECTION, the third thing the floor branch has to consult.
+    //
+    // The floor is an ABSOLUTE chroma threshold, so it is only ever right
+    // for a cube-and-lighting combination whose colours are at least that
+    // chromatic. live5 is backlit by a window and its greens are crushed:
+    // that clip's own GREEN CENTRE measures chroma 19.7, and its face F
+    // cell 5 - a genuine green sticker - measures L 61.4, a* -11.46,
+    // b* -1.16, chroma 11.5, hue 185.8 (dead centre of the 120-250 green
+    // band). At chroma 11.5 it is short-circuited to white before hue is
+    // ever consulted. Its Lab distance to live5's own green centre is 22.2
+    // against 27.5 to live5's own white centre, so the palette agrees with
+    // the hue: green is nearer, and white is the wrong answer.
+    //
+    // WHY NOT A SESSION-RELATIVE FLOOR. Both obvious forms were measured
+    // across all eleven recordings and both are worse:
+    //   - Midway between the session's white reference and its least
+    //     chromatic other reference. On live5 that is (7.3 + 19.7)/2 = 13.5,
+    //     which leaves F[5] at 11.5 on the WHITE side - it does not fix the
+    //     defect at all. On runB/C/D the same rule lands at 23.3-24.2 and
+    //     swallows twelve genuine BLUE stickers (chroma 19.4-24.3), which,
+    //     being dark, then come out UNKNOWN under the lightness floor and
+    //     block their faces from committing.
+    //   - Anchored near the white reference (white chroma + 3). That does
+    //     fix live5, but on the warm-cast clips the same anchor climbs to
+    //     22.1-22.3 - runD's own whites measure chroma 15.7-21.0 - and it
+    //     takes eight blues and one green on runA/B/C/D.
+    // Availability kills it independently of tuning: only five of the
+    // eleven clips ever capture a white centre at all, so on the other six
+    // - live4 among them, which has a second green-stolen-as-white cell at
+    // L[6] - a session floor has no reference to be relative TO.
+    //
+    // WHAT THE CORPUS DOES SEPARATE ON is the DIRECTION of the residual
+    // chroma, not its magnitude. This camera's neutrals render WARM: that
+    // is the whole premise of the soft ceiling above, and every one of the
+    // 48 remaining cells the white branch names across the corpus carries
+    // a* >= -1.15 (live4 L[0]), with 44 of them above +3.5. The two cells
+    // it takes wrongly are the only two pointing hard the other way -
+    // live5 F[5] at a* -11.46 and live4 L[6] at a* -7.36, whose nearest
+    // session centre is live4's own green centre at 15.8 Lab against 39+
+    // for every other centre it captured. A near-neutral sample aimed at
+    // GREEN is not a white tile under a warm cast; it is a colour whose
+    // chroma has been crushed, and the hue path already knows how to name
+    // those.
+    //
+    // -4.0 is the midpoint of the two-sided gap the corpus shows: -1.15
+    // (live4 L[0], the most green-ward sample the branch must KEEP - a
+    // bright L 96.7 tile whose a* is at noise level) to -7.36 (live4 L[6],
+    // the least green-ward sample it must REFUSE). Margin 2.85 on one side,
+    // 3.36 on the other. Deliberately not 0.0: the sign of a near-zero a*
+    // is the sign of a noise term, and keying on it flips live4 L[0] to
+    // yellow on the strength of 1.15 units of nothing.
+    constexpr float kNeutralWhiteMinA = -4.0F;
+    static_assert(kNeutralWhiteMinA < 0.0F,
+                  "the direction gate exists to refuse GREEN-ward neutrals; a non-negative bound "
+                  "would refuse the warm neutrals the branch is for");
 
     // The lightness floor applies to BOTH white branches, not just the
     // warm-cast one below.
@@ -244,13 +301,32 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     //   - mean_confidence() feeds dropMostSuspectSlot as an ARGMIN, so a
     //     face made of background must score WORST. At confidence ~1.0 it
     //     scored best and a correctly-read face was dropped instead.
-    if (chroma < kWhiteChromaFloor) {
-        if (lab[0] <= kWhiteLightnessFloor) {
-            return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
-        }
+    const bool near_neutral = chroma < kWhiteChromaFloor;
+    // The lightness reject is tested FIRST and unconditionally, ahead of the
+    // direction gate, and the order is load-bearing rather than stylistic. A
+    // dark near-neutral has a hue that is the arctangent of two noise terms
+    // - which means it also has an a* SIGN that is the sign of a noise term.
+    // Letting such a sample reach the direction gate would hand roughly half
+    // the lattice gaps and shadowed background cells a green-ward a*, drop
+    // them through to the hue bands, and hand them the 0.2 confidence FLOOR
+    // the bands apply - dismantling the unknown reject and the commit-time
+    // unknown-cell gate that depends on it. Below the lightness floor the
+    // answer stays unknown at confidence zero no matter which way the sample
+    // points.
+    if (near_neutral && lab[0] <= kWhiteLightnessFloor) {
+        return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
+    }
+    if (near_neutral && lab[1] > kNeutralWhiteMinA) {
         const float confidence = std::clamp(1.0F - chroma / (2.0F * kWhiteChromaFloor), 0.0F, 1.0F);
         return Facelet{.color = FacetColor::white, .confidence = confidence};
     }
+    // A green-ward near-neutral falls THROUGH to the hue bands below. It
+    // cannot be caught by the warm-cast branch on the way: that branch
+    // requires hue in [44, 75), which requires a* > 0, and this sample's a*
+    // is at most -4. Its confidence therefore comes from the hue path's
+    // chroma/30 expression - low, as a crushed tile should be, but above the
+    // 0.2 floor rather than at zero, because a hue this far from the warm
+    // axis is a real measurement and not noise.
     const bool warm_cast_white = chroma < kWhiteChromaSoftCeiling &&
                                  lab[0] > kWhiteLightnessFloor && hue >= kOrangeHueMinDeg &&
                                  hue < kOrangeHueMaxDeg;
