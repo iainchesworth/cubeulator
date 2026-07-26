@@ -1,10 +1,54 @@
 # Handoff: camera recording → fitted cube model that assembles
 
 You are picking up a hard, well-diagnosed problem in the Cubeulator repo. A
-previous multi-day effort narrowed the failure to a single stage. Your job
-is to make a recorded scan produce a **physically valid, solvable** cube.
-Read this whole brief before touching code — it exists to stop you
-repeating a day of dead ends.
+previous multi-day effort narrowed the failure. Your job is to make a
+recorded scan produce a **physically valid, solvable** cube. Read this whole
+brief before touching code — it exists to stop you repeating a day of dead
+ends.
+
+## LATEST UPDATE (2026-07-26) — read this first, it changes the direction
+
+A neutral-daylight, square-on capture (`recordings/daylight`) was recorded
+and the fitted grid was inspected directly with `[.frame-debug]` +
+`CUBE_DEBUG_OVERLAY`. The overlays are kept as evidence at
+`docs/evidence/daylight-grid-overlay-{1,2}.png` (source frame:
+`daylight-frame-1.jpg`). They change the picture materially:
+
+- **The grid is placed CORRECTLY on still, square-on, neutrally-lit faces.**
+  The nine sample boxes sit squarely on the nine stickers, and **7 of 9
+  cells classify correctly**. The "systematic geometric mislocalisation"
+  below is a property of the BACKLIT, heavily-rotated `live5` clip — it is
+  NOT a property of a clean square-on capture. Geometry is not fundamentally
+  broken.
+- On the good daylight frames the residual is **two colour-boundary errors,
+  consistent across frames** (both visible in the overlays):
+  - **green → `unknown`**: the cube's green renders desaturated, cell Lab
+    ≈ (56, −9, −3), chroma ~9 — below the white chroma floor, then abstained
+    by the lightness floor. The green *centre* is equally desaturated, so
+    session-relative classification (against observed centres) fixes it;
+    an absolute floor cannot.
+  - **orange → red**: cell hue ≈ 40°, just under the fixed 44° red/orange
+    band edge, so orange is named red. Again the orange *centre* is equally
+    hue-shifted — relative classification fixes it.
+- Therefore the problem decomposes into **(a) coverage** — the daylight clip
+  committed **0 of 6** faces despite 493 good detected frames, the
+  free-rotation routing/tracker gates rejecting everything — and **(b) two
+  known colour-boundary fixes**. Neither is deep grid-fit surgery.
+
+**Revised recommended direction:** build **guided per-face capture** (hold
+one face still, square-on — which is exactly the condition under which the
+overlays show geometry already works, and which also removes the coverage
+wall), plus the two session-relative colour-boundary fixes above. This is a
+better-evidenced and smaller target than the grid-fit refinement the rest of
+this brief describes. The material below remains accurate for the
+free-rotation `live5` path and is the right reading if you pursue that
+instead — but the daylight overlays are the reason to prefer guided capture.
+
+Lighting matters and is measured: WARM tungsten light is a distinct failure
+mode (it crushes green/white so badly they will not capture — see the
+`goodlit`/`goodlit2` clips, 4–5 faces, green missing); NEUTRAL daylight is
+required. Backlighting (`live5`) degrades geometry. Front, neutral, diffuse
+is the capture target.
 
 ## The goal, stated as a measurable
 
