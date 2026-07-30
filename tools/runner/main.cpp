@@ -17,6 +17,7 @@
 #include <cube/model/facelet.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
+#include <cube/vision/recording_v2.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
 #include <cube/vision/pipeline/trace.hpp>
 
@@ -26,12 +27,14 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <thread>
 #include <fstream>
 #include <map>
 #include <optional>
@@ -372,11 +375,79 @@ int write_synth_recording(const fs::path& dir, int frames) {
     return 0;
 }
 
+// Recording integrity audit + manifest summary (recorder v2's exit-gate
+// check: zero dropped frames, contiguous index, files present, state
+// valid).
+int check_clip(const fs::path& dir) {
+    namespace v2 = cube::vision::recording;
+    if (const auto manifest = v2::read_manifest(dir.string())) {
+        std::printf("manifest: state=%s  lighting=\"%s\"  motion=\"%s\"  camera=\"%s\"  cube=\"%s\"\n",
+                    manifest->state ? manifest->state->c_str() : "(none)", manifest->lighting.c_str(),
+                    manifest->motion_script.c_str(), manifest->camera.c_str(), manifest->cube.c_str());
+    } else {
+        std::printf("manifest: none (pre-v2 recording)\n");
+    }
+    if (const auto problem = v2::check_recording(dir.string())) {
+        std::printf("check: FAIL - %s\n", problem->c_str());
+        return 1;
+    }
+    std::printf("check: OK\n");
+    return 0;
+}
+
+// Throughput bench for the async recorder (docs/pipeline-plan.md P0 item
+// 2: measure BEFORE the user recording session). Random-noise frames are
+// the JPEG encoder's worst case, so a clean bench here is a safe margin.
+int bench_recorder(const fs::path& dir, int frames, int width, int height, int fps) {
+    namespace v2 = cube::vision::recording;
+    fs::remove_all(dir);
+    v2::Manifest manifest;
+    manifest.camera = "bench";
+    manifest.motion_script = "synthetic noise bench";
+    v2::AsyncRecorder recorder;
+    if (const auto problem = recorder.start(dir.string(), manifest, true)) {
+        std::fprintf(stderr, "error: %s\n", problem->c_str());
+        return 2;
+    }
+    std::vector<cv::Mat> pool(8);
+    for (auto& m : pool) {
+        m.create(height, width, CV_8UC3);
+        cv::randu(m, cv::Scalar(0, 0, 0), cv::Scalar(255, 255, 255));
+    }
+    const auto period = std::chrono::microseconds(1000000 / std::max(1, fps));
+    const auto start = std::chrono::steady_clock::now();
+    auto next = start;
+    for (int i = 0; i < frames; ++i) {
+        recorder.push(pool[static_cast<std::size_t>(i) % pool.size()],
+                      std::chrono::duration_cast<std::chrono::milliseconds>(next - start).count());
+        next += period;
+        std::this_thread::sleep_until(next);
+    }
+    const auto stats = recorder.stop();
+    const double wall_s =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+    std::uintmax_t bytes = 0;
+    for (const auto& entry : fs::recursive_directory_iterator(dir)) {
+        if (entry.is_regular_file()) {
+            bytes += entry.file_size();
+        }
+    }
+    std::printf("bench: %dx%d @ %d fps, %d frames in %.1f s\n", width, height, fps, frames, wall_s);
+    std::printf("  pushed %d  written %d  dropped %d  queue peak %d/%d\n", stats.pushed, stats.written,
+                stats.dropped, stats.queue_peak, 256);
+    std::printf("  disk %.1f MB (%.1f MB/s)\n", static_cast<double>(bytes) / 1e6,
+                static_cast<double>(bytes) / 1e6 / wall_s);
+    std::printf("  verdict: %s\n", stats.dropped == 0 ? "OK - no drops" : "FAIL - recorder cannot keep up");
+    return stats.dropped == 0 ? 0 : 1;
+}
+
 int usage() {
     std::fprintf(stderr,
                  "usage:\n"
                  "  cube_pipeline_runner replay <recording-dir> [--out <dir>] [--no-video] [--max-frames N]\n"
                  "  cube_pipeline_runner corpus <root-dir> [--out <dir>]\n"
+                 "  cube_pipeline_runner check <recording-dir>\n"
+                 "  cube_pipeline_runner bench-recorder <out-dir> [--frames N] [--size WxH] [--fps N]\n"
                  "  cube_pipeline_runner synth <out-dir> [--frames N]\n");
     return 2;
 }
@@ -394,6 +465,9 @@ int main(int argc, char** argv) {
     bool write_video = true;
     int max_frames = 0;
     int synth_frames = 120;
+    int bench_w = 1280;
+    int bench_h = 720;
+    int bench_fps = 30;
     for (int i = 3; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--out" && i + 1 < argc) {
@@ -404,6 +478,16 @@ int main(int argc, char** argv) {
             max_frames = std::atoi(argv[++i]);
         } else if (arg == "--frames" && i + 1 < argc) {
             synth_frames = std::atoi(argv[++i]);
+        } else if (arg == "--fps" && i + 1 < argc) {
+            bench_fps = std::atoi(argv[++i]);
+        } else if (arg == "--size" && i + 1 < argc) {
+            const std::string size = argv[++i];
+            const auto x = size.find('x');
+            if (x == std::string::npos) {
+                return usage();
+            }
+            bench_w = std::atoi(size.c_str());
+            bench_h = std::atoi(size.c_str() + x + 1);
         } else {
             return usage();
         }
@@ -411,6 +495,12 @@ int main(int argc, char** argv) {
 
     if (mode == "synth") {
         return write_synth_recording(target, synth_frames);
+    }
+    if (mode == "check") {
+        return check_clip(target);
+    }
+    if (mode == "bench-recorder") {
+        return bench_recorder(target, synth_frames, bench_w, bench_h, bench_fps);
     }
     if (mode == "replay") {
         ClipMetrics metrics;
