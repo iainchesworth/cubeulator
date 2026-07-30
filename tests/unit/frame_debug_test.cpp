@@ -23,6 +23,7 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/idle_gate.hpp>
@@ -435,10 +436,10 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                center.y < static_cast<float>(bounds.rows);
     };
 
-    // Matches the live overlay/seed hold window (kOverlayHoldMs in
-    // scan_session.cpp), same constant tracker_sweep_test.cpp keeps: a pose
-    // the overlay already dropped is too stale to hint or seed with.
-    constexpr std::int64_t kSeedHoldMs = 450;
+    // The live overlay/seed hold window, from the shared shipping-policy
+    // header: a pose the overlay already dropped is too stale to hint or
+    // seed with.
+    constexpr std::int64_t kSeedHoldMs = cube::vision::gates::kOverlayHoldMs;
     std::optional<cube::vision::PoseSeed> seed_prior;
     std::int64_t seed_t_ms = 0;
 

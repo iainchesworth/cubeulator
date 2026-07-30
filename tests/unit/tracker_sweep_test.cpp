@@ -56,6 +56,7 @@
 #include <cube/model/face.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
@@ -84,7 +85,7 @@ namespace {
 // Matches the live overlay/seed hold window (kOverlayHoldMs in
 // scan_session.cpp): a pose the overlay already dropped is too stale to
 // bias the next solve's arbitration.
-constexpr std::int64_t kSeedHoldMs = 450;
+constexpr std::int64_t kSeedHoldMs = cube::vision::gates::kOverlayHoldMs;
 
 // Everything one variant may move: the tracker's config plus the idle
 // gate's probe cadence (kIdleEscapeEvery made a constructor knob for

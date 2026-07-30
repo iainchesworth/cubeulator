@@ -7,6 +7,7 @@
 #include <cube/model/color_scheme.hpp>
 #include <cube/model/face.hpp>
 #include <cube/solver/scan_assembly.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
@@ -73,35 +74,23 @@ constexpr int kHandOnnxDecimation = 4;
 constexpr int kHandOnnxDecimationLost = 16;
 
 // --- capture gates (see tryCommitConverged) --------------------------------
-// Primary gate: commits require a LOCKED track whose identity has this
-// many consecutive accepted resolutions behind it - a fresh re-lock must
-// re-prove itself before its routing is trusted with a write.
-constexpr int kMinCaptureAccepts = 3;
-// Per-identity staleness: convergence means "consistent across
-// consecutive-ish frames" (the lesson the old global 700 ms reset
-// encoded), but identity-keyed windows legitimately pause while the user
-// shows OTHER faces - only a gap long enough for lighting to have drifted
-// resets a face's window now, because the identity key already guarantees
-// the samples belong to the same physical face.
-constexpr std::int64_t kIdentityAggStaleMs = 5000;
-// Frontal-ness: beyond ~35 degrees a face view foreshortens too much to
-// trust colours; a corner view reads its flank faces obliquely by
-// construction, so faces whose window took corner samples get the looser
-// corner bound instead.
-constexpr float kMaxFaceCaptureDeg = 35.0F;
-constexpr float kMaxCornerFlankDeg = 70.0F;
-// Motion: a commit mid-turn samples blur. The resolved per-pass rotation
-// bounds actual cube motion; the stability score (threshold well above
-// its 0.02 steady floor) bounds scene motion the pose can't see.
-constexpr float kMaxCaptureRotDeg = 8.0F;
-constexpr float kMaxCaptureMotionScore = 0.05F;
+// The gate values and their rationale live in cube/vision/capture_gates.hpp
+// so the offline replay harnesses measure the shipping policy by
+// construction — they used to hand-transcribe these constants.
+using cube::vision::gates::kIdentityAggStaleMs;
+using cube::vision::gates::kMaxCaptureMotionScore;
+using cube::vision::gates::kMaxCaptureRotDeg;
+using cube::vision::gates::kMaxCornerFlankDeg;
+using cube::vision::gates::kMaxFaceCaptureDeg;
+using cube::vision::gates::kMinCaptureAccepts;
 
 // AR-overlay persistence (display-only; see handleAnalysisFinished): held
-// geometry outlives a detection blip by this long, fading via
-// overlayFreshness, so the overlay doesn't strobe at the per-frame
-// detection rate. Fresh geometry is blended toward the held geometry by
-// (1 - kOverlaySmoothing) to damp frame-to-frame jitter.
-constexpr qint64 kOverlayHoldMs = 450;
+// geometry outlives a detection blip for the shared hold window (also in
+// capture_gates.hpp — the replay harnesses hold seeds/hints for the same
+// window), fading via overlayFreshness, so the overlay doesn't strobe at
+// the per-frame detection rate. Fresh geometry is blended toward the held
+// geometry by (1 - kOverlaySmoothing) to damp frame-to-frame jitter.
+using cube::vision::gates::kOverlayHoldMs;
 constexpr float kOverlaySmoothing = 0.6F;
 
 // Pose-quaternion smoothing (see cubeOrientation): each fresh valid
