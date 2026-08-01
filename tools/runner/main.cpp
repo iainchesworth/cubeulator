@@ -16,6 +16,7 @@
 
 #include <cube/model/facelet.hpp>
 #include <cube/vision/frame_recording.hpp>
+#include <cube/vision/groundtruth.hpp>
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
 #include <cube/vision/recording_v2.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
@@ -169,7 +170,104 @@ struct ClipMetrics {
     std::map<std::string, double> stage_ms_total;
     std::map<std::string, double> stage_ms_max;
     int trace_violations = 0;
+
+    // Ground-truth-scored metrics (docs/pipeline-metrics.md), computed
+    // only when the clip carries sidecars. -1 = not computable (no
+    // labels, or no frames in the denominator's segment class).
+    bool has_ground_truth = false;
+    int gt_inframe_frames = 0;      // in_frame, not occluded
+    int gt_inframe_detected = 0;
+    int gt_occluded_frames = 0;
+    int gt_occluded_detected = 0;
+    int gt_absent_frames = 0;
+    int gt_fp_sustained_runs = 0;   // >=5 consecutive found-frames inside absent segments
+    int gt_keyframes_scored = 0;    // hand-clicked keyframes with a matched detected face
+    std::vector<double> gt_centre_err_pitch;  // per labelled sticker centre, err / pitch
+    int gt_whole_cell_misassignments = 0;     // centre error > 50% of pitch
 };
+
+// Median/p95 of an unsorted sample vector (copies; fine at these sizes).
+std::pair<double, double> median_p95(std::vector<double> values) {
+    if (values.empty()) {
+        return {-1.0, -1.0};
+    }
+    std::sort(values.begin(), values.end());
+    const auto at = [&values](double q) {
+        const auto index = std::min(values.size() - 1, static_cast<std::size_t>(q * static_cast<double>(values.size())));
+        return values[index];
+    };
+    return {at(0.5), at(0.95)};
+}
+
+// Score one hand-clicked keyframe against this frame's detected faces:
+// match each labelled face to the nearest detected face view by quad
+// centre (within half the labelled quad diagonal), then accumulate cell
+// centre errors as fractions of the labelled sticker pitch
+// (docs/pipeline-metrics.md "cell-centre error"). Content-agnostic - no
+// face identity needed, so it works under the legacy adapter too.
+void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
+                    const cube::vision::pipeline::LegacyPipelineResult& result, ClipMetrics& metrics) {
+    bool scored_any = false;
+    for (const auto& labelled : keyframe.faces) {
+        cv::Point2f label_centre(0.0F, 0.0F);
+        for (const auto& corner : labelled.quad) {
+            label_centre += corner;
+        }
+        label_centre *= 0.25F;
+        const float diagonal = static_cast<float>(cv::norm(labelled.quad[0] - labelled.quad[2]));
+
+        // Labelled sticker pitch: median adjacent-centre distance.
+        std::vector<double> gaps;
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 2; ++col) {
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>(row * 3 + col + 1)] -
+                                        labelled.centres[static_cast<std::size_t>(row * 3 + col)]));
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>((col + 1) * 3 + row)] -
+                                        labelled.centres[static_cast<std::size_t>(col * 3 + row)]));
+            }
+        }
+        std::sort(gaps.begin(), gaps.end());
+        const double pitch = gaps[gaps.size() / 2];
+        if (pitch <= 0.0) {
+            continue;
+        }
+
+        // Nearest detected capture-grade face view with cells.
+        int best = -1;
+        double best_distance = diagonal * 0.5;
+        for (std::size_t f = 0; f < result.faces.faces.size(); ++f) {
+            if (f >= result.cells.faces.size()) {
+                continue;
+            }
+            cv::Point2f detected_centre(0.0F, 0.0F);
+            for (const auto& corner : result.faces.faces[f].quad) {
+                detected_centre += corner;
+            }
+            detected_centre *= 0.25F;
+            const double distance = cv::norm(detected_centre - label_centre);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best = static_cast<int>(f);
+            }
+        }
+        if (best < 0) {
+            continue;
+        }
+        scored_any = true;
+        for (std::size_t c = 0; c < 9; ++c) {
+            const auto& cell = result.cells.faces[static_cast<std::size_t>(best)].cells[c];
+            cv::Point2f cell_centre(0.0F, 0.0F);
+            for (const auto& corner : cell.corners) {
+                cell_centre += corner;
+            }
+            cell_centre *= 0.25F;
+            const double err = cv::norm(cell_centre - labelled.centres[c]) / pitch;
+            metrics.gt_centre_err_pitch.push_back(err);
+            metrics.gt_whole_cell_misassignments += err > 0.5 ? 1 : 0;
+        }
+    }
+    metrics.gt_keyframes_scored += scored_any ? 1 : 0;
+}
 
 void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     std::ofstream out(path, std::ios::trunc);
@@ -198,7 +296,23 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     write_map("state_counts", m.state_counts, [&out](int v) { out << v; }, true);
     write_map("gate_counts", m.gate_counts, [&out](int v) { out << v; }, true);
     write_map("stage_ms_total", m.stage_ms_total, [&out](double v) { out << v; }, true);
-    write_map("stage_ms_max", m.stage_ms_max, [&out](double v) { out << v; }, false);
+    write_map("stage_ms_max", m.stage_ms_max, [&out](double v) { out << v; }, m.has_ground_truth);
+    if (m.has_ground_truth) {
+        const auto [centre_median, centre_p95] = median_p95(m.gt_centre_err_pitch);
+        out << "  \"ground_truth\": {\n";
+        out << "    \"inframe_frames\": " << m.gt_inframe_frames << ",\n";
+        out << "    \"inframe_detected\": " << m.gt_inframe_detected << ",\n";
+        out << "    \"occluded_frames\": " << m.gt_occluded_frames << ",\n";
+        out << "    \"occluded_detected\": " << m.gt_occluded_detected << ",\n";
+        out << "    \"absent_frames\": " << m.gt_absent_frames << ",\n";
+        out << "    \"fp_sustained_runs\": " << m.gt_fp_sustained_runs << ",\n";
+        out << "    \"keyframes_scored\": " << m.gt_keyframes_scored << ",\n";
+        out << "    \"centre_err_pitch_median\": " << centre_median << ",\n";
+        out << "    \"centre_err_pitch_p95\": " << centre_p95 << ",\n";
+        out << "    \"centre_err_samples\": " << m.gt_centre_err_pitch.size() << ",\n";
+        out << "    \"whole_cell_misassignments\": " << m.gt_whole_cell_misassignments << "\n";
+        out << "  }\n";
+    }
     out << "}\n";
 }
 
@@ -212,6 +326,17 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     const auto rows = recording::read_index(index_stream);
     metrics.clip = dir.filename().string();
     metrics.frames_indexed = static_cast<int>(rows.size());
+
+    // Ground truth, when the clip carries it (docs/ground-truth-format.md).
+    namespace gt = cube::vision::groundtruth;
+    gt::ClipGroundTruth truth;
+    if (auto loaded = gt::load_clip(dir.string())) {
+        truth = std::move(*loaded);
+        metrics.has_ground_truth = truth.segments.has_value() || !truth.keyframes.empty();
+    } else {
+        std::fprintf(stderr, "warning: ground truth unreadable, scoring without it: %s\n", loaded.error().c_str());
+    }
+    int fp_run = 0;  // consecutive found-frames inside absent segments
 
     int max_pass = 0;
     for (const auto& row : rows) {
@@ -266,6 +391,32 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
             ++metrics.trace_violations;
         }
         trace_out << pipeline::to_jsonl(result.trace) << "\n";
+
+        if (truth.segments) {
+            const gt::TagSet tags = truth.segments->tags_at(row.pass);
+            if ((tags & gt::kAbsent) != 0) {
+                ++metrics.gt_absent_frames;
+                fp_run = result.detection.found ? fp_run + 1 : 0;
+                if (fp_run == gt::kSustainedFrames) {
+                    ++metrics.gt_fp_sustained_runs;  // counted once per run, at threshold
+                }
+            } else {
+                fp_run = 0;
+                if ((tags & gt::kInFrame) != 0) {
+                    if ((tags & gt::kOccluded) != 0) {
+                        ++metrics.gt_occluded_frames;
+                        metrics.gt_occluded_detected += result.detection.found ? 1 : 0;
+                    } else {
+                        ++metrics.gt_inframe_frames;
+                        metrics.gt_inframe_detected += result.detection.found ? 1 : 0;
+                    }
+                }
+            }
+        }
+        if (const auto keyframe = truth.keyframes.find(row.pass);
+            keyframe != truth.keyframes.end() && !keyframe->second.interpolated) {
+            score_keyframe(keyframe->second, result, metrics);
+        }
 
         metrics.frames_detected += result.detection.found ? 1 : 0;
         metrics.frames_pose_valid += result.track.pose_valid ? 1 : 0;
@@ -327,6 +478,19 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 100.0 * static_cast<double>(metrics.cells_unknown) /
                     std::max<std::int64_t>(1, metrics.cells_classified),
                 metrics.trace_violations > 0 ? "  TRACE-VIOLATIONS" : "");
+    if (metrics.has_ground_truth) {
+        const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
+        std::printf("  ground truth: det(in_frame) %s  det(occluded) %s  fp-sustained %d  "
+                    "centre-err median %.3f p95 %.3f (of pitch, %zu samples)  misassigned %d  keyframes %d\n",
+                    metrics.gt_inframe_frames > 0
+                        ? (std::to_string(100 * metrics.gt_inframe_detected / metrics.gt_inframe_frames) + "%").c_str()
+                        : "n/a",
+                    metrics.gt_occluded_frames > 0
+                        ? (std::to_string(100 * metrics.gt_occluded_detected / metrics.gt_occluded_frames) + "%").c_str()
+                        : "n/a",
+                    metrics.gt_fp_sustained_runs, centre_median, centre_p95, metrics.gt_centre_err_pitch.size(),
+                    metrics.gt_whole_cell_misassignments, metrics.gt_keyframes_scored);
+    }
     return metrics.trace_violations == 0 ? 0 : 3;
 }
 
