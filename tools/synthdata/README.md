@@ -159,6 +159,40 @@ validation shows a sim-to-real gap):
   (2026-07-30). It must emit labels through `labels.py` so the format
   cannot drift.
 
+## Synthetic corpus (`make_corpus.py`)
+
+Separate from the training-image generator above: emits a small corpus of
+**recording-format clips** (`rec_%06d.jpg` q90 640x480 + `index.csv` +
+`manifest.json`, per `frame_recording.hpp`) with an exact, auto-generated
+`groundtruth/` sidecar per `docs/ground-truth-format.md`, so Phases 1-2
+have a fully labelled corpus before real footage exists:
+
+```powershell
+.venv/Scripts/python make_corpus.py --out D:/cubeulator-build/synth-corpus --seed 0
+```
+
+Five clip classes: `steady` (240 frames, sub-pixel jitter), `freerot`
+(400, slerp SO(3) trajectory), `occlusion` (300, sweeping finger
+occluders + 3 full-occlusion gaps), `absent` (120, background only),
+`exit-reentry` (300, 4 full frame exits/returns). Labels are analytic
+projections (written `interpolated: false` - exact by construction);
+every frame gets a keyframe file, segment tags are **measured** from the
+rendered masks, and re-entry events are derived, not scripted. Manifest
+states are scrambled by a real quarter-turn move engine operating on the
+cube.hpp facelet layout (scramble recorded in `motion_script`) and are
+validated by the C++ solver oracle via `cube_pipeline_runner check`.
+
+Convention notes: keyframe corner ids are **Singmaster** (0 URF .. 7 DRB);
+the mapping from this generator's binary corner order is
+`[6, 7, 2, 3, 5, 4, 1, 0]`. The manifest/ground-truth facelet grid
+differs from `cube_model._F`'s Kociemba-style layout on R, D and B; the
+conversion is geometric (per sticker 3-D position) and pinned by
+`make_corpus.py`'s selftests, which also verify rendered sticker colours
+against the manifest state pixel-by-pixel. Occluder-covered corners and
+faces are still labelled (positional truth); frames with zero visible
+cube pixels are tagged `absent`, and keyframes are empty only when the
+cube is genuinely out of frame (or there is no cube).
+
 ## Files
 
 - `generate.py` -- CLI; `--backend numpy` (works today) or `--backend
