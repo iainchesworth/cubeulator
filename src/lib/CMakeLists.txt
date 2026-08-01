@@ -74,6 +74,7 @@ target_sources(cube_lib
         src/vision/pipeline/trace.cpp
         src/vision/pipeline/legacy_pipeline.cpp
         src/vision/recording_v2.cpp
+        src/vision/groundtruth.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 
