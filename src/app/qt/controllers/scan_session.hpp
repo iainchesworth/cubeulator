@@ -542,6 +542,9 @@ private:
     // blend.
     std::array<float, 4> smoothed_orientation_{1.0F, 0.0F, 0.0F, 0.0F};
     bool has_smoothed_orientation_ = false;
+    // Last pass carried a continuous-track (M3T) pose: trackingState and
+    // the display paths follow it over the legacy tracker's verdict.
+    bool last_pose_from_track_ = false;
     // Frame time of the last REAL (locked/coasting) orientation sample, so a
     // brief lost/acquiring gap can hold the last pose instead of resetting
     // the 3D view to its idle presentation. See kOrientationHoldMs.

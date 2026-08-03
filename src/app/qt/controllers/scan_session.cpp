@@ -821,7 +821,18 @@ void ScanSession::setPreviewMirrored(bool mirrored) {
     emit readingChanged();
 }
 
-QString ScanSession::trackingState() const { return QString::fromLatin1(track_state_name(tracker_.state())); }
+QString ScanSession::trackingState() const {
+    // A live continuous-track pose outranks the legacy tracker's verdict
+    // for the UI: measured on a live diagnosis session, the M3T lock was
+    // live for 75% of passes while the legacy tracker - whose
+    // plausibility gates refuse the track's frame convention - reported
+    // "lost" 85% of the time, so the chip told the user the opposite of
+    // what the wireframe was doing.
+    if (last_pose_from_track_) {
+        return QStringLiteral("locked");
+    }
+    return QString::fromLatin1(track_state_name(tracker_.state()));
+}
 
 qreal ScanSession::overlayFreshness() const {
     if (!face_observation_ && !corner_observation_ && !cube_pose_) {
@@ -1385,6 +1396,7 @@ void ScanSession::handleAnalysisFinished() {
             // An edge-sourced pose deliberately attaches nothing: the
             // observation carries no colour by design.
         }
+        last_pose_from_track_ = result.pose_from_track;
         track = tracker_.on_pass(track_in);
 
         // Display smoothing - the same nlerp the raw pose stream used to
