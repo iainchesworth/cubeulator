@@ -383,6 +383,11 @@ private:
         // value across unchecked passes.
         bool hand_present = false;
         bool hand_checked = false;
+        // The pass's pose came from the continuous 6-DoF track (the live
+        // M3T loop, CUBE_VISION_TRACKER=m3t): the display paths follow it
+        // directly instead of the legacy orientation tracker, whose
+        // plausibility gates speak a different frame convention.
+        bool pose_from_track = false;
         // Cool-hue presence statistic for the cube-absent idle gate (see
         // cube/vision/idle_gate.hpp), computed on EVERY pass - including
         // idle-skipped ones, since it is the signal that ends an idle

@@ -56,6 +56,14 @@ public:
     [[nodiscard]] bool attached() const { return detector_ != nullptr; }
     [[nodiscard]] bool has_tracker() const { return tracker_ != nullptr; }
 
+    // While the track is LIVE, run the (expensive) detector only every
+    // n-th frame - the tracker steps every frame, health is checked on
+    // detect frames. 1 (default) = detect every frame, the offline
+    // metrics contract; the live app raises it to trade health cadence
+    // for pass rate. While lost the detector always runs (re-anchor
+    // needs it).
+    void set_live_detect_interval(int n) { live_detect_interval_ = n > 1 ? n : 1; }
+
     // One frame through detect + track. Safe to call with nothing
     // attached (returns an empty result).
     [[nodiscard]] DetectTrackResult process(const cv::Mat& bgr_frame);
@@ -68,6 +76,8 @@ private:
     bool live_ = false;
     int health_fail_streak_ = 0;
     int reinits_ = 0;
+    int live_detect_interval_ = 1;
+    int frames_since_detect_ = 0;
 };
 
 }  // namespace cube::vision::pipeline

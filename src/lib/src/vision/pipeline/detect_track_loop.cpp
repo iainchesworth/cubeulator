@@ -16,8 +16,14 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
         return result;
     }
 
-    if (auto detected = detector_->detect(bgr_frame); detected.has_value()) {
-        result.detection = *detected;
+    // Detector decimation applies only while live (a lost loop needs the
+    // detector every frame to re-anchor).
+    const bool run_detector = !live_ || live_detect_interval_ <= 1 || ++frames_since_detect_ >= live_detect_interval_;
+    if (run_detector) {
+        frames_since_detect_ = 0;
+        if (auto detected = detector_->detect(bgr_frame); detected.has_value()) {
+            result.detection = *detected;
+        }
     }
 
     // Single-frame PnP whenever enough identified corners exist - the
@@ -111,6 +117,7 @@ void DetectTrackLoop::reset() {
     live_ = false;
     health_fail_streak_ = 0;
     reinits_ = 0;
+    frames_since_detect_ = 0;
 }
 
 }  // namespace cube::vision::pipeline

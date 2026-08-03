@@ -240,6 +240,11 @@ std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& ana
                 detector = std::move(*created);
                 tracker = std::make_unique<cube::track_m3t::M3tPoseTracker>();
                 loop.attach(detector.get(), tracker.get());
+                // Detector every 3rd pass while locked: the M3T step is
+                // ~1-2 ms, the ONNX detector tens of ms - this is what
+                // buys live tracking cadence (the offline runner keeps
+                // every-frame detection for its metrics).
+                loop.set_live_detect_interval(3);
             }
         }
         if (!loop.attached()) {
@@ -1389,12 +1394,17 @@ void ScanSession::handleAnalysisFinished() {
         // must go empty (QML idles), and the next lock must adopt the new
         // orientation outright instead of visibly easing over from a dead
         // track's pose.
-        if (track.state == cube::vision::TrackState::locked ||
+        if (result.pose_from_track || track.state == cube::vision::TrackState::locked ||
             track.state == cube::vision::TrackState::coasting) {
             // Stamped only for a REAL sample, never while holding one -
             // refreshing it during the hold would make the hold immortal.
             last_orientation_ms_ = result.frame_ms;
-            const std::array<float, 4>& fresh = track.q_track;
+            // A pose from the continuous track feeds the display DIRECTLY:
+            // the legacy tracker's plausibility gates speak a different
+            // frame convention and would refuse/coast it (the P2.5 known
+            // limitation this closes).
+            const std::array<float, 4>& fresh =
+                result.pose_from_track && result.pose ? result.pose->orientation : track.q_track;
             if (!has_smoothed_orientation_) {
                 smoothed_orientation_ = fresh;
                 has_smoothed_orientation_ = true;
@@ -1648,6 +1658,25 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         return result;
     }
 
+#ifdef CUBE_HAVE_M3T
+    // Live M3T lock runs FIRST (Phase 2): while the track is live the
+    // legacy detector cascade below is SKIPPED entirely - the wireframe
+    // and 3D model follow the track, the pass budget collapses to
+    // detector(decimated)+step (the cadence the region tracker needs),
+    // and the overlay loses the legacy quads/cell dots, which were this
+    // cascade's output. Colour capture is Phase 3's concern; under this
+    // demo flag a pass is a tracking pass.
+    if (auto locked = live_m3t_lock(analysis_frame, scale_back); locked.has_value()) {
+        result.pose = *locked;
+        result.pose_from_track = true;
+        VisionDebugStats m3t_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+        m3t_stats.face_status = "m3t-locked";
+        m3t_stats.corner_status = "m3t-locked";
+        dump_vision_debug(analysis_frame, m3t_stats);
+        return result;
+    }
+#endif
+
     // A cell projected outside the frame samples fabricated colour (a
     // clamped border strip, or corner sampling's all-zero fallback) that is
     // perfectly stable frame to frame - stable enough to pass temporal
@@ -1820,22 +1849,6 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
             debug_stats.edge_status = "none";
         }
     }
-
-#ifdef CUBE_HAVE_M3T
-    // Live continuous 6-DoF lock (Phase 2 demo surface): env-gated on
-    // CUBE_VISION_TRACKER=m3t, runs the SAME DetectTrackLoop the offline
-    // runner replays (detector + PnP anchor + M3T region step + corner
-    // health/re-init). While the track is live its pose REPLACES this
-    // pass's result.pose: the AR wireframe pins to the tracked cube and
-    // cubeOrientation drives the 3D model from the track. Worker-side
-    // statics, same locking story as the recorder (single-in-flight).
-    // Side effect worth knowing: the orientation tracker downstream then
-    // consumes the M3T orientation as q_obs - steadier, but different
-    // evidence than the legacy per-frame solves this flag replaces.
-    if (auto locked = live_m3t_lock(analysis_frame, scale_back); locked.has_value()) {
-        result.pose = *locked;
-    }
-#endif
 
     debug_stats.bright_candidates = cube::vision::detail::find_square_candidates(analysis_frame).size();
     dump_vision_debug(analysis_frame, debug_stats);
