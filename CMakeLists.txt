@@ -99,6 +99,10 @@ add_subdirectory(src/app)
 # docs/pipeline-plan.md); gated per-platform inside.
 add_subdirectory(tools)
 
+# Vendored third-party code (currently the M3T tracker for pipeline Phase 2,
+# exported as cube::m3t); desktop-only, gated per-platform inside like tools/.
+add_subdirectory(third_party)
+
 if(CUBEULATOR_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

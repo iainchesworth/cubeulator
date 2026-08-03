@@ -137,6 +137,36 @@ cube_deploy_vision_assets(cube_integration_tests)
 catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_integration_tests>")
 
+# --- Vendored M3T tracker smoke tests (desktop only) ----------------------
+# A separate tiny executable rather than more cases in cube_unit_tests:
+# linking cube::m3t would hang GLEW/GLFW/OpenMP (and their DLL loads on
+# Windows) onto every fast-suite test process, purely for two hidden smoke
+# cases. Here that runtime baggage is confined to one binary. The heavy
+# cases are doubly fenced like the camera probes: hidden "[.m3t-smoke]" tag
+# AND a CUBE_M3T_SMOKE opt-in (they create a GL context and generate a
+# region model); one trivial visible case keeps the link line exercised in
+# every ordinary ctest run. Run the smoke checks with:
+#   set CUBE_M3T_SMOKE=1 && cube_m3t_tests "[.m3t-smoke]"
+if(TARGET cube::m3t)
+    add_executable(cube_m3t_tests unit/m3t_vendored_test.cpp)
+
+    target_link_libraries(cube_m3t_tests
+        PRIVATE
+            cube::m3t
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Catch2::Catch2WithMain)
+
+    # std::getenv gate, same targeted silencing as cube_integration_tests.
+    target_compile_definitions(cube_m3t_tests PRIVATE
+        "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
+
+    cube_deploy_sanitizer_runtime(cube_m3t_tests)
+
+    catch_discover_tests(cube_m3t_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
+endif()
+
 # --- Qt controller tests: needs a QCoreApplication for Qt's meta-object
 # machinery (signals/slots, NOTIFY properties), so it can't use
 # Catch2::Catch2WithMain's auto-generated main() like the two binaries
