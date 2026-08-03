@@ -139,7 +139,17 @@ if(CUBEULATOR_BUILD_APP)
     qt_add_resources(cube_app_controllers "cube_app_models"
         PREFIX "/models"
         BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
+        FILES
+            "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx"
+            "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
+
+    # The live M3T tracker (Phase 2) is desktop-only, like the vendored
+    # library itself; the scan session's env-gated live-lock hook compiles
+    # only where cube::track_m3t exists.
+    if(NOT ANDROID AND NOT IOS)
+        target_link_libraries(cube_app_controllers PRIVATE cube::track_m3t)
+        target_compile_definitions(cube_app_controllers PRIVATE CUBE_HAVE_M3T)
+    endif()
 
     target_link_libraries(cube_app_controllers
         PUBLIC

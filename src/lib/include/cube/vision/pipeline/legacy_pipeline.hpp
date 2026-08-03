@@ -30,6 +30,7 @@
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
+#include <cube/vision/pipeline/detect_track_loop.hpp>
 #include <cube/vision/pipeline/pose_tracker.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
 #include <cube/vision/pipeline/trace.hpp>
@@ -72,7 +73,10 @@ public:
     // consumes the corners directly. found/confidence/roi become the
     // learned detector's verdict - it is the stage-B primary
     // (docs/pipeline-plan.md, classical spike verdict).
-    void set_corner_detector(OnnxCornerDetector* detector) { corner_detector_ = detector; }
+    void set_corner_detector(OnnxCornerDetector* detector) {
+        corner_detector_ = detector;
+        loop_.attach(corner_detector_, pose_tracker_);
+    }
 
     // Phase 2: attach the continuous 6-DoF tracker (not owned; may be
     // nullptr). Requires a corner detector (init and health both consume
@@ -84,7 +88,10 @@ public:
     // detected corners, minimised over the 24 cube rotations
     // (view-canonical ids - see corner_detector.hpp); a streak of
     // failures drops the track and the next good detector PnP re-inits.
-    void set_pose_tracker(PoseTracker* tracker) { pose_tracker_ = tracker; }
+    void set_pose_tracker(PoseTracker* tracker) {
+        pose_tracker_ = tracker;
+        loop_.attach(corner_detector_, pose_tracker_);
+    }
 
 private:
     StabilityTracker stability_;
@@ -94,9 +101,10 @@ private:
     std::int64_t seed_t_ms_ = 0;
     OnnxCornerDetector* corner_detector_ = nullptr;
     PoseTracker* pose_tracker_ = nullptr;
-    bool track_live_ = false;
-    int track_health_fail_streak_ = 0;
-    int track_reinits_ = 0;
+    // The shared detect->init->track->health loop (detect_track_loop.hpp)
+    // - the SAME instance class the live app runs, so offline replays and
+    // the shipping path cannot drift.
+    DetectTrackLoop loop_;
 };
 
 }  // namespace cube::vision::pipeline

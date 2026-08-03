@@ -11,6 +11,15 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/recording_v2.hpp>
+#ifdef CUBE_HAVE_M3T
+#include <cube/track_m3t/m3t_pose_tracker.hpp>
+#include <cube/vision/corner_detector.hpp>
+#include <cube/vision/pipeline/detect_track_loop.hpp>
+
+#include <opencv2/calib3d.hpp>
+
+#include <memory>
+#endif
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
@@ -204,6 +213,66 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
     }
     recorder.push(full_frame, frame_t_ms);
 }
+
+#ifdef CUBE_HAVE_M3T
+// The live continuous-lock hook (see the call site in analyze() for the
+// contract). Worker-side statics: single-in-flight analysis means no
+// concurrent passes, the same story as the recorder above. The detector
+// model comes from the embedded resource (bundled_models), the tracker
+// from cube::track_m3t; a load failure warns once and disables the hook.
+// Returns the tracked pose when live, for analyze() to adopt.
+std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
+    static const bool enabled = qEnvironmentVariable("CUBE_VISION_TRACKER") == QStringLiteral("m3t");
+    if (!enabled) {
+        return std::nullopt;
+    }
+    static cube::vision::pipeline::DetectTrackLoop loop;
+    static std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
+    static std::unique_ptr<cube::track_m3t::M3tPoseTracker> tracker;
+    static bool init_attempted = false;
+    if (!init_attempted) {
+        init_attempted = true;
+        const QByteArray bytes = cube::app::cube_corner_pose_model_bytes();
+        if (!bytes.isEmpty()) {
+            if (auto created = cube::vision::OnnxCornerDetector::create_from_memory(
+                    bytes.constData(), static_cast<std::size_t>(bytes.size()));
+                created.has_value()) {
+                detector = std::move(*created);
+                tracker = std::make_unique<cube::track_m3t::M3tPoseTracker>();
+                loop.attach(detector.get(), tracker.get());
+            }
+        }
+        if (!loop.attached()) {
+            qWarning("ScanSession: CUBE_VISION_TRACKER=m3t set but the corner model could not be loaded");
+        }
+    }
+    if (!loop.attached()) {
+        return std::nullopt;
+    }
+
+    const auto dt = loop.process(analysis_frame);
+    if (!dt.track_live || !dt.step_valid) {
+        return std::nullopt;
+    }
+    cube::vision::CubePoseProjection pose;
+    for (std::size_t i = 0; i < 8; ++i) {
+        pose.vertices[i] = dt.projected[i] * scale_back;  // analysis -> full-frame px
+    }
+    cv::Matx33d rotation;
+    cv::Rodrigues(dt.rvec, rotation);
+    pose.orientation = cube::vision::display_quaternion(rotation);
+    pose.orientation_valid = true;
+    // Seed-compatible-ish extrinsics: the tracked pose is over the
+    // Singmaster half-edge-1 model; kCubeModel's scale differs, so a
+    // downstream seeded solve degrades gracefully (documented behaviour)
+    // rather than being biased by a silently-wrong scale.
+    pose.rvec = dt.rvec;
+    pose.tvec = dt.tvec * 0.5;
+    pose.max_reproj_fraction = dt.health_frac >= 0.0 ? dt.health_frac : 0.0;
+    pose.from_seed = false;
+    return pose;
+}
+#endif
 
 // Set CUBE_VISION_REPLAY_DIR to a directory previously written by
 // CUBE_VISION_RECORD_DIR and poll() draws its frames from that clip instead
@@ -1751,6 +1820,22 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
             debug_stats.edge_status = "none";
         }
     }
+
+#ifdef CUBE_HAVE_M3T
+    // Live continuous 6-DoF lock (Phase 2 demo surface): env-gated on
+    // CUBE_VISION_TRACKER=m3t, runs the SAME DetectTrackLoop the offline
+    // runner replays (detector + PnP anchor + M3T region step + corner
+    // health/re-init). While the track is live its pose REPLACES this
+    // pass's result.pose: the AR wireframe pins to the tracked cube and
+    // cubeOrientation drives the 3D model from the track. Worker-side
+    // statics, same locking story as the recorder (single-in-flight).
+    // Side effect worth knowing: the orientation tracker downstream then
+    // consumes the M3T orientation as q_obs - steadier, but different
+    // evidence than the legacy per-frame solves this flag replaces.
+    if (auto locked = live_m3t_lock(analysis_frame, scale_back); locked.has_value()) {
+        result.pose = *locked;
+    }
+#endif
 
     debug_stats.bright_candidates = cube::vision::detail::find_square_candidates(analysis_frame).size();
     dump_vision_debug(analysis_frame, debug_stats);

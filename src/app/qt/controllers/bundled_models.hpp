@@ -15,4 +15,9 @@ namespace cube::app {
 // normal build).
 [[nodiscard]] QByteArray hand_detection_model_bytes();
 
+// The Phase 1 cube corner-pose detector's bytes (see
+// assets/models/cube_corner_pose_PROVENANCE.md), embedded the same way
+// and for the same reason.
+[[nodiscard]] QByteArray cube_corner_pose_model_bytes();
+
 }  // namespace cube::app
