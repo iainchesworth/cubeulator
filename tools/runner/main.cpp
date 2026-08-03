@@ -15,6 +15,7 @@
 // enforced here, not hoped for.
 
 #include <cube/model/facelet.hpp>
+#include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
@@ -763,12 +764,47 @@ int bench_recorder(const fs::path& dir, int frames, int width, int height, int f
     return stats.dropped == 0 ? 0 : 1;
 }
 
+// One-time per-camera chessboard calibration (docs/pipeline-plan.md
+// Phase 2 item 1): point it at a directory of full-board views captured
+// with the target camera; writes the intrinsics file the recorder
+// manifest references.
+int calibrate_camera(const fs::path& images_dir, cv::Size pattern, float square, const fs::path& out_path) {
+    std::vector<cv::Mat> views;
+    for (const auto& entry : fs::directory_iterator(images_dir)) {
+        const auto ext = entry.path().extension().string();
+        if (ext == ".jpg" || ext == ".jpeg" || ext == ".png") {
+            views.push_back(cv::imread(entry.path().string(), cv::IMREAD_COLOR));
+        }
+    }
+    int used = 0;
+    const auto result = cube::vision::calibrate_from_views(views, pattern, square, &used);
+    if (!result.has_value()) {
+        std::fprintf(stderr, "error: calibration failed (%d/%zu views usable, need >=4 full-board views)\n", used,
+                     views.size());
+        return 1;
+    }
+    std::printf("calibrated from %d/%zu views at %dx%d\n", used, views.size(), result->calibrated_size.width,
+                result->calibrated_size.height);
+    std::printf("  fx %.2f  fy %.2f  cx %.2f  cy %.2f  rms %.3f px\n", result->fx, result->fy, result->cx,
+                result->cy, result->rms_reprojection);
+    const cv::Matx33d approx = cube::vision::approximate_camera_matrix(result->calibrated_size);
+    std::printf("  (the f=width approximation would be fx %.0f - measured error of the fallback: %+.1f%%)\n",
+                approx(0, 0), 100.0 * (result->fx - approx(0, 0)) / approx(0, 0));
+    if (const auto problem = cube::vision::write_intrinsics(out_path.string(), *result)) {
+        std::fprintf(stderr, "error: %s\n", problem->c_str());
+        return 1;
+    }
+    std::printf("wrote %s\n", out_path.string().c_str());
+    return 0;
+}
+
 int usage() {
     std::fprintf(stderr,
                  "usage:\n"
                  "  cube_pipeline_runner replay <recording-dir> [--detector <model.onnx>] [--out <dir>] "
                  "[--no-video] [--max-frames N]\n"
                  "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--out <dir>]\n"
+                 "  cube_pipeline_runner calibrate <images-dir> [--pattern WxH] [--square MM] [--out <file>]\n"
                  "  cube_pipeline_runner check <recording-dir>\n"
                  "  cube_pipeline_runner bench-recorder <out-dir> [--frames N] [--size WxH] [--fps N]\n"
                  "  cube_pipeline_runner synth <out-dir> [--frames N]\n");
@@ -792,6 +828,9 @@ int main(int argc, char** argv) {
     int bench_w = 1280;
     int bench_h = 720;
     int bench_fps = 30;
+    int pattern_w = 9;
+    int pattern_h = 6;
+    float square_size = 24.0F;
     for (int i = 3; i < argc; ++i) {
         const std::string arg = argv[i];
         if (arg == "--out" && i + 1 < argc) {
@@ -806,6 +845,16 @@ int main(int argc, char** argv) {
             synth_frames = std::atoi(argv[++i]);
         } else if (arg == "--fps" && i + 1 < argc) {
             bench_fps = std::atoi(argv[++i]);
+        } else if (arg == "--square" && i + 1 < argc) {
+            square_size = static_cast<float>(std::atof(argv[++i]));
+        } else if (arg == "--pattern" && i + 1 < argc) {
+            const std::string pattern = argv[++i];
+            const auto x = pattern.find('x');
+            if (x == std::string::npos) {
+                return usage();
+            }
+            pattern_w = std::atoi(pattern.c_str());
+            pattern_h = std::atoi(pattern.c_str() + x + 1);
         } else if (arg == "--size" && i + 1 < argc) {
             const std::string size = argv[++i];
             const auto x = size.find('x');
@@ -824,6 +873,10 @@ int main(int argc, char** argv) {
     }
     if (mode == "check") {
         return check_clip(target);
+    }
+    if (mode == "calibrate") {
+        return calibrate_camera(target, cv::Size(pattern_w, pattern_h), square_size,
+                                out_dir.empty() ? target / "intrinsics.txt" : out_dir);
     }
     if (mode == "bench-recorder") {
         return bench_recorder(target, synth_frames, bench_w, bench_h, bench_fps);
