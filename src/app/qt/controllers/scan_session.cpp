@@ -215,17 +215,27 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
 }
 
 #ifdef CUBE_HAVE_M3T
-// The live continuous-lock hook (see the call site in analyze() for the
+// Which vision pipeline the live app runs (P2.10, docs/pipeline-plan.md):
+// the NEW detect->track pipeline is the DEFAULT; the legacy cascade is
+// quarantined behind CUBE_VISION_PIPELINE=legacy (it remains the only
+// scan-to-solve path until Phases 3-5 replace colour capture, and the
+// offline runner's baselines still replay it). track_mode_degraded flips
+// permanently to legacy if the corner model cannot load.
+bool track_mode_degraded = false;  // worker-side, single-in-flight
+
+[[nodiscard]] bool vision_track_mode() {
+    static const bool legacy_requested =
+        qEnvironmentVariable("CUBE_VISION_PIPELINE") == QStringLiteral("legacy");
+    return !legacy_requested && !track_mode_degraded;
+}
+
+// The live continuous-lock pass (see the call site in analyze() for the
 // contract). Worker-side statics: single-in-flight analysis means no
 // concurrent passes, the same story as the recorder above. The detector
 // model comes from the embedded resource (bundled_models), the tracker
-// from cube::track_m3t; a load failure warns once and disables the hook.
-// Returns the tracked pose when live, for analyze() to adopt.
+// from cube::track_m3t; a load failure warns once and degrades the app
+// to the legacy pipeline. Returns the tracked pose when live.
 std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
-    static const bool enabled = qEnvironmentVariable("CUBE_VISION_TRACKER") == QStringLiteral("m3t");
-    if (!enabled) {
-        return std::nullopt;
-    }
     static cube::vision::pipeline::DetectTrackLoop loop;
     static std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
     static std::unique_ptr<cube::track_m3t::M3tPoseTracker> tracker;
@@ -248,7 +258,9 @@ std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& ana
             }
         }
         if (!loop.attached()) {
-            qWarning("ScanSession: CUBE_VISION_TRACKER=m3t set but the corner model could not be loaded");
+            qWarning("ScanSession: corner model could not be loaded - degrading to the legacy pipeline "
+                     "(CUBE_VISION_PIPELINE=legacy behaviour)");
+            track_mode_degraded = true;
         }
     }
     if (!loop.attached()) {
@@ -1397,7 +1409,15 @@ void ScanSession::handleAnalysisFinished() {
             // observation carries no colour by design.
         }
         last_pose_from_track_ = result.pose_from_track;
-        track = tracker_.on_pass(track_in);
+        // In track mode the legacy orientation tracker is NOT fed: its
+        // gates speak a different frame convention than the continuous
+        // track (measured refusing 85% of M3T orientations as
+        // implausible), and every downstream legacy consumer - identity
+        // aggregation, routing, capture - correctly no-ops off its
+        // default lost state. Its real successor for identity is Phase 3.
+        if (!result.pose_from_track) {
+            track = tracker_.on_pass(track_in);
+        }
 
         // Display smoothing - the same nlerp the raw pose stream used to
         // feed, now fed by the tracker (which coasts through detection
@@ -1671,20 +1691,29 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     }
 
 #ifdef CUBE_HAVE_M3T
-    // Live M3T lock runs FIRST (Phase 2): while the track is live the
-    // legacy detector cascade below is SKIPPED entirely - the wireframe
-    // and 3D model follow the track, the pass budget collapses to
-    // detector(decimated)+step (the cadence the region tracker needs),
-    // and the overlay loses the legacy quads/cell dots, which were this
-    // cascade's output. Colour capture is Phase 3's concern; under this
-    // demo flag a pass is a tracking pass.
-    if (auto locked = live_m3t_lock(analysis_frame, scale_back); locked.has_value()) {
-        result.pose = *locked;
-        result.pose_from_track = true;
-        VisionDebugStats m3t_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
-        m3t_stats.face_status = "m3t-locked";
-        m3t_stats.corner_status = "m3t-locked";
-        dump_vision_debug(analysis_frame, m3t_stats);
+    // The DEFAULT pipeline (P2.10): a pass is a tracking pass - detector
+    // (decimated while locked) + M3T step + health, nothing else. The
+    // legacy cascade below never runs in track mode, locked or lost; it
+    // is the quarantined CUBE_VISION_PIPELINE=legacy path (still the
+    // scan-to-solve route until Phases 3-5 replace colour capture). The
+    // wireframe and 3D model follow the track; lost passes return with
+    // no pose and the detector keeps hunting for the next anchor.
+    if (vision_track_mode()) {
+        auto locked = live_m3t_lock(analysis_frame, scale_back);
+        if (!vision_track_mode()) {
+            // Model load failed on this very pass: fall through to the
+            // legacy cascade from the next pass on (this one returns
+            // empty rather than running half of each).
+            return result;
+        }
+        if (locked.has_value()) {
+            result.pose = *locked;
+            result.pose_from_track = true;
+        }
+        VisionDebugStats track_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+        track_stats.face_status = locked.has_value() ? "track-locked" : "track-lost";
+        track_stats.corner_status = track_stats.face_status;
+        dump_vision_debug(analysis_frame, track_stats);
         return result;
     }
 #endif
