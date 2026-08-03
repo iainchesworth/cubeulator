@@ -1,0 +1,1436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cubeulator ground-truth labeller</title>
+<style>
+  :root {
+    --bg: #0d1117; --bg2: #161b22; --bg3: #21262d; --border: #30363d;
+    --fg: #c9d1d9; --fg-dim: #8b949e; --accent: #58a6ff;
+    --hand: #3fb950; --interp: #d29922; --guide: #39c5cf; --danger: #f85149;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  header {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 6px 10px; background: var(--bg2); border-bottom: 1px solid var(--border);
+  }
+  header .title { font-weight: 600; margin-right: 6px; white-space: nowrap; }
+  header label.filebtn, header button, #panel button {
+    background: var(--bg3); color: var(--fg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 3px 10px; cursor: pointer; font-size: 12px;
+  }
+  header label.filebtn:hover, header button:hover, #panel button:hover { border-color: var(--accent); }
+  header input[type=file] { display: none; }
+  header .stride { display: flex; align-items: center; gap: 4px; color: var(--fg-dim); }
+  header input[type=number] {
+    width: 52px; background: var(--bg); color: var(--fg);
+    border: 1px solid var(--border); border-radius: 4px; padding: 2px 4px;
+  }
+  main { flex: 1; display: flex; min-height: 0; }
+  #canvasWrap { flex: 1; position: relative; min-width: 0; background: #010409; }
+  #view { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #hint {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--fg-dim); pointer-events: none; text-align: center; font-size: 15px;
+  }
+  #prompt {
+    position: absolute; top: 8px; left: 8px; max-width: 75%;
+    background: rgba(13,17,23,0.88); border: 1px solid var(--guide);
+    border-radius: 6px; padding: 5px 10px; color: var(--guide); font-size: 13px;
+    display: none; pointer-events: none;
+  }
+  #panel {
+    width: 330px; background: var(--bg2); border-left: 1px solid var(--border);
+    overflow-y: auto; padding: 8px 10px 20px; flex-shrink: 0;
+  }
+  #panel h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--fg-dim); margin: 12px 0 5px; border-bottom: 1px solid var(--border);
+  }
+  #panel h3:first-child { margin-top: 0; }
+  .row { display: flex; align-items: center; gap: 6px; margin: 3px 0; flex-wrap: wrap; }
+  .tagchip { display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; font-size: 12px; }
+  .tagchip.on { border-color: currentColor; background: rgba(255,255,255,0.06); }
+  .list { font-family: Consolas, monospace; font-size: 12px; }
+  .list .item {
+    display: flex; align-items: center; gap: 6px; padding: 1px 3px; border-radius: 4px; cursor: pointer;
+  }
+  .list .item:hover { background: var(--bg3); }
+  .list .item .del { margin-left: auto; color: var(--danger); cursor: pointer; padding: 0 4px; }
+  .badge { font-size: 10px; border-radius: 8px; padding: 0 6px; }
+  .badge.hand { background: var(--hand); color: #04260f; }
+  .badge.interp { background: var(--interp); color: #2b1d00; }
+  .facebtn { width: 34px; text-align: center; }
+  .facebtn.labelled { border-color: var(--hand); }
+  #cornerDiagram svg { display: block; margin: 2px auto; }
+  #cornerDiagram .v { cursor: pointer; }
+  #cornerDiagram .v circle { fill: var(--bg3); stroke: var(--fg-dim); stroke-width: 1.2; }
+  #cornerDiagram .v.armed circle { stroke: var(--guide); stroke-width: 2.5; fill: #103c40; }
+  #cornerDiagram .v.placed circle { stroke: var(--hand); }
+  #cornerDiagram .v text { fill: var(--fg); font: 11px Consolas, monospace; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+  #cornerDiagram .edge { stroke: var(--fg-dim); stroke-width: 1; fill: none; }
+  #cornerDiagram .edge.hidden { stroke-dasharray: 3 3; opacity: 0.5; }
+  #cornerDiagram .facelabel { fill: var(--fg-dim); font: 10px sans-serif; text-anchor: middle; }
+  .legend { color: var(--fg-dim); font-size: 11px; font-family: Consolas, monospace; text-align: center; }
+  #scrub { height: 76px; display: block; width: 100%; background: var(--bg2);
+    border-top: 1px solid var(--border); cursor: pointer; flex-shrink: 0; }
+  footer {
+    padding: 3px 10px; background: var(--bg2); border-top: 1px solid var(--border);
+    font: 12px Consolas, monospace; color: var(--fg-dim); white-space: nowrap; overflow: hidden;
+    flex-shrink: 0;
+  }
+  footer b { color: var(--fg); font-weight: 600; }
+  #help {
+    position: fixed; inset: 0; background: rgba(1,4,9,0.82); z-index: 10;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #help.hiddenpanel { display: none; }
+  #help .card {
+    background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px 24px; max-height: 90vh; overflow-y: auto; max-width: 860px;
+  }
+  #help h2 { font-size: 15px; margin-bottom: 8px; }
+  #help table { border-collapse: collapse; font-size: 12px; }
+  #help td { padding: 1.5px 14px 1.5px 0; vertical-align: top; }
+  #help .cols { display: flex; gap: 34px; flex-wrap: wrap; }
+  kbd {
+    background: var(--bg3); border: 1px solid var(--border); border-bottom-width: 2px;
+    border-radius: 4px; padding: 0 5px; font: 11px Consolas, monospace;
+  }
+  .modehead { display: flex; gap: 6px; margin: 6px 0; }
+  .modehead button { flex: 1; }
+  .modehead button.active { border-color: var(--accent); color: var(--accent); }
+  .hiddenpanel { display: none !important; }
+  .small { font-size: 11px; color: var(--fg-dim); }
+  .statebox { font: 11px Consolas, monospace; white-space: pre; color: var(--fg-dim); }
+</style>
+</head>
+<body>
+<header>
+  <span class="title">Cubeulator labeller</span>
+  <label class="filebtn">Open recording dir<input type="file" id="dirInput" webkitdirectory multiple></label>
+  <label class="filebtn">Import JSON<input type="file" id="jsonInput" accept=".json" multiple></label>
+  <span class="stride">stride <input type="number" id="strideInput" min="1" max="500" value="1"></span>
+  <button id="helpBtn" title="Toggle help (?)">Help (?)</button>
+</header>
+<main>
+  <div id="canvasWrap">
+    <canvas id="view"></canvas>
+    <div id="hint">Open a recording directory to begin<br>
+      <span class="small">(the folder containing index.csv and rec_*.jpg; any existing<br>
+      groundtruth/ sidecars are loaded automatically)</span></div>
+    <div id="prompt"></div>
+  </div>
+  <aside id="panel">
+    <h3>Recording</h3>
+    <div id="recInfo" class="small">none loaded</div>
+    <div id="manifestBox" class="statebox"></div>
+
+    <div class="modehead">
+      <button id="modeSegBtn">Segments (m)</button>
+      <button id="modeKfBtn">Keyframes (m)</button>
+    </div>
+
+    <div id="segPanel">
+      <h3>Pending range</h3>
+      <div class="row">
+        <button id="setStartBtn">Set start [</button>
+        <button id="setEndBtn">Set end ]</button>
+        <span id="pendingRange" class="small">-</span>
+      </div>
+      <div class="row" id="tagChips"></div>
+      <div class="row">
+        <button id="commitSegBtn">Commit segment (Enter)</button>
+        <button id="reentryBtn">Toggle re-entry here (e)</button>
+      </div>
+      <h3>Segments</h3>
+      <div id="segList" class="list small">none</div>
+      <h3>Re-entry events</h3>
+      <div id="reentryList" class="list small">none</div>
+    </div>
+
+    <div id="kfPanel" class="hiddenpanel">
+      <h3>Corners (press 0-7, then click)</h3>
+      <div id="cornerDiagram"></div>
+      <div class="legend">0=URF 1=UFL 2=ULB 3=UBR<br>4=DFR 5=DLF 6=DBL 7=DRB</div>
+      <h3>Faces (press u r f d l b to start)</h3>
+      <div class="row" id="faceBtns"></div>
+      <div class="small">Guided: 4 quad corners (named), then 9 sticker
+        centres. <kbd>g</kbd> accepts the ghost point, <kbd>G</kbd> all
+        remaining, <kbd>Backspace</kbd> undoes, <kbd>Esc</kbd> cancels.</div>
+      <h3>This frame</h3>
+      <div id="kfInfo" class="small">no keyframe</div>
+      <div class="row">
+        <button id="interpBtn">Interpolate here (i)</button>
+        <button id="acceptBtn">Accept as hand-labelled (a)</button>
+      </div>
+      <h3>Keyframes</h3>
+      <div id="kfList" class="list small">none</div>
+    </div>
+
+    <h3>Export / import</h3>
+    <div class="row">
+      <button id="dlSegBtn">segments.json</button>
+      <button id="dlKfBtn">current keyframe</button>
+      <button id="dlBundleBtn">bundle .json</button>
+    </div>
+    <div class="row">
+      <button id="clearAutosaveBtn">Clear autosave</button>
+    </div>
+    <div class="small">Per-file downloads go to your browser download
+      folder; move them into <code>&lt;recording&gt;/groundtruth/</code>
+      (see docs/ground-truth-format.md). Work is autosaved to browser
+      localStorage per clip.</div>
+  </aside>
+</main>
+<canvas id="scrub"></canvas>
+<footer id="status">press ? for help</footer>
+
+<div id="help" class="hiddenpanel">
+  <div class="card">
+    <h2>Keys</h2>
+    <div class="cols">
+      <table>
+        <tr><td colspan="2"><b>Navigation / view</b></td></tr>
+        <tr><td><kbd>&larr;</kbd> <kbd>&rarr;</kbd></td><td>step by stride</td></tr>
+        <tr><td><kbd>Shift</kbd>+arrows</td><td>step by 10 x stride</td></tr>
+        <tr><td><kbd>Ctrl</kbd>+arrows</td><td>step by 1</td></tr>
+        <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>first / last frame</td></tr>
+        <tr><td><kbd>,</kbd> <kbd>.</kbd></td><td>previous / next keyframe</td></tr>
+        <tr><td><kbd>wheel</kbd></td><td>zoom (about cursor)</td></tr>
+        <tr><td><kbd>+</kbd> <kbd>-</kbd> <kbd>z</kbd></td><td>zoom in / out / fit</td></tr>
+        <tr><td><kbd>Space</kbd>+drag</td><td>pan (or middle-drag)</td></tr>
+        <tr><td><kbd>m</kbd></td><td>toggle segment / keyframe mode</td></tr>
+        <tr><td><kbd>?</kbd> or <kbd>h</kbd></td><td>this help</td></tr>
+      </table>
+      <table>
+        <tr><td colspan="2"><b>Segment mode</b></td></tr>
+        <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>set pending start / end = current frame</td></tr>
+        <tr><td><kbd>1</kbd>..<kbd>5</kbd></td><td>toggle in_frame / absent / occluded / steady / turning</td></tr>
+        <tr><td><kbd>Enter</kbd></td><td>commit pending segment</td></tr>
+        <tr><td><kbd>e</kbd></td><td>toggle re-entry event at current frame</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>clear pending range</td></tr>
+      </table>
+      <table>
+        <tr><td colspan="2"><b>Keyframe mode</b></td></tr>
+        <tr><td><kbd>0</kbd>..<kbd>7</kbd></td><td>arm cube corner, then click to place</td></tr>
+        <tr><td><kbd>u r f d l b</kbd></td><td>start guided face labelling</td></tr>
+        <tr><td><kbd>g</kbd> / <kbd>G</kbd></td><td>accept ghost centre / all remaining ghosts</td></tr>
+        <tr><td><kbd>Backspace</kbd></td><td>undo last guided point</td></tr>
+        <tr><td>click near a point</td><td>select; drag to move</td></tr>
+        <tr><td><kbd>Alt</kbd>+arrows</td><td>nudge selected point by 1 screen px</td></tr>
+        <tr><td><kbd>Delete</kbd></td><td>delete selected corner (or its whole face)</td></tr>
+        <tr><td><kbd>i</kbd></td><td>interpolate this frame from neighbour keyframes</td></tr>
+        <tr><td><kbd>a</kbd></td><td>accept interpolated frame as hand-labelled</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>cancel guided sequence / disarm corner</td></tr>
+      </table>
+    </div>
+    <p class="small" style="margin-top:10px">
+      Green overlays = hand-labelled; orange = interpolated (not yet valid
+      for gates - adjust, then press <kbd>a</kbd>). Cyan = in-progress
+      guided points and ghosts. Click anywhere outside this card to close.
+    </p>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* Cubeulator ground-truth labelling tool.
+ * Single-file, no dependencies. Reads a recording directory
+ * (index.csv + rec_*.jpg + optional manifest.json + optional
+ * groundtruth/ sidecars) via the File API and produces the JSON
+ * formats specified in docs/ground-truth-format.md. */
+
+// ----------------------------------------------------------- constants
+const RING = 3600;
+const TAGS = ['in_frame', 'absent', 'occluded', 'steady', 'turning'];
+const TAG_COLORS = {
+  in_frame: '#2ea043', absent: '#6e7681', occluded: '#d29922',
+  steady: '#388bfd', turning: '#a371f7',
+};
+const TAG_ABBR = { in_frame: 'IN', absent: 'AB', occluded: 'OC', steady: 'ST', turning: 'TU' };
+const CORNER_NAMES = ['URF', 'UFL', 'ULB', 'UBR', 'DFR', 'DLF', 'DBL', 'DRB'];
+const FACE_LETTERS = ['U', 'R', 'F', 'D', 'L', 'B'];
+// Quad corner order tl,tr,br,bl per face, in cube-corner names - the
+// face-local grid committed in cube.hpp (see docs/ground-truth-format.md).
+const FACE_QUAD_CORNERS = {
+  U: ['ULB', 'UBR', 'URF', 'UFL'],
+  R: ['UBR', 'URF', 'DFR', 'DRB'],
+  F: ['UFL', 'URF', 'DFR', 'DLF'],
+  D: ['DBL', 'DRB', 'DFR', 'DLF'],
+  L: ['ULB', 'UFL', 'DLF', 'DBL'],
+  B: ['ULB', 'UBR', 'DRB', 'DBL'],
+};
+const QUAD_KEYS = ['tl', 'tr', 'br', 'bl'];
+const CENTRE_NAMES = [
+  'top-left', 'top-centre', 'top-right',
+  'middle-left', 'centre', 'middle-right',
+  'bottom-left', 'bottom-centre', 'bottom-right'];
+const COL_HAND = '#3fb950', COL_INTERP = '#d29922', COL_GUIDE = '#39c5cf';
+const IMG_CACHE_MAX = 48;
+
+// --------------------------------------------------------------- state
+const S = {
+  clipName: '', baseDir: '', files: new Map(), rows: [], passList: [],
+  passIdx: new Map(), manifest: null,
+  segments: [],          // {start, end, tags:[]} pass numbers, inclusive
+  reentry: [],           // sorted pass numbers
+  keyframes: new Map(),  // pass -> {pass, interpolated, corners:[], faces:[]}
+  cur: 0, mode: 'segment', stride: 1,
+  view: { scale: 1, ox: 0, oy: 0, fitted: false },
+  pending: { start: null, end: null, tags: new Set() },
+  armedCorner: null,
+  guided: null,          // {face, quad:[], centres:[], stage:'quad'|'centres'}
+  selection: null,       // {kind:'corner'|'quad'|'centre', pass, ...}
+  drag: null, spaceHeld: false, mouse: null,
+  imgCache: new Map(), imgLRU: [], curBitmap: null,
+};
+let loadToken = 0, drawQueued = false, autosaveTimer = null;
+
+// --------------------------------------------------------------- utils
+const $ = (id) => document.getElementById(id);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const round2 = (v) => Math.round(v * 100) / 100;
+const pad6 = (n) => String(n).padStart(6, '0');
+const frameFilename = (pass) => 'rec_' + pad6(((pass % RING) + RING) % RING) + '.jpg';
+const curPass = () => S.passList.length ? S.passList[S.cur] : null;
+
+function idxForPass(pass) {
+  if (S.passIdx.has(pass)) return S.passIdx.get(pass);
+  // binary search lower bound over sorted passList
+  let lo = 0, hi = S.passList.length - 1, ans = 0;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (S.passList[mid] <= pass) { ans = mid; lo = mid + 1; } else { hi = mid - 1; }
+  }
+  return ans;
+}
+
+function download(name, obj) {
+  const blob = new Blob([JSON.stringify(obj, null, 2) + '\n'], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+
+// Projective map from the unit square to a quad [tl,tr,br,bl]
+// (Heckbert, "Fundamentals of Texture Mapping and Image Warping").
+function quadMap(quad) {
+  const [p0, p1, p2, p3] = quad; // tl tr br bl
+  const sx = p0.x - p1.x + p2.x - p3.x, sy = p0.y - p1.y + p2.y - p3.y;
+  let a, b, c, d, e, f, g, h;
+  if (Math.abs(sx) < 1e-9 && Math.abs(sy) < 1e-9) {
+    a = p1.x - p0.x; b = p2.x - p1.x; c = p0.x;
+    d = p1.y - p0.y; e = p2.y - p1.y; f = p0.y; g = 0; h = 0;
+  } else {
+    const dx1 = p1.x - p2.x, dx2 = p3.x - p2.x, dy1 = p1.y - p2.y, dy2 = p3.y - p2.y;
+    const den = dx1 * dy2 - dx2 * dy1;
+    g = (sx * dy2 - sy * dx2) / den;
+    h = (dx1 * sy - dy1 * sx) / den;
+    a = p1.x - p0.x + g * p1.x; b = p3.x - p0.x + h * p3.x; c = p0.x;
+    d = p1.y - p0.y + g * p1.y; e = p3.y - p0.y + h * p3.y; f = p0.y;
+  }
+  return (u, v) => {
+    const w = g * u + h * v + 1;
+    return { x: (a * u + b * v + c) / w, y: (d * u + e * v + f) / w };
+  };
+}
+const stickerUV = (i) => ({ u: (2 * (i % 3) + 1) / 6, v: (2 * Math.floor(i / 3) + 1) / 6 });
+
+// ------------------------------------------------------------- ingest
+function parseIndexCsv(text) {
+  const rows = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/[\r\n]+$/, '');
+    if (!line || line === 'pass,t_ms,w,h,full_w,full_h' || line.endsWith(',')) continue;
+    const parts = line.split(',');
+    if (parts.length !== 6 || !parts.every((p) => /^-?\d+$/.test(p))) continue;
+    const [pass, t_ms, w, h, full_w, full_h] = parts.map(Number);
+    rows.push({ pass, t_ms, w, h, full_w, full_h });
+  }
+  return rows;
+}
+
+async function ingestEntries(entries) {
+  // entries: [{path, file}] - path is a relative path using '/'.
+  const norm = entries.map((e) => ({ path: e.path.replace(/\\/g, '/').replace(/^\.\//, ''), file: e.file }));
+  const idxEntry = norm
+    .filter((e) => e.path.split('/').pop().toLowerCase() === 'index.csv')
+    .sort((a, b) => a.path.split('/').length - b.path.split('/').length)[0];
+  if (!idxEntry) { alert('No index.csv found in the selected directory.'); return false; }
+  const baseDir = idxEntry.path.slice(0, idxEntry.path.length - 'index.csv'.length); // '' or 'clip/'
+  S.baseDir = baseDir;
+  S.clipName = baseDir ? baseDir.replace(/\/$/, '').split('/').pop() : 'recording';
+
+  S.files = new Map();
+  for (const e of norm) {
+    if (baseDir && !e.path.startsWith(baseDir)) continue;
+    S.files.set(e.path.slice(baseDir.length).toLowerCase(), e.file);
+  }
+
+  let rows = parseIndexCsv(await idxEntry.file.text());
+  const maxPass = rows.reduce((m, r) => Math.max(m, r.pass), 0);
+  const before = rows.length;
+  rows = rows.filter((r) => maxPass - r.pass < RING && S.files.has(frameFilename(r.pass)));
+  rows.sort((a, b) => a.pass - b.pass);
+  if (!rows.length) { alert('index.csv has no usable rows (or frame files are missing).'); return false; }
+  S.rows = rows;
+  S.passList = rows.map((r) => r.pass);
+  S.passIdx = new Map(rows.map((r, i) => [r.pass, i]));
+
+  S.manifest = null;
+  const mf = S.files.get('manifest.json');
+  if (mf) { try { S.manifest = JSON.parse(await mf.text()); } catch (err) { console.warn('manifest.json unparsable', err); } }
+
+  // reset labels, then load groundtruth/ sidecars if present
+  S.segments = []; S.reentry = []; S.keyframes = new Map();
+  S.pending = { start: null, end: null, tags: new Set() };
+  S.guided = null; S.armedCorner = null; S.selection = null;
+  const segFile = S.files.get('groundtruth/segments.json');
+  if (segFile) { try { applySegmentsObj(JSON.parse(await segFile.text())); } catch (err) { console.warn('segments.json unparsable', err); } }
+  let kfLoaded = 0, kfBad = 0;
+  for (const [path, file] of S.files) {
+    const m = /^groundtruth\/keyframes\/(\d+)\.json$/.exec(path);
+    if (!m) continue;
+    try {
+      const kf = normaliseKeyframe(JSON.parse(await file.text()), parseInt(m[1], 10));
+      if (kf) { S.keyframes.set(kf.pass, kf); kfLoaded++; } else kfBad++;
+    } catch (err) { kfBad++; console.warn('bad keyframe file', path, err); }
+  }
+  if (kfBad) alert(kfBad + ' keyframe file(s) could not be parsed (see console).');
+
+  maybeRestoreAutosave();
+
+  S.cur = 0; S.view.fitted = false; S.imgCache.clear(); S.imgLRU.length = 0; S.curBitmap = null;
+  $('hint').style.display = 'none';
+  $('recInfo').textContent = S.clipName + ': ' + S.passList.length + ' frames (pass ' +
+    S.passList[0] + '..' + S.passList[S.passList.length - 1] + ', ' +
+    rows[0].w + 'x' + rows[0].h + (before !== rows.length ? ', ' + (before - rows.length) + ' overwritten/missing rows dropped' : '') + ')';
+  renderManifest();
+  renderAll();
+  await gotoIndex(0);
+  return true;
+}
+
+function renderManifest() {
+  const box = $('manifestBox');
+  if (!S.manifest) { box.textContent = ''; return; }
+  const m = S.manifest;
+  let txt = '';
+  if (typeof m.state === 'string' && m.state.length === 54) {
+    const order = ['U', 'R', 'F', 'D', 'L', 'B'];
+    txt += order.map((f, i) => f + ': ' + m.state.slice(i * 9, i * 9 + 9)).join('\n') + '\n';
+  }
+  for (const k of ['lighting', 'motion_script', 'camera', 'cube'])
+    if (m[k]) txt += k + ': ' + m[k] + '\n';
+  box.textContent = txt.trimEnd();
+}
+
+// ---------------------------------------------------- label validation
+function validPoint(p) { return p && typeof p.x === 'number' && typeof p.y === 'number' && isFinite(p.x) && isFinite(p.y); }
+
+function normaliseKeyframe(obj, fallbackPass) {
+  if (!obj || typeof obj !== 'object') return null;
+  const pass = Number.isInteger(obj.pass) ? obj.pass : fallbackPass;
+  if (!Number.isInteger(pass)) return null;
+  const kf = { pass, interpolated: obj.interpolated === true, corners: [], faces: [] };
+  for (const c of obj.corners || []) {
+    if (Number.isInteger(c.model_id) && c.model_id >= 0 && c.model_id <= 7 && validPoint(c) &&
+        !kf.corners.some((o) => o.model_id === c.model_id))
+      kf.corners.push({ model_id: c.model_id, x: c.x, y: c.y });
+  }
+  for (const f of obj.faces || []) {
+    if (!FACE_LETTERS.includes(f.face) || kf.faces.some((o) => o.face === f.face)) continue;
+    const q = f.quad || {};
+    if (!QUAD_KEYS.every((k) => validPoint(q[k]))) continue;
+    if (!Array.isArray(f.centres) || f.centres.length !== 9 || !f.centres.every(validPoint)) continue;
+    kf.faces.push({
+      face: f.face,
+      quad: Object.fromEntries(QUAD_KEYS.map((k) => [k, { x: q[k].x, y: q[k].y }])),
+      centres: f.centres.map((p) => ({ x: p.x, y: p.y })),
+    });
+  }
+  return kf;
+}
+
+function applySegmentsObj(obj) {
+  if (!obj || !Array.isArray(obj.segments)) return;
+  S.segments = obj.segments
+    .filter((s) => Number.isInteger(s.start) && Number.isInteger(s.end) && Array.isArray(s.tags))
+    .map((s) => ({ start: Math.min(s.start, s.end), end: Math.max(s.start, s.end),
+                   tags: s.tags.filter((t) => TAGS.includes(t)) }))
+    .filter((s) => s.tags.length)
+    .sort((a, b) => a.start - b.start);
+  S.reentry = (obj.reentry_events || []).filter(Number.isInteger).sort((a, b) => a - b);
+}
+
+// -------------------------------------------------------- serialisers
+function segmentsObj() {
+  return {
+    version: 1, clip: S.clipName,
+    segments: [...S.segments].sort((a, b) => a.start - b.start)
+      .map((s) => ({ start: s.start, end: s.end, tags: [...s.tags] })),
+    reentry_events: [...S.reentry].sort((a, b) => a - b),
+  };
+}
+function keyframeObj(kf) {
+  return {
+    version: 1, pass: kf.pass, interpolated: kf.interpolated,
+    corners: [...kf.corners].sort((a, b) => a.model_id - b.model_id)
+      .map((c) => ({ model_id: c.model_id, x: round2(c.x), y: round2(c.y) })),
+    faces: kf.faces.map((f) => ({
+      face: f.face,
+      quad: Object.fromEntries(QUAD_KEYS.map((k) => [k, { x: round2(f.quad[k].x), y: round2(f.quad[k].y) }])),
+      centres: f.centres.map((p) => ({ x: round2(p.x), y: round2(p.y) })),
+    })),
+  };
+}
+function bundleObj() {
+  const keyframes = {};
+  for (const pass of [...S.keyframes.keys()].sort((a, b) => a - b))
+    keyframes[String(pass)] = keyframeObj(S.keyframes.get(pass));
+  return { version: 1, clip: S.clipName, segments: segmentsObj(), keyframes };
+}
+
+// ----------------------------------------------------------- autosave
+const autosaveKey = () => 'cubeulator-labeltool/' + S.clipName;
+function autosave() {
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => {
+    if (!S.clipName) return;
+    try {
+      localStorage.setItem(autosaveKey(), JSON.stringify(bundleObj()));
+    } catch (err) { console.warn('autosave failed', err); }
+  }, 400);
+  renderAll();
+}
+function maybeRestoreAutosave() {
+  if (!S.clipName) return;
+  const raw = localStorage.getItem(autosaveKey());
+  if (!raw) return;
+  const haveFiles = S.segments.length || S.keyframes.size;
+  const msg = 'Autosaved labels exist for "' + S.clipName + '".\nRestore them?' +
+    (haveFiles ? '\n(Cancel keeps the labels loaded from groundtruth/.)' : '');
+  if (!confirm(msg)) return;
+  try {
+    const b = JSON.parse(raw);
+    applySegmentsObj(b.segments || {});
+    S.keyframes = new Map();
+    for (const [k, v] of Object.entries(b.keyframes || {})) {
+      const kf = normaliseKeyframe(v, parseInt(k, 10));
+      if (kf) S.keyframes.set(kf.pass, kf);
+    }
+  } catch (err) { console.warn('autosave restore failed', err); }
+}
+
+// --------------------------------------------------------- image load
+async function bitmapFor(pass) {
+  if (S.imgCache.has(pass)) {
+    const i = S.imgLRU.indexOf(pass);
+    if (i >= 0) S.imgLRU.splice(i, 1);
+    S.imgLRU.push(pass);
+    return S.imgCache.get(pass);
+  }
+  const file = S.files.get(frameFilename(pass));
+  if (!file) return null;
+  let bmp = null;
+  try { bmp = await createImageBitmap(file); } catch (err) { console.warn('decode failed for pass', pass, err); return null; }
+  S.imgCache.set(pass, bmp);
+  S.imgLRU.push(pass);
+  while (S.imgLRU.length > IMG_CACHE_MAX) {
+    const old = S.imgLRU.shift();
+    const b = S.imgCache.get(old);
+    S.imgCache.delete(old);
+    if (b && b.close) b.close();
+  }
+  return bmp;
+}
+
+async function gotoIndex(i) {
+  if (!S.passList.length) return;
+  const ni = clamp(i, 0, S.passList.length - 1);
+  if (S.drag) S.drag = null;
+  S.cur = ni;
+  S.selection = null;
+  if (S.guided) { S.guided = null; updatePrompt(); }
+  updateStatus(); drawScrubber(); renderFramePanels();
+  const tok = ++loadToken;
+  const bmp = await bitmapFor(S.passList[ni]);
+  if (tok !== loadToken) return;
+  S.curBitmap = bmp;
+  if (!S.view.fitted && bmp) fitView(bmp);
+  scheduleDraw();
+  for (const off of [1, -1, S.stride, -S.stride, 2 * S.stride])
+    if (S.passIdx.size && ni + off >= 0 && ni + off < S.passList.length)
+      bitmapFor(S.passList[ni + off]);
+}
+const gotoPass = (pass) => gotoIndex(idxForPass(pass));
+
+// ---------------------------------------------------- view + drawing
+const viewCanvas = $('view'), scrubCanvas = $('scrub');
+const vctx = viewCanvas.getContext('2d'), sctx = scrubCanvas.getContext('2d');
+
+function sizeCanvases() {
+  const dpr = window.devicePixelRatio || 1;
+  for (const c of [viewCanvas, scrubCanvas]) {
+    const r = c.getBoundingClientRect();
+    c.width = Math.max(1, Math.round(r.width * dpr));
+    c.height = Math.max(1, Math.round(r.height * dpr));
+  }
+  scheduleDraw(); drawScrubber();
+}
+window.addEventListener('resize', sizeCanvases);
+
+const w2s = (p) => ({ x: p.x * S.view.scale + S.view.ox, y: p.y * S.view.scale + S.view.oy });
+const s2w = (p) => ({ x: (p.x - S.view.ox) / S.view.scale, y: (p.y - S.view.oy) / S.view.scale });
+
+function fitView(bmp) {
+  const r = viewCanvas.getBoundingClientRect();
+  const scale = Math.min(r.width / bmp.width, r.height / bmp.height) * 0.98;
+  S.view.scale = scale;
+  S.view.ox = (r.width - bmp.width * scale) / 2;
+  S.view.oy = (r.height - bmp.height * scale) / 2;
+  S.view.fitted = true;
+}
+
+function scheduleDraw() {
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; draw(); });
+}
+
+function drawMarker(ctx, p, color, label, selected) {
+  ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(p.x - 8, p.y); ctx.lineTo(p.x - 3, p.y);
+  ctx.moveTo(p.x + 3, p.y); ctx.lineTo(p.x + 8, p.y);
+  ctx.moveTo(p.x, p.y - 8); ctx.lineTo(p.x, p.y - 3);
+  ctx.moveTo(p.x, p.y + 3); ctx.lineTo(p.x, p.y + 8);
+  ctx.stroke();
+  if (label) { ctx.font = '11px Consolas, monospace'; ctx.fillText(label, p.x + 8, p.y - 6); }
+  if (selected) {
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(p.x, p.y, 8.5, 0, Math.PI * 2); ctx.stroke();
+  }
+}
+
+function selMatches(sel, kind, fi, i) {
+  return sel && sel.kind === kind && sel.fi === fi && sel.i === i;
+}
+
+function draw() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = viewCanvas.getBoundingClientRect();
+  vctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  vctx.clearRect(0, 0, r.width, r.height);
+  if (!S.curBitmap) return;
+  const v = S.view;
+  vctx.save();
+  vctx.translate(v.ox, v.oy); vctx.scale(v.scale, v.scale);
+  vctx.imageSmoothingEnabled = v.scale < 3;
+  vctx.drawImage(S.curBitmap, 0, 0);
+  vctx.restore();
+
+  const kf = S.keyframes.get(curPass());
+  const sel = S.selection;
+  if (kf) {
+    const col = kf.interpolated ? COL_INTERP : COL_HAND;
+    kf.faces.forEach((f, fi) => {
+      const q = QUAD_KEYS.map((k) => w2s(f.quad[k]));
+      vctx.strokeStyle = col; vctx.lineWidth = 1.5;
+      vctx.beginPath();
+      q.forEach((p, i) => (i ? vctx.lineTo(p.x, p.y) : vctx.moveTo(p.x, p.y)));
+      vctx.closePath(); vctx.stroke();
+      // tl marker + row-direction tick tl->tr
+      vctx.fillStyle = col;
+      vctx.fillRect(q[0].x - 3, q[0].y - 3, 6, 6);
+      const dx = q[1].x - q[0].x, dy = q[1].y - q[0].y, len = Math.hypot(dx, dy) || 1;
+      vctx.beginPath(); vctx.moveTo(q[0].x, q[0].y);
+      vctx.lineTo(q[0].x + (dx / len) * 14, q[0].y + (dy / len) * 14); vctx.stroke();
+      const cx = (q[0].x + q[1].x + q[2].x + q[3].x) / 4, cy = (q[0].y + q[1].y + q[2].y + q[3].y) / 4;
+      vctx.font = 'bold 15px sans-serif'; vctx.fillText(f.face, cx - 4, cy + 5);
+      QUAD_KEYS.forEach((k, ci) => {
+        vctx.beginPath(); vctx.arc(q[ci].x, q[ci].y, 3.5, 0, Math.PI * 2); vctx.fill();
+        if (selMatches(sel, 'quad', fi, ci)) {
+          vctx.strokeStyle = '#fff'; vctx.beginPath(); vctx.arc(q[ci].x, q[ci].y, 7, 0, Math.PI * 2); vctx.stroke();
+          vctx.strokeStyle = col;
+        }
+      });
+      f.centres.forEach((p, i) => {
+        const s = w2s(p);
+        vctx.beginPath(); vctx.arc(s.x, s.y, 2.5, 0, Math.PI * 2); vctx.fill();
+        vctx.font = '9px Consolas, monospace'; vctx.fillText(String(i + 1), s.x + 4, s.y - 3);
+        if (selMatches(sel, 'centre', fi, i)) {
+          vctx.strokeStyle = '#fff'; vctx.beginPath(); vctx.arc(s.x, s.y, 6, 0, Math.PI * 2); vctx.stroke();
+          vctx.strokeStyle = col;
+        }
+      });
+    });
+    kf.corners.forEach((c, i) => {
+      drawMarker(vctx, w2s(c), col, c.model_id + ':' + CORNER_NAMES[c.model_id],
+        selMatches(sel, 'corner', undefined, i));
+    });
+  }
+
+  // guided in-progress overlay
+  const g = S.guided;
+  if (g) {
+    vctx.strokeStyle = COL_GUIDE; vctx.fillStyle = COL_GUIDE; vctx.lineWidth = 1.5;
+    const qs = g.quad.map(w2s);
+    if (qs.length > 1) {
+      vctx.beginPath();
+      qs.forEach((p, i) => (i ? vctx.lineTo(p.x, p.y) : vctx.moveTo(p.x, p.y)));
+      if (qs.length === 4) vctx.closePath();
+      vctx.stroke();
+    }
+    qs.forEach((p) => { vctx.beginPath(); vctx.arc(p.x, p.y, 4, 0, Math.PI * 2); vctx.fill(); });
+    if (g.stage === 'centres') {
+      const map = quadMap(g.quad);
+      for (let i = 0; i < 9; i++) {
+        if (i < g.centres.length) {
+          const s = w2s(g.centres[i]);
+          vctx.beginPath(); vctx.arc(s.x, s.y, 3, 0, Math.PI * 2); vctx.fill();
+        } else {
+          const uv = stickerUV(i), s = w2s(map(uv.u, uv.v));
+          vctx.setLineDash([3, 3]);
+          vctx.beginPath(); vctx.arc(s.x, s.y, i === g.centres.length ? 6 : 4, 0, Math.PI * 2); vctx.stroke();
+          vctx.setLineDash([]);
+          vctx.font = '9px Consolas, monospace'; vctx.fillText(String(i + 1), s.x + 5, s.y - 4);
+        }
+      }
+    }
+  }
+}
+
+// ------------------------------------------------------------ scrubber
+function drawScrubber() {
+  const dpr = window.devicePixelRatio || 1;
+  const r = scrubCanvas.getBoundingClientRect();
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  sctx.clearRect(0, 0, r.width, r.height);
+  const N = S.passList.length;
+  if (!N) return;
+  const padL = 26, padR = 8, w = r.width - padL - padR;
+  const X = (idx) => padL + (N === 1 ? 0 : (idx / (N - 1)) * w);
+  const laneTop = 16, laneH = 9;
+
+  sctx.font = '9px Consolas, monospace';
+  TAGS.forEach((t, li) => {
+    sctx.fillStyle = TAG_COLORS[t];
+    sctx.fillText(TAG_ABBR[t], 4, laneTop + li * laneH + 8);
+    sctx.globalAlpha = 0.14;
+    sctx.fillRect(padL, laneTop + li * laneH + 1, w, laneH - 2);
+    sctx.globalAlpha = 1;
+  });
+  for (const seg of S.segments) {
+    const x0 = X(idxForPass(seg.start)), x1 = X(idxForPass(seg.end));
+    for (const t of seg.tags) {
+      const li = TAGS.indexOf(t);
+      if (li < 0) continue;
+      sctx.fillStyle = TAG_COLORS[t];
+      sctx.fillRect(x0, laneTop + li * laneH + 1, Math.max(1.5, x1 - x0), laneH - 2);
+    }
+  }
+  // pending range outline
+  if (S.pending.start !== null && S.pending.end !== null) {
+    const x0 = X(idxForPass(Math.min(S.pending.start, S.pending.end)));
+    const x1 = X(idxForPass(Math.max(S.pending.start, S.pending.end)));
+    sctx.strokeStyle = '#ffffff'; sctx.lineWidth = 1;
+    sctx.strokeRect(x0, laneTop, Math.max(2, x1 - x0), TAGS.length * laneH);
+  }
+  // re-entry events
+  sctx.strokeStyle = '#f85149';
+  for (const p of S.reentry) {
+    const x = X(idxForPass(p));
+    sctx.beginPath(); sctx.moveTo(x, laneTop - 2); sctx.lineTo(x, laneTop + TAGS.length * laneH + 2); sctx.stroke();
+  }
+  // keyframe ticks
+  for (const [pass, kf] of S.keyframes) {
+    const x = X(idxForPass(pass));
+    sctx.fillStyle = kf.interpolated ? COL_INTERP : COL_HAND;
+    sctx.beginPath();
+    sctx.moveTo(x - 4, 2); sctx.lineTo(x + 4, 2); sctx.lineTo(x, 11); sctx.closePath(); sctx.fill();
+  }
+  // playhead
+  const x = X(S.cur);
+  sctx.strokeStyle = '#ffffff'; sctx.lineWidth = 1.5;
+  sctx.beginPath(); sctx.moveTo(x, 0); sctx.lineTo(x, r.height - 12); sctx.stroke();
+  sctx.fillStyle = '#c9d1d9'; sctx.font = '10px Consolas, monospace';
+  const lbl = 'pass ' + curPass();
+  sctx.fillText(lbl, clamp(x - 20, padL, r.width - 60), r.height - 2);
+}
+
+function scrubSeek(e) {
+  const N = S.passList.length;
+  if (!N) return;
+  const r = scrubCanvas.getBoundingClientRect();
+  const padL = 26, padR = 8, w = r.width - padL - padR;
+  const frac = clamp((e.clientX - r.left - padL) / w, 0, 1);
+  gotoIndex(Math.round(frac * (N - 1)));
+}
+let scrubDrag = false;
+scrubCanvas.addEventListener('mousedown', (e) => { scrubDrag = true; scrubSeek(e); });
+window.addEventListener('mousemove', (e) => { if (scrubDrag) scrubSeek(e); });
+window.addEventListener('mouseup', () => { scrubDrag = false; });
+
+// ------------------------------------------------- keyframe mutation
+function getOrCreateKF() {
+  const pass = curPass();
+  let kf = S.keyframes.get(pass);
+  if (!kf) { kf = { pass, interpolated: false, corners: [], faces: [] }; S.keyframes.set(pass, kf); }
+  return kf;
+}
+function dropKFIfEmpty(kf) {
+  if (!kf.corners.length && !kf.faces.length) S.keyframes.delete(kf.pass);
+}
+
+function placeCorner(id, wpt) {
+  const kf = getOrCreateKF();
+  const existing = kf.corners.find((c) => c.model_id === id);
+  if (existing) { existing.x = wpt.x; existing.y = wpt.y; }
+  else kf.corners.push({ model_id: id, x: wpt.x, y: wpt.y });
+  S.selection = { kind: 'corner', pass: kf.pass, i: kf.corners.findIndex((c) => c.model_id === id) };
+  autosave(); scheduleDraw();
+}
+
+function startGuided(face) {
+  if (!S.passList.length || S.mode !== 'keyframe') return;
+  S.guided = { face, quad: [], centres: [], stage: 'quad' };
+  S.armedCorner = null; S.selection = null;
+  updatePrompt(); renderFramePanels(); scheduleDraw();
+}
+function placeGuidedPoint(wpt) {
+  const g = S.guided;
+  if (!g) return;
+  if (g.stage === 'quad') {
+    g.quad.push({ x: wpt.x, y: wpt.y });
+    if (g.quad.length === 4) g.stage = 'centres';
+  } else {
+    g.centres.push({ x: wpt.x, y: wpt.y });
+    if (g.centres.length === 9) { commitGuided(); return; }
+  }
+  updatePrompt(); scheduleDraw();
+}
+function acceptGhost(all) {
+  const g = S.guided;
+  if (!g || g.stage !== 'centres') return;
+  const map = quadMap(g.quad);
+  do {
+    const uv = stickerUV(g.centres.length);
+    g.centres.push(map(uv.u, uv.v));
+  } while (all && g.centres.length < 9);
+  if (g.centres.length === 9) commitGuided();
+  else { updatePrompt(); scheduleDraw(); }
+}
+function undoGuided() {
+  const g = S.guided;
+  if (!g) return;
+  if (g.stage === 'centres' && g.centres.length) g.centres.pop();
+  else if (g.stage === 'centres') { g.stage = 'quad'; g.quad.pop(); }
+  else if (g.quad.length) g.quad.pop();
+  updatePrompt(); scheduleDraw();
+}
+function commitGuided() {
+  const g = S.guided;
+  const kf = getOrCreateKF();
+  const faceObj = {
+    face: g.face,
+    quad: Object.fromEntries(QUAD_KEYS.map((k, i) => [k, g.quad[i]])),
+    centres: g.centres,
+  };
+  const idx = kf.faces.findIndex((f) => f.face === g.face);
+  if (idx >= 0) kf.faces[idx] = faceObj; else kf.faces.push(faceObj);
+  S.guided = null;
+  updatePrompt(); autosave(); scheduleDraw();
+}
+
+function hitTest(spt) {
+  const kf = S.keyframes.get(curPass());
+  if (!kf) return null;
+  let best = null, bestD = 10;
+  const tryPt = (wpt, ref) => {
+    const s = w2s(wpt);
+    const d = Math.hypot(s.x - spt.x, s.y - spt.y);
+    if (d < bestD) { bestD = d; best = ref; }
+  };
+  kf.corners.forEach((c, i) => tryPt(c, { kind: 'corner', pass: kf.pass, i }));
+  kf.faces.forEach((f, fi) => {
+    QUAD_KEYS.forEach((k, ci) => tryPt(f.quad[k], { kind: 'quad', pass: kf.pass, fi, i: ci }));
+    f.centres.forEach((p, i) => tryPt(p, { kind: 'centre', pass: kf.pass, fi, i }));
+  });
+  return best;
+}
+function pointFromRef(ref) {
+  const kf = S.keyframes.get(ref.pass);
+  if (!kf) return null;
+  if (ref.kind === 'corner') return kf.corners[ref.i] || null;
+  const f = kf.faces[ref.fi];
+  if (!f) return null;
+  return ref.kind === 'quad' ? f.quad[QUAD_KEYS[ref.i]] : f.centres[ref.i];
+}
+function deleteSelected() {
+  const sel = S.selection;
+  if (!sel) return;
+  const kf = S.keyframes.get(sel.pass);
+  if (!kf) return;
+  if (sel.kind === 'corner') {
+    kf.corners.splice(sel.i, 1);
+  } else {
+    const f = kf.faces[sel.fi];
+    if (!f || !confirm('Delete the whole labelled face ' + f.face + '? (quad + centres)')) return;
+    kf.faces.splice(sel.fi, 1);
+  }
+  S.selection = null;
+  dropKFIfEmpty(kf);
+  autosave(); scheduleDraw();
+}
+function deleteKeyframe(pass) {
+  if (!confirm('Delete keyframe at pass ' + pass + '?')) return;
+  S.keyframes.delete(pass);
+  if (S.selection && S.selection.pass === pass) S.selection = null;
+  autosave(); scheduleDraw();
+}
+
+// -------------------------------------------------------- interpolate
+function tOf(pass) {
+  const i = S.passIdx.get(pass);
+  return i !== undefined ? S.rows[i].t_ms : pass;
+}
+function interpolateCurrent() {
+  const p = curPass();
+  if (p === null) return;
+  const existing = S.keyframes.get(p);
+  if (existing && !existing.interpolated) { alert('Pass ' + p + ' is already hand-labelled.'); return; }
+  const handPasses = [...S.keyframes.entries()].filter(([, kf]) => !kf.interpolated).map(([k]) => k).sort((a, b) => a - b);
+  const prev = handPasses.filter((k) => k < p).pop();
+  const next = handPasses.find((k) => k > p);
+  if (prev === undefined || next === undefined) {
+    alert('Interpolation needs a hand-labelled keyframe on BOTH sides of this frame.');
+    return;
+  }
+  const A = S.keyframes.get(prev), B = S.keyframes.get(next);
+  const t = (tOf(p) - tOf(prev)) / ((tOf(next) - tOf(prev)) || 1);
+  const lerpP = (a, b) => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  const kf = { pass: p, interpolated: true, corners: [], faces: [] };
+  for (const ca of A.corners) {
+    const cb = B.corners.find((c) => c.model_id === ca.model_id);
+    if (cb) kf.corners.push({ model_id: ca.model_id, ...lerpP(ca, cb) });
+  }
+  for (const fa of A.faces) {
+    const fb = B.faces.find((f) => f.face === fa.face);
+    if (!fb) continue;
+    kf.faces.push({
+      face: fa.face,
+      quad: Object.fromEntries(QUAD_KEYS.map((k) => [k, lerpP(fa.quad[k], fb.quad[k])])),
+      centres: fa.centres.map((pt, i) => lerpP(pt, fb.centres[i])),
+    });
+  }
+  if (!kf.corners.length && !kf.faces.length) {
+    alert('Keyframes at ' + prev + ' and ' + next + ' share no corners or faces to interpolate.');
+    return;
+  }
+  S.keyframes.set(p, kf);
+  autosave(); scheduleDraw();
+}
+function acceptCurrent() {
+  const kf = S.keyframes.get(curPass());
+  if (!kf) { alert('No keyframe on this frame.'); return; }
+  if (!kf.interpolated) { alert('This keyframe is already hand-labelled.'); return; }
+  kf.interpolated = false;
+  autosave(); scheduleDraw();
+}
+
+// ----------------------------------------------------------- segments
+function commitPending() {
+  const P = S.pending;
+  if (P.start === null || P.end === null) { alert('Set both start ([) and end (]) first.'); return; }
+  if (!P.tags.size) { alert('Pick at least one tag (keys 1-5).'); return; }
+  const tags = new Set(P.tags);
+  if (tags.has('in_frame') && tags.has('absent')) { alert('in_frame and absent are mutually exclusive.'); return; }
+  if (tags.has('steady') && tags.has('turning')) { alert('steady and turning are mutually exclusive.'); return; }
+  if (tags.has('occluded')) tags.add('in_frame'); // occluded implies in_frame
+  const seg = { start: Math.min(P.start, P.end), end: Math.max(P.start, P.end), tags: TAGS.filter((t) => tags.has(t)) };
+  S.segments.push(seg);
+  S.segments.sort((a, b) => a.start - b.start);
+  P.start = null; P.end = null; // keep tag selection for the next range
+  autosave();
+}
+function toggleReentry() {
+  const p = curPass();
+  if (p === null) return;
+  const i = S.reentry.indexOf(p);
+  if (i >= 0) S.reentry.splice(i, 1);
+  else { S.reentry.push(p); S.reentry.sort((a, b) => a - b); }
+  autosave();
+}
+function coverageFrac() {
+  const N = S.passList.length;
+  if (!N || !S.segments.length) return 0;
+  const covered = new Uint8Array(N);
+  for (const seg of S.segments) {
+    const a = idxForPass(seg.start), b = idxForPass(seg.end);
+    for (let i = Math.min(a, b); i <= Math.max(a, b); i++) covered[i] = 1;
+  }
+  let n = 0;
+  for (let i = 0; i < N; i++) n += covered[i];
+  return n / N;
+}
+
+// -------------------------------------------------------- interaction
+viewCanvas.addEventListener('mousedown', (e) => {
+  if (!S.passList.length) return;
+  const r = viewCanvas.getBoundingClientRect();
+  const spt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  if (e.button === 1 || (e.button === 0 && S.spaceHeld)) {
+    S.drag = { type: 'pan', sx: spt.x, sy: spt.y, ox0: S.view.ox, oy0: S.view.oy };
+    e.preventDefault();
+    return;
+  }
+  if (e.button !== 0) return;
+  const wpt = s2w(spt);
+  if (S.guided) { placeGuidedPoint(wpt); return; }
+  const hit = hitTest(spt);
+  if (hit) {
+    S.selection = hit;
+    S.drag = { type: 'point', ref: hit };
+    scheduleDraw();
+    return;
+  }
+  if (S.mode === 'keyframe' && S.armedCorner !== null) { placeCorner(S.armedCorner, wpt); return; }
+  if (S.selection) { S.selection = null; scheduleDraw(); }
+});
+window.addEventListener('mousemove', (e) => {
+  const r = viewCanvas.getBoundingClientRect();
+  const spt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  S.mouse = spt;
+  if (S.drag && S.drag.type === 'pan') {
+    S.view.ox = S.drag.ox0 + (spt.x - S.drag.sx);
+    S.view.oy = S.drag.oy0 + (spt.y - S.drag.sy);
+    scheduleDraw();
+  } else if (S.drag && S.drag.type === 'point') {
+    const pt = pointFromRef(S.drag.ref);
+    if (pt) {
+      const wpt = s2w(spt);
+      pt.x = wpt.x; pt.y = wpt.y;
+      scheduleDraw();
+    }
+  }
+  updateStatus();
+});
+window.addEventListener('mouseup', () => {
+  if (S.drag && S.drag.type === 'point') autosave();
+  S.drag = null;
+});
+viewCanvas.addEventListener('wheel', (e) => {
+  if (!S.passList.length) return;
+  e.preventDefault();
+  const r = viewCanvas.getBoundingClientRect();
+  const spt = { x: e.clientX - r.left, y: e.clientY - r.top };
+  const factor = Math.pow(1.0015, -e.deltaY);
+  zoomAbout(spt, factor);
+}, { passive: false });
+viewCanvas.addEventListener('contextmenu', (e) => e.preventDefault());
+viewCanvas.addEventListener('auxclick', (e) => { if (e.button === 1) e.preventDefault(); });
+
+function zoomAbout(spt, factor) {
+  const v = S.view;
+  const ns = clamp(v.scale * factor, 0.05, 80);
+  v.ox = spt.x - (spt.x - v.ox) * (ns / v.scale);
+  v.oy = spt.y - (spt.y - v.oy) * (ns / v.scale);
+  v.scale = ns;
+  scheduleDraw(); updateStatus();
+}
+function zoomCentre(factor) {
+  const r = viewCanvas.getBoundingClientRect();
+  zoomAbout({ x: r.width / 2, y: r.height / 2 }, factor);
+}
+
+// ------------------------------------------------------------ keyboard
+window.addEventListener('keydown', (e) => {
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+    if (e.key === 'Enter') e.target.blur();
+    return;
+  }
+  if (e.key === ' ') { S.spaceHeld = true; e.preventDefault(); return; }
+  if (e.key === '?' || e.key === 'h') { toggleHelp(); return; }
+  if (!$('help').classList.contains('hiddenpanel')) { // help open: any key closes
+    if (e.key === 'Escape') toggleHelp();
+    return;
+  }
+
+  switch (e.key) {
+    case 'ArrowLeft': case 'ArrowRight': {
+      e.preventDefault();
+      const dir = e.key === 'ArrowRight' ? 1 : -1;
+      if (e.altKey && S.selection) { // nudge selected point by one screen px
+        const pt = pointFromRef(S.selection);
+        if (pt) { pt.x += dir / S.view.scale; autosave(); scheduleDraw(); }
+        return;
+      }
+      const step = e.ctrlKey ? 1 : e.shiftKey ? S.stride * 10 : S.stride;
+      gotoIndex(S.cur + dir * step);
+      return;
+    }
+    case 'ArrowUp': case 'ArrowDown': {
+      e.preventDefault();
+      if (e.altKey && S.selection) {
+        const pt = pointFromRef(S.selection);
+        if (pt) { pt.y += (e.key === 'ArrowDown' ? 1 : -1) / S.view.scale; autosave(); scheduleDraw(); }
+      }
+      return;
+    }
+    case 'Home': e.preventDefault(); gotoIndex(0); return;
+    case 'End': e.preventDefault(); gotoIndex(S.passList.length - 1); return;
+    case ',': case '.': {
+      const passes = [...S.keyframes.keys()].sort((a, b) => a - b);
+      if (!passes.length) return;
+      const p = curPass();
+      const target = e.key === ',' ? passes.filter((k) => k < p).pop() : passes.find((k) => k > p);
+      if (target !== undefined) gotoPass(target);
+      return;
+    }
+    case '+': case '=': zoomCentre(1.3); return;
+    case '-': case '_': zoomCentre(1 / 1.3); return;
+    case 'z': if (S.curBitmap) { fitView(S.curBitmap); scheduleDraw(); updateStatus(); } return;
+    case 'm':
+      setMode(S.mode === 'segment' ? 'keyframe' : 'segment');
+      return;
+    case 'i': case 'I': interpolateCurrent(); return;
+    case 'a': case 'A': acceptCurrent(); return;
+    case 'Escape':
+      if (S.guided) { S.guided = null; updatePrompt(); }
+      else if (S.armedCorner !== null) { S.armedCorner = null; updatePrompt(); renderFramePanels(); }
+      else if (S.mode === 'segment') { S.pending.start = null; S.pending.end = null; renderAll(); }
+      if (S.selection) S.selection = null;
+      scheduleDraw();
+      return;
+    case 'Backspace':
+      if (S.guided) { e.preventDefault(); undoGuided(); }
+      return;
+    case 'Delete':
+      if (S.mode === 'keyframe') deleteSelected();
+      return;
+  }
+
+  if (S.mode === 'segment') {
+    if (e.key >= '1' && e.key <= '5') { toggleTag(TAGS[Number(e.key) - 1]); return; }
+    switch (e.key) {
+      case '[': S.pending.start = curPass(); renderAll(); return;
+      case ']': S.pending.end = curPass(); renderAll(); return;
+      case 'Enter': commitPending(); return;
+      case 'e': toggleReentry(); return;
+    }
+  } else { // keyframe mode
+    if (e.key >= '0' && e.key <= '7') { armCorner(Number(e.key)); return; }
+    switch (e.key) {
+      case 'u': case 'r': case 'f': case 'd': case 'l': case 'b':
+        startGuided(e.key.toUpperCase()); return;
+      case 'g': acceptGhost(false); return;
+      case 'G': acceptGhost(true); return;
+    }
+  }
+});
+window.addEventListener('keyup', (e) => { if (e.key === ' ') S.spaceHeld = false; });
+
+function armCorner(id) {
+  S.armedCorner = S.armedCorner === id ? null : id;
+  S.guided = null;
+  updatePrompt(); renderFramePanels();
+}
+function toggleTag(t) {
+  if (S.pending.tags.has(t)) S.pending.tags.delete(t); else S.pending.tags.add(t);
+  renderAll();
+}
+function setMode(mode) {
+  S.mode = mode;
+  S.guided = null; S.armedCorner = null; S.selection = null;
+  updatePrompt(); renderAll(); scheduleDraw();
+}
+
+// ------------------------------------------------------------ UI bits
+function updatePrompt() {
+  const el = $('prompt');
+  const g = S.guided;
+  if (g) {
+    el.style.display = 'block';
+    if (g.stage === 'quad') {
+      const n = g.quad.length;
+      el.textContent = 'Face ' + g.face + ': click quad corner ' + QUAD_KEYS[n] +
+        ' = cube corner ' + FACE_QUAD_CORNERS[g.face][n] + ' (' + (n + 1) + ' of 4)';
+    } else {
+      const n = g.centres.length;
+      el.textContent = 'Face ' + g.face + ': click sticker centre ' + (n + 1) + ' of 9 (' +
+        CENTRE_NAMES[n] + ') - g = accept ghost, G = accept all';
+    }
+  } else if (S.armedCorner !== null) {
+    el.style.display = 'block';
+    el.textContent = 'Corner ' + S.armedCorner + ' (' + CORNER_NAMES[S.armedCorner] +
+      ') armed - click to place, Esc to disarm';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+function updateStatus() {
+  const el = $('status');
+  if (!S.passList.length) { el.textContent = 'press ? for help'; return; }
+  const p = curPass(), row = S.rows[S.cur];
+  let hand = 0, interp = 0;
+  for (const kf of S.keyframes.values()) (kf.interpolated ? interp++ : hand++);
+  let mouseTxt = '';
+  if (S.mouse && S.curBitmap) {
+    const w = s2w(S.mouse);
+    if (w.x >= 0 && w.y >= 0 && w.x < S.curBitmap.width && w.y < S.curBitmap.height)
+      mouseTxt = ' | xy ' + w.x.toFixed(1) + ',' + w.y.toFixed(1);
+  }
+  el.innerHTML = 'pass <b>' + p + '</b> (' + (S.cur + 1) + '/' + S.passList.length + ')' +
+    ' t=' + row.t_ms + 'ms | mode <b>' + S.mode + '</b>' +
+    ' | KF <b>' + hand + '</b> hand + <b>' + interp + '</b> interp' +
+    ' | segments <b>' + S.segments.length + '</b> (' + Math.round(coverageFrac() * 100) + '% coverage)' +
+    ' | re-entry <b>' + S.reentry.length + '</b>' +
+    ' | zoom ' + Math.round(S.view.scale * 100) + '%' + mouseTxt +
+    ' | ? = help';
+}
+
+function renderTagChips() {
+  const box = $('tagChips');
+  box.innerHTML = '';
+  TAGS.forEach((t, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'tagchip' + (S.pending.tags.has(t) ? ' on' : '');
+    chip.style.color = TAG_COLORS[t];
+    chip.textContent = (i + 1) + ' ' + t;
+    chip.onclick = () => toggleTag(t);
+    box.appendChild(chip);
+  });
+  $('pendingRange').textContent =
+    (S.pending.start === null ? '?' : S.pending.start) + ' .. ' + (S.pending.end === null ? '?' : S.pending.end);
+}
+
+function renderSegLists() {
+  const list = $('segList');
+  list.innerHTML = '';
+  if (!S.segments.length) list.textContent = 'none';
+  S.segments.forEach((seg, i) => {
+    const item = document.createElement('div');
+    item.className = 'item';
+    const span = document.createElement('span');
+    span.textContent = seg.start + '-' + seg.end + '  [' + seg.tags.join(', ') + ']';
+    span.onclick = () => gotoPass(seg.start);
+    const del = document.createElement('span');
+    del.className = 'del'; del.textContent = 'x'; del.title = 'delete segment';
+    del.onclick = () => { S.segments.splice(i, 1); autosave(); };
+    item.append(span, del);
+    list.appendChild(item);
+  });
+  const rl = $('reentryList');
+  rl.innerHTML = '';
+  if (!S.reentry.length) rl.textContent = 'none';
+  S.reentry.forEach((p, i) => {
+    const item = document.createElement('div');
+    item.className = 'item';
+    const span = document.createElement('span');
+    span.textContent = 'pass ' + p;
+    span.onclick = () => gotoPass(p);
+    const del = document.createElement('span');
+    del.className = 'del'; del.textContent = 'x'; del.title = 'delete event';
+    del.onclick = () => { S.reentry.splice(i, 1); autosave(); };
+    item.append(span, del);
+    rl.appendChild(item);
+  });
+}
+
+function renderKfPanel() {
+  // face buttons
+  const fb = $('faceBtns');
+  fb.innerHTML = '';
+  const kf = S.keyframes.get(curPass());
+  for (const f of FACE_LETTERS) {
+    const btn = document.createElement('button');
+    btn.className = 'facebtn' + (kf && kf.faces.some((x) => x.face === f) ? ' labelled' : '');
+    btn.textContent = f;
+    btn.title = 'label face ' + f + ' (guided)';
+    btn.onclick = () => startGuided(f);
+    fb.appendChild(btn);
+  }
+  // current frame info
+  const info = $('kfInfo');
+  if (!kf) {
+    info.textContent = 'no keyframe on this frame';
+  } else {
+    info.innerHTML = '<span class="badge ' + (kf.interpolated ? 'interp">INTERPOLATED (not gate-valid, press a to accept)' : 'hand">hand-labelled') + '</span>' +
+      '<br>corners: ' + (kf.corners.length ? [...kf.corners].sort((a, b) => a.model_id - b.model_id).map((c) => c.model_id).join(' ') : 'none') +
+      '<br>faces: ' + (kf.faces.length ? kf.faces.map((f) => f.face).join(' ') : 'none');
+  }
+  // corner diagram highlight
+  const dia = $('cornerDiagram');
+  dia.querySelectorAll('.v').forEach((v) => {
+    const id = Number(v.dataset.id);
+    v.classList.toggle('armed', S.armedCorner === id);
+    v.classList.toggle('placed', !!(kf && kf.corners.some((c) => c.model_id === id)));
+  });
+  // keyframe list
+  const list = $('kfList');
+  list.innerHTML = '';
+  const passes = [...S.keyframes.keys()].sort((a, b) => a - b);
+  if (!passes.length) list.textContent = 'none';
+  for (const p of passes) {
+    const k = S.keyframes.get(p);
+    const item = document.createElement('div');
+    item.className = 'item';
+    const badge = document.createElement('span');
+    badge.className = 'badge ' + (k.interpolated ? 'interp' : 'hand');
+    badge.textContent = k.interpolated ? 'int' : 'hand';
+    const span = document.createElement('span');
+    span.textContent = 'pass ' + p + ' (' + k.corners.length + 'c, ' + k.faces.map((f) => f.face).join('') + ')';
+    span.onclick = () => gotoPass(p);
+    const del = document.createElement('span');
+    del.className = 'del'; del.textContent = 'x'; del.title = 'delete keyframe';
+    del.onclick = () => deleteKeyframe(p);
+    item.append(badge, span, del);
+    list.appendChild(item);
+  }
+}
+
+function renderFramePanels() {
+  $('modeSegBtn').classList.toggle('active', S.mode === 'segment');
+  $('modeKfBtn').classList.toggle('active', S.mode === 'keyframe');
+  $('segPanel').classList.toggle('hiddenpanel', S.mode !== 'segment');
+  $('kfPanel').classList.toggle('hiddenpanel', S.mode !== 'keyframe');
+  if (S.mode === 'segment') { renderTagChips(); renderSegLists(); }
+  else renderKfPanel();
+}
+function renderAll() {
+  renderFramePanels();
+  drawScrubber();
+  updateStatus();
+}
+
+function buildCornerDiagram() {
+  // parallel projection of the cube body; ids are Singmaster order.
+  const P = [
+    [12, -4], [-48, -24], [-12, -56], [48, -36], // URF UFL ULB UBR
+    [12, 56], [-48, 36], [-12, 4], [48, 24],     // DFR DLF DBL DRB
+  ];
+  const edges = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+  let svg = '<svg width="210" height="200" viewBox="-72 -78 144 156" xmlns="http://www.w3.org/2000/svg">';
+  for (const [a, b] of edges) {
+    const hidden = a === 6 || b === 6;
+    svg += '<line class="edge' + (hidden ? ' hidden' : '') + '" x1="' + P[a][0] + '" y1="' + P[a][1] +
+      '" x2="' + P[b][0] + '" y2="' + P[b][1] + '"/>';
+  }
+  svg += '<text class="facelabel" x="0" y="-27">U</text>' +
+    '<text class="facelabel" x="-20" y="19">F</text>' +
+    '<text class="facelabel" x="32" y="13">R</text>';
+  for (let i = 0; i < 8; i++) {
+    svg += '<g class="v" data-id="' + i + '"><title>' + i + ' = ' + CORNER_NAMES[i] + '</title>' +
+      '<circle cx="' + P[i][0] + '" cy="' + P[i][1] + '" r="10"/>' +
+      '<text x="' + P[i][0] + '" y="' + P[i][1] + '">' + i + '</text></g>';
+  }
+  svg += '</svg>';
+  const dia = $('cornerDiagram');
+  dia.innerHTML = svg;
+  dia.querySelectorAll('.v').forEach((v) => {
+    v.addEventListener('click', () => armCorner(Number(v.dataset.id)));
+  });
+}
+
+function toggleHelp() { $('help').classList.toggle('hiddenpanel'); }
+
+// --------------------------------------------------------------- wiring
+$('dirInput').addEventListener('change', (e) => {
+  const entries = Array.from(e.target.files).map((f) => ({
+    path: f.webkitRelativePath || f.name, file: f,
+  }));
+  if (entries.length) ingestEntries(entries);
+  e.target.value = '';
+});
+$('jsonInput').addEventListener('change', async (e) => {
+  for (const f of Array.from(e.target.files)) {
+    try {
+      const obj = JSON.parse(await f.text());
+      importJsonObject(obj, f.name);
+    } catch (err) { alert(f.name + ': not valid JSON'); }
+  }
+  e.target.value = '';
+  autosave();
+});
+function importJsonObject(obj, name) {
+  if (obj && obj.keyframes && obj.segments) { // bundle
+    applySegmentsObj(obj.segments);
+    let n = 0;
+    for (const [k, v] of Object.entries(obj.keyframes)) {
+      const kf = normaliseKeyframe(v, parseInt(k, 10));
+      if (kf) { S.keyframes.set(kf.pass, kf); n++; }
+    }
+    console.log('bundle import:', n, 'keyframes');
+  } else if (obj && Array.isArray(obj.segments)) {
+    applySegmentsObj(obj);
+  } else if (obj && (obj.corners || obj.faces)) {
+    const m = /^(\d+)\.json$/.exec(name || '');
+    const kf = normaliseKeyframe(obj, m ? parseInt(m[1], 10) : undefined);
+    if (kf) S.keyframes.set(kf.pass, kf);
+    else alert(name + ': keyframe JSON missing a valid pass number');
+  } else {
+    alert((name || 'file') + ': unrecognised JSON shape (expect bundle, segments.json, or a keyframe file)');
+  }
+}
+$('strideInput').addEventListener('change', (e) => {
+  S.stride = clamp(parseInt(e.target.value, 10) || 1, 1, 500);
+  e.target.value = S.stride;
+});
+$('helpBtn').addEventListener('click', toggleHelp);
+$('help').addEventListener('click', (e) => { if (e.target === $('help')) toggleHelp(); });
+$('modeSegBtn').addEventListener('click', () => setMode('segment'));
+$('modeKfBtn').addEventListener('click', () => setMode('keyframe'));
+$('setStartBtn').addEventListener('click', () => { S.pending.start = curPass(); renderAll(); });
+$('setEndBtn').addEventListener('click', () => { S.pending.end = curPass(); renderAll(); });
+$('commitSegBtn').addEventListener('click', commitPending);
+$('reentryBtn').addEventListener('click', toggleReentry);
+$('interpBtn').addEventListener('click', interpolateCurrent);
+$('acceptBtn').addEventListener('click', acceptCurrent);
+$('dlSegBtn').addEventListener('click', () => {
+  if (!S.passList.length) return;
+  download('segments.json', segmentsObj());
+});
+$('dlKfBtn').addEventListener('click', () => {
+  const kf = S.keyframes.get(curPass());
+  if (!kf) { alert('No keyframe on the current frame.'); return; }
+  download(pad6(kf.pass) + '.json', keyframeObj(kf));
+});
+$('dlBundleBtn').addEventListener('click', () => {
+  if (!S.passList.length) return;
+  download(S.clipName + '.groundtruth.bundle.json', bundleObj());
+});
+$('clearAutosaveBtn').addEventListener('click', () => {
+  if (!S.clipName) return;
+  if (confirm('Remove the autosaved labels for "' + S.clipName + '" from this browser?'))
+    localStorage.removeItem(autosaveKey());
+});
+
+buildCornerDiagram();
+renderAll();
+sizeCanvases();
+
+// Test hook: lets an automated harness feed files without the native
+// directory picker and reach the serialisers directly.
+window.__labelTool = {
+  S, ingestEntries, segmentsObj, keyframeObj, bundleObj, normaliseKeyframe,
+  gotoIndex, gotoPass, quadMap, placeCorner, startGuided, placeGuidedPoint,
+  acceptGhost, commitPending, toggleReentry, interpolateCurrent, acceptCurrent,
+  setMode, armCorner, importJsonObject, coverageFrac, parseIndexCsv,
+};
+</script>
+</body>
+</html>

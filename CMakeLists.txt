@@ -95,6 +95,10 @@ add_subdirectory(src/render)
 # CUBEULATOR_BUILD_APP.
 add_subdirectory(src/app)
 
+# Desktop-only developer instruments (offline pipeline runner - see
+# docs/pipeline-plan.md); gated per-platform inside.
+add_subdirectory(tools)
+
 if(CUBEULATOR_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)

@@ -71,6 +71,10 @@ target_sources(cube_lib
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
         src/vision/idle_gate.cpp
+        src/vision/pipeline/trace.cpp
+        src/vision/pipeline/legacy_pipeline.cpp
+        src/vision/recording_v2.cpp
+        src/vision/groundtruth.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 

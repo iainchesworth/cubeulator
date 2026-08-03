@@ -7,8 +7,10 @@
 #include <cube/model/color_scheme.hpp>
 #include <cube/model/face.hpp>
 #include <cube/solver/scan_assembly.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/frame_recording.hpp>
+#include <cube/vision/recording_v2.hpp>
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
@@ -53,7 +55,9 @@ constexpr qint64 kAnalysisOverrunWarnMs = 2000;
 // Vision analysis cost scales with pixel count and the detectors are
 // resolution-independent above this width, so frames are downscaled before
 // observation and the resulting geometry scaled back up for the overlay.
-constexpr int kAnalysisWidth = 640;
+// Owned by the shared recorder/downscale header now (recording_v2.hpp):
+// the recorder thread and analyze() must agree byte-for-byte.
+using cube::vision::recording::kAnalysisWidth;
 
 // Hand-presence ONNX inference runs on the FULL frame and dominates the
 // analysis pass's budget, yet its output is a purely advisory UI hint -
@@ -73,35 +77,23 @@ constexpr int kHandOnnxDecimation = 4;
 constexpr int kHandOnnxDecimationLost = 16;
 
 // --- capture gates (see tryCommitConverged) --------------------------------
-// Primary gate: commits require a LOCKED track whose identity has this
-// many consecutive accepted resolutions behind it - a fresh re-lock must
-// re-prove itself before its routing is trusted with a write.
-constexpr int kMinCaptureAccepts = 3;
-// Per-identity staleness: convergence means "consistent across
-// consecutive-ish frames" (the lesson the old global 700 ms reset
-// encoded), but identity-keyed windows legitimately pause while the user
-// shows OTHER faces - only a gap long enough for lighting to have drifted
-// resets a face's window now, because the identity key already guarantees
-// the samples belong to the same physical face.
-constexpr std::int64_t kIdentityAggStaleMs = 5000;
-// Frontal-ness: beyond ~35 degrees a face view foreshortens too much to
-// trust colours; a corner view reads its flank faces obliquely by
-// construction, so faces whose window took corner samples get the looser
-// corner bound instead.
-constexpr float kMaxFaceCaptureDeg = 35.0F;
-constexpr float kMaxCornerFlankDeg = 70.0F;
-// Motion: a commit mid-turn samples blur. The resolved per-pass rotation
-// bounds actual cube motion; the stability score (threshold well above
-// its 0.02 steady floor) bounds scene motion the pose can't see.
-constexpr float kMaxCaptureRotDeg = 8.0F;
-constexpr float kMaxCaptureMotionScore = 0.05F;
+// The gate values and their rationale live in cube/vision/capture_gates.hpp
+// so the offline replay harnesses measure the shipping policy by
+// construction — they used to hand-transcribe these constants.
+using cube::vision::gates::kIdentityAggStaleMs;
+using cube::vision::gates::kMaxCaptureMotionScore;
+using cube::vision::gates::kMaxCaptureRotDeg;
+using cube::vision::gates::kMaxCornerFlankDeg;
+using cube::vision::gates::kMaxFaceCaptureDeg;
+using cube::vision::gates::kMinCaptureAccepts;
 
 // AR-overlay persistence (display-only; see handleAnalysisFinished): held
-// geometry outlives a detection blip by this long, fading via
-// overlayFreshness, so the overlay doesn't strobe at the per-frame
-// detection rate. Fresh geometry is blended toward the held geometry by
-// (1 - kOverlaySmoothing) to damp frame-to-frame jitter.
-constexpr qint64 kOverlayHoldMs = 450;
+// geometry outlives a detection blip for the shared hold window (also in
+// capture_gates.hpp — the replay harnesses hold seeds/hints for the same
+// window), fading via overlayFreshness, so the overlay doesn't strobe at
+// the per-frame detection rate. Fresh geometry is blended toward the held
+// geometry by (1 - kOverlaySmoothing) to damp frame-to-frame jitter.
+using cube::vision::gates::kOverlayHoldMs;
 constexpr float kOverlaySmoothing = 0.6F;
 
 // Pose-quaternion smoothing (see cubeOrientation): each fresh valid
@@ -164,41 +156,53 @@ void dump_vision_debug(const cv::Mat& analysis_frame, const VisionDebugStats& st
     slot = (slot + 1) % 6;
 }
 
-// Set CUBE_VISION_RECORD_DIR to a writable directory and the analysis
-// worker records EVERY pass's exact detector-input frame plus an index.csv
-// row of per-pass metadata (format shared with the offline [.track-replay]
-// harness via cube/vision/frame_recording.hpp). Unlike dump_vision_debug's
-// throttled 6-frame ring - built for eyeballing single frames - this
-// captures whole motion sequences: the corpus that free-rotation tracking
-// is calibrated and regression-tested against, where inter-frame timing
-// and completeness are the whole point. JPEG q=90 keeps a clip's disk cost
-// ~30x below PNG while staying visually lossless for the Lab-space
-// detectors; the file ring bounds a forgotten recorder's disk use. Same
-// locking story as dump_vision_debug: single-in-flight worker, so the
-// statics need no synchronization.
-void record_vision_frame(const cv::Mat& analysis_frame, std::int64_t frame_t_ms, const cv::Size& full_size) {
+// Recorder v2 (docs/pipeline-plan.md Phase 0 item 2). Set
+// CUBE_VISION_RECORD_DIR to a writable directory and EVERY frame poll()
+// pops - including ones the busy analysis gate skips - is recorded via the
+// async bounded-queue writer in cube/vision/recording_v2.hpp: the
+// analysis-scale stream (the replay input, format unchanged) plus a
+// full-resolution JPEG under fullres/ for labelling, plus a manifest with
+// the cube's true state VALIDATED through the solver oracle - a state
+// string that cannot build a solvable cube refuses to record, loudly,
+// because a silent slip would poison every exact-state gate downstream.
+// Manifest fields come from CUBE_VISION_RECORD_{STATE,LIGHTING,MOTION,
+// CAMERA,CUBE}. Called from the GUI thread only (poll), so the statics
+// need no locking; the writer thread owns all disk I/O and the producer
+// never blocks (drops are counted and fail the clip's integrity check).
+//
+// Fidelity note vs the v1 recorder this replaces: v1 wrote per analysis
+// PASS from the worker; v2 writes per POPPED FRAME, so a recording may
+// carry more frames than the original run analysed. The offline runner -
+// the acceptance surface - analyses every frame deterministically either
+// way; the in-app replay path was never frame-deterministic (busy-skip).
+void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) {
     namespace recording = cube::vision::recording;
     static const QString dir = qEnvironmentVariable("CUBE_VISION_RECORD_DIR");
     if (dir.isEmpty()) {
         return;
     }
-    static int pass = 0;
-    static std::string dir_path;
-    if (pass == 0) {
+    static recording::AsyncRecorder recorder;
+    static bool start_attempted = false;
+    if (!start_attempted) {
+        start_attempted = true;
+        recording::Manifest manifest;
+        const QString state = qEnvironmentVariable("CUBE_VISION_RECORD_STATE");
+        if (!state.isEmpty()) {
+            manifest.state = state.toStdString();
+        } else {
+            qWarning("ScanSession: recording without CUBE_VISION_RECORD_STATE - clip will carry no "
+                     "true-state manifest and cannot feed exact-state gates");
+        }
+        manifest.lighting = qEnvironmentVariable("CUBE_VISION_RECORD_LIGHTING").toStdString();
+        manifest.motion_script = qEnvironmentVariable("CUBE_VISION_RECORD_MOTION").toStdString();
+        manifest.camera = qEnvironmentVariable("CUBE_VISION_RECORD_CAMERA").toStdString();
+        manifest.cube = qEnvironmentVariable("CUBE_VISION_RECORD_CUBE").toStdString();
         QDir().mkpath(dir);
-        dir_path = QDir(dir).absolutePath().toStdString();
-        // Truncate, don't append: each app run is a fresh recording, and a
-        // stale index describing last run's (partially overwritten) frames
-        // would poison a replay far more subtly than losing the old clip.
-        std::ofstream header(dir_path + "/" + std::string(recording::kIndexCsvName), std::ios::trunc);
-        header << recording::kIndexCsvHeader << '\n';
+        if (const auto problem = recorder.start(QDir(dir).absolutePath().toStdString(), manifest)) {
+            qWarning("ScanSession: recording REFUSED: %s", problem->c_str());
+        }
     }
-    cv::imwrite(dir_path + "/" + recording::frame_filename(pass), analysis_frame,
-                {cv::IMWRITE_JPEG_QUALITY, 90});
-    std::ofstream index(dir_path + "/" + std::string(recording::kIndexCsvName), std::ios::app);
-    index << pass << ',' << frame_t_ms << ',' << analysis_frame.cols << ',' << analysis_frame.rows << ','
-          << full_size.width << ',' << full_size.height << '\n';
-    ++pass;
+    recorder.push(full_frame, frame_t_ms);
 }
 
 // Set CUBE_VISION_REPLAY_DIR to a directory previously written by
@@ -1089,6 +1093,10 @@ void ScanSession::poll() {
     ++frame_seq_;
     emit frameUpdated();
 
+    // Recorded at pop time, GUI-side, so the corpus captures every frame
+    // the pipeline COULD see - including ones the busy gate below skips.
+    record_camera_frame_v2(frame->frame, frame->t_ms);
+
     if (analysis_inflight_ || analysis_watcher_.isRunning()) {
         // Still analyzing a previous frame (or its result is queued but not
         // yet handled - see analysis_inflight_ in the header). The two
@@ -1544,20 +1552,12 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         }
     }
 
-    cv::Mat analysis_frame = frame;
-    float scale_back = 1.0F;
-    if (frame.cols > kAnalysisWidth) {
-        const double scale = static_cast<double>(kAnalysisWidth) / frame.cols;
-        cv::resize(frame, analysis_frame, cv::Size(), scale, scale, cv::INTER_AREA);
-        // Derived from the actual resized width, not the requested scale -
-        // cv::resize rounds the output size.
-        scale_back = static_cast<float>(frame.cols) / static_cast<float>(analysis_frame.cols);
-    }
-
-    // Recorded before the detectors run so the corpus captures the exact
-    // input of a pass even if a detector crashes on it - that frame is
-    // precisely the one worth replaying.
-    record_vision_frame(analysis_frame, frame_t_ms, cv::Size(frame.cols, frame.rows));
+    // The shared downscale (recording_v2.hpp): the recorder thread applies
+    // the identical function, so recorded analysis frames are exactly what
+    // this pass consumed.
+    const auto downscaled = cube::vision::recording::analysis_downscale(frame);
+    const cv::Mat& analysis_frame = downscaled.frame;
+    const float scale_back = downscaled.scale_back;
 
     // Cool-hue presence statistic, computed EVERY pass (idle-skipped ones
     // included - it is the signal that ENDS an idle span, so it cannot

@@ -77,6 +77,7 @@
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
@@ -99,18 +100,16 @@
 
 namespace {
 
-// Capture-gate constants, transcribed from scan_session.cpp's anonymous
-// namespace (they are file-local there). Any tuning of those MUST be
-// mirrored here or this harness stops measuring the shipping policy.
-constexpr int kMinCaptureAccepts = 3;
-constexpr std::int64_t kIdentityAggStaleMs = 5000;
-constexpr float kMaxFaceCaptureDeg = 35.0F;
-constexpr float kMaxCornerFlankDeg = 70.0F;
-constexpr float kMaxCaptureRotDeg = 8.0F;
-constexpr float kMaxCaptureMotionScore = 0.05F;
-// Overlay/seed hold window (kOverlayHoldMs), same constant the other
-// replay harnesses keep.
-constexpr std::int64_t kSeedHoldMs = 450;
+// Capture-gate constants: the shipping policy, from the same shared header
+// the live app consumes (capture_gates.hpp) — nothing to mirror by hand.
+using cube::vision::gates::kIdentityAggStaleMs;
+using cube::vision::gates::kMaxCaptureMotionScore;
+using cube::vision::gates::kMaxCaptureRotDeg;
+using cube::vision::gates::kMaxCornerFlankDeg;
+using cube::vision::gates::kMaxFaceCaptureDeg;
+using cube::vision::gates::kMinCaptureAccepts;
+// Overlay/seed hold window, same constant the live app holds seeds for.
+constexpr std::int64_t kSeedHoldMs = cube::vision::gates::kOverlayHoldMs;
 
 // Per-face aggregator bookkeeping, mirroring ScanSession::AggregatorMeta.
 struct AggregatorMeta {

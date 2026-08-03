@@ -221,6 +221,13 @@ ClientBin/
 # ---------------------------------------------------------------------------
 # Cubeulator: CMake / vcpkg / Ninja / tooling
 # ---------------------------------------------------------------------------
+
+# The stock VisualStudio [Dd]ebug/ pattern above silently swallowed the
+# capture-debug dumps under tests/data/captures/<clip>/debug/ for weeks
+# (docs/pipeline-plan.md, Phase 0). Nothing under tests/data/ is build
+# output; re-include all of it explicitly.
+!tests/data/**/[Dd]ebug/
+!tests/data/**/[Dd]ebug/**
 /build/
 build*/
 cmake-build-*/

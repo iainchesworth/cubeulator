@@ -29,10 +29,14 @@ add_executable(cube_unit_tests
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
     unit/cross_session_test.cpp
+    unit/routing_replay_test.cpp
     unit/assembly_probe_test.cpp
     unit/raw_probe_test.cpp
     unit/union_assembly_test.cpp
     unit/frame_recording_test.cpp
+    unit/pipeline_scaffold_test.cpp
+    unit/recording_v2_test.cpp
+    unit/groundtruth_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp
