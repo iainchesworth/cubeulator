@@ -1,0 +1,56 @@
+From 18065bb14e934f369c7c5df8283cf2f2c6dffaab Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:05:15 +1000
+Subject: [PATCH 1/9] M3T: require CMake 3.10
+
+CMake 4 removed compatibility with CMake < 3.5 and deprecates
+everything below 3.10, so configuring M3T with a current CMake fails
+unless CMAKE_POLICY_VERSION_MINIMUM is passed by hand. src/ already
+requires 3.10; use the same minimum everywhere.
+---
+ M3T/CMakeLists.txt          | 2 +-
+ M3T/doc/CMakeLists.txt      | 2 +-
+ M3T/examples/CMakeLists.txt | 2 +-
+ M3T/test/CMakeLists.txt     | 2 +-
+ 4 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/M3T/CMakeLists.txt b/M3T/CMakeLists.txt
+index 9805deb..183d2a4 100644
+--- a/M3T/CMakeLists.txt
++++ b/M3T/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.5)
++cmake_minimum_required(VERSION 3.10)
+ 
+ # A Multi-Body Multi-Modality Multi-Camera 3D Tracker (M3T)
+ # =============================================================================
+diff --git a/M3T/doc/CMakeLists.txt b/M3T/doc/CMakeLists.txt
+index d3afc3d..78e65e0 100644
+--- a/M3T/doc/CMakeLists.txt
++++ b/M3T/doc/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.5)
++cmake_minimum_required(VERSION 3.10)
+ 
+ # Check if Doxygen is installed
+ find_package(Doxygen COMPONENTS dot)
+diff --git a/M3T/examples/CMakeLists.txt b/M3T/examples/CMakeLists.txt
+index 8bea286..5c03a57 100644
+--- a/M3T/examples/CMakeLists.txt
++++ b/M3T/examples/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-cmake_minimum_required(VERSION 3.5)
++cmake_minimum_required(VERSION 3.10)
+ 
+ add_executable(evaluate_rbot_dataset evaluate_rbot_dataset.cpp rbot_evaluator.cpp rbot_evaluator.h)
+ target_link_libraries(evaluate_rbot_dataset PUBLIC m3t)
+diff --git a/M3T/test/CMakeLists.txt b/M3T/test/CMakeLists.txt
+index 3b2ff02..916ae5e 100644
+--- a/M3T/test/CMakeLists.txt
++++ b/M3T/test/CMakeLists.txt
+@@ -1,4 +1,4 @@
+-CMAKE_MINIMUM_REQUIRED(VERSION 3.5)
++CMAKE_MINIMUM_REQUIRED(VERSION 3.10)
+ 
+ # Options
+ # =============================================================================

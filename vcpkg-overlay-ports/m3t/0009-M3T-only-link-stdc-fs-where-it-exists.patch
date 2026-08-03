@@ -1,0 +1,33 @@
+From 7de820a77e0a9752417fafc6da03054eeedcca50 Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:07:28 +1000
+Subject: [PATCH 9/9] M3T: only link stdc++fs where it exists
+
+stdc++fs is libstdc++'s pre-GCC-9 separate filesystem library. Linking
+it unconditionally on UNIX breaks platforms that use libc++ (such as
+macOS), where no library of that name exists; because the target link
+libraries are PUBLIC, the broken flag also reaches every consumer of
+the installed package. Restrict it to GCC < 9.1.
+---
+ M3T/src/CMakeLists.txt | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/M3T/src/CMakeLists.txt b/M3T/src/CMakeLists.txt
+index a26d4b6..f02bf4e 100644
+--- a/M3T/src/CMakeLists.txt
++++ b/M3T/src/CMakeLists.txt
+@@ -85,7 +85,13 @@ endif ()
+ # =============================================================================
+ set(LIBRARIES Eigen3::Eigen OpenGL::GL GLEW::GLEW glfw ${OpenCV_LIBRARIES} OpenMP::OpenMP_CXX)
+ if (UNIX)
+-    list(APPEND LIBRARIES pthread stdc++fs)
++    list(APPEND LIBRARIES pthread)
++    # libstdc++ needed a separate filesystem library before GCC 9;
++    # libc++ (e.g. macOS) never had one under this name.
++    if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
++            AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1)
++        list(APPEND LIBRARIES stdc++fs)
++    endif ()
+ endif ()
+ if (USE_AZURE_KINECT)
+     list(APPEND LIBRARIES k4a::k4a)

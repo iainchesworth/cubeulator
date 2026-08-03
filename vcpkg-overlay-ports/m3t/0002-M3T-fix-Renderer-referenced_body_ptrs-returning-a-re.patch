@@ -1,0 +1,28 @@
+From fd9907d7d30cbebd0db0522e18404d6a4a3b582b Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:05:36 +1000
+Subject: [PATCH 2/9] M3T: fix Renderer::referenced_body_ptrs returning a
+ reference to a temporary
+
+The base implementation returns a braced-init-list temporary as a
+const reference (MSVC C4172, -Wreturn-local-addr on GCC), which is
+undefined behaviour as soon as a caller reads the result. Return a
+function-local static empty vector instead.
+---
+ M3T/src/renderer.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/M3T/src/renderer.cpp b/M3T/src/renderer.cpp
+index c8b8e6b..5e1684a 100644
+--- a/M3T/src/renderer.cpp
++++ b/M3T/src/renderer.cpp
+@@ -185,7 +185,8 @@ bool Renderer::set_up() const { return set_up_; };
+ 
+ const std::vector<std::shared_ptr<Body>> &Renderer::referenced_body_ptrs()
+     const {
+-  return {};
++  static const std::vector<std::shared_ptr<Body>> kEmptyBodyPtrs{};
++  return kEmptyBodyPtrs;
+ }
+ 
+ Renderer::Renderer(

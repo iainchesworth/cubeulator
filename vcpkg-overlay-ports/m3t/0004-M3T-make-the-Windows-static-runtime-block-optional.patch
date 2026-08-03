@@ -1,0 +1,29 @@
+From a241440c08c26949902503847a6b7024bf41df4c Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:05:49 +1000
+Subject: [PATCH 4/9] M3T: make the Windows static-runtime block optional
+
+The unconditional GLEW_STATIC/OpenCV_STATIC hints and the /MT runtime
+override make it impossible to link M3T against dynamic dependencies
+on Windows (for example vcpkg's default x64-windows triplet, which
+builds everything with /MD). Guard the block behind a new
+M3T_WIN32_STATIC option that defaults to ON, keeping the current
+behaviour unless a packager opts out.
+---
+ M3T/CMakeLists.txt | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/M3T/CMakeLists.txt b/M3T/CMakeLists.txt
+index 183d2a4..ef32ad8 100644
+--- a/M3T/CMakeLists.txt
++++ b/M3T/CMakeLists.txt
+@@ -16,7 +16,8 @@ option(USE_GTEST "Use gtest" ON)
+ # =============================================================================
+ 
+ # Build static on Windows
+-if (WIN32)
++option(M3T_WIN32_STATIC "Prefer static GLEW/OpenCV and the static MSVC runtime on Windows" ON)
++if (WIN32 AND M3T_WIN32_STATIC)
+     set(GLEW_STATIC true)
+     set(OpenCV_STATIC true)
+     set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")

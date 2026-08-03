@@ -41,6 +41,9 @@ endif()
 if(NOT DEFINED CUBEULATOR_BUILD_TESTS OR CUBEULATOR_BUILD_TESTS)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
+if(CUBEULATOR_WITH_M3T_PORT)
+    list(APPEND VCPKG_MANIFEST_FEATURES "m3t")
+endif()
 
 project(Cubeulator
     VERSION 0.1.0
@@ -75,6 +78,8 @@ cube_configure_mobile_dependencies()
 # ---------------------------------------------------------------------------
 option(CUBEULATOR_BUILD_APP "Build the Qt6 GUI application" ON)
 option(CUBEULATOR_BUILD_TESTS "Build the unit and integration test suites" ON)
+option(CUBEULATOR_WITH_M3T_PORT
+    "Consume the M3T tracker via the vcpkg overlay port and build its smoke tool (docs/m3t-port.md)" OFF)
 
 # ---------------------------------------------------------------------------
 # Targets

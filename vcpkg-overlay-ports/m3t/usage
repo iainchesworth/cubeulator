@@ -1,0 +1,10 @@
+m3t provides CMake targets:
+
+    find_package(M3T CONFIG REQUIRED)
+    target_link_libraries(main PRIVATE m3t)
+
+The m3t target propagates C++17 and all transitive dependencies
+(Eigen3, GLEW, glfw3, OpenGL, OpenCV, OpenMP).
+
+TextureModality (keypoint-based tracking) is only available when the
+port is installed with the "texture" feature: m3t[texture].

@@ -1,0 +1,44 @@
+{
+  "name": "m3t",
+  "version-date": "2025-05-21",
+  "description": "M3T: a multi-body, multi-modality, multi-camera 3D object tracker using sparse region and depth modalities (Stoiber et al., DLR-RM/3DObjectTracking)",
+  "homepage": "https://github.com/DLR-RM/3DObjectTracking",
+  "license": "MIT",
+  "supports": "!uwp & !android & !ios & !osx & !emscripten & !xbox",
+  "dependencies": [
+    "eigen3",
+    "glew",
+    "glfw3",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "features": [
+        "calib3d",
+        "highgui"
+      ]
+    },
+    "opengl",
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "texture": {
+      "description": "TextureModality support (keypoint-based tracking; requires OpenCV xfeatures2d from opencv_contrib)",
+      "dependencies": [
+        {
+          "name": "opencv4",
+          "default-features": false,
+          "features": [
+            "contrib"
+          ]
+        }
+      ]
+    }
+  }
+}

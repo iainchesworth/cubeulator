@@ -1,0 +1,26 @@
+From b90c0dfd4cf3ae7a0895e4e67970d707b2e31b89 Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:05:42 +1000
+Subject: [PATCH 3/9] M3T: fix missing return in Body::get_id
+
+IDType only has BODY and REGION, but the compiler cannot prove the
+if-chain is exhaustive (MSVC C4715, -Wreturn-type on GCC); falling
+off the end of a value-returning function is undefined behaviour.
+Make REGION the fallthrough return.
+---
+ M3T/src/body.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/M3T/src/body.cpp b/M3T/src/body.cpp
+index fdc8a67..6b3ef4a 100644
+--- a/M3T/src/body.cpp
++++ b/M3T/src/body.cpp
+@@ -120,7 +120,7 @@ const Transform3fA &Body::geometry2body_pose() const {
+ 
+ uchar Body::get_id(IDType id_type) const {
+   if (id_type == IDType::BODY) return body_id_;
+-  if (id_type == IDType::REGION) return region_id_;
++  return region_id_;
+ }
+ 
+ uchar Body::body_id() const { return body_id_; }

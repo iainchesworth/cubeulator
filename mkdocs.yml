@@ -54,6 +54,7 @@ nav:
   - Architecture: architecture.md
   - Vision pipeline: vision-pipeline.md
   - Dependency strategy: dependency-strategy.md
+  - M3T vcpkg port: m3t-port.md
   - FAQ / troubleshooting: faq.md
   - Contributing: CONTRIBUTING.md
   - Code of conduct: CODE_OF_CONDUCT.md

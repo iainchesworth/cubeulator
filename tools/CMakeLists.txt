@@ -3,4 +3,7 @@
 # tree is skipped there.
 if(NOT ANDROID AND NOT IOS)
     add_subdirectory(runner)
+    if(CUBEULATOR_WITH_M3T_PORT)
+        add_subdirectory(m3t-smoke)
+    endif()
 endif()

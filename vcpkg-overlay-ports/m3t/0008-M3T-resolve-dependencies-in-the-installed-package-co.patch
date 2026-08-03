@@ -1,0 +1,84 @@
+From ab09f7aa813b4c51fd255ff088a49ccdba54b3d9 Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:06:54 +1000
+Subject: [PATCH 8/9] M3T: resolve dependencies in the installed package config
+
+The installed M3TConfig.cmake was the raw EXPORT file, so its imported
+target references Eigen3::Eigen, GLEW::GLEW, glfw, OpenMP::OpenMP_CXX
+and the OpenCV targets without defining them: find_package(M3T) only
+worked if the consumer had already found every dependency itself. The
+C++17 requirement of the public headers (std::filesystem via the
+bundled filesystem shim) was not propagated either, so consumers on
+compilers that default to C++14 failed to compile.
+
+Install the export as M3TTargets.cmake, wrap it in a config file that
+resolves all dependencies via find_dependency(), and export
+cxx_std_17 as a PUBLIC compile feature.
+---
+ M3T/.gitignore               |  1 +
+ M3T/cmake/M3TConfig.cmake.in | 16 ++++++++++++++++
+ M3T/src/CMakeLists.txt       | 11 +++++++++--
+ 3 files changed, 26 insertions(+), 2 deletions(-)
+ create mode 100644 M3T/cmake/M3TConfig.cmake.in
+
+diff --git a/M3T/.gitignore b/M3T/.gitignore
+index 19360cc..eb95593 100644
+--- a/M3T/.gitignore
++++ b/M3T/.gitignore
+@@ -2,6 +2,7 @@
+ /*/
+ *.asv
+ doc/html
++!/cmake/
+ !/include/
+ !/src/
+ !/third_party/
+diff --git a/M3T/cmake/M3TConfig.cmake.in b/M3T/cmake/M3TConfig.cmake.in
+new file mode 100644
+index 0000000..81cbb07
+--- /dev/null
++++ b/M3T/cmake/M3TConfig.cmake.in
+@@ -0,0 +1,16 @@
++include(CMakeFindDependencyMacro)
++
++find_dependency(OpenMP)
++find_dependency(Eigen3)
++find_dependency(GLEW)
++find_dependency(OpenGL)
++find_dependency(glfw3)
++find_dependency(OpenCV)
++if (@USE_AZURE_KINECT@)
++    find_dependency(k4a)
++endif ()
++if (@USE_REALSENSE@)
++    find_dependency(realsense2)
++endif ()
++
++include("${CMAKE_CURRENT_LIST_DIR}/M3TTargets.cmake")
+diff --git a/M3T/src/CMakeLists.txt b/M3T/src/CMakeLists.txt
+index 23e421e..a26d4b6 100644
+--- a/M3T/src/CMakeLists.txt
++++ b/M3T/src/CMakeLists.txt
+@@ -99,6 +99,9 @@ endif ()
+ # =============================================================================
+ add_library(m3t STATIC ${SOURCES} ${HEADERS})
+ target_link_libraries(m3t PUBLIC ${LIBRARIES})
++# The public headers require C++17 (std::filesystem via the bundled
++# filesystem shim); propagate that requirement to consumers.
++target_compile_features(m3t PUBLIC cxx_std_17)
+ if (USE_TEXTURE_MODALITY)
+     # PUBLIC so that consumers of the installed package see the same
+     # generator.h configuration the library was built with.
+@@ -121,6 +124,10 @@ install(TARGETS m3t
+         PUBLIC_HEADER DESTINATION include/m3t)
+ install(DIRECTORY ../third_party/
+         DESTINATION include)
+-install(EXPORT m3t_target 
+-        FILE M3TConfig.cmake
++install(EXPORT m3t_target
++        FILE M3TTargets.cmake
++        DESTINATION lib/cmake/M3T)
++configure_file(${CMAKE_CURRENT_SOURCE_DIR}/../cmake/M3TConfig.cmake.in
++        ${CMAKE_CURRENT_BINARY_DIR}/M3TConfig.cmake @ONLY)
++install(FILES ${CMAKE_CURRENT_BINARY_DIR}/M3TConfig.cmake
+         DESTINATION lib/cmake/M3T)

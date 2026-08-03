@@ -12,6 +12,10 @@ CMakeLists.txt text
 *.json text
 *.md   text
 
+# vcpkg port patches must stay byte-exact LF on every platform; a CRLF
+# checkout can make git apply fail against LF upstream sources.
+*.patch text eol=lf
+
 # Treat these as binary.
 *.png binary
 *.ico binary

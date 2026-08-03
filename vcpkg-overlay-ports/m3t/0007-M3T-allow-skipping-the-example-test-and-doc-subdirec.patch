@@ -1,0 +1,46 @@
+From e05027362b60d8bb8121cc47cdd9e7d261fac454 Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:06:36 +1000
+Subject: [PATCH 7/9] M3T: allow skipping the example, test and doc
+ subdirectories
+
+When M3T is embedded or packaged as a library, the ~20 evaluation and
+example executables, the gtest suite and the Doxygen target are dead
+weight; the doc target even runs Doxygen as part of ALL whenever
+Doxygen happens to be installed. Gate examples and doc behind new
+M3T_BUILD_EXAMPLES/M3T_BUILD_DOC options (default ON, keeping current
+behaviour) and honour the existing USE_GTEST option for the test
+subdirectory instead of entering it unconditionally.
+---
+ M3T/CMakeLists.txt | 14 +++++++++++---
+ 1 file changed, 11 insertions(+), 3 deletions(-)
+
+diff --git a/M3T/CMakeLists.txt b/M3T/CMakeLists.txt
+index 82ad2c7..678e162 100644
+--- a/M3T/CMakeLists.txt
++++ b/M3T/CMakeLists.txt
+@@ -11,6 +11,8 @@ option(USE_AZURE_KINECT "Use Azure Kinect" ON)
+ option(USE_REALSENSE "Use RealSense D435" ON)
+ option(USE_GTEST "Use gtest" ON)
+ option(USE_TEXTURE_MODALITY "Use TextureModality (requires OpenCV xfeatures2d)" ON)
++option(M3T_BUILD_EXAMPLES "Build example and evaluation executables" ON)
++option(M3T_BUILD_DOC "Build Doxygen documentation" ON)
+ 
+ 
+ # Libraries
+@@ -139,6 +141,12 @@ endif ()
+ # Directories
+ # =============================================================================
+ add_subdirectory(src)
+-add_subdirectory(test)
+-add_subdirectory(examples)
+-add_subdirectory(doc)
++if (USE_GTEST)
++    add_subdirectory(test)
++endif ()
++if (M3T_BUILD_EXAMPLES)
++    add_subdirectory(examples)
++endif ()
++if (M3T_BUILD_DOC)
++    add_subdirectory(doc)
++endif ()

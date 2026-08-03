@@ -1,0 +1,141 @@
+From 566e8bb57b3c5de19d1b97e1153abfab61abea5c Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:06:22 +1000
+Subject: [PATCH 6/9] M3T: make TextureModality optional
+
+TextureModality is the only user of OpenCV's xfeatures2d module, which
+lives in opencv_contrib and is not always available (for example in
+package managers that ship OpenCV without contrib by default). Add a
+USE_TEXTURE_MODALITY option (default ON, keeping current behaviour)
+that follows the existing USE_AZURE_KINECT/USE_REALSENSE pattern:
+when OFF, the xfeatures2d requirement, texture_modality.{h,cpp} and
+the TextureModality support in generator.h are all skipped.
+
+The compile definition is exported PUBLIC on the m3t target so that
+consumers of the installed package see the same generator.h
+configuration the library was built with.
+
+The dataset evaluators in examples/ use TextureModality directly and
+continue to require USE_TEXTURE_MODALITY=ON.
+---
+ M3T/CMakeLists.txt          |  7 ++++++-
+ M3T/include/m3t/generator.h | 11 +++++++++--
+ M3T/src/CMakeLists.txt      | 11 +++++++++--
+ 3 files changed, 24 insertions(+), 5 deletions(-)
+
+diff --git a/M3T/CMakeLists.txt b/M3T/CMakeLists.txt
+index fed8fc8..82ad2c7 100644
+--- a/M3T/CMakeLists.txt
++++ b/M3T/CMakeLists.txt
+@@ -10,6 +10,7 @@ project(M3T)
+ option(USE_AZURE_KINECT "Use Azure Kinect" ON)
+ option(USE_REALSENSE "Use RealSense D435" ON)
+ option(USE_GTEST "Use gtest" ON)
++option(USE_TEXTURE_MODALITY "Use TextureModality (requires OpenCV xfeatures2d)" ON)
+ 
+ 
+ # Libraries
+@@ -34,7 +35,11 @@ if (UNIX)
+ endif ()
+ find_package(OpenGL REQUIRED)
+ find_package(glfw3 3.1.2 REQUIRED)
+-find_package(OpenCV 4.3.0 REQUIRED COMPONENTS core imgproc highgui imgcodecs calib3d features2d xfeatures2d OPTIONAL_COMPONENTS cudafeatures2d)
++set(M3T_OPENCV_COMPONENTS core imgproc highgui imgcodecs calib3d features2d)
++if (USE_TEXTURE_MODALITY)
++    list(APPEND M3T_OPENCV_COMPONENTS xfeatures2d)
++endif ()
++find_package(OpenCV 4.3.0 REQUIRED COMPONENTS ${M3T_OPENCV_COMPONENTS} OPTIONAL_COMPONENTS cudafeatures2d)
+ 
+ if (USE_AZURE_KINECT)
+     find_package(k4a 1.3.0 REQUIRED)
+diff --git a/M3T/include/m3t/generator.h b/M3T/include/m3t/generator.h
+index b6552fc..54a4c4d 100644
+--- a/M3T/include/m3t/generator.h
++++ b/M3T/include/m3t/generator.h
+@@ -34,7 +34,9 @@
+ #include <m3t/soft_constraint.h>
+ #include <m3t/static_detector.h>
+ #include <m3t/subscriber.h>
++#ifdef USE_TEXTURE_MODALITY
+ #include <m3t/texture_modality.h>
++#endif
+ #include <m3t/tracker.h>
+ #include <m3t/viewer.h>
+ 
+@@ -518,6 +520,7 @@ inline bool ConfigureDepthModalities(
+       modality_ptrs);
+ }
+ 
++#ifdef USE_TEXTURE_MODALITY
+ inline bool ConfigureTextureModalities(
+     const std::filesystem::path& configfile_path,
+     const cv::FileStorage& file_storage,
+@@ -583,6 +586,7 @@ inline bool ConfigureTextureModalities(
+       },
+       modality_ptrs);
+ }
++#endif
+ 
+ inline bool ConfigureLinks(
+     const std::filesystem::path& configfile_path,
+@@ -1044,12 +1048,15 @@ inline bool GenerateConfiguredTracker(
+       !ConfigureDepthModalities(
+           configfile_path, fs, body_ptrs, depth_camera_ptrs, depth_model_ptrs,
+           focused_depth_renderer_ptrs, focused_silhouette_renderer_ptrs,
+-          &modality_ptrs) ||
+-      !ConfigureTextureModalities(
++          &modality_ptrs))
++    return false;
++#ifdef USE_TEXTURE_MODALITY
++  if (!ConfigureTextureModalities(
+           configfile_path, fs, body_ptrs, color_camera_ptrs,
+           focused_silhouette_renderer_ptrs, depth_camera_ptrs,
+           focused_depth_renderer_ptrs, &modality_ptrs))
+     return false;
++#endif
+ 
+   // Configure links
+   std::vector<std::shared_ptr<Link>> link_ptrs;
+diff --git a/M3T/src/CMakeLists.txt b/M3T/src/CMakeLists.txt
+index 439d164..23e421e 100644
+--- a/M3T/src/CMakeLists.txt
++++ b/M3T/src/CMakeLists.txt
+@@ -22,7 +22,6 @@ set(SOURCES
+         modality.cpp
+         region_modality.cpp
+         depth_modality.cpp
+-        texture_modality.cpp
+         link.cpp
+         constraint.cpp
+         soft_constraint.cpp
+@@ -55,7 +54,6 @@ set(HEADERS
+         ../include/m3t/modality.h
+         ../include/m3t/region_modality.h
+         ../include/m3t/depth_modality.h
+-        ../include/m3t/texture_modality.h
+         ../include/m3t/link.h
+         ../include/m3t/constraint.h
+         ../include/m3t/soft_constraint.h
+@@ -69,6 +67,10 @@ set(HEADERS
+         ../include/m3t/tracker.h
+         ../include/m3t/generator.h)
+ 
++if (USE_TEXTURE_MODALITY)
++    list(APPEND SOURCES texture_modality.cpp)
++    list(APPEND HEADERS ../include/m3t/texture_modality.h)
++endif ()
+ if (USE_AZURE_KINECT)
+     list(APPEND SOURCES azure_kinect_camera.cpp)
+     list(APPEND HEADERS ../include/m3t/azure_kinect_camera.h)
+@@ -97,6 +99,11 @@ endif ()
+ # =============================================================================
+ add_library(m3t STATIC ${SOURCES} ${HEADERS})
+ target_link_libraries(m3t PUBLIC ${LIBRARIES})
++if (USE_TEXTURE_MODALITY)
++    # PUBLIC so that consumers of the installed package see the same
++    # generator.h configuration the library was built with.
++    target_compile_definitions(m3t PUBLIC USE_TEXTURE_MODALITY)
++endif ()
+ target_include_directories(m3t PUBLIC  
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include>
+         $<INSTALL_INTERFACE:include>)

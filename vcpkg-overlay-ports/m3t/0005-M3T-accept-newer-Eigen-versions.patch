@@ -1,0 +1,26 @@
+From beec5f2d3bd615d470f8d9f391f14f5f1e9f5a1e Mon Sep 17 00:00:00 2001
+From: Iain Chesworth <iain.chesworth@gmail.com>
+Date: Mon, 3 Aug 2026 22:05:54 +1000
+Subject: [PATCH 5/9] M3T: accept newer Eigen versions
+
+Eigen's package config version file rejects find_package version
+requests across major versions, so find_package(Eigen3 3.3.2) fails
+against Eigen 4/5 even though the APIs M3T uses are unchanged. Drop
+the version pin.
+---
+ M3T/CMakeLists.txt | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/M3T/CMakeLists.txt b/M3T/CMakeLists.txt
+index ef32ad8..fed8fc8 100644
+--- a/M3T/CMakeLists.txt
++++ b/M3T/CMakeLists.txt
+@@ -27,7 +27,7 @@ endif ()
+ 
+ # Used libraries
+ find_package(OpenMP REQUIRED)
+-find_package(Eigen3 3.3.2 REQUIRED)
++find_package(Eigen3 REQUIRED)
+ find_package(GLEW REQUIRED)
+ if (UNIX)
+     set(OpenGL_GL_PREFERENCE LEGACY)

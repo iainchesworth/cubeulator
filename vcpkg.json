@@ -39,6 +39,12 @@
       "dependencies": [
         "catch2"
       ]
+    },
+    "m3t": {
+      "description": "Consume the M3T tracker via the overlay port (proof-of-port wiring; see docs/m3t-port.md)",
+      "dependencies": [
+        "m3t"
+      ]
     }
   }
 }
