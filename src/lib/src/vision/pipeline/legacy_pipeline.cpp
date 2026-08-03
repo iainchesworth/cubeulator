@@ -170,8 +170,46 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     detection.confidence = confidence;
     detection.roi = roi;
 
+    // Phase 1 learned detector: when attached it is the stage-B PRIMARY -
+    // its verdict becomes found/confidence/roi and it fills the
+    // content-agnostic corner candidates (Singmaster ids). The legacy
+    // observation payloads above still feed stages C-G until the Phase 2
+    // tracker consumes these corners directly.
+    bool learned_ran = false;
+    bool learned_found = false;
+    if (corner_detector_ != nullptr) {
+        learned_ran = true;
+        if (const auto learned = corner_detector_->detect(frame.bgr); learned.has_value()) {
+            learned_found = learned->found;
+            detection.found = learned->found;
+            detection.confidence = learned->confidence;
+            confidence = learned->confidence;
+            if (learned->found) {
+                detection.roi = cv::Rect(static_cast<int>(learned->box.x), static_cast<int>(learned->box.y),
+                                         static_cast<int>(learned->box.width),
+                                         static_cast<int>(learned->box.height));
+                for (int id = 0; id < 8; ++id) {
+                    const auto& corner = learned->corners[static_cast<std::size_t>(id)];
+                    if (corner.confidence < OnnxCornerDetector::kDefaultKeypointFloor) {
+                        continue;
+                    }
+                    CornerCandidate candidate;
+                    candidate.model_vertex = id;
+                    candidate.px = corner.px;
+                    candidate.confidence = corner.confidence;
+                    detection.corners.push_back(candidate);
+                }
+            } else {
+                detection.roi = cv::Rect();
+            }
+        }
+    }
+
     detect.add("found", detection.found);
     detect.add("confidence", static_cast<double>(confidence));
+    detect.add("learned_ran", learned_ran);
+    detect.add("learned_found", learned_found);
+    detect.add("learned_corners", static_cast<std::int64_t>(detection.corners.size()));
     detect.add("face_found", detection.legacy_face.has_value());
     detect.add("face_pose_only", detection.legacy_pose_only_face.has_value());
     detect.add("face_gated", face_gated);

@@ -40,6 +40,35 @@ Knobs: `--width/--height` (default 640x640), `--occluder-prob` (default
 recommended for a real training run; without it backgrounds are solid
 colours and gradients only).
 
+Round-2 sim-to-real knobs (added after the round-1 detector, trained on
+gradient backgrounds only, false-positived on a patterned curtain and
+missed close-up face-on cubes on real footage):
+
+- `--neg-frac F` -- fraction of images that are pure-background hard
+  negatives: no cube, **empty** label file (Ultralytics background
+  images), `negative: true` in `labels.jsonl`. Use ~0.15 with
+  `--backgrounds` pointing at real frames of the deployment scene so the
+  scene itself becomes a learned negative.
+- `--size-min/--size-max` (default 0.12/0.70) -- projected cube bbox
+  height as a fraction of frame height; the z-distance is solved so the
+  *measured* projection hits the target (the old circumsphere fraction
+  under-sized face-on cubes).
+- `--face-on-prob` (default 0.20) -- probability of a near-face-on
+  presentation (one face square to the camera, <=10 deg tilt, mostly
+  near-axis-aligned roll) instead of a uniform SO(3) pose.
+- `--bg-image-prob` (default 0.75) -- probability a positive is composited
+  over a `--backgrounds` photo; half of those use the photo full-frame
+  (deployment framing), half are aspect-correct crops. Negatives use
+  max(prob, 0.9).
+- Always-on round-2 appearance widening: 35% warm indoor colour cast +
+  light hue rotation, per-image sticker desaturation (0-40% toward grey,
+  for printed/cardboard cubes), and grey (20%) / white (15%) cube bodies
+  alongside dark plastic (the real cardboard cube has white face borders).
+
+When training on such a set, keep TRAIN and VAL background pools disjoint
+(e.g. reserve a contiguous chunk of an `absent` clip for validation-only
+backgrounds) or val scores are contaminated.
+
 Measured on this workstation: ~120 ms/image at 640x640 (single process).
 The generator is embarrassingly parallel across seeds/output dirs if more
 throughput is needed.
@@ -69,6 +98,28 @@ bit2 = z sign, so corner 0 = (-1,-1,-1) ... corner 7 = (+1,+1,+1).
 
 Horizontal image flips map corner i -> i XOR 1, i.e. Ultralytics
 `flip_idx: [1, 0, 3, 2, 5, 4, 7, 6]`.
+
+**Training labels are viewer-canonical** (`--corner-order view`, the
+default since 2026-08): the raw model-frame ids above are anchored to the
+cube's own axes, which are *unobservable* in an image once stickers are
+scrambled/random -- under a uniform SO(3) pose every model-frame id is
+equally plausible, per-id keypoint supervision is noise, and a YOLO-pose
+model collapses all 8 keypoints onto the cube centroid (first smoke run:
+box mAP50 0.995, pose mAP50 exactly 0). `generate.py` therefore relabels
+each sample by the cube symmetry that best aligns the model axes with the
+view axes (+x -> image right, +y -> image up, +z -> toward the camera
+along the viewing ray), then applies the same binary indexing in that
+frame. Ids gain a stable visual meaning (corner 7 ~ near top-right) and
+`flip_idx` is **unchanged** -- `cube_model._selftest_view_canonical`
+(run `python cube_model.py`) proves the i XOR 1 mapping still holds
+exactly under image mirroring. `labels.jsonl` records the order tag in
+`corner_order` and the per-image slot->model-frame-id map in
+`corner_perm` (identity for `--corner-order model`, which remains
+available for debugging/geometry work but is NOT trainable). The Blender
+backend stub must apply the same relabelling when it is implemented.
+`make_corpus.py` ground truth is deliberately untouched: its keyframes
+stay state-anchored (Singmaster ids from the model frame), since corpus
+ground truth feeds content-aware checks, not keypoint training.
 
 Faces in the model frame: U = +y, R = +x, F = +z, D = -y, L = -x, B = -z.
 State strings are 54 chars, URFDLB face-major, row-major per face as seen

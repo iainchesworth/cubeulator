@@ -15,6 +15,7 @@
 // enforced here, not hoped for.
 
 #include <cube/model/facelet.hpp>
+#include <cube/vision/corner_detector.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
@@ -38,6 +39,7 @@
 #include <thread>
 #include <fstream>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <variant>
@@ -114,6 +116,16 @@ cv::Mat render_overlay(const cv::Mat& frame, const pipeline::LegacyPipelineResul
         }
     }
 
+    // Learned corner candidates (stage B primary): magenta, Singmaster id.
+    for (const auto& corner : result.detection.corners) {
+        cv::circle(canvas, corner.px, 4, cv::Scalar(255, 0, 255), cv::FILLED, cv::LINE_AA);
+        cv::circle(canvas, corner.px, 4, cv::Scalar(0, 0, 0), 1, cv::LINE_AA);
+        if (corner.model_vertex >= 0) {
+            cv::putText(canvas, std::to_string(corner.model_vertex), corner.px + cv::Point2f(6.0F, -4.0F),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(255, 160, 255), 1, cv::LINE_AA);
+        }
+    }
+
     // Pose wireframe: near face 0-1-2-3, far face 4-5-6-7, connecting ribs.
     if (result.track.pose_valid) {
         const auto& v = result.track.projected_vertices;
@@ -184,6 +196,13 @@ struct ClipMetrics {
     int gt_keyframes_scored = 0;    // hand-clicked keyframes with a matched detected face
     std::vector<double> gt_centre_err_pitch;  // per labelled sticker centre, err / pitch
     int gt_whole_cell_misassignments = 0;     // centre error > 50% of pitch
+
+    // Learned-corner localisation vs labelled corners, matched BY
+    // Singmaster id (docs/pipeline-metrics.md "corner localisation
+    // error"): error as fraction of the labelled-corner bbox extent.
+    std::vector<double> gt_corner_err_extent;
+    int gt_corners_labelled = 0;   // on keyframes where the detector fired
+    int gt_corners_matched = 0;
 };
 
 // Median/p95 of an unsorted sample vector (copies; fine at these sizes).
@@ -207,6 +226,35 @@ std::pair<double, double> median_p95(std::vector<double> values) {
 // face identity needed, so it works under the legacy adapter too.
 void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
                     const cube::vision::pipeline::LegacyPipelineResult& result, ClipMetrics& metrics) {
+    // Learned-corner localisation, id-to-id (both sides carry Singmaster
+    // ids - no nearest-point ambiguity). Extent = longest side of the
+    // labelled visible-corner bbox, per the metrics doc.
+    if (!result.detection.corners.empty() && !keyframe.corners.empty()) {
+        float min_x = keyframe.corners.front().px.x;
+        float max_x = min_x;
+        float min_y = keyframe.corners.front().px.y;
+        float max_y = min_y;
+        for (const auto& corner : keyframe.corners) {
+            min_x = std::min(min_x, corner.px.x);
+            max_x = std::max(max_x, corner.px.x);
+            min_y = std::min(min_y, corner.px.y);
+            max_y = std::max(max_y, corner.px.y);
+        }
+        const float extent = std::max(max_x - min_x, max_y - min_y);
+        if (extent > 1.0F) {
+            for (const auto& labelled : keyframe.corners) {
+                ++metrics.gt_corners_labelled;
+                for (const auto& detected : result.detection.corners) {
+                    if (detected.model_vertex == labelled.model_id) {
+                        ++metrics.gt_corners_matched;
+                        metrics.gt_corner_err_extent.push_back(cv::norm(detected.px - labelled.px) / extent);
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     bool scored_any = false;
     for (const auto& labelled : keyframe.faces) {
         cv::Point2f label_centre(0.0F, 0.0F);
@@ -299,7 +347,12 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     write_map("stage_ms_max", m.stage_ms_max, [&out](double v) { out << v; }, m.has_ground_truth);
     if (m.has_ground_truth) {
         const auto [centre_median, centre_p95] = median_p95(m.gt_centre_err_pitch);
+        const auto [corner_median, corner_p95] = median_p95(m.gt_corner_err_extent);
         out << "  \"ground_truth\": {\n";
+        out << "    \"corners_labelled\": " << m.gt_corners_labelled << ",\n";
+        out << "    \"corners_matched\": " << m.gt_corners_matched << ",\n";
+        out << "    \"corner_err_extent_median\": " << corner_median << ",\n";
+        out << "    \"corner_err_extent_p95\": " << corner_p95 << ",\n";
         out << "    \"inframe_frames\": " << m.gt_inframe_frames << ",\n";
         out << "    \"inframe_detected\": " << m.gt_inframe_detected << ",\n";
         out << "    \"occluded_frames\": " << m.gt_occluded_frames << ",\n";
@@ -316,7 +369,8 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     out << "}\n";
 }
 
-int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, int max_frames, ClipMetrics& metrics) {
+int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, int max_frames,
+                cube::vision::OnnxCornerDetector* detector, ClipMetrics& metrics) {
     std::ifstream index_stream(dir / std::string(recording::kIndexCsvName));
     if (!index_stream) {
         std::fprintf(stderr, "error: no %s under %s - not a recording directory\n",
@@ -365,6 +419,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     cv::VideoWriter video;
 
     pipeline::LegacyPipeline pipe;
+    pipe.set_corner_detector(detector);
     int replayed = 0;
     for (const auto& row : rows) {
         if (max_frames > 0 && replayed >= max_frames) {
@@ -479,6 +534,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     std::max<std::int64_t>(1, metrics.cells_classified),
                 metrics.trace_violations > 0 ? "  TRACE-VIOLATIONS" : "");
     if (metrics.has_ground_truth) {
+        if (!metrics.gt_corner_err_extent.empty()) {
+            const auto [corner_median, corner_p95] = median_p95(metrics.gt_corner_err_extent);
+            std::printf("  corners vs labels: median %.3f p95 %.3f (of extent)  matched %d/%d\n", corner_median,
+                        corner_p95, metrics.gt_corners_matched, metrics.gt_corners_labelled);
+        }
         const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
         std::printf("  ground truth: det(in_frame) %s  det(occluded) %s  fp-sustained %d  "
                     "centre-err median %.3f p95 %.3f (of pitch, %zu samples)  misassigned %d  keyframes %d\n",
@@ -608,8 +668,9 @@ int bench_recorder(const fs::path& dir, int frames, int width, int height, int f
 int usage() {
     std::fprintf(stderr,
                  "usage:\n"
-                 "  cube_pipeline_runner replay <recording-dir> [--out <dir>] [--no-video] [--max-frames N]\n"
-                 "  cube_pipeline_runner corpus <root-dir> [--out <dir>]\n"
+                 "  cube_pipeline_runner replay <recording-dir> [--detector <model.onnx>] [--out <dir>] "
+                 "[--no-video] [--max-frames N]\n"
+                 "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--out <dir>]\n"
                  "  cube_pipeline_runner check <recording-dir>\n"
                  "  cube_pipeline_runner bench-recorder <out-dir> [--frames N] [--size WxH] [--fps N]\n"
                  "  cube_pipeline_runner synth <out-dir> [--frames N]\n");
@@ -626,6 +687,7 @@ int main(int argc, char** argv) {
     const fs::path target = argv[2];
 
     fs::path out_dir;
+    std::string detector_path;
     bool write_video = true;
     int max_frames = 0;
     int synth_frames = 120;
@@ -636,6 +698,8 @@ int main(int argc, char** argv) {
         const std::string arg = argv[i];
         if (arg == "--out" && i + 1 < argc) {
             out_dir = argv[++i];
+        } else if (arg == "--detector" && i + 1 < argc) {
+            detector_path = argv[++i];
         } else if (arg == "--no-video") {
             write_video = false;
         } else if (arg == "--max-frames" && i + 1 < argc) {
@@ -666,10 +730,23 @@ int main(int argc, char** argv) {
     if (mode == "bench-recorder") {
         return bench_recorder(target, synth_frames, bench_w, bench_h, bench_fps);
     }
+    // Phase 1 learned detector: attached when --detector points at the
+    // ONNX model (assets/models/cube_corner_pose.onnx, deployed beside
+    // the binaries under models/). Absent flag = legacy-only replay.
+    std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
+    if (!detector_path.empty()) {
+        auto loaded = cube::vision::OnnxCornerDetector::create(detector_path);
+        if (!loaded.has_value()) {
+            std::fprintf(stderr, "error: could not load corner detector model at %s\n", detector_path.c_str());
+            return 2;
+        }
+        detector = std::move(*loaded);
+    }
+
     if (mode == "replay") {
         ClipMetrics metrics;
         return replay_clip(target, out_dir.empty() ? target / "pipeline-out" : out_dir, write_video, max_frames,
-                           metrics);
+                           detector.get(), metrics);
     }
     if (mode == "corpus") {
         int worst = 0;
@@ -688,7 +765,8 @@ int main(int argc, char** argv) {
             ClipMetrics metrics;
             const fs::path clip_out =
                 (out_dir.empty() ? entry.path() : out_dir / entry.path().filename()) / "pipeline-out";
-            worst = std::max(worst, replay_clip(entry.path(), clip_out, write_video, max_frames, metrics));
+            worst = std::max(worst,
+                             replay_clip(entry.path(), clip_out, write_video, max_frames, detector.get(), metrics));
             table << metrics.clip << "," << metrics.frames_indexed << "," << metrics.frames_replayed << ","
                   << metrics.frames_detected << "," << metrics.frames_pose_valid << "," << metrics.frames_locked << ","
                   << metrics.max_epoch << "," << metrics.capture_grade_faces << "," << metrics.cells_classified << ","

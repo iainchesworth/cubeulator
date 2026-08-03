@@ -39,11 +39,14 @@ class Sample:
     fy: float
     cx: float
     cy: float
-    corners_px: list[list[float]]  # 8 x [x, y], canonical corner order,
+    corners_px: list[list[float]]  # 8 x [x, y], in `corner_order` order,
     #   full-float projections (may lie outside the image)
     visibility: list[int]  # 8 flags, VIS_* above
     bbox_xyxy: list[float]  # clipped to the image
     meta: dict  # backend/augmentation details, free-form
+    corner_order: str = "binary_xyz_x_fastest"  # cube_model.CORNER_ORDER_*
+    corner_perm: list[int] | None = None  # slot j -> model-frame corner id
+    #   (identity when corner_order is the model-frame binary order)
 
 
 def yolo_line(s: Sample) -> str:
@@ -74,7 +77,8 @@ def jsonl_record(s: Sample) -> dict:
         "K": [[s.fx, 0.0, s.cx], [0.0, s.fy, s.cy], [0.0, 0.0, 1.0]],
         "corners_px": [[round(x, 2), round(y, 2)] for x, y in s.corners_px],
         "visibility": list(s.visibility),
-        "corner_order": "binary_xyz_x_fastest",
+        "corner_order": s.corner_order,
+        "corner_perm": list(s.corner_perm) if s.corner_perm is not None else list(range(8)),
         "bbox_xyxy": [round(v, 2) for v in s.bbox_xyxy],
         "meta": s.meta,
     }
@@ -96,6 +100,21 @@ class DatasetWriter:
         stem = Path(s.image_name).stem
         (self.out / "labels" / f"{stem}.txt").write_text(yolo_line(s) + "\n", encoding="utf-8")
         self._jsonl.write(json.dumps(jsonl_record(s)) + "\n")
+
+    def write_negative(self, image_name: str, width: int, height: int, meta: dict) -> None:
+        """Pure-background hard negative: EMPTY label file (Ultralytics
+        treats it as a background image) + a minimal jsonl record with
+        ``negative: true`` and no cube fields."""
+        stem = Path(image_name).stem
+        (self.out / "labels" / f"{stem}.txt").write_text("", encoding="utf-8")
+        rec = {
+            "image": f"images/{image_name}",
+            "width": width,
+            "height": height,
+            "negative": True,
+            "meta": meta,
+        }
+        self._jsonl.write(json.dumps(rec) + "\n")
 
     def close(self) -> None:
         self._jsonl.close()

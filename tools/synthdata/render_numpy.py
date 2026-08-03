@@ -63,24 +63,65 @@ def random_rotation(rng: np.random.Generator) -> np.ndarray:
     )
 
 
-def sample_camera_and_pose(rng: np.random.Generator, w: int, h: int):
-    """Returns (K, rvec, tvec) with the cube mostly in frame."""
+def face_on_rotation(rng: np.random.Generator) -> np.ndarray:
+    """Near-face-on presentation: one face square to the camera, small tilt.
+
+    Real users routinely hold a face flat at the lens (the round-1 detector
+    never saw this and missed close-up face-on cubes entirely).  Roll is
+    mostly near-axis-aligned (how people actually hold a cube) with a
+    uniform tail; tilt is 0-10 degrees off perfectly square-on.
+    """
+    if rng.random() < 0.65:
+        roll = 90.0 * rng.integers(4) + rng.uniform(-12.0, 12.0)
+    else:
+        roll = rng.uniform(0.0, 360.0)
+    tilt = math.radians(rng.uniform(0.0, 10.0))
+    phi = rng.uniform(0.0, 2 * math.pi)
+    rt, _ = cv2.Rodrigues(np.array([math.cos(phi), math.sin(phi), 0.0]) * tilt)
+    rz, _ = cv2.Rodrigues(np.array([0.0, 0.0, math.radians(roll)]))
+    # Random proper cube symmetry so every model face can be the front one.
+    syms = [S for S in cm.SYMMETRIES_48 if np.linalg.det(S) > 0]
+    return rz @ rt @ syms[rng.integers(len(syms))]
+
+
+def sample_camera_and_pose(
+    rng: np.random.Generator,
+    w: int,
+    h: int,
+    size_range: tuple[float, float] = (0.12, 0.70),
+    face_on: bool = False,
+):
+    """Returns (K, rvec, tvec) with the cube mostly in frame.
+
+    ``size_range`` is the target projected bbox HEIGHT as a fraction of the
+    frame height (round 2: 0.12-0.70, matching real footage where a face-on
+    cube fills half the frame).  The z distance is solved iteratively so the
+    *actual* projected extent hits the target regardless of pose.
+    """
     f = w * rng.uniform(0.8, 1.4)
     cx = w / 2 + rng.uniform(-0.03, 0.03) * w
     cy = h / 2 + rng.uniform(-0.03, 0.03) * h
     K = np.array([[f, 0, cx], [0, f, cy], [0, 0, 1]], dtype=np.float64)
 
-    R = random_rotation(rng)
-    # Projected cube diameter as a fraction of min(w, h); circumradius sqrt(3).
-    frac = rng.uniform(0.28, 0.72)
-    z = f * 2 * math.sqrt(3) / (frac * min(w, h))
+    R = face_on_rotation(rng) if face_on else random_rotation(rng)
+    rvec, _ = cv2.Rodrigues(R)
+    rvec = rvec.reshape(3)
+
+    target_px = rng.uniform(*size_range) * h
+    # Initial z from the circumsphere (diameter 2*sqrt(3)), then refine so the
+    # measured projected bbox height matches the target.
+    z = f * 2 * math.sqrt(3) / target_px
+    for _ in range(3):
+        pts = project(cm.CORNERS, rvec, np.array([0.0, 0.0, z]), K)
+        bh = float(pts[:, 1].max() - pts[:, 1].min())
+        z *= bh / target_px
+
     # Image-plane target for the cube centre: keep it comfortably inside.
-    margin = frac * min(w, h) * 0.45
+    margin = min(target_px * 0.4, 0.45 * min(w, h))
     tx_px = rng.uniform(margin, w - margin) if w > 2 * margin else w / 2
     ty_px = rng.uniform(margin, h - margin) if h > 2 * margin else h / 2
     t = np.array([(tx_px - cx) / f * z, (ty_px - cy) / f * z, z])
-    rvec, _ = cv2.Rodrigues(R)
-    return K, rvec.reshape(3), t
+    return K, rvec, t
 
 
 def project(pts3: np.ndarray, rvec: np.ndarray, tvec: np.ndarray, K: np.ndarray) -> np.ndarray:
@@ -93,13 +134,25 @@ def project(pts3: np.ndarray, rvec: np.ndarray, tvec: np.ndarray, K: np.ndarray)
 # --- backgrounds -------------------------------------------------------------
 
 
-def make_background(rng: np.random.Generator, w: int, h: int, bg_images: list | None):
+def make_background(
+    rng: np.random.Generator,
+    w: int,
+    h: int,
+    bg_images: list | None,
+    image_prob: float = 0.75,
+):
+    """Round 2: real photos dominate (``image_prob``, default 0.75) and half
+    of the photo backgrounds are used FULL-FRAME (aspect-fill), so the model
+    sees the deployment scene exactly as the camera does; the rest are
+    aspect-correct random crops for variety.  Solid/gradient fills remain as
+    a regularising minority."""
     kind = rng.random()
-    if bg_images and kind < 0.5:
+    if bg_images and kind < image_prob:
         img = bg_images[rng.integers(len(bg_images))]
         ih, iw = img.shape[:2]
-        # Random crop with the right aspect, then resize.
-        scale = rng.uniform(0.5, 1.0)
+        # Half full-frame (scale 1: the largest aspect-correct window), half
+        # zoomed-in random crops.
+        scale = 1.0 if rng.random() < 0.5 else rng.uniform(0.4, 1.0)
         cw = max(8, int(min(iw, ih * w / h) * scale))
         ch = max(8, int(cw * h / w))
         if cw <= iw and ch <= ih:
@@ -109,7 +162,8 @@ def make_background(rng: np.random.Generator, w: int, h: int, bg_images: list | 
         else:
             crop = img
         return cv2.resize(crop, (w, h), interpolation=cv2.INTER_AREA).astype(np.float32), "image"
-    if kind < 0.75:
+    rest = (kind - image_prob) / max(1.0 - image_prob, 1e-9) if bg_images else kind
+    if rest < 0.5:
         c = rng.uniform(20, 235, size=3).astype(np.float32)
         return np.full((h, w, 3), c, dtype=np.float32), "solid"
     # Linear gradient between two random colours at a random angle.
@@ -163,14 +217,30 @@ def draw_occluders(rng: np.random.Generator, img: np.ndarray, bbox, n: int):
 
 def photometric_jitter(rng: np.random.Generator, img: np.ndarray) -> tuple[np.ndarray, dict]:
     meta = {}
-    gains = rng.uniform(0.88, 1.12, size=3)  # white balance
-    exposure = rng.uniform(0.75, 1.25)
-    gamma = rng.uniform(0.8, 1.3)
+    if rng.random() < 0.35:
+        # Warm indoor cast (round 2): the real clips are shot under warm
+        # lamps with a webcam that pushes reds hard -- whites go pink, blues
+        # sink.  Channel order is BGR.
+        gains = np.array(
+            [rng.uniform(0.60, 0.95), rng.uniform(0.85, 1.05), rng.uniform(1.05, 1.45)]
+        )
+        meta["cast"] = "warm"
+    else:
+        gains = rng.uniform(0.85, 1.15, size=3)  # neutral white-balance jitter
+    exposure = rng.uniform(0.70, 1.30)
+    gamma = rng.uniform(0.70, 1.40)
     meta["wb"] = [round(g, 3) for g in gains]
     meta["exposure"] = round(exposure, 3)
     meta["gamma"] = round(gamma, 3)
     out = img * gains[None, None, :] * exposure
     out = 255.0 * (out.clip(0, 255) / 255.0) ** gamma
+    if rng.random() < 0.5:
+        # Light hue rotation (degrees) on top of the channel gains.
+        hshift = rng.uniform(-10.0, 10.0)
+        hsv = cv2.cvtColor((out / 255.0).astype(np.float32), cv2.COLOR_BGR2HSV)
+        hsv[..., 0] = (hsv[..., 0] + hshift) % 360.0
+        out = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR).astype(np.float64) * 255.0
+        meta["hue_deg"] = round(hshift, 1)
     if rng.random() < 0.8:
         sigma = rng.uniform(1.0, 6.0)
         out = out + rng.normal(0, sigma, out.shape)
@@ -197,6 +267,37 @@ def motion_blur(rng: np.random.Generator, img: np.ndarray) -> tuple[np.ndarray, 
 # --- main render -------------------------------------------------------------
 
 
+def render_negative(
+    rng: np.random.Generator,
+    w: int,
+    h: int,
+    bg_images: list | None,
+    jpeg_prob: float,
+    blur_prob: float,
+    bg_image_prob: float = 0.9,
+) -> tuple[np.ndarray, dict]:
+    """Pure-background hard negative (no cube, empty label file downstream).
+
+    Real photo backgrounds are strongly preferred (default 0.9) -- the whole
+    point is teaching the detector that the deployment room (curtain, hands,
+    face) is not a cube."""
+    bg, bg_kind = make_background(rng, w, h, bg_images, image_prob=bg_image_prob)
+    meta: dict = {"backend": "numpy", "bg": bg_kind, "negative": True}
+    img, pmeta = photometric_jitter(rng, bg)
+    meta.update(pmeta)
+    if rng.random() < blur_prob:
+        img, bmeta = motion_blur(rng, img)
+        meta.update(bmeta)
+    out = img.clip(0, 255).astype(np.uint8)
+    if rng.random() < jpeg_prob:
+        q = int(rng.integers(45, 96))
+        ok, buf = cv2.imencode(".jpg", out, [cv2.IMWRITE_JPEG_QUALITY, q])
+        if ok:
+            out = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+        meta["jpeg_q"] = q
+    return out, meta
+
+
 def render_sample(
     rng: np.random.Generator,
     image_name: str,
@@ -206,13 +307,17 @@ def render_sample(
     occluder_prob: float,
     jpeg_prob: float,
     blur_prob: float,
+    size_range: tuple[float, float] = (0.12, 0.70),
+    face_on_prob: float = 0.20,
+    bg_image_prob: float = 0.75,
 ) -> tuple[np.ndarray, Sample]:
     """Renders one image; returns (bgr uint8, Sample)."""
     state = cm.sample_state(rng)
+    face_on = rng.random() < face_on_prob
 
     # Resample poses until enough of the cube is usefully in frame.
     for _ in range(100):
-        K, rvec, tvec = sample_camera_and_pose(rng, w, h)
+        K, rvec, tvec = sample_camera_and_pose(rng, w, h, size_range, face_on)
         R, _ = cv2.Rodrigues(rvec)
         corners_px = project(cm.CORNERS, rvec, tvec, K)
 
@@ -245,7 +350,7 @@ def render_sample(
     W, H = w * SS, h * SS
     Kss = K.copy()
     Kss[:2] *= SS
-    bg, bg_kind = make_background(rng, w, h, bg_images)
+    bg, bg_kind = make_background(rng, w, h, bg_images, image_prob=bg_image_prob)
     canvas = cv2.resize(bg, (W, H), interpolation=cv2.INTER_LINEAR)
 
     # Lighting: ambient + one directional light from the camera hemisphere.
@@ -258,8 +363,17 @@ def render_sample(
     diffuse = rng.uniform(0.5, 0.8)
 
     # Body silhouette = convex hull of the 8 projected corners.
+    # Round 2: not just dark plastic -- grey and white/light bodies too (the
+    # real cardboard cube has white face borders; stickerless cubes exist).
     body_shade = ambient + diffuse * 0.4
-    body_col = np.array([1.0, 1.0, 1.0]) * rng.uniform(12, 40) * body_shade
+    bk = rng.random()
+    if bk < 0.65:
+        body_base = rng.uniform(8, 45)  # black plastic / dark card
+    elif bk < 0.85:
+        body_base = rng.uniform(60, 140)  # grey
+    else:
+        body_base = rng.uniform(180, 250)  # white-bordered cardboard
+    body_col = np.array([1.0, 1.0, 1.0]) * body_base * body_shade
     hull_ss = cv2.convexHull((project(cm.CORNERS, rvec, tvec, Kss)).astype(np.float32))
     cv2.fillPoly(
         canvas,
@@ -268,12 +382,14 @@ def render_sample(
         lineType=cv2.LINE_AA,
     )
 
-    # Per-image palette + sticker geometry jitter.
-    palette = {
-        k: np.array(v, dtype=np.float64) * rng.uniform(0.92, 1.08)
-        + rng.uniform(-10, 10, size=3)
-        for k, v in BASE_COLORS.items()
-    }
+    # Per-image palette + sticker geometry jitter.  Round 2 adds a per-image
+    # desaturation mix toward grey: printed/cardboard stickers are far more
+    # muted than glossy plastic ones.
+    desat = rng.uniform(0.0, 0.40)
+    palette = {}
+    for k, v in BASE_COLORS.items():
+        c = np.array(v, dtype=np.float64) * rng.uniform(0.92, 1.08) + rng.uniform(-10, 10, size=3)
+        palette[k] = c * (1.0 - desat) + c.mean() * desat
     sticker_frac = rng.uniform(0.84, 0.92)
 
     for f in cm.FACE_ORDER:

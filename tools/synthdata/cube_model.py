@@ -21,6 +21,8 @@ use the colour letters W/Y/R/O/G/B (54 chars, face-major).
 
 from __future__ import annotations
 
+import itertools
+
 import numpy as np
 
 # --- corners -----------------------------------------------------------------
@@ -36,6 +38,86 @@ FLIP_IDX = [1, 0, 3, 2, 5, 4, 7, 6]
 
 #: The 12 cube edges as corner-id pairs (ids differ in exactly one bit).
 EDGES = [(a, b) for a in range(8) for b in range(a + 1, 8) if bin(a ^ b).count("1") == 1]
+
+# --- viewer-canonical corner order -------------------------------------------
+#
+# The model-frame binary corner ids above are anchored to the cube's OWN axes
+# (U=+y etc.), which are NOT observable in an image once stickers are
+# scrambled/random: under a uniform SO(3) pose the 24 rotational symmetries
+# make every model-frame id equally plausible, so per-id keypoint supervision
+# is noise and a detector collapses all 8 keypoints onto the cube centroid
+# (observed: smoke run 2026-07/08, pose mAP 0 with box mAP 0.995).
+#
+# Fix: relabel each sample into a VIEWER-canonical binary order -- apply the
+# cube symmetry S that best aligns the model axes with the view axes
+# (+x -> image right, +y -> image up, +z -> toward the camera along the
+# viewing ray to the cube centre), then index corners by the same binary rule
+# in that relabelled frame.  Ids become a deterministic function of the
+# visible geometry (id 7 ~ the near top-right corner), hence learnable.
+# Horizontal flips still map i -> i XOR 1 (FLIP_IDX unchanged); see
+# _selftest_view_canonical below, which verifies that exactly.
+
+
+def _signed_perm_matrices() -> list[np.ndarray]:
+    """All 48 signed permutation matrices (the full cube symmetry group)."""
+    mats = []
+    for perm in itertools.permutations(range(3)):
+        for signs in itertools.product((1.0, -1.0), repeat=3):
+            m = np.zeros((3, 3))
+            for row, (col, s) in enumerate(zip(perm, signs)):
+                m[row, col] = s
+            mats.append(m)
+    return mats
+
+
+#: 48 signed permutation matrices; det +1 half = the 24 proper rotations.
+SYMMETRIES_48 = _signed_perm_matrices()
+
+
+def corner_index(p) -> int:
+    """Binary corner id (x fastest) of a +-1 corner coordinate triple."""
+    return int(p[0] > 0) | int(p[1] > 0) << 1 | int(p[2] > 0) << 2
+
+
+def view_canonical_perm(R: np.ndarray, tvec=None) -> list[int]:
+    """Viewer-canonical relabelling of the 8 corners for pose ``R`` (+ ``tvec``).
+
+    Returns ``perm`` with ``perm[j]`` = the model-frame corner id that occupies
+    slot ``j`` of the viewer-canonical binary order, i.e. relabelled keypoint
+    arrays are built as ``new[j] = old[perm[j]]``.
+
+    Canonical frame: the cube symmetry ``S`` (proper composite ``R @ S``
+    enforced, so improper ``R`` used by the flip selftest also works)
+    maximising ``trace(T^T R S)`` where ``T``'s columns are the ideal view
+    axes in OpenCV camera coords: x -> image right, y -> image up, z -> toward
+    the camera along the viewing ray to the cube centre (``-tvec``; straight
+    down the optical axis when ``tvec`` is None).
+    """
+    R = np.asarray(R, dtype=np.float64).reshape(3, 3)
+    if tvec is None:
+        z_t = np.array([0.0, 0.0, -1.0])
+    else:
+        t = np.asarray(tvec, dtype=np.float64).reshape(3)
+        z_t = -t / np.linalg.norm(t)
+    up = np.array([0.0, -1.0, 0.0])  # image up in OpenCV camera coords
+    y_t = up - np.dot(up, z_t) * z_t
+    y_t /= np.linalg.norm(y_t)
+    x_t = np.cross(y_t, z_t)
+    T = np.stack([x_t, y_t, z_t], axis=1)
+    det_r = float(np.linalg.det(R))
+    best, best_score = None, -np.inf
+    for S in SYMMETRIES_48:
+        if float(np.linalg.det(S)) * det_r < 0.0:
+            continue  # composite would be an improper (impossible) cube pose
+        score = float(np.trace(T.T @ R @ S))
+        if score > best_score:
+            best_score, best = score, S
+    return [corner_index(best @ CORNERS[j]) for j in range(8)]
+
+
+CORNER_ORDER_MODEL = "binary_xyz_x_fastest"
+CORNER_ORDER_VIEW = "binary_xyz_x_fastest_view_canonical"
+
 
 # --- faces -------------------------------------------------------------------
 
@@ -160,3 +242,60 @@ def state_face(state: str, face: str) -> str:
     """The 9 colour letters of ``face`` from a 54-char state string."""
     i = FACE_ORDER.index(face) * 9
     return state[i : i + 9]
+
+
+# --- selftests ---------------------------------------------------------------
+
+
+def _quat_to_mat(q: np.ndarray) -> np.ndarray:
+    w, x, y, z = q
+    return np.array(
+        [
+            [1 - 2 * (y * y + z * z), 2 * (x * y - w * z), 2 * (x * z + w * y)],
+            [2 * (x * y + w * z), 1 - 2 * (x * x + z * z), 2 * (y * z - w * x)],
+            [2 * (x * z - w * y), 2 * (y * z + w * x), 1 - 2 * (x * x + y * y)],
+        ]
+    )
+
+
+def _selftest_view_canonical(n: int = 20000, seed: int = 0) -> None:
+    """Verify view_canonical_perm: valid permutation, identity view -> identity
+    order, canonical +z toward the viewer, and exact FLIP_IDX consistency
+    under an Ultralytics-style horizontal image flip (mirrored scene
+    relabels to perm[i XOR 1])."""
+    rng = np.random.default_rng(seed)
+    mirror = np.diag([-1.0, 1.0, 1.0])  # camera-frame x flip = image mirror
+
+    assert view_canonical_perm(np.diag([1.0, -1.0, -1.0])) == list(range(8))
+    assert FLIP_IDX == [i ^ 1 for i in range(8)]
+
+    min_zdot = np.inf
+    for _ in range(n):
+        q = rng.normal(size=4)
+        q /= np.linalg.norm(q)
+        R = _quat_to_mat(q)
+        t = np.array([rng.uniform(-2, 2), rng.uniform(-2, 2), rng.uniform(2.5, 9.0)])
+        perm = view_canonical_perm(R, t)
+        assert sorted(perm) == list(range(8)), perm
+
+        # canonical +z axis must point toward the viewer along the view ray
+        S = None
+        for cand in SYMMETRIES_48:
+            if np.linalg.det(cand) > 0 and [corner_index(cand @ CORNERS[j]) for j in range(8)] == perm:
+                S = cand
+                break
+        z_new = (R @ S)[:, 2]
+        zdot = float(np.dot(z_new, -t / np.linalg.norm(t)))
+        min_zdot = min(min_zdot, zdot)
+        assert zdot > 0.0, (zdot, perm)
+
+        # flip consistency: generator labels for the mirrored scene must equal
+        # FLIP_IDX applied to the labels of the original scene
+        perm_m = view_canonical_perm(mirror @ R, mirror @ t)
+        assert perm_m == [perm[j ^ 1] for j in range(8)], (perm, perm_m)
+
+    print(f"cube_model selftest: OK ({n} random poses, min canonical z-alignment {min_zdot:.3f})")
+
+
+if __name__ == "__main__":
+    _selftest_view_canonical()

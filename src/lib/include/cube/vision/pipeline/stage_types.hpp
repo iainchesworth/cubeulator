@@ -59,9 +59,12 @@ struct FramePacket {
 
 // --- B. Detect -------------------------------------------------------------
 
-// A candidate cube outer corner in frame pixels. model_vertex uses
-// CubePoseProjection's vertex convention (0-3 near face tl,tr,br,bl; 4-7
-// the rear counterparts); -1 = detector saw a corner but cannot name it.
+// A candidate cube outer corner in frame pixels. model_vertex is the
+// SINGMASTER corner id (0 URF, 1 UFL, 2 ULB, 3 UBR, 4 DFR, 5 DLF, 6 DBL,
+// 7 DRB) - the ground-truth sidecar convention, so detection metrics
+// match by id instead of by nearest-point. -1 = detector saw a corner
+// but cannot name it. (CubePoseProjection's screen-relative 0-7 vertex
+// order is a DIFFERENT convention; stage C owns that translation.)
 struct CornerCandidate {
     int model_vertex = -1;
     cv::Point2f px{};
