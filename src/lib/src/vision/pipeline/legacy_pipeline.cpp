@@ -8,6 +8,7 @@
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/pose_from_corners.hpp>
 
+#include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -345,9 +346,9 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     track_trace.add("would_idle_skip", would_idle_skip);
     track_trace.add("cool_hue_pixels", static_cast<std::int64_t>(cool_hue));
 
-    // Phase 2 measurement (TRACE-ONLY, steers nothing yet): the detector-
-    // corner PnP pose beside the legacy pose, so their agreement can be
-    // measured on the corpora before the tracker adopts it as its init.
+    // Phase 2: detector-corner PnP - the tracker's init and the trace's
+    // agreement measurement.
+    std::optional<CornerPnpResult> pnp;
     if (detection.corners.size() >= 4) {
         CornerDetectionResult learned_corners;
         learned_corners.found = true;
@@ -357,7 +358,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
                                                                                             candidate.confidence};
             }
         }
-        if (const auto pnp = estimate_pose_from_corners(learned_corners, frame.bgr.size()); pnp.has_value()) {
+        if (auto solved = estimate_pose_from_corners(learned_corners, frame.bgr.size()); solved.has_value()) {
+            pnp = *solved;
             track_trace.add("detector_pnp_valid", true);
             track_trace.add("detector_pnp_corners", static_cast<std::int64_t>(pnp->corners_used));
             track_trace.add("detector_pnp_mean_reproj_px", pnp->mean_reproj_px);
@@ -377,6 +379,105 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         } else {
             track_trace.add("detector_pnp_valid", false);
         }
+    }
+
+    // Continuous 6-DoF tracking (Phase 2, the tracking-first payoff):
+    // init from PnP, step every frame, health-check against this frame's
+    // detected corners up to the 24 view-canonical rotations, re-init on
+    // a failure streak. When live and healthy the tracker OWNS
+    // TrackState's pose/vertices/orientation/phase; the legacy
+    // orientation tracker's verdicts remain in the trace above.
+    if (pose_tracker_ != nullptr) {
+        constexpr int kInitMinCorners = 5;    // stricter than PnP's 4 for a fresh anchor
+        constexpr double kHealthFailFrac = 0.15;  // of detection-box diagonal
+        constexpr int kHealthFailStreak = 3;
+
+        if (!track_live_ && pnp.has_value() && pnp->corners_used >= kInitMinCorners) {
+            if (pose_tracker_->init(pnp->rvec, pnp->tvec, frame.bgr.size(),
+                                    approximate_camera_matrix(frame.bgr.size()))) {
+                track_live_ = true;
+                track_health_fail_streak_ = 0;
+                ++track_reinits_;
+            }
+        }
+
+        bool tracked_valid = false;
+        double health_frac = -1.0;
+        if (track_live_) {
+            const auto tracked = pose_tracker_->step(frame.bgr);
+            if (!tracked.valid) {
+                track_live_ = false;
+            } else {
+                tracked_valid = true;
+                // Project the model corners under the tracked pose.
+                std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(), kSingmasterCornerModel.end());
+                std::vector<cv::Point2f> projected;
+                cv::projectPoints(model, tracked.rvec, tracked.tvec,
+                                  approximate_camera_matrix(frame.bgr.size()), cv::noArray(), projected);
+
+                // Health vs this frame's detections, min over the 24
+                // rotations (the detector's canonical frame is free to
+                // flip; the track's is fixed).
+                if (detection.corners.size() >= 4 && detection.roi.area() > 0) {
+                    const double diagonal = std::sqrt(static_cast<double>(detection.roi.width) * detection.roi.width +
+                                                      static_cast<double>(detection.roi.height) * detection.roi.height);
+                    double best = -1.0;
+                    for (const auto& perm : singmaster_rotation_permutations()) {
+                        double total = 0.0;
+                        int count = 0;
+                        for (const auto& candidate : detection.corners) {
+                            if (candidate.model_vertex < 0 || candidate.model_vertex > 7) {
+                                continue;
+                            }
+                            const int tracked_id = perm[static_cast<std::size_t>(candidate.model_vertex)];
+                            total += cv::norm(projected[static_cast<std::size_t>(tracked_id)] - candidate.px);
+                            ++count;
+                        }
+                        if (count >= 4) {
+                            const double mean = total / count;
+                            if (best < 0.0 || mean < best) {
+                                best = mean;
+                            }
+                        }
+                    }
+                    if (best >= 0.0 && diagonal > 1.0) {
+                        health_frac = best / diagonal;
+                        if (health_frac > kHealthFailFrac) {
+                            if (++track_health_fail_streak_ >= kHealthFailStreak) {
+                                track_live_ = false;  // next good PnP re-inits
+                            }
+                        } else {
+                            track_health_fail_streak_ = 0;
+                        }
+                    }
+                }
+
+                // The tracker owns the state while live.
+                if (track_live_) {
+                    track.pose_valid = true;
+                    track.rvec = tracked.rvec;
+                    track.tvec = tracked.tvec;
+                    cv::Matx33d rotation;
+                    cv::Rodrigues(tracked.rvec, rotation);
+                    track.orientation = display_quaternion(rotation);
+                    for (int i = 0; i < 8; ++i) {
+                        track.projected_vertices[static_cast<std::size_t>(i)] =
+                            projected[static_cast<std::size_t>(i)];
+                    }
+                    track.phase = TrackPhase::locked;
+                    track.pose_source = "m3t";
+                    track.reproj_fraction = health_frac >= 0.0 ? health_frac : track.reproj_fraction;
+                }
+            }
+        }
+        if (!track_live_ && tracked_valid) {
+            track.phase = TrackPhase::lost;  // dropped this frame by health
+        }
+        track_trace.add("m3t_attached", true);
+        track_trace.add("m3t_live", track_live_);
+        track_trace.add("m3t_step_valid", tracked_valid);
+        track_trace.add("m3t_health_frac", health_frac);
+        track_trace.add("m3t_reinits", static_cast<std::int64_t>(track_reinits_));
     }
     track_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(track_trace));
@@ -548,6 +649,12 @@ void LegacyPipeline::reset() {
     idle_gate_ = IdleGate{};
     seed_prior_.reset();
     seed_t_ms_ = 0;
+    if (pose_tracker_ != nullptr) {
+        pose_tracker_->reset();
+    }
+    track_live_ = false;
+    track_health_fail_streak_ = 0;
+    track_reinits_ = 0;
 }
 
 }  // namespace cube::vision::pipeline

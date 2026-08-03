@@ -16,6 +16,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <vector>
 
 namespace cube::vision {
 
@@ -60,5 +61,12 @@ struct CornerPnpResult {
 [[nodiscard]] Result<CornerPnpResult> estimate_pose_from_corners(
     const CornerDetectionResult& detection, cv::Size frame_size,
     float min_confidence = OnnxCornerDetector::kDefaultKeypointFloor);
+
+// The 24 corner-id permutations of the cube's rotation group over
+// kSingmasterCornerModel (perm[from_id] = to_id under the rotation).
+// The vocabulary of every view-canonical-vs-body comparison: detector
+// ids are defined up to one of these (corner_detector.hpp), so metrics
+// and tracker health checks minimise over them. Built once, thread-safe.
+[[nodiscard]] const std::vector<std::array<int, 8>>& singmaster_rotation_permutations();
 
 }  // namespace cube::vision

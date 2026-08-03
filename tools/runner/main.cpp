@@ -19,6 +19,7 @@
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
+#include <cube/track_m3t/m3t_pose_tracker.hpp>
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
 #include <cube/vision/pose_from_corners.hpp>
 #include <cube/vision/recording_v2.hpp>
@@ -467,7 +468,8 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
 }
 
 int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, int max_frames,
-                cube::vision::OnnxCornerDetector* detector, ClipMetrics& metrics) {
+                cube::vision::OnnxCornerDetector* detector, cube::vision::pipeline::PoseTracker* tracker,
+                ClipMetrics& metrics) {
     std::ifstream index_stream(dir / std::string(recording::kIndexCsvName));
     if (!index_stream) {
         std::fprintf(stderr, "error: no %s under %s - not a recording directory\n",
@@ -517,6 +519,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
 
     pipeline::LegacyPipeline pipe;
     pipe.set_corner_detector(detector);
+    if (tracker != nullptr) {
+        tracker->reset();  // fresh track per clip; the region-model cache persists
+        pipe.set_pose_tracker(tracker);
+    }
     int replayed = 0;
     for (const auto& row : rows) {
         if (max_frames > 0 && replayed >= max_frames) {
@@ -801,9 +807,9 @@ int calibrate_camera(const fs::path& images_dir, cv::Size pattern, float square,
 int usage() {
     std::fprintf(stderr,
                  "usage:\n"
-                 "  cube_pipeline_runner replay <recording-dir> [--detector <model.onnx>] [--out <dir>] "
-                 "[--no-video] [--max-frames N]\n"
-                 "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--out <dir>]\n"
+                 "  cube_pipeline_runner replay <recording-dir> [--detector <model.onnx>] [--tracker m3t] "
+                 "[--out <dir>] [--no-video] [--max-frames N]\n"
+                 "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--tracker m3t] [--out <dir>]\n"
                  "  cube_pipeline_runner calibrate <images-dir> [--pattern WxH] [--square MM] [--out <file>]\n"
                  "  cube_pipeline_runner check <recording-dir>\n"
                  "  cube_pipeline_runner bench-recorder <out-dir> [--frames N] [--size WxH] [--fps N]\n"
@@ -822,6 +828,7 @@ int main(int argc, char** argv) {
 
     fs::path out_dir;
     std::string detector_path;
+    std::string tracker_name;
     bool write_video = true;
     int max_frames = 0;
     int synth_frames = 120;
@@ -837,6 +844,8 @@ int main(int argc, char** argv) {
             out_dir = argv[++i];
         } else if (arg == "--detector" && i + 1 < argc) {
             detector_path = argv[++i];
+        } else if (arg == "--tracker" && i + 1 < argc) {
+            tracker_name = argv[++i];
         } else if (arg == "--no-video") {
             write_video = false;
         } else if (arg == "--max-frames" && i + 1 < argc) {
@@ -893,11 +902,24 @@ int main(int argc, char** argv) {
         }
         detector = std::move(*loaded);
     }
+    // --tracker m3t: continuous 6-DoF region tracking (Phase 2). Requires
+    // the detector (init and health both consume its corners).
+    std::unique_ptr<cube::track_m3t::M3tPoseTracker> pose_tracker;
+    if (tracker_name == "m3t") {
+        if (detector == nullptr) {
+            std::fprintf(stderr, "error: --tracker m3t requires --detector\n");
+            return 2;
+        }
+        pose_tracker = std::make_unique<cube::track_m3t::M3tPoseTracker>();
+    } else if (!tracker_name.empty()) {
+        std::fprintf(stderr, "error: unknown tracker '%s' (supported: m3t)\n", tracker_name.c_str());
+        return 2;
+    }
 
     if (mode == "replay") {
         ClipMetrics metrics;
         return replay_clip(target, out_dir.empty() ? target / "pipeline-out" : out_dir, write_video, max_frames,
-                           detector.get(), metrics);
+                           detector.get(), pose_tracker.get(), metrics);
     }
     if (mode == "corpus") {
         int worst = 0;
@@ -916,8 +938,8 @@ int main(int argc, char** argv) {
             ClipMetrics metrics;
             const fs::path clip_out =
                 (out_dir.empty() ? entry.path() : out_dir / entry.path().filename()) / "pipeline-out";
-            worst = std::max(worst,
-                             replay_clip(entry.path(), clip_out, write_video, max_frames, detector.get(), metrics));
+            worst = std::max(worst, replay_clip(entry.path(), clip_out, write_video, max_frames, detector.get(),
+                                                pose_tracker.get(), metrics));
             table << metrics.clip << "," << metrics.frames_indexed << "," << metrics.frames_replayed << ","
                   << metrics.frames_detected << "," << metrics.frames_pose_valid << "," << metrics.frames_locked << ","
                   << metrics.max_epoch << "," << metrics.capture_grade_faces << "," << metrics.cells_classified << ","

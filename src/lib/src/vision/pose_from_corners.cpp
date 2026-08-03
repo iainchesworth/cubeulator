@@ -69,4 +69,47 @@ Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& 
     return result;
 }
 
+const std::vector<std::array<int, 8>>& singmaster_rotation_permutations() {
+    static const std::vector<std::array<int, 8>> perms = [] {
+        const auto perm_of = [](const cv::Matx33f& rotation) {
+            std::array<int, 8> perm{};
+            for (int i = 0; i < 8; ++i) {
+                const cv::Point3f p = kSingmasterCornerModel[static_cast<std::size_t>(i)];
+                const cv::Matx31f rotated = rotation * cv::Matx31f(p.x, p.y, p.z);
+                for (int j = 0; j < 8; ++j) {
+                    const cv::Point3f q = kSingmasterCornerModel[static_cast<std::size_t>(j)];
+                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) < 0.1F) {
+                        perm[static_cast<std::size_t>(i)] = j;
+                        break;
+                    }
+                }
+            }
+            return perm;
+        };
+        // Closure over two quarter-turn generators reaches all 24 proper
+        // rotations of the cube.
+        const cv::Matx33f rot_y(0, 0, 1, 0, 1, 0, -1, 0, 0);
+        const cv::Matx33f rot_z(0, -1, 0, 1, 0, 0, 0, 0, 1);
+        std::vector<cv::Matx33f> rotations{cv::Matx33f::eye()};
+        for (std::size_t i = 0; i < rotations.size(); ++i) {
+            for (const auto& generator : {rot_y, rot_z}) {
+                const cv::Matx33f candidate = generator * rotations[i];
+                const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33f& r) {
+                    return cv::norm(r - candidate) < 0.1;
+                });
+                if (!known) {
+                    rotations.push_back(candidate);
+                }
+            }
+        }
+        std::vector<std::array<int, 8>> out;
+        out.reserve(rotations.size());
+        for (const auto& rotation : rotations) {
+            out.push_back(perm_of(rotation));
+        }
+        return out;
+    }();
+    return perms;
+}
+
 }  // namespace cube::vision
