@@ -27,6 +27,7 @@
 // seq, so identical recordings produce byte-identical traces regardless of
 // what ran before — the property the scaffold test pins.
 
+#include <cube/vision/corner_detector.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
@@ -62,12 +63,23 @@ public:
     // Fresh scan: tracker, stability, idle gate, seed state.
     void reset();
 
+    // Phase 1: attach the learned corner detector (not owned; may be
+    // nullptr = legacy-only). When present, stage B ALSO runs it and
+    // fills CubeDetection's content-agnostic fields (found/confidence/
+    // roi/corners with Singmaster ids) from its result, while the legacy
+    // observations keep driving stages C-G until the Phase 2 tracker
+    // consumes the corners directly. found/confidence/roi become the
+    // learned detector's verdict - it is the stage-B primary
+    // (docs/pipeline-plan.md, classical spike verdict).
+    void set_corner_detector(OnnxCornerDetector* detector) { corner_detector_ = detector; }
+
 private:
     StabilityTracker stability_;
     OrientationTracker tracker_;
     IdleGate idle_gate_;
     std::optional<PoseSeed> seed_prior_;
     std::int64_t seed_t_ms_ = 0;
+    OnnxCornerDetector* corner_detector_ = nullptr;
 };
 
 }  // namespace cube::vision::pipeline

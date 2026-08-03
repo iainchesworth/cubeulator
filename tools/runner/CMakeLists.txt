@@ -12,3 +12,7 @@ target_link_libraries(cube_pipeline_runner
         cube::coverage)
 
 cube_deploy_sanitizer_runtime(cube_pipeline_runner)
+# The Phase 1 corner-detector model (assets/models/*.onnx) lands beside
+# the binary under models/ so `--detector models/cube_corner_pose.onnx`
+# works from the bin directory.
+cube_deploy_vision_assets(cube_pipeline_runner)
