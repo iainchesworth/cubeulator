@@ -69,6 +69,18 @@ def main(argv=None) -> None:
         if img is None:
             continue
         h, w = img.shape[:2]
+        if rec.get("negative"):
+            cv2.putText(
+                img, "NEGATIVE (no cube)", (4, 20),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0, 0, 255), 2, cv2.LINE_AA,
+            )
+            cv2.putText(
+                img, Path(rec["image"]).stem, (4, h - 6),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1, cv2.LINE_AA,
+            )
+            tw = args.tile
+            tiles.append(cv2.resize(img, (tw, int(round(tw * h / w))), interpolation=cv2.INTER_AREA))
+            continue
         corners = rec["corners_px"]
         vis = rec["visibility"]
 
