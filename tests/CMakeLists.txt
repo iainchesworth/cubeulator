@@ -38,6 +38,7 @@ add_executable(cube_unit_tests
     unit/recording_v2_test.cpp
     unit/groundtruth_test.cpp
     unit/corner_detector_test.cpp
+    unit/pose_from_corners_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp

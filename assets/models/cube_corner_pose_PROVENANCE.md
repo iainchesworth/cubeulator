@@ -20,10 +20,17 @@ body content-agnostically and localises its 8 outer corners.
   114, BGR→RGB, /255, CHW); output `output0` [1,29,8400] — rows 0–3 box
   cx,cy,w,h (letterbox px), row 4 cube score (sigmoid), rows 5–28 = 8 ×
   (x px, y px, conf sigmoid). Un-letterbox: (v − pad)/r.
-- Keypoint slot order is synthdata's binary corner order (bit0/1/2 =
-  x/y/z sign, x fastest); `corner_detector.cpp` maps slots to Singmaster
-  ids (0 URF … 7 DRB) via {6,7,2,3,5,4,1,0} — the mapping verified
-  algebraically and on renders in tools/synthdata.
+- Keypoint ids are **view-canonical, not body-fixed** (training
+  corner_order `binary_xyz_x_fastest_view_canonical`; 24 distinct
+  slot→body permutations across the labels — body-fixed ids are
+  unlearnable for a rotationally symmetric object, which is what zeroed
+  round 1's pose mAP). `corner_detector.cpp` applies only the
+  binary→Singmaster NUMBERING relabel {6,7,2,3,5,4,1,0}; the remaining
+  view→body alignment is one of the 24 cube rotations, resolved
+  downstream (best-rotation in metrics, tracker continuity in stage C).
+  Measured: corner error median 1.2% / p95 3.0% of extent up to best
+  rotation on generic 3D synthetic views, gauge stable for hundreds of
+  frames (8 flips / 400).
 - License: model weights derived from Ultralytics YOLO11n-pose pretrained
   weights (AGPL-3.0) fine-tuned on project-generated data. NOTE: AGPL
   licensing of Ultralytics-derived weights must be resolved before any

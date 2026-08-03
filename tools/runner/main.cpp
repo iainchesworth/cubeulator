@@ -19,6 +19,7 @@
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
+#include <cube/vision/pose_from_corners.hpp>
 #include <cube/vision/recording_v2.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
 #include <cube/vision/pipeline/trace.hpp>
@@ -197,13 +198,67 @@ struct ClipMetrics {
     std::vector<double> gt_centre_err_pitch;  // per labelled sticker centre, err / pitch
     int gt_whole_cell_misassignments = 0;     // centre error > 50% of pitch
 
-    // Learned-corner localisation vs labelled corners, matched BY
-    // Singmaster id (docs/pipeline-metrics.md "corner localisation
-    // error"): error as fraction of the labelled-corner bbox extent.
+    // Learned-corner localisation vs labelled corners
+    // (docs/pipeline-metrics.md "corner localisation error"), scored UP TO
+    // THE BEST CUBE ROTATION: detector ids are view-canonical (see
+    // corner_detector.hpp), so each keyframe is matched under whichever of
+    // the 24 rotation permutations minimises the mean error, and the
+    // stability of that choice across keyframes is reported separately
+    // (it is the gauge the Phase 2 tracker will pin).
     std::vector<double> gt_corner_err_extent;
     int gt_corners_labelled = 0;   // on keyframes where the detector fired
     int gt_corners_matched = 0;
+    int gt_corner_keyframes = 0;       // keyframes entering the corner metric
+    int gt_corner_perm_changes = 0;    // best-rotation flips between consecutive scored keyframes
+    int gt_corner_last_perm = -1;
 };
+
+// The 24 corner-id permutations of the cube's rotation group, built by
+// closure over two quarter-turn generators acting on the Singmaster
+// model coordinates. perm[view_id] = body_id candidate alignment.
+// Runner-local for now; promotes into the lattice module when Phase 3
+// grows a production consumer.
+const std::vector<std::array<int, 8>>& corner_rotation_perms() {
+    static const std::vector<std::array<int, 8>> perms = [] {
+        using cube::vision::kSingmasterCornerModel;
+        const auto perm_of = [](const cv::Matx33f& rotation) {
+            std::array<int, 8> perm{};
+            for (int i = 0; i < 8; ++i) {
+                const cv::Point3f p = kSingmasterCornerModel[static_cast<std::size_t>(i)];
+                const cv::Matx31f rotated = rotation * cv::Matx31f(p.x, p.y, p.z);
+                for (int j = 0; j < 8; ++j) {
+                    const cv::Point3f q = kSingmasterCornerModel[static_cast<std::size_t>(j)];
+                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) < 0.1F) {
+                        perm[static_cast<std::size_t>(i)] = j;
+                        break;
+                    }
+                }
+            }
+            return perm;
+        };
+        const cv::Matx33f rot_y(0, 0, 1, 0, 1, 0, -1, 0, 0);   // +90 about y
+        const cv::Matx33f rot_z(0, -1, 0, 1, 0, 0, 0, 0, 1);   // +90 about z
+        std::vector<cv::Matx33f> rotations{cv::Matx33f::eye()};
+        for (std::size_t i = 0; i < rotations.size(); ++i) {
+            for (const auto& generator : {rot_y, rot_z}) {
+                const cv::Matx33f candidate = generator * rotations[i];
+                const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33f& r) {
+                    return cv::norm(r - candidate) < 0.1;
+                });
+                if (!known) {
+                    rotations.push_back(candidate);
+                }
+            }
+        }
+        std::vector<std::array<int, 8>> out;
+        out.reserve(rotations.size());
+        for (const auto& rotation : rotations) {
+            out.push_back(perm_of(rotation));
+        }
+        return out;
+    }();
+    return perms;
+}
 
 // Median/p95 of an unsorted sample vector (copies; fine at these sizes).
 std::pair<double, double> median_p95(std::vector<double> values) {
@@ -226,10 +281,11 @@ std::pair<double, double> median_p95(std::vector<double> values) {
 // face identity needed, so it works under the legacy adapter too.
 void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
                     const cube::vision::pipeline::LegacyPipelineResult& result, ClipMetrics& metrics) {
-    // Learned-corner localisation, id-to-id (both sides carry Singmaster
-    // ids - no nearest-point ambiguity). Extent = longest side of the
-    // labelled visible-corner bbox, per the metrics doc.
-    if (!result.detection.corners.empty() && !keyframe.corners.empty()) {
+    // Learned-corner localisation, scored up to the best cube rotation
+    // (view-canonical detector ids vs body-frame labels - see the
+    // ClipMetrics comment). Extent = longest side of the labelled
+    // visible-corner bbox, per the metrics doc.
+    if (result.detection.corners.size() >= 4 && !keyframe.corners.empty()) {
         float min_x = keyframe.corners.front().px.x;
         float max_x = min_x;
         float min_y = keyframe.corners.front().px.y;
@@ -242,15 +298,55 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
         }
         const float extent = std::max(max_x - min_x, max_y - min_y);
         if (extent > 1.0F) {
-            for (const auto& labelled : keyframe.corners) {
-                ++metrics.gt_corners_labelled;
-                for (const auto& detected : result.detection.corners) {
-                    if (detected.model_vertex == labelled.model_id) {
-                        ++metrics.gt_corners_matched;
-                        metrics.gt_corner_err_extent.push_back(cv::norm(detected.px - labelled.px) / extent);
-                        break;
+            const cv::Point2f* detected_by_id[8] = {};
+            for (const auto& detected : result.detection.corners) {
+                if (detected.model_vertex >= 0 && detected.model_vertex < 8) {
+                    detected_by_id[detected.model_vertex] = &detected.px;
+                }
+            }
+            int best_perm = -1;
+            double best_mean = 0.0;
+            std::vector<double> best_errors;
+            for (std::size_t p = 0; p < corner_rotation_perms().size(); ++p) {
+                const auto& perm = corner_rotation_perms()[p];
+                std::vector<double> errors;
+                for (const auto& labelled : keyframe.corners) {
+                    // Which view-canonical id does this body corner get
+                    // under alignment p? perm maps view->body, so search
+                    // the preimage.
+                    for (int view_id = 0; view_id < 8; ++view_id) {
+                        if (perm[static_cast<std::size_t>(view_id)] == labelled.model_id) {
+                            if (detected_by_id[view_id] != nullptr) {
+                                errors.push_back(cv::norm(*detected_by_id[view_id] - labelled.px) / extent);
+                            }
+                            break;
+                        }
                     }
                 }
+                if (errors.size() < 4) {
+                    continue;
+                }
+                double total = 0.0;
+                for (const double err : errors) {
+                    total += err;
+                }
+                const double mean = total / static_cast<double>(errors.size());
+                if (best_perm < 0 || mean < best_mean) {
+                    best_perm = static_cast<int>(p);
+                    best_mean = mean;
+                    best_errors = std::move(errors);
+                }
+            }
+            if (best_perm >= 0) {
+                ++metrics.gt_corner_keyframes;
+                metrics.gt_corners_labelled += static_cast<int>(keyframe.corners.size());
+                metrics.gt_corners_matched += static_cast<int>(best_errors.size());
+                metrics.gt_corner_err_extent.insert(metrics.gt_corner_err_extent.end(), best_errors.begin(),
+                                                    best_errors.end());
+                if (metrics.gt_corner_last_perm >= 0 && best_perm != metrics.gt_corner_last_perm) {
+                    ++metrics.gt_corner_perm_changes;
+                }
+                metrics.gt_corner_last_perm = best_perm;
             }
         }
     }
@@ -536,8 +632,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     if (metrics.has_ground_truth) {
         if (!metrics.gt_corner_err_extent.empty()) {
             const auto [corner_median, corner_p95] = median_p95(metrics.gt_corner_err_extent);
-            std::printf("  corners vs labels: median %.3f p95 %.3f (of extent)  matched %d/%d\n", corner_median,
-                        corner_p95, metrics.gt_corners_matched, metrics.gt_corners_labelled);
+            std::printf("  corners vs labels (best-rotation): median %.3f p95 %.3f (of extent)  matched %d/%d  "
+                        "gauge flips %d/%d keyframes\n",
+                        corner_median, corner_p95, metrics.gt_corners_matched, metrics.gt_corners_labelled,
+                        metrics.gt_corner_perm_changes, metrics.gt_corner_keyframes);
         }
         const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
         std::printf("  ground truth: det(in_frame) %s  det(occluded) %s  fp-sustained %d  "

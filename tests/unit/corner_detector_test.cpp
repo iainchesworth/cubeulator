@@ -60,13 +60,16 @@ TEST_CASE("decode maps the best anchor through the letterbox to frame pixels", "
     CHECK_THAT(result.box.y, WithinAbs(340.0, 1e-3));
     CHECK_THAT(result.box.width, WithinAbs(200.0, 1e-3));
     CHECK_THAT(result.box.height, WithinAbs(120.0, 1e-3));
-    // Keypoint slot 0 sits at (320, 280) letterbox -> (640, 400) frame,
-    // and slot 0 maps to Singmaster id 6 (DBL).
-    const auto& dbl = result.corners[6];
-    CHECK_THAT(dbl.px.x, WithinAbs(640.0, 1e-3));
-    CHECK_THAT(dbl.px.y, WithinAbs(400.0, 1e-3));
-    CHECK_THAT(dbl.confidence, WithinAbs(0.9, 1e-6));
-    // Slot 7 maps to Singmaster id 0 (URF): x = cx+7 -> (327-0)/0.5 = 654.
+    // Keypoint slot 0 sits at (320, 280) letterbox -> (640, 400) frame.
+    // Slot 0 = binary (-,-,-) relabels to Singmaster 6 (DBL) - a
+    // NUMBERING conversion within the view-canonical frame, not a
+    // body-frame claim (see the header).
+    const auto& slot0 = result.corners[6];
+    CHECK_THAT(slot0.px.x, WithinAbs(640.0, 1e-3));
+    CHECK_THAT(slot0.px.y, WithinAbs(400.0, 1e-3));
+    CHECK_THAT(slot0.confidence, WithinAbs(0.9, 1e-6));
+    // Slot 7 = binary (+,+,+) relabels to Singmaster 0 (URF):
+    // x = cx+7 -> (327-0)/0.5 = 654.
     CHECK_THAT(result.corners[0].px.x, WithinAbs(654.0, 1e-3));
     CHECK_THAT(result.corners[0].px.y, WithinAbs(428.0, 1e-3));
 }
@@ -78,17 +81,17 @@ TEST_CASE("decode refuses when no anchor clears the threshold", "[detector]") {
     CHECK(result.confidence == 0.0F);
 }
 
-TEST_CASE("the slot-to-Singmaster mapping is a fixed permutation", "[detector]") {
-    // Locked against tools/synthdata's verified binary->Singmaster
-    // mapping; a change here silently mislabels every corner metric.
+TEST_CASE("the slot relabel is the binary->Singmaster coordinate map", "[detector]") {
+    // Locked as the NUMBERING conversion (slot k's binary coordinates
+    // name the Singmaster corner below) and nothing more: ids stay
+    // view-canonical up to a cube rotation, which downstream consumers
+    // resolve (best-rotation metrics, tracker continuity). History, so
+    // the next reader doesn't repeat it: a body-frame remap and an
+    // identity map were each tried; the first is unlearnable-by-
+    // construction for a symmetric object, the second mixes numbering
+    // conventions - both were caught by the corner metric.
     static constexpr std::array<int, 8> kExpected{6, 7, 2, 3, 5, 4, 1, 0};
     CHECK(detail::kSlotToSingmaster == kExpected);
-    bool seen[8] = {};
-    for (const int id : detail::kSlotToSingmaster) {
-        REQUIRE((id >= 0 && id < 8));
-        CHECK_FALSE(seen[id]);
-        seen[id] = true;
-    }
 }
 
 TEST_CASE("real model loads and runs one inference", "[.detector-smoke]") {

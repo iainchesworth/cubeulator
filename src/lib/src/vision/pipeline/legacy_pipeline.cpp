@@ -6,12 +6,14 @@
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
+#include <cube/vision/pose_from_corners.hpp>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -342,6 +344,40 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     track_trace.add("belief_margin", static_cast<double>(track_out.belief_margin));
     track_trace.add("would_idle_skip", would_idle_skip);
     track_trace.add("cool_hue_pixels", static_cast<std::int64_t>(cool_hue));
+
+    // Phase 2 measurement (TRACE-ONLY, steers nothing yet): the detector-
+    // corner PnP pose beside the legacy pose, so their agreement can be
+    // measured on the corpora before the tracker adopts it as its init.
+    if (detection.corners.size() >= 4) {
+        CornerDetectionResult learned_corners;
+        learned_corners.found = true;
+        for (const auto& candidate : detection.corners) {
+            if (candidate.model_vertex >= 0 && candidate.model_vertex < 8) {
+                learned_corners.corners[static_cast<std::size_t>(candidate.model_vertex)] = {candidate.px,
+                                                                                            candidate.confidence};
+            }
+        }
+        if (const auto pnp = estimate_pose_from_corners(learned_corners, frame.bgr.size()); pnp.has_value()) {
+            track_trace.add("detector_pnp_valid", true);
+            track_trace.add("detector_pnp_corners", static_cast<std::int64_t>(pnp->corners_used));
+            track_trace.add("detector_pnp_mean_reproj_px", pnp->mean_reproj_px);
+            track_trace.add("detector_pnp_max_reproj_px", pnp->max_reproj_px);
+            if (track.pose_valid) {
+                // Angle between the two display quaternions - the
+                // detector-vs-legacy orientation agreement, in degrees.
+                double dot = 0.0;
+                for (int i = 0; i < 4; ++i) {
+                    dot += static_cast<double>(pnp->orientation[static_cast<std::size_t>(i)]) *
+                           static_cast<double>(track.orientation[static_cast<std::size_t>(i)]);
+                }
+                const double angle_deg =
+                    2.0 * std::acos(std::clamp(std::abs(dot), 0.0, 1.0)) * 180.0 / 3.14159265358979323846;
+                track_trace.add("detector_pnp_vs_legacy_deg", angle_deg);
+            }
+        } else {
+            track_trace.add("detector_pnp_valid", false);
+        }
+    }
     track_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(track_trace));
 
