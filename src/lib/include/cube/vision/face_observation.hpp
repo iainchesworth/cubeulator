@@ -77,6 +77,21 @@ struct FaceObservation {
 // CubeError::no_valid_cube_detected when no acceptable lattice exists.
 [[nodiscard]] Result<FaceObservation> observe_face(const cv::Mat& bgr_frame);
 
+// The exonerated sampling estimator, exported for the tracking-first
+// cell sampler (P4): quad-masked Lab median (float Lab, L in [0,100] -
+// the classify_lab palette convention) with purity/MAD reliability.
+// A thin public wrapper over face_observation.cpp's
+// patch_stats_for_corners with kCellColour intent - the estimator the
+// purity audit cleared (median purity 1.000), reused unchanged.
+struct CellPatchStats {
+    cv::Vec3f lab_median{};    // float Lab; meaningless when quad_px == 0
+    float purity = 0.0F;       // 0 = not measured, NOT "clean" (fails closed)
+    float weighted_mad = 0.0F;
+    int quad_px = 0;
+};
+[[nodiscard]] CellPatchStats sample_cell_patch(const cv::Mat& bgr_frame,
+                                               const std::array<cv::Point2f, 4>& corners);
+
 // Diagnostics seam for the offline frame-replay harness. Not a stable API
 // for anything outside the vision module or its tests.
 namespace detail {

@@ -46,6 +46,11 @@ struct ProjectedFace {
                                                       const cv::Matx33d& camera_matrix,
                                                       double min_frontality = 0.15);
 
+// Sticker extent as a fraction of cell pitch - a MODEL constant (the
+// standard 57 mm cube's ~17 mm sticker on a 19 mm cubie), re-measured
+// against the user's physical cube at the real-corpus session.
+inline constexpr float kStickerFraction = 0.89F;
+
 // P3.2: rectify one derived face to the canonical square - the sampling
 // substrate for Phases 4-5. The homography maps quad tl,tr,br,bl onto
 // the square's corners in the declared face-local frame above, so cell
@@ -53,6 +58,31 @@ struct ProjectedFace {
 // thirds and cell centres sit at ((col+0.5)/3, (row+0.5)/3) of the
 // side. `size` is the square's side in pixels; empty Mat on an empty
 // frame or a degenerate quad.
-[[nodiscard]] cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size = 96);
+// homography_out, when given, receives the forward quad->square map so
+// refined rectified-space geometry can be carried back to the image.
+[[nodiscard]] cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size = 96,
+                                   cv::Mat* homography_out = nullptr);
+
+// P4: sub-pixel refinement of the cell boundaries in rectified space,
+// where the sticker gaps are near-axis-aligned dark lines. The two
+// INTERNAL boundaries per direction are re-fit as 1-D profile minima
+// within +-0.2 cell pitch of their nominal thirds - the clamp that lets
+// refinement polish but never re-seat the grid on a neighbouring
+// sticker (the aliasing failure class, excluded by construction). The
+// outer boundaries stay the face quad's: they belong to the pose and
+// its edge refiner (P2.8); re-fitting them against replicate-padded
+// border pixels would double-count and read artefacts.
+struct RefinedGrid {
+    bool valid = false;
+    std::array<double, 4> x{};  // column boundaries in rectified px, ascending
+    std::array<double, 4> y{};  // row boundaries
+};
+[[nodiscard]] RefinedGrid refine_cell_grid(const cv::Mat& rectified_bgr);
+
+// Image-space sticker quads from a refined grid: cell spans between
+// refined boundaries, inset to kStickerFraction of its LOCAL pitch,
+// mapped back through the rectification homography's inverse.
+[[nodiscard]] std::array<std::array<cv::Point2f, 4>, 9> cells_from_grid(const RefinedGrid& grid,
+                                                                        const cv::Mat& homography);
 
 }  // namespace cube::vision::pipeline

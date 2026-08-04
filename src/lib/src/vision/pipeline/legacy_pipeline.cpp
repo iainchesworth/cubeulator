@@ -430,15 +430,19 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // should trust (threshold provisional, swept at the Phase 3 gate).
     constexpr double kTrackCaptureFrontality = 0.4;
     const bool track_geometry = loop_.has_tracker() && dt.track_live && !dt.faces.empty();
+    // Rectification homographies per derived face (identity-size with
+    // dt.faces), kept for stage E's sub-pixel grid refinement.
+    std::vector<cv::Mat> rectify_homographies(dt.faces.size());
     if (track_geometry) {
-        for (const auto& derived : dt.faces) {
+        for (std::size_t face_index = 0; face_index < dt.faces.size(); ++face_index) {
+            const auto& derived = dt.faces[face_index];
             FaceView face_view;
             face_view.quad = derived.quad;
             face_view.frontal_deg = static_cast<float>(
                 std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
             face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
             if (face_view.capture_grade) {
-                face_view.rectified = rectify_face(frame.bgr, derived);
+                face_view.rectified = rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
             }
             // body_face stays empty: identity is epoch-local gauge, and
             // the assembly arbiter remains centre-colour keying (plan
@@ -500,13 +504,36 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             ++index;
         };
         if (track_geometry) {
-            for (const auto& derived : dt.faces) {
+            // P4 sub-pixel refinement: where the face was rectified, the
+            // gap lines re-fit the internal boundaries (clamped +-0.2
+            // pitch - polish, never re-seat) and the sticker quads map
+            // back through the homography; otherwise the projected
+            // model-fraction cells stand.
+            int refined_faces = 0;
+            for (std::size_t face_index = 0; face_index < dt.faces.size(); ++face_index) {
+                const auto& derived = dt.faces[face_index];
                 std::array<StickerQuad, 9> cells{};
-                for (std::size_t c = 0; c < 9; ++c) {
-                    cells[c].corners = derived.cells[c];
+                bool refined = false;
+                if (face_index < result.faces.faces.size() && !result.faces.faces[face_index].rectified.empty() &&
+                    !rectify_homographies[face_index].empty()) {
+                    const RefinedGrid grid = refine_cell_grid(result.faces.faces[face_index].rectified);
+                    if (grid.valid) {
+                        const auto refined_cells = cells_from_grid(grid, rectify_homographies[face_index]);
+                        for (std::size_t c = 0; c < 9; ++c) {
+                            cells[c].corners = refined_cells[c];
+                        }
+                        refined = true;
+                        ++refined_faces;
+                    }
+                }
+                if (!refined) {
+                    for (std::size_t c = 0; c < 9; ++c) {
+                        cells[c].corners = derived.cells[c];
+                    }
                 }
                 put_cells(cells);
             }
+            cells_trace.add("refined_faces", static_cast<std::int64_t>(refined_faces));
         } else if (detection.legacy_corner) {
             put_cells(detection.legacy_corner->top.cells);
             put_cells(detection.legacy_corner->lower_left.cells);
@@ -545,27 +572,24 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             ++index;
         };
         if (track_geometry) {
-            // P3.4 track-geometry sampling: mean Lab over each cell's
-            // central block of the canonical rectified face - the P3.2
-            // substrate used as designed (same 8U Lab convention as
-            // classify_lab's palette). Phase 4 owns anything smarter.
+            // P4 track-geometry sampling: the exonerated quad-masked
+            // Lab-median estimator (sample_cell_patch) on each projected
+            // STICKER quad, straight off the frame. This replaced a P3.4
+            // placeholder that meaned 8U Lab off the rectified face -
+            // wrong scale against classify_lab's float-Lab palette, a
+            // convention bug this swap retires. Purity rides along; the
+            // aggregators already know how to weigh it.
             for (std::size_t face_index = 0; face_index < result.faces.faces.size(); ++face_index) {
                 const auto& view = result.faces.faces[face_index];
-                if (!view.capture_grade || view.rectified.empty()) {
+                if (!view.capture_grade) {
                     continue;
                 }
-                cv::Mat lab;
-                cv::cvtColor(view.rectified, lab, cv::COLOR_BGR2Lab);
-                const int third = lab.rows / 3;
-                const int margin = third / 4;
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        const cv::Rect block(col * third + margin, row * third + margin, third - 2 * margin,
-                                             third - 2 * margin);
-                        const cv::Scalar mean = cv::mean(lab(block));
-                        result.samples.faces[face_index].lab[static_cast<std::size_t>(row * 3 + col)] =
-                            cv::Vec3f(static_cast<float>(mean[0]), static_cast<float>(mean[1]),
-                                      static_cast<float>(mean[2]));
+                for (std::size_t c = 0; c < 9; ++c) {
+                    const auto stats =
+                        sample_cell_patch(frame.bgr, result.cells.faces[face_index].cells[c].corners);
+                    if (stats.quad_px > 0) {
+                        result.samples.faces[face_index].lab[c] = stats.lab_median;
+                        result.samples.faces[face_index].purity[c] = stats.purity;
                     }
                 }
                 ++sampled_faces;
