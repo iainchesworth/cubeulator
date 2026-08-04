@@ -122,9 +122,18 @@ private:
     // P3.3 gauge state: the pinned view->body alignment (index into
     // singmaster_rotation_permutations(), -1 = pin on the next
     // measurable detect frame) and the slip-failure streak.
+    // gauge_slip_holdoff_ (P6.1): one physical drift transits several
+    // basins and used to fire a declaration per basin - 11 epochs for 3
+    // real slips on the synthetic free-rotation clip, fragmenting
+    // fusion's identity windows for nothing (the FIRST declaration
+    // already invalidated pre-drift identity). While the hold-off runs,
+    // continued slips re-pin SILENTLY: same gauge correctness, one
+    // epoch per drift.
+    static constexpr int kGaugeSlipHoldoff = 15;  // detect-frame measurements
     int gauge_pinned_perm_ = -1;
     int gauge_epoch_ = 0;
     int gauge_fail_streak_ = 0;
+    int gauge_slip_holdoff_ = 0;
 };
 
 }  // namespace cube::vision::pipeline

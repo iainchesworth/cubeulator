@@ -62,6 +62,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             ++gauge_epoch_;
             gauge_pinned_perm_ = -1;
             gauge_fail_streak_ = 0;
+            gauge_slip_holdoff_ = 0;
         }
     }
 
@@ -179,16 +180,24 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 // for ground truth: the same math as the offline P2.7
                 // registration metric.
                 if (best >= 0.0 && diagonal > 1.0) {
+                    if (gauge_slip_holdoff_ > 0) {
+                        --gauge_slip_holdoff_;
+                    }
                     if (gauge_pinned_perm_ < 0) {
                         gauge_pinned_perm_ = best_perm;
                         gauge_fail_streak_ = 0;
                     } else if (pinned_mean >= 0.0 && pinned_mean / diagonal > kHealthFailFrac &&
                                best / diagonal <= kHealthFailFrac) {
                         if (++gauge_fail_streak_ >= kHealthFailStreak) {
-                            result.gauge_slip = true;
-                            ++gauge_epoch_;
+                            // Within the hold-off this is the SAME drift:
+                            // re-pin silently, no new epoch (see header).
+                            if (gauge_slip_holdoff_ == 0) {
+                                result.gauge_slip = true;
+                                ++gauge_epoch_;
+                            }
                             gauge_pinned_perm_ = best_perm;
                             gauge_fail_streak_ = 0;
+                            gauge_slip_holdoff_ = kGaugeSlipHoldoff;
                         }
                     } else {
                         gauge_fail_streak_ = 0;
@@ -224,6 +233,7 @@ void DetectTrackLoop::reset() {
     gauge_pinned_perm_ = -1;
     gauge_epoch_ = 0;
     gauge_fail_streak_ = 0;
+    gauge_slip_holdoff_ = 0;
 }
 
 }  // namespace cube::vision::pipeline
