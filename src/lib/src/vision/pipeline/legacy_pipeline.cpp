@@ -397,6 +397,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("m3t_step_valid", dt.step_valid);
         track_trace.add("m3t_health_frac", dt.health_frac);
         track_trace.add("m3t_reinits", static_cast<std::int64_t>(dt.reinits));
+        result.track_faces = dt.faces;
+        track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
         track_trace.add("refine_applied", dt.refine_applied);
         track_trace.add("refine_matches", static_cast<std::int64_t>(dt.refine_matches));
         track_trace.add("refine_update_deg", dt.refine_update_deg);

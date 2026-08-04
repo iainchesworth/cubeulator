@@ -20,6 +20,7 @@
 
 #include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/corner_detector.hpp>
+#include <cube/vision/pipeline/face_projection.hpp>
 #include <cube/vision/pipeline/pose_tracker.hpp>
 #include <cube/vision/pose_from_corners.hpp>
 
@@ -40,9 +41,12 @@ struct DetectTrackResult {
     std::array<cv::Point2f, 8> projected{};  // Singmaster-ordered model corners under the tracked pose
     double health_frac = -1.0;               // -1 = not measurable this frame
     int reinits = 0;                         // cumulative anchors this loop lifetime
+    // Stage-D geometry derived from the OUTPUT pose while live (P3.1,
+    // face_projection.hpp): visible faces, quads, sticker centres -
+    // most frontal first. Empty while lost.
+    std::vector<ProjectedFace> faces;
     // Edge/lattice refinement facts (pose_refiner.hpp; P2.8). When
-    // applied, rvec/tvec/projected above ARE the refined pose and the
-    // tracker was nudged onto it.
+    // applied, rvec/tvec/projected above ARE the refined pose.
     bool refine_applied = false;
     int refine_matches = 0;
     double refine_update_deg = 0.0;

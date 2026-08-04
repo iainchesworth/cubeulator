@@ -114,6 +114,11 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             for (int i = 0; i < 8; ++i) {
                 result.projected[static_cast<std::size_t>(i)] = projected[static_cast<std::size_t>(i)];
             }
+            // Stage-D geometry from the same OUTPUT pose (P3.1): faces,
+            // quads and sticker centres are projections of the tracked
+            // model - the plan's "no more per-frame face hunting".
+            result.faces = derive_faces(result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
+
             // Raw-pose projection for the health check (see the refine
             // comment above); identical to result.projected on frames
             // the refiner left alone.

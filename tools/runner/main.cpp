@@ -244,6 +244,19 @@ struct ClipMetrics {
     int gt_lock_incorrect_frames = 0;         // locked but beyond bound on a labelled frame
     std::array<cv::Point2d, 8> gt_track_bias_sum{};  // residual-vector sums per BODY corner (of extent)
     std::array<int, 8> gt_track_bias_count{};
+    // P3.1 pose-derived face geometry (face_projection.hpp) vs labelled
+    // face quads/centres, scored on tracked frames. Quad corners match
+    // under the best of the 8 dihedral alignments (the face-local frame
+    // is a convention, not an observable, until P3.3 identity lands);
+    // centres match nearest-neighbour within the matched face - honest
+    // caveat: nearest matching cannot flag a whole-grid alias by itself,
+    // the quad metric is what catches gross misplacement.
+    std::vector<double> gt_face_quad_err_extent;   // per corner of each matched face
+    int gt_faces_labelled = 0;
+    int gt_faces_matched = 0;
+    std::vector<double> gt_face_centre_err_pitch;  // per labelled centre of matched faces
+    int gt_face_centre_misassigned = 0;            // centre err > 50% of pitch
+
     // Self-relative jitter evidence per steady segment (keyed by segment
     // start pass): projected corner positions on locked frames plus the
     // per-frame projected extent. Needs no labels - jitter is deviation
@@ -504,6 +517,119 @@ double score_tracked_frame(const cube::vision::groundtruth::Keyframe& keyframe,
     return best_mean;
 }
 
+// P3.1: score the pose-DERIVED faces (face_projection.hpp) against one
+// labelled frame. Each labelled face matches the nearest derived quad
+// by centre (within half the labelled diagonal); quad corners score
+// under the best of the 8 dihedral alignments as a fraction of the
+// labelled corner extent; sticker centres score nearest-neighbour
+// within the matched face as a fraction of the labelled pitch.
+void score_tracked_faces(const cube::vision::groundtruth::Keyframe& keyframe,
+                         const std::vector<cube::vision::pipeline::ProjectedFace>& derived, ClipMetrics& metrics) {
+    if (derived.empty() || keyframe.faces.empty() || keyframe.corners.size() < 2) {
+        return;
+    }
+    float min_x = keyframe.corners.front().px.x;
+    float max_x = min_x;
+    float min_y = keyframe.corners.front().px.y;
+    float max_y = min_y;
+    for (const auto& corner : keyframe.corners) {
+        min_x = std::min(min_x, corner.px.x);
+        max_x = std::max(max_x, corner.px.x);
+        min_y = std::min(min_y, corner.px.y);
+        max_y = std::max(max_y, corner.px.y);
+    }
+    const double extent = std::max(max_x - min_x, max_y - min_y);
+    if (extent <= 1.0) {
+        return;
+    }
+
+    static const std::array<std::array<int, 4>, 8> kDihedral{{{0, 1, 2, 3},
+                                                              {1, 2, 3, 0},
+                                                              {2, 3, 0, 1},
+                                                              {3, 0, 1, 2},
+                                                              {3, 2, 1, 0},
+                                                              {2, 1, 0, 3},
+                                                              {1, 0, 3, 2},
+                                                              {0, 3, 2, 1}}};
+
+    for (const auto& labelled : keyframe.faces) {
+        ++metrics.gt_faces_labelled;
+        cv::Point2f label_centre(0.0F, 0.0F);
+        for (const auto& corner : labelled.quad) {
+            label_centre += corner;
+        }
+        label_centre *= 0.25F;
+        const double diagonal = cv::norm(labelled.quad[0] - labelled.quad[2]);
+
+        const cube::vision::pipeline::ProjectedFace* best_face = nullptr;
+        double best_distance = diagonal * 0.5;
+        for (const auto& candidate : derived) {
+            cv::Point2f candidate_centre(0.0F, 0.0F);
+            for (const auto& corner : candidate.quad) {
+                candidate_centre += corner;
+            }
+            candidate_centre *= 0.25F;
+            const double distance = cv::norm(candidate_centre - label_centre);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best_face = &candidate;
+            }
+        }
+        if (best_face == nullptr) {
+            continue;
+        }
+        ++metrics.gt_faces_matched;
+
+        double best_mean = -1.0;
+        std::array<double, 4> best_errors{};
+        for (const auto& alignment : kDihedral) {
+            double total = 0.0;
+            std::array<double, 4> errors{};
+            for (int i = 0; i < 4; ++i) {
+                errors[static_cast<std::size_t>(i)] =
+                    cv::norm(best_face->quad[static_cast<std::size_t>(alignment[static_cast<std::size_t>(i)])] -
+                             labelled.quad[static_cast<std::size_t>(i)]) /
+                    extent;
+                total += errors[static_cast<std::size_t>(i)];
+            }
+            if (best_mean < 0.0 || total / 4.0 < best_mean) {
+                best_mean = total / 4.0;
+                best_errors = errors;
+            }
+        }
+        metrics.gt_face_quad_err_extent.insert(metrics.gt_face_quad_err_extent.end(), best_errors.begin(),
+                                               best_errors.end());
+
+        // Labelled sticker pitch: median adjacent-centre distance (same
+        // recipe as the legacy cell metric).
+        std::vector<double> gaps;
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 2; ++col) {
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>(row * 3 + col + 1)] -
+                                        labelled.centres[static_cast<std::size_t>(row * 3 + col)]));
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>((col + 1) * 3 + row)] -
+                                        labelled.centres[static_cast<std::size_t>(col * 3 + row)]));
+            }
+        }
+        std::sort(gaps.begin(), gaps.end());
+        const double pitch = gaps[gaps.size() / 2];
+        if (pitch <= 0.0) {
+            continue;
+        }
+        for (const auto& centre : labelled.centres) {
+            double nearest = -1.0;
+            for (const auto& candidate : best_face->centres) {
+                const double distance = cv::norm(candidate - centre);
+                if (nearest < 0.0 || distance < nearest) {
+                    nearest = distance;
+                }
+            }
+            metrics.gt_face_centre_err_pitch.push_back(nearest / pitch);
+            metrics.gt_face_centre_misassigned += nearest / pitch > 0.5 ? 1 : 0;
+        }
+    }
+}
+
 // Score one hand-clicked keyframe against this frame's detected faces:
 // match each labelled face to the nearest detected face view by quad
 // centre (within half the labelled quad diagonal), then accumulate cell
@@ -702,6 +828,15 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
         }
         out << "],\n";
         out << "    \"track_bias_extent_max\": " << bias_max << ",\n";
+        const auto [face_quad_median, face_quad_p95] = median_p95(m.gt_face_quad_err_extent);
+        const auto [face_centre_median, face_centre_p95] = median_p95(m.gt_face_centre_err_pitch);
+        out << "    \"faces_labelled\": " << m.gt_faces_labelled << ",\n";
+        out << "    \"faces_matched\": " << m.gt_faces_matched << ",\n";
+        out << "    \"face_quad_err_extent_median\": " << face_quad_median << ",\n";
+        out << "    \"face_quad_err_extent_p95\": " << face_quad_p95 << ",\n";
+        out << "    \"face_centre_err_pitch_median\": " << face_centre_median << ",\n";
+        out << "    \"face_centre_err_pitch_p95\": " << face_centre_p95 << ",\n";
+        out << "    \"face_centre_misassigned\": " << m.gt_face_centre_misassigned << ",\n";
         out << "    \"track_jitter_extent_median\": " << clip_jitter(m.gt_track_steady) << ",\n";
         out << "    \"track_jitter_segments\": " << m.gt_track_steady.size() << ",\n";
         out << "    \"reacq_events\": " << m.gt_reacq_ms.size() << ",\n";
@@ -906,6 +1041,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 keyframe != truth.keyframes.end() && !keyframe->second.interpolated) {
                 track_frame_err =
                     score_tracked_frame(keyframe->second, result.track.projected_vertices, track_pinned_perm, metrics);
+                score_tracked_faces(keyframe->second, result.track_faces, metrics);  // P3.1
             }
         } else {
             track_pinned_perm = -1;  // gauge re-pins at the next anchor
@@ -1056,6 +1192,14 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         reacq_median_ms(metrics.gt_reacq_ms), metrics.gt_reacq_ms.size(), reacq_failed);
             std::printf("  tracked pose: registration held %d/%d frames, %d slips (quarter-turn re-pins)\n",
                         metrics.gt_track_reg_held, metrics.gt_track_reg_frames, metrics.gt_track_repins);
+            if (metrics.gt_faces_labelled > 0) {
+                const auto [face_quad_median, face_quad_p95] = median_p95(metrics.gt_face_quad_err_extent);
+                const auto [face_centre_median, face_centre_p95] = median_p95(metrics.gt_face_centre_err_pitch);
+                std::printf("  derived faces: matched %d/%d  quad err median %.4f p95 %.4f (of extent)  "
+                            "centre err median %.3f p95 %.3f (of pitch)  misassigned %d\n",
+                            metrics.gt_faces_matched, metrics.gt_faces_labelled, face_quad_median, face_quad_p95,
+                            face_centre_median, face_centre_p95, metrics.gt_face_centre_misassigned);
+            }
         }
         const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
         std::printf("  ground truth: det(in_frame) %s  det(occluded) %s  fp-sustained %d  "
