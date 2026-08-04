@@ -1672,7 +1672,15 @@ void ScanSession::handleAnalysisFinished() {
         // the tracker's post-pass state (only a lost tracker may idle).
         // Mutated here - GUI thread, once per pass - so poll() can sample
         // the skip verdict at queue time with the worker kept stateless.
-        idle_gate_.on_pass(result.cool_hue_pixels, track.state == cube::vision::TrackState::lost);
+        // "Lost" must consult the CONTINUOUS track too: in track mode the
+        // legacy tracker is never fed and reads lost forever, and the
+        // cool-hue statistic reads near-zero on a low-saturation cube -
+        // measured on the cardboard live-gate run, the gate idled 432 of
+        // 2058 passes WHILE M3T was locked, costing 21 points of
+        // on-screen locked fraction (79% raw vs 97.8% over passes the
+        // loop actually ran).
+        idle_gate_.on_pass(result.cool_hue_pixels,
+                           !result.pose_from_track && track.state == cube::vision::TrackState::lost);
     }
 
     // --- Identity-keyed aggregation & routing ------------------------------

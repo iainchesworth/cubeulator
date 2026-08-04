@@ -59,6 +59,22 @@ Bounds: on-screen locked fraction >=90% while the cube is in frame;
 camera-to-overlay latency <=120 ms; 3D model mirrors rotation and
 position with no visible lag or detachment (recorded for the record).
 
+**Run 1 (2026-08-04, cardboard-02, workstation webcam, 105 s, 2058
+passes at 19.5 Hz — clip + CSV at D:\cubeulator-corpus\gates\
+live-gate-01):**
+
+- Latency: median 3 ms, p95 48 ms — **PASS** (with the +33 ms camera
+  allowance still well under 120 ms).
+- Locked fraction: 77.3% raw / 97.8% over passes the loop actually ran.
+  The gap was a measured BUG, fixed off the back of this run: in track
+  mode the idle gate consulted the never-fed legacy tracker (always
+  lost) and the cool-hue statistic (near zero on cardboard), so it
+  idled 432 passes while M3T was locked. Occlusion behaviour matched
+  the synthetic finding (tracker held straight through the palm);
+  exit/re-entry cost one 2.6 s gap; genuine track loss totalled 35 of
+  2058 passes, 22 re-anchors. **Re-run once with the fix to record the
+  passing number** — expected >=90% on the same script.
+
 Procedure:
 
 1. Launch the app with the measurement channels on:
