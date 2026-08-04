@@ -132,6 +132,38 @@ TEST_CASE("rectification refuses empty frames and degenerate quads", "[face_proj
     REQUIRE(rectify_face(frame, collapsed, 96).empty());
 }
 
+TEST_CASE("gap refinement finds shifted lines and respects its clamp", "[face_projection]") {
+    using cube::vision::pipeline::refine_cell_grid;
+    // A 96x96 face with gap lines displaced from the nominal thirds: the
+    // refiner must find lines inside its +-0.2 pitch reach and stay at
+    // the clamp for lines beyond it.
+    // LINE_AA gives the V-shaped 1-D profile a real anti-aliased gap
+    // has; a hard 3 px line is a FLAT trough whose sub-pixel centre is
+    // ambiguous by +-1 (the first version of this test tripped on that).
+    const auto face_with_gaps = [](double x1, double x2) {
+        cv::Mat face(96, 96, CV_8UC3, cv::Scalar(180, 180, 180));
+        for (const double x : {x1, x2}) {
+            cv::line(face, cv::Point2d(x, 0), cv::Point2d(x, 95), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);
+        }
+        cv::line(face, cv::Point(0, 32), cv::Point(95, 32), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);
+        cv::line(face, cv::Point(0, 64), cv::Point(95, 64), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);
+        return face;
+    };
+
+    // Within reach (nominal 32/64, displaced by +4 / -4; reach is 6.4).
+    const auto near = refine_cell_grid(face_with_gaps(36.0, 60.0));
+    REQUIRE(near.valid);
+    REQUIRE(std::abs(near.x[1] - 36.0) < 1.0);
+    REQUIRE(std::abs(near.x[2] - 60.0) < 1.0);
+    REQUIRE(std::abs(near.y[1] - 32.0) < 1.0);
+
+    // Beyond reach (displaced by +10): the clamp holds at nominal+6.4 -
+    // refinement may polish, never re-seat.
+    const auto far = refine_cell_grid(face_with_gaps(42.0, 64.0));
+    REQUIRE(far.valid);
+    REQUIRE(far.x[1] <= 32.0 + 6.4 + 1e-6);
+}
+
 TEST_CASE("derive_faces is deterministic", "[face_projection]") {
     const cv::Vec3d rvec{0.4, 0.3, -0.2};
     const cv::Vec3d tvec{-0.5, 0.4, 8.0};

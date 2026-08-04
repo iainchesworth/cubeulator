@@ -430,15 +430,19 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // should trust (threshold provisional, swept at the Phase 3 gate).
     constexpr double kTrackCaptureFrontality = 0.4;
     const bool track_geometry = loop_.has_tracker() && dt.track_live && !dt.faces.empty();
+    // Rectification homographies per derived face (identity-size with
+    // dt.faces), kept for stage E's sub-pixel grid refinement.
+    std::vector<cv::Mat> rectify_homographies(dt.faces.size());
     if (track_geometry) {
-        for (const auto& derived : dt.faces) {
+        for (std::size_t face_index = 0; face_index < dt.faces.size(); ++face_index) {
+            const auto& derived = dt.faces[face_index];
             FaceView face_view;
             face_view.quad = derived.quad;
             face_view.frontal_deg = static_cast<float>(
                 std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
             face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
             if (face_view.capture_grade) {
-                face_view.rectified = rectify_face(frame.bgr, derived);
+                face_view.rectified = rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
             }
             // body_face stays empty: identity is epoch-local gauge, and
             // the assembly arbiter remains centre-colour keying (plan
@@ -500,13 +504,36 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             ++index;
         };
         if (track_geometry) {
-            for (const auto& derived : dt.faces) {
+            // P4 sub-pixel refinement: where the face was rectified, the
+            // gap lines re-fit the internal boundaries (clamped +-0.2
+            // pitch - polish, never re-seat) and the sticker quads map
+            // back through the homography; otherwise the projected
+            // model-fraction cells stand.
+            int refined_faces = 0;
+            for (std::size_t face_index = 0; face_index < dt.faces.size(); ++face_index) {
+                const auto& derived = dt.faces[face_index];
                 std::array<StickerQuad, 9> cells{};
-                for (std::size_t c = 0; c < 9; ++c) {
-                    cells[c].corners = derived.cells[c];
+                bool refined = false;
+                if (face_index < result.faces.faces.size() && !result.faces.faces[face_index].rectified.empty() &&
+                    !rectify_homographies[face_index].empty()) {
+                    const RefinedGrid grid = refine_cell_grid(result.faces.faces[face_index].rectified);
+                    if (grid.valid) {
+                        const auto refined_cells = cells_from_grid(grid, rectify_homographies[face_index]);
+                        for (std::size_t c = 0; c < 9; ++c) {
+                            cells[c].corners = refined_cells[c];
+                        }
+                        refined = true;
+                        ++refined_faces;
+                    }
+                }
+                if (!refined) {
+                    for (std::size_t c = 0; c < 9; ++c) {
+                        cells[c].corners = derived.cells[c];
+                    }
                 }
                 put_cells(cells);
             }
+            cells_trace.add("refined_faces", static_cast<std::int64_t>(refined_faces));
         } else if (detection.legacy_corner) {
             put_cells(detection.legacy_corner->top.cells);
             put_cells(detection.legacy_corner->lower_left.cells);
