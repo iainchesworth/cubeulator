@@ -72,8 +72,23 @@ live-gate-01):**
   idled 432 passes while M3T was locked. Occlusion behaviour matched
   the synthetic finding (tracker held straight through the palm);
   exit/re-entry cost one 2.6 s gap; genuine track loss totalled 35 of
-  2058 passes, 22 re-anchors. **Re-run once with the fix to record the
-  passing number** — expected >=90% on the same script.
+  2058 passes, 22 re-anchors. Re-run with the fix below.
+
+**Run 2 (2026-08-04, same cube/camera/script, idle-gate fix in — 152 s,
+3041 passes at 20.0 Hz, D:\cubeulator-corpus\gates\live-gate-02):**
+
+- Locked fraction: **98.4% raw — PASS** (>=90% bound). Idle skips down
+  from 432 to 12; longest untracked run 4 passes (~200 ms); 37
+  re-anchors. Caveat stated honestly: the raw fraction counts any
+  zombie-locked passes during the out-of-frame segment in both
+  numerator and denominator; bounding that segment generously moves the
+  number by <0.3 points - it passes any way it is sliced. The labelled
+  offline re-score of this clip supersedes this estimate.
+- Latency: median 7 ms, p95 40 ms — **PASS**.
+
+Live-gate verdict: **both live bounds met on cardboard**; the formal
+close still wants the same script once on a real stickered cube (P0.3
+session) for the colour-content-independent claim to be complete.
 
 Procedure:
 
