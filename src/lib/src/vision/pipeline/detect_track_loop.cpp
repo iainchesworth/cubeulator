@@ -10,6 +10,50 @@
 
 namespace cube::vision::pipeline {
 
+namespace {
+
+// The cube's 24 rotation matrices (closure over quarter-turn
+// generators) - the snap targets for gauge stitching.
+const std::vector<cv::Matx33d>& cube_rotations() {
+    static const std::vector<cv::Matx33d> rotations = [] {
+        const cv::Matx33d rot_y(0, 0, 1, 0, 1, 0, -1, 0, 0);
+        const cv::Matx33d rot_z(0, -1, 0, 1, 0, 0, 0, 0, 1);
+        std::vector<cv::Matx33d> out{cv::Matx33d::eye()};
+        for (std::size_t i = 0; i < out.size(); ++i) {
+            for (const auto& generator : {rot_y, rot_z}) {
+                const cv::Matx33d candidate = generator * out[i];
+                const bool known = std::any_of(out.begin(), out.end(), [&](const cv::Matx33d& r) {
+                    return cv::norm(r - candidate) < 0.1;
+                });
+                if (!known) {
+                    out.push_back(candidate);
+                }
+            }
+        }
+        return out;
+    }();
+    return rotations;
+}
+
+// Face id (0..5 = +x,-x,+y,-y,+z,-z) of the axis a unit vector points
+// along; -1 if it is not axis-aligned within tolerance.
+int face_id_of_axis(const cv::Vec3d& v) {
+    for (int axis = 0; axis < 3; ++axis) {
+        if (std::abs(v[axis]) > 0.9) {
+            return axis * 2 + (v[axis] > 0 ? 0 : 1);
+        }
+    }
+    return -1;
+}
+
+cv::Vec3d face_axis(int face) {
+    cv::Vec3d v(0, 0, 0);
+    v[face / 2] = (face % 2 == 0) ? 1.0 : -1.0;
+    return v;
+}
+
+}  // namespace
+
 cv::Matx33d DetectTrackLoop::camera_matrix_for(cv::Size size) const {
     return intrinsics_.has_value() ? intrinsics_->scaled_to(size).matrix() : approximate_camera_matrix(size);
 }
@@ -49,6 +93,9 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
     if (tracker_ == nullptr) {
         return result;  // detector-only mode
     }
+    if (!live_ && drop_pose_valid_) {
+        ++frames_since_drop_;
+    }
 
     if (!live_ && result.pnp.has_value() && result.pnp->corners_used >= kInitMinCorners) {
         if (tracker_->init(result.pnp->rvec, result.pnp->tvec, bgr_frame.size(),
@@ -56,10 +103,59 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             live_ = true;
             health_fail_streak_ = 0;
             result.reinits = ++reinits_;
-            // A fresh anchor is a fresh identity epoch: the model frame
-            // is this frame's view-canonical orientation, and the gauge
-            // re-pins on the next measurable detect frame (P3.3).
-            ++gauge_epoch_;
+            // Gauge stitch (P6.2b): a benign drop's registration was
+            // approximately right, so the old->new model-frame rotation
+            // snaps to one of the 24 and face ids relabel into the OLD
+            // epoch's frame - identity survives the re-anchor.
+            bool stitched = false;
+            if (drop_pose_valid_ && frames_since_drop_ <= kStitchMaxGapFrames) {
+                cv::Matx33d rot_old;
+                cv::Matx33d rot_new;
+                cv::Rodrigues(drop_rvec_, rot_old);
+                cv::Rodrigues(result.pnp->rvec, rot_new);
+                const cv::Matx33d frame_change = rot_new.t() * rot_old;  // model_old -> model_new
+                double best_angle = 1e9;
+                cv::Matx33d best_rotation = cv::Matx33d::eye();
+                for (const auto& candidate : cube_rotations()) {
+                    cv::Vec3d delta;
+                    cv::Rodrigues(candidate.t() * frame_change, delta);
+                    const double angle = cv::norm(delta) * 180.0 / CV_PI;
+                    if (angle < best_angle) {
+                        best_angle = angle;
+                        best_rotation = candidate;
+                    }
+                }
+                result.stitch_snap_deg = best_angle;
+                if (best_angle <= kStitchMaxSnapDeg) {
+                    // Compose: new-frame face id -> old-frame id -> the
+                    // epoch-original id the old relabel already spoke.
+                    std::array<int, 6> relabel{};
+                    bool sane = true;
+                    for (int face = 0; face < 6; ++face) {
+                        const cv::Vec3d in_old = best_rotation.t() * face_axis(face);
+                        const int old_face = face_id_of_axis(in_old);
+                        if (old_face < 0) {
+                            sane = false;
+                            break;
+                        }
+                        relabel[static_cast<std::size_t>(face)] =
+                            stitch_relabel_[static_cast<std::size_t>(old_face)];
+                    }
+                    if (sane) {
+                        stitch_relabel_ = relabel;
+                        stitched = true;
+                        result.stitched = true;
+                    }
+                }
+            }
+            if (!stitched) {
+                // A fresh anchor is a fresh identity epoch: the model
+                // frame is this frame's view-canonical orientation
+                // (P3.3), and the relabel resets to identity.
+                ++gauge_epoch_;
+                stitch_relabel_ = {0, 1, 2, 3, 4, 5};
+            }
+            drop_pose_valid_ = false;
             gauge_pinned_perm_ = -1;
             gauge_fail_streak_ = 0;
             gauge_slip_holdoff_ = 0;
@@ -140,6 +236,10 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // quads and sticker centres are projections of the tracked
             // model - the plan's "no more per-frame face hunting".
             result.faces = derive_faces(result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
+            // Stitched epochs speak the epoch-ORIGINAL face ids.
+            for (auto& face : result.faces) {
+                face.face = stitch_relabel_[static_cast<std::size_t>(face.face)];
+            }
 
             // Raw-pose projection for the health check (see the refine
             // comment above); identical to result.projected on frames
@@ -256,6 +356,17 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                             frames_since_anchor_ < kTrackMatureFrames ? kHealthFailStreakYoung : kHealthFailStreak;
                         if (++health_fail_streak_ >= streak_needed) {
                             live_ = false;
+                            // A marginal-band drop is stitchable: the
+                            // registration was approximately right, so
+                            // the next anchor can relabel into this
+                            // epoch's frame (see the anchor block).
+                            if (result.health_frac <= kStitchableHealthFrac) {
+                                drop_pose_valid_ = true;
+                                drop_rvec_ = tracked.rvec;
+                                frames_since_drop_ = 0;
+                            } else {
+                                drop_pose_valid_ = false;
+                            }
                         }
                     } else {
                         health_fail_streak_ = 0;
@@ -295,6 +406,9 @@ void DetectTrackLoop::reset() {
     gauge_settle_ = 0;
     prev_track_rvec_valid_ = false;
     last_health_pass_ = false;
+    drop_pose_valid_ = false;
+    frames_since_drop_ = 0;
+    stitch_relabel_ = {0, 1, 2, 3, 4, 5};
 }
 
 }  // namespace cube::vision::pipeline

@@ -402,6 +402,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
         track_trace.add("gauge_epoch", static_cast<std::int64_t>(dt.gauge_epoch));
         track_trace.add("read_grade", dt.read_grade);
+        track_trace.add("stitched", dt.stitched);
+        track_trace.add("stitch_snap_deg", dt.stitch_snap_deg);
         track_trace.add("gauge_slip", dt.gauge_slip);
         track_trace.add("gauge_pinned_err", dt.gauge_pinned_err);
         track_trace.add("refine_applied", dt.refine_applied);

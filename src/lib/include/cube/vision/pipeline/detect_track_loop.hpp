@@ -72,6 +72,14 @@ struct DetectTrackResult {
     // photometric gates (aggregator convergence, fail-closed unknowns)
     // remain downstream.
     bool read_grade = false;
+    // P6.2b: this anchor was STITCHED to the previous epoch - the
+    // model-frame change between the dropped track's last pose and the
+    // fresh anchor snapped to one of the 24 cube rotations, so face ids
+    // are relabelled into the old epoch's frame and identity survives
+    // the re-anchor. Only benign drops stitch (marginal health, tiny
+    // gap); slips and absences still open a real epoch.
+    bool stitched = false;
+    double stitch_snap_deg = -1.0;  // snap angle at the last anchor attempt; -1 = no attempt
     double turn_deg = -1.0;  // rotation vs the previous tracked frame; -1 = no previous
     // Edge/lattice refinement facts (pose_refiner.hpp; P2.8). When
     // applied, rvec/tvec/projected above ARE the refined pose.
@@ -105,6 +113,19 @@ public:
     // anchor. Settle sequences measure every detect frame and never
     // trip this.
     static constexpr int kHealthGapFrames = 10;
+    // Stitching bounds (P6.2b): a drop whose last health sat in the
+    // marginal band (below wrong-basin ~0.36, measured) and whose
+    // re-anchor arrives within the gap is a benign re-anchor - the old
+    // registration was approximately right, so the old->new model-frame
+    // rotation snaps safely to the nearest of the 24 (drift is far
+    // under the 45-degree basin half-width). An in-place re-seed from
+    // the refined pose was tried first and CANNOT work: at these
+    // errors (~30 px) the refiner is out of reach by its own
+    // never-re-seat design, so refine_applied is false exactly when the
+    // seed would be needed.
+    static constexpr double kStitchableHealthFrac = 0.30;
+    static constexpr int kStitchMaxGapFrames = 5;
+    static constexpr double kStitchMaxSnapDeg = 30.0;
 
     // tracker may be nullptr: the loop then runs detection + PnP only
     // (the P1 detector-only mode) and track_live stays false.
@@ -189,6 +210,13 @@ private:
     int frames_since_anchor_ = 0;
     int frames_since_health_ = 0;
     bool last_health_pass_ = false;
+    // Stitch state: the dropped track's last pose (for the model-frame
+    // snap), its recency, and the cumulative face-id relabel from the
+    // CURRENT model frame back to the epoch-original one.
+    bool drop_pose_valid_ = false;
+    cv::Vec3d drop_rvec_{};
+    int frames_since_drop_ = 0;
+    std::array<int, 6> stitch_relabel_{0, 1, 2, 3, 4, 5};
 };
 
 }  // namespace cube::vision::pipeline
