@@ -545,27 +545,24 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             ++index;
         };
         if (track_geometry) {
-            // P3.4 track-geometry sampling: mean Lab over each cell's
-            // central block of the canonical rectified face - the P3.2
-            // substrate used as designed (same 8U Lab convention as
-            // classify_lab's palette). Phase 4 owns anything smarter.
+            // P4 track-geometry sampling: the exonerated quad-masked
+            // Lab-median estimator (sample_cell_patch) on each projected
+            // STICKER quad, straight off the frame. This replaced a P3.4
+            // placeholder that meaned 8U Lab off the rectified face -
+            // wrong scale against classify_lab's float-Lab palette, a
+            // convention bug this swap retires. Purity rides along; the
+            // aggregators already know how to weigh it.
             for (std::size_t face_index = 0; face_index < result.faces.faces.size(); ++face_index) {
                 const auto& view = result.faces.faces[face_index];
-                if (!view.capture_grade || view.rectified.empty()) {
+                if (!view.capture_grade) {
                     continue;
                 }
-                cv::Mat lab;
-                cv::cvtColor(view.rectified, lab, cv::COLOR_BGR2Lab);
-                const int third = lab.rows / 3;
-                const int margin = third / 4;
-                for (int row = 0; row < 3; ++row) {
-                    for (int col = 0; col < 3; ++col) {
-                        const cv::Rect block(col * third + margin, row * third + margin, third - 2 * margin,
-                                             third - 2 * margin);
-                        const cv::Scalar mean = cv::mean(lab(block));
-                        result.samples.faces[face_index].lab[static_cast<std::size_t>(row * 3 + col)] =
-                            cv::Vec3f(static_cast<float>(mean[0]), static_cast<float>(mean[1]),
-                                      static_cast<float>(mean[2]));
+                for (std::size_t c = 0; c < 9; ++c) {
+                    const auto stats =
+                        sample_cell_patch(frame.bgr, result.cells.faces[face_index].cells[c].corners);
+                    if (stats.quad_px > 0) {
+                        result.samples.faces[face_index].lab[c] = stats.lab_median;
+                        result.samples.faces[face_index].purity[c] = stats.purity;
                     }
                 }
                 ++sampled_faces;

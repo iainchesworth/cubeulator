@@ -70,13 +70,22 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
                 const float u = (static_cast<float>(col) - 1.0F) * (2.0F / 3.0F);
                 const float v = (static_cast<float>(row) - 1.0F) * (2.0F / 3.0F);
                 projected.centres[static_cast<std::size_t>(row * 3 + col)] = project(on_face(u, v));
-                const float u0 = -1.0F + static_cast<float>(col) * (2.0F / 3.0F);
-                const float v0 = -1.0F + static_cast<float>(row) * (2.0F / 3.0F);
+                // Cell quads span the STICKER, not the full pitch: on the
+                // standard 57 mm cube the sticker is ~17 mm of a 19 mm
+                // cubie (~0.89 of pitch) - a model constant, re-measured
+                // against the user's cube at the real-corpus session. The
+                // inset keeps gap and neighbour pixels out of the sample
+                // quad by geometry instead of by sampler margin.
+                constexpr float kStickerFraction = 0.89F;
+                constexpr float kInset = (1.0F - kStickerFraction) * (1.0F / 3.0F);  // per side, model units
+                const float u0 = -1.0F + static_cast<float>(col) * (2.0F / 3.0F) + kInset;
+                const float v0 = -1.0F + static_cast<float>(row) * (2.0F / 3.0F) + kInset;
+                const float span = 2.0F / 3.0F - 2.0F * kInset;
                 auto& cell = projected.cells[static_cast<std::size_t>(row * 3 + col)];
                 cell[0] = project(on_face(u0, v0));
-                cell[1] = project(on_face(u0 + 2.0F / 3.0F, v0));
-                cell[2] = project(on_face(u0 + 2.0F / 3.0F, v0 + 2.0F / 3.0F));
-                cell[3] = project(on_face(u0, v0 + 2.0F / 3.0F));
+                cell[1] = project(on_face(u0 + span, v0));
+                cell[2] = project(on_face(u0 + span, v0 + span));
+                cell[3] = project(on_face(u0, v0 + span));
             }
         }
         out.push_back(projected);

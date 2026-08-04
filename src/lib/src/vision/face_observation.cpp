@@ -754,6 +754,14 @@ struct PatchStats {
 
 }  // namespace
 
+CellPatchStats sample_cell_patch(const cv::Mat& bgr_frame, const std::array<cv::Point2f, 4>& corners) {
+    // Public seam over the file-local estimator (see the header): the
+    // tracking-first sampler reads the SAME statistic the legacy
+    // detectors were exonerated with, cell-colour intent, unchanged.
+    const PatchStats stats = patch_stats_for_corners(bgr_frame, corners, PatchIntent::kCellColour);
+    return CellPatchStats{stats.median, stats.purity, stats.weighted_mad, stats.quad_px};
+}
+
 namespace {
 
 [[nodiscard]] FaceObservation build_observation(const cv::Mat& bgr_frame, const cv::Mat& transform,
