@@ -40,6 +40,12 @@ Rectangle {
     readonly property var liveOrientation: (ScanSession.cubeOrientation
         && ScanSession.cubeOrientation.length === 4) ? ScanSession.cubeOrientation : null
 
+    // Live translation companion to liveOrientation (P2.6): scene-unit
+    // [x, y, z] while the continuous track is live, else null so the
+    // progress cube eases back to its home spot in the viewport.
+    readonly property var livePosition: (ScanSession.cubePosition
+        && ScanSession.cubePosition.length === 3) ? ScanSession.cubePosition : null
+
     // The video/AR layer mirrors via the Scale transforms below; the 3D
     // progress cube can't be x-scaled the same way (a mirrored render of a
     // rotating cube is geometrically wrong, not just flipped), so
@@ -579,6 +585,8 @@ Rectangle {
                 shaderStyle: SettingsState.shaderStyleIndex
                 autoRotate: root.liveOrientation === null
                 externalRotation: root.liveOrientation
+                externalPosition: root.livePosition
+                externalSnap: ScanSession.rawPoseMode
                 faceletColors: root.scanFaceletColors
                 faceRings: root.scanFaceRings
             }
@@ -754,6 +762,8 @@ Rectangle {
                     shaderStyle: SettingsState.shaderStyleIndex
                     autoRotate: root.liveOrientation === null
                     externalRotation: root.liveOrientation
+                    externalPosition: root.livePosition
+                    externalSnap: ScanSession.rawPoseMode
                     faceletColors: root.scanFaceletColors
                     faceRings: root.scanFaceRings
                 }
@@ -816,6 +826,36 @@ Rectangle {
                     color: "#C07C12"; font.pixelSize: 12; font.family: Theme.fontHeading
                     width: parent.width; wrapMode: Text.WordWrap
                 }
+            }
+        }
+    }
+
+    // Debug HUD (P2.6, CUBE_VISION_HUD=1): the tracking loop's real
+    // numbers, per pass and unsmoothed - the smoothed render above can
+    // look fine while the loop is thrashing, and vice versa. Dev-only
+    // surface, hence the raw values and the deliberate lack of styling
+    // effort; absent (not merely hidden) in a normal run.
+    Rectangle {
+        visible: ScanSession.debugHudEnabled
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: Theme.space2
+        width: hudText.implicitWidth + 16
+        height: hudText.implicitHeight + 12
+        radius: 4
+        color: "#C0000000"
+        z: 1000
+        Text {
+            id: hudText
+            anchors.centerIn: parent
+            color: "#7CE07C"; font.family: Theme.fontMono; font.pixelSize: 11
+            text: {
+                var health = ScanSession.trackHealth;
+                return "track  " + ScanSession.trackingState
+                    + (ScanSession.rawPoseMode ? "  [RAW]" : "")
+                    + "\nhealth " + (health >= 0 ? health.toFixed(3) : "—")
+                    + "\nreinit " + ScanSession.trackReinits
+                    + "\npass   " + ScanSession.passMs.toFixed(1) + " ms";
             }
         }
     }

@@ -121,6 +121,17 @@ class ScanSession : public QObject {
     Q_PROPERTY(QVariantList cornerCellColors READ cornerCellColors NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeVertexPoints READ cubeVertexPoints NOTIFY readingChanged)
     Q_PROPERTY(QVariantList cubeOrientation READ cubeOrientation NOTIFY readingChanged)
+    // Tracked-cube translation for the 3D model ([x, y, z] scene units,
+    // empty while not tracking) - the model moves in space, not just
+    // attitude (P2.6).
+    Q_PROPERTY(QVariantList cubePosition READ cubePosition NOTIFY readingChanged)
+    // Debug HUD surface (P2.6), env-gated CUBE_VISION_HUD=1; raw-pose
+    // display mode (no smoothing anywhere), CUBE_VISION_RAW_POSE=1.
+    Q_PROPERTY(bool debugHudEnabled READ debugHudEnabled CONSTANT)
+    Q_PROPERTY(bool rawPoseMode READ rawPoseMode CONSTANT)
+    Q_PROPERTY(qreal trackHealth READ trackHealth NOTIFY readingChanged)
+    Q_PROPERTY(int trackReinits READ trackReinits NOTIFY readingChanged)
+    Q_PROPERTY(qreal passMs READ passMs NOTIFY readingChanged)
     Q_PROPERTY(bool previewMirrored READ previewMirrored WRITE setPreviewMirrored NOTIFY previewMirroredChanged)
     Q_PROPERTY(QString trackingState READ trackingState NOTIFY readingChanged)
     Q_PROPERTY(bool reorienting READ reorienting NOTIFY readingChanged)
@@ -199,6 +210,12 @@ public:
     // would drop. Empty whenever the tracker is lost or still acquiring -
     // QML treats empty as "not tracking" and idles, exactly as before.
     [[nodiscard]] QVariantList cubeOrientation() const;  // 4 reals or empty
+    [[nodiscard]] QVariantList cubePosition() const;     // 3 reals or empty
+    [[nodiscard]] bool debugHudEnabled() const;
+    [[nodiscard]] bool rawPoseMode() const;
+    [[nodiscard]] qreal trackHealth() const { return hud_health_; }
+    [[nodiscard]] int trackReinits() const { return hud_reinits_; }
+    [[nodiscard]] qreal passMs() const { return hud_pass_ms_; }
     // Whether the on-screen video preview is horizontally mirrored - bound
     // from CameraController.previewMirrored in QML (this class deliberately
     // has no CameraController dependency; the flag crosses in QML, where
@@ -383,11 +400,23 @@ private:
         // value across unchecked passes.
         bool hand_present = false;
         bool hand_checked = false;
-        // The pass's pose came from the continuous 6-DoF track (the live
-        // M3T loop, CUBE_VISION_TRACKER=m3t): the display paths follow it
-        // directly instead of the legacy orientation tracker, whose
-        // plausibility gates speak a different frame convention.
+        // The pass's pose came from the continuous 6-DoF track (the
+        // default pipeline): the display paths follow it directly
+        // instead of the legacy orientation tracker, whose plausibility
+        // gates speak a different frame convention.
         bool pose_from_track = false;
+        // Track facts for translation display + the debug HUD (P2.6).
+        // track_pass says the pass actually ran the track loop - idle
+        // -skipped and legacy passes carry no verdict, and the HUD must
+        // not let their defaults clobber the loop's cumulative facts.
+        // track_tvec is the raw tracked translation (Singmaster
+        // half-edge-1 units, OpenCV camera frame); health -1 = not
+        // measured this pass; pass_ms is the worker pass wall-clock.
+        bool track_pass = false;
+        std::array<double, 3> track_tvec{};
+        double track_health = -1.0;
+        int track_reinits = 0;
+        double pass_ms = 0.0;
         // Cool-hue presence statistic for the cube-absent idle gate (see
         // cube/vision/idle_gate.hpp), computed on EVERY pass - including
         // idle-skipped ones, since it is the signal that ends an idle
@@ -545,6 +574,13 @@ private:
     // Last pass carried a continuous-track (M3T) pose: trackingState and
     // the display paths follow it over the legacy tracker's verdict.
     bool last_pose_from_track_ = false;
+    // Smoothed tracked-cube translation backing cubePosition (P2.6);
+    // valid only while has_position_. HUD facts beside it.
+    std::array<double, 3> smoothed_position_{};
+    bool has_position_ = false;
+    qreal hud_health_ = -1.0;
+    int hud_reinits_ = 0;
+    qreal hud_pass_ms_ = 0.0;
     // Frame time of the last REAL (locked/coasting) orientation sample, so a
     // brief lost/acquiring gap can hold the last pose instead of resetting
     // the 3D view to its idle presentation. See kOrientationHoldMs.

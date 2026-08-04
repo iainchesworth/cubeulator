@@ -113,6 +113,34 @@ constexpr float kOverlaySmoothing = 0.6F;
 // than the 2D overlay's because a 3D cube rendering amplifies small
 // angular noise into very visible rocking.
 constexpr float kOrientationSmoothing = 0.35F;
+
+// Tracked-translation display mapping (cubePosition, P2.6). The tracked
+// tvec is Singmaster half-edge-1 units in the OpenCV camera frame (x
+// right, y down, z away); the 3D view wants scene units (y up) around
+// its origin. Lateral displacement maps from the normalised image
+// offset (tx/tz, ty/tz) - the fraction of the screen the user sees the
+// cube sit off-centre - and depth from tz against an arm's-length
+// reference, so bringing the cube closer pushes the model toward the
+// viewer. Gains are sized to Cube3DView's fixed camera (z=430, 26deg
+// vertical FOV -> ~±99 scene units visible at the cube's depth, cube
+// body ~106 wide): the clamps keep the model inside the viewport at
+// full excursion. Smoothed by the same EMA fraction as orientation.
+constexpr double kPositionLateralGain = 130.0;
+constexpr double kPositionLateralLimit = 62.0;
+constexpr double kPositionDepthGain = 180.0;
+constexpr double kPositionDepthReference = 12.0;  // typical tz, half-edge units (~34 cm)
+constexpr double kPositionDepthMin = -130.0;
+constexpr double kPositionDepthMax = 70.0;
+constexpr double kPositionSmoothing = 0.35;
+
+// CUBE_VISION_RAW_POSE=1: the display adopts each tracked pose sample
+// outright - no orientation nlerp, no position EMA, and the QML view
+// disables its own Behavior animations (rawPoseMode) - so the tracker's
+// raw output can be judged against its smoothed presentation (P2.6).
+[[nodiscard]] bool raw_pose_display() {
+    static const bool raw = qEnvironmentVariable("CUBE_VISION_RAW_POSE") == QLatin1String("1");
+    return raw;
+}
 // How long the 3D view keeps showing the last known pose after the tracker
 // stops supplying one. Sized to outlast an ordinary detection gap (a regrip
 // or a mid-turn blur runs 5-8 passes at this corpus's ~100 ms cadence)
@@ -229,13 +257,22 @@ bool track_mode_degraded = false;  // worker-side, single-in-flight
     return !legacy_requested && !track_mode_degraded;
 }
 
+// Everything a tracking pass hands back to analyze(): the pose while
+// live, plus the raw translation and HUD facts either way.
+struct LiveTrackSample {
+    std::optional<cube::vision::CubePoseProjection> pose;
+    cv::Vec3d tvec{};
+    double health_frac = -1.0;
+    int reinits = 0;
+};
+
 // The live continuous-lock pass (see the call site in analyze() for the
 // contract). Worker-side statics: single-in-flight analysis means no
 // concurrent passes, the same story as the recorder above. The detector
 // model comes from the embedded resource (bundled_models), the tracker
 // from cube::track_m3t; a load failure warns once and degrades the app
-// to the legacy pipeline. Returns the tracked pose when live.
-std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
+// to the legacy pipeline.
+LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
     static cube::vision::pipeline::DetectTrackLoop loop;
     static std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
     static std::unique_ptr<cube::track_m3t::M3tPoseTracker> tracker;
@@ -264,13 +301,17 @@ std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& ana
         }
     }
     if (!loop.attached()) {
-        return std::nullopt;
+        return {};
     }
 
     const auto dt = loop.process(analysis_frame);
+    LiveTrackSample sample;
+    sample.health_frac = dt.health_frac;
+    sample.reinits = dt.reinits;
     if (!dt.track_live || !dt.step_valid) {
-        return std::nullopt;
+        return sample;
     }
+    sample.tvec = dt.tvec;
     cube::vision::CubePoseProjection pose;
     for (std::size_t i = 0; i < 8; ++i) {
         pose.vertices[i] = dt.projected[i] * scale_back;  // analysis -> full-frame px
@@ -287,7 +328,8 @@ std::optional<cube::vision::CubePoseProjection> live_m3t_lock(const cv::Mat& ana
     pose.tvec = dt.tvec * 0.5;
     pose.max_reproj_fraction = dt.health_frac >= 0.0 ? dt.health_frac : 0.0;
     pose.from_seed = false;
-    return pose;
+    sample.pose = pose;
+    return sample;
 }
 #endif
 
@@ -815,6 +857,33 @@ QVariantList ScanSession::cubeOrientation() const {
         list.append(static_cast<qreal>(mirror * smoothed_orientation_[3]));
     }
     return list;
+}
+
+QVariantList ScanSession::cubePosition() const {
+    QVariantList list;
+    // Same lifetime rule as cubeOrientation: empty exactly while no
+    // continuous track (or its hold window) backs a translation, which
+    // eases the model back to the viewport centre in QML.
+    if (has_position_) {
+        // Read-time mirror, the cubeOrientation story: the preview
+        // mirrors the video about the screen-vertical axis (x -> -x),
+        // so the model's lateral travel flips with it or the render
+        // slides against the video the user is watching.
+        const double mirror = preview_mirrored_ ? -1.0 : 1.0;
+        list.append(mirror * smoothed_position_[0]);
+        list.append(smoothed_position_[1]);
+        list.append(smoothed_position_[2]);
+    }
+    return list;
+}
+
+bool ScanSession::debugHudEnabled() const {
+    static const bool enabled = qEnvironmentVariable("CUBE_VISION_HUD") == QLatin1String("1");
+    return enabled;
+}
+
+bool ScanSession::rawPoseMode() const {
+    return raw_pose_display();
 }
 
 bool ScanSession::previewMirrored() const noexcept {
@@ -1409,6 +1478,16 @@ void ScanSession::handleAnalysisFinished() {
             // observation carries no colour by design.
         }
         last_pose_from_track_ = result.pose_from_track;
+        // HUD facts ride each TRACK pass verbatim - the HUD's point is
+        // the loop's real numbers, unsmoothed and unheld. Idle-skipped
+        // passes never ran the loop, so they update nothing: reinits is
+        // a cumulative loop counter and a skipped pass zeroing it would
+        // be the HUD lying in the other direction.
+        if (result.track_pass) {
+            hud_health_ = result.track_health;
+            hud_reinits_ = result.track_reinits;
+            hud_pass_ms_ = result.pass_ms;
+        }
         // In track mode the legacy orientation tracker is NOT fed: its
         // gates speak a different frame convention than the continuous
         // track (measured refusing 85% of M3T orientations as
@@ -1437,7 +1516,7 @@ void ScanSession::handleAnalysisFinished() {
             // limitation this closes).
             const std::array<float, 4>& fresh =
                 result.pose_from_track && result.pose ? result.pose->orientation : track.q_track;
-            if (!has_smoothed_orientation_) {
+            if (!has_smoothed_orientation_ || raw_pose_display()) {
                 smoothed_orientation_ = fresh;
                 has_smoothed_orientation_ = true;
             } else {
@@ -1482,6 +1561,37 @@ void ScanSession::handleAnalysisFinished() {
             // abandoned once the gap outlasts any plausible coast, below.
         } else {
             has_smoothed_orientation_ = false;
+        }
+
+        // Tracked translation for the 3D model (P2.6). Only the
+        // continuous track carries a translation the display can use
+        // (the legacy tracker is orientation-only), so cubePosition is
+        // set exactly on tracked passes, held through the same window
+        // as the orientation, and cleared with it - the model eases
+        // home rather than snapping on a detection blip.
+        if (result.pose_from_track && result.pose) {
+            const auto& t = result.track_tvec;
+            std::array<double, 3> fresh_position{0.0, 0.0, 0.0};
+            if (t[2] > 1.0e-6) {
+                fresh_position[0] = std::clamp(kPositionLateralGain * (t[0] / t[2]),  //
+                                               -kPositionLateralLimit, kPositionLateralLimit);
+                fresh_position[1] = std::clamp(-kPositionLateralGain * (t[1] / t[2]),  //
+                                               -kPositionLateralLimit, kPositionLateralLimit);
+                fresh_position[2] = std::clamp(kPositionDepthGain * (1.0 - t[2] / kPositionDepthReference),
+                                               kPositionDepthMin, kPositionDepthMax);
+            }
+            if (!has_position_ || raw_pose_display()) {
+                smoothed_position_ = fresh_position;
+                has_position_ = true;
+            } else {
+                for (std::size_t i = 0; i < 3; ++i) {
+                    smoothed_position_[i] += kPositionSmoothing * (fresh_position[i] - smoothed_position_[i]);
+                }
+            }
+        } else if (has_position_ && result.frame_ms - last_orientation_ms_ <= kOrientationHoldMs) {
+            // Hold: a detection gap is not evidence the cube went home.
+        } else {
+            has_position_ = false;
         }
         log_track_pass(track);
 
@@ -1635,6 +1745,8 @@ void ScanSession::handleAnalysisFinished() {
 ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
                                                  std::optional<cube::vision::PoseSeed> pose_prior,
                                                  bool run_hand_detector, bool skip_detectors) {
+    QElapsedTimer pass_timer;
+    pass_timer.start();
     AnalysisResult result;
     result.frame_ms = frame_t_ms;
 
@@ -1699,19 +1811,24 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // wireframe and 3D model follow the track; lost passes return with
     // no pose and the detector keeps hunting for the next anchor.
     if (vision_track_mode()) {
-        auto locked = live_m3t_lock(analysis_frame, scale_back);
+        const auto sample = live_m3t_lock(analysis_frame, scale_back);
         if (!vision_track_mode()) {
             // Model load failed on this very pass: fall through to the
             // legacy cascade from the next pass on (this one returns
             // empty rather than running half of each).
             return result;
         }
-        if (locked.has_value()) {
-            result.pose = *locked;
+        if (sample.pose.has_value()) {
+            result.pose = *sample.pose;
             result.pose_from_track = true;
+            result.track_tvec = {sample.tvec[0], sample.tvec[1], sample.tvec[2]};
         }
+        result.track_pass = true;
+        result.track_health = sample.health_frac;
+        result.track_reinits = sample.reinits;
+        result.pass_ms = static_cast<double>(pass_timer.nsecsElapsed()) / 1.0e6;
         VisionDebugStats track_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
-        track_stats.face_status = locked.has_value() ? "track-locked" : "track-lost";
+        track_stats.face_status = sample.pose.has_value() ? "track-locked" : "track-lost";
         track_stats.corner_status = track_stats.face_status;
         dump_vision_debug(analysis_frame, track_stats);
         return result;
@@ -2240,6 +2357,12 @@ void ScanSession::resetReading() {
     // would visibly ease in from wherever the previous cube last pointed.
     smoothed_orientation_ = {1.0F, 0.0F, 0.0F, 0.0F};
     has_smoothed_orientation_ = false;
+    // The translation and HUD facts go with it - same fresh-scan rule.
+    smoothed_position_ = {};
+    has_position_ = false;
+    hud_health_ = -1.0;
+    hud_reinits_ = 0;
+    hud_pass_ms_ = 0.0;
     // Zeroed with it: a restarted scan must not hold the previous cube's
     // pose through its first passes (see kOrientationHoldMs).
     last_orientation_ms_ = 0;
