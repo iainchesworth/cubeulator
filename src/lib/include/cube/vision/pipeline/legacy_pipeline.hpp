@@ -56,6 +56,9 @@ struct LegacyPipelineResult {
     // the legacy FaceSet above, carried side by side until P3.4 retires
     // the cascade. Empty while lost or with no tracker attached.
     std::vector<ProjectedFace> track_faces;
+    // The identity epoch the track_faces ids are local to (P3.3): fusion
+    // must key on (epoch, face id), never face id alone.
+    int gauge_epoch = 0;
 };
 
 class LegacyPipeline {
