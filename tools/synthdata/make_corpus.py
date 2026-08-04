@@ -428,6 +428,25 @@ def quat_slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
     return (math.sin((1 - t) * th) * q0 + math.sin(t * th) * q1) / math.sin(th)
 
 
+def quat_from_R(R: np.ndarray) -> np.ndarray:
+    """Shepperd's method, (x, y, z, w) matching the helpers above."""
+    t = float(np.trace(R))
+    if t > 0:
+        s = math.sqrt(t + 1.0) * 2
+        q = np.array([(R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s,
+                      (R[1, 0] - R[0, 1]) / s, 0.25 * s])
+    else:
+        i = int(np.argmax(np.diag(R)))
+        j, k = (i + 1) % 3, (i + 2) % 3
+        s = math.sqrt(1.0 + R[i, i] - R[j, j] - R[k, k]) * 2
+        q = np.zeros(4)
+        q[i] = 0.25 * s
+        q[j] = (R[j, i] + R[i, j]) / s
+        q[k] = (R[k, i] + R[i, k]) / s
+        q[3] = (R[k, j] - R[j, k]) / s
+    return q / np.linalg.norm(q)
+
+
 def R_from_quat(q: np.ndarray) -> np.ndarray:
     x, y, z, w = q / np.linalg.norm(q)
     return np.array(
@@ -605,6 +624,45 @@ def build_freerot(rng: np.random.Generator, frames: int = 400, seg: int = 80) ->
         py = 240 + 18 * math.cos(2 * math.pi * i / 211)
         z = 11.5 + 0.4 * math.sin(i * 0.02)
         specs.append({"R": R_from_quat(q), "tvec": tvec_for(px, py, z), "occluders": []})
+    return specs
+
+
+def build_sweep(frames_hold: int = 45, frames_turn: int = 32) -> list[dict]:
+    """Six-face sweep: each face presented near-face-on and STEADY, with
+    smooth quarter-turn transitions between (~1.6 s per quarter turn at
+    the corpus frame rate - the deliberate presentation the P0.3 script
+    prescribes, not a flick) - the six-face-coverage clip
+    class the Phase 6 exact-state gate rides on. A mild fixed tilt keeps
+    two or three faces visible throughout, so the tracker never sits in
+    the exact face-on degeneracy and every face's centre gets observed."""
+    tilt = rx(math.radians(-18)) @ ry(math.radians(22))
+    face_targets = [       # model face brought toward the camera, in sweep order
+        np.eye(3),         # -z
+        ry(math.radians(90)),   # +x
+        ry(math.radians(180)),  # +z
+        ry(math.radians(270)),  # -x
+        rx(math.radians(-90)),  # +y
+        rx(math.radians(90)),   # -y
+    ]
+    quats = [quat_from_R(tilt @ g) for g in face_targets]
+    z = 10.4
+    specs: list[dict] = []
+    for k, q in enumerate(quats):
+        Rt = R_from_quat(q)
+        for _ in range(frames_hold):
+            i = len(specs)
+            a = math.radians(2.0) * math.sin(i * 0.11)
+            b = math.radians(2.5) * math.sin(i * 0.077 + 0.8)
+            dx = 0.25 * math.sin(i * 0.31)
+            dy = 0.25 * math.cos(i * 0.27)
+            specs.append({"R": rx(a) @ ry(b) @ Rt,
+                          "tvec": tvec_for(320 + dx, 246 + dy, z),
+                          "occluders": [], "steady": True})
+        if k + 1 < len(quats):
+            for i in range(frames_turn):
+                qq = quat_slerp(q, quats[k + 1], (i + 1) / (frames_turn + 1))
+                specs.append({"R": R_from_quat(qq), "tvec": tvec_for(320, 246, z),
+                              "occluders": []})
     return specs
 
 
@@ -839,7 +897,7 @@ def write_preview(out_root: Path, clip: str, p: int) -> Path:
 # Main
 # =============================================================================
 
-ALL_CLASSES = ["steady", "freerot", "occlusion", "absent", "exit-reentry"]
+ALL_CLASSES = ["steady", "freerot", "occlusion", "absent", "exit-reentry", "sweep"]
 
 
 def main(argv=None) -> None:
@@ -882,6 +940,10 @@ def main(argv=None) -> None:
         elif cls == "absent":
             specs = build_absent()
             motion = f"synthetic: background only, no cube; scramble: {scramble_txt}"
+        elif cls == "sweep":
+            specs = build_sweep()
+            motion = ("synthetic: six-face sweep, steady holds with quarter-turn "
+                      f"transitions; scramble: {scramble_txt}")
         else:
             specs = build_exit_reentry()
             motion = f"synthetic: 4 full frame exits and re-entries; scramble: {scramble_txt}"
@@ -906,6 +968,11 @@ def main(argv=None) -> None:
         elif cls == "absent":
             assert all(t == frozenset({"absent"}) for t in tags)
             assert info["reentries"] == []
+        elif cls == "sweep":
+            assert info["reentries"] == []
+            assert all("in_frame" in t for t in tags)
+            steady_frames = sum(1 for t in tags if "steady" in t)
+            assert steady_frames == 6 * 45, steady_frames
         else:  # exit-reentry
             assert len(info["reentries"]) == 4, info["reentries"]
             assert len(absent_runs) == 4 and all(

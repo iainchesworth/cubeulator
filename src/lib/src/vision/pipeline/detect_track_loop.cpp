@@ -70,6 +70,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
         const auto tracked = tracker_->step(bgr_frame);
         if (!tracked.valid) {
             live_ = false;
+            prev_track_rvec_valid_ = false;
         } else {
             result.step_valid = true;
             result.rvec = tracked.rvec;
@@ -179,7 +180,26 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 // declare a new epoch and re-pin. Detections stand in
                 // for ground truth: the same math as the offline P2.7
                 // registration metric.
-                if (best >= 0.0 && diagonal > 1.0) {
+                // Turn rate from consecutive RAW tracked poses - the
+                // quasi-static gate for gauge decisions (see header).
+                double turn_deg = 0.0;
+                if (prev_track_rvec_valid_) {
+                    cv::Matx33d rot_prev;
+                    cv::Matx33d rot_now;
+                    cv::Rodrigues(prev_track_rvec_, rot_prev);
+                    cv::Rodrigues(tracked.rvec, rot_now);
+                    cv::Vec3d delta;
+                    cv::Rodrigues(rot_prev.t() * rot_now, delta);
+                    turn_deg = cv::norm(delta) * 180.0 / CV_PI;
+                }
+                if (turn_deg > kGaugeEvalMaxTurnDeg) {
+                    gauge_settle_ = kGaugeSettleFrames;
+                } else if (gauge_settle_ > 0) {
+                    --gauge_settle_;
+                }
+                if (best >= 0.0 && diagonal > 1.0 && (turn_deg > kGaugeEvalMaxTurnDeg || gauge_settle_ > 0)) {
+                    gauge_fail_streak_ = 0;  // undecidable mid-turn or settling; retry once static
+                } else if (best >= 0.0 && diagonal > 1.0) {
                     if (gauge_slip_holdoff_ > 0) {
                         --gauge_slip_holdoff_;
                     }
@@ -189,11 +209,25 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                     } else if (pinned_mean >= 0.0 && pinned_mean / diagonal > kHealthFailFrac &&
                                best / diagonal <= kHealthFailFrac) {
                         if (++gauge_fail_streak_ >= kHealthFailStreak) {
-                            // Within the hold-off this is the SAME drift:
-                            // re-pin silently, no new epoch (see header).
+                            // DIAGNOSTIC ONLY - measured and demoted: the
+                            // pinned alignment is VIEW-canonical, and a
+                            // legitimate quarter-turn of the cube rotates
+                            // the view-canonical frame itself, so the pin
+                            // goes stale on every turn (the six-face
+                            // sweep fired 3 declarations against 0 real
+                            // slips, all mid-hold after turns). Deeper: a
+                            // slipped track and a rotated view are the
+                            // SAME geometric observation under the cube's
+                            // 24-fold symmetry - online slip detection
+                            // from geometry alone is impossible in
+                            // principle. Identity protection against real
+                            // slips belongs to CONTENT (the aggregator's
+                            // cross-frame variance refuses a face whose
+                            // reads changed colour mid-epoch; centre
+                            // keying arbitrates at assembly). Epochs
+                            // therefore come from ANCHORS ONLY.
                             if (gauge_slip_holdoff_ == 0) {
                                 result.gauge_slip = true;
-                                ++gauge_epoch_;
                             }
                             gauge_pinned_perm_ = best_perm;
                             gauge_fail_streak_ = 0;
@@ -217,6 +251,12 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             }
         }
     }
+    if (live_ && result.step_valid) {
+        prev_track_rvec_ = result.rvec;
+        prev_track_rvec_valid_ = true;
+    } else if (!live_) {
+        prev_track_rvec_valid_ = false;
+    }
     result.track_live = live_;
     result.gauge_epoch = gauge_epoch_;
     return result;
@@ -234,6 +274,8 @@ void DetectTrackLoop::reset() {
     gauge_epoch_ = 0;
     gauge_fail_streak_ = 0;
     gauge_slip_holdoff_ = 0;
+    gauge_settle_ = 0;
+    prev_track_rvec_valid_ = false;
 }
 
 }  // namespace cube::vision::pipeline

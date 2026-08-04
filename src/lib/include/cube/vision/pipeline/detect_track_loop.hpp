@@ -129,11 +129,29 @@ private:
     // already invalidated pre-drift identity). While the hold-off runs,
     // continued slips re-pin SILENTLY: same gauge correctness, one
     // epoch per drift.
+    // A gauge slip is only DECIDABLE when the pose is quasi-static: mid
+    // -turn the tracked pose lags the physical cube and a neighbouring
+    // gauge briefly fits the lagged state - the synthetic six-face sweep
+    // measured 5 declarations against 0 real slips, all during its
+    // quarter-turn transitions. Above this per-frame rotation rate the
+    // slip evaluation (and fresh pinning) is suspended; real slips
+    // persist after the turn settles and are caught then.
+    static constexpr double kGaugeEvalMaxTurnDeg = 2.5;  // per tracked frame
+    // ...and for a window AFTER the turn settles: the tracked pose
+    // converges back over several frames, and - worse - the rate gate is
+    // keyed on TRACKED pose motion, which under-reads exactly when M3T
+    // lags hardest mid-turn (the pose barely moves, then snaps). The
+    // settle window must cover the snap-back; 6 frames left 2 of the
+    // sweep's 5 false positives alive, 12 covers the measured tail.
+    static constexpr int kGaugeSettleFrames = 12;
     static constexpr int kGaugeSlipHoldoff = 15;  // detect-frame measurements
     int gauge_pinned_perm_ = -1;
     int gauge_epoch_ = 0;
     int gauge_fail_streak_ = 0;
     int gauge_slip_holdoff_ = 0;
+    bool prev_track_rvec_valid_ = false;
+    cv::Vec3d prev_track_rvec_{};
+    int gauge_settle_ = 0;
 };
 
 }  // namespace cube::vision::pipeline
