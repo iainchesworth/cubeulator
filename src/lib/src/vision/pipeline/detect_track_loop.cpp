@@ -1,5 +1,6 @@
 #include <cube/vision/pipeline/detect_track_loop.hpp>
 
+#include <cube/vision/pipeline/pose_refiner.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -59,12 +60,64 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             result.step_valid = true;
             result.rvec = tracked.rvec;
             result.tvec = tracked.tvec;
+
+            // Edge/lattice refinement (P2.8): polish the stepped pose
+            // against the image's edges - the OUTPUT pose only, never
+            // fed back into the tracker. Feedback was built and measured
+            // first: nudging M3T's pose after each step did not reduce
+            // quarter-turn registration slips at all (2 with, 2 without
+            // on the synthetic free-rotation clip) while it wrecked
+            // re-anchor convergence (3 of 4 exit-reentry re-acquisitions
+            // failed) - the region modality re-converges to its own
+            // optimum from wherever it is put, so the nudge buys nothing
+            // steady-state and perturbs exactly the fragile phases.
+            // Gated on THIS frame's detection having found the cube: a
+            // track survives a full exit unmeasurable (no corners means
+            // no health), and an ungated refiner then polishes
+            // background clutter. (Live detector decimation dilutes
+            // refine cadence to the detect frames; revisit at the P2.9
+            // live gates if that shows.)
+            //
+            // Health below judges the RAW stepped pose, not the refined
+            // one: health is a statement about the TRACKER's state, and
+            // judging the polished output was measured to mask drift -
+            // the loop stopped re-anchoring (gauge runs 2 -> 1 on the
+            // synthetic free-rotation clip) and M3T drifted through an
+            // extra quarter-turn slip. Downstream consumers get the
+            // refined pose; the drop/re-anchor decision stays keyed to
+            // what the tracker itself believes.
+            if (refine_enabled_ && result.detection.found) {
+                const auto refined =
+                    refine_pose(bgr_frame, result.rvec, result.tvec, approximate_camera_matrix(bgr_frame.size()));
+                result.refine_matches = refined.matches;
+                result.refine_residual_before_px = refined.mean_residual_before_px;
+                result.refine_residual_after_px = refined.mean_residual_after_px;
+                if (refined.applied) {
+                    result.refine_applied = true;
+                    result.refine_update_deg = refined.update_deg;
+                    result.rvec = refined.rvec;
+                    result.tvec = refined.tvec;
+                }
+            }
+
             std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(), kSingmasterCornerModel.end());
             std::vector<cv::Point2f> projected;
-            cv::projectPoints(model, tracked.rvec, tracked.tvec, approximate_camera_matrix(bgr_frame.size()),
+            cv::projectPoints(model, result.rvec, result.tvec, approximate_camera_matrix(bgr_frame.size()),
                               cv::noArray(), projected);
             for (int i = 0; i < 8; ++i) {
                 result.projected[static_cast<std::size_t>(i)] = projected[static_cast<std::size_t>(i)];
+            }
+            // Raw-pose projection for the health check (see the refine
+            // comment above); identical to result.projected on frames
+            // the refiner left alone.
+            std::array<cv::Point2f, 8> raw_projected = result.projected;
+            if (result.refine_applied) {
+                std::vector<cv::Point2f> raw;
+                cv::projectPoints(model, tracked.rvec, tracked.tvec, approximate_camera_matrix(bgr_frame.size()),
+                                  cv::noArray(), raw);
+                for (int i = 0; i < 8; ++i) {
+                    raw_projected[static_cast<std::size_t>(i)] = raw[static_cast<std::size_t>(i)];
+                }
             }
 
             // Health against this frame's detections, minimised over the
@@ -83,7 +136,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                             continue;
                         }
                         const int tracked_id = perm[static_cast<std::size_t>(id)];
-                        total += cv::norm(result.projected[static_cast<std::size_t>(tracked_id)] - corner.px);
+                        total += cv::norm(raw_projected[static_cast<std::size_t>(tracked_id)] - corner.px);
                         ++count;
                     }
                     if (count >= 4) {

@@ -729,7 +729,7 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
 
 int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, int max_frames,
                 cube::vision::OnnxCornerDetector* detector, cube::vision::pipeline::PoseTracker* tracker,
-                ClipMetrics& metrics) {
+                bool refine_enabled, ClipMetrics& metrics) {
     std::ifstream index_stream(dir / std::string(recording::kIndexCsvName));
     if (!index_stream) {
         std::fprintf(stderr, "error: no %s under %s - not a recording directory\n",
@@ -783,6 +783,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         tracker->reset();  // fresh track per clip; the region-model cache persists
         pipe.set_pose_tracker(tracker);
     }
+    pipe.set_refine_enabled(refine_enabled);
 
     // P2.7 tracked-pose scoring state. The gauge pin lives across frames
     // of one locked run; re-acquisition latency walks the sidecar's
@@ -1178,8 +1179,9 @@ int usage() {
     std::fprintf(stderr,
                  "usage:\n"
                  "  cube_pipeline_runner replay <recording-dir> [--detector <model.onnx>] [--tracker m3t] "
-                 "[--out <dir>] [--no-video] [--max-frames N]\n"
-                 "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--tracker m3t] [--out <dir>]\n"
+                 "[--out <dir>] [--no-video] [--no-refine] [--max-frames N]\n"
+                 "  cube_pipeline_runner corpus <root-dir> [--detector <model.onnx>] [--tracker m3t] "
+                 "[--no-refine] [--out <dir>]\n"
                  "  cube_pipeline_runner calibrate <images-dir> [--pattern WxH] [--square MM] [--out <file>]\n"
                  "  cube_pipeline_runner check <recording-dir>\n"
                  "  cube_pipeline_runner bench-recorder <out-dir> [--frames N] [--size WxH] [--fps N]\n"
@@ -1200,6 +1202,7 @@ int main(int argc, char** argv) {
     std::string detector_path;
     std::string tracker_name;
     bool write_video = true;
+    bool refine_enabled = true;
     int max_frames = 0;
     int synth_frames = 120;
     int bench_w = 1280;
@@ -1218,6 +1221,8 @@ int main(int argc, char** argv) {
             tracker_name = argv[++i];
         } else if (arg == "--no-video") {
             write_video = false;
+        } else if (arg == "--no-refine") {
+            refine_enabled = false;
         } else if (arg == "--max-frames" && i + 1 < argc) {
             max_frames = std::atoi(argv[++i]);
         } else if (arg == "--frames" && i + 1 < argc) {
@@ -1289,7 +1294,7 @@ int main(int argc, char** argv) {
     if (mode == "replay") {
         ClipMetrics metrics;
         return replay_clip(target, out_dir.empty() ? target / "pipeline-out" : out_dir, write_video, max_frames,
-                           detector.get(), pose_tracker.get(), metrics);
+                           detector.get(), pose_tracker.get(), refine_enabled, metrics);
     }
     if (mode == "corpus") {
         int worst = 0;
@@ -1311,7 +1316,7 @@ int main(int argc, char** argv) {
             const fs::path clip_out =
                 (out_dir.empty() ? entry.path() : out_dir / entry.path().filename()) / "pipeline-out";
             worst = std::max(worst, replay_clip(entry.path(), clip_out, write_video, max_frames, detector.get(),
-                                                pose_tracker.get(), metrics));
+                                                pose_tracker.get(), refine_enabled, metrics));
             int table_reacq_failed = 0;
             for (const double latency : metrics.gt_reacq_ms) {
                 table_reacq_failed += latency < 0.0 ? 1 : 0;

@@ -39,6 +39,12 @@ public:
     // One tracking step on the next frame. Only meaningful after a
     // successful init; implementations return valid=false when the track
     // has degenerated.
+    //
+    // (Design note, measured not guessed: a nudge() hook that fed the
+    // edge/lattice refinement back into the tracker was built and A/B'd
+    // on the synthetic corpus - it did not reduce registration slips and
+    // it wrecked re-anchor convergence, so refinement stays output-only.
+    // See detect_track_loop.cpp's refine block before re-adding one.)
     virtual TrackedPose step(const cv::Mat& bgr_frame) = 0;
 
     virtual void reset() = 0;

@@ -74,6 +74,7 @@ target_sources(cube_lib
         src/vision/pipeline/trace.cpp
         src/vision/pipeline/legacy_pipeline.cpp
         src/vision/pipeline/detect_track_loop.cpp
+        src/vision/pipeline/pose_refiner.cpp
         src/vision/recording_v2.cpp
         src/vision/groundtruth.cpp
         src/vision/corner_detector.cpp

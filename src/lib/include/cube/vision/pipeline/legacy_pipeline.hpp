@@ -93,6 +93,10 @@ public:
         loop_.attach(corner_detector_, pose_tracker_);
     }
 
+    // A/B switch for the edge/lattice refinement stage (default ON, the
+    // live path's contract) - the runner's --no-refine measurement hook.
+    void set_refine_enabled(bool enabled) { loop_.set_refine_enabled(enabled); }
+
 private:
     StabilityTracker stability_;
     OrientationTracker tracker_;

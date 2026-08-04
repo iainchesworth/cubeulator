@@ -39,6 +39,14 @@ struct DetectTrackResult {
     std::array<cv::Point2f, 8> projected{};  // Singmaster-ordered model corners under the tracked pose
     double health_frac = -1.0;               // -1 = not measurable this frame
     int reinits = 0;                         // cumulative anchors this loop lifetime
+    // Edge/lattice refinement facts (pose_refiner.hpp; P2.8). When
+    // applied, rvec/tvec/projected above ARE the refined pose and the
+    // tracker was nudged onto it.
+    bool refine_applied = false;
+    int refine_matches = 0;
+    double refine_update_deg = 0.0;
+    double refine_residual_before_px = -1.0;
+    double refine_residual_after_px = -1.0;
 };
 
 class DetectTrackLoop {
@@ -64,6 +72,11 @@ public:
     // needs it).
     void set_live_detect_interval(int n) { live_detect_interval_ = n > 1 ? n : 1; }
 
+    // Edge/lattice refinement after each tracking step (pose_refiner.hpp;
+    // P2.8): default ON - it is part of the tracking contract, the same
+    // on the live path and offline. Off exists for A/B measurement.
+    void set_refine_enabled(bool enabled) { refine_enabled_ = enabled; }
+
     // One frame through detect + track. Safe to call with nothing
     // attached (returns an empty result).
     [[nodiscard]] DetectTrackResult process(const cv::Mat& bgr_frame);
@@ -74,6 +87,7 @@ private:
     OnnxCornerDetector* detector_ = nullptr;
     PoseTracker* tracker_ = nullptr;
     bool live_ = false;
+    bool refine_enabled_ = true;
     int health_fail_streak_ = 0;
     int reinits_ = 0;
     int live_detect_interval_ = 1;

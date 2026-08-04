@@ -397,6 +397,11 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("m3t_step_valid", dt.step_valid);
         track_trace.add("m3t_health_frac", dt.health_frac);
         track_trace.add("m3t_reinits", static_cast<std::int64_t>(dt.reinits));
+        track_trace.add("refine_applied", dt.refine_applied);
+        track_trace.add("refine_matches", static_cast<std::int64_t>(dt.refine_matches));
+        track_trace.add("refine_update_deg", dt.refine_update_deg);
+        track_trace.add("refine_residual_before_px", dt.refine_residual_before_px);
+        track_trace.add("refine_residual_after_px", dt.refine_residual_after_px);
     }
     track_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(track_trace));
