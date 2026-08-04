@@ -139,8 +139,13 @@ corpus renders at fx=700 vs the approximation's 640). Calibrate once:
 
 ## Remaining to close Phase 2
 
-- [ ] User: 60-second scripted live run (procedure above).
-- [ ] User: chessboard calibration capture.
+- [x] User: 60-second scripted live run - both bounds PASS (run 2:
+      98.4% locked, 7/40 ms latency).
+- [x] User: chessboard calibration capture (2026-08-04): fx 616.4 fy
+      615.5, cx 310.2 cy 251.7, rms 1.0 px from 33/41 views at 640x480
+      -> D:\cubeulator-corpus\intrinsics-workstation-webcam.txt (f=width
+      fallback measured -3.7% off). Set CUBE_VISION_INTRINSICS to it for
+      all live runs.
 - [x] Wire stored intrinsics through detect-track loop + runner
       (auto per-clip offline, CUBE_VISION_INTRINSICS live).
 - [ ] P0.3 real-cube corpus session; re-score this table on it
