@@ -47,7 +47,21 @@ General rules (from the plan's ground rules):
   rate (the stable-but-wrong trap is the failure mode this metric exists
   to catch). Frames between keyframes inherit no correctness judgement;
   the rate's correctness term is evaluated on keyframes and the locked
-  term on all frames.
+  term on all frames. Correctness is GEOMETRIC: reprojection is
+  minimised over the 24 cube rotations, the same convention as corner
+  localisation — a quarter-turn-slipped pose still projects onto the
+  cube's corners, and whether the rotational registration survived is
+  the next metric's job, not this one's.
+- **registration hold** (needs keyframes; diagnostic, no gate): each
+  locked run pins the best-of-24 gauge on its first scored frame; this
+  reports the fraction of subsequent scored frames on which the pinned
+  gauge stayed within the gate bound, plus the count of re-pins — frames
+  where the best gauge moved while the pinned one went out of bound,
+  i.e. the tracker slipped a cube symmetry (silhouettes are invariant
+  under quarter turns, so region tracking alone cannot forbid this and
+  the loop's best-of-24 health check cannot see it). This is the number
+  that quantifies free-rotation slippage for the Phase 2 refinement and
+  Phase 3 identity work.
 - **reprojection error** (needs keyframes): per labelled corner, distance
   between the tracked pose's projected model corner and the label, % of
   extent. Median / p95 per clip.
@@ -61,8 +75,14 @@ General rules (from the plan's ground rules):
   (tracked pose, no labels needed — jitter is self-relative), % of
   extent, worst corner. Median over segments per clip.
 - **re-acquisition latency** (needs segments): for each `reentry_event`
-  frame r, the count of frames from r until the first locked frame,
-  converted to ms via the recording's timestamps. Median over events.
+  frame r, the time from r until the first locked-AND-correct frame
+  (correctness per the locked-and-correct rule above — a re-lock onto a
+  wrong pose must not stop the clock), converted to ms via the
+  recording's timestamps. An event with no such frame before the cube
+  goes absent again (or the clip ends) is a FAILURE; the median ranks
+  failures worst, so a corpus whose median event failed reports no
+  finite latency rather than the median of the survivors. Median over
+  events.
 - **turn survival** (needs segments): fraction of `turning` segments
   wholly free of `lost` frames.
 
