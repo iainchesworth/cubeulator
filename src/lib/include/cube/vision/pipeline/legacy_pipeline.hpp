@@ -50,6 +50,11 @@ struct LegacyPipelineResult {
     CellSamples samples;
     FaceReads reads;
     FrameTrace trace;
+    // Pose-derived stage-D geometry while the continuous track is live
+    // (P3.1, face_projection.hpp) - the tracking-first replacement for
+    // the legacy FaceSet above, carried side by side until P3.4 retires
+    // the cascade. Empty while lost or with no tracker attached.
+    std::vector<ProjectedFace> track_faces;
 };
 
 class LegacyPipeline {

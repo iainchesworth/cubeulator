@@ -56,6 +56,12 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             live_ = true;
             health_fail_streak_ = 0;
             result.reinits = ++reinits_;
+            // A fresh anchor is a fresh identity epoch: the model frame
+            // is this frame's view-canonical orientation, and the gauge
+            // re-pins on the next measurable detect frame (P3.3).
+            ++gauge_epoch_;
+            gauge_pinned_perm_ = -1;
+            gauge_fail_streak_ = 0;
         }
     }
 
@@ -114,6 +120,11 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             for (int i = 0; i < 8; ++i) {
                 result.projected[static_cast<std::size_t>(i)] = projected[static_cast<std::size_t>(i)];
             }
+            // Stage-D geometry from the same OUTPUT pose (P3.1): faces,
+            // quads and sticker centres are projections of the tracked
+            // model - the plan's "no more per-frame face hunting".
+            result.faces = derive_faces(result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
+
             // Raw-pose projection for the health check (see the refine
             // comment above); identical to result.projected on frames
             // the refiner left alone.
@@ -134,7 +145,10 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 const double diagonal =
                     std::sqrt(static_cast<double>(box.width) * box.width + static_cast<double>(box.height) * box.height);
                 double best = -1.0;
-                for (const auto& perm : singmaster_rotation_permutations()) {
+                int best_perm = -1;
+                double pinned_mean = -1.0;
+                const auto& perms = singmaster_rotation_permutations();
+                for (std::size_t p = 0; p < perms.size(); ++p) {
                     double total = 0.0;
                     int count = 0;
                     for (int id = 0; id < 8; ++id) {
@@ -142,7 +156,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                         if (corner.confidence < OnnxCornerDetector::kDefaultKeypointFloor) {
                             continue;
                         }
-                        const int tracked_id = perm[static_cast<std::size_t>(id)];
+                        const int tracked_id = perms[p][static_cast<std::size_t>(id)];
                         total += cv::norm(raw_projected[static_cast<std::size_t>(tracked_id)] - corner.px);
                         ++count;
                     }
@@ -150,8 +164,36 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                         const double mean = total / count;
                         if (best < 0.0 || mean < best) {
                             best = mean;
+                            best_perm = static_cast<int>(p);
+                        }
+                        if (static_cast<int>(p) == gauge_pinned_perm_) {
+                            pinned_mean = mean;
                         }
                     }
+                }
+                // P3.3 online gauge: pin on the first measurable detect
+                // frame of the epoch; afterwards a persistent pinned-
+                // gauge failure WHILE the best gauge passes is a
+                // quarter-turn slip - identity is invalid from here, so
+                // declare a new epoch and re-pin. Detections stand in
+                // for ground truth: the same math as the offline P2.7
+                // registration metric.
+                if (best >= 0.0 && diagonal > 1.0) {
+                    if (gauge_pinned_perm_ < 0) {
+                        gauge_pinned_perm_ = best_perm;
+                        gauge_fail_streak_ = 0;
+                    } else if (pinned_mean >= 0.0 && pinned_mean / diagonal > kHealthFailFrac &&
+                               best / diagonal <= kHealthFailFrac) {
+                        if (++gauge_fail_streak_ >= kHealthFailStreak) {
+                            result.gauge_slip = true;
+                            ++gauge_epoch_;
+                            gauge_pinned_perm_ = best_perm;
+                            gauge_fail_streak_ = 0;
+                        }
+                    } else {
+                        gauge_fail_streak_ = 0;
+                    }
+                    result.gauge_pinned_err = pinned_mean >= 0.0 ? pinned_mean / diagonal : -1.0;
                 }
                 if (best >= 0.0 && diagonal > 1.0) {
                     result.health_frac = best / diagonal;
@@ -167,6 +209,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
         }
     }
     result.track_live = live_;
+    result.gauge_epoch = gauge_epoch_;
     return result;
 }
 
@@ -178,6 +221,9 @@ void DetectTrackLoop::reset() {
     health_fail_streak_ = 0;
     reinits_ = 0;
     frames_since_detect_ = 0;
+    gauge_pinned_perm_ = -1;
+    gauge_epoch_ = 0;
+    gauge_fail_streak_ = 0;
 }
 
 }  // namespace cube::vision::pipeline

@@ -12,6 +12,7 @@ add_executable(cube_unit_tests
     unit/model_test.cpp
     unit/grid_detection_test.cpp
     unit/pose_refiner_test.cpp
+    unit/face_projection_test.cpp
     unit/face_observation_test.cpp
     unit/temporal_fusion_test.cpp
     unit/color_resolution_test.cpp

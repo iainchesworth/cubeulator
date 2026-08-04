@@ -121,6 +121,26 @@ cv::Mat render_overlay(const cv::Mat& frame, const pipeline::LegacyPipelineResul
         }
     }
 
+    // Derived-face identity labels (P3 gate criterion 4): model-frame
+    // face id + frontality at each tracked face's centre. Epoch-local
+    // identity by design - stable within a gauge epoch, renamed only by
+    // an anchor or a declared slip.
+    if (!result.track_faces.empty()) {
+        static const std::array<const char*, 6> kFaceNames{"+x", "-x", "+y", "-y", "+z", "-z"};
+        for (const auto& face : result.track_faces) {
+            cv::Point2f centre(0.0F, 0.0F);
+            for (const auto& corner : face.quad) {
+                centre += corner;
+            }
+            centre *= 0.25F;
+            std::array<char, 32> label{};
+            std::snprintf(label.data(), label.size(), "%s %.2f",
+                          kFaceNames[static_cast<std::size_t>(face.face)], face.frontality);
+            cv::putText(canvas, label.data(), centre + cv::Point2f(-18.0F, 4.0F), cv::FONT_HERSHEY_SIMPLEX, 0.45,
+                        cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
+        }
+    }
+
     // Learned corner candidates (stage B primary): magenta, Singmaster id.
     for (const auto& corner : result.detection.corners) {
         cv::circle(canvas, corner.px, 4, cv::Scalar(255, 0, 255), cv::FILLED, cv::LINE_AA);
@@ -244,6 +264,19 @@ struct ClipMetrics {
     int gt_lock_incorrect_frames = 0;         // locked but beyond bound on a labelled frame
     std::array<cv::Point2d, 8> gt_track_bias_sum{};  // residual-vector sums per BODY corner (of extent)
     std::array<int, 8> gt_track_bias_count{};
+    // P3.1 pose-derived face geometry (face_projection.hpp) vs labelled
+    // face quads/centres, scored on tracked frames. Quad corners match
+    // under the best of the 8 dihedral alignments (the face-local frame
+    // is a convention, not an observable, until P3.3 identity lands);
+    // centres match nearest-neighbour within the matched face - honest
+    // caveat: nearest matching cannot flag a whole-grid alias by itself,
+    // the quad metric is what catches gross misplacement.
+    std::vector<double> gt_face_quad_err_extent;   // per corner of each matched face
+    int gt_faces_labelled = 0;
+    int gt_faces_matched = 0;
+    std::vector<double> gt_face_centre_err_pitch;  // per labelled centre of matched faces
+    int gt_face_centre_misassigned = 0;            // centre err > 50% of pitch
+
     // Self-relative jitter evidence per steady segment (keyed by segment
     // start pass): projected corner positions on locked frames plus the
     // per-frame projected extent. Needs no labels - jitter is deviation
@@ -254,6 +287,17 @@ struct ClipMetrics {
     };
     std::map<int, SteadyJitterAccum> gt_track_steady;
     std::vector<double> gt_reacq_ms;          // per reentry event; -1 = never re-locked
+
+    // P3 gate criterion 2, "no simmering": phase-correlation shift
+    // magnitude between CONSECUTIVE steady frames' rectified images of
+    // the same (most frontal) face - per-frame fitting could never hold
+    // this; a projection of a stable pose must.
+    std::vector<double> gt_rect_shift_px;
+
+    // P3.3: quarter-turn slips the loop's ONLINE gauge detector declared
+    // (trace field gauge_slip) - compare against gt_track_repins, the
+    // ground-truth count of registration slips, on the console line.
+    int gauge_slips_detected = 0;
 };
 
 // Locked-and-correct bound (docs/pipeline-plan.md Phase 2 exit gate): a
@@ -504,14 +548,160 @@ double score_tracked_frame(const cube::vision::groundtruth::Keyframe& keyframe,
     return best_mean;
 }
 
+// P3.1: score the pose-DERIVED faces (face_projection.hpp) against one
+// labelled frame. Each labelled face matches the nearest derived quad
+// by centre (within half the labelled diagonal); quad corners score
+// under the best of the 8 dihedral alignments as a fraction of the
+// labelled corner extent; sticker centres score nearest-neighbour
+// within the matched face as a fraction of the labelled pitch.
+void score_tracked_faces(const cube::vision::groundtruth::Keyframe& keyframe,
+                         const std::vector<cube::vision::pipeline::ProjectedFace>& derived, ClipMetrics& metrics) {
+    if (derived.empty() || keyframe.faces.empty() || keyframe.corners.size() < 2) {
+        return;
+    }
+    float min_x = keyframe.corners.front().px.x;
+    float max_x = min_x;
+    float min_y = keyframe.corners.front().px.y;
+    float max_y = min_y;
+    for (const auto& corner : keyframe.corners) {
+        min_x = std::min(min_x, corner.px.x);
+        max_x = std::max(max_x, corner.px.x);
+        min_y = std::min(min_y, corner.px.y);
+        max_y = std::max(max_y, corner.px.y);
+    }
+    const double extent = std::max(max_x - min_x, max_y - min_y);
+    if (extent <= 1.0) {
+        return;
+    }
+
+    static const std::array<std::array<int, 4>, 8> kDihedral{{{0, 1, 2, 3},
+                                                              {1, 2, 3, 0},
+                                                              {2, 3, 0, 1},
+                                                              {3, 0, 1, 2},
+                                                              {3, 2, 1, 0},
+                                                              {2, 1, 0, 3},
+                                                              {1, 0, 3, 2},
+                                                              {0, 3, 2, 1}}};
+
+    for (const auto& labelled : keyframe.faces) {
+        ++metrics.gt_faces_labelled;
+        cv::Point2f label_centre(0.0F, 0.0F);
+        for (const auto& corner : labelled.quad) {
+            label_centre += corner;
+        }
+        label_centre *= 0.25F;
+        const double diagonal = cv::norm(labelled.quad[0] - labelled.quad[2]);
+
+        const cube::vision::pipeline::ProjectedFace* best_face = nullptr;
+        double best_distance = diagonal * 0.5;
+        for (const auto& candidate : derived) {
+            cv::Point2f candidate_centre(0.0F, 0.0F);
+            for (const auto& corner : candidate.quad) {
+                candidate_centre += corner;
+            }
+            candidate_centre *= 0.25F;
+            const double distance = cv::norm(candidate_centre - label_centre);
+            if (distance < best_distance) {
+                best_distance = distance;
+                best_face = &candidate;
+            }
+        }
+        if (best_face == nullptr) {
+            continue;
+        }
+        ++metrics.gt_faces_matched;
+
+        double best_mean = -1.0;
+        std::array<double, 4> best_errors{};
+        for (const auto& alignment : kDihedral) {
+            double total = 0.0;
+            std::array<double, 4> errors{};
+            for (int i = 0; i < 4; ++i) {
+                errors[static_cast<std::size_t>(i)] =
+                    cv::norm(best_face->quad[static_cast<std::size_t>(alignment[static_cast<std::size_t>(i)])] -
+                             labelled.quad[static_cast<std::size_t>(i)]) /
+                    extent;
+                total += errors[static_cast<std::size_t>(i)];
+            }
+            if (best_mean < 0.0 || total / 4.0 < best_mean) {
+                best_mean = total / 4.0;
+                best_errors = errors;
+            }
+        }
+        metrics.gt_face_quad_err_extent.insert(metrics.gt_face_quad_err_extent.end(), best_errors.begin(),
+                                               best_errors.end());
+
+        // Labelled sticker pitch: median adjacent-centre distance (same
+        // recipe as the legacy cell metric).
+        std::vector<double> gaps;
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 2; ++col) {
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>(row * 3 + col + 1)] -
+                                        labelled.centres[static_cast<std::size_t>(row * 3 + col)]));
+                gaps.push_back(cv::norm(labelled.centres[static_cast<std::size_t>((col + 1) * 3 + row)] -
+                                        labelled.centres[static_cast<std::size_t>(col * 3 + row)]));
+            }
+        }
+        std::sort(gaps.begin(), gaps.end());
+        const double pitch = gaps[gaps.size() / 2];
+        if (pitch <= 0.0) {
+            continue;
+        }
+        for (const auto& centre : labelled.centres) {
+            double nearest = -1.0;
+            for (const auto& candidate : best_face->centres) {
+                const double distance = cv::norm(candidate - centre);
+                if (nearest < 0.0 || distance < nearest) {
+                    nearest = distance;
+                }
+            }
+            metrics.gt_face_centre_err_pitch.push_back(nearest / pitch);
+            metrics.gt_face_centre_misassigned += nearest / pitch > 0.5 ? 1 : 0;
+        }
+    }
+}
+
 // Score one hand-clicked keyframe against this frame's detected faces:
 // match each labelled face to the nearest detected face view by quad
 // centre (within half the labelled quad diagonal), then accumulate cell
 // centre errors as fractions of the labelled sticker pitch
 // (docs/pipeline-metrics.md "cell-centre error"). Content-agnostic - no
 // face identity needed, so it works under the legacy adapter too.
+// The 8 dihedral index permutations of the 3x3 cell grid (rotations +
+// reflection), for scoring track-sourced cells whose declared face-local
+// frame is a convention away from the labels' body-frame grid order -
+// the assembler's roll search absorbs exactly this (plan Phase 3 item
+// 4). perm[label_index] = candidate cell index under the alignment.
+const std::array<std::array<int, 9>, 8>& cell_grid_alignments() {
+    static const std::array<std::array<int, 9>, 8> alignments = [] {
+        std::array<std::array<int, 9>, 8> out{};
+        for (int flip = 0; flip < 2; ++flip) {
+            for (int rot = 0; rot < 4; ++rot) {
+                auto& perm = out[static_cast<std::size_t>(flip * 4 + rot)];
+                for (int index = 0; index < 9; ++index) {
+                    int row = index / 3;
+                    int col = index % 3;
+                    for (int turn = 0; turn < rot; ++turn) {
+                        const int next_row = col;
+                        const int next_col = 2 - row;
+                        row = next_row;
+                        col = next_col;
+                    }
+                    if (flip == 1) {
+                        col = 2 - col;
+                    }
+                    perm[static_cast<std::size_t>(index)] = row * 3 + col;
+                }
+            }
+        }
+        return out;
+    }();
+    return alignments;
+}
+
 void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
-                    const cube::vision::pipeline::LegacyPipelineResult& result, ClipMetrics& metrics) {
+                    const cube::vision::pipeline::LegacyPipelineResult& result, bool alignment_invariant,
+                    ClipMetrics& metrics) {
     // Learned-corner localisation, scored up to the best cube rotation
     // (view-canonical detector ids vs body-frame labels - see the
     // ClipMetrics comment). Extent = longest side of the labelled
@@ -629,6 +819,7 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
             continue;
         }
         scored_any = true;
+        std::array<cv::Point2f, 9> cell_centres{};
         for (std::size_t c = 0; c < 9; ++c) {
             const auto& cell = result.cells.faces[static_cast<std::size_t>(best)].cells[c];
             cv::Point2f cell_centre(0.0F, 0.0F);
@@ -636,7 +827,30 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
                 cell_centre += corner;
             }
             cell_centre *= 0.25F;
-            const double err = cv::norm(cell_centre - labelled.centres[c]) / pitch;
+            cell_centres[c] = cell_centre;
+        }
+        // Track-sourced cells live in the declared face-local frame, a
+        // dihedral alignment away from the labels' grid order; legacy
+        // cells claim the labels' own order and stay strictly indexed
+        // (an off-by-one there is a real permutation bug, not a
+        // convention).
+        std::array<int, 9> chosen{0, 1, 2, 3, 4, 5, 6, 7, 8};
+        if (alignment_invariant) {
+            double best_total = -1.0;
+            for (const auto& perm : cell_grid_alignments()) {
+                double total = 0.0;
+                for (std::size_t c = 0; c < 9; ++c) {
+                    total += cv::norm(cell_centres[static_cast<std::size_t>(perm[c])] - labelled.centres[c]);
+                }
+                if (best_total < 0.0 || total < best_total) {
+                    best_total = total;
+                    chosen = perm;
+                }
+            }
+        }
+        for (std::size_t c = 0; c < 9; ++c) {
+            const double err =
+                cv::norm(cell_centres[static_cast<std::size_t>(chosen[c])] - labelled.centres[c]) / pitch;
             metrics.gt_centre_err_pitch.push_back(err);
             metrics.gt_whole_cell_misassignments += err > 0.5 ? 1 : 0;
         }
@@ -702,6 +916,19 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
         }
         out << "],\n";
         out << "    \"track_bias_extent_max\": " << bias_max << ",\n";
+        const auto [face_quad_median, face_quad_p95] = median_p95(m.gt_face_quad_err_extent);
+        const auto [face_centre_median, face_centre_p95] = median_p95(m.gt_face_centre_err_pitch);
+        out << "    \"faces_labelled\": " << m.gt_faces_labelled << ",\n";
+        out << "    \"faces_matched\": " << m.gt_faces_matched << ",\n";
+        out << "    \"face_quad_err_extent_median\": " << face_quad_median << ",\n";
+        out << "    \"face_quad_err_extent_p95\": " << face_quad_p95 << ",\n";
+        out << "    \"face_centre_err_pitch_median\": " << face_centre_median << ",\n";
+        out << "    \"face_centre_err_pitch_p95\": " << face_centre_p95 << ",\n";
+        out << "    \"face_centre_misassigned\": " << m.gt_face_centre_misassigned << ",\n";
+        const auto [rect_shift_median, rect_shift_p95] = median_p95(m.gt_rect_shift_px);
+        out << "    \"rect_shift_px_median\": " << rect_shift_median << ",\n";
+        out << "    \"rect_shift_px_p95\": " << rect_shift_p95 << ",\n";
+        out << "    \"rect_shift_pairs\": " << m.gt_rect_shift_px.size() << ",\n";
         out << "    \"track_jitter_extent_median\": " << clip_jitter(m.gt_track_steady) << ",\n";
         out << "    \"track_jitter_segments\": " << m.gt_track_steady.size() << ",\n";
         out << "    \"reacq_events\": " << m.gt_reacq_ms.size() << ",\n";
@@ -833,6 +1060,12 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // locked-and-correct frame - or marking it failed (-1) if the cube
     // goes absent again (or the clip ends) first.
     int track_pinned_perm = -1;
+    // Rectified-stability state: previous steady frame's most-frontal
+    // rectified face (float grey for phaseCorrelate), its model face id
+    // and pass number - only same-face, consecutive-pass pairs score.
+    cv::Mat rect_prev;
+    int rect_prev_face = -1;
+    int rect_prev_pass = -10;
     std::vector<int> reentry_events;
     if (truth.segments) {
         reentry_events = truth.segments->reentry_events;
@@ -891,7 +1124,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         }
         if (const auto keyframe = truth.keyframes.find(row.pass);
             keyframe != truth.keyframes.end() && !keyframe->second.interpolated) {
-            score_keyframe(keyframe->second, result, metrics);
+            const bool cells_from_track =
+                result.track.phase == pipeline::TrackPhase::locked && result.track.pose_source == "m3t";
+            score_keyframe(keyframe->second, result, cells_from_track, metrics);
         }
 
         // --- P2.7: tracked-pose scoring --------------------------------
@@ -906,6 +1141,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 keyframe != truth.keyframes.end() && !keyframe->second.interpolated) {
                 track_frame_err =
                     score_tracked_frame(keyframe->second, result.track.projected_vertices, track_pinned_perm, metrics);
+                score_tracked_faces(keyframe->second, result.track_faces, metrics);  // P3.1
             }
         } else {
             track_pinned_perm = -1;  // gauge re-pins at the next anchor
@@ -920,6 +1156,25 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 ++metrics.gt_inframe_any_frames;
                 metrics.gt_lock_correct_frames += lock_correct ? 1 : 0;
                 metrics.gt_lock_incorrect_frames += (m3t_locked && !lock_correct) ? 1 : 0;
+                // Rectified-face stability (P3 gate criterion 2): shift
+                // between consecutive steady frames' rectified images of
+                // the same most-frontal face, via phase correlation.
+                if ((tags & gt::kSteady) != 0 && m3t_locked && !result.track_faces.empty() &&
+                    !result.faces.faces.empty() && !result.faces.faces.front().rectified.empty()) {
+                    cv::Mat grey;
+                    cv::cvtColor(result.faces.faces.front().rectified, grey, cv::COLOR_BGR2GRAY);
+                    cv::Mat grey_float;
+                    grey.convertTo(grey_float, CV_32F);
+                    const int face_id = result.track_faces.front().face;
+                    if (!rect_prev.empty() && rect_prev_face == face_id && row.pass == rect_prev_pass + 1) {
+                        const cv::Point2d shift = cv::phaseCorrelate(rect_prev, grey_float);
+                        metrics.gt_rect_shift_px.push_back(cv::norm(shift));
+                    }
+                    rect_prev = grey_float;
+                    rect_prev_face = face_id;
+                    rect_prev_pass = row.pass;
+                }
+
                 // Jitter evidence: self-relative, so every locked frame
                 // in a steady segment contributes, labelled or not.
                 if ((tags & gt::kSteady) != 0 && m3t_locked) {
@@ -992,6 +1247,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         ++metrics.state_counts[std::get<std::string>(value)];
                     } else if (field == "gate" && std::holds_alternative<std::string>(value)) {
                         ++metrics.gate_counts[std::get<std::string>(value)];
+                    } else if (field == "gauge_slip" && std::holds_alternative<bool>(value) &&
+                               std::get<bool>(value)) {
+                        ++metrics.gauge_slips_detected;  // P3.3 online detector
                     }
                 }
             }
@@ -1054,8 +1312,23 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         "reacq median %.0f ms over %zu events (%d failed)\n",
                         bias_max, clip_jitter(metrics.gt_track_steady), metrics.gt_track_steady.size(),
                         reacq_median_ms(metrics.gt_reacq_ms), metrics.gt_reacq_ms.size(), reacq_failed);
-            std::printf("  tracked pose: registration held %d/%d frames, %d slips (quarter-turn re-pins)\n",
-                        metrics.gt_track_reg_held, metrics.gt_track_reg_frames, metrics.gt_track_repins);
+            std::printf("  tracked pose: registration held %d/%d frames, %d slips (quarter-turn re-pins)  "
+                        "online gauge detector: %d slips declared\n",
+                        metrics.gt_track_reg_held, metrics.gt_track_reg_frames, metrics.gt_track_repins,
+                        metrics.gauge_slips_detected);
+            if (metrics.gt_faces_labelled > 0) {
+                const auto [face_quad_median, face_quad_p95] = median_p95(metrics.gt_face_quad_err_extent);
+                const auto [face_centre_median, face_centre_p95] = median_p95(metrics.gt_face_centre_err_pitch);
+                std::printf("  derived faces: matched %d/%d  quad err median %.4f p95 %.4f (of extent)  "
+                            "centre err median %.3f p95 %.3f (of pitch)  misassigned %d\n",
+                            metrics.gt_faces_matched, metrics.gt_faces_labelled, face_quad_median, face_quad_p95,
+                            face_centre_median, face_centre_p95, metrics.gt_face_centre_misassigned);
+            }
+            if (!metrics.gt_rect_shift_px.empty()) {
+                const auto [rect_median, rect_p95] = median_p95(metrics.gt_rect_shift_px);
+                std::printf("  rectified stability: shift median %.3f px p95 %.3f px over %zu steady pairs\n",
+                            rect_median, rect_p95, metrics.gt_rect_shift_px.size());
+            }
         }
         const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
         std::printf("  ground truth: det(in_frame) %s  det(occluded) %s  fp-sustained %d  "

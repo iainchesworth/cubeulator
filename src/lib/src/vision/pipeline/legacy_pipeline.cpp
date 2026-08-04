@@ -397,6 +397,11 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("m3t_step_valid", dt.step_valid);
         track_trace.add("m3t_health_frac", dt.health_frac);
         track_trace.add("m3t_reinits", static_cast<std::int64_t>(dt.reinits));
+        result.track_faces = dt.faces;
+        track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
+        track_trace.add("gauge_epoch", static_cast<std::int64_t>(dt.gauge_epoch));
+        track_trace.add("gauge_slip", dt.gauge_slip);
+        track_trace.add("gauge_pinned_err", dt.gauge_pinned_err);
         track_trace.add("refine_applied", dt.refine_applied);
         track_trace.add("refine_matches", static_cast<std::int64_t>(dt.refine_matches));
         track_trace.add("refine_update_deg", dt.refine_update_deg);
@@ -417,7 +422,31 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
 
     const bool track_has_identity =
         track.phase == TrackPhase::locked || track.phase == TrackPhase::coasting;
-    if (detection.legacy_corner) {
+    // P3.4: while the continuous track is live, stage D-F geometry comes
+    // from the POSE - the legacy cascade is retired as the primary
+    // source (it still runs in stage B as a trace-only instrument until
+    // the app's colour path moves in Phases 4-5). Frontality gates
+    // capture grade: a grazing face's cells are slivers no sampler
+    // should trust (threshold provisional, swept at the Phase 3 gate).
+    constexpr double kTrackCaptureFrontality = 0.4;
+    const bool track_geometry = loop_.has_tracker() && dt.track_live && !dt.faces.empty();
+    if (track_geometry) {
+        for (const auto& derived : dt.faces) {
+            FaceView face_view;
+            face_view.quad = derived.quad;
+            face_view.frontal_deg = static_cast<float>(
+                std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
+            face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
+            if (face_view.capture_grade) {
+                face_view.rectified = rectify_face(frame.bgr, derived);
+            }
+            // body_face stays empty: identity is epoch-local gauge, and
+            // the assembly arbiter remains centre-colour keying (plan
+            // Phase 3 item 3).
+            result.faces.faces.push_back(std::move(face_view));
+        }
+        faces_trace.add("source", std::string("track-geometry"));
+    } else if (detection.legacy_corner) {
         for (const auto* view :
              {&detection.legacy_corner->top, &detection.legacy_corner->lower_left, &detection.legacy_corner->lower_right}) {
             FaceView face_view;
@@ -470,7 +499,15 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             ++faces_with_cells;
             ++index;
         };
-        if (detection.legacy_corner) {
+        if (track_geometry) {
+            for (const auto& derived : dt.faces) {
+                std::array<StickerQuad, 9> cells{};
+                for (std::size_t c = 0; c < 9; ++c) {
+                    cells[c].corners = derived.cells[c];
+                }
+                put_cells(cells);
+            }
+        } else if (detection.legacy_corner) {
             put_cells(detection.legacy_corner->top.cells);
             put_cells(detection.legacy_corner->lower_left.cells);
             put_cells(detection.legacy_corner->lower_right.cells);
@@ -507,7 +544,33 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             }
             ++index;
         };
-        if (detection.legacy_corner) {
+        if (track_geometry) {
+            // P3.4 track-geometry sampling: mean Lab over each cell's
+            // central block of the canonical rectified face - the P3.2
+            // substrate used as designed (same 8U Lab convention as
+            // classify_lab's palette). Phase 4 owns anything smarter.
+            for (std::size_t face_index = 0; face_index < result.faces.faces.size(); ++face_index) {
+                const auto& view = result.faces.faces[face_index];
+                if (!view.capture_grade || view.rectified.empty()) {
+                    continue;
+                }
+                cv::Mat lab;
+                cv::cvtColor(view.rectified, lab, cv::COLOR_BGR2Lab);
+                const int third = lab.rows / 3;
+                const int margin = third / 4;
+                for (int row = 0; row < 3; ++row) {
+                    for (int col = 0; col < 3; ++col) {
+                        const cv::Rect block(col * third + margin, row * third + margin, third - 2 * margin,
+                                             third - 2 * margin);
+                        const cv::Scalar mean = cv::mean(lab(block));
+                        result.samples.faces[face_index].lab[static_cast<std::size_t>(row * 3 + col)] =
+                            cv::Vec3f(static_cast<float>(mean[0]), static_cast<float>(mean[1]),
+                                      static_cast<float>(mean[2]));
+                    }
+                }
+                ++sampled_faces;
+            }
+        } else if (detection.legacy_corner) {
             put_lab(detection.legacy_corner->top.lab, nullptr);
             put_lab(detection.legacy_corner->lower_left.lab, nullptr);
             put_lab(detection.legacy_corner->lower_right.lab, nullptr);
@@ -518,7 +581,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         }
     }
     sample_trace.add("sampled_faces", static_cast<std::int64_t>(sampled_faces));
-    sample_trace.add("sampled_by", std::string("legacy-detector"));
+    sample_trace.add("sampled_by", std::string(track_geometry ? "track-rectified" : "legacy-detector"));
     sample_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(sample_trace));
 
