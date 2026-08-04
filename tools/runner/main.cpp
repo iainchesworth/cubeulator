@@ -268,6 +268,12 @@ struct ClipMetrics {
     std::map<int, SteadyJitterAccum> gt_track_steady;
     std::vector<double> gt_reacq_ms;          // per reentry event; -1 = never re-locked
 
+    // P3 gate criterion 2, "no simmering": phase-correlation shift
+    // magnitude between CONSECUTIVE steady frames' rectified images of
+    // the same (most frontal) face - per-frame fitting could never hold
+    // this; a projection of a stable pose must.
+    std::vector<double> gt_rect_shift_px;
+
     // P3.3: quarter-turn slips the loop's ONLINE gauge detector declared
     // (trace field gauge_slip) - compare against gt_track_repins, the
     // ground-truth count of registration slips, on the console line.
@@ -899,6 +905,10 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
         out << "    \"face_centre_err_pitch_median\": " << face_centre_median << ",\n";
         out << "    \"face_centre_err_pitch_p95\": " << face_centre_p95 << ",\n";
         out << "    \"face_centre_misassigned\": " << m.gt_face_centre_misassigned << ",\n";
+        const auto [rect_shift_median, rect_shift_p95] = median_p95(m.gt_rect_shift_px);
+        out << "    \"rect_shift_px_median\": " << rect_shift_median << ",\n";
+        out << "    \"rect_shift_px_p95\": " << rect_shift_p95 << ",\n";
+        out << "    \"rect_shift_pairs\": " << m.gt_rect_shift_px.size() << ",\n";
         out << "    \"track_jitter_extent_median\": " << clip_jitter(m.gt_track_steady) << ",\n";
         out << "    \"track_jitter_segments\": " << m.gt_track_steady.size() << ",\n";
         out << "    \"reacq_events\": " << m.gt_reacq_ms.size() << ",\n";
@@ -1030,6 +1040,12 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // locked-and-correct frame - or marking it failed (-1) if the cube
     // goes absent again (or the clip ends) first.
     int track_pinned_perm = -1;
+    // Rectified-stability state: previous steady frame's most-frontal
+    // rectified face (float grey for phaseCorrelate), its model face id
+    // and pass number - only same-face, consecutive-pass pairs score.
+    cv::Mat rect_prev;
+    int rect_prev_face = -1;
+    int rect_prev_pass = -10;
     std::vector<int> reentry_events;
     if (truth.segments) {
         reentry_events = truth.segments->reentry_events;
@@ -1120,6 +1136,25 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 ++metrics.gt_inframe_any_frames;
                 metrics.gt_lock_correct_frames += lock_correct ? 1 : 0;
                 metrics.gt_lock_incorrect_frames += (m3t_locked && !lock_correct) ? 1 : 0;
+                // Rectified-face stability (P3 gate criterion 2): shift
+                // between consecutive steady frames' rectified images of
+                // the same most-frontal face, via phase correlation.
+                if ((tags & gt::kSteady) != 0 && m3t_locked && !result.track_faces.empty() &&
+                    !result.faces.faces.empty() && !result.faces.faces.front().rectified.empty()) {
+                    cv::Mat grey;
+                    cv::cvtColor(result.faces.faces.front().rectified, grey, cv::COLOR_BGR2GRAY);
+                    cv::Mat grey_float;
+                    grey.convertTo(grey_float, CV_32F);
+                    const int face_id = result.track_faces.front().face;
+                    if (!rect_prev.empty() && rect_prev_face == face_id && row.pass == rect_prev_pass + 1) {
+                        const cv::Point2d shift = cv::phaseCorrelate(rect_prev, grey_float);
+                        metrics.gt_rect_shift_px.push_back(cv::norm(shift));
+                    }
+                    rect_prev = grey_float;
+                    rect_prev_face = face_id;
+                    rect_prev_pass = row.pass;
+                }
+
                 // Jitter evidence: self-relative, so every locked frame
                 // in a steady segment contributes, labelled or not.
                 if ((tags & gt::kSteady) != 0 && m3t_locked) {
@@ -1268,6 +1303,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                             "centre err median %.3f p95 %.3f (of pitch)  misassigned %d\n",
                             metrics.gt_faces_matched, metrics.gt_faces_labelled, face_quad_median, face_quad_p95,
                             face_centre_median, face_centre_p95, metrics.gt_face_centre_misassigned);
+            }
+            if (!metrics.gt_rect_shift_px.empty()) {
+                const auto [rect_median, rect_p95] = median_p95(metrics.gt_rect_shift_px);
+                std::printf("  rectified stability: shift median %.3f px p95 %.3f px over %zu steady pairs\n",
+                            rect_median, rect_p95, metrics.gt_rect_shift_px.size());
             }
         }
         const auto [centre_median, centre_p95] = median_p95(metrics.gt_centre_err_pitch);
