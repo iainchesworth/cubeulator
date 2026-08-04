@@ -70,6 +70,13 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
                 const float u = (static_cast<float>(col) - 1.0F) * (2.0F / 3.0F);
                 const float v = (static_cast<float>(row) - 1.0F) * (2.0F / 3.0F);
                 projected.centres[static_cast<std::size_t>(row * 3 + col)] = project(on_face(u, v));
+                const float u0 = -1.0F + static_cast<float>(col) * (2.0F / 3.0F);
+                const float v0 = -1.0F + static_cast<float>(row) * (2.0F / 3.0F);
+                auto& cell = projected.cells[static_cast<std::size_t>(row * 3 + col)];
+                cell[0] = project(on_face(u0, v0));
+                cell[1] = project(on_face(u0 + 2.0F / 3.0F, v0));
+                cell[2] = project(on_face(u0 + 2.0F / 3.0F, v0 + 2.0F / 3.0F));
+                cell[3] = project(on_face(u0, v0 + 2.0F / 3.0F));
             }
         }
         out.push_back(projected);

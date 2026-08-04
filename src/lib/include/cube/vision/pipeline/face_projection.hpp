@@ -34,6 +34,9 @@ struct ProjectedFace {
     double frontality = 0.0;   // facing cosine toward the camera (1 = square-on)
     std::array<cv::Point2f, 4> quad{};      // tl,tr,br,bl per the face-local frame above
     std::array<cv::Point2f, 9> centres{};   // row-major sticker centres, same frame
+    // Per-cell quads (tl,tr,br,bl each, row-major cells) - stage E's
+    // geometry under tracking-first: a cell is a projection too.
+    std::array<std::array<cv::Point2f, 4>, 9> cells{};
 };
 
 // All front-facing faces of the posed model, most frontal first.

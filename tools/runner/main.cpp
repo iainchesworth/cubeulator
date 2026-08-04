@@ -641,8 +641,41 @@ void score_tracked_faces(const cube::vision::groundtruth::Keyframe& keyframe,
 // centre errors as fractions of the labelled sticker pitch
 // (docs/pipeline-metrics.md "cell-centre error"). Content-agnostic - no
 // face identity needed, so it works under the legacy adapter too.
+// The 8 dihedral index permutations of the 3x3 cell grid (rotations +
+// reflection), for scoring track-sourced cells whose declared face-local
+// frame is a convention away from the labels' body-frame grid order -
+// the assembler's roll search absorbs exactly this (plan Phase 3 item
+// 4). perm[label_index] = candidate cell index under the alignment.
+const std::array<std::array<int, 9>, 8>& cell_grid_alignments() {
+    static const std::array<std::array<int, 9>, 8> alignments = [] {
+        std::array<std::array<int, 9>, 8> out{};
+        for (int flip = 0; flip < 2; ++flip) {
+            for (int rot = 0; rot < 4; ++rot) {
+                auto& perm = out[static_cast<std::size_t>(flip * 4 + rot)];
+                for (int index = 0; index < 9; ++index) {
+                    int row = index / 3;
+                    int col = index % 3;
+                    for (int turn = 0; turn < rot; ++turn) {
+                        const int next_row = col;
+                        const int next_col = 2 - row;
+                        row = next_row;
+                        col = next_col;
+                    }
+                    if (flip == 1) {
+                        col = 2 - col;
+                    }
+                    perm[static_cast<std::size_t>(index)] = row * 3 + col;
+                }
+            }
+        }
+        return out;
+    }();
+    return alignments;
+}
+
 void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
-                    const cube::vision::pipeline::LegacyPipelineResult& result, ClipMetrics& metrics) {
+                    const cube::vision::pipeline::LegacyPipelineResult& result, bool alignment_invariant,
+                    ClipMetrics& metrics) {
     // Learned-corner localisation, scored up to the best cube rotation
     // (view-canonical detector ids vs body-frame labels - see the
     // ClipMetrics comment). Extent = longest side of the labelled
@@ -760,6 +793,7 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
             continue;
         }
         scored_any = true;
+        std::array<cv::Point2f, 9> cell_centres{};
         for (std::size_t c = 0; c < 9; ++c) {
             const auto& cell = result.cells.faces[static_cast<std::size_t>(best)].cells[c];
             cv::Point2f cell_centre(0.0F, 0.0F);
@@ -767,7 +801,30 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
                 cell_centre += corner;
             }
             cell_centre *= 0.25F;
-            const double err = cv::norm(cell_centre - labelled.centres[c]) / pitch;
+            cell_centres[c] = cell_centre;
+        }
+        // Track-sourced cells live in the declared face-local frame, a
+        // dihedral alignment away from the labels' grid order; legacy
+        // cells claim the labels' own order and stay strictly indexed
+        // (an off-by-one there is a real permutation bug, not a
+        // convention).
+        std::array<int, 9> chosen{0, 1, 2, 3, 4, 5, 6, 7, 8};
+        if (alignment_invariant) {
+            double best_total = -1.0;
+            for (const auto& perm : cell_grid_alignments()) {
+                double total = 0.0;
+                for (std::size_t c = 0; c < 9; ++c) {
+                    total += cv::norm(cell_centres[static_cast<std::size_t>(perm[c])] - labelled.centres[c]);
+                }
+                if (best_total < 0.0 || total < best_total) {
+                    best_total = total;
+                    chosen = perm;
+                }
+            }
+        }
+        for (std::size_t c = 0; c < 9; ++c) {
+            const double err =
+                cv::norm(cell_centres[static_cast<std::size_t>(chosen[c])] - labelled.centres[c]) / pitch;
             metrics.gt_centre_err_pitch.push_back(err);
             metrics.gt_whole_cell_misassignments += err > 0.5 ? 1 : 0;
         }
@@ -1031,7 +1088,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         }
         if (const auto keyframe = truth.keyframes.find(row.pass);
             keyframe != truth.keyframes.end() && !keyframe->second.interpolated) {
-            score_keyframe(keyframe->second, result, metrics);
+            const bool cells_from_track =
+                result.track.phase == pipeline::TrackPhase::locked && result.track.pose_source == "m3t";
+            score_keyframe(keyframe->second, result, cells_from_track, metrics);
         }
 
         // --- P2.7: tracked-pose scoring --------------------------------
