@@ -64,11 +64,13 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             gauge_fail_streak_ = 0;
             gauge_slip_holdoff_ = 0;
             frames_since_anchor_ = 0;
+            frames_since_health_ = 0;
         }
     }
 
     if (live_) {
         ++frames_since_anchor_;
+        ++frames_since_health_;
         const auto tracked = tracker_->step(bgr_frame);
         if (!tracked.valid) {
             live_ = false;
@@ -241,6 +243,10 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                     result.gauge_pinned_err = pinned_mean >= 0.0 ? pinned_mean / diagonal : -1.0;
                 }
                 if (best >= 0.0 && diagonal > 1.0) {
+                    if (frames_since_health_ > kHealthGapFrames) {
+                        frames_since_anchor_ = 0;  // gap voids maturity (see header)
+                    }
+                    frames_since_health_ = 0;
                     result.health_frac = best / diagonal;
                     if (result.health_frac > kHealthFailFrac) {
                         const int streak_needed =

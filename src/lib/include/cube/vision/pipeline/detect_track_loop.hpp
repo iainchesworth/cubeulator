@@ -89,6 +89,14 @@ public:
     static constexpr int kHealthFailStreakYoung = 3;
     static constexpr int kHealthFailStreak = 20;
     static constexpr int kTrackMatureFrames = 30;
+    // A health-MEASUREMENT gap voids maturity: a zombie track that
+    // survived the cube's absence unmeasurable resurfaces with mature
+    // patience it never earned (measured: exit-reentry reacq 264 ms ->
+    // 1122 ms under the flat age rule). After this many live frames
+    // without a health measurement, the track re-proves like a fresh
+    // anchor. Settle sequences measure every detect frame and never
+    // trip this.
+    static constexpr int kHealthGapFrames = 10;
 
     // tracker may be nullptr: the loop then runs detection + PnP only
     // (the P1 detector-only mode) and track_live stays false.
@@ -171,6 +179,7 @@ private:
     cv::Vec3d prev_track_rvec_{};
     int gauge_settle_ = 0;
     int frames_since_anchor_ = 0;
+    int frames_since_health_ = 0;
 };
 
 }  // namespace cube::vision::pipeline
