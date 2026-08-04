@@ -80,7 +80,34 @@ namespace detail {
 [[nodiscard]] CornerDetectionResult decode_pose_output(const float* data, int anchors, float score_threshold,
                                                        float scale, float pad_x, float pad_y, cv::Size frame);
 
-// Model keypoint slot (synthdata binary corner order) -> Singmaster id.
+// Keypoint slot ids are VIEW-CANONICAL, not body-fixed - measured fact,
+// load-bearing, do not "fix" this with a remap table (two of them have
+// already been tried and reverted): the v3 training labels
+// (corner_order "binary_xyz_x_fastest_view_canonical") carry 24 distinct
+// slot->body permutations across samples, because body-fixed corner ids
+// are UNLEARNABLE for a rotationally symmetric object from geometry
+// alone - that is precisely why the body-fixed round-1 labels produced
+// pose mAP 0 and view-canonical labels produce 0.94. Consequences:
+//  - ids are consistent WITHIN a frame (PnP correspondences work and the
+//    recovered pose is the body pose composed with an unknown lattice
+//    element - the SAME per-observation gauge the orientation tracker
+//    and CaptureRouter already own);
+//  - across frames the canonical frame is piecewise-stable and can flip
+//    at view boundaries (the tracker's continuity resolves it, like the
+//    legacy gauge);
+//  - metrics against body-frame ground truth must score up to the best
+//    of the 24 cube rotations (the runner does).
+// The table below is the binary-index -> Singmaster RELABELLING of the
+// same eight coordinates (slot 0 = (-,-,-) = DBL = 6 ... slot 7 =
+// (+,+,+) = URF = 0): it converts the model's binary slot numbering into
+// Singmaster numbering WITHIN the view-canonical frame, so downstream
+// code speaks one numbering. It is NOT a view->body alignment - that
+// alignment is one of the 24 rotations and is resolved downstream
+// (best-rotation in metrics, tracker continuity in stage C). An earlier
+// revision deleted this relabel on the theory that view-canonical ids
+// made it meaningless; that mixed two NUMBERINGS of the same corners,
+// which no proper rotation can absorb, and the best-rotation metric
+// flagged it as an irreducible ~0.2-0.4-extent floor.
 inline constexpr std::array<int, 8> kSlotToSingmaster{6, 7, 2, 3, 5, 4, 1, 0};
 
 }  // namespace detail

@@ -7,6 +7,7 @@ add_executable(cube_pipeline_runner main.cpp)
 target_link_libraries(cube_pipeline_runner
     PRIVATE
         cube::lib
+        cube::track_m3t
         cube::warnings
         cube::sanitizers
         cube::coverage)

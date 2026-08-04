@@ -88,6 +88,19 @@ Item {
     readonly property bool externallyDriven: externalRotation !== null
         && externalRotation.length === 4
 
+    // Live pose translation: an [x, y, z] scene-unit offset, or null.
+    // Fed alongside externalRotation so the model moves through the
+    // viewport with the physical cube instead of pivoting in place;
+    // null eases the cube back to centre.
+    property var externalPosition: null
+    readonly property bool externallyPositioned: externalPosition !== null
+        && externalPosition.length === 3
+
+    // Raw-pose debug mode (CUBE_VISION_RAW_POSE=1): the view's own
+    // easing animations switch off so each pose sample lands exactly
+    // as delivered - smoothing anywhere would defeat the mode's point.
+    property bool externalSnap: false
+
     // The drag / idle-spin paths write cubeRoot.eulerRotation imperatively,
     // so the pose hand-off is imperative too: zero the presentation tilt
     // while a live pose drives the cube (otherwise homeRotation would
@@ -386,8 +399,17 @@ Item {
                 ? Qt.quaternion(root.externalRotation[0], root.externalRotation[1],
                                 root.externalRotation[2], root.externalRotation[3])
                 : Qt.quaternion(1, 0, 0, 0)
+            position: root.externallyPositioned
+                ? Qt.vector3d(root.externalPosition[0], root.externalPosition[1],
+                              root.externalPosition[2])
+                : Qt.vector3d(0, 0, 0)
             Behavior on rotation {
+                enabled: !root.externalSnap
                 QuaternionAnimation { duration: 120; type: QuaternionAnimation.Slerp }
+            }
+            Behavior on position {
+                enabled: !root.externalSnap
+                Vector3dAnimation { duration: 120 }
             }
 
             Node {

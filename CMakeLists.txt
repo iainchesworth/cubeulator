@@ -95,6 +95,15 @@ add_subdirectory(src/render)
 # CUBEULATOR_BUILD_APP.
 add_subdirectory(src/app)
 
+# Vendored third-party code (currently the M3T tracker for pipeline Phase 2,
+# exported as cube::m3t); desktop-only, gated per-platform inside. Ordered
+# before its consumers (src/track_m3t, tools/runner).
+add_subdirectory(third_party)
+
+# The M3T-backed stage-C tracker behind the GL-free pipeline seam;
+# desktop-only, gated inside.
+add_subdirectory(src/track_m3t)
+
 # Desktop-only developer instruments (offline pipeline runner - see
 # docs/pipeline-plan.md); gated per-platform inside.
 add_subdirectory(tools)

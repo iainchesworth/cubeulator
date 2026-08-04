@@ -30,6 +30,8 @@
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
+#include <cube/vision/pipeline/detect_track_loop.hpp>
+#include <cube/vision/pipeline/pose_tracker.hpp>
 #include <cube/vision/pipeline/stage_types.hpp>
 #include <cube/vision/pipeline/trace.hpp>
 #include <cube/vision/pose_estimation.hpp>
@@ -71,7 +73,33 @@ public:
     // consumes the corners directly. found/confidence/roi become the
     // learned detector's verdict - it is the stage-B primary
     // (docs/pipeline-plan.md, classical spike verdict).
-    void set_corner_detector(OnnxCornerDetector* detector) { corner_detector_ = detector; }
+    void set_corner_detector(OnnxCornerDetector* detector) {
+        corner_detector_ = detector;
+        loop_.attach(corner_detector_, pose_tracker_);
+    }
+
+    // Phase 2: attach the continuous 6-DoF tracker (not owned; may be
+    // nullptr). Requires a corner detector (init and health both consume
+    // its corners). When attached and healthy, TrackState's pose,
+    // projected vertices, orientation and phase come from the TRACKER;
+    // the legacy orientation tracker keeps running for its identity
+    // machinery and its verdicts stay in the trace. Health: the tracked
+    // pose's projected model corners are compared against this frame's
+    // detected corners, minimised over the 24 cube rotations
+    // (view-canonical ids - see corner_detector.hpp); a streak of
+    // failures drops the track and the next good detector PnP re-inits.
+    void set_pose_tracker(PoseTracker* tracker) {
+        pose_tracker_ = tracker;
+        loop_.attach(corner_detector_, pose_tracker_);
+    }
+
+    // A/B switch for the edge/lattice refinement stage (default ON, the
+    // live path's contract) - the runner's --no-refine measurement hook.
+    void set_refine_enabled(bool enabled) { loop_.set_refine_enabled(enabled); }
+
+    // Measured per-camera intrinsics for the loop's camera-matrix
+    // consumers (P2.9); unset = the f=width approximation.
+    void set_camera_intrinsics(const CameraIntrinsics& intrinsics) { loop_.set_camera_intrinsics(intrinsics); }
 
 private:
     StabilityTracker stability_;
@@ -80,6 +108,11 @@ private:
     std::optional<PoseSeed> seed_prior_;
     std::int64_t seed_t_ms_ = 0;
     OnnxCornerDetector* corner_detector_ = nullptr;
+    PoseTracker* pose_tracker_ = nullptr;
+    // The shared detect->init->track->health loop (detect_track_loop.hpp)
+    // - the SAME instance class the live app runs, so offline replays and
+    // the shipping path cannot drift.
+    DetectTrackLoop loop_;
 };
 
 }  // namespace cube::vision::pipeline

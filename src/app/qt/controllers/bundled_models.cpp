@@ -12,4 +12,12 @@ QByteArray hand_detection_model_bytes() {
     return file.readAll();
 }
 
+QByteArray cube_corner_pose_model_bytes() {
+    QFile file(QStringLiteral(":/models/cube_corner_pose.onnx"));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    return file.readAll();
+}
+
 }  // namespace cube::app

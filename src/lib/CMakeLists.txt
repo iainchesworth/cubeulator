@@ -73,9 +73,13 @@ target_sources(cube_lib
         src/vision/idle_gate.cpp
         src/vision/pipeline/trace.cpp
         src/vision/pipeline/legacy_pipeline.cpp
+        src/vision/pipeline/detect_track_loop.cpp
+        src/vision/pipeline/pose_refiner.cpp
         src/vision/recording_v2.cpp
         src/vision/groundtruth.cpp
         src/vision/corner_detector.cpp
+        src/vision/pose_from_corners.cpp
+        src/vision/camera_intrinsics.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 
