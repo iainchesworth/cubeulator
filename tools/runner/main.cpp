@@ -1418,12 +1418,13 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // older-frame): a cell's 3-D centre in the newer model frame maps
         // through the rotation and decomposes on the older face's local
         // (u, v) axes - the roll falls out of the geometry, no dihedral
-        // search. Face-local convention per face_projection.hpp.
+        // search. Outside-view (u, v) per face_projection.cpp: the cyclic
+        // pair on negative faces, swapped on positive ones.
         const auto map_cell = [](const cv::Matx33d& rotation, int face_new, int cell) -> std::pair<int, int> {
             const int axis_n = face_new / 2;
             const double sign_n = (face_new % 2 == 0) ? 1.0 : -1.0;
-            const int u_n = (axis_n + 1) % 3;
-            const int v_n = (axis_n + 2) % 3;
+            const int u_n = (face_new % 2 == 0) ? (axis_n + 2) % 3 : (axis_n + 1) % 3;
+            const int v_n = (face_new % 2 == 0) ? (axis_n + 1) % 3 : (axis_n + 2) % 3;
             cv::Vec3d p(0, 0, 0);
             p[axis_n] = sign_n;
             p[u_n] = (cell % 3 - 1) * (2.0 / 3.0);
@@ -1439,8 +1440,8 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 return {-1, -1};
             }
             const int axis_o = face_old / 2;
-            const int u_o = (axis_o + 1) % 3;
-            const int v_o = (axis_o + 2) % 3;
+            const int u_o = (face_old % 2 == 0) ? (axis_o + 2) % 3 : (axis_o + 1) % 3;
+            const int v_o = (face_old % 2 == 0) ? (axis_o + 1) % 3 : (axis_o + 2) % 3;
             const int col = static_cast<int>(std::lround(q[u_o] * 1.5)) + 1;
             const int row = static_cast<int>(std::lround(q[v_o] * 1.5)) + 1;
             if (col < 0 || col > 2 || row < 0 || row > 2) {
@@ -1573,9 +1574,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
             fusion[metrics.fusion_best_epoch].size() < 6 ? "insufficient-faces" : "unconverged-faces";
     } else {
         std::array<cube::vision::CapturedFace, 6> captured{};
+        std::array<int, 6> body_face_ids{};
         std::size_t slot = 0;
         for (auto& [face_id, aggregator] : fusion[metrics.fusion_best_epoch]) {
             if (aggregator.converged() && slot < 6) {
+                body_face_ids[slot] = face_id;
                 captured[slot++] = aggregator.capture();
             }
         }
@@ -1583,10 +1586,15 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         if (!resolved.has_value()) {
             metrics.e2e_outcome = "resolve-failed";
         } else {
-            const auto assembled = cube::solver::assemble_scanned_faces(*resolved);
+            // P6.4: a tracked scan's captures carry their body-frame
+            // orientation, so the assembler gets the quarter-turn hint -
+            // tie-break advice only, the search and its bars are unchanged.
+            const cube::solver::RotationHint hint =
+                cube::solver::rotation_hint_for_tracked_scan(*resolved, body_face_ids);
+            const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved, &hint);
             if (!assembled.has_value()) {
                 metrics.e2e_outcome = "assembly-failed";
-            } else if (*assembled == *oracle) {
+            } else if (assembled->cube == *oracle) {
                 metrics.exact_state_match = true;
                 metrics.e2e_outcome = "exact-match";
             } else {

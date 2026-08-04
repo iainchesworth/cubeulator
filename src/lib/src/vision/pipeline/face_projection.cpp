@@ -52,8 +52,16 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
         ProjectedFace projected;
         projected.face = face;
         projected.frontality = frontality;
-        const int axis_u = (face_axis + 1) % 3;
-        const int axis_v = (face_axis + 2) % 3;
+        // Outside-view (u, v): col rightward, row downward exactly as a
+        // camera facing the face sees it, i.e. e_u x e_v = -outward
+        // normal on EVERY face. The cyclic pair (a+1, a+2) has that
+        // handedness only on negative faces; positive faces swap it.
+        // One uniform convention is what lets assembly's centre-pinned
+        // handedness correction be a fixed per-Face table
+        // (scan_assembly.cpp) instead of depending on which body face
+        // the gauge happened to assign.
+        const int axis_u = sign > 0.0F ? (face_axis + 2) % 3 : (face_axis + 1) % 3;
+        const int axis_v = sign > 0.0F ? (face_axis + 1) % 3 : (face_axis + 2) % 3;
         const auto on_face = [&](float u, float v) {
             std::array<float, 3> p{};
             p[static_cast<std::size_t>(face_axis)] = sign;
