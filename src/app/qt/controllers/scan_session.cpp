@@ -14,6 +14,7 @@
 #ifdef CUBE_HAVE_M3T
 #include <cube/track_m3t/m3t_pose_tracker.hpp>
 #include <cube/vision/corner_detector.hpp>
+#include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/pipeline/detect_track_loop.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -303,6 +304,21 @@ LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
                 // buys live tracking cadence (the offline runner keeps
                 // every-frame detection for its metrics).
                 loop.set_live_detect_interval(3);
+                // Measured camera intrinsics (P2.9): point at the file
+                // the calibration tool wrote and every camera-matrix
+                // consumer in the loop leaves the f=width approximation.
+                if (const QString intrinsics_path = qEnvironmentVariable("CUBE_VISION_INTRINSICS");
+                    !intrinsics_path.isEmpty()) {
+                    if (auto intrinsics = cube::vision::read_intrinsics(intrinsics_path.toStdString());
+                        intrinsics.has_value()) {
+                        loop.set_camera_intrinsics(*intrinsics);
+                        qInfo("ScanSession: calibrated intrinsics loaded (fx %.1f fy %.1f from %s)",
+                              intrinsics->fx, intrinsics->fy, qUtf8Printable(intrinsics_path));
+                    } else {
+                        qWarning("ScanSession: CUBE_VISION_INTRINSICS set but unreadable: %s",
+                                 qUtf8Printable(intrinsics_path));
+                    }
+                }
             }
         }
         if (!loop.attached()) {

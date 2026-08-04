@@ -41,6 +41,7 @@
 #include <filesystem>
 #include <thread>
 #include <fstream>
+#include <iterator>
 #include <limits>
 #include <map>
 #include <memory>
@@ -727,6 +728,41 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     out << "}\n";
 }
 
+// Per-clip camera intrinsics (P2.9): intrinsics.txt is the calibration
+// tool's flat format (read_intrinsics); intrinsics.json is the synth
+// generator's sidecar, parsed by field scan - the synthetic clips render
+// at fx=700 while the f=width approximation assumes 640, so scoring them
+// under the approximation was a measured distortion of every
+// PnP-derived number.
+std::optional<cube::vision::CameraIntrinsics> load_clip_intrinsics(const fs::path& dir) {
+    if (auto loaded = cube::vision::read_intrinsics((dir / "intrinsics.txt").string()); loaded.has_value()) {
+        return *loaded;
+    }
+    std::ifstream json_stream(dir / "intrinsics.json");
+    if (!json_stream) {
+        return std::nullopt;
+    }
+    const std::string text((std::istreambuf_iterator<char>(json_stream)), std::istreambuf_iterator<char>());
+    const auto field = [&text](const char* name) -> double {
+        const auto at = text.find('"' + std::string(name) + '"');
+        if (at == std::string::npos) {
+            return 0.0;
+        }
+        const auto colon = text.find(':', at);
+        return colon == std::string::npos ? 0.0 : std::atof(text.c_str() + colon + 1);
+    };
+    cube::vision::CameraIntrinsics value;
+    value.fx = field("fx");
+    value.fy = field("fy");
+    value.cx = field("cx");
+    value.cy = field("cy");
+    value.calibrated_size = cv::Size(static_cast<int>(field("width")), static_cast<int>(field("height")));
+    if (value.fx <= 0.0 || value.fy <= 0.0 || value.calibrated_size.width <= 0) {
+        return std::nullopt;
+    }
+    return value;
+}
+
 int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, int max_frames,
                 cube::vision::OnnxCornerDetector* detector, cube::vision::pipeline::PoseTracker* tracker,
                 bool refine_enabled, ClipMetrics& metrics) {
@@ -784,6 +820,12 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         pipe.set_pose_tracker(tracker);
     }
     pipe.set_refine_enabled(refine_enabled);
+    if (const auto clip_intrinsics = load_clip_intrinsics(dir)) {
+        pipe.set_camera_intrinsics(*clip_intrinsics);
+        std::printf("%-12s using clip intrinsics fx %.1f fy %.1f (approximation would be fx %d)\n",
+                    metrics.clip.c_str(), clip_intrinsics->fx, clip_intrinsics->fy,
+                    clip_intrinsics->calibrated_size.width);
+    }
 
     // P2.7 tracked-pose scoring state. The gauge pin lives across frames
     // of one locked run; re-acquisition latency walks the sidecar's

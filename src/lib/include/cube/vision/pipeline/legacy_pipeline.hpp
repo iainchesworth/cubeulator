@@ -97,6 +97,10 @@ public:
     // live path's contract) - the runner's --no-refine measurement hook.
     void set_refine_enabled(bool enabled) { loop_.set_refine_enabled(enabled); }
 
+    // Measured per-camera intrinsics for the loop's camera-matrix
+    // consumers (P2.9); unset = the f=width approximation.
+    void set_camera_intrinsics(const CameraIntrinsics& intrinsics) { loop_.set_camera_intrinsics(intrinsics); }
+
 private:
     StabilityTracker stability_;
     OrientationTracker tracker_;

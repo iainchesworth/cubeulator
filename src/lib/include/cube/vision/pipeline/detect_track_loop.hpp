@@ -18,6 +18,7 @@
 // is scale-free; kHealthFailFrac/kHealthFailStreak are the loop's policy
 // constants (provisional - swept properly at the Phase 2 gate).
 
+#include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/pipeline/pose_tracker.hpp>
 #include <cube/vision/pose_from_corners.hpp>
@@ -77,6 +78,15 @@ public:
     // on the live path and offline. Off exists for A/B measurement.
     void set_refine_enabled(bool enabled) { refine_enabled_ = enabled; }
 
+    // Measured per-camera intrinsics (P2.9): every camera-matrix consumer
+    // in the loop - PnP anchor, tracker init, projection, refinement -
+    // switches from the f=width approximation to these, rescaled to each
+    // frame's size. Unset = the approximation, as before.
+    void set_camera_intrinsics(const CameraIntrinsics& intrinsics) { intrinsics_ = intrinsics; }
+
+    // The loop's one source of camera truth for a frame size.
+    [[nodiscard]] cv::Matx33d camera_matrix_for(cv::Size size) const;
+
     // One frame through detect + track. Safe to call with nothing
     // attached (returns an empty result).
     [[nodiscard]] DetectTrackResult process(const cv::Mat& bgr_frame);
@@ -86,6 +96,7 @@ public:
 private:
     OnnxCornerDetector* detector_ = nullptr;
     PoseTracker* tracker_ = nullptr;
+    std::optional<CameraIntrinsics> intrinsics_;
     bool live_ = false;
     bool refine_enabled_ = true;
     int health_fail_streak_ = 0;

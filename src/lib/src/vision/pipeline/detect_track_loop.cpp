@@ -10,6 +10,10 @@
 
 namespace cube::vision::pipeline {
 
+cv::Matx33d DetectTrackLoop::camera_matrix_for(cv::Size size) const {
+    return intrinsics_.has_value() ? intrinsics_->scaled_to(size).matrix() : approximate_camera_matrix(size);
+}
+
 DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
     DetectTrackResult result;
     result.reinits = reinits_;
@@ -34,7 +38,10 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
         confident_corners += corner.confidence >= OnnxCornerDetector::kDefaultKeypointFloor ? 1 : 0;
     }
     if (result.detection.found && confident_corners >= 4) {
-        if (auto solved = estimate_pose_from_corners(result.detection, bgr_frame.size()); solved.has_value()) {
+        if (auto solved = estimate_pose_from_corners(result.detection, bgr_frame.size(),
+                                                     OnnxCornerDetector::kDefaultKeypointFloor,
+                                                     camera_matrix_for(bgr_frame.size()));
+            solved.has_value()) {
             result.pnp = *solved;
         }
     }
@@ -45,7 +52,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
 
     if (!live_ && result.pnp.has_value() && result.pnp->corners_used >= kInitMinCorners) {
         if (tracker_->init(result.pnp->rvec, result.pnp->tvec, bgr_frame.size(),
-                           approximate_camera_matrix(bgr_frame.size()))) {
+                           camera_matrix_for(bgr_frame.size()))) {
             live_ = true;
             health_fail_streak_ = 0;
             result.reinits = ++reinits_;
@@ -88,7 +95,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // what the tracker itself believes.
             if (refine_enabled_ && result.detection.found) {
                 const auto refined =
-                    refine_pose(bgr_frame, result.rvec, result.tvec, approximate_camera_matrix(bgr_frame.size()));
+                    refine_pose(bgr_frame, result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
                 result.refine_matches = refined.matches;
                 result.refine_residual_before_px = refined.mean_residual_before_px;
                 result.refine_residual_after_px = refined.mean_residual_after_px;
@@ -102,7 +109,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
 
             std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(), kSingmasterCornerModel.end());
             std::vector<cv::Point2f> projected;
-            cv::projectPoints(model, result.rvec, result.tvec, approximate_camera_matrix(bgr_frame.size()),
+            cv::projectPoints(model, result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()),
                               cv::noArray(), projected);
             for (int i = 0; i < 8; ++i) {
                 result.projected[static_cast<std::size_t>(i)] = projected[static_cast<std::size_t>(i)];
@@ -113,7 +120,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             std::array<cv::Point2f, 8> raw_projected = result.projected;
             if (result.refine_applied) {
                 std::vector<cv::Point2f> raw;
-                cv::projectPoints(model, tracked.rvec, tracked.tvec, approximate_camera_matrix(bgr_frame.size()),
+                cv::projectPoints(model, tracked.rvec, tracked.tvec, camera_matrix_for(bgr_frame.size()),
                                   cv::noArray(), raw);
                 for (int i = 0; i < 8; ++i) {
                     raw_projected[static_cast<std::size_t>(i)] = raw[static_cast<std::size_t>(i)];

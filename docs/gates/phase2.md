@@ -10,16 +10,28 @@ Metric definitions: docs/pipeline-metrics.md. Producer:
 
 ## Offline criteria (plan bounds vs measured, synthetic)
 
+Scored with each clip's own intrinsics (fx=700 renders; the f=width
+approximation assumed 640 — the runner auto-loads intrinsics.txt/.json
+per clip and says so).
+
 | Criterion | Bound | steady | occlusion | exit-reentry | freerot | Verdict |
 |---|---|---|---|---|---|---|
-| Locked-and-correct (free-rotation) | >=95% | 100% | — | — | 82.2% | **OPEN** |
-| Locked-and-correct (occlusion-stress) | >=85% | — | 99.6% | 55.6% | — | **OPEN** (exit-reentry re-anchor convergence) |
-| Corner reprojection median | <=1.5% extent | 0.35% | 0.45% | 0.98% | 0.59% | PASS (provisional) |
-| Corner reprojection p95 | <=3% extent | 0.74% | 5.2% | 28.9% | 14.9% | **OPEN** (slip/re-anchor tails) |
-| Bias (anti-live5) | <=0.5% extent | 0.59% | 1.59% | 5.7% | 2.33% | **OPEN** (close on steady) |
-| Jitter (steady segments) | <=0.3% extent | 0.40% | n/a | n/a | n/a | **OPEN** (close) |
-| Re-acquisition median | <=300 ms, >=10 events | — | 0 ms / 3 ev | 231 ms / 4 ev | — | PASS on 7 events; real corpus must supply >=10 |
+| Locked-and-correct (free-rotation) | >=95% | 100% | — | — | 71.0% | **OPEN** |
+| Locked-and-correct (occlusion-stress) | >=85% | — | 99.6% | 39.9% | — | **OPEN** (exit-reentry re-anchor convergence) |
+| Corner reprojection median | <=1.5% extent | 0.25% | 0.30% | 3.1% | 0.52% | **OPEN** on exit-reentry only |
+| Corner reprojection p95 | <=3% extent | 0.49% | 5.8% | 33.9% | 20.9% | **OPEN** (slip/re-anchor tails) |
+| Bias (anti-live5) | <=0.5% extent | **0.28% PASS** | 1.64% | 7.2% | 3.54% | steady PASSES; stressed clips carry re-anchor/slip residue |
+| Jitter (steady segments) | <=0.3% extent | 0.41% | n/a | n/a | n/a | **OPEN** (close) |
+| Re-acquisition median | <=300 ms, >=10 events | — | 0 ms / 3 ev | failed (2 of 4 events) | — | **OPEN** — see re-anchor note |
 | Layer-turn survival | >=90% of turn segments | n/a — no synthetic layer-turn clip; real corpus item | | | | **OPEN** |
+
+Intrinsics note: correcting the camera passed the steady bias gate and
+cut steady/occlusion errors ~30%, but exit-reentry measures WORSE under
+the honest camera (was 55.6% locked-correct / 231 ms / 0 failed under
+the approximation): M3T's post-reentry convergence is sensitive to the
+projection model, and 4 events is small-N. Re-anchor convergence was
+already this table's biggest open item; the corrected camera makes its
+true size visible. It re-scores on the real corpus with >=10 events.
 
 What the numbers say (P2.7 measurement, P2.8 refinement — see those
 commits for the full A/B history):
@@ -87,18 +99,22 @@ corpus renders at fx=700 vs the approximation's 640). Calibrate once:
    ```
 
    The tool prints the measured error of the f=width fallback.
-3. Wiring the stored intrinsics into the live loop and the runner
-   (replacing `approximate_camera_matrix` end to end, with the
-   approximation kept as fallback) is the remaining P2.9 code item —
-   tracked as its own change so the before/after shows up in the
-   corpus table.
+3. Point the live app at the stored file: `CUBE_VISION_INTRINSICS=
+   D:\cubeulator-corpus\intrinsics-<camera>.txt` — every camera-matrix
+   consumer in the loop (PnP anchor, M3T init, projection, refinement)
+   then uses the measured values, rescaled per frame size; unset keeps
+   the f=width fallback. The runner auto-loads per-clip
+   intrinsics.txt/.json the same way.
 
 ## Remaining to close Phase 2
 
 - [ ] User: 60-second scripted live run (procedure above).
 - [ ] User: chessboard calibration capture.
-- [ ] Wire stored intrinsics through detect-track loop + runner.
+- [x] Wire stored intrinsics through detect-track loop + runner
+      (auto per-clip offline, CUBE_VISION_INTRINSICS live).
 - [ ] P0.3 real-cube corpus session; re-score this table on it
       (including >=10 re-acquisition events and a layer-turn clip).
+- [ ] Exit-reentry re-anchor convergence (the table's biggest gap,
+      39.9% vs 85%): investigate with the real corpus in hand.
 - [ ] Freerot locked-and-correct + registration slips: owned by
       Phase 3 gauge machinery (measured out of refinement's reach).

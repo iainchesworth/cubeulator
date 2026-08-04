@@ -16,6 +16,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <optional>
 #include <vector>
 
 namespace cube::vision {
@@ -56,11 +57,13 @@ struct CornerPnpResult {
 
 // PnP over the detected corners with confidence >= min_confidence.
 // Requires at least 4; fails with no_valid_cube_detected otherwise or
-// when the solve degenerates. Intrinsics are the shared approximation
-// (approximate_camera_matrix) until per-camera calibration lands.
+// when the solve degenerates. camera_matrix carries measured intrinsics
+// when calibration exists (P2.9); nullopt = the shared approximation
+// (approximate_camera_matrix), the uncalibrated fallback.
 [[nodiscard]] Result<CornerPnpResult> estimate_pose_from_corners(
     const CornerDetectionResult& detection, cv::Size frame_size,
-    float min_confidence = OnnxCornerDetector::kDefaultKeypointFloor);
+    float min_confidence = OnnxCornerDetector::kDefaultKeypointFloor,
+    const std::optional<cv::Matx33d>& camera_matrix = std::nullopt);
 
 // The 24 corner-id permutations of the cube's rotation group over
 // kSingmasterCornerModel (perm[from_id] = to_id under the rotation).

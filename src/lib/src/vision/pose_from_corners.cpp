@@ -10,7 +10,8 @@
 namespace cube::vision {
 
 Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& detection, cv::Size frame_size,
-                                                   float min_confidence) {
+                                                   float min_confidence,
+                                                   const std::optional<cv::Matx33d>& camera_matrix) {
     std::vector<cv::Point3f> model_points;
     std::vector<cv::Point2f> image_points;
     for (int id = 0; id < 8; ++id) {
@@ -25,7 +26,7 @@ Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& 
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    const cv::Matx33d camera = approximate_camera_matrix(frame_size);
+    const cv::Matx33d camera = camera_matrix.value_or(approximate_camera_matrix(frame_size));
     CornerPnpResult result;
     // SQPnP: globally optimal for arbitrary (non-coplanar) configurations
     // down to 4 points - exactly this shape of problem. A Levenberg-
