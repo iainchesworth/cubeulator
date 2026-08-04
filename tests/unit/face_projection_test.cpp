@@ -7,6 +7,7 @@
 #include <cube/vision/pose_from_corners.hpp>
 
 #include <opencv2/calib3d.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -68,6 +69,67 @@ TEST_CASE("face-on view shows one face, square-on", "[face_projection]") {
     }
     quad_centre *= 0.25F;
     REQUIRE(cv::norm(mid - quad_centre) < 1e-3);
+}
+
+TEST_CASE("rectification lands each sticker in its canonical cell", "[face_projection]") {
+    using cube::vision::pipeline::rectify_face;
+    // Paint the -z face's 9 cells with distinct grey levels by projecting
+    // each cell's sub-quad under a three-quarter pose, then rectify and
+    // check every cell centre reads its own level back.
+    const cv::Vec3d rvec{0.35, -0.4, 0.1};
+    const cv::Vec3d tvec{0.2, -0.1, 9.0};
+    const auto faces = derive_faces(rvec, tvec, camera());
+    REQUIRE_FALSE(faces.empty());
+    const auto& face = faces.front();
+
+    cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+    cv::Matx33d rotation;
+    cv::Rodrigues(rvec, rotation);
+    const int face_axis = face.face / 2;
+    const float sign = (face.face % 2 == 0) ? 1.0F : -1.0F;
+    const int axis_u = (face_axis + 1) % 3;
+    const int axis_v = (face_axis + 2) % 3;
+    const auto project = [&](float u, float v) {
+        std::array<float, 3> p{};
+        p[static_cast<std::size_t>(face_axis)] = sign;
+        p[static_cast<std::size_t>(axis_u)] = u;
+        p[static_cast<std::size_t>(axis_v)] = v;
+        const cv::Matx31d c = rotation * cv::Matx31d(p[0], p[1], p[2]) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        const cv::Matx33d k = camera();
+        return cv::Point(static_cast<int>(std::lround(k(0, 0) * c(0, 0) / c(2, 0) + k(0, 2))),
+                         static_cast<int>(std::lround(k(1, 1) * c(1, 0) / c(2, 0) + k(1, 2))));
+    };
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const float u0 = -1.0F + static_cast<float>(col) * (2.0F / 3.0F);
+            const float v0 = -1.0F + static_cast<float>(row) * (2.0F / 3.0F);
+            const int level = 40 + (row * 3 + col) * 24;
+            const std::vector<cv::Point> quad{project(u0, v0), project(u0 + 2.0F / 3.0F, v0),
+                                              project(u0 + 2.0F / 3.0F, v0 + 2.0F / 3.0F),
+                                              project(u0, v0 + 2.0F / 3.0F)};
+            cv::fillConvexPoly(frame, quad, cv::Scalar(level, level, level));
+        }
+    }
+
+    const cv::Mat rectified = rectify_face(frame, face, 96);
+    REQUIRE_FALSE(rectified.empty());
+    REQUIRE(rectified.size() == cv::Size(96, 96));
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            const int expected = 40 + (row * 3 + col) * 24;
+            const cv::Vec3b sample = rectified.at<cv::Vec3b>(row * 32 + 16, col * 32 + 16);
+            REQUIRE(std::abs(static_cast<int>(sample[0]) - expected) <= 2);
+        }
+    }
+}
+
+TEST_CASE("rectification refuses empty frames and degenerate quads", "[face_projection]") {
+    using cube::vision::pipeline::rectify_face;
+    cube::vision::pipeline::ProjectedFace collapsed;
+    collapsed.quad = {cv::Point2f(10, 10), cv::Point2f(10.1F, 10), cv::Point2f(10.1F, 10.1F), cv::Point2f(10, 10.1F)};
+    const cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
+    REQUIRE(rectify_face(cv::Mat(), collapsed, 96).empty());
+    REQUIRE(rectify_face(frame, collapsed, 96).empty());
 }
 
 TEST_CASE("derive_faces is deterministic", "[face_projection]") {

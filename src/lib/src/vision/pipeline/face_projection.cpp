@@ -1,6 +1,7 @@
 #include <cube/vision/pipeline/face_projection.hpp>
 
 #include <opencv2/calib3d.hpp>
+#include <opencv2/imgproc.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -77,6 +78,30 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
     std::sort(out.begin(), out.end(),
               [](const ProjectedFace& a, const ProjectedFace& b) { return a.frontality > b.frontality; });
     return out;
+}
+
+cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size) {
+    if (bgr_frame.empty() || size < 3) {
+        return {};
+    }
+    // Degenerate quad (grazing face, garbage pose): a near-zero area
+    // makes the homography explode; refuse rather than return noise.
+    const double area = std::abs(cv::contourArea(std::vector<cv::Point2f>(face.quad.begin(), face.quad.end())));
+    if (area < 16.0) {
+        return {};
+    }
+    const std::array<cv::Point2f, 4> destination{cv::Point2f(0.0F, 0.0F),
+                                                 cv::Point2f(static_cast<float>(size), 0.0F),
+                                                 cv::Point2f(static_cast<float>(size), static_cast<float>(size)),
+                                                 cv::Point2f(0.0F, static_cast<float>(size))};
+    const cv::Mat homography = cv::getPerspectiveTransform(face.quad.data(), destination.data());
+    cv::Mat rectified;
+    // BORDER_REPLICATE: a quad clipped by the frame edge stretches its
+    // border pixels instead of injecting black, which downstream colour
+    // sampling would read as a real (dark) observation.
+    cv::warpPerspective(bgr_frame, rectified, homography, cv::Size(size, size), cv::INTER_LINEAR,
+                        cv::BORDER_REPLICATE);
+    return rectified;
 }
 
 }  // namespace cube::vision::pipeline

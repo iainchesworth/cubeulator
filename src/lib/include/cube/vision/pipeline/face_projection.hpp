@@ -43,4 +43,13 @@ struct ProjectedFace {
                                                       const cv::Matx33d& camera_matrix,
                                                       double min_frontality = 0.15);
 
+// P3.2: rectify one derived face to the canonical square - the sampling
+// substrate for Phases 4-5. The homography maps quad tl,tr,br,bl onto
+// the square's corners in the declared face-local frame above, so cell
+// (row, col) occupies the block [col,col+1)x[row,row+1) of the output's
+// thirds and cell centres sit at ((col+0.5)/3, (row+0.5)/3) of the
+// side. `size` is the square's side in pixels; empty Mat on an empty
+// frame or a degenerate quad.
+[[nodiscard]] cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size = 96);
+
 }  // namespace cube::vision::pipeline
