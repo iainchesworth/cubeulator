@@ -33,6 +33,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <fstream>
 #include <vector>
 
 namespace cube::app {
@@ -581,6 +582,15 @@ private:
     qreal hud_health_ = -1.0;
     int hud_reinits_ = 0;
     qreal hud_pass_ms_ = 0.0;
+    // Live-gate session log (P2.9, CUBE_VISION_GATE_LOG=path): one CSV
+    // row per handled pass, summary appended by finishGateLog() (stop()
+    // and destructor) - the numbers behind the Phase 2 live gates
+    // (locked fraction, latency). GUI thread only.
+    void finishGateLog();
+    std::ofstream gate_log_;
+    std::vector<double> gate_latencies_;
+    int gate_passes_ = 0;
+    int gate_tracked_ = 0;
     // Frame time of the last REAL (locked/coasting) orientation sample, so a
     // brief lost/acquiring gap can hold the last pose instead of resetting
     // the 3D view to its idle presentation. See kOrientationHoldMs.

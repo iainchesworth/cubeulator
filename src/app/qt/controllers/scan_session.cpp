@@ -141,6 +141,17 @@ constexpr double kPositionSmoothing = 0.35;
     static const bool raw = qEnvironmentVariable("CUBE_VISION_RAW_POSE") == QLatin1String("1");
     return raw;
 }
+
+// CUBE_VISION_GATE_LOG=path: one CSV row per handled analysis pass plus
+// a summary on stop() - the measurement channel for the Phase 2 live
+// gates (docs/gates/phase2.md). Latency is the frame-dequeue ->
+// result-handled interval (analysis_inflight_timer_), a proxy that
+// excludes camera-driver and render-present time - stated with the gate
+// numbers, not hidden.
+[[nodiscard]] const QString& gate_log_path() {
+    static const QString path = qEnvironmentVariable("CUBE_VISION_GATE_LOG");
+    return path;
+}
 // How long the 3D view keeps showing the last known pose after the tracker
 // stops supplying one. Sized to outlast an ordinary detection gap (a regrip
 // or a mid-turn blur runs 5-8 passes at this corpus's ~100 ms cadence)
@@ -712,7 +723,33 @@ ScanSession::ScanSession(QObject* parent) : QObject(parent) {
         env.execution_providers);
 }
 
+// P2.9 gate-log summary: the session's headline numbers, appended so
+// the CSV is self-contained evidence for the gate write-up. Called from
+// stop() and the destructor - closing the app mid-scan must not lose
+// the summary.
+void ScanSession::finishGateLog() {
+    if (!gate_log_.is_open()) {
+        return;
+    }
+    std::sort(gate_latencies_.begin(), gate_latencies_.end());
+    const auto latency_at = [this](double q) {
+        return gate_latencies_.empty()
+                   ? -1.0
+                   : gate_latencies_[std::min(gate_latencies_.size() - 1,
+                                              static_cast<std::size_t>(q * static_cast<double>(
+                                                                               gate_latencies_.size())))];
+    };
+    gate_log_ << "# summary passes=" << gate_passes_ << " tracked=" << gate_tracked_ << " tracked_frac="
+              << (gate_passes_ > 0 ? static_cast<double>(gate_tracked_) / gate_passes_ : 0.0)
+              << " latency_median_ms=" << latency_at(0.5) << " latency_p95_ms=" << latency_at(0.95) << "\n";
+    gate_log_.close();
+    gate_latencies_.clear();
+    gate_passes_ = 0;
+    gate_tracked_ = 0;
+}
+
 ScanSession::~ScanSession() {
+    finishGateLog();
     // See the header: block until in-flight workers finish so they can't
     // touch members after destruction begins. Both waits return
     // immediately when no future was ever set or it already finished.
@@ -1118,6 +1155,8 @@ void ScanSession::stop() {
     // (see interfaces/camera.hpp: request_photometry_restore).
     cube::platform::camera::stop();
 
+    finishGateLog();
+
     if (camera_locked_ || camera_lock_warning_ || !camera_lock_status_.isEmpty()) {
         camera_locked_ = false;
         camera_lock_warning_ = false;
@@ -1364,6 +1403,9 @@ void ScanSession::handleAnalysisFinished() {
         return;
     }
     auto result = analysis_watcher_.result();
+    // P2.9 gate latency, captured before any handling work inflates it:
+    // elapsed since THIS pass's frame left the camera mailbox.
+    const qint64 gate_latency_ms = analysis_inflight_timer_.isValid() ? analysis_inflight_timer_.elapsed() : -1;
 
     // Overlay persistence: per-frame detection blips (~1 in 4 frames drops
     // even on a good view) must not strobe the AR overlay in and out. A
@@ -1487,6 +1529,21 @@ void ScanSession::handleAnalysisFinished() {
             hud_health_ = result.track_health;
             hud_reinits_ = result.track_reinits;
             hud_pass_ms_ = result.pass_ms;
+        }
+        // P2.9 live-gate log: every handled pass, raw values only.
+        if (!gate_log_path().isEmpty()) {
+            if (!gate_log_.is_open()) {
+                gate_log_.open(gate_log_path().toStdString(), std::ios::trunc);
+                gate_log_ << "frame_ms,latency_ms,track_pass,tracked,health,reinits,pass_ms\n";
+            }
+            gate_log_ << result.frame_ms << ',' << gate_latency_ms << ',' << (result.track_pass ? 1 : 0) << ','
+                      << (result.pose_from_track ? 1 : 0) << ',' << result.track_health << ','
+                      << result.track_reinits << ',' << result.pass_ms << '\n';
+            ++gate_passes_;
+            gate_tracked_ += result.pose_from_track ? 1 : 0;
+            if (gate_latency_ms >= 0) {
+                gate_latencies_.push_back(static_cast<double>(gate_latency_ms));
+            }
         }
         // In track mode the legacy orientation tracker is NOT fed: its
         // gates speak a different frame convention than the continuous
