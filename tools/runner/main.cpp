@@ -121,6 +121,26 @@ cv::Mat render_overlay(const cv::Mat& frame, const pipeline::LegacyPipelineResul
         }
     }
 
+    // Derived-face identity labels (P3 gate criterion 4): model-frame
+    // face id + frontality at each tracked face's centre. Epoch-local
+    // identity by design - stable within a gauge epoch, renamed only by
+    // an anchor or a declared slip.
+    if (!result.track_faces.empty()) {
+        static const std::array<const char*, 6> kFaceNames{"+x", "-x", "+y", "-y", "+z", "-z"};
+        for (const auto& face : result.track_faces) {
+            cv::Point2f centre(0.0F, 0.0F);
+            for (const auto& corner : face.quad) {
+                centre += corner;
+            }
+            centre *= 0.25F;
+            std::array<char, 32> label{};
+            std::snprintf(label.data(), label.size(), "%s %.2f",
+                          kFaceNames[static_cast<std::size_t>(face.face)], face.frontality);
+            cv::putText(canvas, label.data(), centre + cv::Point2f(-18.0F, 4.0F), cv::FONT_HERSHEY_SIMPLEX, 0.45,
+                        cv::Scalar(0, 255, 255), 1, cv::LINE_AA);
+        }
+    }
+
     // Learned corner candidates (stage B primary): magenta, Singmaster id.
     for (const auto& corner : result.detection.corners) {
         cv::circle(canvas, corner.px, 4, cv::Scalar(255, 0, 255), cv::FILLED, cv::LINE_AA);
