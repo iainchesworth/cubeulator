@@ -267,6 +267,11 @@ struct ClipMetrics {
     };
     std::map<int, SteadyJitterAccum> gt_track_steady;
     std::vector<double> gt_reacq_ms;          // per reentry event; -1 = never re-locked
+
+    // P3.3: quarter-turn slips the loop's ONLINE gauge detector declared
+    // (trace field gauge_slip) - compare against gt_track_repins, the
+    // ground-truth count of registration slips, on the console line.
+    int gauge_slips_detected = 0;
 };
 
 // Locked-and-correct bound (docs/pipeline-plan.md Phase 2 exit gate): a
@@ -1128,6 +1133,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         ++metrics.state_counts[std::get<std::string>(value)];
                     } else if (field == "gate" && std::holds_alternative<std::string>(value)) {
                         ++metrics.gate_counts[std::get<std::string>(value)];
+                    } else if (field == "gauge_slip" && std::holds_alternative<bool>(value) &&
+                               std::get<bool>(value)) {
+                        ++metrics.gauge_slips_detected;  // P3.3 online detector
                     }
                 }
             }
@@ -1190,8 +1198,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         "reacq median %.0f ms over %zu events (%d failed)\n",
                         bias_max, clip_jitter(metrics.gt_track_steady), metrics.gt_track_steady.size(),
                         reacq_median_ms(metrics.gt_reacq_ms), metrics.gt_reacq_ms.size(), reacq_failed);
-            std::printf("  tracked pose: registration held %d/%d frames, %d slips (quarter-turn re-pins)\n",
-                        metrics.gt_track_reg_held, metrics.gt_track_reg_frames, metrics.gt_track_repins);
+            std::printf("  tracked pose: registration held %d/%d frames, %d slips (quarter-turn re-pins)  "
+                        "online gauge detector: %d slips declared\n",
+                        metrics.gt_track_reg_held, metrics.gt_track_reg_frames, metrics.gt_track_repins,
+                        metrics.gauge_slips_detected);
             if (metrics.gt_faces_labelled > 0) {
                 const auto [face_quad_median, face_quad_p95] = median_p95(metrics.gt_face_quad_err_extent);
                 const auto [face_centre_median, face_centre_p95] = median_p95(metrics.gt_face_centre_err_pitch);

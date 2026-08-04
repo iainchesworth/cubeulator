@@ -41,6 +41,18 @@ struct DetectTrackResult {
     std::array<cv::Point2f, 8> projected{};  // Singmaster-ordered model corners under the tracked pose
     double health_frac = -1.0;               // -1 = not measurable this frame
     int reinits = 0;                         // cumulative anchors this loop lifetime
+    // P3.3 gauge/identity facts. The track's model frame is the anchor
+    // frame's view-canonical orientation; epoch-local face identity is
+    // exactly that gauge held by continuity. gauge_epoch increments on
+    // every event that invalidates it - an anchor OR a detected
+    // quarter-turn slip (pinned-gauge error vs detections persistently
+    // failing while the best-of-24 error passes, the online version of
+    // the P2.7 registration metric). gauge_slip flags a slip declared
+    // this frame; gauge_pinned_err is the pinned-gauge mean corner
+    // error fraction on detect frames (-1 = not measurable).
+    int gauge_epoch = 0;
+    bool gauge_slip = false;
+    double gauge_pinned_err = -1.0;
     // Stage-D geometry derived from the OUTPUT pose while live (P3.1,
     // face_projection.hpp): visible faces, quads, sticker centres -
     // most frontal first. Empty while lost.
@@ -107,6 +119,12 @@ private:
     int reinits_ = 0;
     int live_detect_interval_ = 1;
     int frames_since_detect_ = 0;
+    // P3.3 gauge state: the pinned view->body alignment (index into
+    // singmaster_rotation_permutations(), -1 = pin on the next
+    // measurable detect frame) and the slip-failure streak.
+    int gauge_pinned_perm_ = -1;
+    int gauge_epoch_ = 0;
+    int gauge_fail_streak_ = 0;
 };
 
 }  // namespace cube::vision::pipeline
