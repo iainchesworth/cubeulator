@@ -14,9 +14,17 @@
 //              a 3-frame health-failure streak drops the track; the next
 //              solid PnP re-anchors.
 //
-// Health is expressed as a fraction of the detection box diagonal so it
-// is scale-free; kHealthFailFrac/kHealthFailStreak are the loop's policy
-// constants (provisional - swept properly at the Phase 2 gate).
+// Health is expressed as a fraction of the detection box diagonal so
+// it is scale-free. The level/streak pair separates two populations IN
+// TIME, not level (both were measured on the six-face sweep): a track
+// settling after a deliberate quarter-turn OSCILLATES around 0.15 for
+// a dozen frames (0.145-0.178 - a 3-streak dropped that essentially-
+// correct track twice per sweep), while a wrong-basin pose SUSTAINS
+// 0.36+ indefinitely. Widening the level to 0.22 was tried first and
+// let wrong basins park (sweep locked-correct fell to 53.5%); the
+// 20-frame streak at the tight level forgives oscillating settle (any
+// dip below resets it) while a parked wrong basin still drops within a
+// second. Re-swept on the real corpus.
 
 #include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/corner_detector.hpp>
@@ -70,7 +78,17 @@ class DetectTrackLoop {
 public:
     static constexpr int kInitMinCorners = 5;
     static constexpr double kHealthFailFrac = 0.15;
-    static constexpr int kHealthFailStreak = 3;
+    // The streak is AGE-DEPENDENT because the two failure populations
+    // need opposite responses (both measured on the synthetic corpus):
+    // a BAD RE-ANCHOR fails health from its first frames and must drop
+    // fast or re-acquisition stalls (a flat 20-streak pushed exit-
+    // reentry reacq from 264 ms to 1122 ms with a failure), while a
+    // MATURE track failing after a deliberate turn is usually settle
+    // oscillation that a 3-streak wrongly dropped. Young tracks get the
+    // fast trigger; proven ones get patience.
+    static constexpr int kHealthFailStreakYoung = 3;
+    static constexpr int kHealthFailStreak = 20;
+    static constexpr int kTrackMatureFrames = 30;
 
     // tracker may be nullptr: the loop then runs detection + PnP only
     // (the P1 detector-only mode) and track_live stays false.
@@ -152,6 +170,7 @@ private:
     bool prev_track_rvec_valid_ = false;
     cv::Vec3d prev_track_rvec_{};
     int gauge_settle_ = 0;
+    int frames_since_anchor_ = 0;
 };
 
 }  // namespace cube::vision::pipeline
