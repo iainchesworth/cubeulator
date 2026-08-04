@@ -401,6 +401,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         result.gauge_epoch = dt.gauge_epoch;
         track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
         track_trace.add("gauge_epoch", static_cast<std::int64_t>(dt.gauge_epoch));
+        track_trace.add("read_grade", dt.read_grade);
         track_trace.add("gauge_slip", dt.gauge_slip);
         track_trace.add("gauge_pinned_err", dt.gauge_pinned_err);
         track_trace.add("refine_applied", dt.refine_applied);
@@ -441,7 +442,11 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             face_view.quad = derived.quad;
             face_view.frontal_deg = static_cast<float>(
                 std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
-            face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
+            // P6.2: capture grade = geometric frontality AND the loop's
+            // tracker-quality read grade (quasi-static, health-current).
+            // The legacy accept-streak/gauge-margin compensations have no
+            // tracked-path equivalent - this gate is their replacement.
+            face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality && dt.read_grade;
             if (face_view.capture_grade) {
                 face_view.rectified = rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
             }

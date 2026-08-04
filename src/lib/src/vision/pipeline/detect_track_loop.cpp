@@ -65,6 +65,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             gauge_slip_holdoff_ = 0;
             frames_since_anchor_ = 0;
             frames_since_health_ = 0;
+            last_health_pass_ = false;
         }
     }
 
@@ -79,6 +80,15 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             result.step_valid = true;
             result.rvec = tracked.rvec;
             result.tvec = tracked.tvec;
+            if (prev_track_rvec_valid_) {
+                cv::Matx33d rot_prev;
+                cv::Matx33d rot_now;
+                cv::Rodrigues(prev_track_rvec_, rot_prev);
+                cv::Rodrigues(tracked.rvec, rot_now);
+                cv::Vec3d turn_delta;
+                cv::Rodrigues(rot_prev.t() * rot_now, turn_delta);
+                result.turn_deg = cv::norm(turn_delta) * 180.0 / CV_PI;
+            }
 
             // Edge/lattice refinement (P2.8): polish the stepped pose
             // against the image's edges - the OUTPUT pose only, never
@@ -184,18 +194,10 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 // declare a new epoch and re-pin. Detections stand in
                 // for ground truth: the same math as the offline P2.7
                 // registration metric.
-                // Turn rate from consecutive RAW tracked poses - the
-                // quasi-static gate for gauge decisions (see header).
-                double turn_deg = 0.0;
-                if (prev_track_rvec_valid_) {
-                    cv::Matx33d rot_prev;
-                    cv::Matx33d rot_now;
-                    cv::Rodrigues(prev_track_rvec_, rot_prev);
-                    cv::Rodrigues(tracked.rvec, rot_now);
-                    cv::Vec3d delta;
-                    cv::Rodrigues(rot_prev.t() * rot_now, delta);
-                    turn_deg = cv::norm(delta) * 180.0 / CV_PI;
-                }
+                // Turn rate hoisted to result.turn_deg (computed once
+                // per tracked frame) - the quasi-static gate for gauge
+                // decisions AND the P6.2 read grade.
+                const double turn_deg = result.turn_deg < 0.0 ? 0.0 : result.turn_deg;
                 if (turn_deg > kGaugeEvalMaxTurnDeg) {
                     gauge_settle_ = kGaugeSettleFrames;
                 } else if (gauge_settle_ > 0) {
@@ -247,6 +249,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                         frames_since_anchor_ = 0;  // gap voids maturity (see header)
                     }
                     frames_since_health_ = 0;
+                    last_health_pass_ = best / diagonal <= kHealthFailFrac;
                     result.health_frac = best / diagonal;
                     if (result.health_frac > kHealthFailFrac) {
                         const int streak_needed =
@@ -261,6 +264,11 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             }
         }
     }
+    // P6.2 read grade (see header): only quasi-static, health-current
+    // frames may feed reads downstream.
+    result.read_grade = live_ && result.step_valid && result.turn_deg >= 0.0 &&
+                        result.turn_deg <= kGaugeEvalMaxTurnDeg && frames_since_health_ <= kHealthGapFrames &&
+                        last_health_pass_;
     if (live_ && result.step_valid) {
         prev_track_rvec_ = result.rvec;
         prev_track_rvec_valid_ = true;
@@ -286,6 +294,7 @@ void DetectTrackLoop::reset() {
     gauge_slip_holdoff_ = 0;
     gauge_settle_ = 0;
     prev_track_rvec_valid_ = false;
+    last_health_pass_ = false;
 }
 
 }  // namespace cube::vision::pipeline

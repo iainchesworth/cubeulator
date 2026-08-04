@@ -65,6 +65,14 @@ struct DetectTrackResult {
     // face_projection.hpp): visible faces, quads, sticker centres -
     // most frontal first. Empty while lost.
     std::vector<ProjectedFace> faces;
+    // P6.2 commit-grade: the tracker-quality gate for feeding reads
+    // downstream (sampling, classification, palette, fusion) - live,
+    // health CURRENT and passing, and quasi-static. Replaces the legacy
+    // accept-streak/gauge-margin compensations on the tracked path; the
+    // photometric gates (aggregator convergence, fail-closed unknowns)
+    // remain downstream.
+    bool read_grade = false;
+    double turn_deg = -1.0;  // rotation vs the previous tracked frame; -1 = no previous
     // Edge/lattice refinement facts (pose_refiner.hpp; P2.8). When
     // applied, rvec/tvec/projected above ARE the refined pose.
     bool refine_applied = false;
@@ -180,6 +188,7 @@ private:
     int gauge_settle_ = 0;
     int frames_since_anchor_ = 0;
     int frames_since_health_ = 0;
+    bool last_health_pass_ = false;
 };
 
 }  // namespace cube::vision::pipeline
