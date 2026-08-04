@@ -616,6 +616,22 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     StageTrace classify_trace;
     classify_trace.stage = "classify";
     classify_trace.ran = true;
+    // P5 session palette, epoch-scoped: identity is epoch-local, so an
+    // anchor or a declared gauge slip clears the observed centres (they
+    // could be a different face's centre now). Centres feed BEFORE this
+    // frame's cells are named, so even the first tracked frame with two
+    // visible faces classifies session-relative.
+    if (track_geometry) {
+        if (dt.gauge_epoch != session_palette_epoch_) {
+            session_palette_.reset();
+            session_palette_epoch_ = dt.gauge_epoch;
+        }
+        for (std::size_t index = 0; index < result.faces.faces.size(); ++index) {
+            if (result.faces.faces[index].capture_grade && result.samples.faces[index].purity[4] > 0.0F) {
+                session_palette_.observe_centre(result.samples.faces[index].lab[4]);
+            }
+        }
+    }
     int classified_faces = 0;
     std::int64_t unknown_cells = 0;
     result.reads.faces.resize(result.faces.faces.size());
@@ -627,13 +643,15 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         // capture-grade, so a capture-grade face always has samples).
         ++classified_faces;
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            const auto facelet = classify_lab(result.samples.faces[index].lab[cell]);
+            const auto facelet = track_geometry ? session_palette_.classify(result.samples.faces[index].lab[cell])
+                                                : classify_lab(result.samples.faces[index].lab[cell]);
             result.reads.faces[index].facelets[cell] = facelet;
             unknown_cells += facelet.color == cube::model::FacetColor::unknown ? 1 : 0;
         }
     }
     classify_trace.add("classified_faces", static_cast<std::int64_t>(classified_faces));
     classify_trace.add("unknown_cells", unknown_cells);
+    classify_trace.add("session_clusters", static_cast<std::int64_t>(session_palette_.cluster_count()));
     classify_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(classify_trace));
 
@@ -661,6 +679,8 @@ void LegacyPipeline::reset() {
     seed_prior_.reset();
     seed_t_ms_ = 0;
     loop_.reset();
+    session_palette_.reset();
+    session_palette_epoch_ = -1;
 }
 
 }  // namespace cube::vision::pipeline

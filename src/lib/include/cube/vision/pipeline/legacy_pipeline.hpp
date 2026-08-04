@@ -27,6 +27,7 @@
 // seq, so identical recordings produce byte-identical traces regardless of
 // what ran before — the property the scaffold test pins.
 
+#include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
@@ -114,6 +115,11 @@ private:
     std::int64_t seed_t_ms_ = 0;
     OnnxCornerDetector* corner_detector_ = nullptr;
     PoseTracker* pose_tracker_ = nullptr;
+    // P5 live session palette, scoped to the gauge epoch: identity is
+    // epoch-local, so centre observations must not survive an anchor or
+    // a declared slip (they could be a different face's centre now).
+    SessionCentrePalette session_palette_;
+    int session_palette_epoch_ = -1;
     // The shared detect->init->track->health loop (detect_track_loop.hpp)
     // - the SAME instance class the live app runs, so offline replays and
     // the shipping path cannot drift.

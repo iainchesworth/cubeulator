@@ -8,6 +8,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <vector>
 
 namespace cube::vision {
 
@@ -83,6 +84,39 @@ static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
 // tints, progress cube). The authoritative classification is
 // resolve_colors(), which runs once all six faces are captured.
 [[nodiscard]] cube::model::Facelet classify_lab(const cv::Vec3f& lab);
+
+// P5: session-relative classification for the LIVE path - the same idea
+// resolve_colors applies at scan completion (the cube's own stickers
+// define the clusters, so lighting shifts and odd sticker shades cancel)
+// brought forward to per-frame reads, extending classify_lab's seeding
+// rather than running a parallel classifier. Centre cells observed on
+// capture-grade tracked faces accumulate into at most six Lab clusters;
+// once two or more exist, a cell is named by its NEAREST session
+// cluster - whose own name comes from classify_lab on the cluster
+// centroid (the absolute bands as bootstrap and naming) - so a
+// desaturated green or a hue-40 orange lands with its own kind by
+// construction. A cell too far from every cluster (sanity bound) falls
+// back to the absolute bands, which may honestly say unknown.
+//
+// Accumulation is EPOCH-SCOPED by the caller: observations from a track
+// whose identity epoch changed must not keep feeding the same clusters.
+class SessionCentrePalette {
+public:
+    // A capture-grade face's centre-cell Lab (float Lab, L in [0,100]).
+    void observe_centre(const cv::Vec3f& lab);
+    // Session-relative when >=2 clusters exist, absolute-bands fallback
+    // otherwise (bootstrap) or when the sample is out of sanity reach.
+    [[nodiscard]] cube::model::Facelet classify(const cv::Vec3f& lab) const;
+    [[nodiscard]] int cluster_count() const { return static_cast<int>(clusters_.size()); }
+    void reset() { clusters_.clear(); }
+
+private:
+    struct Cluster {
+        cv::Vec3f centroid{};
+        int samples = 0;
+    };
+    std::vector<Cluster> clusters_;
+};
 
 // Final, global colour assignment for a completed scan: clusters all 54
 // captured sticker colours into exactly 6 groups of exactly 9, seeded from
