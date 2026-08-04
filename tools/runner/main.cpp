@@ -314,6 +314,10 @@ struct ClipMetrics {
     int fusion_epoch_converged = 0;  // ... that also passed the aggregator's convergence gate
     bool exact_state_match = false;
     std::string e2e_outcome = "not-attempted";  // the per-clip refusal attribution
+    // P6.3 content registration across epochs: verified merges and
+    // refused ones (a shared face beyond the verify radius).
+    int register_merges = 0;
+    int register_refusals = 0;
 };
 
 // Locked-and-correct bound (docs/pipeline-plan.md Phase 2 exit gate): a
@@ -1355,6 +1359,191 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         metrics.gt_reacq_ms.push_back(-1.0);  // clip ended with the event still unresolved
     }
 
+    // --- P6.3: content-based cross-epoch registration ------------------
+    // An unstitchable drop (snap angle at the basin midpoint) severs
+    // identity that CONTENT can restore: two epochs' fused faces are the
+    // same physical stickers, and the relabel between them must be one
+    // of the 24 cube rotations' face permutations. Each candidate is
+    // scored on fused CENTRE colours (roll-invariant); the re-derived
+    // registration bars apply - commit radius, margin over the runner-up
+    // candidate, minimum shared faces - and the router's invariants
+    // hold: never-overwrite (a face present in both epochs keeps the
+    // older epoch's aggregator) and verify (a shared face disagreeing
+    // beyond the radius refuses the whole merge).
+    {
+        constexpr double kRegisterRadius = 16.0;   // Lab distance, per-cell mean
+        constexpr double kRegisterMargin = 8.0;    // best-vs-runner-up separation
+        // The 24 rotations' face permutations, built once (same math as
+        // the loop's stitch helpers).
+        static const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>> face_perms = [] {
+            const cv::Matx33d rot_y(0, 0, 1, 0, 1, 0, -1, 0, 0);
+            const cv::Matx33d rot_z(0, -1, 0, 1, 0, 0, 0, 0, 1);
+            std::vector<cv::Matx33d> rotations{cv::Matx33d::eye()};
+            for (std::size_t i = 0; i < rotations.size(); ++i) {
+                for (const auto& generator : {rot_y, rot_z}) {
+                    const cv::Matx33d candidate = generator * rotations[i];
+                    const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33d& r) {
+                        return cv::norm(r - candidate) < 0.1;
+                    });
+                    if (!known) {
+                        rotations.push_back(candidate);
+                    }
+                }
+            }
+            std::vector<std::pair<cv::Matx33d, std::array<int, 6>>> perms;
+            for (const auto& rotation : rotations) {
+                std::array<int, 6> perm{};
+                for (int face = 0; face < 6; ++face) {
+                    cv::Vec3d axis(0, 0, 0);
+                    axis[face / 2] = (face % 2 == 0) ? 1.0 : -1.0;
+                    const cv::Vec3d mapped = rotation * axis;
+                    for (int target = 0; target < 3; ++target) {
+                        if (std::abs(mapped[target]) > 0.9) {
+                            perm[static_cast<std::size_t>(face)] = target * 2 + (mapped[target] > 0 ? 0 : 1);
+                        }
+                    }
+                }
+                perms.emplace_back(rotation, perm);
+            }
+            return perms;
+        }();
+        const auto fused_face = [](const cube::vision::FaceAggregator& aggregator)
+            -> std::optional<cube::vision::CapturedFace> {
+            if (aggregator.observation_count() < cube::vision::FaceAggregator::kMinObservations) {
+                return std::nullopt;
+            }
+            return aggregator.capture();
+        };
+        // Cell index mapping under a candidate rotation (newer-frame ->
+        // older-frame): a cell's 3-D centre in the newer model frame maps
+        // through the rotation and decomposes on the older face's local
+        // (u, v) axes - the roll falls out of the geometry, no dihedral
+        // search. Face-local convention per face_projection.hpp.
+        const auto map_cell = [](const cv::Matx33d& rotation, int face_new, int cell) -> std::pair<int, int> {
+            const int axis_n = face_new / 2;
+            const double sign_n = (face_new % 2 == 0) ? 1.0 : -1.0;
+            const int u_n = (axis_n + 1) % 3;
+            const int v_n = (axis_n + 2) % 3;
+            cv::Vec3d p(0, 0, 0);
+            p[axis_n] = sign_n;
+            p[u_n] = (cell % 3 - 1) * (2.0 / 3.0);
+            p[v_n] = (cell / 3 - 1) * (2.0 / 3.0);
+            const cv::Vec3d q = rotation * p;
+            int face_old = -1;
+            for (int axis = 0; axis < 3; ++axis) {
+                if (std::abs(q[axis]) > 0.9) {
+                    face_old = axis * 2 + (q[axis] > 0 ? 0 : 1);
+                }
+            }
+            if (face_old < 0) {
+                return {-1, -1};
+            }
+            const int axis_o = face_old / 2;
+            const int u_o = (axis_o + 1) % 3;
+            const int v_o = (axis_o + 2) % 3;
+            const int col = static_cast<int>(std::lround(q[u_o] * 1.5)) + 1;
+            const int row = static_cast<int>(std::lround(q[v_o] * 1.5)) + 1;
+            if (col < 0 || col > 2 || row < 0 || row > 2) {
+                return {-1, -1};
+            }
+            return {face_old, row * 3 + col};
+        };
+        bool merged_any = true;
+        while (merged_any && fusion.size() > 1) {
+            merged_any = false;
+            for (auto older = fusion.begin(); older != fusion.end() && !merged_any; ++older) {
+                for (auto newer = std::next(older); newer != fusion.end() && !merged_any; ++newer) {
+                    // Content decides across ALL 24 candidates: one
+                    // shared face's NINE cells discriminate by
+                    // themselves (a wrong relabel scrambles the grid).
+                    // The geometric shortlist became unnecessary once
+                    // scoring went cell-level - and a >65-degree drift
+                    // put the true relabel outside it anyway (measured:
+                    // both shortlist candidates cost >114 Lab while the
+                    // 1<-2 merge chose 6.9 vs 108.5).
+                    double best_cost = -1.0;
+                    double second_cost = -1.0;
+                    const std::array<int, 6>* best_perm = nullptr;
+                    for (const auto& [rotation, perm] : face_perms) {
+                        double total = 0.0;
+                        int cells_compared = 0;
+                        int shared = 0;
+                        for (const auto& [face, aggregator] : newer->second) {
+                            const auto newer_face = fused_face(aggregator);
+                            if (!newer_face) {
+                                continue;
+                            }
+                            const auto older_it = older->second.find(perm[static_cast<std::size_t>(face)]);
+                            if (older_it == older->second.end()) {
+                                continue;
+                            }
+                            const auto older_face = fused_face(older_it->second);
+                            if (!older_face) {
+                                continue;
+                            }
+                            ++shared;
+                            for (int cell = 0; cell < 9; ++cell) {
+                                const auto [face_old, cell_old] = map_cell(rotation, face, cell);
+                                if (face_old != perm[static_cast<std::size_t>(face)] || cell_old < 0) {
+                                    continue;
+                                }
+                                total += cv::norm(newer_face->lab[static_cast<std::size_t>(cell)] -
+                                                  older_face->lab[static_cast<std::size_t>(cell_old)]);
+                                ++cells_compared;
+                            }
+                        }
+                        if (shared < 1 || cells_compared < 9) {
+                            continue;
+                        }
+                        const double cost = total / cells_compared;
+                        if (best_cost < 0.0 || cost < best_cost) {
+                            second_cost = best_cost;
+                            best_cost = cost;
+                            best_perm = &perm;
+                        } else if (second_cost < 0.0 || cost < second_cost) {
+                            second_cost = cost;
+                        }
+                    }
+                    // The bars: commit radius, margin over the runner-up,
+                    // and per-face verify inside the merge below.
+                    if (best_perm == nullptr || best_cost > kRegisterRadius ||
+                        (second_cost >= 0.0 && second_cost - best_cost < kRegisterMargin)) {
+                        continue;
+                    }
+                    bool verify_ok = true;
+                    for (const auto& [face, aggregator] : newer->second) {
+                        const auto newer_face = fused_face(aggregator);
+                        const auto older_it =
+                            older->second.find((*best_perm)[static_cast<std::size_t>(face)]);
+                        if (!newer_face || older_it == older->second.end()) {
+                            continue;
+                        }
+                        const auto older_face = fused_face(older_it->second);
+                        if (older_face && cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterRadius) {
+                            verify_ok = false;  // shared centres disagree: refuse
+                            break;
+                        }
+                    }
+                    if (!verify_ok) {
+                        ++metrics.register_refusals;
+                        continue;
+                    }
+                    // Merge: transplant relabelled faces the older epoch
+                    // lacks; NEVER overwrite ones it has.
+                    for (auto& [face, aggregator] : newer->second) {
+                        const int target = (*best_perm)[static_cast<std::size_t>(face)];
+                        if (older->second.find(target) == older->second.end()) {
+                            older->second.emplace(target, std::move(aggregator));
+                        }
+                    }
+                    fusion.erase(newer);
+                    ++metrics.register_merges;
+                    merged_any = true;
+                }
+            }
+        }
+    }
+
     // --- P6.1 finalize: best epoch -> resolve -> assemble -> oracle ---
     // "Best" = most converged aggregators (the photometric gate), ties
     // to most sufficiently-observed - one epoch must carry all six
@@ -1409,8 +1598,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     write_metrics_json(out_dir / "metrics.json", metrics);
 
     if (metrics.e2e_outcome != "no-oracle-state" || metrics.fusion_best_epoch >= 0) {
-        std::printf("  end-to-end: %s  (epoch %d: %d/6 observed, %d/6 converged)\n", metrics.e2e_outcome.c_str(),
-                    metrics.fusion_best_epoch, metrics.fusion_epoch_faces, metrics.fusion_epoch_converged);
+        std::printf("  end-to-end: %s  (epoch %d: %d/6 observed, %d/6 converged; %d registered merges, %d refusals)\n",
+                    metrics.e2e_outcome.c_str(), metrics.fusion_best_epoch, metrics.fusion_epoch_faces,
+                    metrics.fusion_epoch_converged, metrics.register_merges, metrics.register_refusals);
     }
     std::printf("%-12s frames %4d/%4d  det %5.1f%%  pose %5.1f%%  locked %5.1f%%  epochs %2d  unknown-cells %5.1f%%%s\n",
                 metrics.clip.c_str(), metrics.frames_replayed, metrics.frames_indexed,

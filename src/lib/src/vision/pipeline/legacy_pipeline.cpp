@@ -399,6 +399,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("m3t_reinits", static_cast<std::int64_t>(dt.reinits));
         result.track_faces = dt.faces;
         result.gauge_epoch = dt.gauge_epoch;
+        result.stitch_candidates = dt.stitch_candidates;
         track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
         track_trace.add("gauge_epoch", static_cast<std::int64_t>(dt.gauge_epoch));
         track_trace.add("read_grade", dt.read_grade);

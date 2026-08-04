@@ -80,6 +80,12 @@ struct DetectTrackResult {
     // gap); slips and absences still open a real epoch.
     bool stitched = false;
     double stitch_snap_deg = -1.0;  // snap angle at the last anchor attempt; -1 = no attempt
+    // On an UNSTITCHED anchor whose drop was benign: the geometric
+    // shortlist of plausible relabels (face perms, new-frame id -> old
+    // epoch id) that the ambiguous snap could not choose between.
+    // Content registration downstream picks among these with as little
+    // as one shared face - geometry narrows, content decides.
+    std::vector<std::array<int, 6>> stitch_candidates;
     double turn_deg = -1.0;  // rotation vs the previous tracked frame; -1 = no previous
     // Edge/lattice refinement facts (pose_refiner.hpp; P2.8). When
     // applied, rvec/tvec/projected above ARE the refined pose.
@@ -126,6 +132,7 @@ public:
     static constexpr double kStitchableHealthFrac = 0.30;
     static constexpr int kStitchMaxGapFrames = 5;
     static constexpr double kStitchMaxSnapDeg = 30.0;
+    static constexpr double kStitchShortlistDeg = 65.0;  // export candidates within this
 
     // tracker may be nullptr: the loop then runs detection + PnP only
     // (the P1 detector-only mode) and track_live stays false.

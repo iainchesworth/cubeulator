@@ -126,6 +126,29 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                     }
                 }
                 result.stitch_snap_deg = best_angle;
+                // Export the geometric shortlist regardless of the snap
+                // outcome: content registration downstream restricts its
+                // 24 candidates to these.
+                for (const auto& candidate : cube_rotations()) {
+                    cv::Vec3d delta;
+                    cv::Rodrigues(candidate.t() * frame_change, delta);
+                    if (cv::norm(delta) * 180.0 / CV_PI > kStitchShortlistDeg) {
+                        continue;
+                    }
+                    std::array<int, 6> perm{};
+                    bool sane = true;
+                    for (int face = 0; face < 6; ++face) {
+                        const int old_face = face_id_of_axis(candidate.t() * face_axis(face));
+                        if (old_face < 0) {
+                            sane = false;
+                            break;
+                        }
+                        perm[static_cast<std::size_t>(face)] = stitch_relabel_[static_cast<std::size_t>(old_face)];
+                    }
+                    if (sane) {
+                        result.stitch_candidates.push_back(perm);
+                    }
+                }
                 if (best_angle <= kStitchMaxSnapDeg) {
                     // Compose: new-frame face id -> old-frame id -> the
                     // epoch-original id the old relabel already spoke.
