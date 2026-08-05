@@ -1,15 +1,18 @@
 # Phase 6 gate — fusion, commit, assembly: end-to-end scans
 
-Status: **open — exact-state match NOT reached on any clip.** The
-mechanism chain P6.2–P6.7 is landed and regression-pinned; everything
-between the camera and the assembler is measured working, and exactly
-ONE defect remains between the pipeline and an exact-state match — and
-it is user-gated (verdict section). Code: P6.2 read grade (daea262),
+Status: **open — EXACT-STATE MATCH REACHED on the free-rotation
+clip.** The assembler's unique survivor equals the manifest oracle,
+independently reproduced — the first exact-state match in the
+project's history. The mechanism chain P6.2–P6.9 is landed and
+regression-pinned; everything between the camera and the assembler is
+measured working end to end. Code: P6.2 read grade (daea262),
 P6.2b gauge stitching (d115913), P6.3 content registration (2724499),
 P6.3b scoring floor (9ea6d1e), P6.4 RotationHint + handedness fix
 (5efd756), P6.5a store-to-assembly seam (e00f0ee), P6.5b
 store-convention hint (93347a5), P6.6 content-keyed sub-epochs
-(7eb0753), P6.7 shading-invariant assignment (b748cdd), on
+(7eb0753), P6.7 shading-invariant assignment (b748cdd), P6.8 canon
+chirality fix + corpus regeneration (704fe6a), P6.9
+best-supported-face registration scoring (774ca19), on
 feature/pipeline-p6-endtoend.
 
 Suites at head (fast tag, i.e. excluding the solver stages):
@@ -149,8 +152,56 @@ skipped, 62/62 assertions.
   regression fixture embeds all 54 measured freerot fused Lab values
   with manifest truth and fails under the old metric with exactly the
   diagnosed 6 misnames.
+- **P6.8 the canon matches the physical cube.** canonical_color
+  declared U=Yellow, D=White, L=Orange, R=Red: the MIRROR of a
+  physical Western cube, where white-up green-front puts red on the
+  RIGHT and therefore yellow-up green-front puts it on the LEFT. Every
+  correctly-captured real cube and every correctly-rendered synthetic
+  one was unsolvable by construction — 0 of 4096 assembler
+  combinations — and the measured 54/54-perfect freerot capture proved
+  the wall was the canon, not the pipeline. User-approved fix: L=Red,
+  R=Orange (yellow-up, white-cross and green-front conventions all
+  unchanged); the centre-pinning inverse, ScanSession's duplicated
+  display map, doc restatements and the colour-literal fixtures flip
+  with it; axis_pair_of and every derived or colour-keyed consumer
+  stay untouched. The generator's scheme is harmonized to the new
+  canon exactly and the corpus regenerated (deterministic seeds — the
+  geometry is provably identical, only sticker colours changed).
+  Measured: freerot assembly-failed → **EXACT-MATCH**, six faces in
+  one re-unified sub-epoch, unique survivor equal to the oracle.
+  Honest cost, attributed: sweep 5/6 → 4/6 and exit-reentry 4/6 → 3/6
+  observed — per-class seeding is colour-independent and the geometry
+  unchanged, so the deficit is M3T's bidirectional colour sensitivity
+  (region statistics, slip timing, reacquisition shift under new
+  sticker colours, in either direction). observed == converged
+  everywhere: faces go unseen, not wrong.
+- **P6.9 registration commits on its best-supported face.** Two
+  colour-agnostic scoring defects the canon-fix rescore exposed on the
+  sweep: the commit radius applied to the POOLED mean cell cost over
+  shared faces, so one corrupt 2-observation face (45.7 Lab —
+  mixed-pixel grazing samples taken while tracker health had
+  collapsed) out-voted a clean converged face at 9.2, pooling to
+  27.4 > 16 and refusing the merge that carries the sweep's fifth
+  face; and never-overwrite kept a 2-obs unconverged incumbent over an
+  8-obs CONVERGED transplant of the same face. Radius and margin now
+  apply to the best-supported shared face — the minimum per-face mean
+  cell cost, each face carrying a full nine-cell grid — while the
+  per-face centre verify still spans ALL shared faces as the backstop
+  (the corrupt face verifies at 34.2 and correctly does not veto), and
+  an incumbent below the capture bar yields to a converged transplant
+  once it has cleared radius, margin and verify: never-overwrite
+  protects SETTLED faces, not noise that arrived first. Measured on a
+  true A/B (baseline rebuilt from stash), independently reproduced:
+  sweep 4/6 → 5/6 observed and converged (the diagnosed merge commits
+  at min-face 9.2); freerot STAYS exact-match with one extra true
+  merge and one verify refusal — the backstop doing its job on pairs
+  pooled scoring never let reach it, occlusion likewise 51 honest
+  verify refusals at byte-identical face counts; exit-reentry stays
+  3/6 by design — one feed short of the photometric bar on a grazing
+  dark face, inherent colour sensitivity for the real corpus to
+  arbitrate.
 
-## Corpus end-to-end (synthetic v2, deterministic replay, at head)
+## Corpus end-to-end (synthetic v2, regenerated under the P6.8 canon, deterministic replay, at head)
 
 Observed = converged on every clip in this run. Merges/refusals/splits
 are the per-clip registration accounting the exit gate demands — a
@@ -159,11 +210,11 @@ repeat of "0 of 6, cause unattributed" is structurally impossible.
 | clip | end-to-end | faces (best sub-epoch) | merges | refusals | splits | unknown cells |
 |---|---|---|---|---|---|---|
 | absent | no-tracked-reads | 0/6 | 0 | 0 | 0 | 0.0% |
-| steady | insufficient-faces | 2/6 | 0 | 0 | 0 | 5.6% |
-| occlusion | insufficient-faces | 2/6 | 22 | 32 | 33 | 0.0% |
-| exit-reentry | insufficient-faces | 4/6 | 0 | 0 | 2 | 26.9% |
-| freerot | **assembly-failed** | 6/6 | 3 | 0 | 12 | 1.1% |
-| sweep | insufficient-faces | 5/6 | 2 | 0 | 1 | 0.2% |
+| steady | insufficient-faces | 2/6 | 0 | 0 | 0 | 11.1% |
+| occlusion | insufficient-faces | 2/6 | 28 | 51 | 33 | 0.0% |
+| exit-reentry | insufficient-faces | 3/6 | 0 | 0 | 1 | 18.8% |
+| freerot | **exact-match** | 6/6 | 2 | 1 | 7 | 2.3% |
+| sweep | insufficient-faces | 5/6 | 1 | 0 | 3 | 0.4% |
 
 Absent is the false-positive canary (a cube-free clip must produce
 zero reads). Steady/occlusion/exit-reentry are not six-face-coverage
@@ -175,17 +226,18 @@ clips are sweep and freerot, scored in the verdict below.
 
 1. **Exact-state match (assembly distance 0, equal to the manifest
    state up to whole-cube rotation) on every six-face sweep clip and
-   at least one free-rotation clip** — **BLOCKED, user-gated. Not
-   reached on any clip.** The single remaining defect chain: the
-   solver's colour canon is the MIRROR of the physical Western scheme.
-   Measured isolation: freerot's fused capture is 54/54 cells correct
-   against the manifest (the P6.7 fixture); feeding hue-true,
-   scheme-fixed content yields exactly ONE assembler survivor, equal
-   to the manifest oracle — everything from tracker to resolver is
-   cleared, and a real cube (which wears the physical Western scheme)
-   would fail identically, so re-rendering the generator would only
-   move the failure to the first real scan. Decision pending with the
-   user: fix the canon (recommended) vs fix the generator.
+   at least one free-rotation clip** — **MET on freerot; PARTIAL
+   overall.** Freerot: assembly distance 0 — the 4^6 search leaves
+   exactly ONE survivor, equal to the manifest oracle, independently
+   reproduced. The diagnosed defect chain closed as predicted: the
+   solver's colour canon was the MIRROR of the physical Western
+   scheme, the user took the recommended branch (fix the canon — the
+   only branch that also serves real cubes, P6.8), and the isolated
+   54/54 capture converted straight to exact-state. The sweep half is
+   capped upstream: at 5/6 faces committed (criterion 2) no assembly
+   attempt is possible — the mid-flip slip orphan still owns the
+   sixth face, and the gentle-flip corpus variant remains the
+   proposed fix, not a threshold.
 2. **Six faces committed on every six-face-coverage clip, per-gate
    refusal breakdown published** — **PARTIAL.** Freerot: 6/6 observed
    and converged. Sweep: capped at 5/6 — the final hold is orphaned by
@@ -193,19 +245,26 @@ clips are sweep and freerot, scored in the verdict below.
    flip, motion beyond the read-gate's quasi-static spec, leaving that
    face with no shared content any fusion change could score; a
    gentle-flip corpus variant is the proposed fix, not a threshold.
-   The refusal breakdown itself: published per clip (table above), so
-   this criterion's accounting half is met.
+   The fifth face dipped out under the P6.8 colour regeneration and
+   was recovered by P6.9's best-supported-face scoring — the cap is
+   the slip orphan alone. The refusal breakdown itself: published per
+   clip (table above), so this criterion's accounting half is met.
 3. **Full-corpus table, no clip regresses on faces captured or
    assembly distance** — **PARTIAL.** Within Phase 6 the corpus is
    regression-free commit over commit (steady byte-identical is the
-   standing canary; sweep's P6.2 dip to 3/6 was attributed and
-   recovered to 5/6). The criterion's named baseline is the Phase 0
+   standing canary, re-based at the P6.8 corpus regeneration; sweep's
+   P6.2 dip to 3/6 was attributed and recovered to 5/6, its P6.8 dip
+   to 4/6 attributed and recovered by P6.9; exit-reentry's 4/6 → 3/6
+   under the regenerated colours stands attributed — appearance-
+   sensitive coverage, observed == converged — for the real corpus to
+   arbitrate). The criterion's named baseline is the Phase 0
    real-corpus table, which does not exist yet — the standing P0.3
    caveat every prior gate carries.
 4. **Live demo: a real scan on the workstation webcam completes to a
    solved-state readout** — **BLOCKED (needs the user).** Not
-   attempted; also behind the criterion-1 canon decision, since a real
-   cube hits the same defect.
+   attempted; the criterion-1 canon block is gone (P6.8 — a real cube
+   no longer hits the mirror defect), so this now waits only on the
+   user at the camera.
 
 Exonerated by measurement during the criterion-1 diagnosis:
 - FaceAggregator transplants / relabel_cells: the 54/54-perfect fused
@@ -217,11 +276,10 @@ Exonerated by measurement during the criterion-1 diagnosis:
 
 ## Remaining to close Phase 6
 
-- [ ] **USER-GATED:** the colour-canon chirality decision — fix the
-      solver canon to the physical Western scheme (recommended) or
-      re-render the generator to the mirrored canon. Either unblocks
-      exact-state on freerot; only the canon fix also serves real
-      cubes.
+- [x] The colour-canon chirality decision — RESOLVED (P6.8): the user
+      approved the canon fix (L=Red, R=Orange), the generator was
+      harmonized and the corpus regenerated, and freerot reached
+      exact-state exactly as the isolation predicted.
 - [ ] Sweep's sixth face: a gentle-flip corpus variant with the flip
       inside the read-gate's quasi-static bound (the recorded
       5.6 deg/frame slip-orphaned hold is out of spec by design).
