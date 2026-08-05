@@ -1407,9 +1407,20 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
             }
             return perms;
         }();
+        // Registration SCORING floor, deliberately below the capture bar
+        // (kMinObservations=4): a face seen for just 2 frames while the
+        // cube transits between holds is still content evidence - the two
+        // reads must agree with each other AND the radius/margin/verify
+        // bars still apply - and it can be the ONLY face two epochs
+        // share. Measured on the sweep: the boundary face has 2 obs at
+        // 3.98 Lab mean against the older epoch's 46-obs fusion, with the
+        // best wrong candidate at 51.3. Final selection and capture stay
+        // on kMinObservations; never-overwrite keeps thin content out of
+        // the assembled result.
+        constexpr int kRegisterScoreFloor = 2;
         const auto fused_face = [](const cube::vision::FaceAggregator& aggregator)
             -> std::optional<cube::vision::CapturedFace> {
-            if (aggregator.observation_count() < cube::vision::FaceAggregator::kMinObservations) {
+            if (aggregator.observation_count() < kRegisterScoreFloor) {
                 return std::nullopt;
             }
             return aggregator.capture();
