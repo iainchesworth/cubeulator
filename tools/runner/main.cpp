@@ -1407,12 +1407,24 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // scored on fused CENTRE colours (roll-invariant); the re-derived
     // registration bars apply - commit radius, margin over the runner-up
     // candidate, minimum shared faces - and the router's invariants
-    // hold: never-overwrite (a face present in both epochs keeps the
-    // older epoch's aggregator) and verify (a shared face disagreeing
-    // beyond the radius refuses the whole merge).
+    // hold: never-overwrite (a SETTLED face present in both epochs
+    // keeps the older epoch's aggregator; a thin incumbent yields, see
+    // the merge below) and verify (a shared face disagreeing beyond
+    // the radius refuses the whole merge).
     {
-        constexpr double kRegisterRadius = 16.0;   // Lab distance, per-cell mean
-        constexpr double kRegisterMargin = 8.0;    // best-vs-runner-up separation
+        // The radius and margin judge the BEST-SUPPORTED shared face -
+        // the minimum per-face mean cell cost - never a pool over all
+        // shared faces. Shared faces are not equally trustworthy, and a
+        // pool lets the worst one out-vote the best: measured on the
+        // sweep, a 2-observation face fused from mixed-pixel grazing
+        // samples costs 45.7 Lab against its own physical face while a
+        // converged shared face costs 9.2, and the pooled 27.4 blew the
+        // radius, refusing a true merge that commits at 9.2. One clean
+        // face's nine cells are the discriminating evidence (see the
+        // shortlist note below); a corrupt companion face still gets
+        // its veto through the per-face verify, not through the score.
+        constexpr double kRegisterRadius = 16.0;   // Lab, min per-face mean cell cost
+        constexpr double kRegisterMargin = 8.0;    // best-vs-runner-up, same min-face basis
         // P6.6 drift-tolerant per-face verify. The cell-cost radius and
         // margin above are the real bars; the per-face centre check is a
         // structural backstop against merging different physical faces,
@@ -1420,7 +1432,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // across a visibility gap runs 21-32 Lab (which the old
         // kRegisterRadius bound refused, making a spurious generation
         // split unhealable), while the minimum cross-face centre
-        // separation is 57.3 Lab - 40 sits between them.
+        // separation is 57.3 Lab - 40 sits between them. Unlike the
+        // score, verify spans ALL shared faces, including ones too
+        // corrupt to carry the score: the sweep's grazing-sample face
+        // verifies at 34.2 and correctly does not veto, while a genuine
+        // different-face pairing still trips the 57.3 floor.
         constexpr double kRegisterVerifyCentreLab = 40.0;
         // The 24 rotations' face permutations, built once (same math as
         // the loop's stitch helpers).
@@ -1527,8 +1543,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     const std::array<int, 6>* best_perm = nullptr;
                     const cv::Matx33d* best_rotation = nullptr;
                     for (const auto& [rotation, perm] : face_perms) {
-                        double total = 0.0;
-                        int cells_compared = 0;
+                        double cost = -1.0;  // min per-face mean cell cost
                         int shared = 0;
                         for (const auto& [face, aggregator] : newer->second) {
                             const auto newer_face = fused_face(aggregator);
@@ -1544,20 +1559,31 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                                 continue;
                             }
                             ++shared;
+                            double face_total = 0.0;
+                            int face_cells = 0;
                             for (int cell = 0; cell < 9; ++cell) {
                                 const auto [face_old, cell_old] = map_cell(rotation, face, cell);
                                 if (face_old != perm[static_cast<std::size_t>(face)] || cell_old < 0) {
                                     continue;
                                 }
-                                total += cv::norm(newer_face->lab[static_cast<std::size_t>(cell)] -
-                                                  older_face->lab[static_cast<std::size_t>(cell_old)]);
-                                ++cells_compared;
+                                face_total += cv::norm(newer_face->lab[static_cast<std::size_t>(cell)] -
+                                                       older_face->lab[static_cast<std::size_t>(cell_old)]);
+                                ++face_cells;
+                            }
+                            // Only a full nine-cell grid may carry the
+                            // score: a partially mapped face is a
+                            // geometry inconsistency, not evidence.
+                            if (face_cells < 9) {
+                                continue;
+                            }
+                            const double face_cost = face_total / face_cells;
+                            if (cost < 0.0 || face_cost < cost) {
+                                cost = face_cost;
                             }
                         }
-                        if (shared < 1 || cells_compared < 9) {
+                        if (shared < 1 || cost < 0.0) {
                             continue;
                         }
-                        const double cost = total / cells_compared;
                         if (best_cost < 0.0 || cost < best_cost) {
                             second_cost = best_cost;
                             best_cost = cost;
@@ -1593,13 +1619,25 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         continue;
                     }
                     // Merge: transplant relabelled faces the older epoch
-                    // lacks; NEVER overwrite verifiable ones it has. A
-                    // sub-floor incumbent (fewer than kRegisterScoreFloor
-                    // observations - too thin to have participated in
-                    // scoring or verify, an unverified stray read) yields
-                    // to a floor-clearing transplant: measured on the
-                    // sweep, a 1-obs stray otherwise blocks an 8-obs
-                    // converged face and the merge transplants nothing.
+                    // lacks; NEVER overwrite settled ones it has.
+                    // Never-overwrite protects settled evidence, not
+                    // thin evidence. An incumbent still below the
+                    // capture bar (FaceAggregator::kMinObservations)
+                    // yields to a transplant that has already
+                    // converged() - the candidate cleared radius,
+                    // margin and verify to get here, the incumbent
+                    // cleared nothing but arrival order: measured on
+                    // the sweep, a 2-obs unconverged incumbent (the
+                    // same mixed-pixel grazing reads scored above)
+                    // otherwise kept its slot against an 8-obs
+                    // converged read of the same face, and the epoch
+                    // finished a face short. A sub-floor incumbent
+                    // (fewer than kRegisterScoreFloor observations -
+                    // too thin to have participated in scoring or
+                    // verify, an unverified stray read) yields to any
+                    // floor-clearing transplant: a 1-obs stray
+                    // otherwise blocks an 8-obs converged face and the
+                    // merge transplants nothing.
                     // P6.6: re-index each transplanted face's cells
                     // through the SAME map_cell used for scoring, so it
                     // sheds its source-frame grid roll (otherwise
@@ -1612,12 +1650,16 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     for (auto& [face, aggregator] : newer->second) {
                         const int target = (*best_perm)[static_cast<std::size_t>(face)];
                         const auto incumbent = older->second.find(target);
-                        const bool replace_stray =
+                        const bool incumbent_yields =
                             incumbent != older->second.end() &&
-                            incumbent->second.observation_count() <
-                                static_cast<std::size_t>(kRegisterScoreFloor) &&
-                            aggregator.observation_count() >= static_cast<std::size_t>(kRegisterScoreFloor);
-                        if (incumbent == older->second.end() || replace_stray) {
+                            ((incumbent->second.observation_count() <
+                                  static_cast<std::size_t>(kRegisterScoreFloor) &&
+                              aggregator.observation_count() >=
+                                  static_cast<std::size_t>(kRegisterScoreFloor)) ||
+                             (incumbent->second.observation_count() <
+                                  cube::vision::FaceAggregator::kMinObservations &&
+                              aggregator.converged()));
+                        if (incumbent == older->second.end() || incumbent_yields) {
                             std::array<int, 9> new_index_of_cell{};
                             std::array<bool, 9> cell_taken{};
                             bool mapping_ok = true;
