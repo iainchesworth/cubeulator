@@ -33,8 +33,8 @@ struct AssembledScan {
 //
 //   1. Centres never move, so each face's centre colour alone identifies
 //      its cube position under Cube::solved()'s colour scheme (White
-//      centre -> D, Yellow -> U, Green -> F, Blue -> B, Orange -> L,
-//      Red -> R - the inverse of canonical_color()).
+//      centre -> D, Yellow -> U, Green -> F, Blue -> B, Red -> L,
+//      Orange -> R - the inverse of canonical_color()).
 //   2. Reflections cannot occur optically - but they DO occur
 //      conventionally: the solver's cross-unfolded facelet layout is
 //      camera-handed on U, F, L and mirror-handed on D, R, B (the guided

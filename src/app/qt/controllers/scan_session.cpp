@@ -582,7 +582,7 @@ void log_track_pass(const cube::vision::TrackerPassOutput& track) {
 
 // The same centre-colour -> cube-position anchor the assembler stands on
 // (scan_assembly.hpp: centres never move, so under Cube::solved()'s scheme
-// White -> D, Yellow -> U, Green -> F, Blue -> B, Orange -> L, Red -> R).
+// White -> D, Yellow -> U, Green -> F, Blue -> B, Red -> L, Orange -> R).
 // Here it is only a display GUESS for slotSummaries - global colour
 // resolution can still reclassify a centre at assembly time.
 [[nodiscard]] QString face_letter_for_center(cube::model::FacetColor color) {
@@ -596,9 +596,9 @@ void log_track_pass(const cube::vision::TrackerPassOutput& track) {
             return QStringLiteral("F");
         case FacetColor::blue:
             return QStringLiteral("B");
-        case FacetColor::orange:
-            return QStringLiteral("L");
         case FacetColor::red:
+            return QStringLiteral("L");
+        case FacetColor::orange:
             return QStringLiteral("R");
         case FacetColor::unknown:
         default:

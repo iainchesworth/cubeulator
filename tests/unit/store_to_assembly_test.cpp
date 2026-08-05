@@ -148,8 +148,8 @@ TEST_CASE("without the outside-view seam no gauge assembles", "[capture-routing]
 namespace {
 
 // The centre-colour pinning restated from scan_assembly.hpp's documented
-// scheme (White -> D, Yellow -> U, Green -> F, Blue -> B, Orange -> L,
-// Red -> R), not lifted from the implementation, so a mis-pinned producer
+// scheme (White -> D, Yellow -> U, Green -> F, Blue -> B, Red -> L,
+// Orange -> R), not lifted from the implementation, so a mis-pinned producer
 // cannot agree with a mis-pinned test.
 constexpr cube::solver::Face pinned_face(Color centre) {
     switch (centre) {
@@ -161,9 +161,9 @@ constexpr cube::solver::Face pinned_face(Color centre) {
             return cube::solver::Face::F;
         case Color::Blue:
             return cube::solver::Face::B;
-        case Color::Orange:
-            return cube::solver::Face::L;
         case Color::Red:
+            return cube::solver::Face::L;
+        case Color::Orange:
             return cube::solver::Face::R;
     }
     return cube::solver::Face::U;

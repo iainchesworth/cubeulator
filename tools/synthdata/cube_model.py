@@ -15,8 +15,10 @@ flips); that gives the Ultralytics flip_idx [1, 0, 3, 2, 5, 4, 7, 6].
 
 Face/state convention: URFDLB face order, 9 stickers per face row-major as
 seen from OUTSIDE the face, Kociemba-style layout.  The solved colour scheme
-is U=W(hite) R=R(ed) F=G(reen) D=Y(ellow) L=O(range) B=B(lue); state strings
-use the colour letters W/Y/R/O/G/B (54 chars, face-major).
+is U=Y(ellow) R=O(range) F=G(reen) D=W(hite) L=R(ed) B=B(lue) -- exactly the
+solver's cube::solver::canonical_color scheme (the same physical Western
+cube, zero rotation between generator and solver frames); state strings use
+the colour letters W/Y/R/O/G/B (54 chars, face-major).
 """
 
 from __future__ import annotations
@@ -137,7 +139,7 @@ _F = {
 
 FACE_NORMALS = {f: np.array(_F[f]["n"], dtype=np.float64) for f in FACE_ORDER}
 
-SOLVED_SCHEME = {"U": "W", "R": "R", "F": "G", "D": "Y", "L": "O", "B": "B"}
+SOLVED_SCHEME = {"U": "Y", "R": "O", "F": "G", "D": "W", "L": "R", "B": "B"}
 COLOR_LETTERS = "WYROGB"
 
 CELL_PITCH = 2.0 / 3.0  # face spans [-1, 1] in both tangent axes

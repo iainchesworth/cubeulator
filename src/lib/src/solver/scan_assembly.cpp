@@ -41,9 +41,9 @@ constexpr Face face_for_center_color(Color color) noexcept {
             return Face::U;
         case Color::White:
             return Face::D;
-        case Color::Orange:
-            return Face::L;
         case Color::Red:
+            return Face::L;
+        case Color::Orange:
             return Face::R;
         case Color::Green:
             return Face::F;

@@ -124,7 +124,8 @@ ground truth feeds content-aware checks, not keypoint training.
 Faces in the model frame: U = +y, R = +x, F = +z, D = -y, L = -x, B = -z.
 State strings are 54 chars, URFDLB face-major, row-major per face as seen
 from outside (Kociemba-style layout), colour letters W/Y/R/O/G/B; solved
-scheme U=W R=R F=G D=Y L=O B=B. This matches the manifest convention in
+scheme U=Y R=O F=G D=W L=R B=B (the solver's canonical_color scheme, so
+generator and solver frames coincide). This matches the manifest convention in
 `docs/pipeline-plan.md` Phase 0 item 2 (that one stores facelet letters,
 this one colour letters -- centres key the mapping).
 

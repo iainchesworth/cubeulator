@@ -560,10 +560,10 @@ bool Cube::is_solvable() const noexcept {
     // Orange/Red - the usual "placeable without F/B quarter turns" rule.
     // Invariance was hand-checked against one representative edge per
     // interesting move class: F sends good UF to bad (Green primary,
-    // Yellow secondary at FR) and good FR to bad (Red primary at DF); B
+    // Yellow secondary at FR) and good FR to bad (Orange primary at DF); B
     // sends good UB to bad; L preserves good UL (Yellow lands on FL's
     // primary z facet) and good FL (Green lands on DL's primary y facet
-    // with Orange secondary); R preserves good UR; F2 trivially preserves
+    // with Red secondary); R preserves good UR; F2 trivially preserves
     // (stickers return to same-axis facets). So U/D/L/R turns and F2/B2
     // preserve every edge's flip while F/B quarter turns flip exactly the
     // four edges they move: the sum mod 2 is invariant and 0 on solved() -

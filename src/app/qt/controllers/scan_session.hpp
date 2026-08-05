@@ -266,8 +266,8 @@ public:
     //   "face":   "U"/"D"/"L"/"R"/"F"/"B" - the slot's canonical cube
     //             position GUESSED from its centre colour alone, via the
     //             same mapping the assembler anchors on (White -> D,
-    //             Yellow -> U, Green -> F, Blue -> B, Orange -> L,
-    //             Red -> R); "?" when the centre classifies as unknown.
+    //             Yellow -> U, Green -> F, Blue -> B, Red -> L,
+    //             Orange -> R); "?" when the centre classifies as unknown.
     //   "colors": 9 CSS colour strings (provisional classify_lab), the
     //             slot's stickers row-major as the camera saw them.
     // Display-only preview: slot content is now stored in solver facelet
