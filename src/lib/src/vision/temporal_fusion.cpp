@@ -117,6 +117,17 @@ void FaceAggregator::add(const FaceObservation& observation) {
     count_ = std::min(count_ + 1, kWindowSize);
 }
 
+void FaceAggregator::relabel_cells(const std::array<int, 9>& new_index_of_cell) {
+    // The ring is stored per cell (samples_[cell] is that cell's window),
+    // so permuting cells is moving whole vectors: every ring entry's
+    // reading for cell c lands at new_index_of_cell[c].
+    std::array<std::vector<cv::Vec3f>, 9> relabelled{};
+    for (std::size_t cell = 0; cell < samples_.size(); ++cell) {
+        relabelled[static_cast<std::size_t>(new_index_of_cell[cell])] = std::move(samples_[cell]);
+    }
+    samples_ = std::move(relabelled);
+}
+
 void FaceAggregator::reset() {
     for (auto& samples : samples_) {
         samples.clear();

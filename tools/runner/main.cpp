@@ -318,6 +318,11 @@ struct ClipMetrics {
     // refused ones (a shared face beyond the verify radius).
     int register_merges = 0;
     int register_refusals = 0;
+    // P6.6 content-keyed sub-epochs: times the feed-time takeover
+    // detector froze a generation's aggregators because an incoming
+    // centre jumped implausibly far from a settled slot's fused centre
+    // (a tracker slip without an epoch bump).
+    int fusion_generation_splits = 0;
 };
 
 // Locked-and-correct bound (docs/pipeline-plan.md Phase 2 exit gate): a
@@ -1119,11 +1124,24 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // locked-and-correct frame - or marking it failed (-1) if the cube
     // goes absent again (or the clip ends) first.
     int track_pinned_perm = -1;
-    // P6.1 fusion: pose-derived reads per (gauge epoch, model-frame face
+    // P6.1 fusion: pose-derived reads per (sub-epoch, model-frame face
     // id) through the SAME FaceAggregator the app's capture path uses -
     // its window/convergence machinery is the photometric commit gate
     // the plan keeps.
+    // P6.6: the outer key is a CONTENT-KEYED SUB-EPOCH, gauge_epoch *
+    // 1000 + generation. A quarter-turn slip the tracker survives (no
+    // drop, no epoch bump) refills existing face-id slots with a
+    // different physical face, and the 8-deep ring evicts the old
+    // evidence - measured destroying the only shared-face content two
+    // epochs had. The feed-time takeover detector below bumps the
+    // generation instead, freezing the whole label set (a slip moves
+    // every label simultaneously, so one slot's takeover invalidates
+    // them all - including slots whose own centres happened to match).
+    // Registration (P6.3) re-unifies generations by content exactly as
+    // it re-unifies epochs; finalize picks the best sub-epoch.
     std::map<int, std::map<int, cube::vision::FaceAggregator>> fusion;
+    // Current generation per gauge_epoch (starts at 0).
+    std::map<int, int> fusion_generation;
     const auto manifest = recording::read_manifest(dir.string());
     // Rectified-stability state: previous steady frame's most-frontal
     // rectified face (float grey for phaseCorrelate), its model face id
@@ -1198,7 +1216,17 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // Capture-grade tracked faces' per-cell reads accumulate under
         // their epoch-local identity; a sampled centre (purity > 0) is
         // the "this face was really read" proxy.
+        // P6.6 takeover detector: an incoming centre further than
+        // kTakeoverJumpLab from a settled slot's fused centre means a
+        // different physical face took the label over (a slip the
+        // tracker survived) - bump this gauge_epoch's generation so the
+        // frozen sub-epoch keeps its evidence and ALL subsequent feeds
+        // for the epoch land in the new one. A legitimate same-face
+        // illumination jump (measured up to 31.9 Lab across a
+        // visibility gap) causes a spurious split; that is accepted and
+        // healed by registration's drift-tolerant verify.
         if (result.track.pose_source == "m3t" && result.track.phase == pipeline::TrackPhase::locked) {
+            constexpr double kTakeoverJumpLab = 24.0;
             for (std::size_t f = 0; f < result.track_faces.size() && f < result.faces.faces.size(); ++f) {
                 if (!result.faces.faces[f].capture_grade || result.samples.faces[f].purity[4] <= 0.0F) {
                     continue;
@@ -1206,7 +1234,19 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 cube::vision::FaceObservation observation;
                 observation.lab = result.samples.faces[f].lab;
                 observation.cell_purity = result.samples.faces[f].purity;
-                fusion[result.gauge_epoch][result.track_faces[f].face].add(observation);
+                int& generation = fusion_generation[result.gauge_epoch];
+                int sub = result.gauge_epoch * 1000 + generation;
+                const auto faces_it = fusion.find(sub);
+                if (faces_it != fusion.end()) {
+                    const auto slot = faces_it->second.find(result.track_faces[f].face);
+                    if (slot != faces_it->second.end() && slot->second.observation_count() >= 2 &&
+                        cv::norm(observation.lab[4] - slot->second.capture().lab[4]) > kTakeoverJumpLab) {
+                        ++generation;
+                        ++metrics.fusion_generation_splits;
+                        sub = result.gauge_epoch * 1000 + generation;
+                    }
+                }
+                fusion[sub][result.track_faces[f].face].add(observation);
             }
         }
 
@@ -1373,6 +1413,15 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     {
         constexpr double kRegisterRadius = 16.0;   // Lab distance, per-cell mean
         constexpr double kRegisterMargin = 8.0;    // best-vs-runner-up separation
+        // P6.6 drift-tolerant per-face verify. The cell-cost radius and
+        // margin above are the real bars; the per-face centre check is a
+        // structural backstop against merging different physical faces,
+        // not a second radius. Measured same-face illumination drift
+        // across a visibility gap runs 21-32 Lab (which the old
+        // kRegisterRadius bound refused, making a spurious generation
+        // split unhealable), while the minimum cross-face centre
+        // separation is 57.3 Lab - 40 sits between them.
+        constexpr double kRegisterVerifyCentreLab = 40.0;
         // The 24 rotations' face permutations, built once (same math as
         // the loop's stitch helpers).
         static const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>> face_perms = [] {
@@ -1476,6 +1525,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     double best_cost = -1.0;
                     double second_cost = -1.0;
                     const std::array<int, 6>* best_perm = nullptr;
+                    const cv::Matx33d* best_rotation = nullptr;
                     for (const auto& [rotation, perm] : face_perms) {
                         double total = 0.0;
                         int cells_compared = 0;
@@ -1512,6 +1562,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                             second_cost = best_cost;
                             best_cost = cost;
                             best_perm = &perm;
+                            best_rotation = &rotation;
                         } else if (second_cost < 0.0 || cost < second_cost) {
                             second_cost = cost;
                         }
@@ -1531,7 +1582,8 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                             continue;
                         }
                         const auto older_face = fused_face(older_it->second);
-                        if (older_face && cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterRadius) {
+                        if (older_face &&
+                            cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterVerifyCentreLab) {
                             verify_ok = false;  // shared centres disagree: refuse
                             break;
                         }
@@ -1541,10 +1593,50 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                         continue;
                     }
                     // Merge: transplant relabelled faces the older epoch
-                    // lacks; NEVER overwrite ones it has.
+                    // lacks; NEVER overwrite verifiable ones it has. A
+                    // sub-floor incumbent (fewer than kRegisterScoreFloor
+                    // observations - too thin to have participated in
+                    // scoring or verify, an unverified stray read) yields
+                    // to a floor-clearing transplant: measured on the
+                    // sweep, a 1-obs stray otherwise blocks an 8-obs
+                    // converged face and the merge transplants nothing.
+                    // P6.6: re-index each transplanted face's cells
+                    // through the SAME map_cell used for scoring, so it
+                    // sheds its source-frame grid roll (otherwise
+                    // absorbed by assembly's per-face search but
+                    // defeating rotation-hint digits and
+                    // cross-generation cell comparisons). If the mapping
+                    // disagrees with the face permutation or is not a
+                    // valid permutation, transplant as-is rather than
+                    // corrupt content.
                     for (auto& [face, aggregator] : newer->second) {
                         const int target = (*best_perm)[static_cast<std::size_t>(face)];
-                        if (older->second.find(target) == older->second.end()) {
+                        const auto incumbent = older->second.find(target);
+                        const bool replace_stray =
+                            incumbent != older->second.end() &&
+                            incumbent->second.observation_count() <
+                                static_cast<std::size_t>(kRegisterScoreFloor) &&
+                            aggregator.observation_count() >= static_cast<std::size_t>(kRegisterScoreFloor);
+                        if (incumbent == older->second.end() || replace_stray) {
+                            std::array<int, 9> new_index_of_cell{};
+                            std::array<bool, 9> cell_taken{};
+                            bool mapping_ok = true;
+                            for (int cell = 0; cell < 9 && mapping_ok; ++cell) {
+                                const auto [face_old, cell_old] = map_cell(*best_rotation, face, cell);
+                                if (face_old != target || cell_old < 0 || cell_old > 8 ||
+                                    cell_taken[static_cast<std::size_t>(cell_old)]) {
+                                    mapping_ok = false;
+                                    break;
+                                }
+                                cell_taken[static_cast<std::size_t>(cell_old)] = true;
+                                new_index_of_cell[static_cast<std::size_t>(cell)] = cell_old;
+                            }
+                            if (mapping_ok) {
+                                aggregator.relabel_cells(new_index_of_cell);
+                            }
+                            if (incumbent != older->second.end()) {
+                                older->second.erase(incumbent);
+                            }
                             older->second.emplace(target, std::move(aggregator));
                         }
                     }
@@ -1556,9 +1648,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         }
     }
 
-    // --- P6.1 finalize: best epoch -> resolve -> assemble -> oracle ---
+    // --- P6.1 finalize: best sub-epoch -> resolve -> assemble -> oracle ---
     // "Best" = most converged aggregators (the photometric gate), ties
-    // to most sufficiently-observed - one epoch must carry all six
+    // to most sufficiently-observed - one sub-epoch must carry all six
     // faces, the plan's identity-lifetime bar.
     for (const auto& [epoch, faces] : fusion) {
         int enough = 0;
@@ -1617,9 +1709,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     write_metrics_json(out_dir / "metrics.json", metrics);
 
     if (metrics.e2e_outcome != "no-oracle-state" || metrics.fusion_best_epoch >= 0) {
-        std::printf("  end-to-end: %s  (epoch %d: %d/6 observed, %d/6 converged; %d registered merges, %d refusals)\n",
+        std::printf("  end-to-end: %s  (sub-epoch %d: %d/6 observed, %d/6 converged; %d registered merges, "
+                    "%d refusals, %d generation splits)\n",
                     metrics.e2e_outcome.c_str(), metrics.fusion_best_epoch, metrics.fusion_epoch_faces,
-                    metrics.fusion_epoch_converged, metrics.register_merges, metrics.register_refusals);
+                    metrics.fusion_epoch_converged, metrics.register_merges, metrics.register_refusals,
+                    metrics.fusion_generation_splits);
     }
     std::printf("%-12s frames %4d/%4d  det %5.1f%%  pose %5.1f%%  locked %5.1f%%  epochs %2d  unknown-cells %5.1f%%%s\n",
                 metrics.clip.c_str(), metrics.frames_replayed, metrics.frames_indexed,

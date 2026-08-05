@@ -50,6 +50,17 @@ public:
     void add(const FaceObservation& observation);
     void reset();
 
+    // Re-index accumulated content under a cell permutation:
+    // new_index_of_cell[c] is the destination index for the samples
+    // currently held at cell c. Used when cross-epoch registration
+    // transplants a face whose source frames carried a different grid
+    // roll - the window's evidence moves with the cells so downstream
+    // cell-level comparisons (and rotation-hint digits) stay coherent.
+    // Precondition: new_index_of_cell is a permutation of 0..8; the
+    // caller validates (an invalid mapping must skip re-indexing, not
+    // corrupt content).
+    void relabel_cells(const std::array<int, 9>& new_index_of_cell);
+
     [[nodiscard]] std::size_t observation_count() const noexcept;
 
     // 0..1 progress toward convergence, for UI feedback (a capture ring /
