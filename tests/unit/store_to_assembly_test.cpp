@@ -144,3 +144,174 @@ TEST_CASE("without the outside-view seam no gauge assembles", "[capture-routing]
     }
     REQUIRE(assembled_count == 0);
 }
+
+namespace {
+
+// The centre-colour pinning restated from scan_assembly.hpp's documented
+// scheme (White -> D, Yellow -> U, Green -> F, Blue -> B, Orange -> L,
+// Red -> R), not lifted from the implementation, so a mis-pinned producer
+// cannot agree with a mis-pinned test.
+constexpr cube::solver::Face pinned_face(Color centre) {
+    switch (centre) {
+        case Color::White:
+            return cube::solver::Face::D;
+        case Color::Yellow:
+            return cube::solver::Face::U;
+        case Color::Green:
+            return cube::solver::Face::F;
+        case Color::Blue:
+            return cube::solver::Face::B;
+        case Color::Orange:
+            return cube::solver::Face::L;
+        case Color::Red:
+            return cube::solver::Face::R;
+    }
+    return cube::solver::Face::U;
+}
+
+// One clockwise quarter-turn in the image plane, derived from the
+// (row, col) form - rotated(row, col) = source(2 - col, row) - rather than
+// copying scan_assembly.cpp's flat gather table, so a mis-derived table
+// would be caught (scan_assembly_test.cpp does the same).
+std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
+    std::array<Color, 9> rotated{};
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) {
+            rotated[static_cast<std::size_t>(3 * row + col)] =
+                face[static_cast<std::size_t>(3 * (2 - col) + row)];
+        }
+    }
+    return rotated;
+}
+
+// The assembler's handedness correction on a D/R/B-pinned input, restated
+// as the column swap it is documented to be.
+std::array<Color, 9> flipped_columns(std::array<Color, 9> face) {
+    for (int row = 0; row < 3; ++row) {
+        std::swap(face[static_cast<std::size_t>(row * 3)], face[static_cast<std::size_t>(row * 3 + 2)]);
+    }
+    return face;
+}
+
+std::array<Color, 9> slot_colors(const cube::vision::CapturedFace& slot) {
+    std::array<Color, 9> colors{};
+    for (std::size_t k = 0; k < colors.size(); ++k) {
+        colors[k] = color_of(slot.lab[k]);
+    }
+    return colors;
+}
+
+// The store is indexed by body face, so slot b's body label IS Face b -
+// the live path reads the same labels off the router (face_at).
+std::array<cube::model::Face, 6> identity_body_faces() {
+    std::array<cube::model::Face, 6> body_faces{};
+    for (std::size_t b = 0; b < body_faces.size(); ++b) {
+        body_faces[b] = static_cast<cube::model::Face>(b);
+    }
+    return body_faces;
+}
+
+}  // namespace
+
+TEST_CASE("the store hint producer derives digits that re-orient every slot",
+          "[capture-routing][scan_assembly]") {
+    const Cube cube = scrambled();
+    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+        CAPTURE(gauge);
+        auto slots = store_under_gauge(cube, gauge);
+        for (std::size_t b = 0; b < slots.size(); ++b) {
+            cube::vision::slot_to_outside_view(static_cast<cube::model::Face>(b), slots[b]);
+        }
+        const auto inputs = decode(slots);
+
+        const cube::solver::RotationHint hint =
+            cube::solver::rotation_hint_for_store_scan(inputs, identity_body_faces());
+        for (std::size_t i = 0; i < slots.size(); ++i) {
+            CAPTURE(i);
+            REQUIRE(hint.quarter_turns[i] != cube::solver::RotationHint::kNoHint);
+            // Independent digit check, straight from the RotationHint
+            // contract: digit d rotates the ASSEMBLER-CORRECTED input onto
+            // the solver layout of its centre-pinned face. Everything here
+            // is restated from documentation, none of it from the
+            // producer's geometry.
+            std::array<Color, 9> reoriented = slot_colors(slots[i]);
+            const cube::solver::Face pinned = pinned_face(reoriented[cube::model::center_facelet_index]);
+            if (pinned == cube::solver::Face::D || pinned == cube::solver::Face::R ||
+                pinned == cube::solver::Face::B) {
+                reoriented = flipped_columns(reoriented);
+            }
+            for (int t = 0; t < hint.quarter_turns[i]; ++t) {
+                reoriented = rotated_clockwise(reoriented);
+            }
+            REQUIRE(reoriented == cube.face(pinned));
+        }
+
+        const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(inputs, &hint);
+        REQUIRE(assembled.has_value());
+        REQUIRE(assembled->cube == cube);
+    }
+}
+
+TEST_CASE("the store hint degrades to no advice when body labels cannot name a rotation",
+          "[capture-routing][scan_assembly]") {
+    const Cube cube = scrambled();
+    auto slots = store_under_gauge(cube, cube::vision::kIdentityLatticeIndex);
+    for (std::size_t b = 0; b < slots.size(); ++b) {
+        cube::vision::slot_to_outside_view(static_cast<cube::model::Face>(b), slots[b]);
+    }
+    const auto inputs = decode(slots);
+
+    SECTION("a repeated body label is not a bijection") {
+        auto body_faces = identity_body_faces();
+        body_faces[5] = body_faces[0];
+        const auto hint = cube::solver::rotation_hint_for_store_scan(inputs, body_faces);
+        for (const int digit : hint.quarter_turns) {
+            REQUIRE(digit == cube::solver::RotationHint::kNoHint);
+        }
+    }
+
+    SECTION("swapping the L and R slots' body labels composes a reflection") {
+        // Opposite slots hold opposite physical faces under every gauge, so
+        // both centre correspondences still agree on the x column's
+        // DIRECTION - the opposite-pair check passes - but the columns then
+        // form det -1, a mirror no quarter-turn digit can describe.
+        auto body_faces = identity_body_faces();
+        std::swap(body_faces[static_cast<std::size_t>(cube::model::Face::R)],
+                  body_faces[static_cast<std::size_t>(cube::model::Face::L)]);
+        const auto hint = cube::solver::rotation_hint_for_store_scan(inputs, body_faces);
+        for (const int digit : hint.quarter_turns) {
+            REQUIRE(digit == cube::solver::RotationHint::kNoHint);
+        }
+    }
+}
+
+TEST_CASE("the store hint lifts the near-solved ambiguity under every gauge",
+          "[capture-routing][scan_assembly]") {
+    // scan_assembly_test.cpp's canonical ambiguous fixture (one U quarter
+    // turn from solved) expressed through the store convention: U and D are
+    // uniform, and the four side faces admit a rival joint rotation that
+    // reads the displaced rows as a D-layer turn. The unhinted assembler
+    // must refuse, and the store hint's geometric digits must pick the true
+    // cube - under all 24 gauges, 23 of them non-identity.
+    const Cube cube = Cube::solved().apply(Move{cube::solver::Face::U, 1});
+    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+        CAPTURE(gauge);
+        auto slots = store_under_gauge(cube, gauge);
+        for (std::size_t b = 0; b < slots.size(); ++b) {
+            cube::vision::slot_to_outside_view(static_cast<cube::model::Face>(b), slots[b]);
+        }
+        const auto inputs = decode(slots);
+
+        // The premise: without a hint this scan IS ambiguous. If a solver
+        // change ever lifts that, these assertions test nothing and the
+        // fixture must be rebuilt (scan_assembly_test.cpp guards the same
+        // way).
+        const auto unhinted = cube::solver::assemble_scanned_faces_with_mapping(inputs);
+        REQUIRE_FALSE(unhinted.has_value());
+
+        const auto hint = cube::solver::rotation_hint_for_store_scan(inputs, identity_body_faces());
+        const auto hinted = cube::solver::assemble_scanned_faces_with_mapping(inputs, &hint);
+        REQUIRE(hinted.has_value());
+        REQUIRE(hinted->cube == cube);
+    }
+}

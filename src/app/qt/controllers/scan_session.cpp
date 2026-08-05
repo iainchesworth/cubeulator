@@ -2370,12 +2370,17 @@ void ScanSession::finalizeIfComplete() {
     }
 
     std::array<cube::vision::CapturedFace, cube::model::face_count> captured{};
+    std::array<cube::model::Face, cube::model::face_count> body_faces{};
+    bool body_faces_known = true;
     for (std::size_t i = 0; i < captured.size(); ++i) {
         captured[i] = *router_.slot_at(static_cast<int>(i));
         // Store convention (solver layout of the slot's BODY face) ->
         // assembly's outside-view contract; see slot_to_outside_view.
         if (const auto body = router_.face_at(static_cast<int>(i))) {
             cube::vision::slot_to_outside_view(*body, captured[i]);
+            body_faces[i] = *body;
+        } else {
+            body_faces_known = false;  // no label, no hint - never guess
         }
     }
 
@@ -2400,7 +2405,15 @@ void ScanSession::finalizeIfComplete() {
         confidence[i] = mean_confidence((*resolved)[i]);
     }
 
-    const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
+    // P6.5: tracked identity contributes its one extra bit - the per-slot
+    // quarter-turn digits, derived from body labels + resolved centres
+    // (pure geometry, degrades to no-advice on any inconsistency). Tie-
+    // break only: a unique survivor wins regardless of the hint.
+    cube::solver::RotationHint hint;
+    if (body_faces_known) {
+        hint = cube::solver::rotation_hint_for_store_scan(*resolved, body_faces);
+    }
+    const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved, &hint);
     if (!assembled.has_value()) {
         const QString dropped = dropMostSuspectSlot(confidence);
         emit facesScannedChanged();

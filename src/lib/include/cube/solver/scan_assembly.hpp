@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cube/error.hpp>
+#include <cube/model/face.hpp>
 #include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
 
@@ -153,6 +154,28 @@ struct RotationHint {
 [[nodiscard]] RotationHint rotation_hint_for_tracked_scan(
     const std::array<std::array<model::Facelet, 9>, 6>& faces,
     const std::array<int, 6>& model_face_ids) noexcept;
+
+// The capture-store-side RotationHint producer - the same geometry-only
+// derivation as rotation_hint_for_tracked_scan, for the LIVE path's input
+// convention instead of face_projection's. A store slot holds the SOLVER
+// layout of its BODY face, and the finalize path pushes each slot through
+// slot_to_outside_view's column flip on the mirror-handed body faces D, R,
+// B before resolving and assembling; `faces[i]` is input i in exactly that
+// post-seam form and `body_faces[i]` is its slot's body label. Body labels
+// carry the solver embedding's axis meaning by NAME (U = +y, R = +x,
+// F = +z, negatives opposite), so the six centre-pinned (body axis ->
+// solver axis) correspondences name the body->solver rotation, and pushing
+// each slot's cells through it yields the quarter-turn digit assembly's
+// search would apply - defined, per the RotationHint contract, over the
+// search's arrays AFTER its own D/R/B correction on the PINNED face.
+//
+// Degrades to all-kNoHint on anything that cannot name a rigid rotation:
+// a repeated or out-of-range body label, an unknown or duplicated centre
+// colour, or correspondences composing a reflection - advice, not
+// evidence, exactly as the tracked producer.
+[[nodiscard]] RotationHint rotation_hint_for_store_scan(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces,
+    const std::array<model::Face, 6>& body_faces) noexcept;
 
 // As assemble_scanned_faces_with_mapping(), for callers (the solver
 // pipeline) that only need the cube and not the input-index bookkeeping.
