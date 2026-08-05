@@ -448,6 +448,122 @@ TEST_CASE("resolve_colors survives shift, chroma compression, and noise combined
     require_recovered(scan);
 }
 
+// ---------------------------------------------------------------------------
+// The freerot red/orange regression. Every Lab triple below is a REAL
+// measurement: the 54 fused cell colours of the synth-freerot clip's
+// winning sub-epoch (the runner's resolve input), read out of the fused
+// aggregators, with truth taken from the clip's manifest under the
+// renderer's known W<->Y global rename.
+//
+// The R face fused in deep shade: its centre seed sits at L 20.7 while
+// the orange seed sits at L 60.1, and the face carries three
+// shade-darkened ORANGE cells at Lab ~(33.3, 27.0, 38.8). Shading acts
+// as a near-scalar on the whole Lab vector - those cells are the orange
+// seed scaled by ~0.58 in all three channels - so under plain Euclidean
+// Lab they sit 22.8 from the red seed against 41.2 from their own, and
+// STILL nearer red in pure (a,b) (19.0 against 31.2). Plain-Lab
+// assignment therefore put all three into the red cluster, and the
+// exactly-9 census cascaded three bright reds into orange: 6 misnames,
+// independently fatal to assembly. Their hue is unambiguous (55.2
+// degrees against the orange seed's 54.2, red at 31.4), which is what
+// the hue-aware assignment metric keys on. Fails pre-fix with exactly
+// those 6 misnames.
+// ---------------------------------------------------------------------------
+TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "[vision]") {
+    struct Cell {
+        cv::Vec3f lab;
+        FacetColor expected;
+    };
+    constexpr auto W = FacetColor::white;
+    constexpr auto Y = FacetColor::yellow;
+    constexpr auto R = FacetColor::red;
+    constexpr auto O = FacetColor::orange;
+    constexpr auto G = FacetColor::green;
+    constexpr auto B = FacetColor::blue;
+    const std::array<std::array<Cell, 9>, 6> measured{{
+        // The R face, fused in deep shade: cells 1, 2 and 7 are the
+        // shade-darkened oranges this regression is about.
+        {{{{52.4384F, 0.0234F, 0.0156F}, W},
+          {{33.2703F, 27.0078F, 38.7578F}, O},
+          {{33.2031F, 27.3281F, 38.7188F}, O},
+          {{46.8567F, -4.8438F, 47.6484F}, Y},
+          {{20.7336F, 37.0000F, 22.5781F}, R},
+          {{20.6055F, 36.8828F, 22.4219F}, R},
+          {{20.6299F, 36.8047F, 22.8203F}, R},
+          {{33.1726F, 27.1641F, 38.6484F}, O},
+          {{52.4200F, 0.0234F, 0.0156F}, W}}},
+        {{{{60.1318F, 45.9297F, 63.5938F}, O},
+          {{91.1560F, 0.0156F, 0.0000F}, W},
+          {{82.1259F, -7.2031F, 76.6094F}, Y},
+          {{40.1733F, 59.1250F, 39.5078F}, R},
+          {{60.0891F, 45.9531F, 63.5781F}, O},
+          {{81.7413F, -6.9453F, 76.4688F}, Y},
+          {{58.1055F, -53.3594F, 38.4844F}, G},
+          {{58.0627F, -53.3594F, 38.4688F}, G},
+          {{59.2316F, 42.9922F, 61.1719F}, O}}},
+        {{{{34.3872F, 10.8516F, -46.8750F}, B},
+          {{34.6008F, 52.8359F, 34.3438F}, R},
+          {{72.0795F, -6.3359F, 68.5938F}, Y},
+          {{34.2957F, 10.6094F, -46.4531F}, B},
+          {{72.0490F, -6.5781F, 68.5859F}, Y},
+          {{50.7721F, -47.4531F, 34.0625F}, G},
+          {{72.0276F, -6.4688F, 68.5000F}, Y},
+          {{34.5337F, 52.8750F, 34.5625F}, R},
+          {{50.7812F, -47.5469F, 34.1562F}, G}}},
+        {{{{38.2904F, 12.3125F, -51.2812F}, B},
+          {{79.4220F, -6.9375F, 74.8203F}, Y},
+          {{58.0231F, 44.4531F, 61.6719F}, O},
+          {{88.1653F, 0.0156F, 0.0000F}, W},
+          {{88.1653F, 0.0156F, 0.0000F}, W},
+          {{57.8522F, 44.2188F, 61.4922F}, O},
+          {{38.7970F, 57.8516F, 38.3125F}, R},
+          {{79.3671F, -6.7656F, 74.8203F}, Y},
+          {{88.1653F, 0.0156F, 0.0000F}, W}}},
+        {{{{67.1875F, -6.2188F, 64.5078F}, Y},
+          {{74.7070F, 0.0156F, 0.0000F}, W},
+          {{31.7963F, 10.1719F, -44.3438F}, B},
+          {{31.7993F, 9.9141F, -44.3906F}, B},
+          {{31.6925F, 9.9531F, -44.0547F}, B},
+          {{47.2290F, -44.7969F, 31.9062F}, G},
+          {{47.2076F, -44.7422F, 31.9219F}, G},
+          {{31.8115F, 10.1016F, -44.1484F}, B},
+          {{31.8665F, 49.8984F, 32.3828F}, R}}},
+        {{{{83.2550F, 0.0078F, 0.0000F}, W},
+          {{54.5441F, 41.7812F, 58.3594F}, O},
+          {{35.8307F, 11.3984F, -48.3438F}, B},
+          {{35.9009F, 11.6562F, -48.8281F}, B},
+          {{53.0609F, -49.2891F, 35.4453F}, G},
+          {{52.8717F, -49.1797F, 35.4453F}, G},
+          {{36.1847F, 54.6172F, 35.8516F}, R},
+          {{83.1573F, 0.0156F, 0.0000F}, W},
+          {{52.7893F, -49.0703F, 35.6406F}, G}}},
+    }};
+
+    std::array<CapturedFace, 6> faces{};
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t i = 0; i < 9; ++i) {
+            faces[face].lab[i] = measured[face][i].lab;
+        }
+    }
+    const auto resolved = resolve_colors(faces);
+    REQUIRE(resolved.has_value());
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t i = 0; i < 9; ++i) {
+            CAPTURE(face, i);
+            REQUIRE((*resolved)[face][i].color == measured[face][i].expected);
+        }
+    }
+    // The three shaded cells are not merely named right, they are priced
+    // as the safe assignments the hue margin says they are - plain-Lab
+    // pricing would report confidence zero on them (their plain-Lab
+    // nearest mean is red's).
+    for (const std::size_t cell : {std::size_t{1}, std::size_t{2}, std::size_t{7}}) {
+        CAPTURE(cell);
+        REQUIRE((*resolved)[0][cell].color == FacetColor::orange);
+        REQUIRE((*resolved)[0][cell].confidence > 0.0F);
+    }
+}
+
 TEST_CASE("resolve_colors rejects a scan with two identical centres", "[vision]") {
     SyntheticScan scan = make_scan();
     scan.faces[1].lab[4] = scan.faces[0].lab[4];
