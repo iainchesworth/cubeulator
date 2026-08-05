@@ -2372,6 +2372,11 @@ void ScanSession::finalizeIfComplete() {
     std::array<cube::vision::CapturedFace, cube::model::face_count> captured{};
     for (std::size_t i = 0; i < captured.size(); ++i) {
         captured[i] = *router_.slot_at(static_cast<int>(i));
+        // Store convention (solver layout of the slot's BODY face) ->
+        // assembly's outside-view contract; see slot_to_outside_view.
+        if (const auto body = router_.face_at(static_cast<int>(i))) {
+            cube::vision::slot_to_outside_view(*body, captured[i]);
+        }
     }
 
     // Per-slot suspicion score for the recovery path: provisional palette

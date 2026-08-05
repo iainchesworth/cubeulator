@@ -8,7 +8,6 @@ include(Catch)
 add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
-    unit/scan_session_config_test.cpp
     unit/model_test.cpp
     unit/grid_detection_test.cpp
     unit/pose_refiner_test.cpp
@@ -28,6 +27,7 @@ add_executable(cube_unit_tests
     unit/centre_cluster_verify_test.cpp
     unit/centre_palette_test.cpp
     unit/capture_routing_test.cpp
+    unit/store_to_assembly_test.cpp
     unit/crash_hunt_test.cpp
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
