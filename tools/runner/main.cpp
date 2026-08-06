@@ -1404,9 +1404,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // identity that CONTENT can restore: two epochs' fused faces are the
     // same physical stickers, and the relabel between them must be one
     // of the 24 cube rotations' face permutations. Each candidate is
-    // scored on fused CENTRE colours (roll-invariant); the re-derived
-    // registration bars apply - commit radius, margin over the runner-up
-    // candidate, minimum shared faces - and the router's invariants
+    // scored cell-level in the shading-tolerant decomposed cost (P6.11,
+    // see cell_cost below); the re-derived registration bars apply -
+    // commit radius, margin over the runner-up candidate, minimum
+    // shared faces - and the router's invariants
     // hold: never-overwrite (a SETTLED face present in both epochs
     // keeps the older epoch's aggregator; a thin incumbent yields, see
     // the merge below) and verify (a shared face disagreeing beyond
@@ -1416,15 +1417,41 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // the minimum per-face mean cell cost - never a pool over all
         // shared faces. Shared faces are not equally trustworthy, and a
         // pool lets the worst one out-vote the best: measured on the
-        // sweep, a 2-observation face fused from mixed-pixel grazing
+        // sweep (pre-P6.11, in the plain-Lab cost the scorer then used),
+        // a 2-observation face fused from mixed-pixel grazing
         // samples costs 45.7 Lab against its own physical face while a
         // converged shared face costs 9.2, and the pooled 27.4 blew the
         // radius, refusing a true merge that commits at 9.2. One clean
         // face's nine cells are the discriminating evidence (see the
         // shortlist note below); a corrupt companion face still gets
         // its veto through the per-face verify, not through the score.
-        constexpr double kRegisterRadius = 16.0;   // Lab, min per-face mean cell cost
-        constexpr double kRegisterMargin = 8.0;    // best-vs-runner-up, same min-face basis
+        //
+        // P6.11 bars, re-derived by measurement in the decomposed cost
+        // (cell_cost below) by dumping best and runner-up candidate
+        // costs for every pair evaluation across the seven-clip corpus.
+        // TRUE bridges - freerot's two merges, occlusion's twenty-seven
+        // re-acquisitions, both sweeps' hold boundaries, and
+        // sweep_gentle's era-3 bridge that plain Lab refused at 24.8 -
+        // top out at 11.1, and that maximum IS the era-3 bridge:
+        // grazing-oblique against face-on, the largest same-sticker
+        // drift the corpus produces. The nearest best cost any WRONG
+        // pairing produces is 13.7 (exit-reentry's 3000<-3001, which
+        // its 1.8 margin refuses anyway); every other wrong best is
+        // 20.8 or beyond. 12.5 splits the measured gap - thin, and
+        // honestly thin: the gap itself is only 2.6 wide, so the radius
+        // is one more grazing-vs-face-on era away from needing the
+        // margin and verify to carry a refusal alone.
+        constexpr double kRegisterRadiusHue = 12.5;  // decomposed cost, min per-face mean
+        // Margin over the runner-up candidate, same min-face basis. Its
+        // job is ambiguity, not distance: a near-uniform shared face
+        // matches several rolls almost equally (occlusion pairs measure
+        // margins 0.0-6.7, the widest 1003<-1025), and committing one
+        // would scramble cell indices on a coin-flip rotation. The
+        // thinnest margin any genuine commit shows is 7.6 - the era-3
+        // bridge again, runner-up 18.7 against best 11.1 - which the
+        // old bar of 8 refused; 7.0 sits between the measured 6.7 and
+        // 7.6 with the same honesty note as the radius.
+        constexpr double kRegisterMarginHue = 7.0;   // best-vs-runner-up, same basis
         // P6.6 drift-tolerant per-face verify. The cell-cost radius and
         // margin above are the real bars; the per-face centre check is a
         // structural backstop against merging different physical faces,
@@ -1477,9 +1504,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // cube transits between holds is still content evidence - the two
         // reads must agree with each other AND the radius/margin/verify
         // bars still apply - and it can be the ONLY face two epochs
-        // share. Measured on the sweep: the boundary face has 2 obs at
-        // 3.98 Lab mean against the older epoch's 46-obs fusion, with the
-        // best wrong candidate at 51.3. Final selection and capture stay
+        // share. Measured on the sweep (P6.11 decomposed cost): the
+        // boundary face has 2 obs at 4.1 mean against the older epoch's
+        // 46-obs fusion, with the best wrong candidate at 18.5. Final
+        // selection and capture stay
         // on kMinObservations; never-overwrite keeps thin content out of
         // the assembled result.
         constexpr int kRegisterScoreFloor = 2;
@@ -1489,6 +1517,33 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 return std::nullopt;
             }
             return aggregator.capture();
+        };
+        // P6.11: the cell cost is the P6.7 decomposed metric, not plain
+        // Lab. Two fused reads of the SAME sticker taken in different
+        // gauge eras differ by illumination, and illumination acts as a
+        // near-scalar on the whole Lab vector (the resolve-side
+        // measurement, see assignment_distance in color_resolution.cpp):
+        // sweep_gentle's era-3 bridge face was read grazing-oblique in
+        // one era and face-on in the other under the fixed light, and
+        // the same nine stickers scored 24.8 plain Lab - outside any
+        // honest plain-Lab radius. What shading does not move is the hue
+        // direction, so lightness and chroma share the down-weight and
+        // the hue residual keeps full weight. The weight is 0.2 by the
+        // resolve-side derivation (mid-plateau between the shading cliff
+        // at 1.0 and the white-collapse cliff at 0.0); reimplemented
+        // locally rather than exported because color_resolution's
+        // constants were measured against ITS callers, and a shared
+        // symbol would couple two independently-derived bars.
+        const auto cell_cost = [](const cv::Vec3f& a, const cv::Vec3f& b) -> double {
+            constexpr double kShadingAxisWeight = 0.2;
+            const double dl = a[0] - b[0];
+            const double da = a[1] - b[1];
+            const double db = a[2] - b[2];
+            const double dc = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
+            // |dc| <= sqrt(da^2+db^2) by the reverse triangle
+            // inequality; the clamp guards rounding.
+            const double dh_squared = std::max(0.0, da * da + db * db - dc * dc);
+            return std::sqrt(kShadingAxisWeight * (dl * dl + dc * dc) + dh_squared);
         };
         // Cell index mapping under a candidate rotation (newer-frame ->
         // older-frame): a cell's 3-D centre in the newer model frame maps
@@ -1535,9 +1590,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     // themselves (a wrong relabel scrambles the grid).
                     // The geometric shortlist became unnecessary once
                     // scoring went cell-level - and a >65-degree drift
-                    // put the true relabel outside it anyway (measured:
-                    // both shortlist candidates cost >114 Lab while the
-                    // 1<-2 merge chose 6.9 vs 108.5).
+                    // put the true relabel outside it anyway (measured
+                    // pre-P6.11 in plain Lab: both shortlist candidates
+                    // cost >114 while the 1<-2 merge chose 6.9 vs 108.5).
                     double best_cost = -1.0;
                     double second_cost = -1.0;
                     const std::array<int, 6>* best_perm = nullptr;
@@ -1566,8 +1621,8 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                                 if (face_old != perm[static_cast<std::size_t>(face)] || cell_old < 0) {
                                     continue;
                                 }
-                                face_total += cv::norm(newer_face->lab[static_cast<std::size_t>(cell)] -
-                                                       older_face->lab[static_cast<std::size_t>(cell_old)]);
+                                face_total += cell_cost(newer_face->lab[static_cast<std::size_t>(cell)],
+                                                        older_face->lab[static_cast<std::size_t>(cell_old)]);
                                 ++face_cells;
                             }
                             // Only a full nine-cell grid may carry the
@@ -1595,8 +1650,8 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                     }
                     // The bars: commit radius, margin over the runner-up,
                     // and per-face verify inside the merge below.
-                    if (best_perm == nullptr || best_cost > kRegisterRadius ||
-                        (second_cost >= 0.0 && second_cost - best_cost < kRegisterMargin)) {
+                    if (best_perm == nullptr || best_cost > kRegisterRadiusHue ||
+                        (second_cost >= 0.0 && second_cost - best_cost < kRegisterMarginHue)) {
                         continue;
                     }
                     bool verify_ok = true;
