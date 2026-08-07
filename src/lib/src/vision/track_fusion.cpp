@@ -4,7 +4,9 @@
 #include <cmath>
 #include <cstddef>
 #include <iterator>
+#include <map>
 #include <optional>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -319,7 +321,31 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                 // mapping disagrees with the face permutation or is not a
                 // valid permutation, transplant as-is rather than corrupt
                 // content.
-                for (auto& [face, aggregator] : newer->second) {
+                // P6.15: STRONGEST EVIDENCE FIRST. The permutation is a
+                // bijection, so each target takes at most one candidate and
+                // this order changes nothing on its own - it exists so the
+                // duplicate refusal below arbitrates by evidence instead of
+                // by label number. When a relabelled epoch offers one
+                // physical colour under two labels (live-demo-p6-retry's
+                // sub-epoch 1002: the red face under labels 1 and 2, 8
+                // observations against 5), the copy that survives should be
+                // the better-supported one, not whichever label sorts
+                // lower.
+                std::vector<std::map<int, FaceAggregator>::iterator> transplant_order;
+                transplant_order.reserve(newer->second.size());
+                for (auto it = newer->second.begin(); it != newer->second.end(); ++it) {
+                    transplant_order.push_back(it);
+                }
+                std::stable_sort(transplant_order.begin(), transplant_order.end(),
+                                 [](const auto& a, const auto& b) {
+                                     if (a->second.converged() != b->second.converged()) {
+                                         return a->second.converged();
+                                     }
+                                     return a->second.observation_count() > b->second.observation_count();
+                                 });
+                for (const auto& entry : transplant_order) {
+                    const int face = entry->first;
+                    auto& aggregator = entry->second;
                     const int target = (*chosen_perm)[static_cast<std::size_t>(face)];
                     const auto incumbent = older->second.find(target);
                     const bool incumbent_yields =
@@ -331,6 +357,27 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                          (incumbent->second.observation_count() <
                               FaceAggregator::kMinObservations &&
                           aggregator.converged()));
+                    // P6.15: never plant a second copy of a colour the
+                    // target epoch already holds settled. The centre is
+                    // roll-invariant, so this reads the same before and
+                    // after the cell re-index below.
+                    bool duplicates_settled = false;
+                    if (aggregator.observation_count() >= static_cast<std::size_t>(kRegisterScoreFloor)) {
+                        const cv::Vec3f centre = aggregator.capture().lab[4];
+                        for (const auto& [other_id, other] : older->second) {
+                            if (other_id == target ||
+                                other.observation_count() < static_cast<std::size_t>(kRegisterScoreFloor)) {
+                                continue;
+                            }
+                            if (cv::norm(centre - other.capture().lab[4]) < kCrossSlotDuplicateLab) {
+                                duplicates_settled = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (duplicates_settled) {
+                        continue;
+                    }
                     if (incumbent == older->second.end() || incumbent_yields) {
                         std::array<int, 9> new_index_of_cell{};
                         std::array<bool, 9> cell_taken{};
@@ -363,6 +410,23 @@ RegistrationStats register_epochs(FusionStore& fusion) {
     return stats;
 }
 
+int distinct_converged_faces(const std::map<int, FaceAggregator>& faces) {
+    std::vector<cv::Vec3f> counted;
+    for (const auto& [face_id, aggregator] : faces) {
+        if (!aggregator.converged()) {
+            continue;
+        }
+        const cv::Vec3f centre = aggregator.capture().lab[4];
+        const bool duplicate = std::any_of(counted.begin(), counted.end(), [&](const cv::Vec3f& seen) {
+            return cv::norm(centre - seen) < kCrossSlotDuplicateLab;
+        });
+        if (!duplicate) {
+            counted.push_back(centre);
+        }
+    }
+    return static_cast<int>(counted.size());
+}
+
 BestSubEpoch best_sub_epoch(const FusionStore& fusion) {
     BestSubEpoch best;
     for (const auto& [epoch, faces] : fusion) {
@@ -372,10 +436,13 @@ BestSubEpoch best_sub_epoch(const FusionStore& fusion) {
             enough += aggregator.observation_count() >= FaceAggregator::kMinObservations ? 1 : 0;
             converged += aggregator.converged() ? 1 : 0;
         }
-        if (converged > best.converged || (converged == best.converged && enough > best.observed)) {
+        const int distinct = distinct_converged_faces(faces);
+        if (std::tuple(distinct, converged, enough) >
+            std::tuple(best.distinct, best.converged, best.observed)) {
             best.sub_epoch = epoch;
             best.observed = enough;
             best.converged = converged;
+            best.distinct = distinct;
         }
     }
     return best;

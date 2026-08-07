@@ -865,10 +865,15 @@ int ScanSession::frameHeight() const noexcept {
 
 int ScanSession::facesScanned() const {
     // Track mode (P6.12): the fusion store is the capture surface, so
-    // progress is the best registration-merged sub-epoch's CONVERGED face
-    // count (cached by maybeFinalizeTrackFusion) - the same quantity the
-    // finalize bar counts to six. Fusion faces are anonymous body ids
-    // exactly as router slots were, so the UI contract is unchanged.
+    // progress is the best registration-merged sub-epoch's DISTINCT
+    // converged face count (P6.15, cached by maybeFinalizeTrackFusion) -
+    // the same quantity the finalize bar counts to six. Distinct, not
+    // merely converged: measured on live-demo-p6-retry, two of the six
+    // converged slots held one physical face, so the ring read 6/6 for the
+    // rest of the session while completion was unreachable - a progress
+    // indicator that has stopped describing progress. Fusion faces are
+    // anonymous body ids exactly as router slots were, so the UI contract
+    // is unchanged.
     if (track_fusion_active_) {
         return track_fusion_faces_;
     }
@@ -2625,15 +2630,21 @@ void ScanSession::maybeFinalizeTrackFusion() {
     cube::vision::fusion::FusionStore registered = track_fusion_;
     const auto registration = cube::vision::fusion::register_epochs(registered);
     const auto best = cube::vision::fusion::best_sub_epoch(registered);
-    if (best.converged != track_fusion_faces_) {
-        track_fusion_faces_ = best.converged;
+    if (best.distinct != track_fusion_faces_) {
+        track_fusion_faces_ = best.distinct;
         emit facesScannedChanged();
     }
     log_slot_decision("fusion attempt sub=" + std::to_string(best.sub_epoch) + " observed=" +
                       std::to_string(best.observed) + "/6 converged=" + std::to_string(best.converged) +
+                      "/6 distinct=" + std::to_string(best.distinct) +
                       "/6 merges=" + std::to_string(registration.merges) +
                       " refusals=" + std::to_string(registration.refusals));
-    if (best.sub_epoch < 0 || best.converged < static_cast<int>(cube::model::face_count)) {
+    // P6.15: DISTINCT is the completion bar. Six converged slots holding
+    // five physical faces are five faces - resolve_colors refuses them
+    // (correctly, "no valid cube"), and the session would otherwise sit at
+    // a full ring emitting a colour-shaped retry banner for a scan that is
+    // simply missing a face.
+    if (best.sub_epoch < 0 || best.distinct < static_cast<int>(cube::model::face_count)) {
         return;
     }
 

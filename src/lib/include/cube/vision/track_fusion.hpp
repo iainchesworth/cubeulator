@@ -29,7 +29,15 @@
 // match). Registration (register_epochs) re-unifies generations by content
 // exactly as it re-unifies epochs; finalize picks the best sub-epoch
 // (best_sub_epoch).
+// P6.15: across a sub-epoch, the labels are six DISTINCT physical faces -
+// the cube's own physics, and the one invariant the per-slot takeover
+// detector structurally cannot see (kCrossSlotDuplicateLab). It is
+// enforced where a duplicate can be built (registration's transplant) and
+// counted where completion is decided (distinct_converged_faces, which
+// BestSubEpoch::distinct carries to both callers' finalize bars and to the
+// app's progress ring).
 
+#include <cube/vision/color_resolution.hpp>
 #include <cube/vision/temporal_fusion.hpp>
 
 #include <opencv2/core.hpp>
@@ -54,6 +62,50 @@ inline constexpr double kTrackCaptureFrontality = 0.4;
 // causes a spurious split; that is accepted and healed by registration's
 // drift-tolerant verify.
 inline constexpr double kTakeoverJumpLab = 24.0;
+
+// P6.15 CROSS-SLOT duplication bar: two slots this close hold ONE
+// physical face, whatever their labels say.
+//
+// The takeover detector above is PER-SLOT - "does this read still look
+// like what THIS label held?" - and a slip that moves a physical face
+// onto a label the era has not filled yet answers nothing at all: the
+// slot is empty, so there is no incumbent to disagree with. Measured on
+// live-demo-p6-retry, sub-epoch 1002: the red face fed label 1 for passes
+// 195-208, then (passes 226-232, after an 18-pass gap) the SAME face fed
+// label 2, which was empty - no split, and the era ended holding one
+// physical face under two identities 5.6 Lab apart. The per-slot trigger
+// did fire late and just missed: label 1's next read, at pass 254, was a
+// different face 23.7 Lab from its settled centre against the 24.0 bar -
+// and a split there would have come two labels too late anyway, because
+// the duplicate was already built. An adversarial review during P6.6
+// named this class in advance ("cross-slot same-face duplication -
+// invisible to a per-slot jump trigger"); the live clips are where it
+// finally showed.
+//
+// The bar is kMinCentreSeedSeparationLab, DERIVED not restated: the same
+// "two captured centres this close are one colour scanned twice" floor
+// resolve_colors seeds its clusters with, sitting below the measured
+// closest legitimate centre pair (kClosestCentrePairLab, red against
+// orange at 22.9). Two settled slots inside it cannot be two faces of a
+// standard cube - the cube's physics, not a tuned threshold - which is
+// exactly what color_resolution.hpp's header asks every "same physical
+// face" predicate in the stack to derive from.
+//
+// It is applied where a duplicate can be BUILT (register_epochs) and
+// where it must be CAUGHT (distinct_converged_faces), and deliberately
+// NOT at the feed. A feed-time version was implemented and measured: it
+// splits the generation the moment a face arrives under a second label,
+// which is tidier in principle and worse in fact - on the retry clip the
+// split stranded the red face in a generation registration's per-face
+// verify then refused (best candidate 1.10, refuted; best verified
+// candidate 26.30 against a 12.5 radius), finishing at FOUR distinct
+// faces where refusing the duplicating transplant alone finishes at five,
+// and it perturbed synth-occlusion's whole merge accounting (27->29
+// merges, 49->52 refusals, 33->51 splits) for no outcome change. Refusing
+// at the transplant is a no-op on all seven synthetic clips, so the store
+// keeps its evidence and the invariant still holds where it decides
+// anything.
+inline constexpr double kCrossSlotDuplicateLab = kMinCentreSeedSeparationLab;
 
 // P6.11 registration bars, re-derived by measurement in the decomposed
 // (hue-aware) cell cost by dumping best and runner-up candidate costs for
@@ -152,17 +204,46 @@ struct RegistrationStats {
 // Transplanted faces are cell-re-indexed through the same rotation used
 // for scoring (P6.6), so they shed their source-frame grid roll. Runs to
 // a fixed point; mutates the store in place.
+// P6.15: a transplant that would leave the target epoch holding one
+// physical colour under two labels is skipped (kCrossSlotDuplicateLab) -
+// the merge still commits for every face that does not duplicate, and
+// faces transplant strongest-evidence-first so the surviving copy of a
+// duplicated colour is the better-supported one rather than the lower
+// label. A relabel is a rotation of ONE cube, so a duplicate it produces
+// is evidence that this content does not belong in that slot; planting it
+// there only manufactures the era finalize must then refuse. Measured on
+// live-demo-p6-retry: the second copy of the red face used to take label
+// 0 and the era finished six converged slots holding five faces, which
+// resolve_colors refused as "no valid cube"; refusing that one transplant
+// leaves the same store reporting the honest five.
 RegistrationStats register_epochs(FusionStore& fusion);
 
 struct BestSubEpoch {
     int sub_epoch = -1;  // -1 = no sub-epoch carries any scored evidence
     int observed = 0;    // face ids with >= FaceAggregator::kMinObservations
     int converged = 0;   // ... that also passed the aggregator's convergence gate
+    // P6.15: ... counting one physical colour ONCE. Six converged slots
+    // are not six faces if two of them hold the same face, and the
+    // difference is the whole distance between "the scan is done" and "the
+    // scan can never finish" - the number a progress indicator may show
+    // and a completion gate may test.
+    int distinct = 0;
 };
 
-// "Best" = most converged aggregators (the photometric gate), ties to
-// most sufficiently-observed - one sub-epoch must carry all six faces,
-// the plan's identity-lifetime bar.
+// Converged slots of one sub-epoch that are DISTINCT physical faces:
+// converged slots in face-id order, each counted only when its fused
+// centre clears kCrossSlotDuplicateLab against every slot already
+// counted. Order-dependent among a mutually-close group and deliberately
+// so - it under-counts rather than over-counts, which is the fail-closed
+// direction for a completion test.
+[[nodiscard]] int distinct_converged_faces(const std::map<int, FaceAggregator>& faces);
+
+// "Best" = most DISTINCT converged faces (P6.15), ties to most converged
+// aggregators (the photometric gate), then to most sufficiently-observed
+// - one sub-epoch must carry all six faces, the plan's identity-lifetime
+// bar. Distinct leads because distance from a cube is what selection is
+// for: a five-face era is one face from finishing, a six-slot era holding
+// four faces is two, whatever its slot count says.
 [[nodiscard]] BestSubEpoch best_sub_epoch(const FusionStore& fusion);
 
 }  // namespace cube::vision::fusion
