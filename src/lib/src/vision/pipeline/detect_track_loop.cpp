@@ -97,7 +97,12 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
         ++frames_since_drop_;
     }
 
-    if (!live_ && result.pnp.has_value() && result.pnp->corners_used >= kInitMinCorners) {
+    // Anchor gate (P6.13): geometry (corner count) AND detection
+    // confidence - a hallucinated detection can be PnP-consistent, and a
+    // track anchored on one is then health-checked against the same
+    // hallucination (see the header's measurement).
+    if (!live_ && result.pnp.has_value() && result.pnp->corners_used >= kInitMinCorners &&
+        result.detection.confidence >= kAnchorMinConfidence) {
         if (tracker_->init(result.pnp->rvec, result.pnp->tvec, bgr_frame.size(),
                            camera_matrix_for(bgr_frame.size()))) {
             live_ = true;

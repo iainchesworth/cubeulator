@@ -99,6 +99,25 @@ struct DetectTrackResult {
 class DetectTrackLoop {
 public:
     static constexpr int kInitMinCorners = 5;
+    // Anchor confidence bar (P6.13): a track may only be BORN on a
+    // detection whose cube score clears this. The live-demo recording
+    // measured two cleanly separated anchor populations: with no cube in
+    // frame the detector still fires on face/hands/background at scores
+    // 0.25-0.77 (83 hallucinated anchors, median 0.42, max 0.773 - one
+    // outlier, next 0.669), and every one of them seeded a junk track
+    // that health could NOT catch (M3T anchors ON the hallucination, so
+    // the same hallucinated corners it is judged against agree with it -
+    // the fist window passed health at 0.13 for 119 frames and fed 95
+    // dark-grey windows into fusion). Every real-cube anchor across the
+    // live session and the seven-clip synthetic corpus scores 0.826+
+    // (live min 0.902; synthetic min 0.826, an exit-reentry
+    // re-acquisition). 0.80 splits the measured [0.773, 0.826] gap -
+    // thin, and honestly thin: 0.027 to the strongest hallucination,
+    // 0.026 to the weakest real re-anchor. Health keeps consuming
+    // detections BELOW this bar unchanged - an existing real track may
+    // be judged (and dropped) by marginal detections; it may not be
+    // seeded by one.
+    static constexpr float kAnchorMinConfidence = 0.80F;
     static constexpr double kHealthFailFrac = 0.15;
     // The streak is AGE-DEPENDENT because the two failure populations
     // need opposite responses (both measured on the synthetic corpus):

@@ -78,6 +78,11 @@ inline constexpr double kRegisterRadiusHue = 12.5;  // decomposed cost, min per-
 // - the era-3 bridge again, runner-up 18.7 against best 11.1 - which the
 // old bar of 8 refused; 7.0 sits between the measured 6.7 and 7.6 with
 // the same honesty note as the radius.
+// P6.13: when the primary selection refuses, registration retries the
+// same bars over the candidates the per-face verify does not refute - a
+// candidate whose shared centres disagree beyond kRegisterVerifyCentreLab
+// could never commit, so it must not crowd the margin either (rationale
+// and measurements at the retry in register_epochs).
 inline constexpr double kRegisterMarginHue = 7.0;  // best-vs-runner-up, same basis
 
 // P6.6 drift-tolerant per-face verify. The cell-cost radius and margin

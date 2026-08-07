@@ -173,11 +173,23 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                 // 108.5).
                 double best_cost = -1.0;
                 double second_cost = -1.0;
+                bool best_verified = false;
                 const std::array<int, 6>* best_perm = nullptr;
                 const cv::Matx33d* best_rotation = nullptr;
+                // P6.13 retry pass: the same selection restricted to
+                // candidates the per-face verify does not refute (below).
+                double best_v_cost = -1.0;
+                double second_v_cost = -1.0;
+                const std::array<int, 6>* best_v_perm = nullptr;
+                const cv::Matx33d* best_v_rotation = nullptr;
                 for (const auto& [rotation, perm] : face_permutations()) {
                     double cost = -1.0;  // min per-face mean cell cost
                     int shared = 0;
+                    // Per-candidate content refutation - the SAME
+                    // per-face centre verify the commit applies, asked of
+                    // every candidate during scoring (P6.13, see the
+                    // decision below).
+                    bool candidate_verified = true;
                     for (const auto& [face, aggregator] : newer->second) {
                         const auto newer_face = fused_face(aggregator);
                         if (!newer_face) {
@@ -192,6 +204,9 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                             continue;
                         }
                         ++shared;
+                        if (cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterVerifyCentreLab) {
+                            candidate_verified = false;
+                        }
                         double face_total = 0.0;
                         int face_cells = 0;
                         for (int cell = 0; cell < 9; ++cell) {
@@ -220,34 +235,63 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                     if (best_cost < 0.0 || cost < best_cost) {
                         second_cost = best_cost;
                         best_cost = cost;
+                        best_verified = candidate_verified;
                         best_perm = &perm;
                         best_rotation = &rotation;
                     } else if (second_cost < 0.0 || cost < second_cost) {
                         second_cost = cost;
                     }
+                    if (candidate_verified) {
+                        if (best_v_cost < 0.0 || cost < best_v_cost) {
+                            second_v_cost = best_v_cost;
+                            best_v_cost = cost;
+                            best_v_perm = &perm;
+                            best_v_rotation = &rotation;
+                        } else if (second_v_cost < 0.0 || cost < second_v_cost) {
+                            second_v_cost = cost;
+                        }
+                    }
                 }
                 // The bars: commit radius, margin over the runner-up, and
-                // per-face verify inside the merge below.
-                if (best_perm == nullptr || best_cost > kRegisterRadiusHue ||
-                    (second_cost >= 0.0 && second_cost - best_cost < kRegisterMarginHue)) {
-                    continue;
-                }
-                bool verify_ok = true;
-                for (const auto& [face, aggregator] : newer->second) {
-                    const auto newer_face = fused_face(aggregator);
-                    const auto older_it = older->second.find((*best_perm)[static_cast<std::size_t>(face)]);
-                    if (!newer_face || older_it == older->second.end()) {
-                        continue;
-                    }
-                    const auto older_face = fused_face(older_it->second);
-                    if (older_face &&
-                        cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterVerifyCentreLab) {
-                        verify_ok = false;  // shared centres disagree: refuse
-                        break;
+                // the per-face verify - exactly as before on the primary
+                // pass (identical winners, identical refusal accounting).
+                const std::array<int, 6>* chosen_perm = nullptr;
+                const cv::Matx33d* chosen_rotation = nullptr;
+                if (best_perm != nullptr && best_cost <= kRegisterRadiusHue &&
+                    (second_cost < 0.0 || second_cost - best_cost >= kRegisterMarginHue)) {
+                    if (best_verified) {
+                        chosen_perm = best_perm;
+                        chosen_rotation = best_rotation;
+                    } else {
+                        ++stats.refusals;  // shared centres disagree: refuse
                     }
                 }
-                if (!verify_ok) {
-                    ++stats.refusals;
+                // P6.13 retry: when the primary pass refuses, re-select
+                // among candidates the per-face verify would not refute.
+                // A candidate whose shared centres disagree beyond
+                // kRegisterVerifyCentreLab can never commit - the winner
+                // check above has always enforced that - so it should not
+                // crowd the margin either. Measured on the live-demo
+                // session: an island holding a converged blue face could
+                // not join the main epoch because three of the four rolls
+                // that matched its near-uniform shared yellow face within
+                // 0.1 cost mapped blue onto the settled green/orange/red
+                // slots (centre disagreement 56-80 Lab, each refutable),
+                // leaving margin 0.03 against candidates that could never
+                // commit; the one surviving roll is the cube's own
+                // structure forcing the move, and it commits at margin
+                // 30.0. On the seven-clip synthetic corpus this retry
+                // changes NOTHING: every clip's merges, refusals and
+                // final store are identical (occlusion's 49 refusals all
+                // stand, and all its ambiguous thin pairs stay refused -
+                // their competing rolls land on slots without data, which
+                // no verify can refute).
+                if (chosen_perm == nullptr && best_v_perm != nullptr && best_v_cost <= kRegisterRadiusHue &&
+                    (second_v_cost < 0.0 || second_v_cost - best_v_cost >= kRegisterMarginHue)) {
+                    chosen_perm = best_v_perm;
+                    chosen_rotation = best_v_rotation;
+                }
+                if (chosen_perm == nullptr) {
                     continue;
                 }
                 // Merge: transplant relabelled faces the older epoch
@@ -276,7 +320,7 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                 // valid permutation, transplant as-is rather than corrupt
                 // content.
                 for (auto& [face, aggregator] : newer->second) {
-                    const int target = (*best_perm)[static_cast<std::size_t>(face)];
+                    const int target = (*chosen_perm)[static_cast<std::size_t>(face)];
                     const auto incumbent = older->second.find(target);
                     const bool incumbent_yields =
                         incumbent != older->second.end() &&
@@ -292,7 +336,7 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                         std::array<bool, 9> cell_taken{};
                         bool mapping_ok = true;
                         for (int cell = 0; cell < 9 && mapping_ok; ++cell) {
-                            const auto [face_old, cell_old] = map_cell(*best_rotation, face, cell);
+                            const auto [face_old, cell_old] = map_cell(*chosen_rotation, face, cell);
                             if (face_old != target || cell_old < 0 || cell_old > 8 ||
                                 cell_taken[static_cast<std::size_t>(cell_old)]) {
                                 mapping_ok = false;
