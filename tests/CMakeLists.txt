@@ -111,7 +111,11 @@ add_executable(cube_integration_tests
     # Hardware verification of the lock's effect on real pixels: hidden
     # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
     # double fence as the probe above.
-    integration/camera_lock_verification_test.cpp)
+    integration/camera_lock_verification_test.cpp
+    # Detector + tracking loop together on a committed capture frame: it
+    # needs the deployed ONNX model beside the binary, which is exactly
+    # what this suite (unlike the fast unit one) arranges below.
+    integration/refine_cadence_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -130,6 +134,12 @@ target_link_libraries(cube_integration_tests
 # which uses the same MSVC CRT headers.
 target_compile_definitions(cube_integration_tests PRIVATE
     "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
+
+# Committed capture frames (tests/data) are inputs, not deployables - the
+# refine-cadence test reads one from the source tree rather than have the
+# build copy binary fixtures next to every test binary.
+target_compile_definitions(cube_integration_tests PRIVATE
+    "CUBE_TEST_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\"")
 
 cube_deploy_sanitizer_runtime(cube_integration_tests)
 cube_deploy_vision_assets(cube_integration_tests)

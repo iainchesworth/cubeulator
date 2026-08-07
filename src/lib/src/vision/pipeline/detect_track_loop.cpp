@@ -224,12 +224,50 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // failed) - the region modality re-converges to its own
             // optimum from wherever it is put, so the nudge buys nothing
             // steady-state and perturbs exactly the fragile phases.
-            // Gated on THIS frame's detection having found the cube: a
-            // track survives a full exit unmeasurable (no corners means
-            // no health), and an ungated refiner then polishes
-            // background clutter. (Live detector decimation dilutes
-            // refine cadence to the detect frames; revisit at the P2.9
-            // live gates if that shows.)
+            // Runs on every LIVE frame, not only detect frames (P6.14).
+            // The constraint is downstream: derive_faces, cell sampling
+            // and fusion all read the OUTPUT pose, so refine cadence has
+            // to follow the frames that FEED reads, and those are the
+            // live frames. The app decimates the detector to 1 frame in
+            // 3 while locked (scan_session.cpp), so the old
+            // detection-found gate polished one fused observation in
+            // three and sampled the other two from an unrefined, drifted
+            // pose - cross-frame Lab jitter that fragmented fusion into
+            // extra generations. Measured on the live-demo retry clip
+            // through the app: gated 150 refines / 3 converged faces,
+            // ungated 468 refines (offline runner parity 461) / 6
+            // converged, on an IDENTICAL 4 anchors and an identical
+            // tracked fraction - the anchor and health machinery never
+            // moved, which is what identifies refine cadence as the
+            // mechanism rather than anything about locking. Cost, measured
+            // on the same replay: median pass 3.6 -> 4.4 ms, p95 30.7 ->
+            // 32.2 ms, tracked fraction unchanged. Two alternatives were
+            // measured and rejected: dropping the detector interval to 1
+            // also reaches 6/6 but costs +27 ms median, and scaling the
+            // health-fail streak by the decimation constant reached only
+            // 4/6 while keying live behaviour to a constant the real
+            // camera cadence diverges from.
+            //
+            // What the detection gate was protecting against - a track
+            // that survives the cube's full exit unmeasurable (no
+            // corners means no health) while the refiner polishes
+            // background clutter - is covered by the refiner's OWN
+            // guards, which are the caps that make it refine and never
+            // anchor: 12 matched edge points minimum, a search window
+            // under half a projected sticker cell, 6 degrees and 0.15
+            // model units of total movement. A cube-absent frame either
+            // fails to match (refused, pose untouched) or moves the pose
+            // less than the cap. Measured on the exit clip
+            // (live-demo-p6: the cube leaves permanently at frame ~578 of
+            // 1567) - over the 989 post-exit frames the 51 live ones took
+            // 12 extra refinements they used to skip, and NOTHING else
+            // moved: liveness, anchors (25), epochs, derived faces, read
+            // grade and unknown cells are frame-for-frame identical
+            // across the whole clip, and the largest post-exit update
+            // stayed at 4.5 of the 6 permitted degrees. On the synthetic
+            // corpus every one of the 179 extra calls was refused for too
+            // few matches - offline, where the detector runs every frame,
+            // this is a no-op (all seven clips byte-identical).
             //
             // Health below judges the RAW stepped pose, not the refined
             // one: health is a statement about the TRACKER's state, and
@@ -239,7 +277,7 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // extra quarter-turn slip. Downstream consumers get the
             // refined pose; the drop/re-anchor decision stays keyed to
             // what the tracker itself believes.
-            if (refine_enabled_ && result.detection.found) {
+            if (refine_enabled_) {
                 const auto refined =
                     refine_pose(bgr_frame, result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
                 result.refine_matches = refined.matches;
