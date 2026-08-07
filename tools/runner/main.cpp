@@ -19,6 +19,7 @@
 #include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/temporal_fusion.hpp>
+#include <cube/vision/track_fusion.hpp>
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
@@ -1124,22 +1125,13 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // locked-and-correct frame - or marking it failed (-1) if the cube
     // goes absent again (or the clip ends) first.
     int track_pinned_perm = -1;
-    // P6.1 fusion: pose-derived reads per (sub-epoch, model-frame face
-    // id) through the SAME FaceAggregator the app's capture path uses -
-    // its window/convergence machinery is the photometric commit gate
-    // the plan keeps.
-    // P6.6: the outer key is a CONTENT-KEYED SUB-EPOCH, gauge_epoch *
-    // 1000 + generation. A quarter-turn slip the tracker survives (no
-    // drop, no epoch bump) refills existing face-id slots with a
-    // different physical face, and the 8-deep ring evicts the old
-    // evidence - measured destroying the only shared-face content two
-    // epochs had. The feed-time takeover detector below bumps the
-    // generation instead, freezing the whole label set (a slip moves
-    // every label simultaneously, so one slot's takeover invalidates
-    // them all - including slots whose own centres happened to match).
-    // Registration (P6.3) re-unifies generations by content exactly as
-    // it re-unifies epochs; finalize picks the best sub-epoch.
-    std::map<int, std::map<int, cube::vision::FaceAggregator>> fusion;
+    // P6.1/P6.6 fusion store + per-epoch generation counters. The store's
+    // shape, the content-keyed sub-epoch scheme, the takeover detector
+    // and the registration pass all live in cube/vision/track_fusion.hpp
+    // since P6.12 - ONE definition shared with the live app's track-mode
+    // capture path (scan_session.cpp); the rationale comments moved with
+    // the code.
+    cube::vision::fusion::FusionStore fusion;
     // Current generation per gauge_epoch (starts at 0).
     std::map<int, int> fusion_generation;
     const auto manifest = recording::read_manifest(dir.string());
@@ -1215,18 +1207,11 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         // --- P6.1: fusion feed -----------------------------------------
         // Capture-grade tracked faces' per-cell reads accumulate under
         // their epoch-local identity; a sampled centre (purity > 0) is
-        // the "this face was really read" proxy.
-        // P6.6 takeover detector: an incoming centre further than
-        // kTakeoverJumpLab from a settled slot's fused centre means a
-        // different physical face took the label over (a slip the
-        // tracker survived) - bump this gauge_epoch's generation so the
-        // frozen sub-epoch keeps its evidence and ALL subsequent feeds
-        // for the epoch land in the new one. A legitimate same-face
-        // illumination jump (measured up to 31.9 Lab across a
-        // visibility gap) causes a spurious split; that is accepted and
-        // healed by registration's drift-tolerant verify.
+        // the "this face was really read" proxy. The content-keyed
+        // sub-epoch and its feed-time takeover detector are the shared
+        // implementation (track_fusion.hpp) - the app's live feed applies
+        // the identical conditions and the identical add.
         if (result.track.pose_source == "m3t" && result.track.phase == pipeline::TrackPhase::locked) {
-            constexpr double kTakeoverJumpLab = 24.0;
             for (std::size_t f = 0; f < result.track_faces.size() && f < result.faces.faces.size(); ++f) {
                 if (!result.faces.faces[f].capture_grade || result.samples.faces[f].purity[4] <= 0.0F) {
                     continue;
@@ -1234,19 +1219,9 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 cube::vision::FaceObservation observation;
                 observation.lab = result.samples.faces[f].lab;
                 observation.cell_purity = result.samples.faces[f].purity;
-                int& generation = fusion_generation[result.gauge_epoch];
-                int sub = result.gauge_epoch * 1000 + generation;
-                const auto faces_it = fusion.find(sub);
-                if (faces_it != fusion.end()) {
-                    const auto slot = faces_it->second.find(result.track_faces[f].face);
-                    if (slot != faces_it->second.end() && slot->second.observation_count() >= 2 &&
-                        cv::norm(observation.lab[4] - slot->second.capture().lab[4]) > kTakeoverJumpLab) {
-                        ++generation;
-                        ++metrics.fusion_generation_splits;
-                        sub = result.gauge_epoch * 1000 + generation;
-                    }
-                }
-                fusion[sub][result.track_faces[f].face].add(observation);
+                const auto fed = cube::vision::fusion::add_observation(
+                    fusion, fusion_generation, result.gauge_epoch, result.track_faces[f].face, observation);
+                metrics.fusion_generation_splits += fed.generation_split ? 1 : 0;
             }
         }
 
@@ -1400,368 +1375,28 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     }
 
     // --- P6.3: content-based cross-epoch registration ------------------
-    // An unstitchable drop (snap angle at the basin midpoint) severs
-    // identity that CONTENT can restore: two epochs' fused faces are the
-    // same physical stickers, and the relabel between them must be one
-    // of the 24 cube rotations' face permutations. Each candidate is
-    // scored cell-level in the shading-tolerant decomposed cost (P6.11,
-    // see cell_cost below); the re-derived registration bars apply -
-    // commit radius, margin over the runner-up candidate, minimum
-    // shared faces - and the router's invariants
-    // hold: never-overwrite (a SETTLED face present in both epochs
-    // keeps the older epoch's aggregator; a thin incumbent yields, see
-    // the merge below) and verify (a shared face disagreeing beyond
-    // the radius refuses the whole merge).
+    // The whole pass - candidate scoring in the hue-aware decomposed cell
+    // cost, the P6.11 radius/margin bars, drift-tolerant verify,
+    // never-overwrite with incumbent-yield, and cell re-indexing on
+    // transplant - is the shared implementation in track_fusion.cpp
+    // (P6.12), where its measurement rationale moved with it. The app's
+    // live completion path runs the identical pass.
     {
-        // The radius and margin judge the BEST-SUPPORTED shared face -
-        // the minimum per-face mean cell cost - never a pool over all
-        // shared faces. Shared faces are not equally trustworthy, and a
-        // pool lets the worst one out-vote the best: measured on the
-        // sweep (pre-P6.11, in the plain-Lab cost the scorer then used),
-        // a 2-observation face fused from mixed-pixel grazing
-        // samples costs 45.7 Lab against its own physical face while a
-        // converged shared face costs 9.2, and the pooled 27.4 blew the
-        // radius, refusing a true merge that commits at 9.2. One clean
-        // face's nine cells are the discriminating evidence (see the
-        // shortlist note below); a corrupt companion face still gets
-        // its veto through the per-face verify, not through the score.
-        //
-        // P6.11 bars, re-derived by measurement in the decomposed cost
-        // (cell_cost below) by dumping best and runner-up candidate
-        // costs for every pair evaluation across the seven-clip corpus.
-        // TRUE bridges - freerot's two merges, occlusion's twenty-seven
-        // re-acquisitions, both sweeps' hold boundaries, and
-        // sweep_gentle's era-3 bridge that plain Lab refused at 24.8 -
-        // top out at 11.1, and that maximum IS the era-3 bridge:
-        // grazing-oblique against face-on, the largest same-sticker
-        // drift the corpus produces. The nearest best cost any WRONG
-        // pairing produces is 13.7 (exit-reentry's 3000<-3001, which
-        // its 1.8 margin refuses anyway); every other wrong best is
-        // 20.8 or beyond. 12.5 splits the measured gap - thin, and
-        // honestly thin: the gap itself is only 2.6 wide, so the radius
-        // is one more grazing-vs-face-on era away from needing the
-        // margin and verify to carry a refusal alone.
-        constexpr double kRegisterRadiusHue = 12.5;  // decomposed cost, min per-face mean
-        // Margin over the runner-up candidate, same min-face basis. Its
-        // job is ambiguity, not distance: a near-uniform shared face
-        // matches several rolls almost equally (occlusion pairs measure
-        // margins 0.0-6.7, the widest 1003<-1025), and committing one
-        // would scramble cell indices on a coin-flip rotation. The
-        // thinnest margin any genuine commit shows is 7.6 - the era-3
-        // bridge again, runner-up 18.7 against best 11.1 - which the
-        // old bar of 8 refused; 7.0 sits between the measured 6.7 and
-        // 7.6 with the same honesty note as the radius.
-        constexpr double kRegisterMarginHue = 7.0;   // best-vs-runner-up, same basis
-        // P6.6 drift-tolerant per-face verify. The cell-cost radius and
-        // margin above are the real bars; the per-face centre check is a
-        // structural backstop against merging different physical faces,
-        // not a second radius. Measured same-face illumination drift
-        // across a visibility gap runs 21-32 Lab (which the old
-        // kRegisterRadius bound refused, making a spurious generation
-        // split unhealable), while the minimum cross-face centre
-        // separation is 57.3 Lab - 40 sits between them. Unlike the
-        // score, verify spans ALL shared faces, including ones too
-        // corrupt to carry the score: the sweep's grazing-sample face
-        // verifies at 34.2 and correctly does not veto, while a genuine
-        // different-face pairing still trips the 57.3 floor.
-        constexpr double kRegisterVerifyCentreLab = 40.0;
-        // The 24 rotations' face permutations, built once (same math as
-        // the loop's stitch helpers).
-        static const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>> face_perms = [] {
-            const cv::Matx33d rot_y(0, 0, 1, 0, 1, 0, -1, 0, 0);
-            const cv::Matx33d rot_z(0, -1, 0, 1, 0, 0, 0, 0, 1);
-            std::vector<cv::Matx33d> rotations{cv::Matx33d::eye()};
-            for (std::size_t i = 0; i < rotations.size(); ++i) {
-                for (const auto& generator : {rot_y, rot_z}) {
-                    const cv::Matx33d candidate = generator * rotations[i];
-                    const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33d& r) {
-                        return cv::norm(r - candidate) < 0.1;
-                    });
-                    if (!known) {
-                        rotations.push_back(candidate);
-                    }
-                }
-            }
-            std::vector<std::pair<cv::Matx33d, std::array<int, 6>>> perms;
-            for (const auto& rotation : rotations) {
-                std::array<int, 6> perm{};
-                for (int face = 0; face < 6; ++face) {
-                    cv::Vec3d axis(0, 0, 0);
-                    axis[face / 2] = (face % 2 == 0) ? 1.0 : -1.0;
-                    const cv::Vec3d mapped = rotation * axis;
-                    for (int target = 0; target < 3; ++target) {
-                        if (std::abs(mapped[target]) > 0.9) {
-                            perm[static_cast<std::size_t>(face)] = target * 2 + (mapped[target] > 0 ? 0 : 1);
-                        }
-                    }
-                }
-                perms.emplace_back(rotation, perm);
-            }
-            return perms;
-        }();
-        // Registration SCORING floor, deliberately below the capture bar
-        // (kMinObservations=4): a face seen for just 2 frames while the
-        // cube transits between holds is still content evidence - the two
-        // reads must agree with each other AND the radius/margin/verify
-        // bars still apply - and it can be the ONLY face two epochs
-        // share. Measured on the sweep (P6.11 decomposed cost): the
-        // boundary face has 2 obs at 4.1 mean against the older epoch's
-        // 46-obs fusion, with the best wrong candidate at 18.5. Final
-        // selection and capture stay
-        // on kMinObservations; never-overwrite keeps thin content out of
-        // the assembled result.
-        constexpr int kRegisterScoreFloor = 2;
-        const auto fused_face = [](const cube::vision::FaceAggregator& aggregator)
-            -> std::optional<cube::vision::CapturedFace> {
-            if (aggregator.observation_count() < kRegisterScoreFloor) {
-                return std::nullopt;
-            }
-            return aggregator.capture();
-        };
-        // P6.11: the cell cost is the P6.7 decomposed metric, not plain
-        // Lab. Two fused reads of the SAME sticker taken in different
-        // gauge eras differ by illumination, and illumination acts as a
-        // near-scalar on the whole Lab vector (the resolve-side
-        // measurement, see assignment_distance in color_resolution.cpp):
-        // sweep_gentle's era-3 bridge face was read grazing-oblique in
-        // one era and face-on in the other under the fixed light, and
-        // the same nine stickers scored 24.8 plain Lab - outside any
-        // honest plain-Lab radius. What shading does not move is the hue
-        // direction, so lightness and chroma share the down-weight and
-        // the hue residual keeps full weight. The weight is 0.2 by the
-        // resolve-side derivation (mid-plateau between the shading cliff
-        // at 1.0 and the white-collapse cliff at 0.0); reimplemented
-        // locally rather than exported because color_resolution's
-        // constants were measured against ITS callers, and a shared
-        // symbol would couple two independently-derived bars.
-        const auto cell_cost = [](const cv::Vec3f& a, const cv::Vec3f& b) -> double {
-            constexpr double kShadingAxisWeight = 0.2;
-            const double dl = a[0] - b[0];
-            const double da = a[1] - b[1];
-            const double db = a[2] - b[2];
-            const double dc = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
-            // |dc| <= sqrt(da^2+db^2) by the reverse triangle
-            // inequality; the clamp guards rounding.
-            const double dh_squared = std::max(0.0, da * da + db * db - dc * dc);
-            return std::sqrt(kShadingAxisWeight * (dl * dl + dc * dc) + dh_squared);
-        };
-        // Cell index mapping under a candidate rotation (newer-frame ->
-        // older-frame): a cell's 3-D centre in the newer model frame maps
-        // through the rotation and decomposes on the older face's local
-        // (u, v) axes - the roll falls out of the geometry, no dihedral
-        // search. Outside-view (u, v) per face_projection.cpp: the cyclic
-        // pair on negative faces, swapped on positive ones.
-        const auto map_cell = [](const cv::Matx33d& rotation, int face_new, int cell) -> std::pair<int, int> {
-            const int axis_n = face_new / 2;
-            const double sign_n = (face_new % 2 == 0) ? 1.0 : -1.0;
-            const int u_n = (face_new % 2 == 0) ? (axis_n + 2) % 3 : (axis_n + 1) % 3;
-            const int v_n = (face_new % 2 == 0) ? (axis_n + 1) % 3 : (axis_n + 2) % 3;
-            cv::Vec3d p(0, 0, 0);
-            p[axis_n] = sign_n;
-            p[u_n] = (cell % 3 - 1) * (2.0 / 3.0);
-            p[v_n] = (cell / 3 - 1) * (2.0 / 3.0);
-            const cv::Vec3d q = rotation * p;
-            int face_old = -1;
-            for (int axis = 0; axis < 3; ++axis) {
-                if (std::abs(q[axis]) > 0.9) {
-                    face_old = axis * 2 + (q[axis] > 0 ? 0 : 1);
-                }
-            }
-            if (face_old < 0) {
-                return {-1, -1};
-            }
-            const int axis_o = face_old / 2;
-            const int u_o = (face_old % 2 == 0) ? (axis_o + 2) % 3 : (axis_o + 1) % 3;
-            const int v_o = (face_old % 2 == 0) ? (axis_o + 1) % 3 : (axis_o + 2) % 3;
-            const int col = static_cast<int>(std::lround(q[u_o] * 1.5)) + 1;
-            const int row = static_cast<int>(std::lround(q[v_o] * 1.5)) + 1;
-            if (col < 0 || col > 2 || row < 0 || row > 2) {
-                return {-1, -1};
-            }
-            return {face_old, row * 3 + col};
-        };
-        bool merged_any = true;
-        while (merged_any && fusion.size() > 1) {
-            merged_any = false;
-            for (auto older = fusion.begin(); older != fusion.end() && !merged_any; ++older) {
-                for (auto newer = std::next(older); newer != fusion.end() && !merged_any; ++newer) {
-                    // Content decides across ALL 24 candidates: one
-                    // shared face's NINE cells discriminate by
-                    // themselves (a wrong relabel scrambles the grid).
-                    // The geometric shortlist became unnecessary once
-                    // scoring went cell-level - and a >65-degree drift
-                    // put the true relabel outside it anyway (measured
-                    // pre-P6.11 in plain Lab: both shortlist candidates
-                    // cost >114 while the 1<-2 merge chose 6.9 vs 108.5).
-                    double best_cost = -1.0;
-                    double second_cost = -1.0;
-                    const std::array<int, 6>* best_perm = nullptr;
-                    const cv::Matx33d* best_rotation = nullptr;
-                    for (const auto& [rotation, perm] : face_perms) {
-                        double cost = -1.0;  // min per-face mean cell cost
-                        int shared = 0;
-                        for (const auto& [face, aggregator] : newer->second) {
-                            const auto newer_face = fused_face(aggregator);
-                            if (!newer_face) {
-                                continue;
-                            }
-                            const auto older_it = older->second.find(perm[static_cast<std::size_t>(face)]);
-                            if (older_it == older->second.end()) {
-                                continue;
-                            }
-                            const auto older_face = fused_face(older_it->second);
-                            if (!older_face) {
-                                continue;
-                            }
-                            ++shared;
-                            double face_total = 0.0;
-                            int face_cells = 0;
-                            for (int cell = 0; cell < 9; ++cell) {
-                                const auto [face_old, cell_old] = map_cell(rotation, face, cell);
-                                if (face_old != perm[static_cast<std::size_t>(face)] || cell_old < 0) {
-                                    continue;
-                                }
-                                face_total += cell_cost(newer_face->lab[static_cast<std::size_t>(cell)],
-                                                        older_face->lab[static_cast<std::size_t>(cell_old)]);
-                                ++face_cells;
-                            }
-                            // Only a full nine-cell grid may carry the
-                            // score: a partially mapped face is a
-                            // geometry inconsistency, not evidence.
-                            if (face_cells < 9) {
-                                continue;
-                            }
-                            const double face_cost = face_total / face_cells;
-                            if (cost < 0.0 || face_cost < cost) {
-                                cost = face_cost;
-                            }
-                        }
-                        if (shared < 1 || cost < 0.0) {
-                            continue;
-                        }
-                        if (best_cost < 0.0 || cost < best_cost) {
-                            second_cost = best_cost;
-                            best_cost = cost;
-                            best_perm = &perm;
-                            best_rotation = &rotation;
-                        } else if (second_cost < 0.0 || cost < second_cost) {
-                            second_cost = cost;
-                        }
-                    }
-                    // The bars: commit radius, margin over the runner-up,
-                    // and per-face verify inside the merge below.
-                    if (best_perm == nullptr || best_cost > kRegisterRadiusHue ||
-                        (second_cost >= 0.0 && second_cost - best_cost < kRegisterMarginHue)) {
-                        continue;
-                    }
-                    bool verify_ok = true;
-                    for (const auto& [face, aggregator] : newer->second) {
-                        const auto newer_face = fused_face(aggregator);
-                        const auto older_it =
-                            older->second.find((*best_perm)[static_cast<std::size_t>(face)]);
-                        if (!newer_face || older_it == older->second.end()) {
-                            continue;
-                        }
-                        const auto older_face = fused_face(older_it->second);
-                        if (older_face &&
-                            cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterVerifyCentreLab) {
-                            verify_ok = false;  // shared centres disagree: refuse
-                            break;
-                        }
-                    }
-                    if (!verify_ok) {
-                        ++metrics.register_refusals;
-                        continue;
-                    }
-                    // Merge: transplant relabelled faces the older epoch
-                    // lacks; NEVER overwrite settled ones it has.
-                    // Never-overwrite protects settled evidence, not
-                    // thin evidence. An incumbent still below the
-                    // capture bar (FaceAggregator::kMinObservations)
-                    // yields to a transplant that has already
-                    // converged() - the candidate cleared radius,
-                    // margin and verify to get here, the incumbent
-                    // cleared nothing but arrival order: measured on
-                    // the sweep, a 2-obs unconverged incumbent (the
-                    // same mixed-pixel grazing reads scored above)
-                    // otherwise kept its slot against an 8-obs
-                    // converged read of the same face, and the epoch
-                    // finished a face short. A sub-floor incumbent
-                    // (fewer than kRegisterScoreFloor observations -
-                    // too thin to have participated in scoring or
-                    // verify, an unverified stray read) yields to any
-                    // floor-clearing transplant: a 1-obs stray
-                    // otherwise blocks an 8-obs converged face and the
-                    // merge transplants nothing.
-                    // P6.6: re-index each transplanted face's cells
-                    // through the SAME map_cell used for scoring, so it
-                    // sheds its source-frame grid roll (otherwise
-                    // absorbed by assembly's per-face search but
-                    // defeating rotation-hint digits and
-                    // cross-generation cell comparisons). If the mapping
-                    // disagrees with the face permutation or is not a
-                    // valid permutation, transplant as-is rather than
-                    // corrupt content.
-                    for (auto& [face, aggregator] : newer->second) {
-                        const int target = (*best_perm)[static_cast<std::size_t>(face)];
-                        const auto incumbent = older->second.find(target);
-                        const bool incumbent_yields =
-                            incumbent != older->second.end() &&
-                            ((incumbent->second.observation_count() <
-                                  static_cast<std::size_t>(kRegisterScoreFloor) &&
-                              aggregator.observation_count() >=
-                                  static_cast<std::size_t>(kRegisterScoreFloor)) ||
-                             (incumbent->second.observation_count() <
-                                  cube::vision::FaceAggregator::kMinObservations &&
-                              aggregator.converged()));
-                        if (incumbent == older->second.end() || incumbent_yields) {
-                            std::array<int, 9> new_index_of_cell{};
-                            std::array<bool, 9> cell_taken{};
-                            bool mapping_ok = true;
-                            for (int cell = 0; cell < 9 && mapping_ok; ++cell) {
-                                const auto [face_old, cell_old] = map_cell(*best_rotation, face, cell);
-                                if (face_old != target || cell_old < 0 || cell_old > 8 ||
-                                    cell_taken[static_cast<std::size_t>(cell_old)]) {
-                                    mapping_ok = false;
-                                    break;
-                                }
-                                cell_taken[static_cast<std::size_t>(cell_old)] = true;
-                                new_index_of_cell[static_cast<std::size_t>(cell)] = cell_old;
-                            }
-                            if (mapping_ok) {
-                                aggregator.relabel_cells(new_index_of_cell);
-                            }
-                            if (incumbent != older->second.end()) {
-                                older->second.erase(incumbent);
-                            }
-                            older->second.emplace(target, std::move(aggregator));
-                        }
-                    }
-                    fusion.erase(newer);
-                    ++metrics.register_merges;
-                    merged_any = true;
-                }
-            }
-        }
+        const auto registration = cube::vision::fusion::register_epochs(fusion);
+        metrics.register_merges += registration.merges;
+        metrics.register_refusals += registration.refusals;
     }
 
     // --- P6.1 finalize: best sub-epoch -> resolve -> assemble -> oracle ---
     // "Best" = most converged aggregators (the photometric gate), ties
     // to most sufficiently-observed - one sub-epoch must carry all six
-    // faces, the plan's identity-lifetime bar.
-    for (const auto& [epoch, faces] : fusion) {
-        int enough = 0;
-        int converged = 0;
-        for (const auto& [face_id, aggregator] : faces) {
-            enough += aggregator.observation_count() >= cube::vision::FaceAggregator::kMinObservations ? 1 : 0;
-            converged += aggregator.converged() ? 1 : 0;
-        }
-        if (converged > metrics.fusion_epoch_converged ||
-            (converged == metrics.fusion_epoch_converged && enough > metrics.fusion_epoch_faces)) {
-            metrics.fusion_best_epoch = epoch;
-            metrics.fusion_epoch_faces = enough;
-            metrics.fusion_epoch_converged = converged;
-        }
+    // faces, the plan's identity-lifetime bar (shared selection,
+    // track_fusion.hpp).
+    {
+        const auto best = cube::vision::fusion::best_sub_epoch(fusion);
+        metrics.fusion_best_epoch = best.sub_epoch;
+        metrics.fusion_epoch_faces = best.observed;
+        metrics.fusion_epoch_converged = best.converged;
     }
     const std::optional<cube::solver::Cube> oracle =
         (manifest.has_value() && manifest->state.has_value()) ? manifest_cube(*manifest->state) : std::nullopt;

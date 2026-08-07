@@ -60,6 +60,7 @@ target_sources(cube_lib
         src/vision/face_grid_fit.cpp
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
+        src/vision/track_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp

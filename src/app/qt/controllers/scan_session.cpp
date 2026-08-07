@@ -8,13 +8,13 @@
 #include <cube/model/face.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/capture_gates.hpp>
+#include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/recording_v2.hpp>
 #ifdef CUBE_HAVE_M3T
 #include <cube/track_m3t/m3t_pose_tracker.hpp>
 #include <cube/vision/corner_detector.hpp>
-#include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/pipeline/detect_track_loop.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -247,6 +247,29 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
         manifest.camera = qEnvironmentVariable("CUBE_VISION_RECORD_CAMERA").toStdString();
         manifest.cube = qEnvironmentVariable("CUBE_VISION_RECORD_CUBE").toStdString();
         QDir().mkpath(dir);
+        // P6.12: stamp the ACTIVE intrinsics into the clip. The tracking
+        // loop runs under CUBE_VISION_INTRINSICS (see live_m3t_lock); a
+        // clip recorded without them replays under the f=width
+        // approximation and scores a DIFFERENT pipeline than the one the
+        // session actually ran - the manifest.intrinsics field existed for
+        // exactly this and was never written. The calibration is copied
+        // into the clip (self-contained, the runner's load_clip_intrinsics
+        // reads <dir>/intrinsics.txt) and referenced from the manifest.
+        if (const QString intrinsics_path = qEnvironmentVariable("CUBE_VISION_INTRINSICS");
+            !intrinsics_path.isEmpty()) {
+            if (const auto intrinsics = cube::vision::read_intrinsics(intrinsics_path.toStdString());
+                intrinsics.has_value()) {
+                const std::string copy_path = QDir(dir).absolutePath().toStdString() + "/intrinsics.txt";
+                if (const auto problem = cube::vision::write_intrinsics(copy_path, *intrinsics); !problem) {
+                    manifest.intrinsics = "intrinsics.txt";
+                } else {
+                    qWarning("ScanSession: recording could not stamp intrinsics: %s", problem->c_str());
+                }
+            } else {
+                qWarning("ScanSession: CUBE_VISION_INTRINSICS set but unreadable at record time: %s",
+                         qUtf8Printable(intrinsics_path));
+            }
+        }
         if (const auto problem = recorder.start(QDir(dir).absolutePath().toStdString(), manifest)) {
             qWarning("ScanSession: recording REFUSED: %s", problem->c_str());
         }
@@ -270,12 +293,18 @@ bool track_mode_degraded = false;  // worker-side, single-in-flight
 }
 
 // Everything a tracking pass hands back to analyze(): the pose while
-// live, plus the raw translation and HUD facts either way.
+// live, plus the raw translation and HUD facts either way - and, since
+// P6.12, the capture surface: this pass's capture-grade tracked faces
+// sampled to per-cell Lab (the runner's stage D-F composition, run live)
+// with the identity facts the GUI-side fusion feed keys on.
 struct LiveTrackSample {
     std::optional<cube::vision::CubePoseProjection> pose;
     cv::Vec3d tvec{};
     double health_frac = -1.0;
     int reinits = 0;
+    bool locked = false;      // M3T live and stepped this pass
+    int gauge_epoch = -1;     // the loop's content-identity epoch
+    std::vector<cube::vision::fusion::TrackedFaceRead> faces;
 };
 
 // The live continuous-lock pass (see the call site in analyze() for the
@@ -338,6 +367,8 @@ LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
     if (!dt.track_live || !dt.step_valid) {
         return sample;
     }
+    sample.locked = true;
+    sample.gauge_epoch = dt.gauge_epoch;
     sample.tvec = dt.tvec;
     cube::vision::CubePoseProjection pose;
     for (std::size_t i = 0; i < 8; ++i) {
@@ -356,6 +387,45 @@ LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
     pose.max_reproj_fraction = dt.health_frac >= 0.0 ? dt.health_frac : 0.0;
     pose.from_seed = false;
     sample.pose = pose;
+
+    // P6.12: the runner's stage D-F track-geometry composition, run live -
+    // this is the wiring the live-demo diagnosis measured as absent (track
+    // mode returned here with pose only, and no observation ever reached
+    // any capture surface). Per capture-grade derived face (geometric
+    // frontality AND the loop's tracker-quality read grade, the P6.2
+    // gate): rectify at analysis scale, re-fit the internal cell grid
+    // where the rectification holds (P4 sub-pixel polish, clamped
+    // never-re-seat), then sample each sticker quad with the exonerated
+    // quad-masked Lab-median estimator. Purity rides along; 0 stays "not
+    // measured" and fails closed at the feed's centre bar. Mirrors
+    // legacy_pipeline.cpp's track_geometry branch, which the offline
+    // runner replays - the two must produce the same reads or the corpus
+    // stops being evidence about the app.
+    for (const auto& derived : dt.faces) {
+        if (!(derived.frontality >= cube::vision::fusion::kTrackCaptureFrontality && dt.read_grade)) {
+            continue;
+        }
+        cv::Mat homography;
+        const cv::Mat rectified =
+            cube::vision::pipeline::rectify_face(analysis_frame, derived, 96, &homography);
+        std::array<std::array<cv::Point2f, 4>, 9> cells = derived.cells;
+        if (!rectified.empty() && !homography.empty()) {
+            const auto grid = cube::vision::pipeline::refine_cell_grid(rectified);
+            if (grid.valid) {
+                cells = cube::vision::pipeline::cells_from_grid(grid, homography);
+            }
+        }
+        cube::vision::fusion::TrackedFaceRead read;
+        read.face = derived.face;
+        for (std::size_t cell = 0; cell < read.lab.size(); ++cell) {
+            const auto stats = cube::vision::sample_cell_patch(analysis_frame, cells[cell]);
+            if (stats.quad_px > 0) {
+                read.lab[cell] = stats.lab_median;
+                read.purity[cell] = stats.purity;
+            }
+        }
+        sample.faces.push_back(std::move(read));
+    }
     return sample;
 }
 #endif
@@ -794,10 +864,29 @@ int ScanSession::frameHeight() const noexcept {
 }
 
 int ScanSession::facesScanned() const {
-    // Filled slot count, NOT progress_ - progress_ only gains faces once a
-    // completed scan assembles (slot keys are tracked body faces, which
-    // stay anonymous to the UI until assembly names their colours).
+    // Track mode (P6.12): the fusion store is the capture surface, so
+    // progress is the best registration-merged sub-epoch's CONVERGED face
+    // count (cached by maybeFinalizeTrackFusion) - the same quantity the
+    // finalize bar counts to six. Fusion faces are anonymous body ids
+    // exactly as router slots were, so the UI contract is unchanged.
+    if (track_fusion_active_) {
+        return track_fusion_faces_;
+    }
+    // Legacy pipeline: filled slot count, NOT progress_ - progress_ only
+    // gains faces once a completed scan assembles (slot keys are tracked
+    // body faces, which stay anonymous to the UI until assembly names
+    // their colours).
     return router_.filled_count();
+}
+
+int ScanSession::trackFusionObservations() const {
+    int total = 0;
+    for (const auto& [sub_epoch, faces] : track_fusion_) {
+        for (const auto& [face_id, aggregator] : faces) {
+            total += static_cast<int>(aggregator.observation_count());
+        }
+    }
+    return total;
 }
 
 QVariantList ScanSession::cellColors() const {
@@ -1278,6 +1367,14 @@ void ScanSession::restartScan() {
     progress_ = cube::model::ScanProgress();
     router_.clear();
     assembled_cube_.reset();
+    // P6.12 track-mode fusion: a restarted scan may be a different cube,
+    // so every sub-epoch's evidence (and the generation counters keyed to
+    // the dead track's epochs) goes with it.
+    track_fusion_.clear();
+    track_fusion_generation_.clear();
+    track_fusion_active_ = false;
+    track_fusion_faces_ = 0;
+    track_fusion_attempt_sig_ = {-1, -1};
     resetAggregators();
     resetReading();
     emit facesScannedChanged();
@@ -1298,6 +1395,19 @@ void ScanSession::poll() {
         camera_lock_warning_ = !report->fully_applied();
         camera_lock_status_ = QString::fromStdString(report->summary());
         emit cameraLockChanged();
+    }
+
+    // Replay is LOSSLESS (P6.12): while a pass is in flight the clip is
+    // HELD, not popped-and-dropped - a recorded frame the busy gate
+    // discards is gone forever, which made replay coverage depend on this
+    // machine's poll-vs-analysis timing (measured on synth-freerot: 124
+    // fusion observations and 5/6 converged where the deterministic
+    // offline replay of the same clip reaches 6/6). The camera path is
+    // untouched below: the mailbox pop must happen every tick so the
+    // preview always shows the latest frame, and busy-skip remains the
+    // live cadence policy by design.
+    if (replay_active() && (analysis_inflight_ || analysis_watcher_.isRunning())) {
+        return;
     }
 
     auto frame = replay_active() ? try_pop_replay_frame() : cube::platform::camera::try_pop_latest_frame();
@@ -1816,6 +1926,18 @@ void ScanSession::handleAnalysisFinished() {
         // Edge-sourced passes aggregate nothing: pose-only by contract.
     }
 
+    // --- P6.12: track-mode fusion feed + completion -------------------------
+    // The chain the offline runner replays, run live: capture-grade
+    // tracked reads accumulate in the sub-epoch fusion store, and
+    // completion goes registration -> best sub-epoch -> resolve ->
+    // rotation hint -> assembly. The legacy aggregation/commit path above
+    // is untouched and inert in track mode (its tracker is never fed);
+    // both surfaces coexist until Phase 7 deletes the legacy one.
+    if (result.track_locked) {
+        feedTrackFusion(result);
+    }
+    maybeFinalizeTrackFusion();
+
     emit readingChanged();
 
     if (auto_advance_) {
@@ -1892,7 +2014,7 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // wireframe and 3D model follow the track; lost passes return with
     // no pose and the detector keeps hunting for the next anchor.
     if (vision_track_mode()) {
-        const auto sample = live_m3t_lock(analysis_frame, scale_back);
+        auto sample = live_m3t_lock(analysis_frame, scale_back);
         if (!vision_track_mode()) {
             // Model load failed on this very pass: fall through to the
             // legacy cascade from the next pass on (this one returns
@@ -1907,6 +2029,12 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         result.track_pass = true;
         result.track_health = sample.health_frac;
         result.track_reinits = sample.reinits;
+        // P6.12: the pass's capture surface rides the result to the GUI
+        // thread, which owns the fusion store (same all-mutation-on-GUI
+        // rule as the legacy aggregators).
+        result.track_locked = sample.locked;
+        result.track_gauge_epoch = sample.gauge_epoch;
+        result.track_face_samples = std::move(sample.faces);
         result.pass_ms = static_cast<double>(pass_timer.nsecsElapsed()) / 1.0e6;
         VisionDebugStats track_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
         track_stats.face_status = sample.pose.has_value() ? "track-locked" : "track-lost";
@@ -2438,6 +2566,124 @@ void ScanSession::finalizeIfComplete() {
     // Centers gained identity; progressCenters/progressFacelets listen here.
     emit facesScannedChanged();
 
+    emit scanCompleted();
+}
+
+void ScanSession::feedTrackFusion(const AnalysisResult& result) {
+    for (const auto& read : result.track_face_samples) {
+        // The runner's feed bar, verbatim: a sampled centre (purity > 0)
+        // is the "this face was really read" proxy - purity 0 means "not
+        // measured" and fails closed.
+        if (read.purity[4] <= 0.0F) {
+            continue;
+        }
+        cube::vision::FaceObservation observation;
+        observation.lab = read.lab;
+        observation.cell_purity = read.purity;
+        const auto fed = cube::vision::fusion::add_observation(
+            track_fusion_, track_fusion_generation_, result.track_gauge_epoch, read.face, observation);
+        track_fusion_active_ = true;
+        if (fed.generation_split) {
+            log_slot_decision("fusion generation-split epoch=" + std::to_string(result.track_gauge_epoch) +
+                              " sub=" + std::to_string(fed.sub_epoch) + " face=" + std::to_string(read.face));
+        }
+    }
+}
+
+void ScanSession::maybeFinalizeTrackFusion() {
+    // A completed scan stays completed: SolveController owns the flow from
+    // scanCompleted on, and further passes must not re-fire it (the poll
+    // loop keeps running until the user leaves the scan screen).
+    if (!track_fusion_active_ || assembled_cube_.has_value()) {
+        return;
+    }
+    // Attempt only when the store's convergence signature moved - see the
+    // member comment. Counting converged() across every window each pass
+    // is a few hundred bounded-window MAD evaluations, comfortably cheap;
+    // registration is not, which is exactly what the signature gates.
+    int face_slots = 0;
+    int converged_total = 0;
+    for (const auto& [sub_epoch, faces] : track_fusion_) {
+        for (const auto& [face_id, aggregator] : faces) {
+            ++face_slots;
+            converged_total += aggregator.converged() ? 1 : 0;
+        }
+    }
+    const std::pair<int, int> signature{face_slots, converged_total};
+    if (signature == track_fusion_attempt_sig_) {
+        return;
+    }
+    track_fusion_attempt_sig_ = signature;
+
+    // Registration runs on a COPY: the live store keeps its raw sub-epoch
+    // keys (so the feed-time takeover baselines and future generations
+    // stay coherent) and every attempt re-registers from the full
+    // evidence - the runner's once-at-end pass, applied to "the evidence
+    // so far" rather than locking early merges in. The copy is a few
+    // hundred KB at the measured worst case (33 sub-epochs), at
+    // signature-change cadence.
+    cube::vision::fusion::FusionStore registered = track_fusion_;
+    const auto registration = cube::vision::fusion::register_epochs(registered);
+    const auto best = cube::vision::fusion::best_sub_epoch(registered);
+    if (best.converged != track_fusion_faces_) {
+        track_fusion_faces_ = best.converged;
+        emit facesScannedChanged();
+    }
+    log_slot_decision("fusion attempt sub=" + std::to_string(best.sub_epoch) + " observed=" +
+                      std::to_string(best.observed) + "/6 converged=" + std::to_string(best.converged) +
+                      "/6 merges=" + std::to_string(registration.merges) +
+                      " refusals=" + std::to_string(registration.refusals));
+    if (best.sub_epoch < 0 || best.converged < static_cast<int>(cube::model::face_count)) {
+        return;
+    }
+
+    // Finalize exactly as the runner does: the best sub-epoch's converged
+    // windows become the six captures, body ids feed the tracked-scan
+    // rotation hint (P6.4 - tie-break advice only), and
+    // assemble_scanned_faces_with_mapping stays the acceptance oracle.
+    std::array<cube::vision::CapturedFace, cube::model::face_count> captured{};
+    std::array<int, cube::model::face_count> body_face_ids{};
+    std::size_t slot = 0;
+    for (auto& [face_id, aggregator] : registered[best.sub_epoch]) {
+        if (aggregator.converged() && slot < captured.size()) {
+            body_face_ids[slot] = face_id;
+            captured[slot++] = aggregator.capture();
+        }
+    }
+    const auto resolved = cube::vision::resolve_colors(captured);
+    if (!resolved.has_value()) {
+        // Fail closed, keep scanning: fusion has no slot to drop (evidence
+        // is windows, not commitments), so the recovery is more evidence -
+        // the next converged read changes the signature and retries. The
+        // banner keeps the user showing faces instead of waiting on a
+        // progress ring that reads 6/6.
+        log_slot_decision("fusion resolve-refused: " + std::string(to_string(resolved.error())));
+        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(resolved.error()))) +
+                            QStringLiteral(" - keep showing faces"));
+        return;
+    }
+    const cube::solver::RotationHint hint =
+        cube::solver::rotation_hint_for_tracked_scan(*resolved, body_face_ids);
+    const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved, &hint);
+    if (!assembled.has_value()) {
+        log_slot_decision("fusion assembly-refused: " + std::string(to_string(assembled.error())));
+        emit scanNeedsRetry(QString::fromStdString(std::string(to_string(assembled.error()))) +
+                            QStringLiteral(" - keep showing faces"));
+        return;
+    }
+
+    // The finalizeIfComplete() completion tail, verbatim contract: expose
+    // the validated cube, rewrite the legacy ScanProgress at ASSEMBLED
+    // positions (display/back-compat only - SolveController consumes
+    // assembledCube() directly), and hand off.
+    assembled_cube_ = assembled->cube;
+    progress_ = cube::model::ScanProgress();
+    for (const auto solver_face : cube::solver::kAllFaces) {
+        const auto input = assembled->input_index_of_face[static_cast<std::size_t>(solver_face)];
+        progress_.set_face(model_face(solver_face), (*resolved)[input]);
+    }
+    log_slot_decision("fusion assembled sub=" + std::to_string(best.sub_epoch));
+    emit facesScannedChanged();
     emit scanCompleted();
 }
 

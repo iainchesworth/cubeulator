@@ -7,6 +7,7 @@
 #include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/pose_from_corners.hpp>
+#include <cube/vision/track_fusion.hpp>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
@@ -432,8 +433,10 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // source (it still runs in stage B as a trace-only instrument until
     // the app's colour path moves in Phases 4-5). Frontality gates
     // capture grade: a grazing face's cells are slivers no sampler
-    // should trust (threshold provisional, swept at the Phase 3 gate).
-    constexpr double kTrackCaptureFrontality = 0.4;
+    // should trust (threshold provisional, swept at the Phase 3 gate;
+    // shared with the app's live track-mode sampler via track_fusion.hpp
+    // since P6.12 - the two must agree byte-for-byte).
+    using fusion::kTrackCaptureFrontality;
     const bool track_geometry = loop_.has_tracker() && dt.track_live && !dt.faces.empty();
     // Rectification homographies per derived face (identity-size with
     // dt.faces), kept for stage E's sub-pixel grid refinement.

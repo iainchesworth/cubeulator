@@ -97,6 +97,44 @@ TEST_CASE("chessboard calibration recovers a known camera", "[intrinsics]") {
     }
 }
 
+TEST_CASE("scaled_to keeps fx/fy isotropic across an aspect change (16:9 stream from a 4:3 calibration)",
+          "[intrinsics]") {
+    // The measured live-demo case (P6.12): a 640x480 chessboard
+    // calibration driving a 640x360 stream. The old per-axis scaling
+    // produced fx 616.4 / fy 461.6 (ratio 1.335) - an anamorphic camera
+    // that does not exist; the 16:9 mode is a centre CROP of the 4:3
+    // sensor field, so focal lengths are untouched (width ratio 1.0) and
+    // only the principal point moves, by the 60 rows cropped off the top.
+    CameraIntrinsics calibration;
+    calibration.fx = 616.4;
+    calibration.fy = 615.5;
+    calibration.cx = 323.1;
+    calibration.cy = 241.7;
+    calibration.calibrated_size = cv::Size(640, 480);
+
+    const auto scaled = calibration.scaled_to(cv::Size(640, 360));
+    CHECK_THAT(scaled.fx, WithinAbs(616.4, 1e-9));
+    CHECK_THAT(scaled.fy, WithinAbs(615.5, 1e-9));
+    // Near-isotropic: the fx/fy ratio survives the mode change exactly.
+    CHECK_THAT(scaled.fx / scaled.fy, WithinAbs(calibration.fx / calibration.fy, 1e-12));
+    CHECK_THAT(scaled.cx, WithinAbs(323.1, 1e-9));
+    CHECK_THAT(scaled.cy, WithinAbs(241.7 - 60.0, 1e-9));
+
+    SECTION("the opposite direction crops columns instead") {
+        // 4:3 target from a 16:9 calibration: height is the kept
+        // dimension, the width loses (853.3 - 640)/2 columns per edge.
+        CameraIntrinsics wide = calibration;
+        wide.calibrated_size = cv::Size(640, 360);
+        const auto narrowed = wide.scaled_to(cv::Size(640, 480));
+        const double scale = 480.0 / 360.0;
+        CHECK_THAT(narrowed.fx, WithinAbs(616.4 * scale, 1e-9));
+        CHECK_THAT(narrowed.fy, WithinAbs(615.5 * scale, 1e-9));
+        CHECK_THAT(narrowed.fx / narrowed.fy, WithinAbs(wide.fx / wide.fy, 1e-12));
+        CHECK_THAT(narrowed.cx, WithinAbs(323.1 * scale - (640.0 * scale - 640.0) / 2.0, 1e-9));
+        CHECK_THAT(narrowed.cy, WithinAbs(241.7 * scale, 1e-9));
+    }
+}
+
 TEST_CASE("calibration refuses too few usable views", "[intrinsics]") {
     std::vector<cv::Mat> views{cv::Mat(480, 640, CV_8UC3, cv::Scalar(128, 128, 128)),
                                cv::Mat(480, 640, CV_8UC3, cv::Scalar(90, 90, 90))};
