@@ -17,6 +17,10 @@ class AppInfo : public QObject {
     Q_PROPERTY(QString name READ name CONSTANT FINAL)
     Q_PROPERTY(QString version READ version CONSTANT FINAL)
     Q_PROPERTY(QString build READ build CONSTANT FINAL)
+    // The app's menu is a menu bar at the top of the screen with the standard
+    // window commands in it, and full screen has the chord that goes with it
+    // (macOS). The platform says so; the QML does not ask which OS it is on.
+    Q_PROPERTY(bool nativeMenuBar READ nativeMenuBar CONSTANT FINAL)
 
 public:
     explicit AppInfo(QObject* parent = nullptr);
@@ -25,6 +29,7 @@ public:
     [[nodiscard]] QString version() const;
     // `git describe` at build time: the release tag, or the commit.
     [[nodiscard]] QString build() const;
+    [[nodiscard]] bool nativeMenuBar() const;
 
     // Asks for the placeholder About (DesktopShell.qml). The Settings
     // screen's About row calls this until E3b puts a real About screen on
@@ -74,9 +79,9 @@ private:
 //   runtime.load();
 //   desktop.attach(runtime.engine());             // after
 //
-// On a platform without the desktop shell (CUBE_DESKTOP_SHELL undefined) it is
-// an empty class, so main() carries no #ifdef.
-#ifdef CUBE_DESKTOP_SHELL
+// What of this a platform wants is its own to say (interfaces/desktop_shell.hpp,
+// Traits): on a phone, where the OS owns the window, the geometry is left
+// alone and the identity step is a no-op, so main() carries no #ifdef.
 class DesktopIntegration : public QObject {
     Q_OBJECT
 
@@ -91,18 +96,11 @@ public:
 private:
     WindowGeometry geometry_;
 };
-#else
-class DesktopIntegration {
-public:
-    explicit DesktopIntegration(QGuiApplication&) {}
-    void prepare(QQmlApplicationEngine&) {}
-    void attach(QQmlApplicationEngine&) {}
-};
-#endif
 
 // The identifier on every platform (docs/design/platforms.md, "Identity").
 inline constexpr const char* kAppId = "com.iainchesworthlabs.cubeulator";
-// Windows only: groups the taskbar button with its shortcut.
-inline constexpr const wchar_t* kAppUserModelId = L"IainChesworthLabs.Cubeulator";
+// Windows only: groups the taskbar button with its shortcut. Handed to the
+// platform's implementation, which the other platforms ignore.
+inline constexpr const char* kAppUserModelId = "IainChesworthLabs.Cubeulator";
 
 }  // namespace cube::app

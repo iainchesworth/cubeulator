@@ -7,7 +7,8 @@
 
 namespace cube::app {
 
-KeepAwake::KeepAwake(QObject* parent) : KeepAwake(makePlatformKeepAwakeBackend(), parent) {}
+KeepAwake::KeepAwake(QObject* parent)
+    : KeepAwake(cube::platform::desktop_shell::make_keep_awake_backend(), parent) {}
 
 KeepAwake::KeepAwake(std::unique_ptr<KeepAwakeBackend> backend, QObject* parent)
     : QObject(parent), backend_(std::move(backend)) {

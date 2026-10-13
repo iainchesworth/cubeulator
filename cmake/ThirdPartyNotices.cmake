@@ -27,18 +27,8 @@ include_guard(GLOBAL)
 cmake_file_api(QUERY API_VERSION 1 CODEMODEL 2)
 
 function(_cube_notices_platform out)
-    if(ANDROID)
-        set(p android)
-    elseif(IOS)
-        set(p ios)
-    elseif(WIN32)
-        set(p windows)
-    elseif(APPLE)
-        set(p macos)
-    else()
-        set(p linux)
-    endif()
-    set(${out} "${p}" PARENT_SCOPE)
+    # The platform name cmake/Platform.cmake already decided.
+    set(${out} "${CUBEULATOR_PLATFORM}" PARENT_SCOPE)
 endfunction()
 
 function(_cube_notices_common_args out app_target)
@@ -130,7 +120,7 @@ function(cube_add_third_party_notices app_target)
 
     # Desktop packages: the notices and the licence ride in every one. The
     # check comes first so a refused install leaves nothing behind.
-    if(NOT ANDROID AND NOT IOS)
+    if(CUBEULATOR_PLATFORM_DESKTOP)
         install(CODE "
             file(READ \"${json}\" _notices)
             string(JSON _n LENGTH \"\${_notices}\" unresolved)
@@ -139,16 +129,10 @@ function(cube_add_third_party_notices app_target)
                 message(FATAL_ERROR \"Refusing to package: \${_n} third-party component(s) have no notice. First: \${_first}\nSee ${out_dir}/third-party-notices.json and docs/licensing.md.\")
             endif()
         ")
-        # The root of the install on Windows and macOS (beside the program, or
-        # beside the .app in the .dmg). A Linux package installs under /usr, so
-        # the root is /usr itself: they go under share/doc, where the desktop
-        # packages in cmake/DesktopPackaging.cmake keep the rest of the
-        # app's files (E4a).
-        if(UNIX AND NOT APPLE)
-            set(notices_dir "share/doc/cubeulator")
-        else()
-            set(notices_dir ".")
-        endif()
+        # Where the platform keeps them (CUBEULATOR_PLATFORM_NOTICES_DIR): the
+        # root of an installer or disk image (beside the program, or beside the
+        # .app in the .dmg), or share/doc where a package installs under /usr.
+        set(notices_dir "${CUBEULATOR_PLATFORM_NOTICES_DIR}")
         install(FILES "${txt}" DESTINATION "${notices_dir}")
         install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION "${notices_dir}" RENAME LICENSE.txt)
     endif()

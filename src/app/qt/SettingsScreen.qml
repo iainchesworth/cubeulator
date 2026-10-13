@@ -72,7 +72,7 @@ Rectangle {
 
             // Desktop: pick from whatever's actually plugged in.
             // CameraController (not CameraDeviceModel) is the source of
-            // truth here: it's the same controller ScanSession.start() reads
+            // truth here: it's the same controller DirectScan.start() reads
             // selectedDeviceId from, and its refreshDevices() runs off the
             // GUI thread (see camera_controller.hpp) - CameraDeviceModel's
             // refresh() enumerated synchronously and would freeze the window
@@ -128,35 +128,6 @@ Rectangle {
                     objectName: "settings.grantCamera"; variant: "secondary"; text: qsTrId("permission.allow")
                     onClicked: AppState.requestPermission()
                 }
-            }
-        }
-
-        Column {
-            width: parent.width
-            spacing: Theme.space3
-            SectionLabel { text: "SCANNING" }
-            Toggle {
-                width: parent.width
-                objectName: "settings.handDetection"
-                checked: ScanSession.handDetectionEnabled
-                label: "Detect hands with AI"
-                enabled: SettingsModel.handDetectionAvailable
-                opacity: SettingsModel.handDetectionAvailable ? 1.0 : 0.45
-                onToggled: ScanSession.handDetectionEnabled = !ScanSession.handDetectionEnabled
-            }
-            Text {
-                visible: !SettingsModel.handDetectionAvailable
-                text: SettingsModel.handDetectionUnavailableReason
-                font.family: Theme.fontHeading; font.pixelSize: 12
-                color: Theme.inkMuted(0.6)
-                width: parent.width; wrapMode: Text.WordWrap
-            }
-            Toggle {
-                width: parent.width
-                objectName: "settings.autoAdvance"
-                checked: ScanSession.autoAdvance
-                label: "Auto-advance between faces"
-                onToggled: ScanSession.autoAdvance = !ScanSession.autoAdvance
             }
         }
 

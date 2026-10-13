@@ -58,7 +58,7 @@ Read from `feature/direct-scan` at `fa81b2e`.
 | Layout | One breakpoint (720); phone layouts sized by subtraction (`root.height - 360`); no safe-area insets | `LaunchScreen.qml:26`, `PermissionScreen.qml:69` |
 | Theme | 54 colour literals outside `Theme.qml`, 39 of them in the legacy `ScanScreen.qml` | `DirectScanScreen.qml`, `SolveScreen.qml` |
 | Mobile | Screen can sleep mid-solve; no haptics or sound; orientation unspecified | `AndroidManifest.xml` |
-| Identity | No icon, no splash, no bundle id, no Windows version resource; package `org.qtproject.example` | `src/app/android/`, `cmake/Packaging.cmake` |
+| Identity | No icon, no splash, no bundle id, no Windows version resource; package `org.qtproject.example` | `src/app/platform/android/package/`, `cmake/Packaging.cmake` |
 | Legal | No about box; no third-party notices anywhere; the GPL and App Store question is open | `LICENSE-NOTE.md` |
 | Privacy | The permission screen promises "Nothing is stored, uploaded, or shared"; R4 plans to record every failed scan | `PermissionScreen.qml:25`, `recovery-plan.md` R4 |
 | Docs | README and CHANGELOG still say "repository skeleton, no solver" | `README.md:16` |

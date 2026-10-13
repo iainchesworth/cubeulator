@@ -1,9 +1,7 @@
 #pragma once
 
 #include "controllers/app_controllers.hpp"
-#ifdef CUBE_DESKTOP_SHELL
 #include "desktop/desktop_integration.hpp"
-#endif
 
 #include <QQmlApplicationEngine>
 
@@ -42,7 +40,6 @@ public:
 
     // The controllers by the names the tests use.
     [[nodiscard]] CameraController& camera() noexcept { return controllers_.camera; }
-    [[nodiscard]] ScanSession& scanSession() noexcept { return controllers_.scanSession; }
     [[nodiscard]] DirectScan& directScan() noexcept { return controllers_.directScan; }
     [[nodiscard]] SettingsModel& settings() noexcept { return controllers_.settings; }
     [[nodiscard]] SolveController& solve() noexcept { return controllers_.solve; }
@@ -52,13 +49,11 @@ private:
     // Declared after the controllers, and so destroyed before them: the
     // engine's image provider borrows directScan.
     AppControllers controllers_;
-#ifdef CUBE_DESKTOP_SHELL
     // What DesktopShell.qml reads (KeepAwake, AppInfo). Part of the runtime,
     // not of main(), so that a test boots the same Main.qml with the same
     // singletons. Window geometry and the process's identity are not here:
     // they are what only the real application does (desktop_integration.hpp).
     DesktopServices desktop_;
-#endif
     QQmlApplicationEngine engine_;
 };
 

@@ -125,18 +125,16 @@ TEST_CASE("KeepAwake hands the display back when it is destroyed while active",
 
 TEST_CASE("KeepAwake on this platform can be switched on and off",
           "[desktop][keepawake][platform]") {
-    // The real backend, briefly. It must come back off and never hang. On
-    // Windows and macOS the request is always granted; on Linux it depends on
-    // a session bus, which a CI container does not have, so only the
-    // behaviour that holds either way is checked there.
+    // The real backend, briefly. It must come back off and never hang. Whether
+    // the request is granted depends on the platform (Linux needs a session
+    // bus, which a CI container does not have), so only what holds on every
+    // platform is checked here; tests/platform/<name>/desktop/ holds the
+    // platforms that always grant it.
     KeepAwake keepAwake;
     REQUIRE_FALSE(keepAwake.held());
 
     keepAwake.setActive(true);
     REQUIRE(keepAwake.active());
-#if defined(Q_OS_WIN) || defined(Q_OS_MACOS)
-    REQUIRE(keepAwake.held());
-#endif
 
     keepAwake.setActive(false);
     REQUIRE_FALSE(keepAwake.active());

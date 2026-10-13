@@ -1,5 +1,7 @@
 #include "window_geometry.hpp"
 
+#include "interfaces/desktop_shell.hpp"
+
 #include <QGuiApplication>
 #include <QScreen>
 
@@ -168,11 +170,11 @@ void WindowGeometry::track(QWindow* window) {
     }
     window_ = window;
 
-#ifdef Q_OS_MACOS
-    // The green button offers full screen (platforms.md: "Full screen is
-    // offered"). Without the hint a Qt window can lose that offer.
-    window_->setFlags(window_->flags() | Qt::WindowFullscreenButtonHint);
-#endif
+    if (cube::platform::desktop_shell::traits().fullscreen_button_hint) {
+        // The green button offers full screen (platforms.md: "Full screen is
+        // offered"). Without the hint a Qt window can lose that offer.
+        window_->setFlags(window_->flags() | Qt::WindowFullscreenButtonHint);
+    }
 
     QSettings settings;
     if (const auto saved = load(settings)) {

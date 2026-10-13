@@ -1,48 +1,17 @@
 #pragma once
 
+#include "interfaces/desktop_shell.hpp"
+
 #include <QObject>
 
-#include <functional>
 #include <memory>
-#include <utility>
 
 namespace cube::app {
 
-// What one platform does to keep the display from dimming or locking.
-//
-// docs/design/platforms.md, "Keep awake": there is no cross-platform Qt API
-// for this, so each desktop OS has its own implementation behind this
-// interface - a display-required execution state on Windows, a no-display-
-// sleep power assertion on macOS, the session's inhibit interface on Linux.
-// None of them asks the person for anything.
-class KeepAwakeBackend {
-public:
-    // Called whenever the platform's answer to acquire() is known, with
-    // whether the display is now being held. Synchronous backends call it
-    // from inside acquire(); the Linux one calls it when D-Bus replies.
-    using Reporter = std::function<void(bool held)>;
-
-    virtual ~KeepAwakeBackend() = default;
-
-    // Both are idempotent.
-    virtual void acquire() = 0;
-    virtual void release() = 0;
-
-    void setReporter(Reporter reporter) { reporter_ = std::move(reporter); }
-
-protected:
-    void report(bool held) const {
-        if (reporter_) {
-            reporter_(held);
-        }
-    }
-
-private:
-    Reporter reporter_;
-};
-
-// The backend for the platform this binary was built for.
-[[nodiscard]] std::unique_ptr<KeepAwakeBackend> makePlatformKeepAwakeBackend();
+// What one platform does to keep the display from dimming or locking
+// (docs/design/platforms.md, "Keep awake"): the platform's own implementation,
+// declared in interfaces/desktop_shell.hpp.
+using KeepAwakeBackend = cube::platform::desktop_shell::KeepAwakeBackend;
 
 // QML-facing switch. Screens that need the display awake - the scan and
 // solve screens, in E3 - set `active`; nothing else is needed.

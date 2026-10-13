@@ -27,7 +27,10 @@ Item {
 
     required property ApplicationWindow window
 
-    readonly property bool isMac: Qt.platform.os === "osx"
+    // The platform has a menu bar for the whole app and the standard window
+    // commands in it, and its own chord for full screen (macOS). Asked of the
+    // platform, never derived from the OS name here.
+    readonly property bool nativeMenuBar: AppInfo.nativeMenuBar
 
     // New Scan is offered from Home and, once solved, from Complete. Never
     // mid-scan or mid-solve, where it would throw the person's place away.
@@ -91,7 +94,7 @@ Item {
         id: fullScreenAction
         text: shell.window.visibility === Window.FullScreen ? qsTrId("menu.exitFullScreen") : qsTrId("menu.enterFullScreen")
         // Ctrl+Cmd+F on macOS (Qt's Ctrl is Cmd there, Meta is Control).
-        shortcut: shell.isMac ? "Ctrl+Meta+F" : "F11"
+        shortcut: shell.nativeMenuBar ? "Ctrl+Meta+F" : "F11"
         onTriggered: shell.toggleFullScreen()
     }
 
@@ -108,7 +111,7 @@ Item {
         id: closeWindowAction
         text: qsTrId("menu.closeWindow")
         shortcut: "Ctrl+W"
-        enabled: shell.isMac
+        enabled: shell.nativeMenuBar
         onTriggered: shell.window.close()
     }
 
@@ -116,14 +119,14 @@ Item {
         id: minimiseAction
         text: qsTrId("menu.minimise")
         shortcut: "Ctrl+M"
-        enabled: shell.isMac
+        enabled: shell.nativeMenuBar
         onTriggered: shell.window.showMinimized()
     }
 
     Action {
         id: zoomAction
         text: qsTrId("menu.zoom")
-        enabled: shell.isMac
+        enabled: shell.nativeMenuBar
         onTriggered: shell.window.visibility = shell.window.visibility === Window.Maximized
                                               ? Window.Windowed : Window.Maximized
     }
@@ -131,7 +134,7 @@ Item {
     Action {
         id: bringAllToFrontAction
         text: qsTrId("menu.bringAllToFront")
-        enabled: shell.isMac
+        enabled: shell.nativeMenuBar
         onTriggered: {
             shell.window.raise();
             shell.window.requestActivate();
@@ -183,7 +186,7 @@ Item {
     }
 
     Component.onCompleted: {
-        if (shell.isMac) {
+        if (shell.nativeMenuBar) {
             shell.window.menuBar = macMenuBar.createObject(shell.window.contentItem);
         }
     }

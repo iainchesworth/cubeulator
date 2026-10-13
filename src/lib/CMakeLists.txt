@@ -16,6 +16,11 @@ find_package(Git QUIET)
 set(CUBEULATOR_VERSION_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/cube/version.hpp.in")
 set(CUBEULATOR_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/cube/version.hpp")
 
+# What this build targets ("Windows x86_64 (MSVC 1951)"), worked out from
+# the platform fragment and the toolchain here rather than by predefined
+# macros inside a source file - this library holds no platform code.
+cube_describe_build_target(CUBEULATOR_BUILD_TARGET)
+
 # Generate once at configure time so the header exists for the first build.
 set(CUBEULATOR_VERSION "${PROJECT_VERSION}")
 set(SRC "${CUBEULATOR_VERSION_TEMPLATE}")
@@ -30,6 +35,7 @@ add_custom_target(cube_version ALL
     BYPRODUCTS "${CUBEULATOR_VERSION_HEADER}"
     COMMAND "${CMAKE_COMMAND}"
         "-DCUBEULATOR_VERSION=${PROJECT_VERSION}"
+        "-DCUBEULATOR_BUILD_TARGET=${CUBEULATOR_BUILD_TARGET}"
         "-DSRC=${CUBEULATOR_VERSION_TEMPLATE}"
         "-DDST=${CUBEULATOR_VERSION_HEADER}"
         "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
@@ -62,7 +68,6 @@ target_sources(cube_lib
         src/vision/face_grid_fit.cpp
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
-        src/vision/track_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
@@ -74,16 +79,7 @@ target_sources(cube_lib
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
         src/vision/idle_gate.cpp
-        src/vision/pipeline/trace.cpp
-        src/vision/pipeline/legacy_pipeline.cpp
-        src/vision/pipeline/detect_track_loop.cpp
-        src/vision/pipeline/pose_refiner.cpp
-        src/vision/pipeline/face_projection.cpp
         src/vision/recording_v2.cpp
-        src/vision/groundtruth.cpp
-        src/vision/corner_detector.cpp
-        src/vision/pose_from_corners.cpp
-        src/vision/camera_intrinsics.cpp
         src/vision/direct_scan.cpp
         src/vision/held_cube.cpp
         src/render/render.cpp

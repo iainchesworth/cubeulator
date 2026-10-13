@@ -16,8 +16,9 @@ what each platform is supposed to do is specified in
 A `.zip` (and, on Linux, a `.tar.gz`) is always produced as well.
 
 CI builds each one on its own runner and uploads it as a build artifact
-(`.github/workflows/ci.yml`, job `build-and-test`). Nothing is released or
-published.
+(`.github/workflows/ci.yml`, job `build-and-test`). CI publishes nothing: a
+release is cut by tagging, through `.github/workflows/release.yml` (see
+[Cutting a release](releasing.md)).
 
 ### Publishing
 
@@ -51,14 +52,19 @@ Needs, besides the build's own tools:
 | file | does |
 |---|---|
 | `cmake/AppIdentity.cmake` | The name, the identifier and the Windows AppUserModelID, once |
-| `cmake/DesktopPackaging.cmake` | Icons, the executable's identity per platform, the install rules and Qt deployment |
-| `cmake/Packaging.cmake` | CPack: generators, file names, installer and package fields |
+| `cmake/DesktopPackaging.cmake` | What the desktops share: the icons, the window-icon resource, the install and Qt-deployment helpers, wording from the string inventory |
+| `cmake/Packaging.cmake` | CPack: the file name, vendor and licence; each platform adds its generators |
+| `src/app/platform/<os>/platform.cmake` | The platform's hooks into all of the above: `cube_platform_configure_packaging()`, `cube_platform_configure_desktop_app()`, `cube_platform_configure_desktop_shell()` (see [Platform isolation](platform-isolation.md)) |
+| `packaging/<os>/Packaging.cmake` | That platform's CPack generators and fields |
+| `packaging/<os>/ConfigureApp.cmake` | That platform's executable name, version resource or bundle, install rules and Qt deployment |
 | `packaging/make_platform_icons.py` | SVG to `.ico`, `.icns`, PNG and `hicolor` files |
 | `packaging/windows/Cubeulator.rc.in` | Icon and version resource |
 | `packaging/windows/StampShortcut.ps1` | Puts the AppUserModelID on the Start menu shortcut |
 | `packaging/macos/Info.plist.in` | `Info.plist`, including the camera usage string |
 | `packaging/linux/*.in` | Desktop entry and AppStream metadata |
-| `src/app/desktop/` | Window geometry, `KeepAwake`, process identity |
+| `src/app/interfaces/desktop_shell.hpp` | What a platform supplies the shell: keep awake, process identity, window traits |
+| `src/app/platform/<os>/desktop_shell_<os>.cpp` | One implementation of it per platform |
+| `src/app/desktop/` | Window geometry, `KeepAwake` and the identity step, all platform-neutral |
 | `src/app/qt/DesktopShell.qml` | Shortcuts, the macOS menu bar, the placeholder About |
 
 ### Identity
@@ -130,12 +136,15 @@ icons follow.
   install (`platforms.md`, "Fonts").
 - Qt, OpenCV and ONNX Runtime are inside the package, so its dependencies
   are the system libraries Qt's xcb and OpenGL plumbing loads. The list is in
-  `cmake/Packaging.cmake`; it is written down, not discovered, because
-  dpkg-shlibdeps and rpm's scan would try to resolve the bundled libraries.
+  `packaging/linux/Packaging.cmake`; it is written down, not discovered,
+  because dpkg-shlibdeps and rpm's scan would try to resolve the bundled
+  libraries.
 
 ## Window manners
 
-All three desktops, from `src/app/desktop/window_geometry.*`:
+All three desktops, from `src/app/desktop/window_geometry.*`, and only where
+the platform says the window is the person's to keep
+(`Traits::remembers_window_geometry`; a phone's is not):
 
 - Opens at 960 x 680, centred, with a 360 x 560 minimum.
 - Remembers size, position and maximised state (QSettings group `window`).
@@ -146,7 +155,7 @@ All three desktops, from `src/app/desktop/window_geometry.*`:
 - The geometry is applied as initial properties of the root window, so it is
   created in place and never appears at one size and jumps to another.
 - macOS: the window carries the full-screen hint, so the green button offers
-  full screen.
+  full screen (`Traits::fullscreen_button_hint`, which only macOS sets).
 
 ## Keyboard shortcuts
 
@@ -168,7 +177,8 @@ absent.
 ## Keep awake
 
 `KeepAwake` (`src/app/desktop/keep_awake.*`) is a QML singleton with one
-read-write property, `active`, and one read-only one, `held`.
+read-write property, `active`, and one read-only one, `held`. The mechanism is
+the platform's own, behind `interfaces/desktop_shell.hpp`.
 
 ```qml
 KeepAwake.active = true     // the scan or solve screen is showing

@@ -62,6 +62,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# The one place the target OS is decided (cmake/Platform.cmake); every other
+# CMake file reads what the platform's fragment declared.
+include(Platform)
 include(CompilerWarnings)
 include(Sanitizers)
 include(Coverage)
@@ -95,17 +98,8 @@ add_subdirectory(src/render)
 # CUBEULATOR_BUILD_APP.
 add_subdirectory(src/app)
 
-# Vendored third-party code (currently the M3T tracker for pipeline Phase 2,
-# exported as cube::m3t); desktop-only, gated per-platform inside. Ordered
-# before its consumers (src/track_m3t, tools/runner).
-add_subdirectory(third_party)
-
-# The M3T-backed stage-C tracker behind the GL-free pipeline seam;
-# desktop-only, gated inside.
-add_subdirectory(src/track_m3t)
-
-# Desktop-only developer instruments (offline pipeline runner - see
-# docs/pipeline-plan.md); gated per-platform inside.
+# Desktop-only developer instruments (the scan scoreboard - see
+# docs/recovery-plan.md); gated per-platform inside.
 add_subdirectory(tools)
 
 if(CUBEULATOR_BUILD_TESTS)

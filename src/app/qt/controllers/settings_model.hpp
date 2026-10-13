@@ -5,12 +5,10 @@
 
 namespace cube::app {
 
-// Read-only capability info for the Settings screen's hand-detection-AI
-// toggle: whether the model file and an inference execution provider are
-// actually present on this device, independent of whether the user has it
-// enabled - see ScanSession::handDetectionEnabled for the toggle itself,
-// and CameraController for the camera-device-picker data this screen also
-// shows.
+// Read-only capability info about hand detection: whether the model file
+// and an inference execution provider are actually present on this device.
+// Nothing shows it now: the setting it sat beside drove the previous scan
+// pipeline and went with it, and this goes with the hand detector.
 class SettingsModel : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool handDetectionAvailable READ handDetectionAvailable CONSTANT)
