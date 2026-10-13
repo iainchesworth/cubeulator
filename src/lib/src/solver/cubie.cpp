@@ -42,7 +42,7 @@ constexpr std::array<std::array<Face, 2>, kEdgeCount> kEdgeFaces = {{
 // The position whose three faces are exactly {a, b, c}, or -1.
 int corner_position_of(Face a, Face b, Face c) noexcept {
     for (std::size_t pos = 0; pos < kCornerCount; ++pos) {
-        const auto& faces = kCornerFaces[pos];
+        const auto& faces = kCornerFaces.at(pos);
         auto has = [&](Face f) { return std::ranges::find(faces, f) != faces.end(); };
         if (a != b && b != c && a != c && has(a) && has(b) && has(c)) {
             return static_cast<int>(pos);
@@ -53,8 +53,9 @@ int corner_position_of(Face a, Face b, Face c) noexcept {
 
 int edge_position_of(Face a, Face b) noexcept {
     for (std::size_t pos = 0; pos < kEdgeCount; ++pos) {
-        const auto& faces = kEdgeFaces[pos];
-        if (a != b && ((faces[0] == a && faces[1] == b) || (faces[0] == b && faces[1] == a))) {
+        const auto& faces = kEdgeFaces.at(pos);
+        if (a != b &&
+            ((faces.at(0) == a && faces.at(1) == b) || (faces.at(0) == b && faces.at(1) == a))) {
             return static_cast<int>(pos);
         }
     }
@@ -78,39 +79,39 @@ std::optional<CubieCube> to_cubie(const Cube& cube) noexcept {
     for (std::size_t piece = 0; piece < kCornerCount; ++piece) {
         // The piece is the one whose solved stickers are these colours, so
         // finding those colours finds the piece wherever it has been moved.
-        const auto& home = kCornerFaces[piece];
-        const Color c0 = canonical_color(home[0]);  // the U/D sticker
-        const Color c1 = canonical_color(home[1]);
-        const Color c2 = canonical_color(home[2]);
+        const auto& home = kCornerFaces.at(piece);
+        const Color c0 = canonical_color(home.at(0));  // the U/D sticker
+        const Color c1 = canonical_color(home.at(1));
+        const Color c2 = canonical_color(home.at(2));
         const Cube::CornerLocation loc = cube.locate_corner(c0, c1, c2);
         const int pos = corner_position_of(loc.face_a, loc.face_b, loc.face_c);
-        if (pos < 0 || corner_seen[static_cast<std::size_t>(pos)]) {
+        if (pos < 0 || corner_seen.at(static_cast<std::size_t>(pos))) {
             return std::nullopt;
         }
-        corner_seen[static_cast<std::size_t>(pos)] = true;
+        corner_seen.at(static_cast<std::size_t>(pos)) = true;
 
-        const auto& faces = kCornerFaces[static_cast<std::size_t>(pos)];
+        const auto& faces = kCornerFaces.at(static_cast<std::size_t>(pos));
         const auto turned = std::ranges::find(faces, loc.face_a);  // where the U/D sticker is
-        result.cp[static_cast<std::size_t>(pos)] = static_cast<std::uint8_t>(piece);
-        result.co[static_cast<std::size_t>(pos)] =
+        result.cp.at(static_cast<std::size_t>(pos)) = static_cast<std::uint8_t>(piece);
+        result.co.at(static_cast<std::size_t>(pos)) =
             static_cast<std::uint8_t>(std::distance(faces.begin(), turned));
     }
 
     for (std::size_t piece = 0; piece < kEdgeCount; ++piece) {
-        const auto& home = kEdgeFaces[piece];
-        const Color primary = canonical_color(home[0]);
-        const Color secondary = canonical_color(home[1]);
+        const auto& home = kEdgeFaces.at(piece);
+        const Color primary = canonical_color(home.at(0));
+        const Color secondary = canonical_color(home.at(1));
         const Cube::EdgeLocation loc = cube.locate_edge(primary, secondary);
         const int pos = edge_position_of(loc.face_a, loc.face_b);
-        if (pos < 0 || edge_seen[static_cast<std::size_t>(pos)]) {
+        if (pos < 0 || edge_seen.at(static_cast<std::size_t>(pos))) {
             return std::nullopt;
         }
-        edge_seen[static_cast<std::size_t>(pos)] = true;
+        edge_seen.at(static_cast<std::size_t>(pos)) = true;
 
-        result.ep[static_cast<std::size_t>(pos)] = static_cast<std::uint8_t>(piece);
+        result.ep.at(static_cast<std::size_t>(pos)) = static_cast<std::uint8_t>(piece);
         // face_a is where the piece's primary sticker landed.
-        result.eo[static_cast<std::size_t>(pos)] =
-            loc.face_a == kEdgeFaces[static_cast<std::size_t>(pos)][0] ? 0 : 1;
+        result.eo.at(static_cast<std::size_t>(pos)) =
+            loc.face_a == kEdgeFaces.at(static_cast<std::size_t>(pos)).at(0) ? 0 : 1;
     }
 
     return result;

@@ -74,11 +74,11 @@ TEST_CASE("state oracle accepts a solved cube and real scrambles", "[recording]"
     using cube::solver::Face;
     using cube::solver::Move;
     const auto scrambled = cube::solver::Cube::solved()
-                               .apply(Move{Face::R, 1})
-                               .apply(Move{Face::U, 2})
-                               .apply(Move{Face::F, 3})
-                               .apply(Move{Face::L, 1})
-                               .apply(Move{Face::D, 1});
+                               .apply(Move{.face = Face::R, .turns = 1})
+                               .apply(Move{.face = Face::U, .turns = 2})
+                               .apply(Move{.face = Face::F, .turns = 3})
+                               .apply(Move{.face = Face::L, .turns = 1})
+                               .apply(Move{.face = Face::D, .turns = 1});
     const auto problem = state_string_problem(state_string_of(scrambled));
     INFO(problem.value_or(""));
     CHECK(!problem.has_value());
@@ -87,13 +87,13 @@ TEST_CASE("state oracle accepts a solved cube and real scrambles", "[recording]"
 TEST_CASE("state oracle refuses malformed and impossible states", "[recording]") {
     CHECK(state_string_problem("UUU").has_value());  // length
     std::string bad_char = kSolved;
-    bad_char[0] = 'X';
+    bad_char.at(0) = 'X';
     CHECK(state_string_problem(bad_char).has_value());  // alphabet
     std::string bad_centre = kSolved;
-    bad_centre[4] = 'R';
+    bad_centre.at(4) = 'R';
     CHECK(state_string_problem(bad_centre).has_value());  // centre convention
     std::string two_sticker_swap = kSolved;
-    two_sticker_swap[0] = 'R';  // U corner shows R...
+    two_sticker_swap.at(0) = 'R';  // U corner shows R...
     // ...without the matching change anywhere else: 10 R stickers, 8 U.
     CHECK(state_string_problem(two_sticker_swap).has_value());  // oracle (census/validity)
 }
@@ -146,7 +146,7 @@ TEST_CASE("async recorder writes a sound dual-stream recording", "[recording]") 
     REQUIRE(!recorder.start(dir.string(), manifest, true).has_value());
     const cv::Mat frame(720, 1280, CV_8UC3, cv::Scalar(40, 80, 120));
     for (int i = 0; i < 12; ++i) {
-        recorder.push(frame, 1000 + 33 * i);
+        recorder.push(frame, 1000 + (33 * i));
     }
     const auto stats = recorder.stop();
     CHECK(stats.pushed == 12);

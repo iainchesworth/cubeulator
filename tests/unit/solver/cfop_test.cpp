@@ -65,7 +65,7 @@ std::array<std::array<std::uint8_t, 4>, 24> all_orders_of_four() {
             for (std::uint8_t c = 0; c < 4; ++c) {
                 for (std::uint8_t d = 0; d < 4; ++d) {
                     if (a != b && a != c && a != d && b != c && b != d && c != d) {
-                        orders[n++] = {a, b, c, d};
+                        orders.at(n++) = {a, b, c, d};
                     }
                 }
             }
@@ -91,7 +91,7 @@ std::vector<Move> flatten(const Solution& solution) {
 
 bool has_adjacent_same_face(const std::vector<Move>& moves) {
     for (std::size_t i = 1; i < moves.size(); ++i) {
-        if (moves[i].face == moves[i - 1].face) {
+        if (moves.at(i).face == moves.at(i - 1).face) {
             return true;
         }
     }
@@ -142,18 +142,18 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
                     int c = ct;
                     int e = et;
                     for (std::size_t i = 0; i < 3; ++i) {
-                        state.co[i] = static_cast<std::uint8_t>(c % 3);
+                        state.co.at(i) = static_cast<std::uint8_t>(c % 3);
                         twist_sum += c % 3;
                         c /= 3;
-                        state.eo[i] = static_cast<std::uint8_t>(e % 2);
+                        state.eo.at(i) = static_cast<std::uint8_t>(e % 2);
                         flip_sum += e % 2;
                         e /= 2;
                     }
-                    state.co[3] = static_cast<std::uint8_t>((3 - twist_sum % 3) % 3);
-                    state.eo[3] = static_cast<std::uint8_t>(flip_sum % 2);
+                    state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
+                    state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
                     for (std::size_t i = 0; i < 4; ++i) {
-                        state.cp[i] = corners[i];
-                        state.ep[i] = edges[i];
+                        state.cp.at(i) = corners.at(i);
+                        state.ep.at(i) = edges.at(i);
                     }
                     ++states;
 
@@ -207,16 +207,16 @@ TEST_CASE("the permutation lookup refuses a last layer that is not oriented or n
     // done. Anything else must be refused, not answered from a neighbouring
     // entry, because applying the wrong sequence would scramble the cube.
     CubieCube twisted;
-    twisted.co[0] = 1;
+    twisted.co.at(0) = 1;
     CHECK_FALSE(pll_algorithm(twisted).has_value());
 
     CubieCube flipped;
-    flipped.eo[1] = 1;
+    flipped.eo.at(1) = 1;
     CHECK_FALSE(pll_algorithm(flipped).has_value());
 
     // One swapped pair of corners with the edges untouched: parities differ.
     CubieCube mismatched;
-    std::swap(mismatched.cp[0], mismatched.cp[1]);
+    std::swap(mismatched.cp.at(0), mismatched.cp.at(1));
     CHECK_FALSE(pll_algorithm(mismatched).has_value());
 }
 
@@ -242,17 +242,17 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
         int twist_sum = 0;
         int flip_sum = 0;
         for (std::size_t i = 3; i-- > 0;) {
-            state.co[i] = static_cast<std::uint8_t>(corners % 3);
+            state.co.at(i) = static_cast<std::uint8_t>(corners % 3);
             twist_sum += static_cast<int>(corners % 3);
             corners /= 3;
-            state.eo[i] = static_cast<std::uint8_t>(edges % 2);
+            state.eo.at(i) = static_cast<std::uint8_t>(edges % 2);
             flip_sum += static_cast<int>(edges % 2);
             edges /= 2;
         }
-        state.co[3] = static_cast<std::uint8_t>((3 - twist_sum % 3) % 3);
-        state.eo[3] = static_cast<std::uint8_t>(flip_sum % 2);
+        state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
+        state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
         REQUIRE(cube::solver::detail::oll_case(state) == index);
-        same(oll_algorithm(state), generated_words::kOllWords[index]);
+        same(oll_algorithm(state), generated_words::kOllWords.at(index));
     }
 
     // A PLL slot is the corners' rank * 24 + the edges' rank; only slots
@@ -264,8 +264,8 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
         for (const auto& edge_order : orders) {
             CubieCube state;
             for (std::size_t i = 0; i < 4; ++i) {
-                state.cp[i] = corner_order[i];
-                state.ep[i] = edge_order[i];
+                state.cp.at(i) = corner_order.at(i);
+                state.ep.at(i) = edge_order.at(i);
             }
             const std::size_t slot = cube::solver::detail::pll_slot(state);
             if (cube::solver::detail::parity_of_four(corner_order.data()) !=
@@ -273,7 +273,7 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
                 CHECK_FALSE(pll_algorithm(state).has_value());
                 continue;
             }
-            same(pll_algorithm(state), generated_words::kPllWords[slot]);
+            same(pll_algorithm(state), generated_words::kPllWords.at(slot));
             ++used;
         }
     }
@@ -299,22 +299,22 @@ TEST_CASE("cfop takes the four stages in order and each one finishes its job", "
         const auto stages = solve_cfop_stages(scrambled);
         REQUIRE(stages.has_value());
         REQUIRE(stages->steps.size() == 4);
-        CHECK(stages->steps[0].stage == Stage::Cross);
-        CHECK(stages->steps[1].stage == Stage::F2l);
-        CHECK(stages->steps[2].stage == Stage::Oll);
-        CHECK(stages->steps[3].stage == Stage::Pll);
+        CHECK(stages->steps.at(0).stage == Stage::Cross);
+        CHECK(stages->steps.at(1).stage == Stage::F2l);
+        CHECK(stages->steps.at(2).stage == Stage::Oll);
+        CHECK(stages->steps.at(3).stage == Stage::Pll);
 
         Cube cube = scrambled;
-        cube = apply_all(cube, stages->steps[0].moves);
+        cube = apply_all(cube, stages->steps.at(0).moves);
         CHECK(cross_solved(cube));
 
-        cube = apply_all(cube, stages->steps[1].moves);
+        cube = apply_all(cube, stages->steps.at(1).moves);
         CHECK(f2l_solved(cube));  // cross, corners and middle edges
 
-        cube = apply_all(cube, stages->steps[2].moves);
+        cube = apply_all(cube, stages->steps.at(2).moves);
         CHECK(oll_solved(cube));  // first two layers, and the whole top one colour
 
-        cube = apply_all(cube, stages->steps[3].moves);
+        cube = apply_all(cube, stages->steps.at(3).moves);
         CHECK(cube.is_solved());
     }
 }
@@ -329,7 +329,7 @@ TEST_CASE("cfop's cross is as short as any cross can be", "[cfop][slow]") {
         const auto optimum = cube::solver::solve_cross(scrambled);
         REQUIRE(cfop.has_value());
         REQUIRE(optimum.has_value());
-        CHECK(cfop->steps[0].moves.size() == optimum->size());
+        CHECK(cfop->steps.at(0).moves.size() == optimum->size());
     }
 }
 
@@ -387,10 +387,10 @@ TEST_CASE("cfop reports a valid but unreachable cube as unsolvable", "[cfop]") {
     std::array<std::array<Color, 9>, 6> facelets{};
     const Cube solved = Cube::solved();
     for (const Face face : kAllFaces) {
-        facelets[static_cast<std::size_t>(face)] = solved.face(face);
+        facelets.at(static_cast<std::size_t>(face)) = solved.face(face);
     }
-    std::swap(facelets[static_cast<std::size_t>(Face::U)][7],
-              facelets[static_cast<std::size_t>(Face::F)][1]);  // one edge flipped
+    std::swap(facelets.at(static_cast<std::size_t>(Face::U)).at(7),
+              facelets.at(static_cast<std::size_t>(Face::F)).at(1));  // one edge flipped
     const auto flipped = Cube::from_facelets(facelets);
     REQUIRE(flipped.has_value());
 
@@ -406,10 +406,10 @@ TEST_CASE("cfop gives the same solution every time and from several threads", "[
 
     std::array<bool, 4> same{};
     std::vector<std::thread> threads;
-    for (std::size_t i = 0; i < same.size(); ++i) {
-        threads.emplace_back([&same, &cube, &reference, i] {
+    for (bool& i : same) {
+        threads.emplace_back([&same, &cube, &reference, &i] {
             const auto again = solve_cfop(cube);
-            same[i] = again.has_value() && flatten(*again) == flatten(*reference);
+            i = again.has_value() && flatten(*again) == flatten(*reference);
         });
     }
     for (std::thread& t : threads) {

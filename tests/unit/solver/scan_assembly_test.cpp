@@ -1,7 +1,6 @@
 #include <algorithm>
 #include <catch2/catch_test_macros.hpp>
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <random>
@@ -46,7 +45,7 @@ constexpr FacetColor to_model_color(Color color) noexcept {
 std::array<Facelet, 9> to_model_face(const std::array<Color, 9>& colors) {
     std::array<Facelet, 9> facelets{};
     for (std::size_t i = 0; i < colors.size(); ++i) {
-        facelets[i] = Facelet{.color = to_model_color(colors[i]), .confidence = 1.0F};
+        facelets.at(i) = Facelet{.color = to_model_color(colors.at(i)), .confidence = 1.0F};
     }
     return facelets;
 }
@@ -60,8 +59,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
     std::array<Color, 9> rotated{};
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            rotated[static_cast<std::size_t>((3 * row) + col)] =
-                face[static_cast<std::size_t>((3 * (2 - col)) + row)];
+            rotated.at(static_cast<std::size_t>((3 * row) + col)) =
+                face.at(static_cast<std::size_t>((3 * (2 - col)) + row));
         }
     }
     return rotated;
@@ -75,8 +74,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
 std::array<Color, 9> outside_view(Face face, std::array<Color, 9> stickers) {
     if (face == Face::D || face == Face::R || face == Face::B) {
         for (int row = 0; row < 3; ++row) {
-            std::swap(stickers[static_cast<std::size_t>(row * 3)],
-                      stickers[static_cast<std::size_t>((row * 3) + 2)]);
+            std::swap(stickers.at(static_cast<std::size_t>(row * 3)),
+                      stickers.at(static_cast<std::size_t>((row * 3) + 2)));
         }
     }
     return stickers;
@@ -87,7 +86,7 @@ Cube scrambled_cube(std::mt19937& rng, int move_count) {
     std::uniform_int_distribution<int> turn_dist{1, 3};
     Cube c = Cube::solved();
     for (int i = 0; i < move_count; ++i) {
-        c = c.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
+        c = c.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
     }
     return c;
 }
@@ -99,7 +98,8 @@ Cube scrambled_cube(std::mt19937& rng, int move_count) {
 std::array<std::array<Facelet, 9>, 6> model_faces_of(const Cube& cube) {
     std::array<std::array<Facelet, 9>, 6> faces{};
     for (Face face : kAllFaces) {
-        faces[static_cast<std::size_t>(face)] = to_model_face(outside_view(face, cube.face(face)));
+        faces.at(static_cast<std::size_t>(face)) =
+            to_model_face(outside_view(face, cube.face(face)));
     }
     return faces;
 }
@@ -123,7 +123,7 @@ TEST_CASE("assembly round-trips scrambled cubes through per-face rotation and or
             for (int r = 0; r < rotations; ++r) {
                 stickers = rotated_clockwise(stickers);
             }
-            captured[static_cast<std::size_t>(face)] = stickers;
+            captured.at(static_cast<std::size_t>(face)) = stickers;
         }
 
         // Present the six faces in an arbitrary order: input slot i
@@ -132,14 +132,14 @@ TEST_CASE("assembly round-trips scrambled cubes through per-face rotation and or
         std::shuffle(order.begin(), order.end(), rng);
         std::array<std::array<Facelet, 9>, 6> input{};
         for (std::size_t input_index = 0; input_index < input.size(); ++input_index) {
-            input[input_index] = to_model_face(captured[order[input_index]]);
+            input.at(input_index) = to_model_face(captured.at(order.at(input_index)));
         }
 
         const auto result = assemble_scanned_faces_with_mapping(input);
         REQUIRE(result.has_value());
         REQUIRE(result->cube == original);
         for (std::size_t input_index = 0; input_index < input.size(); ++input_index) {
-            REQUIRE(result->input_index_of_face[order[input_index]] == input_index);
+            REQUIRE(result->input_index_of_face.at(order.at(input_index)) == input_index);
         }
     }
 }
@@ -191,7 +191,7 @@ TEST_CASE("a rotation hint lifts near-solved assembly ambiguity", "[scan_assembl
     // search runs): canonical input order means the identity mapping.
     for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size();
          ++face_index) {
-        REQUIRE(hinted->input_index_of_face[face_index] == face_index);
+        REQUIRE(hinted->input_index_of_face.at(face_index) == face_index);
     }
 }
 
@@ -258,7 +258,7 @@ TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standi
     // scores tie and the scan must still fail - a hint may only ever win
     // STRICTLY.
     RotationHint hint;
-    hint.quarter_turns[0] = 0;
+    hint.quarter_turns.at(0) = 0;
     const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
     REQUIRE_FALSE(hinted.has_value());
     REQUIRE(hinted.error() == cube::CubeError::invalid_cube_state);
@@ -269,7 +269,7 @@ TEST_CASE("duplicate centre colours are rejected", "[scan_assembly]") {
     // Solver-Face input order puts U (Yellow centre) at index 0 and D
     // (White centre) at index 1; forcing U's centre to white gives two
     // White-centred faces - a physically impossible scan.
-    input[0][4].color = FacetColor::white;
+    input.at(0).at(4).color = FacetColor::white;
 
     const auto result = assemble_scanned_faces(input);
     REQUIRE_FALSE(result.has_value());
@@ -294,8 +294,8 @@ TEST_CASE("a cross-face sticker swap that keeps colour counts is rejected", "[sc
     bool swapped = false;
     for (std::size_t corner : corner_indices) {
         for (std::size_t edge : edge_indices) {
-            if (captured[0][corner].color != captured[1][edge].color) {
-                std::swap(captured[0][corner].color, captured[1][edge].color);
+            if (captured.at(0).at(corner).color != captured.at(1).at(edge).color) {
+                std::swap(captured.at(0).at(corner).color, captured.at(1).at(edge).color);
                 swapped = true;
                 break;
             }
@@ -326,16 +326,16 @@ std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
         for (int signs = 0; signs < 8; ++signs) {
             std::array<std::array<int, 3>, 3> column{};
             for (int a = 0; a < 3; ++a) {
-                column[static_cast<std::size_t>(a)]
-                      [static_cast<std::size_t>(perm[static_cast<std::size_t>(a)])] =
-                          ((signs >> a) & 1) != 0 ? -1 : 1;
+                column.at(static_cast<std::size_t>(a))
+                    .at(static_cast<std::size_t>(perm.at(static_cast<std::size_t>(a)))) =
+                    ((signs >> a) & 1) != 0 ? -1 : 1;
             }
-            const auto& cx = column[0];
-            const auto& cy = column[1];
-            const auto& cz = column[2];
-            const int det = (cx[0] * ((cy[1] * cz[2]) - (cy[2] * cz[1]))) -
-                            (cy[0] * ((cx[1] * cz[2]) - (cx[2] * cz[1]))) +
-                            (cz[0] * ((cx[1] * cy[2]) - (cx[2] * cy[1])));
+            const auto& cx = column.at(0);
+            const auto& cy = column.at(1);
+            const auto& cz = column.at(2);
+            const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
+                            (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
+                            (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
             if (det == 1) {
                 orientations.push_back(column);
             }
@@ -345,19 +345,19 @@ std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
 }
 
 Face face_of_direction(const std::array<int, 3>& d) {
-    if (d[0] == 1) {
+    if (d.at(0) == 1) {
         return Face::R;
     }
-    if (d[0] == -1) {
+    if (d.at(0) == -1) {
         return Face::L;
     }
-    if (d[1] == 1) {
+    if (d.at(1) == 1) {
         return Face::U;
     }
-    if (d[1] == -1) {
+    if (d.at(1) == -1) {
         return Face::D;
     }
-    return d[2] == 1 ? Face::F : Face::B;
+    return d.at(2) == 1 ? Face::F : Face::B;
 }
 
 // The facelet layout documented in cube.hpp, restated here from that spec
@@ -367,13 +367,13 @@ int solver_index_of(Face face, const std::array<int, 3>& q) {
     switch (face) {
         case Face::U:
         case Face::D:
-            return ((q[2] + 1) * 3) + (q[0] + 1);
+            return ((q.at(2) + 1) * 3) + (q.at(0) + 1);
         case Face::R:
         case Face::L:
-            return ((1 - q[1]) * 3) + (q[2] + 1);
+            return ((1 - q.at(1)) * 3) + (q.at(2) + 1);
         case Face::F:
         case Face::B:
-            return ((1 - q[1]) * 3) + (q[0] + 1);
+            return ((1 - q.at(1)) * 3) + (q.at(0) + 1);
     }
     return 0;
 }
@@ -399,8 +399,9 @@ TEST_CASE("the tracked-scan hint producer derives digits that re-orient every ca
             const int sign = (id % 2 == 0) ? 1 : -1;
             std::array<int, 3> outward{};
             for (int k = 0; k < 3; ++k) {
-                outward[static_cast<std::size_t>(k)] =
-                    sign * column[static_cast<std::size_t>(body_axis)][static_cast<std::size_t>(k)];
+                outward.at(static_cast<std::size_t>(k)) =
+                    sign *
+                    column.at(static_cast<std::size_t>(body_axis)).at(static_cast<std::size_t>(k));
             }
             const Face face = face_of_direction(outward);
             // face_projection.cpp's outside-view axes: cyclic pair on
@@ -411,37 +412,37 @@ TEST_CASE("the tracked-scan hint producer derives digits that re-orient every ca
             for (int row = 0; row < 3; ++row) {
                 for (int col = 0; col < 3; ++col) {
                     std::array<int, 3> p{};
-                    p[static_cast<std::size_t>(body_axis)] = sign;
-                    p[static_cast<std::size_t>(axis_u)] = col - 1;
-                    p[static_cast<std::size_t>(axis_v)] = row - 1;
+                    p.at(static_cast<std::size_t>(body_axis)) = sign;
+                    p.at(static_cast<std::size_t>(axis_u)) = col - 1;
+                    p.at(static_cast<std::size_t>(axis_v)) = row - 1;
                     std::array<int, 3> q{};
                     for (int k = 0; k < 3; ++k) {
-                        q[static_cast<std::size_t>(k)] =
-                            (column[0][static_cast<std::size_t>(k)] * p[0]) +
-                            (column[1][static_cast<std::size_t>(k)] * p[1]) +
-                            (column[2][static_cast<std::size_t>(k)] * p[2]);
+                        q.at(static_cast<std::size_t>(k)) =
+                            (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
+                            (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
+                            (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
                     }
-                    colors[static_cast<std::size_t>((row * 3) + col)] =
-                        cube.face(face)[static_cast<std::size_t>(solver_index_of(face, q))];
+                    colors.at(static_cast<std::size_t>((row * 3) + col)) =
+                        cube.face(face).at(static_cast<std::size_t>(solver_index_of(face, q)));
                 }
             }
-            captured_colors[static_cast<std::size_t>(id)] = colors;
-            captured[static_cast<std::size_t>(id)] = to_model_face(colors);
-            body_ids[static_cast<std::size_t>(id)] = id;
-            shown[static_cast<std::size_t>(id)] = face;
+            captured_colors.at(static_cast<std::size_t>(id)) = colors;
+            captured.at(static_cast<std::size_t>(id)) = to_model_face(colors);
+            body_ids.at(static_cast<std::size_t>(id)) = id;
+            shown.at(static_cast<std::size_t>(id)) = face;
         }
 
         const RotationHint hint = rotation_hint_for_tracked_scan(captured, body_ids);
         for (std::size_t i = 0; i < captured.size(); ++i) {
-            REQUIRE(hint.quarter_turns[i] >= 0);
+            REQUIRE(hint.quarter_turns.at(i) >= 0);
             // Digits are defined over the search's arrays, i.e. AFTER
             // assembly's handedness flip on D/R/B - outside_view applies
             // that same self-inverse flip.
-            std::array<Color, 9> reoriented = outside_view(shown[i], captured_colors[i]);
-            for (int k = 0; k < hint.quarter_turns[i]; ++k) {
+            std::array<Color, 9> reoriented = outside_view(shown.at(i), captured_colors.at(i));
+            for (int k = 0; k < hint.quarter_turns.at(i); ++k) {
                 reoriented = rotated_clockwise(reoriented);
             }
-            REQUIRE(reoriented == cube.face(shown[i]));
+            REQUIRE(reoriented == cube.face(shown.at(i)));
         }
 
         const auto assembled = assemble_scanned_faces_with_mapping(captured, &hint);
@@ -466,7 +467,7 @@ TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a 
 
     SECTION("a repeated body id is not a bijection") {
         std::array<int, 6> repeated = identity_ids;
-        repeated[5] = repeated[0];
+        repeated.at(5) = repeated.at(0);
         const RotationHint hint = rotation_hint_for_tracked_scan(faces, repeated);
         for (const int digit : hint.quarter_turns) {
             REQUIRE(digit == RotationHint::kNoHint);
@@ -478,7 +479,7 @@ TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a 
         // agree on the x column's DIRECTION (-x), so the pair check
         // passes - but the columns then form det -1, a mirror.
         std::array<int, 6> mirrored = identity_ids;
-        std::swap(mirrored[2], mirrored[3]);
+        std::swap(mirrored.at(2), mirrored.at(3));
         const RotationHint hint = rotation_hint_for_tracked_scan(faces, mirrored);
         for (const int digit : hint.quarter_turns) {
             REQUIRE(digit == RotationHint::kNoHint);
@@ -487,7 +488,7 @@ TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a 
 
     SECTION("an unknown centre colour cannot pin a cube position") {
         auto unknown_centre = faces;
-        unknown_centre[0][4].color = FacetColor::unknown;
+        unknown_centre.at(0).at(4).color = FacetColor::unknown;
         const RotationHint hint = rotation_hint_for_tracked_scan(unknown_centre, identity_ids);
         for (const int digit : hint.quarter_turns) {
             REQUIRE(digit == RotationHint::kNoHint);
