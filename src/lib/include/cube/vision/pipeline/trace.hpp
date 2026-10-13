@@ -39,7 +39,9 @@ struct StageTrace {
     // docs/pipeline-trace-schema.md before renaming anything.
     std::vector<std::pair<std::string, TraceValue>> fields;
 
-    void add(std::string key, TraceValue value) { fields.emplace_back(std::move(key), std::move(value)); }
+    void add(std::string key, TraceValue value) {
+        fields.emplace_back(std::move(key), std::move(value));
+    }
 };
 
 struct FrameTrace {

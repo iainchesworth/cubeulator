@@ -19,7 +19,8 @@ std::array<cv::Vec3f, 9> base_colors() {
     std::array<cv::Vec3f, 9> lab{};
     for (int i = 0; i < 9; ++i) {
         const auto f = static_cast<float>(i);
-        lab[static_cast<std::size_t>(i)] = cv::Vec3f(30.0F + 5.0F * f, -20.0F + 4.0F * f, 10.0F + 3.0F * f);
+        lab[static_cast<std::size_t>(i)] =
+            cv::Vec3f(30.0F + 5.0F * f, -20.0F + 4.0F * f, 10.0F + 3.0F * f);
     }
     return lab;
 }

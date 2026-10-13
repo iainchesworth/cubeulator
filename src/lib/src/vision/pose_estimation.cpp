@@ -91,8 +91,8 @@ const cv::Matx33d kOpenCVToDisplayFlip{1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 
         z = 0.25 * s;
     }
     const double norm = std::sqrt(w * w + x * x + y * y + z * z);
-    return {static_cast<float>(w / norm), static_cast<float>(x / norm), static_cast<float>(y / norm),
-            static_cast<float>(z / norm)};
+    return {static_cast<float>(w / norm), static_cast<float>(x / norm),
+            static_cast<float>(y / norm), static_cast<float>(z / norm)};
 }
 
 // The inverse direction (unit quaternion {w,x,y,z} -> rotation matrix),
@@ -114,7 +114,8 @@ const cv::Matx33d kOpenCVToDisplayFlip{1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, 
 // to the quaternion double cover and to any axis-decomposition choice.
 [[nodiscard]] double rotation_angle_deg_between(const cv::Matx33d& a, const cv::Matx33d& b) {
     const cv::Matx33d relative = a * b.t();
-    const double cosine = std::clamp(0.5 * (relative(0, 0) + relative(1, 1) + relative(2, 2) - 1.0), -1.0, 1.0);
+    const double cosine =
+        std::clamp(0.5 * (relative(0, 0) + relative(1, 1) + relative(2, 2) - 1.0), -1.0, 1.0);
     return std::acos(cosine) * 180.0 / std::numbers::pi;
 }
 
@@ -200,11 +201,12 @@ constexpr double kMaxReprojectionFraction = 0.15;
 // Anything non-finite or beyond twice the frame diagonal from the centre
 // cannot be a plausible overlay of a cube the detectors just saw, so the
 // whole projection is rejected rather than drawing garbage.
-[[nodiscard]] bool projection_is_plausible(const std::array<cv::Point2f, 8>& vertices, cv::Size frame_size) {
+[[nodiscard]] bool projection_is_plausible(const std::array<cv::Point2f, 8>& vertices,
+                                           cv::Size frame_size) {
     const float centre_x = 0.5F * static_cast<float>(frame_size.width);
     const float centre_y = 0.5F * static_cast<float>(frame_size.height);
-    const float limit =
-        2.0F * std::hypot(static_cast<float>(frame_size.width), static_cast<float>(frame_size.height));
+    const float limit = 2.0F * std::hypot(static_cast<float>(frame_size.width),
+                                          static_cast<float>(frame_size.height));
     for (const cv::Point2f& vertex : vertices) {
         if (!std::isfinite(vertex.x) || !std::isfinite(vertex.y)) {
             return false;
@@ -232,7 +234,8 @@ std::array<float, 4> display_quaternion(const cv::Matx33d& opencv_rotation) {
 cv::Matx33d opencv_rotation_from_display(const std::array<float, 4>& display_orientation) {
     // Same conjugation as display_quaternion, run the other way; F is its
     // own inverse so the sandwich is symmetric.
-    return kOpenCVToDisplayFlip * rotation_from_quaternion(display_orientation) * kOpenCVToDisplayFlip;
+    return kOpenCVToDisplayFlip * rotation_from_quaternion(display_orientation) *
+           kOpenCVToDisplayFlip;
 }
 
 namespace {
@@ -351,8 +354,8 @@ std::optional<CornerHint> compute_corner_hint(const PoseSeed& seed) {
     // right one's along -n_left (away from it). At the isometric pose this
     // reproduces the fixed kTopColDir/kSideRowDir/... values exactly.
     const std::array<std::pair<cv::Vec3d, cv::Vec3d>, 3> role_bases = {{
-        {n_right, n_left},          // top: col, row
-        {n_right, -1.0 * n_top},    // lower_left
+        {n_right, n_left},              // top: col, row
+        {n_right, -1.0 * n_top},        // lower_left
         {-1.0 * n_left, -1.0 * n_top},  // lower_right
     }};
     for (std::size_t role = 0; role < role_bases.size(); ++role) {
@@ -451,8 +454,8 @@ std::optional<EdgeHint> compute_edge_hint(const PoseSeed& seed) {
     return hint;
 }
 
-Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation, cv::Size frame_size,
-                                                  const PoseSeed* seed) {
+Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation,
+                                                  cv::Size frame_size, const PoseSeed* seed) {
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -466,7 +469,8 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
     // canonical order (-l/2,+l/2), (+l/2,+l/2), (+l/2,-l/2), (-l/2,-l/2).
     // In our y-down model that is bl, br, tr, tl - so both lists are handed
     // over reversed; the recovered pose is order-independent.
-    const std::vector<cv::Point3d> object_points = {kCubeModel[3], kCubeModel[2], kCubeModel[1], kCubeModel[0]};
+    const std::vector<cv::Point3d> object_points = {kCubeModel[3], kCubeModel[2], kCubeModel[1],
+                                                    kCubeModel[0]};
     const std::vector<cv::Point2d> image_points = {cv::Point2d(quad[3]), cv::Point2d(quad[2]),
                                                    cv::Point2d(quad[1]), cv::Point2d(quad[0])};
 
@@ -523,14 +527,16 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
         cv::Matx33d seed_rotation;
         cv::Rodrigues(seed->rvec, seed_rotation);
         const bool discontinuous =
-            !cheirality_ok || rotation_angle_deg_between(rotation, seed_rotation) > kMirrorArbitrationDeg;
+            !cheirality_ok ||
+            rotation_angle_deg_between(rotation, seed_rotation) > kMirrorArbitrationDeg;
         if (discontinuous) {
             cv::Vec3d seeded_rvec = seed->rvec;
             cv::Vec3d seeded_tvec = seed->tvec;
             bool seeded_solved = false;
             try {
-                seeded_solved = cv::solvePnP(object_points, image_points, camera, cv::noArray(), seeded_rvec,
-                                             seeded_tvec, true, cv::SOLVEPNP_ITERATIVE);
+                seeded_solved =
+                    cv::solvePnP(object_points, image_points, camera, cv::noArray(), seeded_rvec,
+                                 seeded_tvec, true, cv::SOLVEPNP_ITERATIVE);
             } catch (const cv::Exception&) {
                 seeded_solved = false;
             }
@@ -538,8 +544,8 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
                 cv::Matx33d seeded_rotation;
                 cv::Rodrigues(seeded_rvec, seeded_rotation);
                 if (passes_cheirality(seeded_rotation, seeded_tvec, kAllCorners) &&
-                    max_reprojection_fraction(object_points, image_points, seeded_rvec, seeded_tvec, camera) <=
-                        kMaxReprojectionFraction) {
+                    max_reprojection_fraction(object_points, image_points, seeded_rvec, seeded_tvec,
+                                              camera) <= kMaxReprojectionFraction) {
                     rvec = seeded_rvec;
                     tvec = seeded_tvec;
                     rotation = seeded_rotation;
@@ -564,7 +570,8 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
     result.rvec = rvec;
     result.tvec = tvec;
     result.from_seed = from_seed;
-    result.max_reproj_fraction = max_reprojection_fraction(object_points, image_points, rvec, tvec, camera);
+    result.max_reproj_fraction =
+        max_reprojection_fraction(object_points, image_points, rvec, tvec, camera);
     // The reprojection gate, applied to the pose that is actually being
     // returned. kMaxReprojectionFraction is documented as the acceptance
     // "shared by every seeded/derived solve" and is enforced on the corner
@@ -595,8 +602,8 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
     return result;
 }
 
-Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation, cv::Size frame_size,
-                                                    const PoseSeed* seed) {
+Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation,
+                                                    cv::Size frame_size, const PoseSeed* seed) {
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -680,9 +687,9 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
         {0.5, 0.5, -0.5},    // DRF
         {-0.5, 0.5, -0.5},   // DLF
     };
-    const std::vector<cv::Point2d> corner_images = {cv::Point2d(v_ubl), cv::Point2d(v_ubr), cv::Point2d(v_urf),
-                                                    cv::Point2d(v_ufl), cv::Point2d(v_drb), cv::Point2d(v_drf),
-                                                    cv::Point2d(v_dlf)};
+    const std::vector<cv::Point2d> corner_images = {
+        cv::Point2d(v_ubl), cv::Point2d(v_ubr), cv::Point2d(v_urf), cv::Point2d(v_ufl),
+        cv::Point2d(v_drb), cv::Point2d(v_drf), cv::Point2d(v_dlf)};
     const cv::Matx33d camera = approximate_camera_matrix(frame_size);
 
     // One gated fit attempt: solve (optionally initialised from a seed),
@@ -722,7 +729,8 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
         if (!passes_cheirality(rotation, tvec, kCornerModel)) {
             return std::nullopt;
         }
-        const double fraction = max_reprojection_fraction(kCornerModel, corner_images, rvec, tvec, camera);
+        const double fraction =
+            max_reprojection_fraction(kCornerModel, corner_images, rvec, tvec, camera);
         if (fraction > kMaxReprojectionFraction) {
             return std::nullopt;
         }
@@ -756,12 +764,13 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
     return result;
 }
 
-Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation, cv::Size frame_size,
-                                                  const PoseSeed* seed) {
+Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation,
+                                                  cv::Size frame_size, const PoseSeed* seed) {
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
-    if (quad_area(observation.left_quad) < kMinQuadAreaPx2 || quad_area(observation.right_quad) < kMinQuadAreaPx2) {
+    if (quad_area(observation.left_quad) < kMinQuadAreaPx2 ||
+        quad_area(observation.right_quad) < kMinQuadAreaPx2) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
@@ -783,9 +792,9 @@ Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observa
     const std::array<cv::Point2f, 4>& right = observation.right_quad;
     const cv::Point2f v_urf = 0.5F * (left[1] + right[0]);
     const cv::Point2f v_drf = 0.5F * (left[2] + right[3]);
-    const std::vector<cv::Point2d> image_points = {cv::Point2d(left[0]), cv::Point2d(v_urf),
+    const std::vector<cv::Point2d> image_points = {cv::Point2d(left[0]),  cv::Point2d(v_urf),
                                                    cv::Point2d(right[1]), cv::Point2d(left[3]),
-                                                   cv::Point2d(v_drf),   cv::Point2d(right[2])};
+                                                   cv::Point2d(v_drf),    cv::Point2d(right[2])};
 
     const cv::Matx33d camera = approximate_camera_matrix(frame_size);
 
@@ -795,7 +804,8 @@ Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observa
         cv::Matx33d rotation;
         double reproj_fraction = 0.0;
     };
-    const auto attempt_fit = [&](const cv::Vec3d* init_rvec, const cv::Vec3d* init_tvec) -> std::optional<AcceptedFit> {
+    const auto attempt_fit = [&](const cv::Vec3d* init_rvec,
+                                 const cv::Vec3d* init_tvec) -> std::optional<AcceptedFit> {
         cv::Vec3d rvec;
         cv::Vec3d tvec;
         const bool use_guess = init_rvec != nullptr;
@@ -805,8 +815,8 @@ Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observa
         }
         bool solved = false;
         try {
-            solved = cv::solvePnP(kEdgeModel, image_points, camera, cv::noArray(), rvec, tvec, use_guess,
-                                  cv::SOLVEPNP_ITERATIVE);
+            solved = cv::solvePnP(kEdgeModel, image_points, camera, cv::noArray(), rvec, tvec,
+                                  use_guess, cv::SOLVEPNP_ITERATIVE);
         } catch (const cv::Exception&) {
             solved = false;
         }
@@ -818,7 +828,8 @@ Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observa
         if (!passes_cheirality(rotation, tvec, kEdgeModel)) {
             return std::nullopt;
         }
-        const double fraction = max_reprojection_fraction(kEdgeModel, image_points, rvec, tvec, camera);
+        const double fraction =
+            max_reprojection_fraction(kEdgeModel, image_points, rvec, tvec, camera);
         if (fraction > kMaxReprojectionFraction) {
             return std::nullopt;
         }
@@ -878,7 +889,8 @@ Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observa
 
     CubePoseProjection result;
     for (std::size_t i = 0; i < result.vertices.size(); ++i) {
-        result.vertices[i] = cv::Point2f(static_cast<float>(projected[i].x), static_cast<float>(projected[i].y));
+        result.vertices[i] =
+            cv::Point2f(static_cast<float>(projected[i].x), static_cast<float>(projected[i].y));
     }
     if (!projection_is_plausible(result.vertices, frame_size)) {
         return std::unexpected(CubeError::no_valid_cube_detected);

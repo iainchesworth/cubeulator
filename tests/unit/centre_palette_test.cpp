@@ -85,7 +85,9 @@ constexpr std::size_t kSamples = kFaces * kCells;
 
 constexpr std::array<const char*, 7> kColorName{"?", "W", "Y", "R", "O", "G", "B"};
 
-const char* color_name(FacetColor color) { return kColorName[static_cast<std::size_t>(color)]; }
+const char* color_name(FacetColor color) {
+    return kColorName[static_cast<std::size_t>(color)];
+}
 
 // One clip's end-of-run store: the six slots the production capture layer
 // would hand to assembly, indexed by cube::model::Face (U,R,F,D,L,B).
@@ -276,8 +278,10 @@ std::array<int, kSamples> assign_exactly_nine(const std::array<cv::Vec3f, kSampl
                 }
                 const auto ca = static_cast<std::size_t>(cluster[a]);
                 const auto cb = static_cast<std::size_t>(cluster[b]);
-                const float current = lab_distance(samples[a], anchors[ca]) + lab_distance(samples[b], anchors[cb]);
-                const float swapped = lab_distance(samples[a], anchors[cb]) + lab_distance(samples[b], anchors[ca]);
+                const float current =
+                    lab_distance(samples[a], anchors[ca]) + lab_distance(samples[b], anchors[cb]);
+                const float swapped =
+                    lab_distance(samples[a], anchors[cb]) + lab_distance(samples[b], anchors[ca]);
                 if (swapped + kMinImprovement < current) {
                     std::swap(cluster[a], cluster[b]);
                     improved = true;
@@ -311,12 +315,18 @@ struct Breakdown {
 Breakdown breakdown(const Grid& facelets) {
     const auto solver_color = [](FacetColor color) {
         switch (color) {
-            case FacetColor::white: return cube::solver::Color::White;
-            case FacetColor::yellow: return cube::solver::Color::Yellow;
-            case FacetColor::green: return cube::solver::Color::Green;
-            case FacetColor::blue: return cube::solver::Color::Blue;
-            case FacetColor::orange: return cube::solver::Color::Orange;
-            default: return cube::solver::Color::Red;
+            case FacetColor::white:
+                return cube::solver::Color::White;
+            case FacetColor::yellow:
+                return cube::solver::Color::Yellow;
+            case FacetColor::green:
+                return cube::solver::Color::Green;
+            case FacetColor::blue:
+                return cube::solver::Color::Blue;
+            case FacetColor::orange:
+                return cube::solver::Color::Orange;
+            default:
+                return cube::solver::Color::Red;
         }
     };
     std::array<std::array<cube::solver::Color, 9>, 6> base{};
@@ -326,7 +336,8 @@ Breakdown breakdown(const Grid& facelets) {
             converted[k] = solver_color(face[k].color);
         }
         for (std::size_t position = 0; position < kFaces; ++position) {
-            if (cube::solver::canonical_color(static_cast<cube::solver::Face>(position)) == converted[kCentre]) {
+            if (cube::solver::canonical_color(static_cast<cube::solver::Face>(position)) ==
+                converted[kCentre]) {
                 base[position] = converted;
             }
         }
@@ -336,7 +347,8 @@ Breakdown breakdown(const Grid& facelets) {
         rotations[f][0] = base[f];
         for (std::size_t quarter = 1; quarter < 4; ++quarter) {
             for (std::size_t k = 0; k < kCells; ++k) {
-                rotations[f][quarter][static_cast<std::size_t>(kRot90[k])] = rotations[f][quarter - 1][k];
+                rotations[f][quarter][static_cast<std::size_t>(kRot90[k])] =
+                    rotations[f][quarter - 1][k];
             }
         }
     }
@@ -414,7 +426,8 @@ Verdict judge(const Grid& grid, bool search_repairs) {
     }
     for (std::size_t i = 0; i < cells.size(); ++i) {
         for (std::size_t j = i + 1; j < cells.size(); ++j) {
-            if (grid[cells[i].face][cells[i].index].color == grid[cells[j].face][cells[j].index].color) {
+            if (grid[cells[i].face][cells[i].index].color ==
+                grid[cells[j].face][cells[j].index].color) {
                 continue;
             }
             Grid trial = grid;
@@ -423,8 +436,8 @@ Verdict judge(const Grid& grid, bool search_repairs) {
                 ++verdict.swap_repairs;
                 if (verdict.first_repair.empty()) {
                     char text[128];
-                    std::snprintf(text, sizeof(text), "%c%zu<->%c%zu", "URFDLB"[cells[i].face], cells[i].index,
-                                  "URFDLB"[cells[j].face], cells[j].index);
+                    std::snprintf(text, sizeof(text), "%c%zu<->%c%zu", "URFDLB"[cells[i].face],
+                                  cells[i].index, "URFDLB"[cells[j].face], cells[j].index);
                     verdict.first_repair = text;
                 }
             }
@@ -438,15 +451,16 @@ Verdict judge(const Grid& grid, bool search_repairs) {
 // the `budget` stickers whose assignment margin was smallest. If not even
 // two swaps among the most-doubtful stickers repair the scan, the errors are
 // neither few nor confined to the cells the classifier was unsure about.
-int two_swap_repairs(const Grid& grid, const std::array<float, kSamples>& margin, std::size_t budget,
-                     std::string& first) {
+int two_swap_repairs(const Grid& grid, const std::array<float, kSamples>& margin,
+                     std::size_t budget, std::string& first) {
     std::vector<std::size_t> order;
     for (std::size_t s = 0; s < kSamples; ++s) {
         if (s % kCells != kCentre) {
             order.push_back(s);
         }
     }
-    std::sort(order.begin(), order.end(), [&](std::size_t a, std::size_t b) { return margin[a] < margin[b]; });
+    std::sort(order.begin(), order.end(),
+              [&](std::size_t a, std::size_t b) { return margin[a] < margin[b]; });
     order.resize(std::min(budget, order.size()));
     std::vector<std::pair<std::size_t, std::size_t>> swaps;
     for (std::size_t i = 0; i < order.size(); ++i) {
@@ -495,10 +509,12 @@ void report(const std::string& label, const Grid& grid, bool search_repairs,
     for (const auto& [name, count] : verdict.census) {
         std::printf(" %s=%d", name.c_str(), count);
     }
-    std::printf(" | centres=%d | VALID=%s", verdict.distinct_centres, verdict.assembled ? "YES" : "no");
+    std::printf(" | centres=%d | VALID=%s", verdict.distinct_centres,
+                verdict.assembled ? "YES" : "no");
     if (!verdict.assembled) {
         const Breakdown chain = breakdown(grid);
-        std::printf(" | of 4096 rotations built=%d valid=%d solvable=%d", chain.built, chain.valid, chain.solvable);
+        std::printf(" | of 4096 rotations built=%d valid=%d solvable=%d", chain.built, chain.valid,
+                    chain.solvable);
     }
     if (!verdict.assembled && search_repairs) {
         std::printf(" | one-swap repairs=%d%s%s", verdict.swap_repairs,
@@ -537,7 +553,8 @@ std::array<float, kSamples> assignment_margins(const std::array<cv::Vec3f, kSamp
     return margin;
 }
 
-Grid grid_from_assignment(const std::array<int, kSamples>& cluster, const std::array<FacetColor, kFaces>& name_of) {
+Grid grid_from_assignment(const std::array<int, kSamples>& cluster,
+                          const std::array<FacetColor, kFaces>& name_of) {
     Grid grid{};
     for (std::size_t s = 0; s < kSamples; ++s) {
         grid[s / kCells][s % kCells] =
@@ -556,9 +573,9 @@ Grid grid_from_assignment(const std::array<int, kSamples>& cluster, const std::a
 // uniform, so all 4096 rotations must build, be physically valid and be
 // solvable. Runs in the normal suite.
 TEST_CASE("CentrePaletteVerdictPlumbing", "[vision][capture-routing]") {
-    static constexpr std::array<FacetColor, kFaces> kSolvedCentres{FacetColor::yellow, FacetColor::red,
-                                                                   FacetColor::green,  FacetColor::white,
-                                                                   FacetColor::orange, FacetColor::blue};
+    static constexpr std::array<FacetColor, kFaces> kSolvedCentres{
+        FacetColor::yellow, FacetColor::red,    FacetColor::green,
+        FacetColor::white,  FacetColor::orange, FacetColor::blue};
     Grid solved{};
     for (std::size_t f = 0; f < kFaces; ++f) {
         solved[f].fill(Facelet{.color = kSolvedCentres[f], .confidence = 1.0F});
@@ -575,7 +592,8 @@ TEST_CASE("CentrePaletteVerdictPlumbing", "[vision][capture-routing]") {
     CHECK(chain.solvable == 4096);
 }
 
-TEST_CASE("centre-anchored classification against the captured centre palette", "[.centre-palette]") {
+TEST_CASE("centre-anchored classification against the captured centre palette",
+          "[.centre-palette]") {
     const char* csv = std::getenv("CUBE_CENTRE_PALETTE_CSV");
     if (csv == nullptr) {
         SKIP("CUBE_CENTRE_PALETTE_CSV not set - tee a clip through \"[.cross-session]\" first");
@@ -640,14 +658,18 @@ TEST_CASE("centre-anchored classification against the captured centre palette", 
         std::printf("\n=== clip %s ===\n", clip.name.c_str());
         std::printf("  centre naming: ");
         for (std::size_t f = 0; f < kFaces; ++f) {
-            std::printf("%c=%s(L%.1f,a%.1f,b%.1f,C%.1f) ", "URFDLB"[f], color_name(naming.color[f]), centres[f][0],
-                        centres[f][1], centres[f][2], std::hypot(centres[f][1], centres[f][2]));
+            std::printf("%c=%s(L%.1f,a%.1f,b%.1f,C%.1f) ", "URFDLB"[f], color_name(naming.color[f]),
+                        centres[f][0], centres[f][1], centres[f][2],
+                        std::hypot(centres[f][1], centres[f][2]));
         }
-        std::printf("\n  centre separations: min=%.1f max=%.1f (seed floor %.1f, closest legit pair %.1f)\n",
-                    naming.min_separation, naming.max_separation, cube::vision::kMinCentreSeedSeparationLab,
-                    cube::vision::kClosestCentrePairLab);
+        std::printf(
+            "\n  centre separations: min=%.1f max=%.1f (seed floor %.1f, closest legit pair "
+            "%.1f)\n",
+            naming.min_separation, naming.max_separation, cube::vision::kMinCentreSeedSeparationLab,
+            cube::vision::kClosestCentrePairLab);
         std::printf("  naming margin: best=%.1f runner-up=%.1f (gap %.1f over 720 permutations)\n",
-                    naming.best_total, naming.runner_up_total, naming.runner_up_total - naming.best_total);
+                    naming.best_total, naming.runner_up_total,
+                    naming.runner_up_total - naming.best_total);
         // Per-face exposure spread, the drift the offset variants exist to
         // cancel.
         std::printf("  per-face mean L:");
@@ -751,7 +773,8 @@ TEST_CASE("centre-anchored classification against the captured centre palette", 
             }
         }
         report("V3 per-face offset vs palette (free)", v3_free, false);
-        const auto v3_cluster = assign_exactly_nine(v3_samples, palette_anchors, /*pin_centres=*/true);
+        const auto v3_cluster =
+            assign_exactly_nine(v3_samples, palette_anchors, /*pin_centres=*/true);
         const Grid v3 = grid_from_assignment(v3_cluster, naming.color);
         const auto v3_margin = assignment_margins(v3_samples, palette_anchors, v3_cluster);
         report("V3 per-face offset vs palette + 9", v3, true, &v3_margin);
@@ -783,7 +806,8 @@ TEST_CASE("centre-anchored classification against the captured centre palette", 
             }
         }
         report("V4 per-face offset vs pooled (free)", v4_free, false);
-        const auto v4_cluster = assign_exactly_nine(v4_samples, pooled_anchors, /*pin_centres=*/true);
+        const auto v4_cluster =
+            assign_exactly_nine(v4_samples, pooled_anchors, /*pin_centres=*/true);
         const Grid v4 = grid_from_assignment(v4_cluster, naming.color);
         const auto v4_margin = assignment_margins(v4_samples, pooled_anchors, v4_cluster);
         report("V4 per-face offset vs pooled + 9", v4, true, &v4_margin);
@@ -792,7 +816,8 @@ TEST_CASE("centre-anchored classification against the captured centre palette", 
         // parts company with the incumbent, and whether the disagreements
         // cluster on one face, on peripheral cells, or on the known
         // non-sticker samples (L below 35: shadow, gap or dark shirt).
-        const std::array<const Grid*, 4> variants{&v2, &v3, &v4, have_resolved ? &resolved_grid : &v2};
+        const std::array<const Grid*, 4> variants{&v2, &v3, &v4,
+                                                  have_resolved ? &resolved_grid : &v2};
         const std::array<const char*, 4> variant_names{"V2", "V3", "V4", "V0b"};
         for (std::size_t v = 0; v < variants.size(); ++v) {
             int differing = 0;
@@ -815,13 +840,14 @@ TEST_CASE("centre-anchored classification against the captured centre palette", 
                     }
                     char text[64];
                     std::snprintf(text, sizeof(text), " %c%zu(%s->%s,L%.0f)", "URFDLB"[f], k,
-                                  color_name(incumbent[f][k].color), color_name((*variants[v])[f][k].color),
-                                  clip.lab[f][k][0]);
+                                  color_name(incumbent[f][k].color),
+                                  color_name((*variants[v])[f][k].color), clip.lab[f][k][0]);
                     cells += text;
                 }
             }
-            std::printf("  %s vs incumbent: %d/54 differ (dark L<35: %d, corner cells: %d) per-face", variant_names[v],
-                        differing, dark, peripheral);
+            std::printf(
+                "  %s vs incumbent: %d/54 differ (dark L<35: %d, corner cells: %d) per-face",
+                variant_names[v], differing, dark, peripheral);
             for (std::size_t f = 0; f < kFaces; ++f) {
                 std::printf(" %c=%d", "URFDLB"[f], per_face[f]);
             }

@@ -51,8 +51,8 @@ TEST_CASE("session palette rescues a desaturated green", "[session_palette]") {
     // by nearest reference - green, with no band gap to fall into.
     SessionCentrePalette palette;
     palette.observe_centre(dull_green);
-    palette.observe_centre(lab_of_bgr(0, 106, 255));   // orange centre
-    palette.observe_centre(lab_of_bgr(255, 255, 255)); // white centre
+    palette.observe_centre(lab_of_bgr(0, 106, 255));    // orange centre
+    palette.observe_centre(lab_of_bgr(255, 255, 255));  // white centre
     REQUIRE(palette.cluster_count() == 3);
     const cv::Vec3f cell = dull_green + cv::Vec3f(2.0F, -1.5F, 1.0F);  // a nearby cell read
     REQUIRE(palette.classify(cell).color == FacetColor::green);
@@ -73,10 +73,11 @@ TEST_CASE("session palette keeps hue-40 orange out of the red band", "[session_p
     CHECK_NOFAIL(classify_lab(warm_orange).color != FacetColor::orange);
 
     SessionCentrePalette palette;
-    palette.observe_centre(warm_orange);                // this cube's warm orange centre
-    palette.observe_centre(lab_of_bgr(0, 0, 196));      // and its true red centre
+    palette.observe_centre(warm_orange);            // this cube's warm orange centre
+    palette.observe_centre(lab_of_bgr(0, 0, 196));  // and its true red centre
     palette.observe_centre(lab_of_bgr(255, 255, 255));
-    REQUIRE(palette.classify(warm_orange + cv::Vec3f(1.0F, 1.5F, -1.0F)).color == FacetColor::orange);
+    REQUIRE(palette.classify(warm_orange + cv::Vec3f(1.0F, 1.5F, -1.0F)).color ==
+            FacetColor::orange);
 }
 
 TEST_CASE("session palette bootstraps to the absolute bands", "[session_palette]") {

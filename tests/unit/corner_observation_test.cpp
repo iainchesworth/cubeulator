@@ -79,18 +79,20 @@ void draw_face(cv::Mat& frame, cv::Point2f anchor, cv::Point2f col_step, cv::Poi
                const std::array<FacetColor, 9>& colors) {
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            const cv::Point2f center =
-                anchor + static_cast<float>(col - 1) * col_step + static_cast<float>(row - 1) * row_step;
+            const cv::Point2f center = anchor + static_cast<float>(col - 1) * col_step +
+                                       static_cast<float>(row - 1) * row_step;
             const cv::Point2f half_col = kCellFillHalfSpan * col_step;
             const cv::Point2f half_row = kCellFillHalfSpan * row_step;
-            const std::array<cv::Point2f, 4> quad = {center - half_col - half_row, center + half_col - half_row,
-                                                     center + half_col + half_row, center - half_col + half_row};
+            const std::array<cv::Point2f, 4> quad = {
+                center - half_col - half_row, center + half_col - half_row,
+                center + half_col + half_row, center - half_col + half_row};
             std::vector<cv::Point> points;
             for (const auto& corner : quad) {
                 points.emplace_back(static_cast<int>(std::lround(corner.x)),
                                     static_cast<int>(std::lround(corner.y)));
             }
-            cv::fillConvexPoly(frame, points, bgr_of(colors[static_cast<std::size_t>(row * 3 + col)]));
+            cv::fillConvexPoly(frame, points,
+                               bgr_of(colors[static_cast<std::size_t>(row * 3 + col)]));
         }
     }
 }
@@ -98,7 +100,8 @@ void draw_face(cv::Mat& frame, cv::Point2f anchor, cv::Point2f col_step, cv::Poi
 // Renders the documented iso arrangement on a dark canvas: the top face's
 // rhombus with its bottom vertex at the shared corner, the two side
 // parallelograms hanging below-left and below-right of it.
-cv::Mat synthetic_corner_frame(const std::array<FacetColor, 9>& top, const std::array<FacetColor, 9>& lower_left,
+cv::Mat synthetic_corner_frame(const std::array<FacetColor, 9>& top,
+                               const std::array<FacetColor, 9>& lower_left,
                                const std::array<FacetColor, 9>& lower_right) {
     cv::Mat frame(400, 400, CV_8UC3, cv::Scalar(20, 20, 20));
     // Anchors are each face's centre cell; the face corner touching the
@@ -119,8 +122,8 @@ cv::Mat synthetic_flat_face_frame() {
     cv::Mat frame = cv::Mat::zeros(230, 230, CV_8UC3);
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            cv::rectangle(frame, cv::Rect(15 + col * 70, 15 + row * 70, 60, 60), cv::Scalar(255, 255, 255),
-                          cv::FILLED);
+            cv::rectangle(frame, cv::Rect(15 + col * 70, 15 + row * 70, 60, 60),
+                          cv::Scalar(255, 255, 255), cv::FILLED);
         }
     }
     return frame;
@@ -254,15 +257,17 @@ const std::array<RenderedModelFace, 6> kRenderedFaces = {{
 const cv::Size kHintFrame(480, 480);
 const cv::Vec3d kHintTranslation(0.0, 0.0, 3.4);
 
-cv::Point2f project_display_point(const cv::Vec3d& point_display, const cv::Matx33d& camera_rotation,
-                                  const cv::Vec3d& translation, cv::Size frame) {
+cv::Point2f project_display_point(const cv::Vec3d& point_display,
+                                  const cv::Matx33d& camera_rotation, const cv::Vec3d& translation,
+                                  cv::Size frame) {
     const cv::Vec3d in_camera = camera_rotation * (kFlip * point_display) + translation;
     const double focal = static_cast<double>(frame.width);
     return {static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * frame.width),
             static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * frame.height)};
 }
 
-cv::Mat render_rotated_cube(const cv::Matx33d& display_rotation, const cv::Vec3d& translation, cv::Size size) {
+cv::Mat render_rotated_cube(const cv::Matx33d& display_rotation, const cv::Vec3d& translation,
+                            cv::Size size) {
     cv::Mat frame(size, CV_8UC3, cv::Scalar(20, 20, 20));
     const cv::Matx33d camera_rotation = kFlip * display_rotation * kFlip;
     for (const auto& face : kRenderedFaces) {
@@ -275,14 +280,17 @@ cv::Mat render_rotated_cube(const cv::Matx33d& display_rotation, const cv::Vec3d
         }
         for (int i = -1; i <= 1; ++i) {
             for (int j = -1; j <= 1; ++j) {
-                const cv::Vec3d center =
-                    0.5 * face.normal + (static_cast<double>(i) / 3.0) * face.u + (static_cast<double>(j) / 3.0) * face.v;
+                const cv::Vec3d center = 0.5 * face.normal +
+                                         (static_cast<double>(i) / 3.0) * face.u +
+                                         (static_cast<double>(j) / 3.0) * face.v;
                 constexpr double kHalf = 0.4 / 3.0;  // 80% fill, 20% gaps
-                const std::array<std::pair<double, double>, 4> corner_signs = {{{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}};
+                const std::array<std::pair<double, double>, 4> corner_signs = {
+                    {{-1, -1}, {1, -1}, {1, 1}, {-1, 1}}};
                 std::vector<cv::Point> polygon;
                 for (const auto& [su, sv] : corner_signs) {
                     const cv::Vec3d corner = center + su * kHalf * face.u + sv * kHalf * face.v;
-                    const cv::Point2f pixel = project_display_point(corner, camera_rotation, translation, size);
+                    const cv::Point2f pixel =
+                        project_display_point(corner, camera_rotation, translation, size);
                     polygon.emplace_back(static_cast<int>(std::lround(pixel.x)),
                                          static_cast<int>(std::lround(pixel.y)));
                 }
@@ -310,7 +318,8 @@ void require_uniform_view(const CornerFaceView& view, FacetColor expected) {
 // detection must yield a pose whose lattice resolution against the ground
 // truth is tight and unambiguous (the gauge itself is free - role cycling
 // is a lattice element by design).
-AlignmentResolution require_pose_resolves(const CornerObservation& observation, const PoseSeed& seed,
+AlignmentResolution require_pose_resolves(const CornerObservation& observation,
+                                          const PoseSeed& seed,
                                           const cv::Matx33d& display_rotation) {
     const auto pose = project_cube_from_corner(observation, kHintFrame, &seed);
     REQUIRE(pose.has_value());
@@ -328,15 +337,18 @@ AlignmentResolution require_pose_resolves(const CornerObservation& observation, 
 TEST_CASE("observe_corner reads a synthetic corner view's 27 stickers", "[vision]") {
     // Deliberately asymmetric colour patterns so any cell-order or
     // face-assignment mistake shows up as a colour mismatch.
-    const std::array<FacetColor, 9> top = {FacetColor::white, FacetColor::red,   FacetColor::green,
-                                           FacetColor::blue,  FacetColor::yellow, FacetColor::orange,
-                                           FacetColor::red,   FacetColor::white,  FacetColor::blue};
-    const std::array<FacetColor, 9> lower_left = {FacetColor::green,  FacetColor::orange, FacetColor::white,
-                                                  FacetColor::yellow, FacetColor::blue,   FacetColor::red,
-                                                  FacetColor::orange, FacetColor::green,  FacetColor::yellow};
-    const std::array<FacetColor, 9> lower_right = {FacetColor::blue,   FacetColor::yellow, FacetColor::orange,
-                                                   FacetColor::red,    FacetColor::white,  FacetColor::green,
-                                                   FacetColor::yellow, FacetColor::blue,   FacetColor::red};
+    const std::array<FacetColor, 9> top = {
+        FacetColor::white, FacetColor::red,    FacetColor::green,
+        FacetColor::blue,  FacetColor::yellow, FacetColor::orange,
+        FacetColor::red,   FacetColor::white,  FacetColor::blue};
+    const std::array<FacetColor, 9> lower_left = {
+        FacetColor::green,  FacetColor::orange, FacetColor::white,
+        FacetColor::yellow, FacetColor::blue,   FacetColor::red,
+        FacetColor::orange, FacetColor::green,  FacetColor::yellow};
+    const std::array<FacetColor, 9> lower_right = {
+        FacetColor::blue,   FacetColor::yellow, FacetColor::orange,
+        FacetColor::red,    FacetColor::white,  FacetColor::green,
+        FacetColor::yellow, FacetColor::blue,   FacetColor::red};
 
     const auto observation = observe_corner(synthetic_corner_frame(top, lower_left, lower_right));
     REQUIRE(observation.has_value());
@@ -434,7 +446,8 @@ TEST_CASE("compute_corner_hint reproduces the fixed isometric arrangement", "[vi
     // documented unit bases - the "strict generalisation" claim, checked
     // numerically. (All three faces foreshorten equally at iso, so the
     // shorter-axis normalisation must land every basis at unit length.)
-    const auto hint = compute_corner_hint(seed_for_rotation(iso_corner_rotation(), kHintTranslation));
+    const auto hint =
+        compute_corner_hint(seed_for_rotation(iso_corner_rotation(), kHintTranslation));
     REQUIRE(hint.has_value());
 
     const auto near_point = [](cv::Point2f actual, cv::Point2f expected) {
@@ -456,9 +469,11 @@ TEST_CASE("compute_corner_hint reproduces the fixed isometric arrangement", "[vi
 
 TEST_CASE("compute_corner_hint refuses non-corner poses", "[vision]") {
     // Frontal: only one face clears the visibility floor.
-    REQUIRE_FALSE(compute_corner_hint(PoseSeed{cv::Vec3d(0.0, 0.0, 0.0), cv::Vec3d(0.0, 0.0, 3.0)}).has_value());
+    REQUIRE_FALSE(compute_corner_hint(PoseSeed{cv::Vec3d(0.0, 0.0, 0.0), cv::Vec3d(0.0, 0.0, 3.0)})
+                      .has_value());
     // Edge-on (two faces visible, the third exactly on the limb).
-    REQUIRE_FALSE(compute_corner_hint(seed_for_rotation(rot_y_display(-45.0), kHintTranslation)).has_value());
+    REQUIRE_FALSE(
+        compute_corner_hint(seed_for_rotation(rot_y_display(-45.0), kHintTranslation)).has_value());
 }
 
 TEST_CASE("a hinted observation at the prompted pose matches the unhinted reading", "[vision]") {
@@ -467,28 +482,34 @@ TEST_CASE("a hinted observation at the prompted pose matches the unhinted readin
     // every cell classifies identically to the unhinted read (the fits
     // converge through an affine refit, so float-exact equality is not the
     // contract - classification equality is).
-    const std::array<FacetColor, 9> top = {FacetColor::white, FacetColor::red,    FacetColor::green,
-                                           FacetColor::blue,  FacetColor::yellow, FacetColor::orange,
-                                           FacetColor::red,   FacetColor::white,  FacetColor::blue};
-    const std::array<FacetColor, 9> lower_left = {FacetColor::green,  FacetColor::orange, FacetColor::white,
-                                                  FacetColor::yellow, FacetColor::blue,   FacetColor::red,
-                                                  FacetColor::orange, FacetColor::green,  FacetColor::yellow};
-    const std::array<FacetColor, 9> lower_right = {FacetColor::blue,   FacetColor::yellow, FacetColor::orange,
-                                                   FacetColor::red,    FacetColor::white,  FacetColor::green,
-                                                   FacetColor::yellow, FacetColor::blue,   FacetColor::red};
+    const std::array<FacetColor, 9> top = {
+        FacetColor::white, FacetColor::red,    FacetColor::green,
+        FacetColor::blue,  FacetColor::yellow, FacetColor::orange,
+        FacetColor::red,   FacetColor::white,  FacetColor::blue};
+    const std::array<FacetColor, 9> lower_left = {
+        FacetColor::green,  FacetColor::orange, FacetColor::white,
+        FacetColor::yellow, FacetColor::blue,   FacetColor::red,
+        FacetColor::orange, FacetColor::green,  FacetColor::yellow};
+    const std::array<FacetColor, 9> lower_right = {
+        FacetColor::blue,   FacetColor::yellow, FacetColor::orange,
+        FacetColor::red,    FacetColor::white,  FacetColor::green,
+        FacetColor::yellow, FacetColor::blue,   FacetColor::red};
     const cv::Mat frame = synthetic_corner_frame(top, lower_left, lower_right);
 
     const auto unhinted = observe_corner(frame);
     REQUIRE(unhinted.has_value());
-    const auto hint = compute_corner_hint(seed_for_rotation(iso_corner_rotation(), kHintTranslation));
+    const auto hint =
+        compute_corner_hint(seed_for_rotation(iso_corner_rotation(), kHintTranslation));
     REQUIRE(hint.has_value());
     const auto hinted = observe_corner(frame, &*hint);
     REQUIRE(hinted.has_value());
 
     for (std::size_t k = 0; k < 9; ++k) {
         REQUIRE(classify_lab(hinted->top.lab[k]) == classify_lab(unhinted->top.lab[k]));
-        REQUIRE(classify_lab(hinted->lower_left.lab[k]) == classify_lab(unhinted->lower_left.lab[k]));
-        REQUIRE(classify_lab(hinted->lower_right.lab[k]) == classify_lab(unhinted->lower_right.lab[k]));
+        REQUIRE(classify_lab(hinted->lower_left.lab[k]) ==
+                classify_lab(unhinted->lower_left.lab[k]));
+        REQUIRE(classify_lab(hinted->lower_right.lab[k]) ==
+                classify_lab(unhinted->lower_right.lab[k]));
     }
 }
 
@@ -609,21 +630,24 @@ TEST_CASE("observe_corner with a hint re-assigns roles past the 120-degree bound
 // (scan_session.cpp) cites these numbers.
 TEST_CASE("profile the corner path's per-pass cost", "[.corner-profile]") {
     const cv::Matx33d rotated = rot_z_display(40.0) * iso_corner_rotation();
-    const cv::Mat iso_frame = render_rotated_cube(iso_corner_rotation(), kHintTranslation, kHintFrame);
+    const cv::Mat iso_frame =
+        render_rotated_cube(iso_corner_rotation(), kHintTranslation, kHintFrame);
     const cv::Mat rotated_frame = render_rotated_cube(rotated, kHintTranslation, kHintFrame);
 
     const PoseSeed rotated_seed = seed_for_rotation(rotated, kHintTranslation);
     // A hint pointing 100 degrees away from what the frame shows: sectors
     // and bases land on the wrong candidates, so every per-face fit is
     // attempted and fails - the detector's bounded-work worst case.
-    const PoseSeed mismatched_seed = seed_for_rotation(rot_z_display(140.0) * iso_corner_rotation(), kHintTranslation);
+    const PoseSeed mismatched_seed =
+        seed_for_rotation(rot_z_display(140.0) * iso_corner_rotation(), kHintTranslation);
 
     const auto time_ms = [](int reps, const auto& body) {
         const auto start = std::chrono::steady_clock::now();
         for (int i = 0; i < reps; ++i) {
             body();
         }
-        const auto elapsed = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
+        const auto elapsed =
+            std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start);
         return elapsed.count() / reps;
     };
 
@@ -631,10 +655,12 @@ TEST_CASE("profile the corner path's per-pass cost", "[.corner-profile]") {
     constexpr int kDetectorReps = 25;
     const double hint_ms = time_ms(kHintReps, [&] { (void)compute_corner_hint(rotated_seed); });
     const double unhinted_hit_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(iso_frame); });
-    const double unhinted_miss_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame); });
+    const double unhinted_miss_ms =
+        time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame); });
     const auto rotated_hint = compute_corner_hint(rotated_seed);
     REQUIRE(rotated_hint.has_value());
-    const double hinted_hit_ms = time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame, &*rotated_hint); });
+    const double hinted_hit_ms =
+        time_ms(kDetectorReps, [&] { (void)observe_corner(rotated_frame, &*rotated_hint); });
     const auto mismatched_hint = compute_corner_hint(mismatched_seed);
     REQUIRE(mismatched_hint.has_value());
     const double hinted_miss_ms =
@@ -642,7 +668,9 @@ TEST_CASE("profile the corner path's per-pass cost", "[.corner-profile]") {
 
     std::printf("corner-profile (%dx%d synthetic frames)\n", kHintFrame.width, kHintFrame.height);
     std::printf("  compute_corner_hint      %9.4f ms\n", hint_ms);
-    std::printf("  observe_corner unhinted  %9.4f ms hit   %9.4f ms miss\n", unhinted_hit_ms, unhinted_miss_ms);
-    std::printf("  observe_corner hinted    %9.4f ms hit   %9.4f ms miss\n", hinted_hit_ms, hinted_miss_ms);
+    std::printf("  observe_corner unhinted  %9.4f ms hit   %9.4f ms miss\n", unhinted_hit_ms,
+                unhinted_miss_ms);
+    std::printf("  observe_corner hinted    %9.4f ms hit   %9.4f ms miss\n", hinted_hit_ms,
+                hinted_miss_ms);
     SUCCEED();
 }

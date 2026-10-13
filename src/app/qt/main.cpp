@@ -38,11 +38,12 @@ LONG WINAPI writeCrashDump(EXCEPTION_POINTERS* exception) {
     // Replace the trailing "cube_app.exe" with the dump name; on failure the
     // path stays as-is and the dump lands next to the binary regardless.
     if (char* last_slash = std::strrchr(dump_path, '\\'); last_slash != nullptr) {
-        std::snprintf(last_slash + 1, MAX_PATH - (last_slash + 1 - dump_path), "cube_app_crash.dmp");
+        std::snprintf(last_slash + 1, MAX_PATH - (last_slash + 1 - dump_path),
+                      "cube_app_crash.dmp");
     }
 
-    const HANDLE file = ::CreateFileA(dump_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL,
-                                       nullptr);
+    const HANDLE file = ::CreateFileA(dump_path, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                                      FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file != INVALID_HANDLE_VALUE) {
         MINIDUMP_EXCEPTION_INFORMATION info{};
         info.ThreadId = ::GetCurrentThreadId();
@@ -51,17 +52,17 @@ LONG WINAPI writeCrashDump(EXCEPTION_POINTERS* exception) {
         // WithIndirectlyReferencedMemory keeps the dump small while still
         // capturing the objects the faulting frames point at - enough to see
         // which container/optional was empty.
-        ::MiniDumpWriteDump(::GetCurrentProcess(), ::GetCurrentProcessId(), file,
-                            static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory |
-                                                        MiniDumpScanMemory),
-                            &info, nullptr, nullptr);
+        ::MiniDumpWriteDump(
+            ::GetCurrentProcess(), ::GetCurrentProcessId(), file,
+            static_cast<MINIDUMP_TYPE>(MiniDumpWithIndirectlyReferencedMemory | MiniDumpScanMemory),
+            &info, nullptr, nullptr);
         ::CloseHandle(file);
     }
 
     if (exception != nullptr && exception->ExceptionRecord != nullptr) {
         std::fprintf(stderr, "CUBE CRASH: code=0x%08lX address=%p dump=%s\n",
-                     exception->ExceptionRecord->ExceptionCode, exception->ExceptionRecord->ExceptionAddress,
-                     dump_path);
+                     exception->ExceptionRecord->ExceptionCode,
+                     exception->ExceptionRecord->ExceptionAddress, dump_path);
         std::fflush(stderr);
     }
     return EXCEPTION_EXECUTE_HANDLER;

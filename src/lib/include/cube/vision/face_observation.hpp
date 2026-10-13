@@ -84,8 +84,8 @@ struct FaceObservation {
 // patch_stats_for_corners with kCellColour intent - the estimator the
 // purity audit cleared (median purity 1.000), reused unchanged.
 struct CellPatchStats {
-    cv::Vec3f lab_median{};    // float Lab; meaningless when quad_px == 0
-    float purity = 0.0F;       // 0 = not measured, NOT "clean" (fails closed)
+    cv::Vec3f lab_median{};  // float Lab; meaningless when quad_px == 0
+    float purity = 0.0F;     // 0 = not measured, NOT "clean" (fails closed)
     float weighted_mad = 0.0F;
     int quad_px = 0;
 };

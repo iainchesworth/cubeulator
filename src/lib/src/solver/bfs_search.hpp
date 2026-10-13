@@ -29,7 +29,8 @@ struct SignatureKey {
 
 struct SignatureKeyHash {
     std::size_t operator()(const SignatureKey& key) const noexcept {
-        return std::hash<std::uint64_t>{}(key.cross) ^ (std::hash<std::uint64_t>{}(key.rest) * 0x9E3779B97F4A7C15ULL);
+        return std::hash<std::uint64_t>{}(key.cross) ^
+               (std::hash<std::uint64_t>{}(key.rest) * 0x9E3779B97F4A7C15ULL);
     }
 };
 
@@ -56,8 +57,9 @@ inline constexpr std::size_t kMaxVisitedNodes = 2'000'000;
 
 template <typename Postcondition, typename Signature>
 Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>& allowed_faces,
-                                      Postcondition postcondition, Signature signature, int max_depth,
-                                      std::size_t max_visited_nodes = kMaxVisitedNodes) {
+                                     Postcondition postcondition, Signature signature,
+                                     int max_depth,
+                                     std::size_t max_visited_nodes = kMaxVisitedNodes) {
     if (postcondition(start)) {
         return std::vector<Move>{};
     }
@@ -86,7 +88,8 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
 
     auto reconstruct = [&nodes](std::size_t leaf, Move last) {
         std::vector<Move> path;
-        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0; i = nodes[static_cast<std::size_t>(i)].parent) {
+        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0;
+             i = nodes[static_cast<std::size_t>(i)].parent) {
             path.push_back(nodes[static_cast<std::size_t>(i)].move);
         }
         std::reverse(path.begin(), path.end());
@@ -113,8 +116,8 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
                     return std::unexpected(CubeError::no_solution);
                 }
                 if (visited.insert(signature(next)).second) {
-                    nodes.push_back(Node{std::move(next), static_cast<std::int32_t>(head), Move{face, turns},
-                                          depth + 1});
+                    nodes.push_back(Node{std::move(next), static_cast<std::int32_t>(head),
+                                         Move{face, turns}, depth + 1});
                 }
             }
         }
@@ -132,7 +135,8 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
     return static_cast<std::uint64_t>(loc.face_a) * 9 + static_cast<std::uint64_t>(loc.index_a);
 }
 
-[[nodiscard]] inline std::uint64_t piece_code_corner(const Cube& cube, Color a, Color b, Color c) noexcept {
+[[nodiscard]] inline std::uint64_t piece_code_corner(const Cube& cube, Color a, Color b,
+                                                     Color c) noexcept {
     const Cube::CornerLocation loc = cube.locate_corner(a, b, c);
     return static_cast<std::uint64_t>(loc.face_a) * 9 + static_cast<std::uint64_t>(loc.index_a);
 }

@@ -16,15 +16,26 @@ void append_escaped(std::string& out, std::string_view text) {
     out.push_back('"');
     for (const char ch : text) {
         switch (ch) {
-            case '"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
             default:
                 if (static_cast<unsigned char>(ch) < 0x20) {
                     char buf[8];
-                    std::snprintf(buf, sizeof buf, "\\u%04x", static_cast<unsigned>(static_cast<unsigned char>(ch)));
+                    std::snprintf(buf, sizeof buf, "\\u%04x",
+                                  static_cast<unsigned>(static_cast<unsigned char>(ch)));
                     out += buf;
                 } else {
                     out.push_back(ch);
@@ -54,10 +65,13 @@ void append_double(std::string& out, double value) {
 
 void append_value(std::string& out, const TraceValue& value) {
     switch (value.index()) {
-        case 0: out += std::get<bool>(value) ? "true" : "false"; break;
+        case 0:
+            out += std::get<bool>(value) ? "true" : "false";
+            break;
         case 1: {
             char buf[24];
-            const auto [ptr, ec] = std::to_chars(buf, buf + sizeof buf, std::get<std::int64_t>(value));
+            const auto [ptr, ec] =
+                std::to_chars(buf, buf + sizeof buf, std::get<std::int64_t>(value));
             if (ec == std::errc{}) {
                 out.append(buf, ptr);
             } else {
@@ -65,8 +79,12 @@ void append_value(std::string& out, const TraceValue& value) {
             }
             break;
         }
-        case 2: append_double(out, std::get<double>(value)); break;
-        default: append_escaped(out, std::get<std::string>(value)); break;
+        case 2:
+            append_double(out, std::get<double>(value));
+            break;
+        default:
+            append_escaped(out, std::get<std::string>(value));
+            break;
     }
 }
 
@@ -126,8 +144,9 @@ std::string to_jsonl(const FrameTrace& trace) {
 
 std::optional<std::string> validate_trace(const FrameTrace& trace) {
     if (trace.stages.size() != kStageNames.size()) {
-        return "frame " + std::to_string(trace.seq) + ": expected " + std::to_string(kStageNames.size()) +
-               " stage records, got " + std::to_string(trace.stages.size());
+        return "frame " + std::to_string(trace.seq) + ": expected " +
+               std::to_string(kStageNames.size()) + " stage records, got " +
+               std::to_string(trace.stages.size());
     }
     for (std::size_t i = 0; i < kStageNames.size(); ++i) {
         if (trace.stages[i].stage != kStageNames[i]) {

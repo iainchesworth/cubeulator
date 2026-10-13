@@ -174,8 +174,8 @@ struct TrackedFaceRead {
 };
 
 struct FeedResult {
-    int sub_epoch = 0;             // the sub-epoch the observation landed in
-    bool generation_split = false; // the takeover detector bumped the generation
+    int sub_epoch = 0;              // the sub-epoch the observation landed in
+    bool generation_split = false;  // the takeover detector bumped the generation
 };
 
 // Feed one capture-grade read into the store under its content-keyed
@@ -183,8 +183,9 @@ struct FeedResult {
 // gauge_epoch across calls (starts at 0); the takeover detector above
 // bumps it so the frozen sub-epoch keeps its evidence and ALL subsequent
 // feeds for the epoch land in the new one.
-[[nodiscard]] FeedResult add_observation(FusionStore& fusion, std::map<int, int>& generation_of_epoch,
-                                         int gauge_epoch, int face_id, const FaceObservation& observation);
+[[nodiscard]] FeedResult add_observation(FusionStore& fusion,
+                                         std::map<int, int>& generation_of_epoch, int gauge_epoch,
+                                         int face_id, const FaceObservation& observation);
 
 struct RegistrationStats {
     int merges = 0;    // verified cross-epoch merges committed

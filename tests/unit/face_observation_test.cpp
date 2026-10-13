@@ -60,8 +60,8 @@ cv::Mat synthetic_face_frame(int skip_index = -1) {
             }
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), layout[static_cast<std::size_t>(index)].bgr,
-                          cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell),
+                          layout[static_cast<std::size_t>(index)].bgr, cv::FILLED);
         }
     }
     return frame;
@@ -113,7 +113,8 @@ TEST_CASE("observe_face reads all 9 sticker colours from a synthetic face", "[vi
         for (int col = 0; col < 3; ++col) {
             const auto index = static_cast<std::size_t>(row * 3 + col);
             REQUIRE(nearest_palette_color(observation->lab[index]) == layout[index].color);
-            REQUIRE(point_distance(quad_centroid(observation->cells[index]), flat_cell_center(row, col)) < 12.0F);
+            REQUIRE(point_distance(quad_centroid(observation->cells[index]),
+                                   flat_cell_center(row, col)) < 12.0F);
         }
     }
 }
@@ -151,7 +152,8 @@ TEST_CASE("observe_face stays correct under a perspective warp", "[vision]") {
             const std::vector<cv::Point2f> flat_center{flat_cell_center(row, col)};
             std::vector<cv::Point2f> expected_center;
             cv::perspectiveTransform(flat_center, expected_center, warp);
-            REQUIRE(point_distance(quad_centroid(observation->cells[index]), expected_center[0]) < 12.0F);
+            REQUIRE(point_distance(quad_centroid(observation->cells[index]), expected_center[0]) <
+                    12.0F);
         }
     }
 }
@@ -262,7 +264,8 @@ void fill_quad(cv::Mat& frame, const std::array<cv::Point2f, 4>& corners, const 
 // the cell's L ~ 32), so the first CHECK below fails by ~56 L.
 TEST_CASE("cell sampling reads the cell, not its bounding rect", "[vision][patch-sampling]") {
     cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(230, 230, 230));  // light neighbour material
-    const std::array<cv::Point2f, 4> sample{{{10.0F, 10.0F}, {26.0F, 10.0F}, {58.0F, 30.0F}, {42.0F, 30.0F}}};
+    const std::array<cv::Point2f, 4> sample{
+        {{10.0F, 10.0F}, {26.0F, 10.0F}, {58.0F, 30.0F}, {42.0F, 30.0F}}};
     fill_quad(frame, sample, cv::Scalar(40, 40, 40));  // the cell itself: dark
 
     const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
@@ -298,9 +301,11 @@ TEST_CASE("cell sampling reads the cell, not its bounding rect", "[vision][patch
 // pre-mask build lands at L 6.4 - the mask is decisive here as well. The
 // isolation claim still holds via the middle row: with the mask on and the
 // refinement off this test fails on its own.
-TEST_CASE("cell sampling recentres on the dominant mode, not the split median", "[vision][patch-sampling]") {
+TEST_CASE("cell sampling recentres on the dominant mode, not the split median",
+          "[vision][patch-sampling]") {
     cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(0, 0, 0));
-    const std::array<cv::Point2f, 4> sample{{{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
+    const std::array<cv::Point2f, 4> sample{
+        {{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
     // Rows 20..38 (19 of the patch's 40 rows) are a dark contaminant; rows
     // 39..59 are the tile, ramping across its own shading.
     fill_quad(frame, sample, cv::Scalar(20, 20, 20));
@@ -336,7 +341,8 @@ TEST_CASE("cell sampling recentres on the dominant mode, not the split median", 
 // share genuinely behind the returned median.
 TEST_CASE("cell sampling reports low purity when no mode dominates", "[vision][patch-sampling]") {
     cv::Mat frame(80, 100, CV_8UC3, cv::Scalar(0, 0, 0));
-    const std::array<cv::Point2f, 4> sample{{{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
+    const std::array<cv::Point2f, 4> sample{
+        {{20.0F, 20.0F}, {60.0F, 20.0F}, {60.0F, 60.0F}, {20.0F, 60.0F}}};
     constexpr std::array<int, 5> kLevels{{40, 80, 120, 160, 210}};
     for (std::size_t band = 0; band < kLevels.size(); ++band) {
         const int top = 20 + static_cast<int>(band) * 8;
@@ -364,12 +370,13 @@ TEST_CASE("cell sampling reports low purity when no mode dominates", "[vision][p
 TEST_CASE("cell sampling still reads a sub-pixel quad", "[vision][patch-sampling]") {
     cv::Mat frame(40, 40, CV_8UC3, cv::Scalar(30, 30, 30));
     cv::rectangle(frame, cv::Rect(18, 18, 3, 3), cv::Scalar(220, 220, 220), cv::FILLED);
-    const std::array<cv::Point2f, 4> sample{{{19.0F, 19.0F}, {20.0F, 19.0F}, {20.0F, 20.0F}, {19.0F, 20.0F}}};
+    const std::array<cv::Point2f, 4> sample{
+        {{19.0F, 19.0F}, {20.0F, 19.0F}, {20.0F, 20.0F}, {19.0F, 20.0F}}};
 
     const auto stats = detail::cell_patch_sample(frame, cell_quad_for_sample(sample));
 
-    CHECK(stats.quad_px < 8);          // the mask alone would have yielded nothing usable
-    CHECK(stats.median[0] > 70.0F);    // yet the bright patch under it still reads
+    CHECK(stats.quad_px < 8);        // the mask alone would have yielded nothing usable
+    CHECK(stats.median[0] > 70.0F);  // yet the bright patch under it still reads
 }
 
 // The purity signal has to be carried on the observation, not just

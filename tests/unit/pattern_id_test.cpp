@@ -82,23 +82,34 @@ constexpr std::int64_t kSeedHoldMs = 450;
 
 const char* state_name(TrackState state) {
     switch (state) {
-        case TrackState::lost: return "lost";
-        case TrackState::acquiring: return "acquiring";
-        case TrackState::locked: return "locked";
-        case TrackState::coasting: return "coasting";
+        case TrackState::lost:
+            return "lost";
+        case TrackState::acquiring:
+            return "acquiring";
+        case TrackState::locked:
+            return "locked";
+        case TrackState::coasting:
+            return "coasting";
     }
     return "?";
 }
 
 char color_letter(cube::model::FacetColor color) {
     switch (color) {
-        case cube::model::FacetColor::white: return 'W';
-        case cube::model::FacetColor::yellow: return 'Y';
-        case cube::model::FacetColor::red: return 'R';
-        case cube::model::FacetColor::orange: return 'O';
-        case cube::model::FacetColor::green: return 'G';
-        case cube::model::FacetColor::blue: return 'B';
-        case cube::model::FacetColor::unknown: return '?';
+        case cube::model::FacetColor::white:
+            return 'W';
+        case cube::model::FacetColor::yellow:
+            return 'Y';
+        case cube::model::FacetColor::red:
+            return 'R';
+        case cube::model::FacetColor::orange:
+            return 'O';
+        case cube::model::FacetColor::green:
+            return 'G';
+        case cube::model::FacetColor::blue:
+            return 'B';
+        case cube::model::FacetColor::unknown:
+            return '?';
     }
     return '?';
 }
@@ -199,7 +210,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         if (recording::frame_overwritten(row.pass, max_pass)) {
             continue;
         }
-        const cv::Mat frame = cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             continue;
         }
@@ -223,7 +235,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         // Captured straight after the call: the detector's own record of
         // which transform model placed these cells, not a re-derivation.
         cube::vision::detail::PlacementDiagnostic placement{};
-        if (auto observed = observe_face(frame); observed.has_value() && all_cells_in_frame(observed->cells)) {
+        if (auto observed = observe_face(frame);
+            observed.has_value() && all_cells_in_frame(observed->cells)) {
             placement = cube::vision::detail::last_placement_diagnostic();
             if (observed->pose_only) {
                 pose_only_face = std::move(*observed);
@@ -238,7 +251,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         std::optional<CornerObservation> corner;
         if (auto observed = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
             observed.has_value() && all_cells_in_frame(observed->top.cells) &&
-            all_cells_in_frame(observed->lower_left.cells) && all_cells_in_frame(observed->lower_right.cells)) {
+            all_cells_in_frame(observed->lower_left.cells) &&
+            all_cells_in_frame(observed->lower_right.cells)) {
             corner = std::move(*observed);
         }
 
@@ -246,17 +260,20 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         bool corner_pose = false;
         bool face_pose = false;
         if (corner.has_value()) {
-            if (auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_corner(*corner, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 corner_pose = true;
             }
         } else if (face.has_value()) {
-            if (auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 face_pose = true;
             }
         } else if (pose_only_face.has_value()) {
-            if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
             }
         }
@@ -265,8 +282,10 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             if (seed_prior) {
                 edge_hint = compute_edge_hint(*seed_prior);
             }
-            if (auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
-                if (auto projected = project_cube_from_edge(*edge, frame.size(), seed); projected.has_value()) {
+            if (auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr);
+                edge.has_value()) {
+                if (auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
                     pose = *projected;
                 }
             }
@@ -280,8 +299,10 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             if (corner_pose && corner) {
                 input.centre_lab_count = 3;
                 input.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
-                input.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
-                input.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+                input.centre_lab[1] =
+                    lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                input.centre_lab[2] =
+                    lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && face) {
                 input.centre_lab_count = 1;
                 input.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
@@ -309,10 +330,12 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             continue;
         }
 
-        const Quat q = pose && pose->orientation_valid ? *input.q_obs : Quat{1.0F, 0.0F, 0.0F, 0.0F};
-        std::fprintf(out, "%s,%d,%lld,%d,%d,%.6f,%.6f,%.6f,%.6f,%d,%s,%s,%d,%.4f", clip.c_str(), row.pass,
-                     static_cast<long long>(row.t_ms), pose && pose->orientation_valid ? 1 : 0,
-                     face_good ? 1 : 0, q[0], q[1], q[2], q[3], corner_pose ? 1 : 0, state_name(track.state),
+        const Quat q =
+            pose && pose->orientation_valid ? *input.q_obs : Quat{1.0F, 0.0F, 0.0F, 0.0F};
+        std::fprintf(out, "%s,%d,%lld,%d,%d,%.6f,%.6f,%.6f,%.6f,%d,%s,%s,%d,%.4f", clip.c_str(),
+                     row.pass, static_cast<long long>(row.t_ms),
+                     pose && pose->orientation_valid ? 1 : 0, face_good ? 1 : 0, q[0], q[1], q[2],
+                     q[3], corner_pose ? 1 : 0, state_name(track.state),
                      track.front_face ? face_name(*track.front_face) : "-", track.epoch,
                      face_good ? static_cast<double>(face->geometry_confidence) : 0.0);
         std::fprintf(out, ",%s,%s,%d", model_name(placement.model), path_name(placement.path),
@@ -324,8 +347,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         for (int cell = 0; cell < 9; ++cell) {
             const auto& lab = placement.counterfactual_lab[static_cast<std::size_t>(cell)];
             if (placement.has_counterfactual) {
-                std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]), static_cast<double>(lab[1]),
-                             static_cast<double>(lab[2]));
+                std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]),
+                             static_cast<double>(lab[1]), static_cast<double>(lab[2]));
             } else {
                 std::fprintf(out, ",,,");
             }
@@ -338,14 +361,15 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             CapturedFace captured;
             captured.lab = face->lab;
             const ColorCensus census = color_census(captured);
-            std::fprintf(out, ",%d",
-                         static_cast<int>(classify_lab(face->lab[cube::model::center_facelet_index]).color));
+            std::fprintf(
+                out, ",%d",
+                static_cast<int>(classify_lab(face->lab[cube::model::center_facelet_index]).color));
             for (const int count : census) {
                 std::fprintf(out, ",%d", count);
             }
             for (const auto& lab : face->lab) {
-                std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]), static_cast<double>(lab[1]),
-                             static_cast<double>(lab[2]));
+                std::fprintf(out, ",%.3f,%.3f,%.3f", static_cast<double>(lab[0]),
+                             static_cast<double>(lab[1]), static_cast<double>(lab[2]));
             }
 
             // The two nine-sticker strings whose reading-consistency is
@@ -365,9 +389,9 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             // is kept (echoing the absolute read) so existing analysis scripts
             // that index by position still parse these CSVs.
             const std::string& session = absolute;
-            std::fprintf(out, ",%s,%s,%c,%d", absolute.c_str(), session.c_str(),
-                         color_letter(classify_lab(face->lab[cube::model::center_facelet_index]).color),
-                         1);
+            std::fprintf(
+                out, ",%s,%s,%c,%d", absolute.c_str(), session.c_str(),
+                color_letter(classify_lab(face->lab[cube::model::center_facelet_index]).color), 1);
 
             // DISPERSION PROBE. Per cell: the chroma-weighted intra-patch
             // MAD and the cell quad's screen area, plus the face quad's
@@ -387,10 +411,11 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             // describes the patch production actually read.
             for (const auto& cell : face->cells) {
                 const auto sample = detail::cell_patch_sample(frame, cell);
-                std::fprintf(out, ",%.4f,%.1f,%.3f,%.3f,%.3f", static_cast<double>(sample.weighted_mad),
-                             static_cast<double>(sample.cell_quad_area_px),
-                             static_cast<double>(sample.median[0]), static_cast<double>(sample.median[1]),
-                             static_cast<double>(sample.median[2]));
+                std::fprintf(
+                    out, ",%.4f,%.1f,%.3f,%.3f,%.3f", static_cast<double>(sample.weighted_mad),
+                    static_cast<double>(sample.cell_quad_area_px),
+                    static_cast<double>(sample.median[0]), static_cast<double>(sample.median[1]),
+                    static_cast<double>(sample.median[2]));
             }
         } else {
             std::fprintf(out, ",-1");
@@ -456,13 +481,15 @@ TEST_CASE("PatternIdExtract", "[.pattern-id]") {
     const std::filesystem::path root(root_env);
     const auto clips = collect_clip_dirs(root);
     if (clips.empty()) {
-        SKIP("no recording directories (index.csv) under " << root.string() << " - corpus not recorded yet");
+        SKIP("no recording directories (index.csv) under " << root.string()
+                                                           << " - corpus not recorded yet");
     }
 
     std::FILE* out = stdout;
-    std::fprintf(out,
-                 "clip,pass,t_ms,pose_valid,face_good,qw,qx,qy,qz,corner_view,trk_state,trk_front,trk_epoch,"
-                 "geom_conf,tf_model,tf_path,tf_matched,cf_valid");
+    std::fprintf(
+        out,
+        "clip,pass,t_ms,pose_valid,face_good,qw,qx,qy,qz,corner_view,trk_state,trk_front,trk_epoch,"
+        "geom_conf,tf_model,tf_path,tf_matched,cf_valid");
     for (int cell = 0; cell < 9; ++cell) {
         std::fprintf(out, ",cfL%d,cfa%d,cfb%d", cell, cell, cell);
     }

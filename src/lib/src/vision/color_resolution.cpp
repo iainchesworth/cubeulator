@@ -248,7 +248,8 @@ void SessionCentrePalette::observe_centre(const cv::Vec3f& lab) {
         float closest = std::numeric_limits<float>::max();
         for (std::size_t a = 0; a < clusters_.size(); ++a) {
             for (std::size_t b = a + 1; b < clusters_.size(); ++b) {
-                const float distance = static_cast<float>(cv::norm(clusters_[a].centroid - clusters_[b].centroid));
+                const float distance =
+                    static_cast<float>(cv::norm(clusters_[a].centroid - clusters_[b].centroid));
                 if (distance < closest) {
                     closest = distance;
                     merge_a = a;
@@ -705,7 +706,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         float rival_distance = std::numeric_limits<float>::max();
         for (std::size_t c = 0; c < face_count; ++c) {
             if (c != own) {
-                rival_distance = std::min(rival_distance, assignment_distance(samples[s], means[c]));
+                rival_distance =
+                    std::min(rival_distance, assignment_distance(samples[s], means[c]));
             }
         }
         // Relative margin between the sample's own cluster and the nearest

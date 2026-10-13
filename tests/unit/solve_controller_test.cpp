@@ -18,7 +18,8 @@ using cube::app::ScanSession;
 // reason. That path is covered by manual verification instead (see the
 // implementation plan).
 
-TEST_CASE("SolveController starts with a solved placeholder and no solve in flight", "[qt][controllers]") {
+TEST_CASE("SolveController starts with a solved placeholder and no solve in flight",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
@@ -36,7 +37,8 @@ TEST_CASE("what changes when a solve lands is announced to the screen", "[qt][co
     // and never again, which left the screen showing "0 moves" and a dead
     // stage list beside a solution it could step through.
     const QMetaObject& meta = SolveController::staticMetaObject;
-    for (const char* name : {"totalMoves", "stageRanges", "moveIndex", "currentMoveNotation", "isSolving"}) {
+    for (const char* name :
+         {"totalMoves", "stageRanges", "moveIndex", "currentMoveNotation", "isSolving"}) {
         const QMetaProperty property = meta.property(meta.indexOfProperty(name));
         INFO(name);
         REQUIRE(property.isValid());
@@ -45,7 +47,8 @@ TEST_CASE("what changes when a solve lands is announced to the screen", "[qt][co
     }
 }
 
-TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step", "[qt][controllers]") {
+TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
@@ -56,11 +59,13 @@ TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to ste
     REQUIRE(controller.totalMoves() == 0);
 }
 
-TEST_CASE("SolveController's placeholder cube is solved on all three visible faces", "[qt][controllers]") {
+TEST_CASE("SolveController's placeholder cube is solved on all three visible faces",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
-    for (const auto& colors : {controller.topColors(), controller.rightColors(), controller.leftColors()}) {
+    for (const auto& colors :
+         {controller.topColors(), controller.rightColors(), controller.leftColors()}) {
         REQUIRE(colors.size() == 9);
         const auto center = colors.at(4);
         for (const auto& color : colors) {

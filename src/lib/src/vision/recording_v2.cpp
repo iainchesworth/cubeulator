@@ -40,13 +40,20 @@ constexpr std::array<cube::solver::Face, 6> kManifestFaceOrder{
 
 std::optional<cube::solver::Face> face_from_letter(char letter) {
     switch (letter) {
-        case 'U': return cube::solver::Face::U;
-        case 'R': return cube::solver::Face::R;
-        case 'F': return cube::solver::Face::F;
-        case 'D': return cube::solver::Face::D;
-        case 'L': return cube::solver::Face::L;
-        case 'B': return cube::solver::Face::B;
-        default: return std::nullopt;
+        case 'U':
+            return cube::solver::Face::U;
+        case 'R':
+            return cube::solver::Face::R;
+        case 'F':
+            return cube::solver::Face::F;
+        case 'D':
+            return cube::solver::Face::D;
+        case 'L':
+            return cube::solver::Face::L;
+        case 'B':
+            return cube::solver::Face::B;
+        default:
+            return std::nullopt;
     }
 }
 
@@ -57,11 +64,21 @@ void append_json_string(std::string& out, const std::string& text) {
     out.push_back('"');
     for (const char ch : text) {
         switch (ch) {
-            case '"': out += "\\\""; break;
-            case '\\': out += "\\\\"; break;
-            case '\n': out += "\\n"; break;
-            case '\r': out += "\\r"; break;
-            case '\t': out += "\\t"; break;
+            case '"':
+                out += "\\\"";
+                break;
+            case '\\':
+                out += "\\\\";
+                break;
+            case '\n':
+                out += "\\n";
+                break;
+            case '\r':
+                out += "\\r";
+                break;
+            case '\t':
+                out += "\\t";
+                break;
             default:
                 if (static_cast<unsigned char>(ch) >= 0x20) {
                     out.push_back(ch);
@@ -99,10 +116,17 @@ std::optional<std::string> json_string_field(const std::string& text, const std:
         if (ch == '\\' && pos + 1 < text.size()) {
             const char next = text[++pos];
             switch (next) {
-                case 'n': value.push_back('\n'); break;
-                case 'r': value.push_back('\r'); break;
-                case 't': value.push_back('\t'); break;
-                default: value.push_back(next);
+                case 'n':
+                    value.push_back('\n');
+                    break;
+                case 'r':
+                    value.push_back('\r');
+                    break;
+                case 't':
+                    value.push_back('\t');
+                    break;
+                default:
+                    value.push_back(next);
             }
         } else if (ch == '"') {
             return value;
@@ -123,7 +147,8 @@ std::optional<std::string> state_string_problem(const std::string& state) {
     for (std::size_t i = 0; i < 54; ++i) {
         const auto face = face_from_letter(state[i]);
         if (!face) {
-            return "state[" + std::to_string(i) + "] is '" + std::string(1, state[i]) + "', expected one of URFDLB";
+            return "state[" + std::to_string(i) + "] is '" + std::string(1, state[i]) +
+                   "', expected one of URFDLB";
         }
         const auto slot = kManifestFaceOrder[i / 9];
         facelets[static_cast<std::size_t>(slot)][i % 9] = cube::solver::canonical_color(*face);
@@ -134,8 +159,9 @@ std::optional<std::string> state_string_problem(const std::string& state) {
     for (std::size_t f = 0; f < 6; ++f) {
         const std::size_t centre = f * 9 + 4;
         if (state[centre] != kCentreLetters[f]) {
-            return "state[" + std::to_string(centre) + "] must be the centre '" + std::string(1, kCentreLetters[f]) +
-                   "', got '" + std::string(1, state[centre]) + "'";
+            return "state[" + std::to_string(centre) + "] must be the centre '" +
+                   std::string(1, kCentreLetters[f]) + "', got '" + std::string(1, state[centre]) +
+                   "'";
         }
     }
     const auto cube = cube::solver::Cube::from_facelets(facelets);
@@ -155,7 +181,8 @@ std::optional<std::string> write_manifest(const std::string& dir, const Manifest
         }
     }
     std::string out = "{\n";
-    const auto field = [&out](const char* key, const std::optional<std::string>& value, bool last = false) {
+    const auto field = [&out](const char* key, const std::optional<std::string>& value,
+                              bool last = false) {
         out += "  \"";
         out += key;
         out += "\": ";
@@ -221,8 +248,8 @@ std::optional<std::string> check_recording(const std::string& dir) {
     std::int64_t previous_t = rows.front().t_ms;
     for (const auto& row : rows) {
         if (row.pass != expected_pass) {
-            return "pass gap: expected " + std::to_string(expected_pass) + ", found " + std::to_string(row.pass) +
-                   " (dropped frames)";
+            return "pass gap: expected " + std::to_string(expected_pass) + ", found " +
+                   std::to_string(row.pass) + " (dropped frames)";
         }
         ++expected_pass;
         if (row.t_ms < previous_t) {
@@ -255,7 +282,8 @@ std::optional<std::string> check_recording(const std::string& dir) {
             if (const auto colon = text.find(':', pos); colon != std::string::npos) {
                 const int dropped = std::atoi(text.c_str() + colon + 1);
                 if (dropped > 0) {
-                    return "recorder dropped " + std::to_string(dropped) + " frame(s) (queue overflow)";
+                    return "recorder dropped " + std::to_string(dropped) +
+                           " frame(s) (queue overflow)";
                 }
             }
         }
@@ -335,7 +363,8 @@ AsyncRecorder::Stats AsyncRecorder::stop() {
     // failed clip even though the index itself stays contiguous.
     std::ofstream stats_file(fs::path(dir_) / "recording_stats.json", std::ios::trunc);
     stats_file << "{\"pushed\": " << stats_.pushed << ", \"written\": " << stats_.written
-               << ", \"dropped\": " << stats_.dropped << ", \"queue_peak\": " << stats_.queue_peak << "}\n";
+               << ", \"dropped\": " << stats_.dropped << ", \"queue_peak\": " << stats_.queue_peak
+               << "}\n";
     return stats_;
 }
 
@@ -360,8 +389,8 @@ void AsyncRecorder::writer_loop() {
             cv::imwrite((dir / std::string(kFullResSubdir) / name).string(), job.full,
                         {cv::IMWRITE_JPEG_QUALITY, kFullResJpegQuality});
         }
-        index << pass_ << ',' << job.t_ms << ',' << analysis.frame.cols << ',' << analysis.frame.rows << ','
-              << job.full.cols << ',' << job.full.rows << '\n';
+        index << pass_ << ',' << job.t_ms << ',' << analysis.frame.cols << ','
+              << analysis.frame.rows << ',' << job.full.cols << ',' << job.full.rows << '\n';
         index.flush();
         ++pass_;
         {

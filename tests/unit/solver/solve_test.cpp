@@ -75,7 +75,8 @@ Cube apply_all(Cube cube, const std::vector<Move>& moves) {
 
 }  // namespace
 
-TEST_CASE("solve fully solves a corpus of random scrambles via the beginner method", "[solve][slow]") {
+TEST_CASE("solve fully solves a corpus of random scrambles via the beginner method",
+          "[solve][slow]") {
     for (unsigned seed = 0; seed < 3; ++seed) {
         CAPTURE(seed);
         const Cube scrambled = random_scramble(seed, 25);
@@ -92,7 +93,8 @@ TEST_CASE("solve fully solves a corpus of random scrambles via the beginner meth
     }
 }
 
-TEST_CASE("solve produces every stage in order for a scramble that needs each one", "[solve][slow]") {
+TEST_CASE("solve produces every stage in order for a scramble that needs each one",
+          "[solve][slow]") {
     const Cube scrambled = random_scramble(0, 25);
     const auto solution = solve(scrambled);
     REQUIRE(solution.has_value());
@@ -101,8 +103,8 @@ TEST_CASE("solve produces every stage in order for a scramble that needs each on
     for (const auto& step : solution->steps) {
         stages.push_back(step.stage);
     }
-    REQUIRE(stages == std::vector<Stage>{Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges, Stage::Oll,
-                                          Stage::Pll});
+    REQUIRE(stages == std::vector<Stage>{Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges,
+                                         Stage::Oll, Stage::Pll});
 }
 
 // solve()'s is_physically_valid() guard (see solver.cpp) isn't exercised

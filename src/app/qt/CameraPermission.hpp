@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QObject>
 #include <qqmlintegration.h>
+#include <QObject>
 
 // QML-facing camera permission status/request. Deliberately does not
 // hand-roll per-platform permission code: Qt's own cross-platform

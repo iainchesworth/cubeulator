@@ -92,8 +92,8 @@ cube::model::ScanProgress synthesize_scan(const Cube& cube) {
         std::array<cube::model::Facelet, 9> facelets{};
         for (std::size_t cam_index = 0; cam_index < 9; ++cam_index) {
             const auto sol_index = static_cast<std::size_t>(permutation[cam_index]);
-            facelets[cam_index] =
-                cube::model::Facelet{.color = to_model_color(solver_facelets[sol_index]), .confidence = 1.0F};
+            facelets[cam_index] = cube::model::Facelet{
+                .color = to_model_color(solver_facelets[sol_index]), .confidence = 1.0F};
         }
         progress.set_face(model_face, facelets);
     }
@@ -102,9 +102,12 @@ cube::model::ScanProgress synthesize_scan(const Cube& cube) {
 
 }  // namespace
 
-TEST_CASE("cube_from_scan round-trips a synthesized scan back to the original cube", "[scan_conversion]") {
-    const Cube scrambled = Cube::solved().apply(Move{Face::R, 1}).apply(Move{Face::U, 1}).apply(Move{Face::F, 2});
-    for (const Cube& original : {Cube::solved(), Cube::solved().apply(Move{Face::R, 1}), scrambled}) {
+TEST_CASE("cube_from_scan round-trips a synthesized scan back to the original cube",
+          "[scan_conversion]") {
+    const Cube scrambled =
+        Cube::solved().apply(Move{Face::R, 1}).apply(Move{Face::U, 1}).apply(Move{Face::F, 2});
+    for (const Cube& original :
+         {Cube::solved(), Cube::solved().apply(Move{Face::R, 1}), scrambled}) {
         const auto result = cube_from_scan(synthesize_scan(original));
         REQUIRE(result.has_value());
         REQUIRE(*result == original);
@@ -118,13 +121,15 @@ TEST_CASE("cube_from_scan fails on an incomplete scan", "[scan_conversion]") {
     REQUIRE(result.error() == CubeError::face_capture_incomplete);
 }
 
-TEST_CASE("cube_from_scan rejects a scan with a contradictory colour arrangement", "[scan_conversion]") {
+TEST_CASE("cube_from_scan rejects a scan with a contradictory colour arrangement",
+          "[scan_conversion]") {
     cube::model::ScanProgress progress = synthesize_scan(Cube::solved());
     // Forcing U to also read all-White (alongside D's genuine all-White)
     // pushes White's count to 18 and Yellow's to 0 - a real vision
     // misclassification is_physically_valid() must catch.
     std::array<cube::model::Facelet, 9> all_white{};
-    all_white.fill(cube::model::Facelet{.color = cube::model::FacetColor::white, .confidence = 1.0F});
+    all_white.fill(
+        cube::model::Facelet{.color = cube::model::FacetColor::white, .confidence = 1.0F});
     progress.set_face(cube::model::Face::U, all_white);
 
     const auto result = cube_from_scan(progress);

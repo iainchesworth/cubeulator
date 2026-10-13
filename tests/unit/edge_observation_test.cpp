@@ -36,12 +36,12 @@ cv::Mat render_edge_view(const Quat& q, double distance = 2.6) {
     const cv::Matx33d camera = approximate_camera_matrix(frame.size());
 
     const std::array<cv::Scalar, 6> palette = {
-        cv::Scalar(0, 0, 200),    // red
-        cv::Scalar(60, 170, 60),  // green
-        cv::Scalar(200, 80, 0),   // blue
-        cv::Scalar(0, 120, 240),  // orange
-        cv::Scalar(0, 200, 230),  // yellow
-        cv::Scalar(180, 60, 180), // magenta stand-in: any saturated tile works
+        cv::Scalar(0, 0, 200),     // red
+        cv::Scalar(60, 170, 60),   // green
+        cv::Scalar(200, 80, 0),    // blue
+        cv::Scalar(0, 120, 240),   // orange
+        cv::Scalar(0, 200, 230),   // yellow
+        cv::Scalar(180, 60, 180),  // magenta stand-in: any saturated tile works
     };
 
     constexpr double kHalfTile = 0.8 / 6.0;
@@ -52,9 +52,11 @@ cv::Mat render_edge_view(const Quat& q, double distance = 2.6) {
                 const double u = -0.5 + (col + 0.5) / 3.0;
                 const double v = -0.5 + (row + 0.5) / 3.0;
                 std::vector<cv::Point3d> corners;
-                for (const auto [du, dv] : std::array<std::array<double, 2>, 4>{
-                         {{-kHalfTile, -kHalfTile}, {kHalfTile, -kHalfTile}, {kHalfTile, kHalfTile},
-                          {-kHalfTile, kHalfTile}}}) {
+                for (const auto [du, dv] :
+                     std::array<std::array<double, 2>, 4>{{{-kHalfTile, -kHalfTile},
+                                                           {kHalfTile, -kHalfTile},
+                                                           {kHalfTile, kHalfTile},
+                                                           {-kHalfTile, kHalfTile}}}) {
                     if (is_left_face) {
                         corners.emplace_back(u + du, v + dv, -0.5);  // model F plane
                     } else {
@@ -69,7 +71,8 @@ cv::Mat render_edge_view(const Quat& q, double distance = 2.6) {
                     poly.emplace_back(static_cast<int>(std::lround(point.x)),
                                       static_cast<int>(std::lround(point.y)));
                 }
-                cv::fillConvexPoly(frame, poly, palette[static_cast<std::size_t>(tile_index) % palette.size()],
+                cv::fillConvexPoly(frame, poly,
+                                   palette[static_cast<std::size_t>(tile_index) % palette.size()],
                                    cv::LINE_8);
             }
         }
@@ -89,7 +92,8 @@ cv::Mat render_edge_view(const Quat& q, double distance = 2.6) {
 
 }  // namespace
 
-TEST_CASE("observe_edge + project_cube_from_edge recover synthetic edge poses within 8 degrees", "[vision]") {
+TEST_CASE("observe_edge + project_cube_from_edge recover synthetic edge poses within 8 degrees",
+          "[vision]") {
     for (const float yaw : {40.0F, 45.0F, 50.0F}) {
         for (const float roll : {-15.0F, 0.0F, 15.0F}) {
             CAPTURE(yaw, roll);
@@ -98,9 +102,9 @@ TEST_CASE("observe_edge + project_cube_from_edge recover synthetic edge poses wi
 
             detail::EdgeDiagnostics diag;
             const auto edge = detail::observe_edge_diagnosed(frame, nullptr, &diag);
-            CAPTURE(diag.candidate_count, diag.splits_evaluated, diag.paired_fits, diag.best_split_x,
-                    diag.best_left_inliers, diag.best_right_inliers, diag.best_pitch_ratio,
-                    diag.best_shared_edge_px);
+            CAPTURE(diag.candidate_count, diag.splits_evaluated, diag.paired_fits,
+                    diag.best_split_x, diag.best_left_inliers, diag.best_right_inliers,
+                    diag.best_pitch_ratio, diag.best_shared_edge_px);
             REQUIRE(edge.has_value());
             REQUIRE(edge->geometry_confidence > 0.0F);
 
@@ -157,7 +161,8 @@ TEST_CASE("compute_edge_hint refuses non-edge presentations", "[vision]") {
     CHECK(compute_corner_hint(seed_for(corner)).has_value());
     // Horizontal shared edge (pitch instead of yaw): two faces visible but
     // not the vertical-edge presentation this detector models.
-    CHECK_FALSE(compute_edge_hint(seed_for(quat_from_rotvec_deg({-45.0F, 0.0F, 0.0F}))).has_value());
+    CHECK_FALSE(
+        compute_edge_hint(seed_for(quat_from_rotvec_deg({-45.0F, 0.0F, 0.0F}))).has_value());
 }
 
 TEST_CASE("observe_edge rejects frames without a two-face edge view", "[vision]") {
