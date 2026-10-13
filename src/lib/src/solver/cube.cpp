@@ -18,16 +18,18 @@ struct Vec3 {
 };
 
 constexpr Vec3 operator+(Vec3 a, Vec3 b) noexcept {
-    return {a.x + b.x, a.y + b.y, a.z + b.z};
+    return {.x = a.x + b.x, .y = a.y + b.y, .z = a.z + b.z};
 }
 constexpr Vec3 operator*(Vec3 v, int s) noexcept {
-    return {v.x * s, v.y * s, v.z * s};
+    return {.x = v.x * s, .y = v.y * s, .z = v.z * s};
 }
 constexpr int dot(Vec3 a, Vec3 b) noexcept {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
+    return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
 }
 constexpr Vec3 cross(Vec3 a, Vec3 b) noexcept {
-    return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+    return {.x = (a.y * b.z) - (a.z * b.y),
+            .y = (a.z * b.x) - (a.x * b.z),
+            .z = (a.x * b.y) - (a.y * b.x)};
 }
 
 // The outward normal of `face`: R/L along X (L->R), U/D along Y (D->U), F/B
@@ -36,32 +38,37 @@ constexpr Vec3 cross(Vec3 a, Vec3 b) noexcept {
 constexpr Vec3 face_normal(Face face) noexcept {
     switch (face) {
         case Face::R:
-            return {1, 0, 0};
+            return {.x = 1, .y = 0, .z = 0};
         case Face::L:
-            return {-1, 0, 0};
+            return {.x = -1, .y = 0, .z = 0};
         case Face::U:
-            return {0, 1, 0};
+            return {.x = 0, .y = 1, .z = 0};
         case Face::D:
-            return {0, -1, 0};
+            return {.x = 0, .y = -1, .z = 0};
         case Face::F:
-            return {0, 0, 1};
+            return {.x = 0, .y = 0, .z = 1};
         case Face::B:
-            return {0, 0, -1};
+            return {.x = 0, .y = 0, .z = -1};
     }
     return {};
 }
 
 constexpr Face face_from_normal(Vec3 n) noexcept {
-    if (n.x == 1)
+    if (n.x == 1) {
         return Face::R;
-    if (n.x == -1)
+    }
+    if (n.x == -1) {
         return Face::L;
-    if (n.y == 1)
+    }
+    if (n.y == 1) {
         return Face::U;
-    if (n.y == -1)
+    }
+    if (n.y == -1) {
         return Face::D;
-    if (n.z == 1)
+    }
+    if (n.z == 1) {
         return Face::F;
+    }
     return Face::B;
 }
 
@@ -81,17 +88,17 @@ constexpr Vec3 rotate_quarter(Vec3 v, Vec3 n) noexcept {
 constexpr Vec3 position_of(Face face, int row, int col) noexcept {
     switch (face) {
         case Face::U:
-            return {col - 1, 1, row - 1};
+            return {.x = col - 1, .y = 1, .z = row - 1};
         case Face::D:
-            return {col - 1, -1, row - 1};
+            return {.x = col - 1, .y = -1, .z = row - 1};
         case Face::R:
-            return {1, 1 - row, col - 1};
+            return {.x = 1, .y = 1 - row, .z = col - 1};
         case Face::L:
-            return {-1, 1 - row, col - 1};
+            return {.x = -1, .y = 1 - row, .z = col - 1};
         case Face::F:
-            return {col - 1, 1 - row, 1};
+            return {.x = col - 1, .y = 1 - row, .z = 1};
         case Face::B:
-            return {col - 1, 1 - row, -1};
+            return {.x = col - 1, .y = 1 - row, .z = -1};
     }
     return {};
 }
@@ -106,13 +113,13 @@ constexpr int index_on_face(Face face, Vec3 pos) noexcept {
     switch (face) {
         case Face::U:
         case Face::D:
-            return (pos.z + 1) * 3 + (pos.x + 1);
+            return ((pos.z + 1) * 3) + (pos.x + 1);
         case Face::R:
         case Face::L:
-            return (1 - pos.y) * 3 + (pos.z + 1);
+            return ((1 - pos.y) * 3) + (pos.z + 1);
         case Face::F:
         case Face::B:
-            return (1 - pos.y) * 3 + (pos.x + 1);
+            return ((1 - pos.y) * 3) + (pos.x + 1);
     }
     return 0;
 }
@@ -165,8 +172,10 @@ constexpr MoveTable make_move_table(Face turned, int turns) {
             if (new_face == face && new_index == index) {
                 continue;  // the turned face's own centre
             }
-            table[count++] = StickerMove{new_face, static_cast<std::uint8_t>(new_index), face,
-                                         static_cast<std::uint8_t>(index)};
+            table[count++] = StickerMove{.dst_face = new_face,
+                                         .dst_index = static_cast<std::uint8_t>(new_index),
+                                         .src_face = face,
+                                         .src_index = static_cast<std::uint8_t>(index)};
         }
     }
     if (count != table.size()) {
@@ -226,7 +235,10 @@ constexpr auto kEdgePositions = [] {
                         indices[n] = static_cast<std::uint8_t>(index_on_face(face, pos));
                         ++n;
                     }
-                    positions[count++] = EdgePosition{faces[0], indices[0], faces[1], indices[1]};
+                    positions[count++] = EdgePosition{.face_a = faces[0],
+                                                      .index_a = indices[0],
+                                                      .face_b = faces[1],
+                                                      .index_b = indices[1]};
                 }
             }
         }
@@ -243,12 +255,12 @@ constexpr auto kCornerPositions = [] {
                 CornerPosition corner{};
                 int n = 0;
                 for (Face face : kAllFaces) {
-                    if (dot(face_normal(face), Vec3{cx, cy, cz}) != 1) {
+                    if (dot(face_normal(face), Vec3{.x = cx, .y = cy, .z = cz}) != 1) {
                         continue;
                     }
                     corner.faces[static_cast<std::size_t>(n)] = face;
-                    corner.indices[static_cast<std::size_t>(n)] =
-                        static_cast<std::uint8_t>(index_on_face(face, Vec3{cx, cy, cz}));
+                    corner.indices[static_cast<std::size_t>(n)] = static_cast<std::uint8_t>(
+                        index_on_face(face, Vec3{.x = cx, .y = cy, .z = cz}));
                     ++n;
                 }
                 positions[count++] = corner;
@@ -374,10 +386,10 @@ bool Cube::is_physically_valid() const noexcept {
                 int n = 0;
                 for (Face face : kAllFaces) {
                     const Vec3 fn = face_normal(face);
-                    if (dot(fn, Vec3{cx, cy, cz}) != 1) {
+                    if (dot(fn, Vec3{.x = cx, .y = cy, .z = cz}) != 1) {
                         continue;  // this face doesn't touch this corner
                     }
-                    const int index = index_on_face(face, Vec3{cx, cy, cz});
+                    const int index = index_on_face(face, Vec3{.x = cx, .y = cy, .z = cz});
                     colors[static_cast<std::size_t>(n)] = at(face, index);
                     ++n;
                 }
@@ -445,19 +457,19 @@ constexpr Face canonical_face_of(Color color) noexcept {
 
 // Dense 0..7 index for a corner position (all coordinates in {-1, 1}).
 constexpr int corner_slot(Vec3 pos) noexcept {
-    return ((pos.x + 1) / 2) * 4 + ((pos.y + 1) / 2) * 2 + (pos.z + 1) / 2;
+    return (((pos.x + 1) / 2) * 4) + (((pos.y + 1) / 2) * 2) + ((pos.z + 1) / 2);
 }
 
 // Dense 0..11 index for an edge position (exactly one coordinate 0),
 // grouped by which axis holds the zero.
 constexpr int edge_slot(Vec3 pos) noexcept {
     if (pos.x == 0) {
-        return ((pos.y + 1) / 2) * 2 + (pos.z + 1) / 2;
+        return (((pos.y + 1) / 2) * 2) + ((pos.z + 1) / 2);
     }
     if (pos.y == 0) {
-        return 4 + ((pos.x + 1) / 2) * 2 + (pos.z + 1) / 2;
+        return 4 + (((pos.x + 1) / 2) * 2) + ((pos.z + 1) / 2);
     }
-    return 8 + ((pos.x + 1) / 2) * 2 + (pos.y + 1) / 2;
+    return 8 + (((pos.x + 1) / 2) * 2) + ((pos.y + 1) / 2);
 }
 
 // Parity (0 = even, 1 = odd) of a permutation given as slot -> home-slot,
@@ -532,7 +544,7 @@ bool Cube::is_solvable() const noexcept {
     for (int cx : {-1, 1}) {
         for (int cy : {-1, 1}) {
             for (int cz : {-1, 1}) {
-                const Vec3 pos{cx, cy, cz};
+                const Vec3 pos{.x = cx, .y = cy, .z = cz};
                 Vec3 ud_facet{};  // outward normal of the facet holding White/Yellow
                 Vec3 home{};      // sum of the three colours' canonical-face normals
                 for (Face face : kAllFaces) {
@@ -548,7 +560,8 @@ bool Cube::is_solvable() const noexcept {
                 }
 
                 if (ud_facet.y == 0) {  // not already on the U/D facet
-                    twist_sum += dot(cross(Vec3{0, cy, 0}, ud_facet), pos) < 0 ? 1 : 2;
+                    twist_sum +=
+                        dot(cross(Vec3{.x = 0, .y = cy, .z = 0}, ud_facet), pos) < 0 ? 1 : 2;
                 }
 
                 // The three canonical normals are mutually orthogonal
@@ -653,10 +666,16 @@ Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
         const Color c0 = at(position.face_a, position.index_a);
         const Color c1 = at(position.face_b, position.index_b);
         if (c0 == a && c1 == b) {
-            return {position.face_a, position.index_a, position.face_b, position.index_b};
+            return {.face_a = position.face_a,
+                    .index_a = position.index_a,
+                    .face_b = position.face_b,
+                    .index_b = position.index_b};
         }
         if (c0 == b && c1 == a) {
-            return {position.face_b, position.index_b, position.face_a, position.index_a};
+            return {.face_a = position.face_b,
+                    .index_a = position.index_b,
+                    .face_b = position.face_a,
+                    .index_b = position.index_a};
         }
     }
     return {};  // unreachable for a physically valid cube
@@ -682,8 +701,12 @@ Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexce
             const auto fa = static_cast<std::size_t>(ia);
             const auto fb = static_cast<std::size_t>(ib);
             const auto fc = static_cast<std::size_t>(ic);
-            return {position.faces[fa],   position.indices[fa], position.faces[fb],
-                    position.indices[fb], position.faces[fc],   position.indices[fc]};
+            return {.face_a = position.faces[fa],
+                    .index_a = position.indices[fa],
+                    .face_b = position.faces[fb],
+                    .index_b = position.indices[fb],
+                    .face_c = position.faces[fc],
+                    .index_c = position.indices[fc]};
         }
     }
     return {};  // unreachable for a physically valid cube

@@ -10,7 +10,7 @@ namespace {
     std::array<Color, 9> turned{};
     for (std::size_t row = 0; row < 3; ++row) {
         for (std::size_t column = 0; column < 3; ++column) {
-            turned[row * 3 + column] = side[column * 3 + (2 - row)];
+            turned[(row * 3) + column] = side[(column * 3) + (2 - row)];
         }
     }
     return turned;

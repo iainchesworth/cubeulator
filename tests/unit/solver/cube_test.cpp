@@ -33,7 +33,7 @@ TEST_CASE("applying a quarter turn four times is the identity", "[cube]") {
     for (Face face : kAllFaces) {
         Cube c = Cube::solved();
         for (int i = 0; i < 4; ++i) {
-            c = c.apply(Move{face, 1});
+            c = c.apply(Move{.face = face, .turns = 1});
         }
         REQUIRE(c == Cube::solved());
         REQUIRE(c.is_solved());
@@ -42,7 +42,9 @@ TEST_CASE("applying a quarter turn four times is the identity", "[cube]") {
 
 TEST_CASE("applying a half turn twice is the identity", "[cube]") {
     for (Face face : kAllFaces) {
-        Cube c = Cube::solved().apply(Move{face, 2}).apply(Move{face, 2});
+        Cube c = Cube::solved()
+                     .apply(Move{.face = face, .turns = 2})
+                     .apply(Move{.face = face, .turns = 2});
         REQUIRE(c == Cube::solved());
     }
 }
@@ -55,13 +57,13 @@ TEST_CASE("a move followed by its inverse round-trips, from solved and from a sc
     // round-trip check below runs against a non-trivial starting state too.
     Cube scrambled = Cube::solved();
     for (int i = 0; i < 20; ++i) {
-        scrambled = scrambled.apply(Move{kAllFaces[face_dist(rng)], 1 + static_cast<int>(i % 3)});
+        scrambled = scrambled.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = 1 + (i % 3)});
     }
 
     for (const Cube& start : {Cube::solved(), scrambled}) {
         for (Face face : kAllFaces) {
             for (int turns = 1; turns <= 3; ++turns) {
-                const Move move{face, turns};
+                const Move move{.face = face, .turns = turns};
                 const Cube after = start.apply(move).apply(move.inverse());
                 REQUIRE(after == start);
             }
@@ -73,7 +75,7 @@ TEST_CASE("R turn cycles U/F/D/B's right-hand columns in the expected direction"
     // Verified by hand against the well-known physical fact that a
     // clockwise R turn (viewed from the right) cycles the R-adjacent
     // stickers U -> B -> D -> F -> U.
-    const Cube c = Cube::solved().apply(Move{Face::R, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::R, .turns = 1});
 
     for (int row = 0; row < 3; ++row) {
         CAPTURE(row);
@@ -92,7 +94,7 @@ TEST_CASE("U turn cycles F/R/B/L's top rows in the expected direction", "[cube]"
     // Verified by hand against the well-known physical fact that a
     // clockwise U turn (viewed from above) cycles the U-adjacent stickers
     // F -> L -> B -> R -> F.
-    const Cube c = Cube::solved().apply(Move{Face::U, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::U, .turns = 1});
 
     for (int col = 0; col < 3; ++col) {
         CAPTURE(col);
@@ -111,7 +113,7 @@ TEST_CASE("F turn cycles U/R/D/L's F-adjacent lines in the expected direction", 
     // Verified by hand against the well-known physical fact that a
     // clockwise F turn (viewed from the front) cycles the F-adjacent
     // stickers U -> R -> D -> L -> U.
-    const Cube c = Cube::solved().apply(Move{Face::F, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::F, .turns = 1});
 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
@@ -126,7 +128,7 @@ TEST_CASE("L turn cycles U/F/D/B's L-adjacent lines in the expected direction", 
     // Verified by hand against the well-known physical fact that a
     // clockwise L turn (viewed from the left) cycles the L-adjacent
     // stickers U -> F -> D -> B -> U.
-    const Cube c = Cube::solved().apply(Move{Face::L, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::L, .turns = 1});
 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
@@ -141,7 +143,7 @@ TEST_CASE("D turn cycles F/R/B/L's bottom rows in the expected direction", "[cub
     // Verified by hand against the well-known physical fact that a
     // clockwise D turn (viewed from below) cycles the D-adjacent stickers
     // F -> R -> B -> L -> F.
-    const Cube c = Cube::solved().apply(Move{Face::D, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::D, .turns = 1});
 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
@@ -156,7 +158,7 @@ TEST_CASE("B turn cycles U/L/D/R's B-adjacent lines in the expected direction", 
     // Verified by hand against the well-known physical fact that a
     // clockwise B turn (viewed from the back) cycles the B-adjacent
     // stickers U -> L -> D -> R -> U.
-    const Cube c = Cube::solved().apply(Move{Face::B, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::B, .turns = 1});
 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
@@ -179,12 +181,12 @@ TEST_CASE("half and prime turns equal composed quarter turns, for every face", "
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     Cube scrambled = Cube::solved();
     for (int i = 0; i < 20; ++i) {
-        scrambled = scrambled.apply(Move{kAllFaces[face_dist(rng)], 1 + static_cast<int>(i % 3)});
+        scrambled = scrambled.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = 1 + (i % 3)});
     }
 
     for (const Cube& start : {Cube::solved(), scrambled}) {
         for (Face face : kAllFaces) {
-            const Cube quarter = start.apply(Move{face, 1});
+            const Cube quarter = start.apply(Move{.face = face, .turns = 1});
             REQUIRE(start.apply(Move{face, 2}) == quarter.apply(Move{face, 1}));
             REQUIRE(start.apply(Move{face, 3}) ==
                     quarter.apply(Move{face, 1}).apply(Move{face, 1}));
@@ -199,7 +201,7 @@ TEST_CASE("random move sequences stay physically valid at every step", "[cube]")
 
     Cube c = Cube::solved();
     for (int i = 0; i < 200; ++i) {
-        c = c.apply(Move{kAllFaces[face_dist(rng)], turn_dist(rng)});
+        c = c.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
         CAPTURE(i);
         REQUIRE(c.is_physically_valid());
     }
@@ -217,9 +219,18 @@ TEST_CASE("locate_edge finds every edge of a solved cube on its own two faces", 
     // is to exercise locate_edge's face-pair enumeration, not re-derive the
     // full edge list.
     for (auto [a, b, face_a, face_b] : {
-             Case{Color::Yellow, Color::Green, Face::U, Face::F},
-             Case{Color::White, Color::Orange, Face::D, Face::R},
-             Case{Color::Green, Color::Orange, Face::F, Face::R},
+             Case{.a = Color::Yellow,
+                  .b = Color::Green,
+                  .expected_face_a = Face::U,
+                  .expected_face_b = Face::F},
+             Case{.a = Color::White,
+                  .b = Color::Orange,
+                  .expected_face_a = Face::D,
+                  .expected_face_b = Face::R},
+             Case{.a = Color::Green,
+                  .b = Color::Orange,
+                  .expected_face_a = Face::F,
+                  .expected_face_b = Face::R},
          }) {
         const auto loc = solved.locate_edge(a, b);
         REQUIRE(loc.face_a == face_a);
@@ -239,14 +250,16 @@ TEST_CASE("locate_edge tracks a piece through a move", "[cube]") {
     // R). A single R turn carries the DR position to FR (see the golden
     // R-turn test above: R's layer stays on R, and D's content becomes
     // F's), with White now on F and Orange still on R.
-    const Cube c = Cube::solved().apply(Move{Face::R, 1});
+    const Cube c = Cube::solved().apply(Move{.face = Face::R, .turns = 1});
     const auto loc = c.locate_edge(Color::White, Color::Orange);
     REQUIRE(loc.face_a == Face::F);
     REQUIRE(loc.face_b == Face::R);
 }
 
 TEST_CASE("from_facelets round-trips a physically valid cube's own facelets", "[cube]") {
-    const Cube original = Cube::solved().apply(Move{Face::R, 1}).apply(Move{Face::U, 2});
+    const Cube original = Cube::solved()
+                              .apply(Move{.face = Face::R, .turns = 1})
+                              .apply(Move{.face = Face::U, .turns = 2});
     std::array<std::array<Color, 9>, 6> facelets{};
     for (Face face : kAllFaces) {
         facelets[static_cast<std::size_t>(face)] = original.face(face);
@@ -302,7 +315,7 @@ TEST_CASE("solved and randomly scrambled cubes are solvable", "[cube]") {
 
     Cube c = Cube::solved();
     for (int i = 0; i < 200; ++i) {
-        c = c.apply(Move{kAllFaces[face_dist(rng)], turn_dist(rng)});
+        c = c.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
         CAPTURE(i);
         REQUIRE(c.is_solvable());
     }

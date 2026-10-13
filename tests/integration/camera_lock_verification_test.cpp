@@ -46,6 +46,7 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <utility>
 #include <vector>
 
 namespace camera = cube::platform::camera;
@@ -125,8 +126,7 @@ Run collect(int frames) {
     chroma_values.reserve(static_cast<std::size_t>(frames));
 
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-    while (static_cast<int>(l_values.size()) < frames &&
-           std::chrono::steady_clock::now() < deadline) {
+    while (std::cmp_less(l_values.size(), frames) && std::chrono::steady_clock::now() < deadline) {
         auto frame = camera::try_pop_latest_frame();
         if (!frame) {
             // The mailbox is latest-wins and this poll is faster than the
