@@ -67,10 +67,10 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
+      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       # clang-tidy uses its own clang frontend to parse the compile commands
       # regardless of which compiler actually built the code, so this job
@@ -201,16 +201,21 @@ jobs:
       # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
       # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
       #
-      # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
+      # Three distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
       # bgfx's port unconditionally find_package(X11)s even with
       # examples/tools disabled ("Could NOT find X11"); (2) gperf (a
       # transitive dependency via gettext, itself pulled in by
       # onnxruntime/protobuf) needs the autotools chain to build from source
       # ("gperf currently requires ... autoconf autoconf-archive automake
-      # libtoolize"). Both confirmed in CI.
+      # libtoolize"); (3) glew's generated glew.pc declares `Requires: glu`, and
+      # vcpkg_fixup_pkgconfig() then runs `pkg-config --exists glew`, which
+      # fails with "Package 'glu', required by 'glew', not found" (glu.pc
+      # comes from libglu1-mesa-dev, which ubuntu-26.04 does not preinstall
+      # - the build of glew:x64-linux dies with BUILD_FAILED). All three
+      # confirmed in CI.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -484,10 +489,10 @@ jobs:
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
       # out of the box - see the equivalent comment on build-and-test above.
       #
-      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test above (X11 for bgfx, autotools for gperf).
+      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test above (X11 for bgfx, autotools for gperf, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr
