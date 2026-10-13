@@ -87,12 +87,12 @@ std::filesystem::path write_cube_obj(const std::filesystem::path& dir) {
     }
     // 1-based indices for vertices (-h,-h,-h),(h,-h,-h),(h,h,-h),(-h,h,-h),
     // (-h,-h,h),(h,-h,h),(h,h,h),(-h,h,h) in the classic ordering.
-    out << "f 5 6 7\nf 5 7 8\n"    // +z
-        << "f 2 1 4\nf 2 4 3\n"    // -z
-        << "f 6 2 3\nf 6 3 7\n"    // +x
-        << "f 1 5 8\nf 1 8 4\n"    // -x
-        << "f 8 7 3\nf 8 3 4\n"    // +y
-        << "f 1 2 6\nf 1 6 5\n";   // -y
+    out << "f 5 6 7\nf 5 7 8\n"   // +z
+        << "f 2 1 4\nf 2 4 3\n"   // -z
+        << "f 6 2 3\nf 6 3 7\n"   // +x
+        << "f 1 5 8\nf 1 8 4\n"   // -x
+        << "f 8 7 3\nf 8 3 4\n"   // +y
+        << "f 1 2 6\nf 1 6 5\n";  // -y
     REQUIRE(out.good());
     return path;
 }
@@ -112,8 +112,7 @@ std::array<Eigen::Vector3f, 8> cube_corners() {
 }
 
 std::filesystem::path make_scratch_dir() {
-    const std::filesystem::path dir =
-        std::filesystem::temp_directory_path() / "cube_m3t_smoke";
+    const std::filesystem::path dir = std::filesystem::temp_directory_path() / "cube_m3t_smoke";
     std::filesystem::create_directories(dir);
     return dir;
 }
@@ -127,13 +126,11 @@ m3t::Transform3fA gt_pose(int i) {
     const float t = static_cast<float>(i);
     const float angle = 0.012F * t;  // rad, ~0.7 deg/frame
     const Eigen::Vector3f axis = Eigen::Vector3f{0.3F, 1.0F, 0.2F}.normalized();
-    const Eigen::Vector3f trans{0.02F * std::sin(0.05F * t),
-                                0.015F * std::sin(0.037F * t),
+    const Eigen::Vector3f trans{0.02F * std::sin(0.05F * t), 0.015F * std::sin(0.037F * t),
                                 0.25F + 0.012F * std::sin(0.023F * t)};
-    return m3t::Transform3fA{
-        Eigen::Translation3f{trans} *
-        Eigen::AngleAxisf{0.5F, Eigen::Vector3f{1, 1, 0}.normalized()} *
-        Eigen::AngleAxisf{angle, axis}};
+    return m3t::Transform3fA{Eigen::Translation3f{trans} *
+                             Eigen::AngleAxisf{0.5F, Eigen::Vector3f{1, 1, 0}.normalized()} *
+                             Eigen::AngleAxisf{angle, axis}};
 }
 
 cv::Mat render_frame(const m3t::Transform3fA& body2world) {
@@ -234,20 +231,19 @@ struct TrackRun {
 // camera, modality, optimizer and tracker every time; only the region-model
 // cache (model_dir) persists between runs. Mirrors RunTrackerProcess's
 // stepping order via the advanced-use API, as the spike did.
-TrackRun run_track(const std::filesystem::path& obj_path,
-                   const std::filesystem::path& model_dir,
+TrackRun run_track(const std::filesystem::path& obj_path, const std::filesystem::path& model_dir,
                    const std::vector<cv::Mat>& frames) {
-    auto body_ptr{std::make_shared<m3t::Body>(
-        "cube", obj_path, 1.0F, true, true, m3t::Transform3fA::Identity())};
+    auto body_ptr{std::make_shared<m3t::Body>("cube", obj_path, 1.0F, true, true,
+                                              m3t::Transform3fA::Identity())};
     auto camera_ptr{std::make_shared<InMemColorCamera>("camera")};
     // Spike-reduced generation parameters (n_divides 4 -> 3, image_size
     // 2000 -> 1000): a one-time offline cost, cached to .bin in model_dir.
     // use_random_seed stays false - determinism is the point.
     auto region_model_ptr{std::make_shared<m3t::RegionModel>(
-        "region_model", body_ptr, model_dir / "cube_region_model.bin", 0.8F, 3,
-        200, 0.05F, 0.002F, false, 1000)};
-    auto region_modality_ptr{std::make_shared<m3t::RegionModality>(
-        "region_modality", body_ptr, camera_ptr, region_model_ptr)};
+        "region_model", body_ptr, model_dir / "cube_region_model.bin", 0.8F, 3, 200, 0.05F, 0.002F,
+        false, 1000)};
+    auto region_modality_ptr{std::make_shared<m3t::RegionModality>("region_modality", body_ptr,
+                                                                   camera_ptr, region_model_ptr)};
     auto link_ptr{std::make_shared<m3t::Link>("link", body_ptr)};
     link_ptr->AddModality(region_modality_ptr);
     auto optimizer_ptr{std::make_shared<m3t::Optimizer>("optimizer", link_ptr)};
@@ -256,9 +252,8 @@ TrackRun run_track(const std::filesystem::path& obj_path,
 
     // Init pose: frame 0's ground truth, deliberately perturbed (a few mm and
     // ~3 deg) the way a PnP initialisation would be.
-    const m3t::Transform3fA init_pose{
-        gt_pose(0) * Eigen::Translation3f{0.004F, -0.003F, 0.006F} *
-        Eigen::AngleAxisf{0.05F, Eigen::Vector3f{0, 1, 0}}};
+    const m3t::Transform3fA init_pose{gt_pose(0) * Eigen::Translation3f{0.004F, -0.003F, 0.006F} *
+                                      Eigen::AngleAxisf{0.05F, Eigen::Vector3f{0, 1, 0}}};
     body_ptr->set_body2world_pose(init_pose);
 
     REQUIRE(tracker_ptr->SetUp());
@@ -282,8 +277,7 @@ TrackRun run_track(const std::filesystem::path& obj_path,
         const double terr =
             static_cast<double>((pose.translation() - gt.translation()).norm()) * 1000.0;
         const Eigen::AngleAxisf diff{gt.rotation().transpose() * pose.rotation()};
-        const double rerr = std::abs(static_cast<double>(diff.angle())) *
-                            180.0 / std::numbers::pi;
+        const double rerr = std::abs(static_cast<double>(diff.angle())) * 180.0 / std::numbers::pi;
         run.max_terr_mm = std::max(run.max_terr_mm, terr);
         run.max_rerr_deg = std::max(run.max_rerr_deg, rerr);
         sum_terr += terr;
@@ -303,8 +297,8 @@ TrackRun run_track(const std::filesystem::path& obj_path,
 // cube::m3t link line (and the DLL load on Windows) at zero cost.
 // ---------------------------------------------------------------------------
 TEST_CASE("vendored m3t links and constructs", "[m3t]") {
-    const m3t::Body body{"cube", "nonexistent.obj", 1.0F, true, true,
-                         m3t::Transform3fA::Identity()};
+    const m3t::Body body{
+        "cube", "nonexistent.obj", 1.0F, true, true, m3t::Transform3fA::Identity()};
     CHECK(body.name() == "cube");
     CHECK_FALSE(body.set_up());
 
@@ -320,8 +314,7 @@ TEST_CASE("vendored m3t links and constructs", "[m3t]") {
 // (hidden window, console process), and the silhouette it produces is the
 // cube we asked for, where we asked for it.
 // ---------------------------------------------------------------------------
-TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane",
-          "[.m3t-smoke]") {
+TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane", "[.m3t-smoke]") {
     if (std::getenv("CUBE_M3T_SMOKE") == nullptr) {
         SKIP("set CUBE_M3T_SMOKE=1 to run the M3T offscreen-render smoke check");
     }
@@ -329,8 +322,8 @@ TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane",
     const std::filesystem::path scratch = make_scratch_dir();
     const std::filesystem::path obj_path = write_cube_obj(scratch);
 
-    auto body_ptr{std::make_shared<m3t::Body>(
-        "cube", obj_path, 1.0F, true, true, m3t::Transform3fA::Identity())};
+    auto body_ptr{std::make_shared<m3t::Body>("cube", obj_path, 1.0F, true, true,
+                                              m3t::Transform3fA::Identity())};
     REQUIRE(body_ptr->SetUp());
 
     // glfwInit + hidden window + GLEW all happen inside SetUp(); on a machine
@@ -362,8 +355,7 @@ TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane",
     // so the silhouette must cover tens of thousands of pixels but nowhere
     // near the frame. (Spike measurement on this scene: 30676 px.)
     const int nonzero = cv::countNonZero(sil);
-    std::cout << "[m3t-smoke] silhouette nonzero px = " << nonzero << " of "
-              << sil.total() << '\n';
+    std::cout << "[m3t-smoke] silhouette nonzero px = " << nonzero << " of " << sil.total() << '\n';
     REQUIRE(nonzero > 15000);
     REQUIRE(nonzero < 60000);
 
@@ -396,8 +388,7 @@ TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane",
 // the region model and caches it; run B loads the cache - the spike showed
 // both paths give identical poses, so this also guards the cache round-trip.
 // ---------------------------------------------------------------------------
-TEST_CASE("m3t 100-frame synthetic track is bit-identical across runs",
-          "[.m3t-smoke]") {
+TEST_CASE("m3t 100-frame synthetic track is bit-identical across runs", "[.m3t-smoke]") {
     if (std::getenv("CUBE_M3T_SMOKE") == nullptr) {
         SKIP("set CUBE_M3T_SMOKE=1 to run the M3T tracking smoke check");
     }
@@ -420,10 +411,9 @@ TEST_CASE("m3t 100-frame synthetic track is bit-identical across runs",
     std::cout << "[m3t-smoke] run B (loads cached region model)\n";
     const TrackRun run_b = run_track(obj_path, scratch, frames);
 
-    std::cout << "[m3t-smoke] run A: mean terr " << run_a.mean_terr_mm
-              << " mm, mean rerr " << run_a.mean_rerr_deg << " deg, max terr "
-              << run_a.max_terr_mm << " mm, max rerr " << run_a.max_rerr_deg
-              << " deg, last terr " << run_a.last_terr_mm << " mm\n";
+    std::cout << "[m3t-smoke] run A: mean terr " << run_a.mean_terr_mm << " mm, mean rerr "
+              << run_a.mean_rerr_deg << " deg, max terr " << run_a.max_terr_mm << " mm, max rerr "
+              << run_a.max_rerr_deg << " deg, last terr " << run_a.last_terr_mm << " mm\n";
 
     // Tracking quality: loose bounds around the spike's measurements (mean
     // 1.96 mm / 1.24 deg, max 13.5 mm / 12.4 deg) - tight enough to fail on
@@ -436,13 +426,11 @@ TEST_CASE("m3t 100-frame synthetic track is bit-identical across runs",
 
     // Determinism: bit-identical pose matrices across the two runs. memcmp,
     // not float ==, so -0.0/0.0 or NaN can never alias a real difference.
-    REQUIRE(run_a.pose_words.size() ==
-            static_cast<std::size_t>(kNFrames) * 16U);
+    REQUIRE(run_a.pose_words.size() == static_cast<std::size_t>(kNFrames) * 16U);
     REQUIRE(run_a.pose_words.size() == run_b.pose_words.size());
-    const bool bit_identical =
-        std::memcmp(run_a.pose_words.data(), run_b.pose_words.data(),
-                    run_a.pose_words.size() * sizeof(float)) == 0;
-    std::cout << "[m3t-smoke] pose streams bit-identical: "
-              << (bit_identical ? "yes" : "NO") << '\n';
+    const bool bit_identical = std::memcmp(run_a.pose_words.data(), run_b.pose_words.data(),
+                                           run_a.pose_words.size() * sizeof(float)) == 0;
+    std::cout << "[m3t-smoke] pose streams bit-identical: " << (bit_identical ? "yes" : "NO")
+              << '\n';
     REQUIRE(bit_identical);
 }

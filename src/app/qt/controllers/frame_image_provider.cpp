@@ -8,7 +8,7 @@ FrameImageProvider::FrameImageProvider(std::function<cv::Mat()> latest_frame)
     : QQuickImageProvider(QQuickImageProvider::Image), latest_frame_(std::move(latest_frame)) {}
 
 QImage FrameImageProvider::requestImage(const QString& /*id*/, QSize* size,
-                                         const QSize& /*requestedSize*/) {
+                                        const QSize& /*requestedSize*/) {
     const cv::Mat frame = latest_frame_();
     if (frame.empty()) {
         if (size) {

@@ -138,7 +138,8 @@ struct Candidate {
     double area = 0.0;
 };
 
-[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame, double max_aspect) {
+[[nodiscard]] std::vector<Candidate> find_sticker_candidates(const cv::Mat& bgr_frame,
+                                                             double max_aspect) {
     cv::Mat blurred;
     cv::GaussianBlur(bgr_frame, blurred, cv::Size(5, 5), 0);
 
@@ -160,7 +161,8 @@ struct Candidate {
     cv::split(hsv, hsv_channels);
 
     cv::Mat v_eq;
-    cv::createCLAHE(kClaheClipLimit, cv::Size(kClaheTileGrid, kClaheTileGrid))->apply(blurred_channels[2], v_eq);
+    cv::createCLAHE(kClaheClipLimit, cv::Size(kClaheTileGrid, kClaheTileGrid))
+        ->apply(blurred_channels[2], v_eq);
 
     int block_size = std::min(bgr_frame.cols, bgr_frame.rows) / kAdaptiveBlockDivisor;
     if (block_size % 2 == 0) {
@@ -169,8 +171,8 @@ struct Candidate {
     block_size = std::max(block_size, kAdaptiveBlockMin);
 
     cv::Mat brightness_mask;
-    cv::adaptiveThreshold(v_eq, brightness_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, block_size,
-                          kAdaptiveThresholdC);
+    cv::adaptiveThreshold(v_eq, brightness_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                          cv::THRESH_BINARY, block_size, kAdaptiveThresholdC);
     // Raw (pre-CLAHE, unblurred) channel: CLAHE stretches uniform
     // background toward bright, so only the raw value still distinguishes
     // it from a sticker.
@@ -183,11 +185,12 @@ struct Candidate {
     // grid_detection.cpp's find_dark_square_candidates). No floor needed:
     // uniform regions are never darker than their own local mean minus C.
     cv::Mat dark_mask;
-    cv::adaptiveThreshold(v_eq, dark_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY_INV, block_size,
-                          kAdaptiveThresholdC);
+    cv::adaptiveThreshold(v_eq, dark_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                          cv::THRESH_BINARY_INV, block_size, kAdaptiveThresholdC);
 
     cv::Mat saturated_mask;
-    cv::threshold(hsv_channels[1], saturated_mask, kMinStickerSaturation - 1, 255, cv::THRESH_BINARY);
+    cv::threshold(hsv_channels[1], saturated_mask, kMinStickerSaturation - 1, 255,
+                  cv::THRESH_BINARY);
     cv::Mat white_mask;
     cv::threshold(hsv_channels[2], white_mask, kMinWhiteValue - 1, 255, cv::THRESH_BINARY);
 
@@ -202,7 +205,8 @@ struct Candidate {
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
 
     std::vector<Candidate> candidates;
-    const double frame_area = static_cast<double>(bgr_frame.cols) * static_cast<double>(bgr_frame.rows);
+    const double frame_area =
+        static_cast<double>(bgr_frame.cols) * static_cast<double>(bgr_frame.rows);
     const double min_area = frame_area * kMinCellAreaFraction;
     const double max_area = frame_area * kMaxCellAreaFraction;
 
@@ -244,7 +248,8 @@ struct Candidate {
             if (aspect > max_aspect) {
                 continue;
             }
-            const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
+            const double rect_area =
+                static_cast<double>(min_rect.size.width) * min_rect.size.height;
             if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
                 continue;
             }
@@ -255,7 +260,8 @@ struct Candidate {
             for (const auto& vertex : approx) {
                 center += cv::Point2f(static_cast<float>(vertex.x), static_cast<float>(vertex.y));
             }
-            candidates.push_back(Candidate{.center = center / static_cast<float>(approx.size()), .area = area});
+            candidates.push_back(
+                Candidate{.center = center / static_cast<float>(approx.size()), .area = area});
         }
     }
 
@@ -302,14 +308,16 @@ using detail::FaceFit;
 // cv::COLOR_BGR2Lab (L in [0,100]) - the same float-Lab convention as
 // color_classification.cpp's bgr_to_lab - and take the per-channel median,
 // which shrugs off glare pixels and edge bleed a mean would average in.
-[[nodiscard]] cv::Vec3f sample_cell_lab(const cv::Mat& bgr_frame, cv::Point2f center, cv::Point2f col_step,
-                                        cv::Point2f row_step) {
+[[nodiscard]] cv::Vec3f sample_cell_lab(const cv::Mat& bgr_frame, cv::Point2f center,
+                                        cv::Point2f col_step, cv::Point2f row_step) {
     std::vector<cv::Vec3b> samples;
     samples.reserve(static_cast<std::size_t>(kSampleGridDim) * kSampleGridDim);
     for (int i = 0; i < kSampleGridDim; ++i) {
         for (int j = 0; j < kSampleGridDim; ++j) {
-            const float fu = (static_cast<float>(i) / (kSampleGridDim - 1) - 0.5F) * 2.0F * kStickerSampleHalfSpan;
-            const float fv = (static_cast<float>(j) / (kSampleGridDim - 1) - 0.5F) * 2.0F * kStickerSampleHalfSpan;
+            const float fu = (static_cast<float>(i) / (kSampleGridDim - 1) - 0.5F) * 2.0F *
+                             kStickerSampleHalfSpan;
+            const float fv = (static_cast<float>(j) / (kSampleGridDim - 1) - 0.5F) * 2.0F *
+                             kStickerSampleHalfSpan;
             const cv::Point2f pt = center + fu * col_step + fv * row_step;
             const int x = static_cast<int>(std::lround(pt.x));
             const int y = static_cast<int>(std::lround(pt.y));
@@ -325,9 +333,9 @@ using detail::FaceFit;
 
     cv::Mat3f bgr_float(static_cast<int>(samples.size()), 1);
     for (std::size_t i = 0; i < samples.size(); ++i) {
-        bgr_float(static_cast<int>(i), 0) =
-            cv::Vec3f(static_cast<float>(samples[i][0]) / 255.0F, static_cast<float>(samples[i][1]) / 255.0F,
-                      static_cast<float>(samples[i][2]) / 255.0F);
+        bgr_float(static_cast<int>(i), 0) = cv::Vec3f(static_cast<float>(samples[i][0]) / 255.0F,
+                                                      static_cast<float>(samples[i][1]) / 255.0F,
+                                                      static_cast<float>(samples[i][2]) / 255.0F);
     }
     cv::Mat3f lab;
     cv::cvtColor(bgr_float, lab, cv::COLOR_BGR2Lab);
@@ -349,14 +357,15 @@ using detail::FaceFit;
     CornerFaceView view;
     const cv::Point2f half_face_col = 1.5F * fit.col_step;
     const cv::Point2f half_face_row = 1.5F * fit.row_step;
-    view.quad = {fit.anchor - half_face_col - half_face_row, fit.anchor + half_face_col - half_face_row,
-                 fit.anchor + half_face_col + half_face_row, fit.anchor - half_face_col + half_face_row};
+    view.quad = {
+        fit.anchor - half_face_col - half_face_row, fit.anchor + half_face_col - half_face_row,
+        fit.anchor + half_face_col + half_face_row, fit.anchor - half_face_col + half_face_row};
 
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
             const auto slot = static_cast<std::size_t>(row * 3 + col);
-            const cv::Point2f center =
-                fit.anchor + static_cast<float>(col - 1) * fit.col_step + static_cast<float>(row - 1) * fit.row_step;
+            const cv::Point2f center = fit.anchor + static_cast<float>(col - 1) * fit.col_step +
+                                       static_cast<float>(row - 1) * fit.row_step;
             const cv::Point2f half_col = kStickerQuadHalfSpan * fit.col_step;
             const cv::Point2f half_row = kStickerQuadHalfSpan * fit.row_step;
             view.cells[slot].corners = {center - half_col - half_row, center + half_col - half_row,
@@ -380,9 +389,9 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerH
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
     if (candidates.size() > kMaxCandidatesConsidered) {
-        std::ranges::partial_sort(candidates,
-                                  candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesConsidered), {},
-                                  [](const Candidate& candidate) { return -candidate.area; });
+        std::ranges::partial_sort(
+            candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesConsidered),
+            {}, [](const Candidate& candidate) { return -candidate.area; });
         candidates.resize(kMaxCandidatesConsidered);
     }
 
@@ -442,8 +451,8 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerH
             // identically), which is the same bisector partition the fixed
             // path draws - just rotated to where the pose actually put the
             // faces.
-            const std::array<std::vector<cv::Point2f>*, 3> sectors{&top_centers, &lower_left_centers,
-                                                                   &lower_right_centers};
+            const std::array<std::vector<cv::Point2f>*, 3> sectors{
+                &top_centers, &lower_left_centers, &lower_right_centers};
             std::size_t best = 0;
             float best_dot = std::numeric_limits<float>::lowest();
             for (std::size_t role = 0; role < sectors.size(); ++role) {
@@ -470,14 +479,15 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerH
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    const auto top_fit = detail::fit_face_grid(top_centers, hint != nullptr ? hint->col_dir[0] : kTopColDir,
-                                               hint != nullptr ? hint->row_dir[0] : kTopRowDir);
-    const auto lower_left_fit =
-        detail::fit_face_grid(lower_left_centers, hint != nullptr ? hint->col_dir[1] : kSideColRightDir,
-                              hint != nullptr ? hint->row_dir[1] : kSideRowDir);
-    const auto lower_right_fit =
-        detail::fit_face_grid(lower_right_centers, hint != nullptr ? hint->col_dir[2] : kSideColUpDir,
-                              hint != nullptr ? hint->row_dir[2] : kSideRowDir);
+    const auto top_fit =
+        detail::fit_face_grid(top_centers, hint != nullptr ? hint->col_dir[0] : kTopColDir,
+                              hint != nullptr ? hint->row_dir[0] : kTopRowDir);
+    const auto lower_left_fit = detail::fit_face_grid(
+        lower_left_centers, hint != nullptr ? hint->col_dir[1] : kSideColRightDir,
+        hint != nullptr ? hint->row_dir[1] : kSideRowDir);
+    const auto lower_right_fit = detail::fit_face_grid(
+        lower_right_centers, hint != nullptr ? hint->col_dir[2] : kSideColUpDir,
+        hint != nullptr ? hint->row_dir[2] : kSideRowDir);
     if (!top_fit || !lower_left_fit || !lower_right_fit) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -487,7 +497,8 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerH
     observation.lower_left = build_face_view(bgr_frame, *lower_left_fit);
     observation.lower_right = build_face_view(bgr_frame, *lower_right_fit);
     observation.geometry_confidence =
-        static_cast<float>(top_fit->inlier_count + lower_left_fit->inlier_count + lower_right_fit->inlier_count) /
+        static_cast<float>(top_fit->inlier_count + lower_left_fit->inlier_count +
+                           lower_right_fit->inlier_count) /
         27.0F;
     return observation;
 }

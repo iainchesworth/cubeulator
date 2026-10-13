@@ -125,14 +125,15 @@ constexpr float kMinBasisAngleSine = 0.34F;  // ~20 degrees
 // into narrow gaps to bridge adjacent cells - a ~20% colour mix over a dark
 // gap still reads strongly saturated), and only open (no close) runs so
 // preserved separations aren't re-sealed.
-[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask, double max_aspect) {
+[[nodiscard]] std::vector<StickerCandidate> candidates_from_condition_mask(cv::Mat mask,
+                                                                           double max_aspect) {
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(3, 3));
     cv::morphologyEx(mask, mask, cv::MORPH_OPEN, kernel);
     return detail::candidates_from_binary_mask(mask, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(const std::vector<cv::Mat>& hsv_channels,
-                                                                       double max_aspect) {
+[[nodiscard]] std::vector<StickerCandidate> find_saturation_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
     return candidates_from_condition_mask(hsv_channels[1] >= kMinStickerSaturation, max_aspect);
 }
 
@@ -148,7 +149,8 @@ constexpr int kPermissiveStickerSaturation = 25;
 
 [[nodiscard]] std::vector<StickerCandidate> find_permissive_saturation_candidates(
     const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kPermissiveStickerSaturation, max_aspect);
+    return candidates_from_condition_mask(hsv_channels[1] >= kPermissiveStickerSaturation,
+                                          max_aspect);
 }
 
 // A FOURTH cut at a HIGH floor (live1 F4, frame 448 class): under warm
@@ -164,7 +166,8 @@ constexpr int kVeryStrictStickerSaturation = 100;
 
 [[nodiscard]] std::vector<StickerCandidate> find_very_strict_saturation_candidates(
     const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
-    return candidates_from_condition_mask(hsv_channels[1] >= kVeryStrictStickerSaturation, max_aspect);
+    return candidates_from_condition_mask(hsv_channels[1] >= kVeryStrictStickerSaturation,
+                                          max_aspect);
 }
 
 // A SECOND saturation cut at a stricter floor, contoured independently:
@@ -182,10 +185,11 @@ constexpr int kStrictStickerSaturation = 60;
     return candidates_from_condition_mask(hsv_channels[1] >= kStrictStickerSaturation, max_aspect);
 }
 
-[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(const std::vector<cv::Mat>& hsv_channels,
-                                                                  double max_aspect) {
+[[nodiscard]] std::vector<StickerCandidate> find_white_candidates(
+    const std::vector<cv::Mat>& hsv_channels, double max_aspect) {
     cv::Mat white_mask;
-    cv::bitwise_and(hsv_channels[2] >= kMinWhiteValue, hsv_channels[1] < kMinStickerSaturation, white_mask);
+    cv::bitwise_and(hsv_channels[2] >= kMinWhiteValue, hsv_channels[1] < kMinStickerSaturation,
+                    white_mask);
     return candidates_from_condition_mask(std::move(white_mask), max_aspect);
 }
 
@@ -193,7 +197,8 @@ constexpr int kStrictStickerSaturation = 60;
 // same physical sticker found by more than one source) so the lattice fit
 // doesn't see phantom double-density. Larger area wins a collapse - the
 // fuller of two detections of one sticker bounds it better.
-[[nodiscard]] std::vector<StickerCandidate> merge_candidates(std::vector<std::vector<StickerCandidate>> sources) {
+[[nodiscard]] std::vector<StickerCandidate> merge_candidates(
+    std::vector<std::vector<StickerCandidate>> sources) {
     std::vector<StickerCandidate> merged;
     for (auto& source : sources) {
         merged.insert(merged.end(), source.begin(), source.end());
@@ -205,13 +210,15 @@ constexpr int kStrictStickerSaturation = 60;
     std::vector<float> sides;
     sides.reserve(merged.size());
     for (const auto& candidate : merged) {
-        sides.push_back(static_cast<float>(std::max(candidate.bounds.width, candidate.bounds.height)));
+        sides.push_back(
+            static_cast<float>(std::max(candidate.bounds.width, candidate.bounds.height)));
     }
     const auto mid = sides.begin() + static_cast<std::ptrdiff_t>(sides.size() / 2);
     std::ranges::nth_element(sides, mid);
     const float dedupe_radius = *mid * kDedupeRadiusFraction;
 
-    std::ranges::sort(merged, {}, [](const StickerCandidate& candidate) { return -candidate.area; });
+    std::ranges::sort(merged, {},
+                      [](const StickerCandidate& candidate) { return -candidate.area; });
 
     std::vector<StickerCandidate> unique;
     unique.reserve(merged.size());
@@ -272,7 +279,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
     g_placement_diagnostic.matched_cells = static_cast<int>(lattice_points.size());
 
     if (lattice_points.size() >= 5) {
-        cv::Mat homography = cv::findHomography(lattice_points, frame_points, cv::RANSAC, kHomographyReprojThreshold);
+        cv::Mat homography = cv::findHomography(lattice_points, frame_points, cv::RANSAC,
+                                                kHomographyReprojThreshold);
         if (!homography.empty()) {
             homography.convertTo(homography, CV_64F);
             g_placement_diagnostic.model = detail::TransformModel::homography;
@@ -281,8 +289,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
     }
 
     if (lattice_points.size() >= 4) {
-        cv::Mat affine2x3 =
-            cv::estimateAffine2D(lattice_points, frame_points, cv::noArray(), cv::RANSAC, kHomographyReprojThreshold);
+        cv::Mat affine2x3 = cv::estimateAffine2D(lattice_points, frame_points, cv::noArray(),
+                                                 cv::RANSAC, kHomographyReprojThreshold);
         if (!affine2x3.empty()) {
             cv::Mat affine = cv::Mat::eye(3, 3, CV_64F);
             affine2x3.convertTo(affine2x3, CV_64F);
@@ -299,9 +307,12 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
 [[nodiscard]] cv::Point2f project_lattice_point(const cv::Mat& transform, float u, float v) {
     const auto ud = static_cast<double>(u);
     const auto vd = static_cast<double>(v);
-    const double x = transform.at<double>(0, 0) * ud + transform.at<double>(0, 1) * vd + transform.at<double>(0, 2);
-    const double y = transform.at<double>(1, 0) * ud + transform.at<double>(1, 1) * vd + transform.at<double>(1, 2);
-    const double w = transform.at<double>(2, 0) * ud + transform.at<double>(2, 1) * vd + transform.at<double>(2, 2);
+    const double x = transform.at<double>(0, 0) * ud + transform.at<double>(0, 1) * vd +
+                     transform.at<double>(0, 2);
+    const double y = transform.at<double>(1, 0) * ud + transform.at<double>(1, 1) * vd +
+                     transform.at<double>(1, 2);
+    const double w = transform.at<double>(2, 0) * ud + transform.at<double>(2, 1) * vd +
+                     transform.at<double>(2, 2);
     // w -> 0 only for a degenerate estimate placing the point at infinity;
     // clamping keeps the arithmetic finite rather than emitting NaN corners.
     const double safe_w = std::abs(w) > 1e-9 ? w : 1e-9;
@@ -311,8 +322,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
 // Corners ordered top-left, top-right, bottom-right, bottom-left in lattice
 // space; the homography preserves that winding for any physically-plausible
 // (non-mirrored) view, matching StickerQuad's documented order.
-[[nodiscard]] std::array<cv::Point2f, 4> project_quad(const cv::Mat& transform, cv::Point2f center_uv,
-                                                       float half_extent) {
+[[nodiscard]] std::array<cv::Point2f, 4> project_quad(const cv::Mat& transform,
+                                                      cv::Point2f center_uv, float half_extent) {
     return {
         project_lattice_point(transform, center_uv.x - half_extent, center_uv.y - half_extent),
         project_lattice_point(transform, center_uv.x + half_extent, center_uv.y - half_extent),
@@ -332,8 +343,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
     std::array<cv::Point2f, cells_per_grid> centers;
     for (int row = 0; row < grid_dimension; ++row) {
         for (int col = 0; col < grid_dimension; ++col) {
-            const auto center =
-                project_lattice_point(transform, static_cast<float>(col - 1), static_cast<float>(row - 1));
+            const auto center = project_lattice_point(transform, static_cast<float>(col - 1),
+                                                      static_cast<float>(row - 1));
             if (!std::isfinite(center.x) || !std::isfinite(center.y)) {
                 return false;
             }
@@ -341,7 +352,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
         }
     }
 
-    const float max_spacing = static_cast<float>(std::min(frame_size.width, frame_size.height)) * 0.5F;
+    const float max_spacing =
+        static_cast<float>(std::min(frame_size.width, frame_size.height)) * 0.5F;
     const auto spacing_sane = [&](const cv::Point2f& a, const cv::Point2f& b) {
         const float spacing = std::hypot(a.x - b.x, a.y - b.y);
         return spacing >= kMinProjectedCellSpacing && spacing <= max_spacing;
@@ -353,7 +365,8 @@ thread_local detail::PlacementDiagnostic g_placement_diagnostic{};
                 return false;
             }
             if (row + 1 < grid_dimension &&
-                !spacing_sane(centers[slot], centers[slot + static_cast<std::size_t>(grid_dimension)])) {
+                !spacing_sane(centers[slot],
+                              centers[slot + static_cast<std::size_t>(grid_dimension)])) {
                 return false;
             }
         }
@@ -557,7 +570,8 @@ struct PatchStats {
         for (std::size_t k = 0; k < 4; ++k) {
             const cv::Point2f& current = corners[k];
             const cv::Point2f& next = corners[(k + 1) % 4];
-            const float cross = (next.x - current.x) * (py - current.y) - (next.y - current.y) * (px - current.x);
+            const float cross =
+                (next.x - current.x) * (py - current.y) - (next.y - current.y) * (px - current.x);
             if (cross * winding < 0.0F) {
                 return false;
             }
@@ -565,7 +579,8 @@ struct PatchStats {
         return true;
     };
 
-    const auto pixel_count = static_cast<std::size_t>(lab.rows) * static_cast<std::size_t>(lab.cols);
+    const auto pixel_count =
+        static_cast<std::size_t>(lab.rows) * static_cast<std::size_t>(lab.cols);
     const bool mask_to_quad = intent == PatchIntent::kCellColour;
 
     // THE RECT PASS, run for both intents because the MAD needs it either
@@ -594,7 +609,8 @@ struct PatchStats {
     }
     // channel_median permutes its argument, and the MAD below needs only the
     // multiset, so taking the rect median here costs nothing extra.
-    const cv::Vec3f rect_median(channel_median(l_values), channel_median(a_values), channel_median(b_values));
+    const cv::Vec3f rect_median(channel_median(l_values), channel_median(a_values),
+                                channel_median(b_values));
 
     PatchStats stats;
     stats.median = rect_median;
@@ -614,7 +630,8 @@ struct PatchStats {
             scratch_a.push_back(pixel[1]);
             scratch_b.push_back(pixel[2]);
         }
-        return cv::Vec3f(channel_median(scratch_l), channel_median(scratch_a), channel_median(scratch_b));
+        return cv::Vec3f(channel_median(scratch_l), channel_median(scratch_a),
+                         channel_median(scratch_b));
     };
 
     if (mask_to_quad) {
@@ -670,8 +687,9 @@ struct PatchStats {
                 mode_pixels.push_back(pixel);
             }
         }
-        return masked.empty() ? 0.0F
-                              : static_cast<float>(mode_pixels.size()) / static_cast<float>(masked.size());
+        return masked.empty()
+                   ? 0.0F
+                   : static_cast<float>(mode_pixels.size()) / static_cast<float>(masked.size());
     };
 
     for (int round = 0; !masked.empty() && round < kMaxModeRounds; ++round) {
@@ -739,22 +757,25 @@ struct PatchStats {
     return stats;
 }
 
-[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv,
-                                            PatchIntent intent) {
-    return patch_stats_for_corners(bgr_frame, project_quad(transform, cell_uv, kSampleHalfExtent), intent);
+[[nodiscard]] PatchStats sample_patch_stats(const cv::Mat& bgr_frame, const cv::Mat& transform,
+                                            cv::Point2f cell_uv, PatchIntent intent) {
+    return patch_stats_for_corners(bgr_frame, project_quad(transform, cell_uv, kSampleHalfExtent),
+                                   intent);
 }
 
 // Every caller of this overload is a STRUCTURAL probe - gap material, the
 // lattice reference, the inside/outside boundary strips - so it is fixed at
 // kMaterialMix rather than parameterised. A cell colour goes through
 // sample_patch_stats directly, where the intent has to be spelled out.
-[[nodiscard]] cv::Vec3f sample_patch_lab(const cv::Mat& bgr_frame, const cv::Mat& transform, cv::Point2f cell_uv) {
+[[nodiscard]] cv::Vec3f sample_patch_lab(const cv::Mat& bgr_frame, const cv::Mat& transform,
+                                         cv::Point2f cell_uv) {
     return sample_patch_stats(bgr_frame, transform, cell_uv, PatchIntent::kMaterialMix).median;
 }
 
 }  // namespace
 
-CellPatchStats sample_cell_patch(const cv::Mat& bgr_frame, const std::array<cv::Point2f, 4>& corners) {
+CellPatchStats sample_cell_patch(const cv::Mat& bgr_frame,
+                                 const std::array<cv::Point2f, 4>& corners) {
     // Public seam over the file-local estimator (see the header): the
     // tracking-first sampler reads the SAME statistic the legacy
     // detectors were exonerated with, cell-colour intent, unchanged.
@@ -765,14 +786,15 @@ CellPatchStats sample_cell_patch(const cv::Mat& bgr_frame, const std::array<cv::
 namespace {
 
 [[nodiscard]] FaceObservation build_observation(const cv::Mat& bgr_frame, const cv::Mat& transform,
-                                                 float geometry_confidence) {
+                                                float geometry_confidence) {
     FaceObservation observation;
     for (int row = 0; row < grid_dimension; ++row) {
         for (int col = 0; col < grid_dimension; ++col) {
             const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
             const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
             observation.cells[slot].corners = project_quad(transform, cell_uv, kCellQuadHalfExtent);
-            const auto stats = sample_patch_stats(bgr_frame, transform, cell_uv, PatchIntent::kCellColour);
+            const auto stats =
+                sample_patch_stats(bgr_frame, transform, cell_uv, PatchIntent::kCellColour);
             observation.lab[slot] = stats.median;
             observation.cell_purity[slot] = stats.purity;
         }
@@ -796,14 +818,24 @@ namespace {
     // static const, not constexpr: cv::Point2f's constructors are not
     // constexpr in this OpenCV build.
     static const std::array<cv::Point2f, 12> points = {{
-        {-0.5F, -1.0F}, {0.5F, -1.0F}, {-0.5F, 0.0F}, {0.5F, 0.0F}, {-0.5F, 1.0F}, {0.5F, 1.0F},
-        {-1.0F, -0.5F}, {0.0F, -0.5F}, {1.0F, -0.5F}, {-1.0F, 0.5F}, {0.0F, 0.5F}, {1.0F, 0.5F},
+        {-0.5F, -1.0F},
+        {0.5F, -1.0F},
+        {-0.5F, 0.0F},
+        {0.5F, 0.0F},
+        {-0.5F, 1.0F},
+        {0.5F, 1.0F},
+        {-1.0F, -0.5F},
+        {0.0F, -0.5F},
+        {1.0F, -0.5F},
+        {-1.0F, 0.5F},
+        {0.0F, 0.5F},
+        {1.0F, 0.5F},
     }};
     return points;
 }
 
 [[nodiscard]] bool grid_phase_plausible(const cv::Mat& bgr_frame, const cv::Mat& transform,
-                                         const FaceObservation& observation) {
+                                        const FaceObservation& observation) {
     constexpr float kInversionMargin = 8.0F;
 
     float cell_chroma = 0.0F;
@@ -846,8 +878,8 @@ namespace {
 // lands on a tile (chromatic); slid off-cube, gaps land on shirt (dark) or
 // skin (warm-chromatic); seeded on uniform clutter, the anchors
 // themselves fail to contrast with the reference.
-[[nodiscard]] std::vector<detail::ScoredPlacement> score_placements(const cv::Mat& bgr_frame,
-                                                                    const std::vector<StickerCandidate>& candidates) {
+[[nodiscard]] std::vector<detail::ScoredPlacement> score_placements(
+    const cv::Mat& bgr_frame, const std::vector<StickerCandidate>& candidates) {
     std::vector<detail::ScoredPlacement> scored;
     for (const auto& placement : detail::partial_lattice_placements(candidates, bgr_frame.size())) {
         cv::Mat transform = basis_affine(placement.anchor, placement.col_step, placement.row_step);
@@ -855,7 +887,8 @@ namespace {
         std::vector<std::pair<int, int>> matched;  // (row, col)
         for (int row = 0; row < grid_dimension; ++row) {
             for (int col = 0; col < grid_dimension; ++col) {
-                if (placement.matched_centers[static_cast<std::size_t>(row * grid_dimension + col)]) {
+                if (placement
+                        .matched_centers[static_cast<std::size_t>(row * grid_dimension + col)]) {
                     matched.emplace_back(row, col);
                 }
             }
@@ -897,8 +930,8 @@ namespace {
 
         float deviation_sum = 0.0F;
         for (const auto& midpoint : gap_midpoints()) {
-            const float deviation =
-                weighted_lab_distance(sample_patch_lab(bgr_frame, entry.transform, midpoint), reference);
+            const float deviation = weighted_lab_distance(
+                sample_patch_lab(bgr_frame, entry.transform, midpoint), reference);
             deviation_sum += deviation;
             entry.peak_gap_deviation = std::max(entry.peak_gap_deviation, deviation);
         }
@@ -908,8 +941,8 @@ namespace {
         contrasts.reserve(matched.size());
         for (const auto& [row, col] : matched) {
             const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
-            contrasts.push_back(
-                weighted_lab_distance(sample_patch_lab(bgr_frame, entry.transform, cell_uv), reference));
+            contrasts.push_back(weighted_lab_distance(
+                sample_patch_lab(bgr_frame, entry.transform, cell_uv), reference));
         }
         entry.anchor_contrast = channel_median(contrasts);
 
@@ -924,8 +957,8 @@ namespace {
                 // discriminators between a correct placement and one
                 // translated by a cell pitch, and they were calibrated on
                 // the rect statistic.
-                const auto stats =
-                    sample_patch_stats(bgr_frame, entry.transform, cell_uv, PatchIntent::kMaterialMix);
+                const auto stats = sample_patch_stats(bgr_frame, entry.transform, cell_uv,
+                                                      PatchIntent::kMaterialMix);
                 mad_sum += stats.weighted_mad;
                 cell_lightness.push_back(stats.median[0]);
             }
@@ -933,7 +966,8 @@ namespace {
         entry.cell_mad = mad_sum / static_cast<float>(cells_per_grid);
         const float min_lightness = *std::ranges::min_element(cell_lightness);
         const float median_lightness = channel_median(cell_lightness);
-        entry.min_cell_lightness = median_lightness > 0.0F ? min_lightness / median_lightness : 0.0F;
+        entry.min_cell_lightness =
+            median_lightness > 0.0F ? min_lightness / median_lightness : 0.0F;
 
         // Boundary contrast: the face ends at +-1.5 lattice units, so a
         // strip just inside each edge and one just outside it should read
@@ -950,16 +984,29 @@ namespace {
                 cv::Point2f inside_uv;
                 cv::Point2f outside_uv;
                 switch (side) {
-                    case 0: inside_uv = {lane_f, -1.2F}; outside_uv = {lane_f, -1.8F}; break;
-                    case 1: inside_uv = {lane_f, 1.2F}; outside_uv = {lane_f, 1.8F}; break;
-                    case 2: inside_uv = {-1.2F, lane_f}; outside_uv = {-1.8F, lane_f}; break;
-                    default: inside_uv = {1.2F, lane_f}; outside_uv = {1.8F, lane_f}; break;
+                    case 0:
+                        inside_uv = {lane_f, -1.2F};
+                        outside_uv = {lane_f, -1.8F};
+                        break;
+                    case 1:
+                        inside_uv = {lane_f, 1.2F};
+                        outside_uv = {lane_f, 1.8F};
+                        break;
+                    case 2:
+                        inside_uv = {-1.2F, lane_f};
+                        outside_uv = {-1.8F, lane_f};
+                        break;
+                    default:
+                        inside_uv = {1.2F, lane_f};
+                        outside_uv = {1.8F, lane_f};
+                        break;
                 }
-                pair_contrasts.push_back(
-                    weighted_lab_distance(sample_patch_lab(bgr_frame, entry.transform, inside_uv),
-                                          sample_patch_lab(bgr_frame, entry.transform, outside_uv)));
+                pair_contrasts.push_back(weighted_lab_distance(
+                    sample_patch_lab(bgr_frame, entry.transform, inside_uv),
+                    sample_patch_lab(bgr_frame, entry.transform, outside_uv)));
             }
-            entry.boundary_contrast = std::min(entry.boundary_contrast, channel_median(pair_contrasts));
+            entry.boundary_contrast =
+                std::min(entry.boundary_contrast, channel_median(pair_contrasts));
         }
 
         entry.accepted = entry.mean_gap_deviation <= kCompletionMaxMeanGapDeviation &&
@@ -975,15 +1022,16 @@ namespace {
     // correct and one-pitch-shifted placements tie on gap deviation. Cell
     // patch uniformity does separate them - a translated grid's cells
     // straddle tile boundaries and the face's outer edge.
-    std::ranges::sort(scored, [](const detail::ScoredPlacement& a, const detail::ScoredPlacement& b) {
-        if (a.accepted != b.accepted) {
-            return a.accepted;
-        }
-        if (a.inlier_count != b.inlier_count) {
-            return a.inlier_count > b.inlier_count;
-        }
-        return a.cell_mad < b.cell_mad;
-    });
+    std::ranges::sort(scored,
+                      [](const detail::ScoredPlacement& a, const detail::ScoredPlacement& b) {
+                          if (a.accepted != b.accepted) {
+                              return a.accepted;
+                          }
+                          if (a.inlier_count != b.inlier_count) {
+                              return a.inlier_count > b.inlier_count;
+                          }
+                          return a.cell_mad < b.cell_mad;
+                      });
     return scored;
 }
 
@@ -996,7 +1044,7 @@ namespace {
 // polluted by gripping fingers fails the gap check instead of capturing
 // garbage.
 [[nodiscard]] std::optional<cv::Mat> outline_transform(const cv::Mat& bgr_frame,
-                                                        const std::vector<cv::Mat>& hsv_channels) {
+                                                       const std::vector<cv::Mat>& hsv_channels) {
     cv::Mat mask;
     cv::bitwise_or(hsv_channels[1] >= 25, hsv_channels[2] >= 150, mask);
     const auto kernel = cv::getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5));
@@ -1021,8 +1069,8 @@ namespace {
         if (rect.size.width <= 0.0F || rect.size.height <= 0.0F) {
             continue;
         }
-        const float squareness =
-            std::max(rect.size.width, rect.size.height) / std::min(rect.size.width, rect.size.height);
+        const float squareness = std::max(rect.size.width, rect.size.height) /
+                                 std::min(rect.size.width, rect.size.height);
         // Tighter than the per-cell bound: a whole cube face reads as a
         // near-square even under moderate tilt, while a hand-plus-cube
         // blob is elongated - the cheapest finger filter available here.
@@ -1108,7 +1156,8 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         const cv::Mat transform = lattice_to_frame_transform(*fit);
         if (transform_grid_sane(transform, bgr_frame.size())) {
             auto observation = build_observation(
-                bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
+                bgr_frame, transform,
+                static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
             if (grid_phase_plausible(bgr_frame, transform, observation)) {
                 g_placement_diagnostic.path = detail::PlacementPath::lattice_fit;
                 // Counterfactual: re-sample this frame with the lattice's own
@@ -1121,7 +1170,8 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
                     for (int row = 0; row < grid_dimension; ++row) {
                         for (int col = 0; col < grid_dimension; ++col) {
                             const auto slot = static_cast<std::size_t>(row * grid_dimension + col);
-                            const cv::Point2f cell_uv(static_cast<float>(col - 1), static_cast<float>(row - 1));
+                            const cv::Point2f cell_uv(static_cast<float>(col - 1),
+                                                      static_cast<float>(row - 1));
                             g_placement_diagnostic.counterfactual_lab[slot] =
                                 sample_patch_lab(bgr_frame, affine, cell_uv);
                         }
@@ -1148,9 +1198,9 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         if (!transform_grid_sane(scored.transform, bgr_frame.size())) {
             continue;
         }
-        auto observation =
-            build_observation(bgr_frame, scored.transform,
-                              static_cast<float>(scored.inlier_count) / static_cast<float>(cells_per_grid));
+        auto observation = build_observation(
+            bgr_frame, scored.transform,
+            static_cast<float>(scored.inlier_count) / static_cast<float>(cells_per_grid));
         if (grid_phase_plausible(bgr_frame, scored.transform, observation)) {
             // score_placements builds every placement with basis_affine.
             g_placement_diagnostic.model = detail::TransformModel::basis_affine;
@@ -1189,7 +1239,8 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
         const cv::Mat transform = lattice_to_frame_transform(*fit);
         if (transform_grid_sane(transform, bgr_frame.size())) {
             auto observation = build_observation(
-                bgr_frame, transform, static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
+                bgr_frame, transform,
+                static_cast<float>(fit->inlier_count) / static_cast<float>(cells_per_grid));
             if (grid_phase_plausible(bgr_frame, transform, observation)) {
                 observation.pose_only = true;
                 g_placement_diagnostic.path = detail::PlacementPath::pose_only;
@@ -1203,7 +1254,9 @@ Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
 
 namespace detail {
 
-PlacementDiagnostic last_placement_diagnostic() { return g_placement_diagnostic; }
+PlacementDiagnostic last_placement_diagnostic() {
+    return g_placement_diagnostic;
+}
 
 std::vector<StickerCandidate> merged_face_candidates(const cv::Mat& bgr_frame, double max_aspect) {
     if (bgr_frame.empty()) {
@@ -1250,8 +1303,8 @@ CellPatchSample cell_patch_sample(const cv::Mat& bgr_frame, const StickerQuad& c
     sample.weighted_mad = stats.weighted_mad;
     sample.purity = stats.purity;
     sample.quad_px = stats.quad_px;
-    sample.cell_quad_area_px = static_cast<float>(std::abs(cv::contourArea(
-        std::vector<cv::Point2f>(cell.corners.begin(), cell.corners.end()))));
+    sample.cell_quad_area_px = static_cast<float>(std::abs(
+        cv::contourArea(std::vector<cv::Point2f>(cell.corners.begin(), cell.corners.end()))));
     sample.sample_quad = sample_corners;
     return sample;
 }

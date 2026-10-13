@@ -142,42 +142,60 @@ struct AggregatorMeta {
 // unattributed refusals are the exact blindness it exists to end.
 [[nodiscard]] const char* outcome_name(cube::vision::CommitOutcome outcome) {
     switch (outcome) {
-        case cube::vision::CommitOutcome::filled: return "filled";
-        case cube::vision::CommitOutcome::updated: return "updated";
-        case cube::vision::CommitOutcome::quarantined: return "quarantined";
-        case cube::vision::CommitOutcome::deferred: return "deferred";
-        case cube::vision::CommitOutcome::holdoff: return "holdoff";
+        case cube::vision::CommitOutcome::filled:
+            return "filled";
+        case cube::vision::CommitOutcome::updated:
+            return "updated";
+        case cube::vision::CommitOutcome::quarantined:
+            return "quarantined";
+        case cube::vision::CommitOutcome::deferred:
+            return "deferred";
+        case cube::vision::CommitOutcome::holdoff:
+            return "holdoff";
     }
     return nullptr;
 }
 
 [[nodiscard]] const char* reg_status_name(cube::vision::EpochRegistration::Status status) {
     switch (status) {
-        case cube::vision::EpochRegistration::Status::resolved: return "resolved";
-        case cube::vision::EpochRegistration::Status::ambiguous: return "ambiguous";
-        case cube::vision::EpochRegistration::Status::insufficient: return "insufficient";
+        case cube::vision::EpochRegistration::Status::resolved:
+            return "resolved";
+        case cube::vision::EpochRegistration::Status::ambiguous:
+            return "ambiguous";
+        case cube::vision::EpochRegistration::Status::insufficient:
+            return "insufficient";
     }
     return nullptr;
 }
 
 [[nodiscard]] const char* reg_basis_name(cube::vision::EpochRegistration::Basis basis) {
     switch (basis) {
-        case cube::vision::EpochRegistration::Basis::unique: return "unique";
-        case cube::vision::EpochRegistration::Basis::oriented: return "oriented";
-        case cube::vision::EpochRegistration::Basis::content_equivalent: return "content-equiv";
+        case cube::vision::EpochRegistration::Basis::unique:
+            return "unique";
+        case cube::vision::EpochRegistration::Basis::oriented:
+            return "oriented";
+        case cube::vision::EpochRegistration::Basis::content_equivalent:
+            return "content-equiv";
     }
     return nullptr;
 }
 
 [[nodiscard]] char color_letter(cube::model::FacetColor color) {
     switch (color) {
-        case cube::model::FacetColor::white: return 'W';
-        case cube::model::FacetColor::yellow: return 'Y';
-        case cube::model::FacetColor::red: return 'R';
-        case cube::model::FacetColor::orange: return 'O';
-        case cube::model::FacetColor::green: return 'G';
-        case cube::model::FacetColor::blue: return 'B';
-        case cube::model::FacetColor::unknown: return '?';
+        case cube::model::FacetColor::white:
+            return 'W';
+        case cube::model::FacetColor::yellow:
+            return 'Y';
+        case cube::model::FacetColor::red:
+            return 'R';
+        case cube::model::FacetColor::orange:
+            return 'O';
+        case cube::model::FacetColor::green:
+            return 'G';
+        case cube::model::FacetColor::blue:
+            return 'B';
+        case cube::model::FacetColor::unknown:
+            return '?';
     }
     return '?';
 }
@@ -210,11 +228,11 @@ struct RoutingTally {
     // daylight-wall lesson: "no attempts" must be attributable too).
     // Live-loop only - the canned sweep starts from offered commits, so
     // these are deliberately excluded from tally_fields' agreement check.
-    int starved_pass_gate = 0;   // window converged but track not locked / streak short
-    int starved_identity = 0;    // per-face identity not commit-grade (and not waived)
-    int starved_frontal = 0;     // face too oblique (kMaxFaceCaptureDeg / corner flank)
-    int starved_motion = 0;      // pass rotation or motion score over bounds
-    int starved_unknown = 0;     // > FaceAggregator::kMaxUnstableCells unknown cells
+    int starved_pass_gate = 0;  // window converged but track not locked / streak short
+    int starved_identity = 0;   // per-face identity not commit-grade (and not waived)
+    int starved_frontal = 0;    // face too oblique (kMaxFaceCaptureDeg / corner flank)
+    int starved_motion = 0;     // pass rotation or motion score over bounds
+    int starved_unknown = 0;    // > FaceAggregator::kMaxUnstableCells unknown cells
 };
 
 // Field-for-field comparison surface for the default-agreement check. All
@@ -223,8 +241,8 @@ struct RoutingTally {
 [[nodiscard]] auto tally_fields(const RoutingTally& t) {
     return std::tie(t.attempts, t.outcomes, t.deferred_no_registration, t.deferred_insufficient,
                     t.deferred_ambiguous, t.deferred_resolved, t.quarantine_duplicate_centre,
-                    t.quarantine_verify_conflict, t.force_lost, t.layer_turn, t.reg_status, t.reg_basis,
-                    t.epochs_seen, t.filled_slots, t.slot_centres, t.unattributed);
+                    t.quarantine_verify_conflict, t.force_lost, t.layer_turn, t.reg_status,
+                    t.reg_basis, t.epochs_seen, t.filled_slots, t.slot_centres, t.unattributed);
 }
 
 // One commit result into the tally - shared verbatim by the live loop and
@@ -292,8 +310,8 @@ void tally_final_store(RoutingTally& tally, const cube::vision::CaptureRouter& r
         }
         tally.slot_centres += "URFDLB"[static_cast<std::size_t>(*store_face)];
         tally.slot_centres += ':';
-        tally.slot_centres +=
-            color_letter(cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
+        tally.slot_centres += color_letter(
+            cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
     }
     if (tally.slot_centres.empty()) {
         tally.slot_centres = "-";
@@ -385,11 +403,14 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
     };
     // Capture acceptance gate: ALL FOUR corners in frame (the strict
     // full-visibility flag production computes for the routed family).
-    const auto quad_fully_in_frame = [](const cube::vision::StickerQuad& cell, const cv::Mat& bounds) {
-        return std::all_of(cell.corners.begin(), cell.corners.end(), [&bounds](const cv::Point2f& corner) {
-            return corner.x >= 0.0F && corner.y >= 0.0F && corner.x < static_cast<float>(bounds.cols) &&
-                   corner.y < static_cast<float>(bounds.rows);
-        });
+    const auto quad_fully_in_frame = [](const cube::vision::StickerQuad& cell,
+                                        const cv::Mat& bounds) {
+        return std::all_of(cell.corners.begin(), cell.corners.end(),
+                           [&bounds](const cv::Point2f& corner) {
+                               return corner.x >= 0.0F && corner.y >= 0.0F &&
+                                      corner.x < static_cast<float>(bounds.cols) &&
+                                      corner.y < static_cast<float>(bounds.rows);
+                           });
     };
 
     std::optional<cube::vision::PoseSeed> seed_prior;
@@ -413,7 +434,8 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
         if (recording::frame_overwritten(row.pass, max_pass)) {
             continue;
         }
-        const cv::Mat frame = cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             continue;
         }
@@ -424,12 +446,15 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
         const cube::vision::PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
 
         const auto all_cells_in_frame = [&](const auto& cells) {
-            return std::all_of(cells.begin(), cells.end(),
-                               [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
+            return std::all_of(
+                cells.begin(), cells.end(),
+                [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
         };
         const auto all_quads_full = [&](const auto& cells) {
             return std::all_of(cells.begin(), cells.end(),
-                               [&](const cube::vision::StickerQuad& cell) { return quad_fully_in_frame(cell, frame); });
+                               [&](const cube::vision::StickerQuad& cell) {
+                                   return quad_fully_in_frame(cell, frame);
+                               });
         };
 
         const auto observed = observe_face(frame);
@@ -448,10 +473,10 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
             corner_hint = cube::vision::compute_corner_hint(*seed_prior);
         }
         const auto observed_corner = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
-        const bool corner_gated =
-            observed_corner.has_value() &&
-            !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
-              all_cells_in_frame(observed_corner->lower_right.cells));
+        const bool corner_gated = observed_corner.has_value() &&
+                                  !(all_cells_in_frame(observed_corner->top.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_left.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_right.cells));
         std::optional<cube::vision::CornerObservation> corner;
         if (observed_corner.has_value() && !corner_gated) {
             corner = *observed_corner;
@@ -464,12 +489,14 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
         bool corner_pose = false;
         bool face_pose = false;
         if (corner.has_value()) {
-            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 corner_pose = true;
             }
         } else if (face.has_value()) {
-            if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 face_pose = true;
             }
@@ -484,8 +511,10 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
             if (seed_prior) {
                 edge_hint = cube::vision::compute_edge_hint(*seed_prior);
             }
-            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
-                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed); projected.has_value()) {
+            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr);
+                edge.has_value()) {
+                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
                     pose = *projected;
                 }
             }
@@ -515,9 +544,12 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
             };
             if (corner_pose && corner.has_value()) {
                 track_in.centre_lab_count = 3;
-                track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[0] =
+                    lab_entry(corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] =
+                    lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] =
+                    lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && face.has_value()) {
                 track_in.centre_lab_count = 1;
                 track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
@@ -542,10 +574,12 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
             consec_accepts = 0;
             has_last_track_q = false;
         }
-        const bool pass_accepted =
-            track.gate == cube::vision::TrackGate::accepted || track.gate == cube::vision::TrackGate::anchored;
+        const bool pass_accepted = track.gate == cube::vision::TrackGate::accepted ||
+                                   track.gate == cube::vision::TrackGate::anchored;
         const float pass_rotation_deg =
-            pass_accepted && has_last_track_q ? cube::vision::quat_angle_deg(track.q_track, last_track_q) : 0.0F;
+            pass_accepted && has_last_track_q
+                ? cube::vision::quat_angle_deg(track.q_track, last_track_q)
+                : 0.0F;
         if (pass_accepted) {
             last_track_q = track.q_track;
             has_last_track_q = true;
@@ -565,8 +599,8 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
         if (capture_gate_ok && router.filled_count() < static_cast<int>(cube::model::face_count)) {
             const auto lattice = static_cast<std::size_t>(track.lattice_index);
             const auto add_keyed = [&](const cube::vision::FaceCellMap& map,
-                                       const cube::vision::FaceObservation& observation, bool from_corner,
-                                       bool full_quads) {
+                                       const cube::vision::FaceObservation& observation,
+                                       bool from_corner, bool full_quads) {
                 if (!full_quads) {
                     return;
                 }
@@ -576,8 +610,8 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
                 }
                 auto& aggregator = aggregators[face_index];
                 auto& meta = metas[face_index];
-                if (meta.has_window &&
-                    (row.t_ms - meta.last_add_ms > kIdentityAggStaleMs || meta.window_map != map.cell)) {
+                if (meta.has_window && (row.t_ms - meta.last_add_ms > kIdentityAggStaleMs ||
+                                        meta.window_map != map.cell)) {
                     aggregator.reset();
                     meta = AggregatorMeta{};
                 }
@@ -602,11 +636,12 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
                     slot_obs.lab = views[view]->lab;
                     slot_obs.face_quad = views[view]->quad;
                     slot_obs.geometry_confidence = corner->geometry_confidence;
-                    add_keyed(cube::vision::kCornerObsToBody[lattice][view], slot_obs, /*from_corner=*/true,
-                              corner_full_quads);
+                    add_keyed(cube::vision::kCornerObsToBody[lattice][view], slot_obs,
+                              /*from_corner=*/true, corner_full_quads);
                 }
             } else if (face_pose && face.has_value()) {
-                add_keyed(cube::vision::kFaceObsToBody[lattice], *face, /*from_corner=*/false, face_full_quads);
+                add_keyed(cube::vision::kFaceObsToBody[lattice], *face, /*from_corner=*/false,
+                          face_full_quads);
             }
         }
 
@@ -650,7 +685,8 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
             // path would have committed.
             const auto unknown_cells = static_cast<std::size_t>(
                 std::count_if(captured.lab.begin(), captured.lab.end(), [](const cv::Vec3f& lab) {
-                    return cube::vision::classify_lab(lab).color == cube::model::FacetColor::unknown;
+                    return cube::vision::classify_lab(lab).color ==
+                           cube::model::FacetColor::unknown;
                 }));
             if (unknown_cells > cube::vision::FaceAggregator::kMaxUnstableCells) {
                 ++result.tally.starved_unknown;
@@ -704,7 +740,8 @@ LiveLoopResult run_live_fidelity_loop(const std::filesystem::path& dir) {
 // Re-drive one RoutingConfig variant over a canned event stream: a fresh
 // router, the recorded epoch changes and commit attempts, nothing else.
 // See the file header for exactly what this does and does not replay.
-RoutingTally drive_canned(const std::vector<CannedEvent>& events, const std::vector<AttemptRecord>& attempts,
+RoutingTally drive_canned(const std::vector<CannedEvent>& events,
+                          const std::vector<AttemptRecord>& attempts,
                           const cube::vision::RoutingConfig& config) {
     cube::vision::CaptureRouter router(config);
     RoutingTally tally;
@@ -725,27 +762,36 @@ RoutingTally drive_canned(const std::vector<CannedEvent>& events, const std::vec
 // The per-clip refusal-attribution summary - the block whose existence the
 // pipeline plan requires (Phase 0 exit gate: "routing replay harness
 // produces a per-gate refusal breakdown for a replayed clip").
-void print_summary(const char* tag, const std::string& clip, const RoutingTally& t, std::size_t replayed) {
-    std::printf("# %s clip=%s attempts=%d outcomes: filled=%d updated=%d quarantined=%d deferred=%d holdoff=%d\n",
-                tag, clip.c_str(), t.attempts, t.outcomes[0], t.outcomes[1], t.outcomes[2], t.outcomes[3],
-                t.outcomes[4]);
-    std::printf("# %s clip=%s deferrals: no-registration=%d insufficient=%d ambiguous=%d resolved-flush=%d\n", tag,
-                clip.c_str(), t.deferred_no_registration, t.deferred_insufficient, t.deferred_ambiguous,
-                t.deferred_resolved);
-    std::printf("# %s clip=%s quarantines: duplicate-centre=%d verification-conflict=%d | escalations: "
-                "force-lost=%d layer-turn=%d\n",
-                tag, clip.c_str(), t.quarantine_duplicate_centre, t.quarantine_verify_conflict, t.force_lost,
-                t.layer_turn);
-    std::printf("# %s clip=%s registrations: resolved=%d ambiguous=%d insufficient=%d | resolved-by: unique=%d "
-                "oriented=%d content-equiv=%d\n",
-                tag, clip.c_str(), t.reg_status[0], t.reg_status[1], t.reg_status[2], t.reg_basis[0], t.reg_basis[1],
-                t.reg_basis[2]);
-    std::printf("# %s clip=%s starvation (converged windows refused pre-router): pass-gate=%d identity=%d "
-                "frontal=%d motion=%d unknown-cells=%d\n",
-                tag, clip.c_str(), t.starved_pass_gate, t.starved_identity, t.starved_frontal, t.starved_motion,
-                t.starved_unknown);
-    std::printf("# %s clip=%s epochs=%d replayed-passes=%zu filled-slots=%d slots=%s\n", tag, clip.c_str(),
-                t.epochs_seen, replayed, t.filled_slots, t.slot_centres.c_str());
+void print_summary(const char* tag, const std::string& clip, const RoutingTally& t,
+                   std::size_t replayed) {
+    std::printf(
+        "# %s clip=%s attempts=%d outcomes: filled=%d updated=%d quarantined=%d deferred=%d "
+        "holdoff=%d\n",
+        tag, clip.c_str(), t.attempts, t.outcomes[0], t.outcomes[1], t.outcomes[2], t.outcomes[3],
+        t.outcomes[4]);
+    std::printf(
+        "# %s clip=%s deferrals: no-registration=%d insufficient=%d ambiguous=%d "
+        "resolved-flush=%d\n",
+        tag, clip.c_str(), t.deferred_no_registration, t.deferred_insufficient,
+        t.deferred_ambiguous, t.deferred_resolved);
+    std::printf(
+        "# %s clip=%s quarantines: duplicate-centre=%d verification-conflict=%d | escalations: "
+        "force-lost=%d layer-turn=%d\n",
+        tag, clip.c_str(), t.quarantine_duplicate_centre, t.quarantine_verify_conflict,
+        t.force_lost, t.layer_turn);
+    std::printf(
+        "# %s clip=%s registrations: resolved=%d ambiguous=%d insufficient=%d | resolved-by: "
+        "unique=%d "
+        "oriented=%d content-equiv=%d\n",
+        tag, clip.c_str(), t.reg_status[0], t.reg_status[1], t.reg_status[2], t.reg_basis[0],
+        t.reg_basis[1], t.reg_basis[2]);
+    std::printf(
+        "# %s clip=%s starvation (converged windows refused pre-router): pass-gate=%d identity=%d "
+        "frontal=%d motion=%d unknown-cells=%d\n",
+        tag, clip.c_str(), t.starved_pass_gate, t.starved_identity, t.starved_frontal,
+        t.starved_motion, t.starved_unknown);
+    std::printf("# %s clip=%s epochs=%d replayed-passes=%zu filled-slots=%d slots=%s\n", tag,
+                clip.c_str(), t.epochs_seen, replayed, t.filled_slots, t.slot_centres.c_str());
 }
 
 // One swept RoutingConfig knob: a name for the CSV, the candidate values
@@ -764,15 +810,20 @@ struct RoutingAxis {
 // PINS registration hypotheses - it moves the same refusal counts.
 std::vector<RoutingAxis> routing_axes() {
     return {
-        {"epoch_register_max_score", {6.0F, 4.0F, 8.0F, 10.0F, 12.0F},
+        {"epoch_register_max_score",
+         {6.0F, 4.0F, 8.0F, 10.0F, 12.0F},
          [](cube::vision::RoutingConfig& c, float v) { c.epoch_register_max_score = v; }},
-        {"epoch_register_margin", {4.0F, 2.0F, 6.0F},
+        {"epoch_register_margin",
+         {4.0F, 2.0F, 6.0F},
          [](cube::vision::RoutingConfig& c, float v) { c.epoch_register_margin = v; }},
-        {"epoch_register_oriented_max_lab", {20.0F, 12.0F, 28.0F},
+        {"epoch_register_oriented_max_lab",
+         {20.0F, 12.0F, 28.0F},
          [](cube::vision::RoutingConfig& c, float v) { c.epoch_register_oriented_max_lab = v; }},
-        {"epoch_register_oriented_margin_lab", {6.0F, 3.0F, 9.0F},
+        {"epoch_register_oriented_margin_lab",
+         {6.0F, 3.0F, 9.0F},
          [](cube::vision::RoutingConfig& c, float v) { c.epoch_register_oriented_margin_lab = v; }},
-        {"reassoc_census", {4.0F, 2.0F, 6.0F},
+        {"reassoc_census",
+         {4.0F, 2.0F, 6.0F},
          [](cube::vision::RoutingConfig& c, float v) { c.reassoc_census = static_cast<int>(v); }},
     };
 }
@@ -782,10 +833,11 @@ std::vector<RoutingAxis> routing_axes() {
 // settings_fields (memcmp would read padding).
 [[nodiscard]] auto routing_config_fields(const cube::vision::RoutingConfig& c) {
     return std::make_tuple(c.same_face_centre_lab, c.verify_census_drift, c.duplicate_centre_radius,
-                           c.self_duplication_centre_lab, c.conflict_strikes, c.layer_turn_conflict_faces,
-                           c.layer_turn_window_ms, c.recommit_holdoff_ms, c.reassoc_census, c.content_equiv_lab,
-                           c.epoch_register_max_score, c.epoch_register_margin, c.epoch_register_oriented_max_lab,
-                           c.epoch_register_oriented_margin_lab);
+                           c.self_duplication_centre_lab, c.conflict_strikes,
+                           c.layer_turn_conflict_faces, c.layer_turn_window_ms,
+                           c.recommit_holdoff_ms, c.reassoc_census, c.content_equiv_lab,
+                           c.epoch_register_max_score, c.epoch_register_margin,
+                           c.epoch_register_oriented_max_lab, c.epoch_register_oriented_margin_lab);
 }
 
 struct RoutingVariant {
@@ -819,14 +871,16 @@ TEST_CASE("emit the routing story for recorded clips", "[.routing-replay]") {
     const std::filesystem::path root(root_env);
     const auto clips = collect_clip_dirs(root);
     if (clips.empty()) {
-        SKIP("no recording directories (index.csv) under " << root.string() << " - corpus not recorded yet");
+        SKIP("no recording directories (index.csv) under " << root.string()
+                                                           << " - corpus not recorded yet");
     }
 
     // One row per commit ATTEMPT (cross_session's records show only what
     // LANDED; the routing story is above all what was refused, and why).
-    std::printf("clip,pass,t_ms,epoch,body_face,outcome,confirmed,dup_centre,force_lost,layer_turn,"
-                "reg_status,reg_basis,reg_lattice,reg_cand,reg_tied,reg_best,reg_runner_up,"
-                "reg_best_lab,reg_runner_up_lab\n");
+    std::printf(
+        "clip,pass,t_ms,epoch,body_face,outcome,confirmed,dup_centre,force_lost,layer_turn,"
+        "reg_status,reg_basis,reg_lattice,reg_cand,reg_tied,reg_best,reg_runner_up,"
+        "reg_best_lab,reg_runner_up_lab\n");
 
     std::size_t clips_replayed = 0;
     int total_attempts = 0;
@@ -834,7 +888,8 @@ TEST_CASE("emit the routing story for recorded clips", "[.routing-replay]") {
         const std::string clip = clip_dir.filename().string();
         const auto live = run_live_fidelity_loop(clip_dir);
         if (live.replayed == 0) {
-            std::printf("# routing-replay clip=%s has no replayable passes - skipped\n", clip.c_str());
+            std::printf("# routing-replay clip=%s has no replayable passes - skipped\n",
+                        clip.c_str());
             continue;
         }
         ++clips_replayed;
@@ -846,7 +901,8 @@ TEST_CASE("emit the routing story for recorded clips", "[.routing-replay]") {
             if (commit.registration.has_value()) {
                 const auto& reg = *commit.registration;
                 const char* status = reg_status_name(reg.status);
-                const bool resolved = reg.status == cube::vision::EpochRegistration::Status::resolved;
+                const bool resolved =
+                    reg.status == cube::vision::EpochRegistration::Status::resolved;
                 const char* basis = resolved ? reg_basis_name(reg.basis) : "-";
                 char lattice_text[16];
                 if (resolved) {
@@ -855,18 +911,22 @@ TEST_CASE("emit the routing story for recorded clips", "[.routing-replay]") {
                     std::snprintf(lattice_text, sizeof(lattice_text), "-");
                 }
                 std::snprintf(reg_text, sizeof(reg_text), "%s,%s,%s,%d,%d,%.2f,%.2f,%.2f,%.2f",
-                              status != nullptr ? status : "?", basis != nullptr ? basis : "?", lattice_text,
-                              reg.candidates, reg.tied, static_cast<double>(reg.best_score),
-                              static_cast<double>(reg.runner_up_score), static_cast<double>(reg.best_oriented_lab),
+                              status != nullptr ? status : "?", basis != nullptr ? basis : "?",
+                              lattice_text, reg.candidates, reg.tied,
+                              static_cast<double>(reg.best_score),
+                              static_cast<double>(reg.runner_up_score),
+                              static_cast<double>(reg.best_oriented_lab),
                               static_cast<double>(reg.runner_up_oriented_lab));
             } else {
                 std::snprintf(reg_text, sizeof(reg_text), "-,-,-,-,-,-,-,-,-");
             }
             std::printf("%s,%d,%lld,%d,%c,%s,%d,%d,%d,%d,%s\n", clip.c_str(), attempt.pass,
                         static_cast<long long>(attempt.t_ms), attempt.epoch,
-                        "URFDLB"[static_cast<std::size_t>(attempt.body_face)], outcome != nullptr ? outcome : "?",
-                        static_cast<int>(commit.confirmed_slots.size()), commit.duplicate_centre ? 1 : 0,
-                        commit.force_lost ? 1 : 0, commit.layer_turn ? 1 : 0, reg_text);
+                        "URFDLB"[static_cast<std::size_t>(attempt.body_face)],
+                        outcome != nullptr ? outcome : "?",
+                        static_cast<int>(commit.confirmed_slots.size()),
+                        commit.duplicate_centre ? 1 : 0, commit.force_lost ? 1 : 0,
+                        commit.layer_turn ? 1 : 0, reg_text);
         }
 
         print_summary("routing-replay", clip, live.tally, live.replayed);
@@ -885,7 +945,8 @@ TEST_CASE("emit the routing story for recorded clips", "[.routing-replay]") {
     CHECK(clips_replayed > 0);
 }
 
-TEST_CASE("sweep RoutingConfig registration bars over canned router-input streams", "[.routing-sweep]") {
+TEST_CASE("sweep RoutingConfig registration bars over canned router-input streams",
+          "[.routing-sweep]") {
     const char* root_env = std::getenv("CUBE_ROUTING_SWEEP_DIR");
     if (root_env == nullptr) {
         SKIP("CUBE_ROUTING_SWEEP_DIR not set - record clips via CUBE_VISION_RECORD_DIR first");
@@ -893,7 +954,8 @@ TEST_CASE("sweep RoutingConfig registration bars over canned router-input stream
     const std::filesystem::path root(root_env);
     const auto clips = collect_clip_dirs(root);
     if (clips.empty()) {
-        SKIP("no recording directories (index.csv) under " << root.string() << " - corpus not recorded yet");
+        SKIP("no recording directories (index.csv) under " << root.string()
+                                                           << " - corpus not recorded yet");
     }
 
     // Grid anchoring (tracker_sweep's rule): each axis's first value must
@@ -929,10 +991,11 @@ TEST_CASE("sweep RoutingConfig registration bars over canned router-input stream
         SKIP("corpus directories contain no replayable passes");
     }
 
-    std::printf("variant,axis,value,clip,attempts,filled,updated,quarantined,deferred,holdoff,"
-                "def_noreg,def_insufficient,def_ambiguous,def_resolved,quar_dup,quar_verify,"
-                "force_lost,layer_turn,reg_resolved,reg_ambiguous,reg_insufficient,"
-                "by_unique,by_oriented,by_content_equiv,epochs,filled_slots,slots\n");
+    std::printf(
+        "variant,axis,value,clip,attempts,filled,updated,quarantined,deferred,holdoff,"
+        "def_noreg,def_insufficient,def_ambiguous,def_resolved,quar_dup,quar_verify,"
+        "force_lost,layer_turn,reg_resolved,reg_ambiguous,reg_insufficient,"
+        "by_unique,by_oriented,by_content_equiv,epochs,filled_slots,slots\n");
     const auto variants = build_routing_variants();
     std::size_t rows = 0;
     for (std::size_t v = 0; v < variants.size(); ++v) {
@@ -940,13 +1003,16 @@ TEST_CASE("sweep RoutingConfig registration bars over canned router-input stream
         for (const auto& stream : streams) {
             const auto t = drive_canned(stream.live.events, stream.live.attempts, variant.config);
             REQUIRE(t.unattributed == 0);
-            std::printf("%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%s\n", v,
-                        variant.axis.c_str(), static_cast<double>(variant.value), stream.name.c_str(), t.attempts,
-                        t.outcomes[0], t.outcomes[1], t.outcomes[2], t.outcomes[3], t.outcomes[4],
-                        t.deferred_no_registration, t.deferred_insufficient, t.deferred_ambiguous,
-                        t.deferred_resolved, t.quarantine_duplicate_centre, t.quarantine_verify_conflict,
-                        t.force_lost, t.layer_turn, t.reg_status[0], t.reg_status[1], t.reg_status[2], t.reg_basis[0],
-                        t.reg_basis[1], t.reg_basis[2], t.epochs_seen, t.filled_slots, t.slot_centres.c_str());
+            std::printf(
+                "%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%"
+                "s\n",
+                v, variant.axis.c_str(), static_cast<double>(variant.value), stream.name.c_str(),
+                t.attempts, t.outcomes[0], t.outcomes[1], t.outcomes[2], t.outcomes[3],
+                t.outcomes[4], t.deferred_no_registration, t.deferred_insufficient,
+                t.deferred_ambiguous, t.deferred_resolved, t.quarantine_duplicate_centre,
+                t.quarantine_verify_conflict, t.force_lost, t.layer_turn, t.reg_status[0],
+                t.reg_status[1], t.reg_status[2], t.reg_basis[0], t.reg_basis[1], t.reg_basis[2],
+                t.epochs_seen, t.filled_slots, t.slot_centres.c_str());
             ++rows;
 
             // The fidelity anchor (see the file header): the default-config
@@ -955,16 +1021,21 @@ TEST_CASE("sweep RoutingConfig registration bars over canned router-input stream
             // everything the router's decisions depend on.
             if (v == 0) {
                 const bool agrees = tally_fields(t) == tally_fields(stream.live.tally);
-                std::printf("# routing-sweep clip=%s default-agreement=%s (canned default vs full-fidelity: "
-                            "attempts %d/%d filled %d/%d deferred %d/%d quarantined %d/%d)\n",
-                            stream.name.c_str(), agrees ? "OK" : "MISMATCH", t.attempts, stream.live.tally.attempts,
-                            t.outcomes[0], stream.live.tally.outcomes[0], t.outcomes[3], stream.live.tally.outcomes[3],
-                            t.outcomes[2], stream.live.tally.outcomes[2]);
+                std::printf(
+                    "# routing-sweep clip=%s default-agreement=%s (canned default vs "
+                    "full-fidelity: "
+                    "attempts %d/%d filled %d/%d deferred %d/%d quarantined %d/%d)\n",
+                    stream.name.c_str(), agrees ? "OK" : "MISMATCH", t.attempts,
+                    stream.live.tally.attempts, t.outcomes[0], stream.live.tally.outcomes[0],
+                    t.outcomes[3], stream.live.tally.outcomes[3], t.outcomes[2],
+                    stream.live.tally.outcomes[2]);
                 CHECK(agrees);
-                print_summary("routing-sweep-reference", stream.name, stream.live.tally, stream.live.replayed);
+                print_summary("routing-sweep-reference", stream.name, stream.live.tally,
+                              stream.live.replayed);
             }
         }
     }
-    std::printf("# %zu sweep rows (%zu variants, %zu clips)\n", rows, variants.size(), streams.size());
+    std::printf("# %zu sweep rows (%zu variants, %zu clips)\n", rows, variants.size(),
+                streams.size());
     CHECK(rows > 0);
 }

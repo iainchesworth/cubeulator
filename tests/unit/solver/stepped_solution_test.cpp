@@ -19,7 +19,8 @@ SteppedSolution stepped_for(unsigned seed) {
 
 }  // namespace
 
-TEST_CASE("SteppedSolution starts at the scrambled state, not yet at the end", "[stepped_solution][slow]") {
+TEST_CASE("SteppedSolution starts at the scrambled state, not yet at the end",
+          "[stepped_solution][slow]") {
     const SteppedSolution stepped = stepped_for(0);
     REQUIRE(stepped.at_start());
     REQUIRE(stepped.current_index() == 0);
@@ -67,7 +68,8 @@ TEST_CASE("next and previous are no-ops past the ends", "[stepped_solution][slow
     REQUIRE(stepped.current_cube() == solved_state);
 }
 
-TEST_CASE("current_move applied to current_cube reproduces the next cube in sequence", "[stepped_solution][slow]") {
+TEST_CASE("current_move applied to current_cube reproduces the next cube in sequence",
+          "[stepped_solution][slow]") {
     SteppedSolution stepped = stepped_for(0);
     REQUIRE(stepped.move_count() > 0);
 
@@ -77,7 +79,8 @@ TEST_CASE("current_move applied to current_cube reproduces the next cube in sequ
     REQUIRE(stepped.current_cube() == before.apply(move));
 }
 
-TEST_CASE("stage_ranges cover every move exactly once, in order, with no gaps", "[stepped_solution][slow]") {
+TEST_CASE("stage_ranges cover every move exactly once, in order, with no gaps",
+          "[stepped_solution][slow]") {
     const SteppedSolution stepped = stepped_for(0);
     int expected_start = 0;
     for (const auto& range : stepped.stage_ranges()) {

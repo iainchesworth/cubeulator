@@ -25,9 +25,15 @@ constexpr int kWidth = 640;
 constexpr int kHeight = 480;
 
 cv::Matx33d camera_matrix() {
-    return {static_cast<double>(kWidth), 0.0, kWidth / 2.0,  //
-            0.0, static_cast<double>(kWidth), kHeight / 2.0,  //
-            0.0, 0.0, 1.0};
+    return {static_cast<double>(kWidth),
+            0.0,
+            kWidth / 2.0,  //
+            0.0,
+            static_cast<double>(kWidth),
+            kHeight / 2.0,  //
+            0.0,
+            0.0,
+            1.0};
 }
 
 // Render the cube at a pose: light-grey faces (distinct shades so ridge
@@ -39,7 +45,8 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
     cv::Matx33d rotation;
     cv::Rodrigues(rvec, rotation);
     const auto project = [&](const cv::Point3f& p) {
-        const cv::Matx31d c = rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        const cv::Matx31d c =
+            rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         const cv::Matx33d k = camera_matrix();
         return cv::Point(static_cast<int>(std::lround(k(0, 0) * c(0, 0) / c(2, 0) + k(0, 2))),
                          static_cast<int>(std::lround(k(1, 1) * c(1, 0) / c(2, 0) + k(1, 2))));
@@ -69,9 +76,10 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
         }
         centre = normal;
         const cv::Matx31d normal_c = rotation * cv::Matx31d(normal.x, normal.y, normal.z);
-        const cv::Matx31d centre_c =
-            rotation * cv::Matx31d(centre.x, centre.y, centre.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
-        if (normal_c(0, 0) * centre_c(0, 0) + normal_c(1, 0) * centre_c(1, 0) + normal_c(2, 0) * centre_c(2, 0) >=
+        const cv::Matx31d centre_c = rotation * cv::Matx31d(centre.x, centre.y, centre.z) +
+                                     cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        if (normal_c(0, 0) * centre_c(0, 0) + normal_c(1, 0) * centre_c(1, 0) +
+                normal_c(2, 0) * centre_c(2, 0) >=
             0.0) {
             continue;
         }
@@ -79,7 +87,8 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
         for (const auto& corner : faces[static_cast<std::size_t>(face)]) {
             quad.push_back(project(corner));
         }
-        cv::fillConvexPoly(frame, quad, cv::Scalar(shades[static_cast<std::size_t>(face)]), cv::LINE_AA);
+        cv::fillConvexPoly(frame, quad, cv::Scalar(shades[static_cast<std::size_t>(face)]),
+                           cv::LINE_AA);
         // Sticker-gap lattice: the four internal lines of the face.
         const int face_axis = face / 2;
         const int axis_u = (face_axis + 1) % 3;
@@ -93,8 +102,8 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
                 lo[static_cast<std::size_t>(run_axis)] = -1.0F;
                 std::array<float, 3> hi = lo;
                 hi[static_cast<std::size_t>(run_axis)] = 1.0F;
-                cv::line(frame, project({lo[0], lo[1], lo[2]}), project({hi[0], hi[1], hi[2]}), cv::Scalar(60), 3,
-                         cv::LINE_AA);
+                cv::line(frame, project({lo[0], lo[1], lo[2]}), project({hi[0], hi[1], hi[2]}),
+                         cv::Scalar(60), 3, cv::LINE_AA);
             }
         }
     }

@@ -38,14 +38,20 @@ public:
 
     // The move about to be performed from the current state. Only valid
     // when !at_end().
-    [[nodiscard]] Move current_move() const noexcept { return moves_[static_cast<std::size_t>(index_)]; }
+    [[nodiscard]] Move current_move() const noexcept {
+        return moves_[static_cast<std::size_t>(index_)];
+    }
 
     // Which stage current_move() belongs to. Only valid when !at_end().
-    [[nodiscard]] Stage current_stage() const noexcept { return stage_per_move_[static_cast<std::size_t>(index_)]; }
+    [[nodiscard]] Stage current_stage() const noexcept {
+        return stage_per_move_[static_cast<std::size_t>(index_)];
+    }
 
     // The cube state after current_index() moves have been applied - what
     // should currently be drawn.
-    [[nodiscard]] const Cube& current_cube() const noexcept { return cubes_[static_cast<std::size_t>(index_)]; }
+    [[nodiscard]] const Cube& current_cube() const noexcept {
+        return cubes_[static_cast<std::size_t>(index_)];
+    }
 
     // Applies current_move() and advances; a no-op at_end().
     void next() noexcept;
@@ -58,12 +64,15 @@ public:
     // by comparing current_index() against a range instead of needing one
     // entry per stage-sized macro-step (see AppState.qml's old, per-stage
     // stepping model, which this per-move model replaces).
-    [[nodiscard]] const std::vector<StageRange>& stage_ranges() const noexcept { return stage_ranges_; }
+    [[nodiscard]] const std::vector<StageRange>& stage_ranges() const noexcept {
+        return stage_ranges_;
+    }
 
 private:
     std::vector<Move> moves_;
     std::vector<Stage> stage_per_move_;
-    std::vector<Cube> cubes_;  // cubes_[i] = state after i moves; cubes_.size() == moves_.size() + 1
+    std::vector<Cube>
+        cubes_;  // cubes_[i] = state after i moves; cubes_.size() == moves_.size() + 1
     std::vector<StageRange> stage_ranges_;
     int index_ = 0;
 };

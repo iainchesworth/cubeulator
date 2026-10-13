@@ -118,12 +118,13 @@ struct Basis {
 // Best fit of one side's centres over its basis variants: most inliers
 // wins (the pairing gates re-check consistency, so a sloppier variant
 // cannot smuggle a wrong grid past them on inlier count alone).
-[[nodiscard]] std::optional<cube::vision::detail::FaceFit> best_side_fit(const std::vector<cv::Point2f>& centers,
-                                                                         const std::vector<Basis>& sets) {
+[[nodiscard]] std::optional<cube::vision::detail::FaceFit> best_side_fit(
+    const std::vector<cv::Point2f>& centers, const std::vector<Basis>& sets) {
     std::optional<cube::vision::detail::FaceFit> best;
     for (const auto& basis : sets) {
         const auto fit = cube::vision::detail::fit_face_grid(
-            centers, basis.col, basis.row, static_cast<std::size_t>(kEdgeMinSideInliers), kEdgeMinSideInliers);
+            centers, basis.col, basis.row, static_cast<std::size_t>(kEdgeMinSideInliers),
+            kEdgeMinSideInliers);
         if (fit && (!best || fit->inlier_count > best->inlier_count)) {
             best = fit;
         }
@@ -134,8 +135,8 @@ struct Basis {
 [[nodiscard]] std::array<cv::Point2f, 4> face_quad(const detail::FaceFit& fit) {
     const cv::Point2f half_col = 1.5F * fit.col_step;
     const cv::Point2f half_row = 1.5F * fit.row_step;
-    return {fit.anchor - half_col - half_row, fit.anchor + half_col - half_row, fit.anchor + half_col + half_row,
-            fit.anchor - half_col + half_row};
+    return {fit.anchor - half_col - half_row, fit.anchor + half_col - half_row,
+            fit.anchor + half_col + half_row, fit.anchor - half_col + half_row};
 }
 
 }  // namespace
@@ -158,8 +159,9 @@ Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const E
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
     if (candidates.size() > kEdgeMaxCandidates) {
-        std::ranges::partial_sort(candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kEdgeMaxCandidates),
-                                  {}, [](const StickerCandidate& candidate) { return -candidate.area; });
+        std::ranges::partial_sort(
+            candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kEdgeMaxCandidates), {},
+            [](const StickerCandidate& candidate) { return -candidate.area; });
         candidates.resize(kEdgeMaxCandidates);
     }
 
@@ -190,8 +192,8 @@ Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const E
     const auto right_sets = side_basis_sets(hint, 1);
     diag.basis_sets = static_cast<int>(left_sets.size());
 
-    const float shared_tolerance_px =
-        kEdgeSharedTolerancePx * static_cast<float>(bgr_frame.cols) / kEdgeSharedToleranceScaleWidth;
+    const float shared_tolerance_px = kEdgeSharedTolerancePx * static_cast<float>(bgr_frame.cols) /
+                                      kEdgeSharedToleranceScaleWidth;
 
     std::optional<EdgeObservation> best;
     int best_combined = 0;
@@ -218,17 +220,22 @@ Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const E
             // which gate stopped it - the funnel's whole point.
             const auto left_quad = face_quad(*left_fit);
             const auto right_quad = face_quad(*right_fit);
-            const float top_gap = std::hypot(left_quad[1].x - right_quad[0].x, left_quad[1].y - right_quad[0].y);
-            const float bottom_gap = std::hypot(left_quad[2].x - right_quad[3].x, left_quad[2].y - right_quad[3].y);
+            const float top_gap =
+                std::hypot(left_quad[1].x - right_quad[0].x, left_quad[1].y - right_quad[0].y);
+            const float bottom_gap =
+                std::hypot(left_quad[2].x - right_quad[3].x, left_quad[2].y - right_quad[3].y);
             const float shared_px = std::max(top_gap, bottom_gap);
             const float left_row = std::hypot(left_fit->row_step.x, left_fit->row_step.y);
             const float right_row = std::hypot(right_fit->row_step.x, right_fit->row_step.y);
-            const float pitch_ratio = left_row > 0.0F && right_row > 0.0F
-                                          ? std::max(left_row, right_row) / std::min(left_row, right_row)
-                                          : 0.0F;
-            const float col_pitch = 0.5F * (std::hypot(left_fit->col_step.x, left_fit->col_step.y) +
-                                            std::hypot(right_fit->col_step.x, right_fit->col_step.y));
-            const float shared_gate_px = std::max(shared_tolerance_px, kEdgeSharedPitchFraction * col_pitch);
+            const float pitch_ratio =
+                left_row > 0.0F && right_row > 0.0F
+                    ? std::max(left_row, right_row) / std::min(left_row, right_row)
+                    : 0.0F;
+            const float col_pitch =
+                0.5F * (std::hypot(left_fit->col_step.x, left_fit->col_step.y) +
+                        std::hypot(right_fit->col_step.x, right_fit->col_step.y));
+            const float shared_gate_px =
+                std::max(shared_tolerance_px, kEdgeSharedPitchFraction * col_pitch);
             if (combined > diag.best_left_inliers + diag.best_right_inliers) {
                 diag.best_split_x = split_x;
                 diag.best_left_inliers = left_fit->inlier_count;
@@ -243,8 +250,8 @@ Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const E
             // The refit may flex the basis but must not have flipped it: a
             // mirrored fit would silently swap the quads' corner labels
             // and hand the pose solve a chirally impossible cube.
-            if (left_fit->col_step.x <= 0.0F || right_fit->col_step.x <= 0.0F || left_fit->row_step.y <= 0.0F ||
-                right_fit->row_step.y <= 0.0F) {
+            if (left_fit->col_step.x <= 0.0F || right_fit->col_step.x <= 0.0F ||
+                left_fit->row_step.y <= 0.0F || right_fit->row_step.y <= 0.0F) {
                 continue;
             }
             // Grids on opposite sides of the split line.
@@ -263,7 +270,8 @@ Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const E
                 continue;
             }
 
-            if (combined > best_combined || (combined == best_combined && shared_px < best_shared_px)) {
+            if (combined > best_combined ||
+                (combined == best_combined && shared_px < best_shared_px)) {
                 EdgeObservation observation;
                 observation.left_quad = left_quad;
                 observation.right_quad = right_quad;

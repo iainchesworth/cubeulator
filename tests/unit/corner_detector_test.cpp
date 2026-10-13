@@ -29,16 +29,19 @@ namespace {
 // A [29 x anchors] row-major tensor with every value 0 except anchor
 // `hot`, which carries a box at (cx,cy,w,h), score, and 8 keypoints laid
 // out per the interface doc.
-std::vector<float> craft_tensor(int anchors, int hot, float cx, float cy, float w, float h, float score) {
+std::vector<float> craft_tensor(int anchors, int hot, float cx, float cy, float w, float h,
+                                float score) {
     std::vector<float> data(static_cast<std::size_t>(29) * anchors, 0.0F);
-    const auto at = [&](int row, int a) -> float& { return data[static_cast<std::size_t>(row) * anchors + a]; };
+    const auto at = [&](int row, int a) -> float& {
+        return data[static_cast<std::size_t>(row) * anchors + a];
+    };
     at(0, hot) = cx;
     at(1, hot) = cy;
     at(2, hot) = w;
     at(3, hot) = h;
     at(4, hot) = score;
     for (int slot = 0; slot < 8; ++slot) {
-        at(5 + slot * 3, hot) = cx + static_cast<float>(slot);      // distinct x per slot
+        at(5 + slot * 3, hot) = cx + static_cast<float>(slot);  // distinct x per slot
         at(6 + slot * 3, hot) = cy + 2.0F * static_cast<float>(slot);
         at(7 + slot * 3, hot) = 0.9F;
     }
@@ -49,13 +52,15 @@ std::vector<float> craft_tensor(int anchors, int hot, float cx, float cy, float 
 
 TEST_CASE("decode maps the best anchor through the letterbox to frame pixels", "[detector]") {
     // Letterbox: scale 0.5, pad (0, 80) - a 1280x960 frame into 640x640.
-    const auto data = craft_tensor(16, 7, /*cx=*/320.0F, /*cy=*/280.0F, /*w=*/100.0F, /*h=*/60.0F, /*score=*/0.9F);
+    const auto data = craft_tensor(16, 7, /*cx=*/320.0F, /*cy=*/280.0F, /*w=*/100.0F, /*h=*/60.0F,
+                                   /*score=*/0.9F);
     const auto result =
-        detail::decode_pose_output(data.data(), 16, 0.25F, /*scale=*/0.5F, /*pad_x=*/0.0F, /*pad_y=*/80.0F,
-                                   cv::Size(1280, 960));
+        detail::decode_pose_output(data.data(), 16, 0.25F, /*scale=*/0.5F, /*pad_x=*/0.0F,
+                                   /*pad_y=*/80.0F, cv::Size(1280, 960));
     REQUIRE(result.found);
     CHECK_THAT(result.confidence, WithinAbs(0.9, 1e-6));
-    // Box: letterbox (270..370, 250..310) -> frame ((270-0)/0.5, (250-80)/0.5) = (540, 340) to (740, 460).
+    // Box: letterbox (270..370, 250..310) -> frame ((270-0)/0.5, (250-80)/0.5) = (540, 340) to
+    // (740, 460).
     CHECK_THAT(result.box.x, WithinAbs(540.0, 1e-3));
     CHECK_THAT(result.box.y, WithinAbs(340.0, 1e-3));
     CHECK_THAT(result.box.width, WithinAbs(200.0, 1e-3));
@@ -76,7 +81,8 @@ TEST_CASE("decode maps the best anchor through the letterbox to frame pixels", "
 
 TEST_CASE("decode refuses when no anchor clears the threshold", "[detector]") {
     const auto data = craft_tensor(8, 3, 100.0F, 100.0F, 50.0F, 50.0F, /*score=*/0.2F);
-    const auto result = detail::decode_pose_output(data.data(), 8, 0.25F, 1.0F, 0.0F, 0.0F, cv::Size(640, 640));
+    const auto result =
+        detail::decode_pose_output(data.data(), 8, 0.25F, 1.0F, 0.0F, 0.0F, cv::Size(640, 640));
     CHECK_FALSE(result.found);
     CHECK(result.confidence == 0.0F);
 }

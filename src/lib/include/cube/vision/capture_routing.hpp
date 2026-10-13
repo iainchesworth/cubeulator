@@ -285,7 +285,8 @@ static_assert(RoutingConfig{}.self_duplication_centre_lab >= RoutingConfig{}.sam
               "the refusal bar may never be narrower than the authentication bar: a reading the "
               "verifier would call a re-show of a captured face must not be admissible as a "
               "newcomer beside it, which is the [18, 25) self-duplication window");
-static_assert(RoutingConfig{}.self_duplication_centre_lab >= RoutingConfig{}.duplicate_centre_radius,
+static_assert(RoutingConfig{}.self_duplication_centre_lab >=
+                  RoutingConfig{}.duplicate_centre_radius,
               "the centre-alias net is a subset of the self-duplication net, not a wider one");
 static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_centre_lab,
               "content equivalence is a strictly stronger claim than same-face: two slots declared "
@@ -356,8 +357,10 @@ void slot_to_outside_view(cube::model::Face body_face, CapturedFace& slot) noexc
 // (as CapturedFace always is - see kBodyRelabel's note), `epoch_body_face`
 // is the epoch-frame face that `epoch_face` was captured on, and `stored`
 // is the slot at kFacePermutation[lattice_index][epoch_body_face].
-[[nodiscard]] float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
-                                               cube::model::Face epoch_body_face, int lattice_index);
+[[nodiscard]] float oriented_cell_lab_distance(const CapturedFace& epoch_face,
+                                               const CapturedFace& stored,
+                                               cube::model::Face epoch_body_face,
+                                               int lattice_index);
 
 // 24-hypothesis photometric re-registration of a post-loss epoch against
 // the slot store (the recovery path that needs NO specific pose - any
@@ -473,9 +476,9 @@ struct EpochRegistration {
     float best_oriented_lab = 0.0F;
     float runner_up_oriented_lab = 0.0F;
 };
-[[nodiscard]] EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch_faces,
-                                                     const std::array<std::optional<CapturedFace>, 6>& slots,
-                                                     const RoutingConfig& config);
+[[nodiscard]] EpochRegistration register_epoch_gauge(
+    const std::vector<EpochFaceSample>& epoch_faces,
+    const std::array<std::optional<CapturedFace>, 6>& slots, const RoutingConfig& config);
 
 enum class CommitOutcome : std::uint8_t {
     filled,       // routed to its empty slot and written
@@ -591,8 +594,8 @@ private:
     void begin_epoch_scope();
 
     // The gauge-resolved commit core (rules 2-6 of the identity policy).
-    DirectCommit commit_direct(cube::model::Face epoch_face, const CapturedFace& captured, std::int64_t now_ms,
-                               CommitResult& result);
+    DirectCommit commit_direct(cube::model::Face epoch_face, const CapturedFace& captured,
+                               std::int64_t now_ms, CommitResult& result);
     // Gauge adoption for the <= 1-filled-slot epoch change, and for the
     // never-seen face admitted mid-recovery (registration `insufficient`).
     // The slot LABEL is relative in this regime and chosen by convention -
@@ -603,7 +606,8 @@ private:
     // it). Returns false when the capture must not be admitted at all: its
     // centre aliases a captured face without authenticating as it, two
     // stored slots both claim it, or the store is full.
-    [[nodiscard]] bool adopt_gauge_direct(cube::model::Face epoch_face, const CapturedFace& captured);
+    [[nodiscard]] bool adopt_gauge_direct(cube::model::Face epoch_face,
+                                          const CapturedFace& captured);
     // "Some filled slot already holds this physical face." The refusal half
     // of the same-face question, shared by ALL THREE admission paths so one
     // physical face cannot be filed beside itself: see

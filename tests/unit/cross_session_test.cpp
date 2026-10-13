@@ -72,12 +72,12 @@
 #include <cube/model/face.hpp>
 #include <cube/model/facelet.hpp>
 #include <cube/solver/scan_assembly.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/capture_routing.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
-#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/orientation_lattice.hpp>
 #include <cube/vision/orientation_tracker.hpp>
@@ -121,24 +121,36 @@ struct AggregatorMeta {
 
 const char* commit_outcome_name(cube::vision::CommitOutcome outcome) {
     switch (outcome) {
-        case cube::vision::CommitOutcome::filled: return "filled";
-        case cube::vision::CommitOutcome::updated: return "updated";
-        case cube::vision::CommitOutcome::quarantined: return "quarantined";
-        case cube::vision::CommitOutcome::deferred: return "deferred";
-        case cube::vision::CommitOutcome::holdoff: return "holdoff";
+        case cube::vision::CommitOutcome::filled:
+            return "filled";
+        case cube::vision::CommitOutcome::updated:
+            return "updated";
+        case cube::vision::CommitOutcome::quarantined:
+            return "quarantined";
+        case cube::vision::CommitOutcome::deferred:
+            return "deferred";
+        case cube::vision::CommitOutcome::holdoff:
+            return "holdoff";
     }
     return "?";
 }
 
 char color_letter(cube::model::FacetColor color) {
     switch (color) {
-        case cube::model::FacetColor::white: return 'W';
-        case cube::model::FacetColor::yellow: return 'Y';
-        case cube::model::FacetColor::red: return 'R';
-        case cube::model::FacetColor::orange: return 'O';
-        case cube::model::FacetColor::green: return 'G';
-        case cube::model::FacetColor::blue: return 'B';
-        case cube::model::FacetColor::unknown: return '?';
+        case cube::model::FacetColor::white:
+            return 'W';
+        case cube::model::FacetColor::yellow:
+            return 'Y';
+        case cube::model::FacetColor::red:
+            return 'R';
+        case cube::model::FacetColor::orange:
+            return 'O';
+        case cube::model::FacetColor::green:
+            return 'G';
+        case cube::model::FacetColor::blue:
+            return 'B';
+        case cube::model::FacetColor::unknown:
+            return '?';
     }
     return '?';
 }
@@ -167,9 +179,10 @@ private:
 
 // One face record: nine classified colours, nine mean Labs, and the
 // provenance a cross-session comparison needs to weigh a disagreement.
-std::string face_record(const std::string& kind, const std::string& clip, int pass, std::int64_t t_ms, int epoch,
-                        char epoch_face, char store_face, int slot, const std::string& outcome, int contrib_obs,
-                        bool corner_fed, float frontal_deg, float pass_rot_deg, float motion_score,
+std::string face_record(const std::string& kind, const std::string& clip, int pass,
+                        std::int64_t t_ms, int epoch, char epoch_face, char store_face, int slot,
+                        const std::string& outcome, int contrib_obs, bool corner_fed,
+                        float frontal_deg, float pass_rot_deg, float motion_score,
                         float belief_margin, bool certain, bool certain_face, float convergence,
                         const cube::vision::CapturedFace& captured) {
     std::string colours;
@@ -177,10 +190,12 @@ std::string face_record(const std::string& kind, const std::string& clip, int pa
         colours += color_letter(cube::vision::classify_lab(lab).color);
     }
     char head[512];
-    std::snprintf(head, sizeof(head), "%s,%s,%d,%lld,%d,%c,%c,%d,%s,%d,%d,%.2f,%.2f,%.4f,%.3f,%d,%d,%.3f,%s",
-                  kind.c_str(), clip.c_str(), pass, static_cast<long long>(t_ms), epoch, epoch_face, store_face, slot,
-                  outcome.c_str(), contrib_obs, corner_fed ? 1 : 0, frontal_deg, pass_rot_deg, motion_score,
-                  belief_margin, certain ? 1 : 0, certain_face ? 1 : 0, convergence, colours.c_str());
+    std::snprintf(head, sizeof(head),
+                  "%s,%s,%d,%lld,%d,%c,%c,%d,%s,%d,%d,%.2f,%.2f,%.4f,%.3f,%d,%d,%.3f,%s",
+                  kind.c_str(), clip.c_str(), pass, static_cast<long long>(t_ms), epoch, epoch_face,
+                  store_face, slot, outcome.c_str(), contrib_obs, corner_fed ? 1 : 0, frontal_deg,
+                  pass_rot_deg, motion_score, belief_margin, certain ? 1 : 0, certain_face ? 1 : 0,
+                  convergence, colours.c_str());
     std::string row(head);
     for (const auto& lab : captured.lab) {
         char cell[64];
@@ -216,23 +231,27 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
     const std::string dir_path(dir);
     std::ifstream index_stream(dir_path + "/" + std::string(recording::kIndexCsvName));
     if (!index_stream) {
-        SKIP("no " << recording::kIndexCsvName << " under " << dir_path << " - not a recording directory");
+        SKIP("no " << recording::kIndexCsvName << " under " << dir_path
+                   << " - not a recording directory");
     }
     const char* clip_override = std::getenv("CUBE_CROSS_SESSION_CLIP");
-    const std::string clip = clip_override != nullptr ? std::string(clip_override) : leaf_name(dir_path);
+    const std::string clip =
+        clip_override != nullptr ? std::string(clip_override) : leaf_name(dir_path);
 
     RecordSink sink;
     sink.open(std::getenv("CUBE_CROSS_SESSION_OUT"));
 
     const auto rows = recording::read_index(index_stream);
-    std::printf("cross-session: %s clip=%s (%zu passes)%s\n", dir_path.c_str(), clip.c_str(), rows.size(),
-                sink.teed() ? " [teed to CUBE_CROSS_SESSION_OUT]" : "");
+    std::printf("cross-session: %s clip=%s (%zu passes)%s\n", dir_path.c_str(), clip.c_str(),
+                rows.size(), sink.teed() ? " [teed to CUBE_CROSS_SESSION_OUT]" : "");
     // Schema line, emitted into the record stream so a parser reading only
     // the tee'd file is self-describing. "kind" is `face` for a capture
     // that landed and `slot` for the end-of-clip store dump.
-    sink.line("kind,clip,pass,t_ms,epoch,epoch_face,store_face,slot,outcome,contrib_obs,corner_fed,frontal_deg,"
-              "pass_rot_deg,motion,belief_margin,certain,certain_face,convergence,colors,"
-              "L0,a0,b0,L1,a1,b1,L2,a2,b2,L3,a3,b3,L4,a4,b4,L5,a5,b5,L6,a6,b6,L7,a7,b7,L8,a8,b8");
+    sink.line(
+        "kind,clip,pass,t_ms,epoch,epoch_face,store_face,slot,outcome,contrib_obs,corner_fed,"
+        "frontal_deg,"
+        "pass_rot_deg,motion,belief_margin,certain,certain_face,convergence,colors,"
+        "L0,a0,b0,L1,a1,b1,L2,a2,b2,L3,a3,b3,L4,a4,b4,L5,a5,b5,L6,a6,b6,L7,a7,b7,L8,a8,b8");
 
     int max_pass = 0;
     for (const auto& row : rows) {
@@ -252,11 +271,14 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
     };
     // Capture acceptance gate: ALL FOUR corners in frame (the strict
     // full-visibility flag production computes for the routed family).
-    const auto quad_fully_in_frame = [](const cube::vision::StickerQuad& cell, const cv::Mat& bounds) {
-        return std::all_of(cell.corners.begin(), cell.corners.end(), [&bounds](const cv::Point2f& corner) {
-            return corner.x >= 0.0F && corner.y >= 0.0F && corner.x < static_cast<float>(bounds.cols) &&
-                   corner.y < static_cast<float>(bounds.rows);
-        });
+    const auto quad_fully_in_frame = [](const cube::vision::StickerQuad& cell,
+                                        const cv::Mat& bounds) {
+        return std::all_of(cell.corners.begin(), cell.corners.end(),
+                           [&bounds](const cv::Point2f& corner) {
+                               return corner.x >= 0.0F && corner.y >= 0.0F &&
+                                      corner.x < static_cast<float>(bounds.cols) &&
+                                      corner.y < static_cast<float>(bounds.rows);
+                           });
     };
 
     std::optional<cube::vision::PoseSeed> seed_prior;
@@ -282,7 +304,7 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
     // LANDED; a scan that cannot complete is characterised entirely by
     // what it refused and why, and "deferred" without its registration
     // status is the specific blindness that hid the four-fold roll tie.
-    std::array<int, 5> outcome_counts{};  // indexed by CommitOutcome
+    std::array<int, 5> outcome_counts{};       // indexed by CommitOutcome
     std::array<int, 3> registration_counts{};  // indexed by EpochRegistration::Status
     std::array<int, 3> registration_basis{};   // indexed by EpochRegistration::Basis
     int epochs_seen = 0;
@@ -295,7 +317,8 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         if (recording::frame_overwritten(row.pass, max_pass)) {
             continue;
         }
-        const cv::Mat frame = cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             continue;
         }
@@ -310,12 +333,15 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         const cube::vision::PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
 
         const auto all_cells_in_frame = [&](const auto& cells) {
-            return std::all_of(cells.begin(), cells.end(),
-                               [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
+            return std::all_of(
+                cells.begin(), cells.end(),
+                [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
         };
         const auto all_quads_full = [&](const auto& cells) {
             return std::all_of(cells.begin(), cells.end(),
-                               [&](const cube::vision::StickerQuad& cell) { return quad_fully_in_frame(cell, frame); });
+                               [&](const cube::vision::StickerQuad& cell) {
+                                   return quad_fully_in_frame(cell, frame);
+                               });
         };
 
         const auto observed = observe_face(frame);
@@ -334,10 +360,10 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             corner_hint = cube::vision::compute_corner_hint(*seed_prior);
         }
         const auto observed_corner = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
-        const bool corner_gated =
-            observed_corner.has_value() &&
-            !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
-              all_cells_in_frame(observed_corner->lower_right.cells));
+        const bool corner_gated = observed_corner.has_value() &&
+                                  !(all_cells_in_frame(observed_corner->top.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_left.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_right.cells));
         std::optional<cube::vision::CornerObservation> corner;
         if (observed_corner.has_value() && !corner_gated) {
             corner = *observed_corner;
@@ -350,12 +376,14 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         bool corner_pose = false;
         bool face_pose = false;
         if (corner.has_value()) {
-            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 corner_pose = true;
             }
         } else if (face.has_value()) {
-            if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 face_pose = true;
             }
@@ -370,8 +398,10 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             if (seed_prior) {
                 edge_hint = cube::vision::compute_edge_hint(*seed_prior);
             }
-            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
-                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed); projected.has_value()) {
+            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr);
+                edge.has_value()) {
+                if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
                     pose = *projected;
                 }
             }
@@ -401,9 +431,12 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             };
             if (corner_pose && corner.has_value()) {
                 track_in.centre_lab_count = 3;
-                track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[0] =
+                    lab_entry(corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] =
+                    lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] =
+                    lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && face.has_value()) {
                 track_in.centre_lab_count = 1;
                 track_in.centre_lab[0] = lab_entry(face->lab[cube::model::center_facelet_index]);
@@ -427,10 +460,12 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             consec_accepts = 0;
             has_last_track_q = false;
         }
-        const bool pass_accepted =
-            track.gate == cube::vision::TrackGate::accepted || track.gate == cube::vision::TrackGate::anchored;
+        const bool pass_accepted = track.gate == cube::vision::TrackGate::accepted ||
+                                   track.gate == cube::vision::TrackGate::anchored;
         const float pass_rotation_deg =
-            pass_accepted && has_last_track_q ? cube::vision::quat_angle_deg(track.q_track, last_track_q) : 0.0F;
+            pass_accepted && has_last_track_q
+                ? cube::vision::quat_angle_deg(track.q_track, last_track_q)
+                : 0.0F;
         if (pass_accepted) {
             last_track_q = track.q_track;
             has_last_track_q = true;
@@ -450,8 +485,8 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
         if (capture_gate_ok && router.filled_count() < static_cast<int>(cube::model::face_count)) {
             const auto lattice = static_cast<std::size_t>(track.lattice_index);
             const auto add_keyed = [&](const cube::vision::FaceCellMap& map,
-                                       const cube::vision::FaceObservation& observation, bool from_corner,
-                                       bool full_quads) {
+                                       const cube::vision::FaceObservation& observation,
+                                       bool from_corner, bool full_quads) {
                 if (!full_quads) {
                     return;
                 }
@@ -461,8 +496,8 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                 }
                 auto& aggregator = aggregators[face_index];
                 auto& meta = metas[face_index];
-                if (meta.has_window &&
-                    (row.t_ms - meta.last_add_ms > kIdentityAggStaleMs || meta.window_map != map.cell)) {
+                if (meta.has_window && (row.t_ms - meta.last_add_ms > kIdentityAggStaleMs ||
+                                        meta.window_map != map.cell)) {
                     aggregator.reset();
                     meta = AggregatorMeta{};
                 }
@@ -487,11 +522,12 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                     slot_obs.lab = views[view]->lab;
                     slot_obs.face_quad = views[view]->quad;
                     slot_obs.geometry_confidence = corner->geometry_confidence;
-                    add_keyed(cube::vision::kCornerObsToBody[lattice][view], slot_obs, /*from_corner=*/true,
-                              corner_full_quads);
+                    add_keyed(cube::vision::kCornerObsToBody[lattice][view], slot_obs,
+                              /*from_corner=*/true, corner_full_quads);
                 }
             } else if (face_pose && face.has_value()) {
-                add_keyed(cube::vision::kFaceObsToBody[lattice], *face, /*from_corner=*/false, face_full_quads);
+                add_keyed(cube::vision::kFaceObsToBody[lattice], *face, /*from_corner=*/false,
+                          face_full_quads);
             }
         }
 
@@ -517,11 +553,11 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                 continue;
             }
             const auto captured = aggregator.capture();
-            const bool has_unknown_cell = std::any_of(captured.lab.begin(), captured.lab.end(),
-                                                      [](const cv::Vec3f& lab) {
-                                                          return cube::vision::classify_lab(lab).color ==
-                                                                 cube::model::FacetColor::unknown;
-                                                      });
+            const bool has_unknown_cell =
+                std::any_of(captured.lab.begin(), captured.lab.end(), [](const cv::Vec3f& lab) {
+                    return cube::vision::classify_lab(lab).color ==
+                           cube::model::FacetColor::unknown;
+                });
             if (has_unknown_cell) {
                 continue;
             }
@@ -541,12 +577,14 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                     ++registration_basis[static_cast<std::size_t>(reg.basis)];
                 }
                 std::printf(
-                    "# reg clip=%s pass=%d epoch=%d face=%c status=%d cand=%d tied=%d score=%.2f/%.2f "
+                    "# reg clip=%s pass=%d epoch=%d face=%c status=%d cand=%d tied=%d "
+                    "score=%.2f/%.2f "
                     "roll=%.2f/%.2f filled=%d\n",
-                    clip.c_str(), row.pass, track.epoch, "URFDLB"[f], static_cast<int>(reg.status), reg.candidates,
-                    reg.tied, static_cast<double>(reg.best_score), static_cast<double>(reg.runner_up_score),
-                    static_cast<double>(reg.best_oriented_lab), static_cast<double>(reg.runner_up_oriented_lab),
-                    router.filled_count());
+                    clip.c_str(), row.pass, track.epoch, "URFDLB"[f], static_cast<int>(reg.status),
+                    reg.candidates, reg.tied, static_cast<double>(reg.best_score),
+                    static_cast<double>(reg.runner_up_score),
+                    static_cast<double>(reg.best_oriented_lab),
+                    static_cast<double>(reg.runner_up_oriented_lab), router.filled_count());
             }
 
             if (commit.outcome == cube::vision::CommitOutcome::holdoff) {
@@ -571,11 +609,12 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
                     continue;
                 }
                 const char store_letter = "URFDLB"[static_cast<std::size_t>(*store_face)];
-                sink.line(face_record("face", clip, row.pass, row.t_ms, track.epoch,
-                                      single ? "URFDLB"[f] : '?', store_letter, slot_index,
-                                      commit_outcome_name(commit.outcome), single ? contrib_obs : -1, corner_fed,
-                                      frontal, pass_rotation_deg, motion_score, track.belief_margin,
-                                      track.identity_certain, capture_identity_ok[f], convergence, *content));
+                sink.line(face_record(
+                    "face", clip, row.pass, row.t_ms, track.epoch, single ? "URFDLB"[f] : '?',
+                    store_letter, slot_index, commit_outcome_name(commit.outcome),
+                    single ? contrib_obs : -1, corner_fed, frontal, pass_rotation_deg, motion_score,
+                    track.belief_margin, track.identity_certain, capture_identity_ok[f],
+                    convergence, *content));
                 ++records;
                 ++records_per_face[static_cast<std::size_t>(*store_face)];
             }
@@ -609,8 +648,8 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             continue;
         }
         sink.line(face_record("slot", clip, -1, 0, agg_epoch, '-',
-                              "URFDLB"[static_cast<std::size_t>(*store_face)], slot_index, "final", -1, false, 0.0F,
-                              0.0F, 0.0F, 0.0F, false, false, 0.0F, *content));
+                              "URFDLB"[static_cast<std::size_t>(*store_face)], slot_index, "final",
+                              -1, false, 0.0F, 0.0F, 0.0F, 0.0F, false, false, 0.0F, *content));
     }
 
     // --- The verdict that actually counts ---------------------------------
@@ -733,10 +772,11 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             }
         }
     }
-    std::printf("# verdict: clip=%s filled=%d distinct-centres=%d live-census=%s resolve=%s "
-                "resolved-census=%s assemble=%s\n",
-                clip.c_str(), filled, distinct_centres, census_text.c_str(), resolve_text.c_str(),
-                resolved_census_text.c_str(), assemble_text.c_str());
+    std::printf(
+        "# verdict: clip=%s filled=%d distinct-centres=%d live-census=%s resolve=%s "
+        "resolved-census=%s assemble=%s\n",
+        clip.c_str(), filled, distinct_centres, census_text.c_str(), resolve_text.c_str(),
+        resolved_census_text.c_str(), assemble_text.c_str());
 
     std::string face_letters;
     for (std::size_t f = 0; f < records_per_face.size(); ++f) {
@@ -744,16 +784,20 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             face_letters += "URFDLB"[f];
         }
     }
-    std::printf("# cross-session: clip=%s replayed=%zu commits-attempted=%d records=%d faces=%s filled-slots=%d\n",
-                clip.c_str(), replayed, commits_attempted, records,
-                face_letters.empty() ? "-" : face_letters.c_str(), router.filled_count());
     std::printf(
-        "# cross-session: clip=%s epochs=%d outcomes filled=%d updated=%d quarantined=%d deferred=%d holdoff=%d"
+        "# cross-session: clip=%s replayed=%zu commits-attempted=%d records=%d faces=%s "
+        "filled-slots=%d\n",
+        clip.c_str(), replayed, commits_attempted, records,
+        face_letters.empty() ? "-" : face_letters.c_str(), router.filled_count());
+    std::printf(
+        "# cross-session: clip=%s epochs=%d outcomes filled=%d updated=%d quarantined=%d "
+        "deferred=%d holdoff=%d"
         " | registration resolved=%d ambiguous=%d insufficient=%d"
         " | resolved-by unique=%d oriented=%d content-equiv=%d\n",
-        clip.c_str(), epochs_seen, outcome_counts[0], outcome_counts[1], outcome_counts[2], outcome_counts[3],
-        outcome_counts[4], registration_counts[0], registration_counts[1], registration_counts[2],
-        registration_basis[0], registration_basis[1], registration_basis[2]);
+        clip.c_str(), epochs_seen, outcome_counts[0], outcome_counts[1], outcome_counts[2],
+        outcome_counts[3], outcome_counts[4], registration_counts[0], registration_counts[1],
+        registration_counts[2], registration_basis[0], registration_basis[1],
+        registration_basis[2]);
 
     // T2's verdict, computed here rather than left to a downstream script,
     // because the three numbers that decide whether a clip COULD have
@@ -800,37 +844,39 @@ TEST_CASE("emit per-body-face captured colour for a recorded clip", "[.cross-ses
             for (const auto& lab : content->lab) {
                 ++census[static_cast<std::size_t>(cube::vision::classify_lab(lab).color)];
             }
-            const char centre =
-                color_letter(cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
+            const char centre = color_letter(
+                cube::vision::classify_lab(content->lab[cube::model::center_facelet_index]).color);
             if (centre_names.find(centre) == std::string::npos) {
                 centre_names += centre;
             }
         }
-        std::printf("# cross-session: clip=%s census W=%d Y=%d R=%d O=%d G=%d B=%d ?=%d"
-                    " | centre-names=%s distinct-centre-names=%zu\n",
-                    clip.c_str(), census[static_cast<std::size_t>(cube::model::FacetColor::white)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::yellow)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::red)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::orange)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::green)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::blue)],
-                    census[static_cast<std::size_t>(cube::model::FacetColor::unknown)],
-                    centre_names.empty() ? "-" : centre_names.c_str(), centre_names.size());
+        std::printf(
+            "# cross-session: clip=%s census W=%d Y=%d R=%d O=%d G=%d B=%d ?=%d"
+            " | centre-names=%s distinct-centre-names=%zu\n",
+            clip.c_str(), census[static_cast<std::size_t>(cube::model::FacetColor::white)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::yellow)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::red)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::orange)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::green)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::blue)],
+            census[static_cast<std::size_t>(cube::model::FacetColor::unknown)],
+            centre_names.empty() ? "-" : centre_names.c_str(), centre_names.size());
 
         if (filled < static_cast<int>(cube::model::face_count)) {
-            std::printf("# cross-session: clip=%s assemble=not-attempted (filled-slots=%d of 6)\n", clip.c_str(),
-                        filled);
+            std::printf("# cross-session: clip=%s assemble=not-attempted (filled-slots=%d of 6)\n",
+                        clip.c_str(), filled);
         } else {
             const auto resolved = cube::vision::resolve_colors(slots);
             if (!resolved.has_value()) {
-                std::printf("# cross-session: clip=%s assemble=NO resolve_colors=%s\n", clip.c_str(),
-                            std::string(cube::to_string(resolved.error())).c_str());
+                std::printf("# cross-session: clip=%s assemble=NO resolve_colors=%s\n",
+                            clip.c_str(), std::string(cube::to_string(resolved.error())).c_str());
             } else {
                 const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved);
-                std::printf("# cross-session: clip=%s assemble=%s\n", clip.c_str(),
-                            assembled.has_value()
-                                ? "YES"
-                                : ("NO " + std::string(cube::to_string(assembled.error()))).c_str());
+                std::printf(
+                    "# cross-session: clip=%s assemble=%s\n", clip.c_str(),
+                    assembled.has_value()
+                        ? "YES"
+                        : ("NO " + std::string(cube::to_string(assembled.error()))).c_str());
             }
         }
     }

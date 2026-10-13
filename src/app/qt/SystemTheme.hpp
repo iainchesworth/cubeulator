@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QObject>
 #include <qqmlintegration.h>
+#include <QObject>
 
 // Whether the OS is currently in dark mode, for Settings' "System (default)"
 // appearance option. Deliberately not just a QML binding on

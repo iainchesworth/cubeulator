@@ -130,8 +130,9 @@ TEST_CASE("scan a recording's cool-hue statistics", "[.cool-hue-scan]") {
         if (frame.empty()) {
             break;
         }
-        std::printf("%d,%d,%d,%d,%d\n", pass, count_cool_hue_pixels(frame), band_count(frame, 35, 135, 80, 60),
-                    band_count(frame, 35, 135, 100, 60), band_count(frame, 35, 135, 120, 80));
+        std::printf("%d,%d,%d,%d,%d\n", pass, count_cool_hue_pixels(frame),
+                    band_count(frame, 35, 135, 80, 60), band_count(frame, 35, 135, 100, 60),
+                    band_count(frame, 35, 135, 120, 80));
     }
     SUCCEED();
 }

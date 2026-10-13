@@ -57,9 +57,10 @@ Result<std::vector<Move>> solve_pll(const Cube& start) {
     // see last_layer.hpp for why this composition is bounded to
     // milliseconds, unlike the per-scramble commutator search it replaced
     // (whose worst PLL cases ran minutes-to-hours).
-    const std::vector<std::vector<Move>> corner_alphabet = {detail::kAdjustU, detail::kAdjustU2,
-                                                            detail::kAdjustUPrime, detail::kCornerCycle};
-    Result<std::vector<Move>> corners_step = detail::algorithm_search(cube, corner_alphabet, corners_permuted, 12);
+    const std::vector<std::vector<Move>> corner_alphabet = {
+        detail::kAdjustU, detail::kAdjustU2, detail::kAdjustUPrime, detail::kCornerCycle};
+    Result<std::vector<Move>> corners_step =
+        detail::algorithm_search(cube, corner_alphabet, corners_permuted, 12);
     if (!corners_step.has_value()) {
         return std::unexpected(corners_step.error());
     }
@@ -73,9 +74,10 @@ Result<std::vector<Move>> solve_pll(const Cube& start) {
     // legal cube's corner and edge parities match), so the U-perm edge
     // 3-cycle plus U alignment always completes it.
     auto fully_solved = [](const Cube& c) { return c.is_solved(); };
-    const std::vector<std::vector<Move>> edge_alphabet = {detail::kAdjustU, detail::kAdjustU2,
-                                                          detail::kAdjustUPrime, detail::kEdgeCycle};
-    Result<std::vector<Move>> edges_step = detail::algorithm_search(cube, edge_alphabet, fully_solved, 12);
+    const std::vector<std::vector<Move>> edge_alphabet = {
+        detail::kAdjustU, detail::kAdjustU2, detail::kAdjustUPrime, detail::kEdgeCycle};
+    Result<std::vector<Move>> edges_step =
+        detail::algorithm_search(cube, edge_alphabet, fully_solved, 12);
     if (!edges_step.has_value()) {
         return std::unexpected(edges_step.error());
     }

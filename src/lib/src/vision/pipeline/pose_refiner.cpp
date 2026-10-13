@@ -26,9 +26,12 @@ struct ModelEdge {
 cv::Point3f face_normal(int face) {
     const float sign = (face % 2 == 0) ? 1.0F : -1.0F;
     switch (face / 2) {
-        case 0: return {sign, 0.0F, 0.0F};
-        case 1: return {0.0F, sign, 0.0F};
-        default: return {0.0F, 0.0F, sign};
+        case 0:
+            return {sign, 0.0F, 0.0F};
+        case 1:
+            return {0.0F, sign, 0.0F};
+        default:
+            return {0.0F, 0.0F, sign};
     }
 }
 
@@ -116,8 +119,9 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
         return cv::Vec3d(c(0, 0), c(1, 0), c(2, 0));
     };
     const auto project = [&](const cv::Vec3d& camera_point) {
-        return cv::Point2d(camera_matrix(0, 0) * camera_point[0] / camera_point[2] + camera_matrix(0, 2),
-                           camera_matrix(1, 1) * camera_point[1] / camera_point[2] + camera_matrix(1, 2));
+        return cv::Point2d(
+            camera_matrix(0, 0) * camera_point[0] / camera_point[2] + camera_matrix(0, 2),
+            camera_matrix(1, 1) * camera_point[1] / camera_point[2] + camera_matrix(1, 2));
     };
     const auto sample_intensity = [&](double x, double y) -> double {
         const int xi = static_cast<int>(std::lround(x));
@@ -135,8 +139,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
         const cv::Point3f n = face_normal(face);
         const cv::Matx31d normal_c = rotation * cv::Matx31d(n.x, n.y, n.z);
         const cv::Vec3d centre_c = to_camera(n);  // face centre = its unit normal, half-edge 1
-        const double along =
-            normal_c(0, 0) * centre_c[0] + normal_c(1, 0) * centre_c[1] + normal_c(2, 0) * centre_c[2];
+        const double along = normal_c(0, 0) * centre_c[0] + normal_c(1, 0) * centre_c[1] +
+                             normal_c(2, 0) * centre_c[2];
         const double distance = cv::norm(centre_c);
         front[static_cast<std::size_t>(face)] = along < 0.0;
         frontality[static_cast<std::size_t>(face)] = distance > 1e-9 ? -along / distance : 0.0;
@@ -149,7 +153,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
                 frontality[static_cast<std::size_t>(edge.face_a)] < params.frontality_min) {
                 continue;
             }
-        } else if (!front[static_cast<std::size_t>(edge.face_a)] && !front[static_cast<std::size_t>(edge.face_b)]) {
+        } else if (!front[static_cast<std::size_t>(edge.face_a)] &&
+                   !front[static_cast<std::size_t>(edge.face_b)]) {
             continue;  // fully back-facing outer edge
         }
 
@@ -167,8 +172,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
         }
         const cv::Point2d direction = span / length_px;
         const cv::Point2d normal(-direction.y, direction.x);
-        const int samples =
-            std::clamp(static_cast<int>(length_px / params.sample_spacing_px), 2, params.max_samples_per_edge);
+        const int samples = std::clamp(static_cast<int>(length_px / params.sample_spacing_px), 2,
+                                       params.max_samples_per_edge);
 
         for (int s = 0; s < samples; ++s) {
             // Interior samples only: corners are rounded on a real cube
@@ -185,7 +190,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
             // beyond ~half a cell lies the aliasing basin, which this
             // stage must never be able to reach.
             const double cell_px = camera_matrix(0, 0) * (2.0 / 3.0) / camera_point[2];
-            const double window = std::clamp(params.search_cell_fraction * cell_px, 2.0, params.search_cap_px);
+            const double window =
+                std::clamp(params.search_cell_fraction * cell_px, 2.0, params.search_cap_px);
             ++m.samples;
 
             // Profile the window once. Lattice gap lines are dark RIDGES
@@ -199,7 +205,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
             std::vector<double> profile;
             profile.reserve(static_cast<std::size_t>(2 * reach + 1));
             for (int offset = -reach; offset <= reach; ++offset) {
-                profile.push_back(sample_intensity(projected.x + offset * normal.x, projected.y + offset * normal.y));
+                profile.push_back(sample_intensity(projected.x + offset * normal.x,
+                                                   projected.y + offset * normal.y));
             }
             const auto value_at = [&](int index) {
                 return (index >= 0 && index < static_cast<int>(profile.size()))
@@ -221,7 +228,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
                 if (valid.size() < 5) {
                     continue;
                 }
-                std::nth_element(valid.begin(), valid.begin() + static_cast<std::ptrdiff_t>(valid.size() / 2),
+                std::nth_element(valid.begin(),
+                                 valid.begin() + static_cast<std::ptrdiff_t>(valid.size() / 2),
                                  valid.end());
                 const double median = valid[valid.size() / 2];
                 for (std::size_t i = 0; i < profile.size(); ++i) {
@@ -249,7 +257,8 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
             }
             double best_offset = static_cast<double>(best_index - reach);
             // Parabolic sub-pixel refinement over the score peak.
-            const double left = best_index > 0 ? scores[static_cast<std::size_t>(best_index - 1)] : -1.0;
+            const double left =
+                best_index > 0 ? scores[static_cast<std::size_t>(best_index - 1)] : -1.0;
             const double right = best_index + 1 < static_cast<int>(scores.size())
                                      ? scores[static_cast<std::size_t>(best_index + 1)]
                                      : -1.0;
@@ -263,8 +272,9 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
                 }
             }
             m.model_points.push_back(model_point);
-            m.image_points.push_back(cv::Point2f(static_cast<float>(projected.x + best_offset * normal.x),
-                                                 static_cast<float>(projected.y + best_offset * normal.y)));
+            m.image_points.push_back(
+                cv::Point2f(static_cast<float>(projected.x + best_offset * normal.x),
+                            static_cast<float>(projected.y + best_offset * normal.y)));
             m.displacements.push_back(best_offset);
             m.normals.push_back(normal);
         }
@@ -321,7 +331,8 @@ PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec, const 
     cv::Vec3d current_tvec = tvec;
     bool solved_any = false;
     for (int iteration = 0; iteration < std::max(1, params.iterations); ++iteration) {
-        const Measurement m = measure_edges(grey, current_rvec, current_tvec, camera_matrix, params);
+        const Measurement m =
+            measure_edges(grey, current_rvec, current_tvec, camera_matrix, params);
         result.samples = m.samples;
         result.matches = static_cast<int>(m.model_points.size());
         if (result.matches < params.min_matches) {
@@ -358,8 +369,8 @@ PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec, const 
         cv::Vec3d solved_rvec = current_rvec;
         cv::Vec3d solved_tvec = current_tvec;
         try {
-            cv::solvePnPRefineLM(m.model_points, m.image_points, camera_matrix, cv::noArray(), solved_rvec,
-                                 solved_tvec);
+            cv::solvePnPRefineLM(m.model_points, m.image_points, camera_matrix, cv::noArray(),
+                                 solved_rvec, solved_tvec);
         } catch (const cv::Exception&) {
             if (!solved_any) {
                 result.reject_reason = "solve-failed";
@@ -380,7 +391,8 @@ PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec, const 
         }
 
         std::vector<cv::Point2f> reprojected;
-        cv::projectPoints(m.model_points, solved_rvec, solved_tvec, camera_matrix, cv::noArray(), reprojected);
+        cv::projectPoints(m.model_points, solved_rvec, solved_tvec, camera_matrix, cv::noArray(),
+                          reprojected);
         double after = 0.0;
         for (std::size_t i = 0; i < reprojected.size(); ++i) {
             after += cv::norm(reprojected[i] - m.image_points[i]);

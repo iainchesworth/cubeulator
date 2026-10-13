@@ -31,11 +31,11 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
-#include <fstream>
 #include <utility>
 #include <vector>
 
@@ -81,9 +81,9 @@ namespace cube::app {
 // unknown-classed cells, and a per-face holdoff - so mid-rotation or
 // occluded windows keep accumulating instead of landing - while an edge-
 // clipped observation (any quad corner out of frame) never enters a
-// window at all, so a converged window is fully-visible by construction. Once the sixth distinct slot fills, resolve_colors()
-// clusters all 54 stickers globally and assemble_scanned_faces() remains
-// the acceptance oracle exactly as before.
+// window at all, so a converged window is fully-visible by construction. Once the sixth distinct
+// slot fills, resolve_colors() clusters all 54 stickers globally and assemble_scanned_faces()
+// remains the acceptance oracle exactly as before.
 //
 // Completion / recovery contract: on assembly SUCCESS the assembled Cube
 // is exposed via assembledCube(), the legacy ScanProgress is rewritten
@@ -136,16 +136,18 @@ class ScanSession : public QObject {
     Q_PROPERTY(qreal trackHealth READ trackHealth NOTIFY readingChanged)
     Q_PROPERTY(int trackReinits READ trackReinits NOTIFY readingChanged)
     Q_PROPERTY(qreal passMs READ passMs NOTIFY readingChanged)
-    Q_PROPERTY(bool previewMirrored READ previewMirrored WRITE setPreviewMirrored NOTIFY previewMirroredChanged)
+    Q_PROPERTY(bool previewMirrored READ previewMirrored WRITE setPreviewMirrored NOTIFY
+                   previewMirroredChanged)
     Q_PROPERTY(QString trackingState READ trackingState NOTIFY readingChanged)
     Q_PROPERTY(bool reorienting READ reorienting NOTIFY readingChanged)
     Q_PROPERTY(qreal overlayFreshness READ overlayFreshness NOTIFY readingChanged)
     Q_PROPERTY(qreal captureProgress READ captureProgress NOTIFY readingChanged)
     Q_PROPERTY(bool autoAdvance READ autoAdvance WRITE setAutoAdvance NOTIFY autoAdvanceChanged)
-    Q_PROPERTY(bool handDetectionEnabled READ handDetectionEnabled WRITE setHandDetectionEnabled NOTIFY
-                   handDetectionEnabledChanged)
+    Q_PROPERTY(bool handDetectionEnabled READ handDetectionEnabled WRITE setHandDetectionEnabled
+                   NOTIFY handDetectionEnabledChanged)
     Q_PROPERTY(QVariantList progressCenters READ progressCenters NOTIFY facesScannedChanged)
-    Q_PROPERTY(QVariantList progressCentersConfirmed READ progressCentersConfirmed NOTIFY facesScannedChanged)
+    Q_PROPERTY(QVariantList progressCentersConfirmed READ progressCentersConfirmed NOTIFY
+                   facesScannedChanged)
     Q_PROPERTY(QVariantList progressFacelets READ progressFacelets NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList slotSummaries READ slotSummaries NOTIFY facesScannedChanged)
     Q_PROPERTY(QVariantList faceCaptureStates READ faceCaptureStates NOTIFY facesScannedChanged)
@@ -192,8 +194,8 @@ public:
     // AR overlay geometry, full-frame pixel coordinates, flat
     // [x0,y0,x1,y1,...] with quad corners ordered tl,tr,br,bl. Empty lists
     // when nothing was detected on the latest reading.
-    [[nodiscard]] QVariantList faceQuadPoints() const;   // 8 reals
-    [[nodiscard]] QVariantList cellQuadPoints() const;   // 9*8 reals, row-major cells
+    [[nodiscard]] QVariantList faceQuadPoints() const;  // 8 reals
+    [[nodiscard]] QVariantList cellQuadPoints() const;  // 9*8 reals, row-major cells
     [[nodiscard]] bool cornerDetected() const noexcept;
     [[nodiscard]] QVariantList cornerQuadPoints() const;  // 3*8 reals: top, lower_left, lower_right
     // 27 CSS colour strings (provisional classify_lab), slot-major in the
@@ -471,7 +473,8 @@ private:
     // IdleGate: a true verdict elides the face/corner detectors and pose
     // for this pass (cube-absent frame, tracker lost) while stability,
     // hand election, the recorder and the cool-hue statistic still run.
-    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
+    [[nodiscard]] AnalysisResult analyze(const cv::Mat& frame, std::int64_t frame_t_ms,
+                                         bool corner_armed,
                                          std::optional<cube::vision::PoseSeed> pose_prior,
                                          bool run_hand_detector, bool skip_detectors);
 
