@@ -13,6 +13,7 @@
 | `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) | No |
 | `docs.yml` | Builds and publishes the mkdocs site to GitHub Pages | N/A (push to `main` only) | No |
 | `dependabot-auto-merge.yml` | Enables auto-merge on Dependabot's minor/patch PRs for GitHub Actions and pip | No (acts on Dependabot PRs only) | No |
+| `cache-hygiene.yml` | Prunes the Actions cache quota: closed PRs' and deleted branches' entries, superseded vcpkg and Qt generations ([below](#the-vcpkg-binary-cache)) | No (acts on the cache only) | No |
 
 See [Branch protection and the merge queue](branch-protection.md) for which
 checks are required on `develop` and `main`, how the queue is configured, and
@@ -97,6 +98,133 @@ gh variable delete CONTROL_RUNNER_JSON                                          
   actionlint does not parse `$/` yet (as of 1.7.12,
   [rhysd/actionlint#711](https://github.com/rhysd/actionlint/issues/711));
   nothing in this repository runs it.
+
+## The vcpkg binary cache
+
+A cold vcpkg install is the longest thing CI does: ONNX Runtime alone is 39
+minutes on the Windows leg, OpenCV 14 on Linux, and a whole macOS or iOS
+configure is over an hour. With the cache restored it is seconds (96 of 98
+Linux packages came back in 19 s; a macOS configure took 43 s instead of 67
+minutes). Every job that runs vcpkg uses the same two composite actions,
+[`.github/actions/vcpkg-cache/restore` and `/save`](../.github/actions/vcpkg-cache),
+which wrap vcpkg's `files` binary-cache provider (its `x-gha` provider was
+removed) around `actions/cache`.
+
+| Step | What it does |
+| --- | --- |
+| restore | Points `VCPKG_BINARY_SOURCES` at `$RUNNER_TEMP/vcpkg-cache` and fills it from the **newest** entry whose key starts `vcpkg-binary-cache-<triplet>-`. |
+| *(build)* | vcpkg restores every archive whose ABI hash matches and builds only the rest. |
+| save | Runs with `if: always()`, so a red or cancelled leg keeps what it already built. Stores the directory under `vcpkg-binary-cache-<triplet>-<hash of its file listing>` - **only if** an archive was added since the restore **and** that exact key is not already readable from this ref. |
+
+The job summary of every leg carries one line saying which of those happened,
+and the log has `vcpkg cache: restored N archive(s) from <key>` and
+`vcpkg cache: N package(s); restored X, now Y; save=...`.
+
+### One cache per triplet, not per build type
+
+Keying by the CMake preset (Debug, Release, coverage) was tried and removed: it
+stored near-identical copies of the same archives. vcpkg names an archive by an
+ABI hash that already covers what actually changes the binaries - the port and
+its dependencies' versions, the triplet, the compiler - and every archive holds
+both the debug and the release variant of the library (`Building x64-windows-dbg`
+and `-rel` happen in one pass). The project's own `CMAKE_BUILD_TYPE` and the
+compiler it is built with are not in that hash: `fmt:x64-linux` has ABI
+`51a55f9e...` in the Coverage (g++-15), Linux (g++-15) and clang-tidy
+(clang++-21) jobs of one run. So the triplet is the whole cache identity:
+
+| Triplet | Legs that share it |
+| --- | --- |
+| `x64-linux` | Linux (GCC 15), Coverage, System tests, clang-tidy, CodeQL |
+| `x64-windows` | Windows (MSVC) |
+| `arm64-osx` | macOS (AppleClang) |
+| `arm64-ios` | iOS (also holds the `arm64-osx` host tools it builds) |
+| `arm64-android` | Android |
+
+Keying finer than that would not make a restore any more correct; it would only
+multiply the 10 GB quota's consumption.
+
+### Where an entry can be read from
+
+An Actions cache entry is readable from **its own ref, the base branch of a pull
+request, and the default branch (`main`)** - nothing else:
+
+| Run | Reads | Writes to |
+| --- | --- | --- |
+| Pull request | `refs/pull/N/merge`, then `develop`, then `main` | `refs/pull/N/merge` |
+| Push to `develop` | `develop`, then `main` | `develop` |
+| Manual dispatch on a feature branch | that branch, then `main` - **not `develop`** | that branch |
+
+Consequences worth knowing:
+
+- `develop` is where the cache every pull request starts from is made, so a
+  push to `develop` must run to the end. `ci.yml` and `codeql.yml` therefore do
+  not cancel an in-progress run on `develop` or `main` (pull requests and
+  dispatches still supersede themselves).
+- The first dispatch on a feature branch is cold, because it cannot see
+  `develop`'s entries; the second restores the first's. For a leg that has to
+  be fast, open the pull request instead.
+- A pull request whose dependency set equals `develop`'s stores nothing (the
+  save step's exact-key lookup finds `develop`'s entry). Before that check, a PR
+  that started from an older generation rebuilt the same set and stored its own
+  1.6 GB copy of it: on 2026-10-13 four closed PRs held 6.5 GB of the 10 GB
+  between them, three of them byte-for-byte the key `develop` already had.
+- A pull request that *changes* the dependency set builds it cold, stores it in
+  its own scope, and `develop` builds it cold again after the merge: the scopes
+  cannot be bridged.
+
+### Keeping inside the quota
+
+The quota is 10 GB per repository. Past it GitHub evicts least-recently-used
+entries without regard to what they cost: a one-hour macOS cache was gone within
+two hours of being saved. [`cache-hygiene.yml`](../.github/workflows/cache-hygiene.yml)
+runs `ci/prune-actions-cache.sh` when a pull request closes and on every push to
+`develop` or `main`, and removes
+
+1. entries whose ref no longer exists (closed PR, deleted branch or tag, merge
+   queue branch) - nothing can read them again;
+2. superseded generations: per ref, the newest vcpkg entry of each triplet and
+   the newest Qt install of each OS and target, unless something read the older
+   one in the last 20 minutes.
+
+Content-addressed keys mean every change stores a *full* new copy, and vcpkg
+never forgets an archive, so a family grows by the stale archives of every
+dependency bump it has been through. There is no automatic reset (a wrong one
+would throw an hour of work away); when `Largest families kept` in a hygiene
+run's summary shows a triplet far past what its install plan needs, reset it:
+
+```sh
+gh workflow run cache-hygiene.yml -f purge=vcpkg-binary-cache-x64-windows- -f dry_run=false
+```
+
+The next run on that triplet builds from cold and stores a clean entry.
+`./ci/prune-actions-cache.sh --dry-run` shows the same report locally.
+
+### Not done, and why
+
+- **Release-only triplets** (`VCPKG_BUILD_TYPE=release`) would halve both the
+  archives and the build time, but the Coverage and clang-tidy legs build Debug
+  and the Windows Debug runtime does not mix with release libraries.
+- **A per-package remote store** (vcpkg's `nuget` provider on GitHub Packages,
+  or S3) uploads each archive the moment it is built - so a cancel loses
+  seconds, not a 39-minute build - has no quota, and is readable from every
+  ref. It is the structural fix for the scoping and eviction above; it costs
+  `packages: write` on the build jobs, `mono` on the Linux and macOS images, and
+  a decision about sharing one feed with the other repositories. Take it if the
+  measures above are not enough.
+- **Default branch `develop`** would make every `develop` entry readable from
+  dispatches on feature branches. It is a repository setting with wider effects
+  (Dependabot's target, Scorecard, the CodeQL default-branch scan) and is the
+  owner's call.
+
+### The same shape in the other repositories
+
+The contract any repository should follow: one directory of archives per
+triplet; restore the newest entry of the triplet; save under a key derived from
+the directory's contents, from an `always()` step, and only when something was
+added and the key is not already readable; prune closed-PR and superseded
+entries. ICL Forge, aqualink-automate and CountdownSolver each differ from this
+in ways that cost them; the audit of what differs is in the pull request that
+introduced this section.
 
 ## Toolchain versions
 

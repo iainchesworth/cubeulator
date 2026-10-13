@@ -24,7 +24,15 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.legs }}
-  cancel-in-progress: true
+  # develop and main are the refs a pull request restores its vcpkg cache from
+  # (docs/ci.md, "The vcpkg binary cache"), and a cold ONNX Runtime build alone
+  # is 39 minutes on Windows. A push there that is cancelled by the next push
+  # restarts that package from nothing, so under a stream of merges it never
+  # finishes and the cache is never warmed: on 2026-10-13, 29 of the 31 push
+  # runs on develop were cancelled that way and none completed. Those runs go
+  # to the end (a newer push waits, and replaces any older one still waiting);
+  # everything else is superseded as before.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -121,10 +129,10 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf, GLU for glew).
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11 for bgfx, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
       # clang-tidy uses its own clang frontend to parse the compile commands
       # regardless of which compiler actually built the code, so this job
@@ -314,21 +322,26 @@ jobs:
       # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
       # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
       #
-      # Three distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
+      # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
       # bgfx's port unconditionally find_package(X11)s even with
-      # examples/tools disabled ("Could NOT find X11"); (2) gperf (a
-      # transitive dependency via gettext, itself pulled in by
-      # onnxruntime/protobuf) needs the autotools chain to build from source
-      # ("gperf currently requires ... autoconf autoconf-archive automake
-      # libtoolize"); (3) glew's generated glew.pc declares `Requires: glu`, and
-      # vcpkg_fixup_pkgconfig() then runs `pkg-config --exists glew`, which
-      # fails with "Package 'glu', required by 'glew', not found" (glu.pc
-      # comes from libglu1-mesa-dev, which ubuntu-26.04 does not preinstall
-      # - the build of glew:x64-linux dies with BUILD_FAILED). All three
-      # confirmed in CI.
+      # examples/tools disabled ("Could NOT find X11"); (2) glew's generated
+      # glew.pc declares `Requires: glu`, and vcpkg_fixup_pkgconfig() then
+      # runs `pkg-config --exists glew`, which fails with "Package 'glu',
+      # required by 'glew', not found" (glu.pc comes from libglu1-mesa-dev,
+      # which ubuntu-26.04 does not preinstall - the build of glew:x64-linux
+      # dies with BUILD_FAILED). Both confirmed in CI.
+      #
+      # A third gap used to be listed here: the autotools chain (autoconf
+      # autoconf-archive automake libtool libltdl-dev) for gperf and for the
+      # vcpkg-make X11 ports, and libxtst-dev for at-spi2-core. They were
+      # reached through opencv4[gtk] -> gtk3 -> pango -> fontconfig -> gperf.
+      # With opencv4[gtk,highgui] gone, no port left in the x64-linux plan is
+      # built with autotools and none needs libxtst. The Android job below
+      # still installs the autotools chain: opencv4[gtk] is not supported on
+      # android, so this change does not alter that job's plan.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -689,7 +702,6 @@ jobs:
         run: >
           sudo apt-get install -y
           libx11-dev libgl1-mesa-dev libglu1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
-          autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
           xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libfontconfig1 libxkbcommon-x11-0
           libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
           libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
@@ -810,10 +822,10 @@ jobs:
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
       # out of the box - see the equivalent comment on build-and-test above.
       #
-      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test above (X11 for bgfx, autotools for gperf, GLU for glew).
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test above (X11 for bgfx, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr
