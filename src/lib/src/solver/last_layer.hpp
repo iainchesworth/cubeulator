@@ -10,6 +10,7 @@
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/search_work.hpp>
 
 // Fixed-algorithm solving for the last layer (2-look OLL / 2-look PLL).
 //
@@ -155,6 +156,7 @@ Result<std::vector<Move>> algorithm_search(const Cube& start,
     std::unordered_set<std::uint64_t> visited;
     nodes.push_back(Node{start, -1, -1, 0});
     visited.insert(last_layer_key(start));
+    const SearchWorkScope work([&visited] { return visited.size(); });
 
     auto reconstruct = [&](std::size_t leaf, std::size_t last_word) {
         std::vector<std::int32_t> words;

@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "about": "Per-zone cost of cube_perf_tests under Tracy: the zone's fastest call, as a multiple of the perf.calibration zone's fastest call. Written by tools/perf/tracy_check.py --update; see docs/testing.md, 'Tracy: per-zone, local and nightly'.",
+  "workload": "cube_perf_tests [perf] with CUBE_PERF_TIMING=1",
+  "tolerance": 3.0,
+  "zones": {
+    "perf.calibration": {
+      "count": 108,
+      "ratio": 1.0
+    },
+    "solver.algorithm_search": {
+      "count": 88,
+      "ratio": 0.0001952
+    },
+    "solver.assemble_scan": {
+      "count": 19,
+      "ratio": 0.06238
+    },
+    "solver.bfs_search": {
+      "count": 225,
+      "ratio": 1.718e-05
+    },
+    "solver.cfop": {
+      "count": 28,
+      "ratio": 0.1441
+    },
+    "solver.corners": {
+      "count": 22,
+      "ratio": 0.1415
+    },
+    "solver.cross": {
+      "count": 22,
+      "ratio": 0.9638
+    },
+    "solver.merge_adjacent_moves": {
+      "count": 68,
+      "ratio": 0.0004014
+    },
+    "solver.middle_edges": {
+      "count": 22,
+      "ratio": 57.05
+    },
+    "solver.oll": {
+      "count": 22,
+      "ratio": 0.006461
+    },
+    "solver.pll": {
+      "count": 22,
+      "ratio": 0.002671
+    },
+    "solver.solve": {
+      "count": 54,
+      "ratio": 0.1441
+    },
+    "solver.two_phase": {
+      "count": 18,
+      "ratio": 7.197
+    },
+    "solver.two_phase.prepare": {
+      "count": 2,
+      "ratio": 1.964e-05
+    },
+    "vision.direct_scan.add": {
+      "count": 1756,
+      "ratio": 1.227e-06
+    },
+    "vision.direct_scan.read_side": {
+      "count": 67,
+      "ratio": 0.1574
+    },
+    "vision.direct_scan.scanned": {
+      "count": 17,
+      "ratio": 0.115
+    },
+    "vision.resolve_colors": {
+      "count": 17,
+      "ratio": 0.0468
+    }
+  }
+}

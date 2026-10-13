@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <cube/profiling.hpp>
+#include <cube/solver/search_work.hpp>
 
 #include "cfop_last_layer.hpp"
 #include "cfop_stages.hpp"
@@ -166,6 +167,8 @@ std::optional<std::vector<std::uint8_t>> shortest_sequence(const CubieCube& cube
     Frontier backward;
     forward.add(start, -1, 0);
     backward.add(goal, -1, 0);
+    const detail::SearchWorkScope work(
+        [&] { return forward.state.size() + backward.state.size(); });
 
     // Forward from the meeting state to `start`'s end is the forward path;
     // from the meeting state back to the goal, each backward move is undone:

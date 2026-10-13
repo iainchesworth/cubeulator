@@ -259,6 +259,16 @@
     { "name": "macos-clang-debug", "inherits": "base", "configurePreset": "macos-clang-debug" },
     { "name": "macos-clang-release", "inherits": "base", "configurePreset": "macos-clang-release" },
     { "name": "macos-clang-fastdebug", "inherits": "base", "configurePreset": "macos-clang-fastdebug" },
-    { "name": "macos-clang-profiling", "inherits": "base", "configurePreset": "macos-clang-profiling" }
+    { "name": "macos-clang-profiling", "inherits": "base", "configurePreset": "macos-clang-profiling" },
+    {
+      "name": "perf",
+      "hidden": true,
+      "inherits": "base",
+      "filter": { "include": { "label": "perf" } },
+      "environment": { "CUBE_PERF_TIMING": "1" }
+    },
+    { "name": "windows-msvc-perf", "inherits": "perf", "configurePreset": "windows-msvc-release" },
+    { "name": "linux-gcc-perf", "inherits": "perf", "configurePreset": "linux-gcc-release" },
+    { "name": "macos-clang-perf", "inherits": "perf", "configurePreset": "macos-clang-release" }
   ]
 }

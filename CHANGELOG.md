@@ -42,6 +42,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- A performance test tier, `cube_perf_tests` (label `perf`), so that a change
+  that makes the app meaningfully slower fails a test the way a wrong one does.
+  Its work budgets - search nodes the solver visits per stage and per solve for
+  all three methods, over a fixed scramble corpus that is the same on every
+  platform, and the pixel buffers `read_side` / `SideScan` allocate at three
+  frame sizes - are counted, not timed, so they are exact on every machine and
+  run in each build leg's plain `ctest` (skipped, not failed, in a Debug or
+  coverage build). The wall-time checks, each a ratio to a calibration workload
+  run in the same process, are opt-in: `CUBE_PERF_TIMING=1`, the `*-perf` test
+  presets, or the dispatch-only `perf` CI leg (`legs=perf`). Every threshold is
+  in `tests/perf/budgets.hpp`; `cube_perf_tests "[.perf-report]"` prints each
+  metric beside its budget. An optional per-zone Tracy comparison against a
+  checked-in baseline is `tools/perf/tracy_check.py`. The solver's searches
+  report their node counts through the new `cube/solver/search_work.hpp`
+  (one thread-local add per search, nothing per node). See
+  [docs/testing.md](docs/testing.md#performance-tests).
 - Desktop packages for Windows (NSIS installer), macOS (`.dmg`) and Linux
   (`.deb`, `.rpm`), each with the app icon, the version, the identifier
   `com.iainchesworthlabs.cubeulator` and the third-party notices; built and

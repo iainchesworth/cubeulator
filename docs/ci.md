@@ -33,13 +33,19 @@ gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
 
 `legs` is a comma-separated list (no spaces) of `clang-format`,
 `platform-isolation`, `clang-tidy`, `linux`, `macos`, `windows`, `coverage`,
-`system`, `android`, `ios`, or `all` (the default). An unknown name fails the
-run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
+`system`, `android`, `ios`, `perf`, or `all` (the default, which does not
+include `perf`). An unknown name fails the run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
 ([platform-isolation.md](platform-isolation.md)): fast, and independent of the
 build legs.
 `system` is the Linux job that runs the system tests under Xvfb (see
 [testing.md](testing.md#system-tests)); on Windows and macOS the same suite
 runs as a non-blocking step of their build legs.
+`perf` is the wall-time half of the performance tier: it builds only
+`cube_perf_tests` on the Linux Release preset (no Qt, no app) and runs
+`ctest --preset linux-gcc-perf`. It runs only when it is named - `all` leaves it
+out - because a stopwatch on a shared runner is the one check that can fail
+for no reason of its own; the work budgets are exact and already run in every
+build leg's plain `ctest` ([testing.md](testing.md#performance-tests)).
 
 Jobs of a dispatched run are named `dispatch - <leg>`, deliberately not the
 names of the required checks: a run that skips legs would otherwise report
