@@ -139,8 +139,18 @@ function(cube_add_third_party_notices app_target)
                 message(FATAL_ERROR \"Refusing to package: \${_n} third-party component(s) have no notice. First: \${_first}\nSee ${out_dir}/third-party-notices.json and docs/licensing.md.\")
             endif()
         ")
-        install(FILES "${txt}" DESTINATION .)
-        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION . RENAME LICENSE.txt)
+        # The root of the install on Windows and macOS (beside the program, or
+        # beside the .app in the .dmg). A Linux package installs under /usr, so
+        # the root is /usr itself: they go under share/doc, where the desktop
+        # packages in cmake/DesktopPackaging.cmake keep the rest of the
+        # app's files (E4a).
+        if(UNIX AND NOT APPLE)
+            set(notices_dir "share/doc/cubeulator")
+        else()
+            set(notices_dir ".")
+        endif()
+        install(FILES "${txt}" DESTINATION "${notices_dir}")
+        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION "${notices_dir}" RENAME LICENSE.txt)
     endif()
 endfunction()
 

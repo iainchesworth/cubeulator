@@ -210,10 +210,8 @@ function(cube_configure_desktop_app target)
     if(UNIX AND NOT APPLE)
         set(_app_dir "lib/cubeulator")
         set(_bindir "${_app_dir}/bin")
-        set(_docdir "${CMAKE_INSTALL_DATADIR}/doc/cubeulator")
     else()
         set(_bindir "${CMAKE_INSTALL_BINDIR}")
-        set(_docdir ".")
     endif()
 
     install(TARGETS ${target}
@@ -268,10 +266,9 @@ function(cube_configure_desktop_app target)
         ${_deploy_options})
     install(SCRIPT "${_cube_deploy_script}")
 
-    # The licence, in every package.
-    install(FILES "${PROJECT_SOURCE_DIR}/LICENSE"
-        DESTINATION "${_docdir}"
-        RENAME "LICENSE.txt")
+    # The licence and the third-party notices are installed by
+    # cube_add_third_party_notices() (cmake/ThirdPartyNotices.cmake), to the
+    # root of the install, or share/doc/cubeulator on Linux.
 
     # --- Linux: launcher, desktop entry, AppStream metadata, icons -----------
     if(UNIX AND NOT APPLE)
