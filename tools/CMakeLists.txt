@@ -3,4 +3,5 @@
 # tree is skipped there.
 if(CUBEULATOR_PLATFORM_DESKTOP)
     add_subdirectory(scan)
+    add_subdirectory(cfop_tables)
 endif()

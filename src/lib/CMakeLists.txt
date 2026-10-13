@@ -60,6 +60,11 @@ target_sources(cube_lib
         src/solver/middle_edges.cpp
         src/solver/oll.cpp
         src/solver/pll.cpp
+        src/solver/cubie.cpp
+        src/solver/two_phase.cpp
+        src/solver/two_phase_tables.cpp
+        src/solver/cfop_last_layer.cpp
+        src/solver/cfop.cpp
         src/solver/solver.cpp
         src/solver/stepped_solution.cpp
         src/vision/vision.cpp
@@ -83,6 +88,32 @@ target_sources(cube_lib
         src/vision/direct_scan.cpp
         src/vision/held_cube.cpp
         src/i18n/i18n.cpp)
+
+# Two files make the compiler build lookup tables from loops: the two-phase
+# solver's phase 1 move tables (two_phase_tables.cpp, about 85 thousand
+# entries) and the last-layer algorithms, parsed from their text
+# (cfop_last_layer.cpp). They fit inside every compiler's default
+# constant-evaluation budget today - by a factor of only 1.5 to 2 on Clang and
+# MSVC - but a budget is a count of steps a vendor chose, so these two files
+# are given plenty of room rather than being one added move table away from a
+# build error. Only these files: the budget exists to stop runaway evaluation,
+# and everything else should keep that protection.
+#
+# The flag differs by compiler (clang-cl accepts the Clang spelling only
+# through /clang:).
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    set(CUBEULATOR_CONSTEXPR_BUDGET "/clang:-fconstexpr-steps=10000000")
+elseif(MSVC)
+    set(CUBEULATOR_CONSTEXPR_BUDGET "/constexpr:steps10000000")
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set(CUBEULATOR_CONSTEXPR_BUDGET "-fconstexpr-ops-limit=200000000")
+else()
+    set(CUBEULATOR_CONSTEXPR_BUDGET "-fconstexpr-steps=10000000")
+endif()
+set_source_files_properties(
+    src/solver/two_phase_tables.cpp
+    src/solver/cfop_last_layer.cpp
+    PROPERTIES COMPILE_OPTIONS "${CUBEULATOR_CONSTEXPR_BUDGET}")
 
 add_dependencies(cube_lib cube_version)
 

@@ -90,6 +90,9 @@ add_executable(cube_unit_tests
     unit/solver/oll_test.cpp
     unit/solver/pll_test.cpp
     unit/solver/solve_test.cpp
+    unit/solver/cubie_test.cpp
+    unit/solver/two_phase_test.cpp
+    unit/solver/cfop_test.cpp
     unit/solver/stepped_solution_test.cpp)
 
 target_link_libraries(cube_unit_tests

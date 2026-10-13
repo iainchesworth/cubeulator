@@ -439,6 +439,36 @@ In your hands.</source>
         <extracomment>Why.</extracomment>
         <translation type="unfinished"></translation>
     </message>
+    <message id="stage.f2l.title">
+        <source>First two layers</source>
+        <extracomment>Name of a stage the Intermediate method has instead of 'White corners' and 'Middle layer'. Cubers call it 'F2L'; do not use that term.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="stage.f2l.what">
+        <source>Join each white corner to its middle-layer edge and put the pair in place, one pair at a time.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="stage.reduce.title">
+        <source>Get it ready</source>
+        <extracomment>Name of the first of two stages of the Advanced method. It does not look like progress: the cube is made ready for the second stage.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="stage.reduce.what">
+        <source>Turn every piece the right way up and send the middle-layer edges back to the middle.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="stage.finish.title">
+        <source>Finish</source>
+        <extracomment>Name of the second of two stages of the Advanced method. Also the word on a button (solve.finish); here it is a heading.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="stage.finish.what">
+        <source>Solve the rest with turns of the top and bottom and half turns of the other four sides.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
         <extracomment>One sentence under the headline on the home screen.</extracomment>
@@ -1077,7 +1107,7 @@ In your hands.</source>
     </message>
     <message id="solve.stageOf">
         <source>Stage %1 of %2</source>
-        <extracomment>Which of the five stages. Shown in small capitals.</extracomment>
+        <extracomment>Which stage of this solution is being worked on, and how many it has: five for Beginner, four for Intermediate, two for Advanced. Shown in small capitals.</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message id="solve.next">
@@ -1213,6 +1243,36 @@ In your hands.</source>
     <message id="solve.a11y.notation">
         <source>In notation: %1</source>
         <extracomment>Read after the turn sentence when notation is switched on. %1 is letters such as R' or U2; do not translate it.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.beginner">
+        <source>Beginner</source>
+        <extracomment>Name of the first way of solving a cube: layer by layer. A button label, one word.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.intermediate">
+        <source>Intermediate</source>
+        <extracomment>Name of the second way of solving: the way fast solvers do it, in four stages. A button label, one word.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.advanced">
+        <source>Advanced</source>
+        <extracomment>Name of the third way of solving: the fewest turns, with no stages to learn. A button label, one word.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.beginner.note">
+        <source>Layer by layer, in steps you can learn. About 100 turns.</source>
+        <extracomment>One line under the three method buttons, shown while Beginner is chosen. 'About 100' is an average; keep it approximate.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.intermediate.note">
+        <source>The way fast solvers do it, in four stages. About 50 turns.</source>
+        <extracomment>One line under the three method buttons, shown while Intermediate is chosen. 'About 50' is an average; keep it approximate.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="solve.method.advanced.note">
+        <source>The fewest turns there are, with no stages to learn. About 20 turns.</source>
+        <extracomment>One line under the three method buttons, shown while Advanced is chosen. 'About 20' is an average; keep it approximate.</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message id="complete.eyebrow">

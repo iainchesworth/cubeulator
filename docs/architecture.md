@@ -52,7 +52,10 @@ which keeps every solve bounded to seconds for interactive mobile use (see
 `src/lib/src/solver/`). The stages' moves are then tidied in one linear pass,
 so no two neighbouring moves turn the same side - including across a stage
 boundary, where a stage can end up with no moves at all
-(`merge_adjacent_moves`). `cube::vision` runs a full OpenCV capture-to-state
+(`merge_adjacent_moves`). That is `SolveMethod::Beginner`, the default; two
+shorter methods sit beside it behind the same entry point - `Intermediate`
+(CFOP, about 52 moves) and `Advanced` (Kociemba's two-phase search, about 20) -
+described, with their measurements, in [Solve methods](solver-methods.md). `cube::vision` runs a full OpenCV capture-to-state
 pipeline - a RANSAC-style lattice fit for grid detection (tolerant of
 uneven lighting, background clutter, and a minority of missed/occluded
 cells, not just a clean dead-on shot), colour classification,
@@ -66,7 +69,13 @@ The scan controller (`src/app/qt/controllers/direct_scan.hpp`) reads the
 cube's sides with `cube::vision::read_side`, and once six sides make exactly
 one valid cube hands a `cube::solver::Cube` to
 `src/app/qt/solve_controller.hpp` (`solveCube`), which solves it on a worker
-thread. A scan that does not yet make a valid cube is never solved: the scan
+thread. Which of the three methods it uses is `SolveController.method`,
+chosen on the solve screen and in settings (`SolveMethodPicker.qml`) and
+kept by `SettingsState.solveMethod`; changing it mid-solve solves on from
+the cube as it stands, off the UI thread, and keeps the hold the camera has
+seen (`solutionContinuesCube`). The screens word each stage by its
+`cube::solver::Stage` value, since the methods have different stages. A scan
+that does not yet make a valid cube is never solved: the scan
 screen keeps asking for the sides again. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
 the solver's actual output, with a hidden-face badge for moves on faces
 this fixed 3-face iso view doesn't show. `i18n` remains a stub target that

@@ -24,7 +24,43 @@ Rectangle {
         { title: "Orient last layer", detail: "Orient the last layer's edges and corners so the top side reads solid." },
         { title: "Permute last layer", detail: "Permute the last layer's pieces into their solved positions." }
     ]
-    readonly property var currentCopy: stageCopy[SolveController.currentStageIndex]
+    // The three stages the other two methods have (cube::solver::Stage::F2l,
+    // Reduce and Finish, which follow the five above in value). Worded through
+    // ids; the five above are the solve lane's, and are worded by them.
+    readonly property var extraStageCopy: [
+        { title: qsTrId("stage.f2l.title"), detail: qsTrId("stage.f2l.what") },
+        { title: qsTrId("stage.reduce.title"), detail: qsTrId("stage.reduce.what") },
+        { title: qsTrId("stage.finish.title"), detail: qsTrId("stage.finish.what") }
+    ]
+    // The words for a cube::solver::Stage value. The methods have different
+    // stages, so a stage's value says what it is and nothing about its
+    // position: that is stagePosition below.
+    function copyFor(stage) {
+        return stage < stageCopy.length ? stageCopy[stage] : extraStageCopy[stage - stageCopy.length];
+    }
+    readonly property var currentCopy: copyFor(SolveController.currentStageIndex)
+
+    // The stages of this solution in the order they are done, as Stage values;
+    // fixed for the length of a solution, so it is set when one lands and not
+    // on every move (a model that changed each step would rebuild the list).
+    property var stageOrder: []
+    function updateStageOrder() {
+        stageOrder = SolveController.stageRanges.map(function (range) { return range.stageIndex; });
+    }
+    Connections {
+        target: SolveController
+        function onSolutionChanged() { root.updateStageOrder(); }
+    }
+    // Where the stage being worked on is among them, and how many there are.
+    readonly property int stagePosition: Math.max(0, stageOrder.indexOf(SolveController.currentStageIndex))
+    readonly property int stageCount: stageOrder.length > 0 ? stageOrder.length : stageCopy.length
+
+    // A method picked here is the method from now on: it is kept (so the next
+    // cube is solved the same way) and the cube in hand is solved on from where
+    // it stands. SettingsState keeps it and tells the controller.
+    function chooseMethod(method) {
+        SettingsState.solveMethod = method;
+    }
 
     // Theme's sticker palette is keyed by colour, under names left over from
     // a white-on-top scheme: faceU is white, faceD yellow, faceL orange,
@@ -221,7 +257,10 @@ Rectangle {
 
     // Hands are on the cube, not the mouse.
     focus: true
-    Component.onCompleted: forceActiveFocus()
+    Component.onCompleted: {
+        forceActiveFocus();
+        updateStageOrder();
+    }
     Keys.onRightPressed: next()
     Keys.onSpacePressed: next()
     Keys.onReturnPressed: next()
@@ -306,7 +345,7 @@ Rectangle {
             spacing: 4
 
             Text {
-                text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length
+                text: "STAGE " + (root.stagePosition + 1) + " OF " + root.stageCount
                 color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
             }
             Text {
@@ -637,7 +676,8 @@ Rectangle {
             property int idx: 0
             property var copy: null
             readonly property var range: SolveController.stageRanges[idx]
-            readonly property bool isCurrent: SolveController.currentStageIndex === idx
+            readonly property bool isCurrent: range !== undefined
+                && SolveController.currentStageIndex === range.stageIndex
             // No range yet while the solve is still running.
             readonly property bool isDone: range !== undefined && SolveController.moveIndex >= range.endIndex
             width: ListView.view ? ListView.view.width : 320
@@ -704,10 +744,32 @@ Rectangle {
         width: root.wide ? 320 : parent.width
         height: parent.height - y
 
+        // How the cube is being solved. The same row on both layouts; wide it
+        // also says what the chosen method is, narrow there is no room. Choosing
+        // a different one solves on from the cube as it stands.
+        Item {
+            id: methodBox
+            anchors.top: parent.top
+            width: parent.width
+            height: methodPicker.height + 2 * Theme.space3
+
+            SolveMethodPicker {
+                id: methodPicker
+                objectName: "solve.method"
+                x: Theme.space3; y: Theme.space3
+                width: parent.width - 2 * Theme.space3
+                showNote: root.wide
+                current: SolveController.method
+                choosable: !SolveController.isSolving
+                onSelected: (method) => root.chooseMethod(method)
+            }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
+        }
+
         // Wide: every stage, the current one opened out.
         Column {
             visible: root.wide
-            anchors.top: parent.top; anchors.bottom: buttons.top
+            anchors.top: methodBox.bottom; anchors.bottom: buttons.top
             width: parent.width
 
             Text {
@@ -722,10 +784,10 @@ Rectangle {
                 width: parent.width
                 height: parent.height - 46
                 clip: true
-                model: root.stageCopy
+                model: root.stageOrder
                 delegate: Loader {
                     sourceComponent: stepRow
-                    onLoaded: { item.idx = index; item.copy = modelData; }
+                    onLoaded: { item.idx = index; item.copy = root.copyFor(modelData); }
                 }
             }
         }
@@ -733,7 +795,7 @@ Rectangle {
         // Narrow: the current stage only.
         Column {
             visible: !root.wide
-            anchors.top: parent.top; anchors.bottom: buttons.top
+            anchors.top: methodBox.bottom; anchors.bottom: buttons.top
             anchors.left: parent.left; anchors.right: parent.right
             anchors.margins: Theme.space4
             spacing: Theme.space1
