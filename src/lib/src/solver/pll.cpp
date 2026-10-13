@@ -24,10 +24,26 @@ struct CornerSlot {
 // corner index is (row=1-y)*3+col with y=1, i.e. always row 0 - see
 // cube.cpp's layout derivation.
 constexpr std::array<CornerSlot, 4> kCornerSlots = {{
-    {8, Face::F, 2, Face::R, 2},  // UFR
-    {6, Face::F, 0, Face::L, 2},  // UFL
-    {2, Face::B, 2, Face::R, 0},  // UBR
-    {0, Face::B, 0, Face::L, 0},  // UBL
+    {.u_index = 8,
+     .side_a = Face::F,
+     .side_a_index = 2,
+     .side_b = Face::R,
+     .side_b_index = 2},  // UFR
+    {.u_index = 6,
+     .side_a = Face::F,
+     .side_a_index = 0,
+     .side_b = Face::L,
+     .side_b_index = 2},  // UFL
+    {.u_index = 2,
+     .side_a = Face::B,
+     .side_a_index = 2,
+     .side_b = Face::R,
+     .side_b_index = 0},  // UBR
+    {.u_index = 0,
+     .side_a = Face::B,
+     .side_a_index = 0,
+     .side_b = Face::L,
+     .side_b_index = 0},  // UBL
 }};
 
 bool corner_slot_permuted(const Cube& cube, const CornerSlot& slot) noexcept {

@@ -50,7 +50,7 @@ branch's head commit.
 ### Self-hosted runners
 
 The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
-load even a seconds-long required check queues for half an hour. Five jobs can
+load even a seconds-long required check queues for half an hour. Six jobs can
 therefore run on the organisation's self-hosted fleet instead (the
 `iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
 not this repo, decide who may use it):
@@ -62,6 +62,7 @@ not this repo, decide who may use it):
 | `clang-format` | `ci.yml` |
 | `platform-isolation` | `ci.yml` |
 | `Plan build legs` | `ci.yml` |
+| `Prune Actions caches` | `cache-hygiene.yml` |
 
 They are routed by the `CONTROL_RUNNER_JSON` repository variable, a JSON array
 of runner labels. Unset, each job runs on the hosted image it names, exactly as
@@ -224,9 +225,18 @@ The contract any repository should follow: one directory of archives per
 triplet; restore the newest entry of the triplet; save under a key derived from
 the directory's contents, from an `always()` step, and only when something was
 added and the key is not already readable; prune closed-PR and superseded
-entries. ICL Forge, aqualink-automate and CountdownSolver each differ from this
-in ways that cost them; the audit of what differs is in the pull request that
-introduced this section.
+entries. `ci/prune-actions-cache.sh` is the same file in all four repositories.
+The others differed from this in ways that cost them, and have a pull request
+each: aqualink-automate's hosted Linux and macOS legs restored a ~200-byte
+cache because `lukka/run-vcpkg` redirected vcpkg to another directory
+([#223](https://github.com/iainchesworthlabs/aqualink-automate/pull/223));
+ICL Forge threw a failed job's built packages away
+([#1569](https://github.com/iainchesworthlabs/iclforge/pull/1569)) and had
+4.8 GB of ccache generations and merge-queue copies
+([#1568](https://github.com/iainchesworthlabs/iclforge/pull/1568));
+CountdownSolver's vcpkg set is Catch2 only, and its quota problem is Qt
+installs stored per pull request
+([#111](https://github.com/iainchesworth/CountdownSolver/pull/111)).
 
 ## Toolchain versions
 

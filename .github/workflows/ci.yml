@@ -834,6 +834,10 @@ jobs:
       # 80% gate of the Coverage job below until the numbers have been looked
       # at. QML is not in this report - gcov cannot see it; the reach report
       # in the artifact above is the QML measure.
+      # --gcov-ignore-parse-errors: the same negative branch count in cube.cpp
+      # the Coverage job below reads past (gcc bug 68080). This report is not
+      # gated, but a gcovr that exits 64 here still fails the whole job, and
+      # this is an `if: always()` step on a run that otherwise passed.
       - name: App coverage report
         if: always()
         run: >
@@ -841,6 +845,7 @@ jobs:
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-ignore-parse-errors negative_hits.warn_once_per_file
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage-app.html
           --json-summary build/coverage-app.json

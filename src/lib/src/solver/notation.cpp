@@ -33,7 +33,7 @@ Result<Move> parse_move(std::string_view token) {
     }
 
     Face face{};
-    switch (token[0]) {
+    switch (token.at(0)) {
         case 'U':
             face = Face::U;
             break;
@@ -58,9 +58,9 @@ Result<Move> parse_move(std::string_view token) {
 
     int turns = 1;
     if (token.size() == 2) {
-        if (token[1] == '\'') {
+        if (token.at(1) == '\'') {
             turns = 3;
-        } else if (token[1] == '2') {
+        } else if (token.at(1) == '2') {
             turns = 2;
         } else {
             return std::unexpected(CubeError::invalid_move_sequence);
@@ -74,11 +74,11 @@ Result<std::vector<Move>> parse_algorithm(std::string_view text) {
     std::vector<Move> moves;
     std::size_t pos = 0;
     while (pos < text.size()) {
-        while (pos < text.size() && text[pos] == ' ') {
+        while (pos < text.size() && text.at(pos) == ' ') {
             ++pos;
         }
         const std::size_t start = pos;
-        while (pos < text.size() && text[pos] != ' ') {
+        while (pos < text.size() && text.at(pos) != ' ') {
             ++pos;
         }
         if (pos == start) {
@@ -110,7 +110,7 @@ std::string to_string(const std::vector<Move>& moves) {
         if (i > 0) {
             result += ' ';
         }
-        result += to_string(moves[i]);
+        result += to_string(moves.at(i));
     }
     return result;
 }
