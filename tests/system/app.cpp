@@ -462,9 +462,8 @@ void App::resize(QSize size) {
 }
 
 void App::reset_language() {
-    auto* language =
-        runtime_->engine().singletonInstance<cube::i18n::LanguageManager*>("Cubeulator",
-                                                                           "LanguageManager");
+    auto* language = runtime_->engine().singletonInstance<cube::i18n::LanguageManager*>(
+        "Cubeulator", "LanguageManager");
     if (language == nullptr) {
         return;
     }
