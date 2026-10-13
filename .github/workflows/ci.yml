@@ -16,8 +16,9 @@ on:
     inputs:
       legs:
         description: >-
-          Comma-separated legs to run: clang-format, clang-tidy, linux, macos,
-          windows, coverage, system, android, ios - or "all".
+          Comma-separated legs to run: clang-format, platform-isolation,
+          clang-tidy, linux, macos, windows, coverage, system, android, ios -
+          or "all".
         type: string
         default: all
 
@@ -32,24 +33,61 @@ jobs:
   clang-format:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-format' || 'clang-format' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
-    runs-on: ubuntu-26.04
+    # Routed by the CONTROL_RUNNER_JSON repository variable (a runner-label
+    # JSON array; unset means GitHub-hosted, deleting it switches back). A
+    # fork PR is pinned to the hosted image whatever the variable says: fork
+    # code must never reach a self-hosted runner. See docs/ci.md. Only the
+    # seconds-long jobs are routed; the build legs stay on hosted images.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned to one release, not to whatever `clang-format` means this year:
+      # the repo is formatted with one release (docs/CONTRIBUTING.md).
+      # clang-format comes from a pinned PyPI wheel, not apt: the apt package
+      # is whatever Ubuntu ships, so a runner-image bump could change the
+      # formatting rules under an unchanged tree. Pinning also lets a
+      # developer install exactly this version locally
+      # (`pip install -r ci/requirements-lint.txt`), and Dependabot's pip
+      # ecosystem for /ci keeps the pin current. The wheel is ~1.5 MB and
+      # needs no root.
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install clang-format (pinned)
+        run: |
+          uv venv "$RUNNER_TEMP/lint-venv"
+          uv pip install --python "$RUNNER_TEMP/lint-venv/bin/python" --requirement ci/requirements-lint.txt
+          echo "$RUNNER_TEMP/lint-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/lint-venv/bin/clang-format" --version
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
+            | xargs -0 clang-format --dry-run --Werror
+
+  # The no-#ifdef rule (docs/platform-isolation.md): the operating system is a
+  # CMake decision, so no platform code, OS header or runtime OS test may sit
+  # outside src/app/platform. Cheap, fast and deliberately not behind the
+  # build legs, so a violation is reported even while a porting leg is red.
+  platform-isolation:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - platform-isolation' || 'platform-isolation' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',platform-isolation,') }}
+    # Seconds-long, so routed like clang-format: by the CONTROL_RUNNER_JSON
+    # repository variable, with a fork PR pinned to the hosted image (see
+    # docs/ci.md). The fleet image ships pwsh, which the check needs.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
 
-      # Pinned to 22, not to whatever `clang-format` means this year: the
-      # unversioned package is a moving target, and the repo is formatted with
-      # one release (docs/CONTRIBUTING.md). 22 formats this tree byte for byte
-      # as 21.1.6 did, so moving to it changed no source line.
-      - name: Install clang-format 22
-        run: sudo apt-get update && sudo apt-get install -y clang-format-22
-
-      - name: Check formatting
-        run: |
-          clang-format-22 --version
-          find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
-            | xargs -0 clang-format-22 --dry-run --Werror
+      - name: Check for platform code outside the platform section
+        shell: pwsh
+        run: ./tools/checks/check_platform_isolation.ps1 -Root $PWD
 
   clang-tidy:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-tidy' || 'clang-tidy' }}
@@ -63,7 +101,7 @@ jobs:
     steps:
       # fetch-depth: 0 is required for vcpkg's version resolution - see the
       # equivalent comment on build-and-test below.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -74,12 +112,12 @@ jobs:
       # why per-preset keys were wasteful/over quota.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -97,21 +135,32 @@ jobs:
       # package was 1:18.0 (noble's stock version), too old to parse
       # <expected> at all - cascading into "no template named 'Result'"/"no
       # member 'expected'" errors on every file (confirmed in CI on that
-      # image). ubuntu-26.04 ships clang-21 directly (20/21/22 side by side),
-      # so no LLVM apt-repo pin is needed anymore - just install it.
+      # image).
       #
-      # libomp-21-dev: the vendored M3T tracker (third_party/m3t) does
+      # Clang 23 is the current release, and ubuntu-26.04 only carries 20-22,
+      # so it comes from apt.llvm.org (ci/install-llvm.sh verifies the
+      # archive key against a pinned fingerprint). Caveat: that archive keeps
+      # one build per major - a snapshot of LLVM's release/23.x branch,
+      # rebuilt as the branch moves - so this is the latest 23.x, not a
+      # frozen version, and the gate can shift between runs. clang-format,
+      # which must be deterministic, is a pinned wheel (see that job). When a
+      # clang-tidy 23 wheel exists on PyPI, move it into
+      # ci/requirements-lint.txt and drop this install.
+      #
+      # libomp-23-dev: the vendored M3T tracker (third_party/m3t) does
       # find_package(OpenMP REQUIRED) for C and C++. GCC ships libgomp, but
       # clang++ only has an OpenMP runtime with LLVM's libomp, so without it
       # configure stops at "Could NOT find OpenMP_CXX (missing:
       # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
-      - name: Install Clang 21
-        run: sudo apt-get install -y clang-21 clang-tidy-21 libomp-21-dev
+      # It must match the compiler; it pins libomp5 to 23, which supersedes
+      # the libomp-21-dev this job used with Clang 21.
+      - name: Install Clang 23
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
           cmake --preset linux-gcc-debug
-          -DCMAKE_CXX_COMPILER=clang++-21
+          -DCMAKE_CXX_COMPILER=clang++-23
           -DCUBEULATOR_BUILD_APP=OFF
 
       # A full build (not just configure) is required here: Ninja's compile
@@ -131,7 +180,7 @@ jobs:
         run: |
           jq -r '.[].file' build/linux-gcc-debug/compile_commands.json \
             | grep -E '/(src|tests)/' \
-            | xargs clang-tidy-21 -p build/linux-gcc-debug --warnings-as-errors='*'
+            | xargs clang-tidy-23 -p build/linux-gcc-debug --warnings-as-errors='*'
 
       # Saved even when a later step fails: otherwise a red leg throws away every
       # package vcpkg had already built and the next attempt starts from nothing
@@ -139,7 +188,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -150,7 +199,10 @@ jobs:
   # is the one place the legs are defined.
   plan:
     name: Plan build legs
-    runs-on: ubuntu-26.04
+    # Routed like clang-format above. It is a few seconds of jq, but every
+    # build leg waits on it, so queueing it behind the hosted pool stalls the
+    # whole run.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
@@ -160,19 +212,21 @@ jobs:
         env:
           LEGS: ${{ github.event_name == 'workflow_dispatch' && inputs.legs || 'all' }}
         run: |
-          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
-          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
-          # links unconditionally on macOS ("ld: framework 'AGL' not
-          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
+          # macOS builds on macos-26 (Xcode 26). It was pinned to macos-15
+          # because that SDK dropped AGL.framework, which Qt 6.8.3 linked
+          # unconditionally ("ld: framework 'AGL' not found"). Qt 6.12 lists
+          # macOS 26 as supported, so that no longer applies; if this leg
+          # regresses on the SDK, macos-15 is the known-good fallback. The iOS
+          # job stays on macos-15 for an unrelated vcpkg reason (see ios-build).
           all='[
             {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux"},
-            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-15",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
+            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
             {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows"}
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
                  exit 1 ;;
             esac
           done
@@ -183,7 +237,8 @@ jobs:
           fi
           count=$(jq 'length' <<<"$selected")
           # Only the desktop legs are chosen here; a dispatch that names just
-          # clang-format, android, ios or coverage legitimately selects none.
+          # clang-format, platform-isolation, android, ios or coverage
+          # legitimately selects none.
           echo "legs: $LEGS -> $count desktop leg(s)"
           echo "matrix=$selected" >> "$GITHUB_OUTPUT"
 
@@ -225,7 +280,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -245,12 +300,12 @@ jobs:
       # across 15 entries, over the limit).
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: ${{ matrix.triplet }}
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -282,9 +337,19 @@ jobs:
       # Prebuilt Qt (official binaries) so the GUI app builds without
       # compiling Qt from source. Sets QT_ROOT_DIR for find_package(Qt6).
       - name: Install Qt (prebuilt)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
+          # Windows only. Qt 6.11+ moved the Windows kits into per-architecture
+          # repository folders, which aqtinstall's last release (3.3.0, the
+          # action's default) predates: it fails with "Failed to locate XML
+          # data for Qt version '6.12.0'". "Support Qt 6.11+ for Windows x64"
+          # (7e5a5c3d, 2026-03-01) is on aqtinstall master but unreleased, so
+          # the Windows leg installs this pinned master commit. Linux and macOS
+          # still use the legacy layout the release handles, so they keep it.
+          # Drop this once a release after 3.3.0 exists and the action's
+          # aqtversion default moves to it.
+          aqtsource: ${{ runner.os == 'Windows' && 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7' || '' }}
           modules: "qtquick3d qtshadertools"
           cache: true
 
@@ -340,7 +405,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: ${{ matrix.triplet }}
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -368,7 +433,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -381,10 +446,29 @@ jobs:
       - name: Install Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      - name: Install Android NDK
+      # NDK r28c (28.2.13676358), JDK 21, SDK platform 36 / build-tools 36.0.0.
+      #
+      # r28c is NEWER than the r27c (27.2.12479018) Qt 6.12's prerequisites
+      # name and its libraries were built with. Qt only *recommends* building
+      # an app with the same NDK "to avoid missing symbol errors"; it does not
+      # call a newer one unsupported, and its CMake does not check. That is a
+      # departure from Qt's tested configuration, taken on purpose (Iain,
+      # 2026-10-13): r28c's libc++ has std::expected::transform/and_then,
+      # std::format and std::print, ranges::contains/fold_left and mdspan,
+      # which r26b lacks (compile-probed), and it carries libc++'s fix for
+      # std::expected clobbering its has-value flag through tail padding
+      # (llvm-project#68552, #70494; an ABI change). Result<T> is
+      # std::expected throughout. If an APK misbehaves, r27c is Qt's
+      # documented NDK and the first thing to try.
+      #
+      # ubuntu-26.04's default JDK is 25; JAVA_HOME_21_X64 is preinstalled
+      # alongside it.
+      - name: Install Android NDK, platform and build-tools
         run: |
-          sdkmanager --install "ndk;26.1.10909125"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          test -d "$JAVA_HOME_21_X64" || { echo "::error::JDK 21 (JAVA_HOME_21_X64) is not preinstalled on this image"; exit 1; }
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
 
       # gperf (a transitive dependency, built as a host tool regardless of
       # target triplet) needs these from the system package manager to build
@@ -400,12 +484,12 @@ jobs:
       # same mistake later.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: arm64-android
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -419,9 +503,9 @@ jobs:
       # ONLY, which would otherwise hide both Qt kits and vcpkg's install
       # tree from find_package() (confirmed locally on windows-msvc/android).
       - name: Install Qt (prebuilt, Android)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
           target: android
           arch: android_arm64_v8a
           modules: "qtquick3d qtshadertools"
@@ -488,7 +572,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-android
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -518,7 +602,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -528,12 +612,12 @@ jobs:
       # see the equivalent comment on android-build above.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: arm64-ios
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -556,7 +640,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-ios
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -587,7 +671,7 @@ jobs:
       # The x64-linux triplet cache, shared with build-and-test's Linux leg.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
@@ -680,7 +764,7 @@ jobs:
       # Saved even when a later step fails - see build-and-test.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -703,7 +787,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -714,12 +798,12 @@ jobs:
       # above on why per-preset keys were wasteful/over the 10GB cap.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -748,12 +832,19 @@ jobs:
       - name: Test
         run: ctest --preset linux-gcc-coverage
 
+      # --gcov-suspicious-hits-threshold: gcovr 8 stops with "SuspiciousHits ...
+      # cube.cpp:283 Got suspicious hit value" (gcc bug 68080's signature)
+      # for any line hit more than its default threshold. The solver's slow
+      # corpus tests run an -O0, -fno-inline build of Cube::at() ~5.8e10 times;
+      # those counters are correct (checked: 64-bit, none negative). 1e12
+      # keeps the detector for a counter that really has gone wrong.
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-suspicious-hits-threshold 1000000000000
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage.html
           --fail-under-line 80 --fail-under-branch 80
@@ -771,7 +862,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}

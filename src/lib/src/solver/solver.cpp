@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/cfop.hpp>
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
@@ -45,6 +46,7 @@ Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
 }  // namespace
 
 Solution merge_adjacent_moves(Solution solution) {
+    CUBE_ZONE_SCOPED_N("solver.merge_adjacent_moves");
     // One stack over the whole solution rather than a pass per step. The
     // kept moves never have two neighbours on the same face, so an incoming
     // move can only merge with the top of the stack; when that pair cancels,
@@ -127,6 +129,7 @@ Result<Solution> solve_beginner(const Cube& scrambled) {
 }  // namespace
 
 Result<Solution> solve(const Cube& scrambled, SolveMethod method) {
+    CUBE_ZONE_SCOPED_N("solver.solve");
     switch (method) {
         case SolveMethod::Beginner:
             return solve_beginner(scrambled);

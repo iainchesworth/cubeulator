@@ -29,6 +29,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "interfaces/camera.hpp"
+#include "platform/detail/opencv_capture_loop.hpp"
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -315,7 +316,7 @@ TEST_CASE("photometry lock holds a static scene still", "[.camera-lock]") {
     // which deliberately exposes no property reads, and only after the last
     // stop() so it cannot perturb either latency measurement above.
     {
-        cv::VideoCapture fresh(0, cv::CAP_DSHOW);
+        cv::VideoCapture fresh(0, cube::platform::camera::detail::capture_backend());
         REQUIRE(fresh.isOpened());
         cv::Mat frame;
         fresh.read(frame);

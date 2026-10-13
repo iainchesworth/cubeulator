@@ -1,39 +1,24 @@
 # ---------------------------------------------------------------------------
-# cube_platform - the four platform-abstraction interfaces (camera,
-# gpu_surface, inference_env, paths), each with exactly one compiled
-# implementation per OS. Built unconditionally (not gated behind
-# CUBEULATOR_BUILD_APP) so the per-OS selection logic below is exercised on
-# every preset, including headless CUBEULATOR_BUILD_APP=OFF builds. No Qt
-# dependency: the GUI shell further down links this, but this target itself
-# has none.
+# cube_platform - the platform-abstraction interfaces (camera, gpu_surface,
+# inference_env, paths, platform_info, crash_handler), each with exactly one
+# compiled implementation per OS. Built unconditionally (not gated behind
+# CUBEULATOR_BUILD_APP) so the per-OS selection is exercised on every preset,
+# including headless CUBEULATOR_BUILD_APP=OFF builds. No Qt dependency: the
+# GUI shell further down links this, but this target itself has none (bar
+# the one Qt library Android's camera needs, added below).
 #
-# ANDROID/IOS must be checked before WIN32/APPLE/UNIX: CMake sets ANDROID
-# alongside UNIX, and IOS alongside APPLE, when cross-compiling.
+# Which implementations those are, and what they link against, is decided
+# by the platform's own fragment - src/app/platform/<os>/platform.cmake,
+# selected once in cmake/Platform.cmake. Nothing in this file tests the OS.
 # ---------------------------------------------------------------------------
-if(ANDROID)
-    set(CUBEULATOR_PLATFORM_DIR platform/android)
-    set(CUBEULATOR_PLATFORM_SUFFIX android)
-elseif(IOS)
-    set(CUBEULATOR_PLATFORM_DIR platform/ios)
-    set(CUBEULATOR_PLATFORM_SUFFIX ios)
-elseif(WIN32)
-    set(CUBEULATOR_PLATFORM_DIR platform/windows)
-    set(CUBEULATOR_PLATFORM_SUFFIX windows)
-elseif(APPLE)
-    set(CUBEULATOR_PLATFORM_DIR platform/macos)
-    set(CUBEULATOR_PLATFORM_SUFFIX macos)
-elseif(UNIX)
-    set(CUBEULATOR_PLATFORM_DIR platform/linux)
-    set(CUBEULATOR_PLATFORM_SUFFIX linux)
-else()
-    message(FATAL_ERROR "Unsupported target platform")
-endif()
-
 add_library(cube_platform
     interfaces/camera.hpp
+    interfaces/crash_handler.hpp
     interfaces/gpu_surface.hpp
     interfaces/inference_env.hpp
     interfaces/paths.hpp
+    interfaces/platform_info.hpp
+    platform/detail/capture_thread_scope.hpp
     platform/detail/opencv_capture_loop.hpp
     platform/detail/opencv_capture_loop.cpp
     # Built on every platform, including the ones whose backend cannot
@@ -42,21 +27,14 @@ add_library(cube_platform
     # is exactly what those platforms need.
     platform/detail/photometry_lock.hpp
     platform/detail/photometry_lock.cpp
-    "${CUBEULATOR_PLATFORM_DIR}/camera_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
-    "${CUBEULATOR_PLATFORM_DIR}/gpu_surface_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
-    "${CUBEULATOR_PLATFORM_DIR}/inference_env_${CUBEULATOR_PLATFORM_SUFFIX}.cpp"
-    "${CUBEULATOR_PLATFORM_DIR}/paths_${CUBEULATOR_PLATFORM_SUFFIX}.cpp")
+    ${CUBEULATOR_PLATFORM_SOURCES})
 add_library(cube::platform ALIAS cube_platform)
 
 target_include_directories(cube_platform PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
 
-# std::getenv is flagged "unsafe" by the MSVC CRT; the usage in the
-# Windows/macOS/Linux platform implementations is correct and portable, so
-# silence that specific deprecation for this target only. This also fires
-# under clang-cl (CXX_COMPILER_ID "Clang"), which uses the same MSVC CRT
-# headers/annotations on Windows.
-target_compile_definitions(cube_platform PRIVATE
-    "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
+# What the platform's C runtime needs of its callers (the MSVC CRT flags
+# std::getenv "unsafe", for one) - see the fragment for the reasoning.
+target_compile_definitions(cube_platform PRIVATE ${CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS})
 
 target_link_libraries(cube_platform
     PUBLIC
@@ -64,19 +42,8 @@ target_link_libraries(cube_platform
     PRIVATE
         cube::warnings
         cube::sanitizers
-        cube::coverage)
-
-# camera_windows.cpp enumerates via native DirectShow device enumeration
-# (ICreateDevEnum/IEnumMoniker) rather than OpenCvCaptureLoop's generic
-# probe - see its own comment for why, and for why DirectShow rather than
-# Media Foundation. strmiids provides the CLSID_SystemDeviceEnum/
-# CLSID_VideoInputDeviceCategory/IID_ICreateDevEnum GUID definitions; ole32
-# provides CoCreateInstance/CoInitializeEx; oleaut32 provides the
-# VARIANT/BSTR helpers (VariantInit/VariantClear) used to read each
-# device's friendly name.
-if(WIN32)
-    target_link_libraries(cube_platform PRIVATE strmiids ole32 oleaut32)
-endif()
+        cube::coverage
+        ${CUBEULATOR_PLATFORM_LINK_LIBRARIES})
 
 # ---------------------------------------------------------------------------
 # cube_app - the Qt6 Quick (QML) GUI shell, shared across every platform (see
@@ -88,16 +55,10 @@ if(CUBEULATOR_BUILD_APP)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Quick Qml Gui QuickControls2 Quick3D ShaderTools LabsSettings)
     qt_standard_project_setup(REQUIRES 6.5)
 
-    # camera_android.cpp uses QJniObject/QNativeInterface for the
-    # ACTION_APPLICATION_DETAILS_SETTINGS permission-settings deep link
-    # (see interfaces/camera.hpp: open_permission_settings()). cube_platform
-    # is otherwise deliberately Qt-free (see the comment on it above) - this
-    # holds only while Android also always builds the Qt app (which is the
-    # case for every current preset); a genuinely headless
-    # CUBEULATOR_BUILD_APP=OFF Android configure would need this revisited.
-    if(ANDROID)
-        target_link_libraries(cube_platform PRIVATE Qt6::Core)
-    endif()
+    # The Qt libraries the platform's own implementations need (Android's
+    # camera uses QJniObject for the permission-settings deep link; see its
+    # fragment). cube_platform is otherwise deliberately Qt-free.
+    target_link_libraries(cube_platform PRIVATE ${CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES})
 
     # ---------------------------------------------------------------------
     # cube_app_controllers - QObject-derived bridge types exposed to QML
@@ -107,10 +68,9 @@ if(CUBEULATOR_BUILD_APP)
     # qmlRegisterSingletonInstance in main.cpp rather than QML_ELEMENT,
     # since QML_ELEMENT's compile-time registration only works for sources
     # compiled directly into a qt_add_qml_module target. SolveController
-    # lives here (not in cube_app_qml, unlike before) for the same reason:
-    # it needs a real C++ reference to the live ScanSession instance
-    # (cube::model::ScanProgress can't cross into QML), which only works if
-    # both are constructed and wired together directly in main.cpp.
+    # lives here (not in cube_app_qml) for the same reason: the scan
+    # controller hands it a cube::solver::Cube, which cannot cross into QML,
+    # so the two are constructed and wired together in C++.
     # ---------------------------------------------------------------------
     add_library(cube_app_controllers STATIC
         qt/controllers/app_controllers.hpp
@@ -121,8 +81,8 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp
         qt/controllers/held_cube.cpp
-        qt/controllers/scan_session.hpp
-        qt/controllers/scan_session.cpp
+        qt/controllers/platform_facts.hpp
+        qt/controllers/platform_facts.cpp
         qt/controllers/settings_model.hpp
         qt/controllers/settings_model.cpp
         qt/controllers/bundled_models.hpp
@@ -142,29 +102,10 @@ if(CUBEULATOR_BUILD_APP)
     # binaries, which cube::vision's own filesystem-path-based tests
     # (tests/integration/hand_presence_integration_test.cpp) still rely on -
     # that's a Qt-free cube_lib API and can't read a Qt resource.
-    #
-    # The corner-detector weights are not distributed with the repository
-    # (assets/models/cube_corner_pose_PROVENANCE.md). A local copy is embedded
-    # when there is one; without it the previous scan pipeline's track mode
-    # finds no model and falls back, and the direct scan never asked for it.
-    set(_cube_app_models
-        "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
-    if(EXISTS "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-        list(APPEND _cube_app_models "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-    endif()
     qt_add_resources(cube_app_controllers "cube_app_models"
         PREFIX "/models"
         BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES ${_cube_app_models})
-    unset(_cube_app_models)
-
-    # The live M3T tracker (Phase 2) is desktop-only, like the vendored
-    # library itself; the scan session's env-gated live-lock hook compiles
-    # only where cube::track_m3t exists.
-    if(NOT ANDROID AND NOT IOS)
-        target_link_libraries(cube_app_controllers PRIVATE cube::track_m3t)
-        target_compile_definitions(cube_app_controllers PRIVATE CUBE_HAVE_M3T)
-    endif()
+        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
 
     target_link_libraries(cube_app_controllers
         PUBLIC
@@ -211,7 +152,6 @@ if(CUBEULATOR_BUILD_APP)
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
-            qt/ScanScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml
             qt/SolveMethodPicker.qml
@@ -248,15 +188,10 @@ if(CUBEULATOR_BUILD_APP)
     qt_add_executable(cube_app
         qt/main.cpp)
 
-    if(ANDROID)
-        # Custom AndroidManifest.xml (see src/app/android/) declaring the
-        # CAMERA permission androiddeployqt's own auto-detection doesn't
-        # know to add for a C++-side QCameraPermission request (confirmed:
-        # without this, the OS permission dialog still appears, but
-        # `pm revoke`/real-device permission tracking doesn't recognise the
-        # app as having requested it at all).
-        set_property(TARGET cube_app PROPERTY
-            QT_ANDROID_PACKAGE_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/android")
+    # Target properties the platform's packaging needs (Android's custom
+    # manifest, for one): <property> <value> pairs from its fragment.
+    if(CUBEULATOR_PLATFORM_APP_PROPERTIES)
+        set_target_properties(cube_app PROPERTIES ${CUBEULATOR_PLATFORM_APP_PROPERTIES})
     endif()
 
     target_link_libraries(cube_app
@@ -274,13 +209,6 @@ if(CUBEULATOR_BUILD_APP)
             Qt6::Quick3D
             Qt6::LabsSettings)
 
-    if(WIN32)
-        # DbgHelp backs main.cpp's unhandled-exception filter, which writes a
-        # minidump for the hard faults (access violation, stack overflow) that
-        # no C++ catch can see under MSVC's default /EHsc.
-        target_link_libraries(cube_app PRIVATE dbghelp)
-    endif()
-
     add_dependencies(cube_app cube_version)
 
     cube_deploy_sanitizer_runtime(cube_app)
@@ -290,31 +218,10 @@ if(CUBEULATOR_BUILD_APP)
         WIN32_EXECUTABLE ON
         MACOSX_BUNDLE ON)
 
-    # Windows desktop only: Qt's DLLs aren't next to cube_app.exe or on PATH
-    # by default, so it fails to start (STATUS_DLL_NOT_FOUND) unless launched
-    # from a shell that already has Qt's bin dir on PATH - which Visual
-    # Studio's F5/"Select Startup Item" does not. windeployqt copies
-    # everything cube_app.exe actually needs (Qt DLLs, platform/style
-    # plugins, translations) next to it after every build, so it runs
-    # standalone regardless of how it's launched. macOS would need the
-    # equivalent macdeployqt call, not added here - no Mac available to
-    # verify it against.
-    if(WIN32)
-        find_program(CUBEULATOR_WINDEPLOYQT_EXECUTABLE
-            NAMES windeployqt6 windeployqt
-            HINTS "${Qt6_DIR}/../../../bin")
-        if(CUBEULATOR_WINDEPLOYQT_EXECUTABLE)
-            add_custom_command(TARGET cube_app POST_BUILD
-                COMMAND "${CUBEULATOR_WINDEPLOYQT_EXECUTABLE}"
-                    --qmldir "${CMAKE_CURRENT_SOURCE_DIR}/qt"
-                    "$<TARGET_FILE:cube_app>"
-                COMMENT "windeployqt: copying Qt runtime next to cube_app.exe")
-        else()
-            message(WARNING
-                "windeployqt not found near Qt6_DIR (${Qt6_DIR}); cube_app.exe "
-                "will need Qt's bin dir on PATH to run standalone.")
-        endif()
-    endif()
+    # Puts Qt's runtime next to the built app where the platform needs that
+    # (Windows runs windeployqt; macOS has no equivalent wired yet - see the
+    # fragments).
+    cube_platform_deploy_qt_runtime(cube_app "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 endif()
 
 # ---------------------------------------------------------------------------

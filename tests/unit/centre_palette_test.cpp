@@ -41,9 +41,6 @@
 // CENSUS PROVES NOTHING. A constrained assignment can always force nine of
 // each colour, so the decisive column below is PHYSICALLY VALID, and the
 // only thing that writes it is the assembler.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

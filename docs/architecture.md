@@ -7,8 +7,10 @@ src/
   lib/            cube:: — GUI-free core (solver, vision, render, i18n)
   app/
     qt/            Qt 6 Quick/QML desktop shell
-    platform/       one implementation per OS behind each interfaces/ header
-    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp
+    platform/       one directory per OS: its implementations of each
+                    interfaces/ header, and the platform.cmake that selects them
+    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp,
+                    platform_info.hpp, crash_handler.hpp
   render/          bgfx setup and the technical-drawing render pipeline
 tests/
   unit/
@@ -16,19 +18,18 @@ tests/
 ```
 
 `src/lib/` is Qt-free and platform-free by design: independently unit-testable,
-reusable behind any shell. Platform differences are isolated to one file per
-OS under `src/app/platform/`, selected by CMake at configure time
-(`if(ANDROID) / elseif(IOS) / elseif(WIN32) / elseif(APPLE) / elseif(UNIX)`)
-— never `#ifdef` in shared code.
+reusable behind any shell. Platform differences are isolated to one directory
+per OS under `src/app/platform/`; `cmake/Platform.cmake` picks the directory
+once, and its `platform.cmake` names the files compiled and the libraries
+linked. No source file, QML file or other CMake file branches on the
+platform — see [Platform isolation](platform-isolation.md) for the rule, how a
+platform is added, and the CI check that holds it.
 
 ## C++23 patterns in use
 
 - **`Result<T> = std::expected<T, CubeError>`** ([error.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/develop/src/lib/include/cube/error.hpp))
   for every fallible operation, composed with `and_then`/`transform`/`or_else`
   rather than exceptions for expected failure modes.
-- **Deducing-`this` fluent builders**
-  ([scan_session_config.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/develop/src/lib/include/cube/scan_session_config.hpp))
-  for types with several optional construction parameters.
 - Build-time git version stamp (`cmake/GenerateVersion.cmake` +
   `version.hpp.in`), re-run on every build so it tracks new commits without a
   reconfigure.
@@ -65,22 +66,18 @@ The image pipeline end to end - capture, the per-pass analysis stages, the
 GUI-thread commit path, and where colour decisions are made - is diagrammed
 in [Vision pipeline](vision-pipeline.md), together with the measured
 weaknesses of each stage.
-`cube::solver::cube_from_scan()` (`src/lib/src/solver/scan_conversion.cpp`)
-bridges a completed `cube::model::ScanProgress` into a `cube::solver::Cube`
-under a fixed camera-holding convention (documented in
-`scan_conversion.hpp`, surfaced to the user as the "face up" hint on the
-scan screen), validated via `Cube::is_physically_valid()`.
-`src/app/qt/solve_controller.hpp` calls it once `ScanSession::scanCompleted`
-fires, feeding the solver the real scanned cube instead of a
-`random_scramble()`. Which of the three methods it uses is
-`SolveController.method`, chosen on the solve screen and in settings
-(`SolveMethodPicker.qml`) and kept by `SettingsState.solveMethod`; changing it
-mid-solve solves on from the cube as it stands, off the UI thread, and keeps
-the hold the camera has seen (`solutionContinuesCube`). The screens word each
-stage by its `cube::solver::Stage` value, since the methods have different
-stages. A rejected scan (e.g. a colour misclassification)
-resets scanning back to face 1 rather than silently solving the wrong
-cube. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
+The scan controller (`src/app/qt/controllers/direct_scan.hpp`) reads the
+cube's sides with `cube::vision::read_side`, and once six sides make exactly
+one valid cube hands a `cube::solver::Cube` to
+`src/app/qt/solve_controller.hpp` (`solveCube`), which solves it on a worker
+thread. Which of the three methods it uses is `SolveController.method`,
+chosen on the solve screen and in settings (`SolveMethodPicker.qml`) and
+kept by `SettingsState.solveMethod`; changing it mid-solve solves on from
+the cube as it stands, off the UI thread, and keeps the hold the camera has
+seen (`solutionContinuesCube`). The screens word each stage by its
+`cube::solver::Stage` value, since the methods have different stages. A scan
+that does not yet make a valid cube is never solved: the scan
+screen keeps asking for the sides again. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
 the solver's actual output, with a hidden-face badge for moves on faces
 this fixed 3-face iso view doesn't show. `render` (bgfx) and `i18n` remain
 stub targets that compile and link but contain no real logic.

@@ -1,6 +1,7 @@
 #include <cube/solver/scan_assembly.hpp>
 
 #include <cube/model/face.hpp>
+#include <cube/profiling.hpp>
 
 #include <algorithm>
 #include <array>
@@ -84,6 +85,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
 
 Result<AssembledScan> assemble_scanned_faces_with_mapping(
     const std::array<std::array<model::Facelet, 9>, 6>& faces, const RotationHint* hint) noexcept {
+    CUBE_ZONE_SCOPED_N("solver.assemble_scan");
     // Step 1: convert colours and identify each input face's cube position
     // by its centre. Six inputs against six distinct-centre slots means a
     // collision check alone proves the mapping is a bijection.
@@ -263,8 +265,13 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
 
 Result<Cube> assemble_scanned_faces(
     const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
-    return assemble_scanned_faces_with_mapping(faces).transform(
-        [](const AssembledScan& assembled) { return assembled.cube; });
+    // Checked by hand rather than with Result::transform: the Android NDK's
+    // libc++ (r26) has no monadic std::expected.
+    const auto assembled = assemble_scanned_faces_with_mapping(faces);
+    if (!assembled) {
+        return std::unexpected(assembled.error());
+    }
+    return assembled->cube;
 }
 
 RotationHint rotation_hint_for_tracked_scan(

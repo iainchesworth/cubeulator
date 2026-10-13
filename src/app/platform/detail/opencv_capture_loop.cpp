@@ -1,60 +1,15 @@
 #include "platform/detail/opencv_capture_loop.hpp"
 
+#include "platform/detail/capture_thread_scope.hpp"
+
+#include <cube/profiling.hpp>
+
 #include <chrono>
 #include <exception>
 #include <string>
 #include <utility>
 
-#if defined(_WIN32)
-#include <objbase.h>
-#endif
-
 namespace cube::platform::camera::detail {
-
-namespace {
-
-#if defined(_WIN32)
-// This file's Windows-only cv::VideoCaptureAPIs backends (MSMF/DSHOW)
-// require COM initialized on whichever thread calls into them - not
-// something OpenCV can do on our behalf, since it doesn't control thread
-// creation. The GUI thread gets this for free from Qt's own startup, but
-// enumerate_devices() is deliberately run off it (via QtConcurrent, to
-// avoid freezing the UI for the ~15-20s a real hardware probe takes) on a
-// Qt thread-pool thread that has no COM initialization of its own.
-//
-// MTA (COINIT_MULTITHREADED), not STA: MSMF's cap_msmf.cpp delivers frames
-// through an async IMFSourceReader callback (SourceReaderCB in its own
-// logs) whose completion needs to be marshaled back to the calling
-// thread's COM apartment. STA marshaling relies on that thread pumping a
-// Windows message loop to receive it - which a QtConcurrent worker thread
-// never does - so releasing a real (non-empty-slot) capture opened under
-// STA on such a thread reliably stalled for ~14s per device (confirmed
-// via cap_msmf's own SourceReaderCB teardown log timestamps) until
-// whatever internal timeout eventually recovered it, and the process
-// crashed shortly after. MTA doesn't need message-pump-based marshaling
-// for calls within the same apartment, which covers this case.
-class ScopedCom {
-public:
-    ScopedCom() : hr_(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-    ~ScopedCom() {
-        if (SUCCEEDED(hr_)) {
-            CoUninitialize();
-        }
-    }
-
-    ScopedCom(const ScopedCom&) = delete;
-    ScopedCom& operator=(const ScopedCom&) = delete;
-    ScopedCom(ScopedCom&&) = delete;
-    ScopedCom& operator=(ScopedCom&&) = delete;
-
-private:
-    HRESULT hr_;
-};
-#else
-class ScopedCom {};
-#endif
-
-}  // namespace
 
 // How long the automatics are given to converge before a pending lock is
 // applied. ~20 frames is a third of a second at 30fps - long enough for a
@@ -72,7 +27,8 @@ OpenCvCaptureLoop::~OpenCvCaptureLoop() {
 }
 
 Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
-    [[maybe_unused]] const ScopedCom scoped_com;
+    CUBE_ZONE_SCOPED_N("capture.enumerate_devices");
+    const CaptureThreadScope capture_thread_scope;
 
     // A simple index probe: friendly device names aren't reliably available
     // across OpenCV's desktop backends, so devices are identified by index.
@@ -97,7 +53,8 @@ Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
 }
 
 Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
-    [[maybe_unused]] const ScopedCom scoped_com;
+    CUBE_ZONE_SCOPED_N("capture.start");
+    const CaptureThreadScope capture_thread_scope;
 
     if (is_capturing()) {
         return std::unexpected(CubeError::camera_start_failed);
@@ -137,6 +94,7 @@ Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
 }
 
 void OpenCvCaptureLoop::stop() {
+    CUBE_ZONE_SCOPED_N("capture.stop");
     if (capture_thread_.joinable()) {
         stop_requested_.store(true, std::memory_order_release);
         capture_thread_.join();
@@ -249,12 +207,14 @@ void OpenCvCaptureLoop::service_photometry_requests() {
     // GUI-thread take_photometry_report(). Nothing else touches capture_
     // while this thread is between grabs, so dropping the lock is safe.
     if (do_restore) {
+        CUBE_ZONE_SCOPED_N("capture.photometry_restore");
         restore(capture_, as_found_);
         return;
     }
     if (!do_lock) {
         return;
     }
+    CUBE_ZONE_SCOPED_N("capture.photometry_lock");
 
     PhotometryLockReport report =
         apply_lock(capture_, request, as_found_, [this](const cv::Mat& frame) { publish(frame); });
@@ -263,6 +223,7 @@ void OpenCvCaptureLoop::service_photometry_requests() {
 }
 
 void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
+    CUBE_ZONE_SCOPED_N("capture.publish");
     // Stamped here, after the (blocking, device-rate) read returns, so the
     // timestamp tracks capture time even when the consumer polls slower
     // than the device delivers and overwritten frames vanish without ever
@@ -275,11 +236,20 @@ void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
 }
 
 void OpenCvCaptureLoop::run() {
-    [[maybe_unused]] const ScopedCom scoped_com;
+    const CaptureThreadScope capture_thread_scope;
+    CUBE_THREAD_NAME("camera-capture");
 
     cv::Mat frame;
     while (!stop_requested_.load(std::memory_order_acquire)) {
-        if (!capture_.read(frame) || frame.empty()) {
+        bool grabbed = false;
+        {
+            // The blocking, device-rate read: its length IS the camera's frame
+            // interval, so this zone is where "is the camera the bottleneck"
+            // gets answered.
+            CUBE_ZONE_SCOPED_N("capture.read");
+            grabbed = capture_.read(frame) && !frame.empty();
+        }
+        if (!grabbed) {
             continue;
         }
         // Between grabs, on the thread that owns the device - the only
@@ -289,6 +259,7 @@ void OpenCvCaptureLoop::run() {
         // wall-clock time on a device whose CAP_PROP_FPS reads 0.
         service_photometry_requests();
         publish(frame);
+        CUBE_FRAME_MARK_NAMED("Capture");
     }
 }
 

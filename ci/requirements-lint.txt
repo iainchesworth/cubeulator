@@ -1,0 +1,4 @@
+# Pinned lint tooling for the clang-format CI job and for local use:
+#   pip install -r ci/requirements-lint.txt
+# Dependabot's pip ecosystem for /ci keeps this current.
+clang-format==23.1.3

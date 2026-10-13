@@ -8,6 +8,8 @@
 #include <utility>
 #include <vector>
 
+#include <cube/profiling.hpp>
+
 #include "cubie.hpp"
 #include "two_phase_tables.hpp"
 
@@ -254,10 +256,12 @@ private:
 }  // namespace
 
 void prepare_two_phase() {
+    CUBE_ZONE_SCOPED_N("solver.two_phase.prepare");
     (void)detail::phase2_tables();
 }
 
 Result<Solution> solve_two_phase(const Cube& scrambled) {
+    CUBE_ZONE_SCOPED_N("solver.two_phase");
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
     }

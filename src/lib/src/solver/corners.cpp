@@ -2,6 +2,7 @@
 
 #include <array>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/cross.hpp>
 
 #include "bfs_search.hpp"
@@ -49,6 +50,7 @@ bool first_layer_solved(const Cube& cube) noexcept {
 }
 
 Result<std::vector<Move>> solve_corners(const Cube& start) {
+    CUBE_ZONE_SCOPED_N("solver.corners");
     std::vector<Move> solution;
     Cube cube = start;
 

@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include <cube/profiling.hpp>
+
 #include "cfop_last_layer.hpp"
 #include "cfop_stages.hpp"
 #include "cubie.hpp"
@@ -470,6 +472,7 @@ Result<Solution> solve_cfop_stages(const Cube& scrambled) {
 }  // namespace detail
 
 Result<Solution> solve_cfop(const Cube& scrambled) {
+    CUBE_ZONE_SCOPED_N("solver.cfop");
     Result<Solution> stages = detail::solve_cfop_stages(scrambled);
     if (!stages.has_value()) {
         return std::unexpected(stages.error());

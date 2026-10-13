@@ -1,6 +1,7 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/temporal_fusion.hpp>
@@ -488,6 +489,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 }  // namespace
 
 std::optional<SideRead> read_side(const cv::Mat& bgr) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
     if (bgr.empty() || bgr.type() != CV_8UC3) {
         return std::nullopt;
     }
@@ -565,6 +567,7 @@ void SideScan::reset() {
 }
 
 void SideScan::add(const std::optional<SideRead>& read) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
     in_view_.reset();
     if (!read.has_value()) {
         previous_centre_.reset();
@@ -639,10 +642,16 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
 }
 
 Result<solver::Cube> SideScan::cube() const {
-    return scanned().transform([](const ScannedCube& scanned) { return scanned.cube; });
+    // By hand, not Result::transform: see scan_assembly.cpp.
+    const auto whole = scanned();
+    if (!whole) {
+        return std::unexpected(whole.error());
+    }
+    return whole->cube;
 }
 
 Result<ScannedCube> SideScan::scanned() const {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.scanned");
     const std::vector<std::size_t> captured = captured_by_support();
     if (captured.size() < 6) {
         return std::unexpected(CubeError::face_capture_incomplete);
@@ -654,8 +663,11 @@ Result<ScannedCube> SideScan::scanned() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces[i].lab = groups_[captured[i]].fused;
     }
-    return resolve_colors(faces).and_then(
-        [&faces](const NamedSides& named) { return assemble(named, faces); });
+    const auto named = resolve_colors(faces);
+    if (!named) {
+        return std::unexpected(named.error());
+    }
+    return assemble(*named, faces);
 }
 
 }  // namespace cube::vision

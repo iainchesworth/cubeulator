@@ -19,6 +19,7 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QMetaObject>
 #include <QPointF>
 #include <QQmlComponent>
@@ -444,6 +445,27 @@ TEST_CASE("the camera preview closes in on the cube and follows it", "[qml][solv
     const cube::test::Pose pose{.centre = {180.0F, 110.0F}, .pitch = 30.0F};
     show(pose);
     REQUIRE(wait_for([&]() { return in_the_middle(pose.centre) && scale() > 1.8 * whole(); }));
+    // in_the_middle() holds within 3 px, well before the view has stopped: it
+    // eases towards its aim (SmoothedAnimation, 350 ms in SolveScreen.qml), and
+    // on a loaded machine it is still moving. Take the baseline only once it
+    // has stood still for longer than the ease, in wall time - wait_for() spins
+    // processEvents(5 ms), so two equal reads in a row would prove nothing.
+    {
+        QElapsedTimer still;
+        still.start();
+        QPointF last = lands(pose.centre);
+        double last_scale = scale();
+        REQUIRE(wait_for([&]() {
+            const QPointF now = lands(pose.centre);
+            if (std::abs(now.x() - last.x()) > 0.01 || std::abs(now.y() - last.y()) > 0.01 ||
+                std::abs(scale() - last_scale) > 1e-4) {
+                last = now;
+                last_scale = scale();
+                still.restart();
+            }
+            return still.elapsed() > 400;
+        }));
+    }
     const double closed_in = scale();
 
     // Shifted by a few pixels, as a hand does: the view stays put.

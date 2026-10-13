@@ -38,6 +38,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "platform/detail/opencv_capture_loop.hpp"
+
 #include <opencv2/imgproc.hpp>
 #include <opencv2/videoio.hpp>
 
@@ -55,18 +57,14 @@
 
 namespace {
 
-// The app opens Windows cameras through CAP_DSHOW (see
-// src/app/platform/windows/camera_windows.cpp): CAP_MSMF took ~9-10s to
-// cold-open the user's StreamCam against DSHOW's ~1.0-1.4s. Probing any
+// The backend the app itself opens this platform's cameras through (on
+// Windows that is CAP_DSHOW, see src/app/platform/windows/camera_windows.cpp:
+// CAP_MSMF took ~9-10s to cold-open the user's StreamCam against DSHOW's
+// ~1.0-1.4s). Asked of the platform rather than chosen here: probing any
 // other backend would tell us nothing about what the shipped app can do,
 // since property support is a property of the backend, not of the device.
-#if defined(_WIN32)
-constexpr cv::VideoCaptureAPIs kBackend = cv::CAP_DSHOW;
-constexpr const char* kBackendName = "CAP_DSHOW";
-#else
-constexpr cv::VideoCaptureAPIs kBackend = cv::CAP_ANY;
-constexpr const char* kBackendName = "CAP_ANY";
-#endif
+const cv::VideoCaptureAPIs kBackend = cube::platform::camera::detail::capture_backend();
+const char* const kBackendName = cube::platform::camera::detail::capture_backend_name();
 
 struct PropertySpec {
     int id;

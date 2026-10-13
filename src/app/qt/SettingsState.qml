@@ -5,7 +5,7 @@ import Cubeulator
 
 // Demo/mock settings state, following the same pattern as AppState. Camera
 // device selection lives on CameraController (selectedDeviceId/
-// selectDevice()), not here - it's the same controller ScanSession.start()
+// selectDevice()), not here - it's the same controller DirectScan.start()
 // reads from, so there's a single source of truth for which device is live.
 QtObject {
     id: settings
@@ -70,39 +70,13 @@ QtObject {
     property alias themeMode: appearanceSettingsId.themeMode
 
     // Which QRhi backends Qt actually supports on this platform (see
-    // https://doc.qt.io/qt-6/qsgrendererinterface.html and the Qt 6.0
-    // graphics blog post): Direct3D is Windows-only, Metal is macOS/iOS-only,
-    // Vulkan/OpenGL are available wherever Qt ships a backend for them - iOS
-    // effectively has just the one real choice. Kept as a single source of
-    // truth here rather than in StatsOverlay so main.cpp's comment about
-    // valid values and this list can't drift apart silently.
-    readonly property var availableGraphicsBackends: {
-        var opts = [{ key: "auto", label: "Auto" }];
-        switch (Qt.platform.os) {
-        case "windows":
-            opts.push({ key: "d3d11", label: "D3D11" });
-            opts.push({ key: "d3d12", label: "D3D12" });
-            opts.push({ key: "vulkan", label: "Vulkan" });
-            opts.push({ key: "opengl", label: "GL" });
-            break;
-        case "osx":
-            opts.push({ key: "metal", label: "Metal" });
-            opts.push({ key: "opengl", label: "GL" });
-            break;
-        case "linux":
-            opts.push({ key: "vulkan", label: "Vulkan" });
-            opts.push({ key: "opengl", label: "GL" });
-            break;
-        case "android":
-            opts.push({ key: "vulkan", label: "Vulkan" });
-            opts.push({ key: "opengl", label: "GLES" });
-            break;
-        case "ios":
-            opts.push({ key: "metal", label: "Metal" });
-            break;
-        }
-        return opts;
-    }
+    // https://doc.qt.io/qt-6/qsgrendererinterface.html): "auto" always, then
+    // whatever the platform's own implementation lists (PlatformFacts, from
+    // interfaces/platform_info.hpp). Kept as a single source of truth here
+    // rather than in StatsOverlay so main.cpp's comment about valid values
+    // and this list can't drift apart silently.
+    readonly property var availableGraphicsBackends:
+        [{ key: "auto", label: "Auto" }].concat(PlatformFacts.graphicsBackends)
 
     // GraphicsInfo.api (a running window's actual backend) -> display name.
     readonly property var graphicsApiNames: ({

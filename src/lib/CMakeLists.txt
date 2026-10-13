@@ -16,6 +16,11 @@ find_package(Git QUIET)
 set(CUBEULATOR_VERSION_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/cube/version.hpp.in")
 set(CUBEULATOR_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/cube/version.hpp")
 
+# What this build targets ("Windows x86_64 (MSVC 1951)"), worked out from
+# the platform fragment and the toolchain here rather than by predefined
+# macros inside a source file - this library holds no platform code.
+cube_describe_build_target(CUBEULATOR_BUILD_TARGET)
+
 # Generate once at configure time so the header exists for the first build.
 set(CUBEULATOR_VERSION "${PROJECT_VERSION}")
 set(SRC "${CUBEULATOR_VERSION_TEMPLATE}")
@@ -30,6 +35,7 @@ add_custom_target(cube_version ALL
     BYPRODUCTS "${CUBEULATOR_VERSION_HEADER}"
     COMMAND "${CMAKE_COMMAND}"
         "-DCUBEULATOR_VERSION=${PROJECT_VERSION}"
+        "-DCUBEULATOR_BUILD_TARGET=${CUBEULATOR_BUILD_TARGET}"
         "-DSRC=${CUBEULATOR_VERSION_TEMPLATE}"
         "-DDST=${CUBEULATOR_VERSION_HEADER}"
         "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
@@ -67,7 +73,6 @@ target_sources(cube_lib
         src/vision/face_grid_fit.cpp
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
-        src/vision/track_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
@@ -79,16 +84,7 @@ target_sources(cube_lib
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
         src/vision/idle_gate.cpp
-        src/vision/pipeline/trace.cpp
-        src/vision/pipeline/legacy_pipeline.cpp
-        src/vision/pipeline/detect_track_loop.cpp
-        src/vision/pipeline/pose_refiner.cpp
-        src/vision/pipeline/face_projection.cpp
         src/vision/recording_v2.cpp
-        src/vision/groundtruth.cpp
-        src/vision/corner_detector.cpp
-        src/vision/pose_from_corners.cpp
-        src/vision/camera_intrinsics.cpp
         src/vision/direct_scan.cpp
         src/vision/held_cube.cpp
         src/render/render.cpp
@@ -122,10 +118,22 @@ set_source_files_properties(
 
 add_dependencies(cube_lib cube_version)
 
+# Which cube/profiling.hpp the zone macros resolve to: CMake chooses the
+# directory, not an #ifdef in the header (see cmake/Tracy.cmake). PUBLIC
+# because every layer above this one - the app's capture loop and controllers,
+# the tracker wrapper, the tools - is instrumented with the same macros, and
+# the real variant includes Tracy's own headers, which cube::tracy supplies.
+if(CUBEULATOR_ENABLE_TRACY)
+    set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_enabled")
+else()
+    set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_disabled")
+endif()
+
 target_include_directories(cube_lib
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>"
+        "$<BUILD_INTERFACE:${CUBEULATOR_PROFILING_DIR}>"
         "$<INSTALL_INTERFACE:include>")
 
 target_compile_features(cube_lib PUBLIC cxx_std_23)
@@ -133,6 +141,7 @@ target_compile_features(cube_lib PUBLIC cxx_std_23)
 target_link_libraries(cube_lib
     PUBLIC
         cube::opencv
+        cube::tracy
     PRIVATE
         cube::onnxruntime
         cube::warnings

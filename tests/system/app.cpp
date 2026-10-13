@@ -58,13 +58,6 @@ void walk(QQuickItem* item, const std::function<void(QQuickItem*)>& visit) {
     }
 }
 
-// AppButton declares its own `enabled`, shadowing Item::enabled, so ask
-// through the property system, which finds the most derived one.
-[[nodiscard]] bool is_enabled(QQuickItem* item) {
-    const QVariant enabled = item->property("enabled");
-    return (enabled.isValid() ? enabled.toBool() : item->isEnabled()) && item->isEnabled();
-}
-
 }  // namespace
 
 App& App::launched() {

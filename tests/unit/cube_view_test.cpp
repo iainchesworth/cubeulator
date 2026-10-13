@@ -29,8 +29,6 @@
 #include <QString>
 #include <QUrl>
 #include <QVariant>
-#include <QVariantList>
-#include <QVariantMap>
 
 #include <cmath>
 #include <cstddef>
@@ -73,20 +71,6 @@ namespace {
     return {};
 }
 
-// The cube as the solve screen hands it to the view: each side as seen from
-// outside, which is what SolveController::stickers() publishes.
-[[nodiscard]] QVariantMap painting(const Cube& cube) {
-    QVariantMap sides;
-    for (const Face face : kAllFaces) {
-        QVariantList colours;
-        for (const Color colour : cube::solver::outside_view(cube, face)) {
-            colours.append(paint(colour).name());
-        }
-        sides.insert(letter(face), colours);
-    }
-    return sides;
-}
-
 // The real Cube3DView, wrapped only to count its movePlayed signals.
 constexpr auto kHarness = R"QML(
 import QtQuick
@@ -123,7 +107,11 @@ public:
     [[nodiscard]] QVariant get(const char* name) const { return item_->property(name); }
     [[nodiscard]] QObject* item() const { return item_.get(); }
 
-    void show(const Cube& cube) { set("faceletColors", painting(cube)); }
+    void show(const Cube& cube) {
+        // A fresh JavaScript object each time; see cube::test::painting().
+        set("faceletColors",
+            QVariant::fromValue(cube::test::painting(cube::test::qml_engine(), cube, &paint)));
+    }
     [[nodiscard]] bool shows(const Cube& cube) const {
         return cube::test::shows(item_.get(), cube, &paint);
     }

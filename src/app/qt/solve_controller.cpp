@@ -1,18 +1,15 @@
 #include "solve_controller.hpp"
 
-#include "controllers/scan_session.hpp"
-
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
 #include <cube/error.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
-#include <cube/solver/scan_conversion.hpp>
 #include <cube/solver/solver.hpp>
 
 using cube::solver::Cube;
-using cube::solver::cube_from_scan;
 using cube::solver::Face;
 using cube::solver::solve;
 using cube::solver::SolveMethod;
@@ -87,6 +84,7 @@ SolveMethod to_solver_method(SolveController::Method method) {
 
 // Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
 SteppedSolution solve_stepped(Cube scrambled, SolveMethod method) {
+    CUBE_ZONE_SCOPED_N("app.solve_stepped");
     const auto solution = solve(scrambled, method);
     if (solution.has_value()) {
         return SteppedSolution::from(scrambled, *solution);
@@ -99,40 +97,12 @@ SteppedSolution solve_stepped(Cube scrambled, SolveMethod method) {
 
 }  // namespace
 
-SolveController::SolveController(cube::app::ScanSession& scanSession, QObject* parent)
-    : QObject(parent), scanSession_(scanSession) {
+SolveController::SolveController(QObject* parent) : QObject(parent) {
     // Safe placeholder so topColors()/etc. never read an empty stepped_
     // before the first real scan completes.
     stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
     connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this,
             &SolveController::applySolveResult);
-    connect(&scanSession_, &cube::app::ScanSession::scanCompleted, this,
-            &SolveController::onScanCompleted);
-}
-
-void SolveController::onScanCompleted() {
-    // Free-form scans arrive pre-assembled: ScanSession only emits
-    // scanCompleted once cube::solver::assemble_scanned_faces() has
-    // produced a validated Cube, exposed via assembledCube() - consume
-    // that directly, skipping the holding-convention cube_from_scan()
-    // conversion entirely. The fallback below only runs when no assembled
-    // cube is set (a ScanSession whose progress was populated without the
-    // free-form pipeline), keeping the legacy construction path - and its
-    // rejection handling - intact.
-    if (const auto assembled = scanSession_.assembledCube(); assembled.has_value()) {
-        beginSolve(*assembled);
-        emit solveReady();
-        return;
-    }
-
-    const auto scanned_cube = cube_from_scan(scanSession_.progress());
-    if (!scanned_cube.has_value()) {
-        scanSession_.restartScan();
-        emit scanRejected(QString::fromStdString(std::string(to_string(scanned_cube.error()))));
-        return;
-    }
-    beginSolve(*scanned_cube);
-    emit solveReady();
 }
 
 void SolveController::solveCube(const Cube& cube) {
@@ -169,12 +139,15 @@ void SolveController::beginSolve(const Cube& scrambled, bool continuation) {
     pending_ = scrambled;
     solving_continuation_ = continuation;
     isSolving_ = true;
+    CUBE_MESSAGE("solve.started");
     emit stateChanged();
     solveWatcher_.setFuture(
         QtConcurrent::run(&solve_stepped, scrambled, to_solver_method(method_)));
 }
 
 void SolveController::applySolveResult() {
+    CUBE_ZONE_SCOPED_N("app.solve.apply_result");
+    CUBE_MESSAGE("solve.finished");
     stepped_ = solveWatcher_.result();
     isSolving_ = false;
     continuation_ = solving_continuation_;

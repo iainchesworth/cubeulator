@@ -42,9 +42,6 @@
 // same search oriented_cell_lab_distance runs over solver-order arrays.
 // PatternIdRollsMatchBodyRelabel below PROVES that equality against the
 // production tables rather than asserting it in a comment.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

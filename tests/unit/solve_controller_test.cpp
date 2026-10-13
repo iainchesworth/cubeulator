@@ -1,6 +1,5 @@
 #include <catch2/catch_test_macros.hpp>
 
-#include "controllers/scan_session.hpp"
 #include "solve_controller.hpp"
 
 #include <cube/solver/solver.hpp>
@@ -14,7 +13,6 @@
 
 #include <vector>
 
-using cube::app::ScanSession;
 using cube::solver::Cube;
 using cube::solver::random_scramble;
 
@@ -52,23 +50,15 @@ constexpr int kF2l = 5, kReduce = 6, kFinish = 7;
 
 }  // namespace
 
-// SolveController's reaction to a completed scan (onScanCompleted's
-// solveReady/scanRejected branches) isn't exercised here: it only fires
-// from ScanSession::scanCompleted, which only fires once confirmFace() has
-// a real detected reading - set solely by analyze(), a private method only
-// reachable via poll()'s camera-driven pipeline. There's no public seam to
-// inject a completed scan without adding test-only scaffolding to
-// ScanSession, which scan_session_test.cpp deliberately avoids for the same
-// reason. That path is covered by manual verification instead (see the
-// implementation plan).
+// A scanned cube arriving and coming back solved for stepping is covered in
+// direct_scan_controller_test.cpp, which can drive a whole scan without a
+// camera.
 
 TEST_CASE("SolveController starts with a solved placeholder and no solve in flight",
           "[qt][controllers]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
 
-    // Unlike the old random_scramble()-seeded constructor, nothing is
-    // solved until a real scan completes - see onScanCompleted().
+    // Nothing is solved until a scan hands over a cube - see solveCube().
     REQUIRE_FALSE(controller.isSolving());
     REQUIRE(controller.totalMoves() == 0);
     REQUIRE(controller.atStart());
@@ -93,8 +83,7 @@ TEST_CASE("what changes when a solve lands is announced to the screen", "[qt][co
 
 TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step",
           "[qt][controllers]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
 
     controller.nextMove();
     controller.previousMove();
@@ -105,8 +94,7 @@ TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to ste
 
 TEST_CASE("SolveController's placeholder cube is solved on all three visible faces",
           "[qt][controllers]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
 
     for (const auto& colors :
          {controller.topColors(), controller.rightColors(), controller.leftColors()}) {
@@ -120,8 +108,7 @@ TEST_CASE("SolveController's placeholder cube is solved on all three visible fac
 
 TEST_CASE("SolveController solves the way it is asked to, and keeps to that method's stages",
           "[qt][controllers][solve-method]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
     CHECK(controller.method() == SolveController::Beginner);
 
     const Cube scrambled = random_scramble(41, 100);
@@ -156,8 +143,7 @@ TEST_CASE("SolveController solves the way it is asked to, and keeps to that meth
 
 TEST_CASE("changing the method before anything is scanned only records it",
           "[qt][controllers][solve-method]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
     int changes = 0;
     QObject::connect(&controller, &SolveController::methodChanged, [&changes]() { ++changes; });
 
@@ -175,8 +161,7 @@ TEST_CASE("changing the method before anything is scanned only records it",
 
 TEST_CASE("changing the method part-way solves on from the cube as it stands",
           "[qt][controllers][solve-method]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
     int solutions = 0;
     QObject::connect(&controller, &SolveController::solutionChanged,
                      [&solutions]() { ++solutions; });
@@ -221,8 +206,7 @@ TEST_CASE("changing the method part-way solves on from the cube as it stands",
 
 TEST_CASE("changing the method while a solve is still being worked out replaces that solve",
           "[qt][controllers][solve-method]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
 
     const Cube scrambled = random_scramble(23, 100);
     controller.solveCube(scrambled);  // the beginner method: the slow one
@@ -248,8 +232,7 @@ TEST_CASE("changing the method while a solve is still being worked out replaces 
 
 TEST_CASE("a cube scanned after a swap is a new cube, not a continuation",
           "[qt][controllers][solve-method]") {
-    ScanSession session;
-    SolveController controller(session);
+    SolveController controller;
     controller.solveCube(random_scramble(5, 100));
     REQUIRE(wait_until_solved(controller));
     controller.setMethod(SolveController::Advanced);

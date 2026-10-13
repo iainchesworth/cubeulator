@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "interfaces/camera.hpp"
+#include "platform/detail/opencv_capture_loop.hpp"
 #include "platform/detail/photometry_lock.hpp"
 
 #include <cube/error.hpp>
@@ -194,15 +195,17 @@ TEST_CASE("locking without a capture fails without touching hardware", "[camera]
     REQUIRE_FALSE(cube::platform::camera::take_photometry_report().has_value());
 }
 
-// Support is claimed only where it was measured. Windows opens through
-// CAP_DSHOW, the backend the probe exercised; every other platform must
-// answer no rather than guess, and its refusal must be the "platform"
-// flavour the summary words differently from a driver refusal.
+// Support is claimed only where it was measured. Only CAP_DSHOW has been
+// measured against real hardware (the probe in
+// camera_property_probe_test.cpp), so a platform's camera may claim
+// photometry control if and only if it opens through that backend; every
+// other platform must answer no rather than guess, and its refusal must be
+// the "platform" flavour the summary words differently from a driver
+// refusal. Asked of the backend the platform actually opens through, so no
+// platform is named here.
 TEST_CASE("photometry support is claimed only where it was measured", "[camera][photometry]") {
-#if defined(_WIN32)
-    REQUIRE(cube::platform::camera::photometry_control_supported());
-#else
-    REQUIRE_FALSE(cube::platform::camera::photometry_control_supported());
+    const bool measured = cube::platform::camera::detail::capture_backend() == cv::CAP_DSHOW;
+    REQUIRE(cube::platform::camera::photometry_control_supported() == measured);
+    // A report nobody has produced yet is never one a backend vouched for.
     REQUIRE_FALSE(PhotometryLockReport{}.platform_supported);
-#endif
 }

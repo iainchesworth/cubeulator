@@ -54,6 +54,11 @@ Item {
     // turned a layer, painting the cube as it now stands therefore changes
     // nothing on screen - provided the turn shown was the turn made, which
     // is what cube_view_test.cpp holds this file to.
+    //
+    // Hand it a new object each time, as SolveScreen.painted() does. Since
+    // Qt 6.12, a QVariantMap assigned from C++ that equals the current value
+    // no longer emits faceletColorsChanged (Qt 6.8 did), so repainting an
+    // unchanged cube that way would leave a turned layer where it is.
     onFaceletColorsChanged: resetLayers()
 
     // ---- Move guidance ----------------------------------------------------
@@ -131,7 +136,7 @@ Item {
     // letter -> "ok" | "conflict". Each named face gets a thin frame drawn
     // just outside its sticker plane - green for a cleanly captured face,
     // warning-coloured while the face has an outstanding verification
-    // conflict (ScanSession.faceCaptureStates) - so the progress cube says
+    // conflict - so the progress cube says
     // not just WHAT was captured (the painted stickers) but how much of
     // the cube is banked and which face needs re-showing, at a glance and
     // on the rotating cube itself. The backing model only re-evaluates

@@ -11,26 +11,17 @@
 
 #include <optional>
 
-namespace cube::app {
-class ScanSession;
-}
-
-// Bridges cube::solver's real solve into QML. Owns a
-// SteppedSolution built from the real scanned cube - normally the
-// free-form-assembled Cube the ScanSession this controller is constructed
-// with exposes via assembledCube(), with cube::solver::cube_from_scan()
-// as the fallback when none is set - rather than a random_scramble().
-// SolveScreen.qml/
-// CubeView.qml read the exposed properties to draw the current stickers and
-// an arrow for the exact move about to happen, rather than the old static
-// demo data. Deliberately thin: all solving and stepping logic lives in
-// cube::solver, which is plain C++ and Catch2-tested independently of Qt.
+// Bridges cube::solver's real solve - in whichever of its three methods is
+// chosen - into QML. Owns a SteppedSolution built from the cube the scan read
+// (solveCube). The solve
+// screen reads the exposed properties to draw the current stickers and the
+// move about to happen. Deliberately thin: all solving and stepping logic
+// lives in cube::solver, which is plain C++ and Catch2-tested independently
+// of Qt.
 //
-// Constructed directly in main.cpp and registered via
-// qmlRegisterSingletonInstance, like CameraController/ScanSession/
-// SettingsModel - not QML_ELEMENT/QML_SINGLETON, since it needs a real C++
-// reference to the live ScanSession (cube::model::ScanProgress can't cross
-// into QML - cube::model stays Qt-free) rather than being engine-owned.
+// Constructed in C++ and registered via qmlRegisterSingletonInstance, like
+// the other controllers - not QML_ELEMENT/QML_SINGLETON, since the scan
+// controller hands it a cube::solver::Cube, which cannot cross into QML.
 class SolveController : public QObject {
     Q_OBJECT
 
@@ -105,17 +96,7 @@ private:
     Q_PROPERTY(bool isSolving READ isSolving NOTIFY stateChanged)
 
 public:
-    explicit SolveController(cube::app::ScanSession& scanSession, QObject* parent = nullptr);
-
-    [[nodiscard]] Method method() const noexcept { return method_; }
-    void setMethod(Method method);
-
-    // True when the solution now in place is a continuation of the previous
-    // one: the same physical cube, in the same hands, solved a different way
-    // because the method changed. False for a solution to a newly scanned
-    // cube. HeldCube reads it on solutionChanged: a new cube starts from the
-    // hold the screen asks for, a continuation keeps the hold it has seen.
-    [[nodiscard]] bool solutionContinuesCube() const noexcept { return continuation_; }
+    explicit SolveController(QObject* parent = nullptr);
 
     [[nodiscard]] QVariantList topColors() const;
     [[nodiscard]] QVariantList rightColors() const;
@@ -146,10 +127,20 @@ public:
 
     [[nodiscard]] bool isSolving() const;
 
+    [[nodiscard]] Method method() const noexcept { return method_; }
+    void setMethod(Method method);
+
+    // True when the solution now in place is a continuation of the previous
+    // one: the same physical cube, in the same hands, solved a different way
+    // because the method changed. False for a solution to a newly scanned
+    // cube. HeldCube reads it on solutionChanged: a new cube starts from the
+    // hold the screen asks for, a continuation keeps the hold it has seen.
+    [[nodiscard]] bool solutionContinuesCube() const noexcept { return continuation_; }
+
     // Starts solving a cube handed over already validated - the direct-scan
-    // path. isSolving is true until the solution lands. solveReady is not
-    // emitted: the caller decides when to show the solution, so a finished
-    // scan can stay on screen while this runs.
+    // path. isSolving is true until the solution lands. Nothing is
+    // announced beyond that: the caller decides when to show the solution,
+    // so a finished scan can stay on screen while this runs.
     void solveCube(const cube::solver::Cube& cube);
 
 public slots:
@@ -164,36 +155,17 @@ signals:
     // (solutionChanged); this is for whoever shows which method is chosen.
     void methodChanged();
 
-    // Emitted once a completed scan is accepted and its background solve is
-    // kicked off (isSolving becomes true at the same point) - AppState.qml
-    // navigates to the solve screen on this, not on
-    // ScanSession::scanCompleted directly, since a completed scan isn't
-    // necessarily a valid one.
-    void solveReady();
-
-    // Emitted instead of solveReady when the fallback
-    // cube::solver::cube_from_scan() path rejected the completed scan
-    // (e.g. a genuine colour misclassification failing
-    // Cube::is_physically_valid()); `reason` is cube::to_string(CubeError).
-    // scanSession_'s progress is already reset (via restartScan()) by the
-    // time this fires. Unreachable when assembledCube() is set - assembly
-    // already validated that cube before scanCompleted ever fired.
-    void scanRejected(QString reason);
-
 private:
-    // Connected to scanSession_'s scanCompleted signal.
-    void onScanCompleted();
-    // Kicks off the background solve for `scrambled` with the current
-    // method. Shared by onScanCompleted(), solveCube() and a method change;
-    // the constructor's initial solved-cube placeholder is set directly, not
-    // through this path - see the .cpp. `continuation`: this is the cube
-    // already being solved, handed over to another method.
+    // Kicks off the background solve for `scrambled` with the current method.
+    // Shared by solveCube() and a method change; the constructor's
+    // solved-cube placeholder is set directly, not through this path - see
+    // the .cpp. `continuation`: this is the cube already being solved, handed
+    // over to another method.
     void beginSolve(const cube::solver::Cube& scrambled, bool continuation = false);
     // Invoked on the UI thread once solveWatcher_'s background solve()
     // (kicked off from beginSolve()) finishes.
     void applySolveResult();
 
-    cube::app::ScanSession& scanSession_;
     cube::solver::SteppedSolution stepped_;
     QFutureWatcher<cube::solver::SteppedSolution> solveWatcher_;
     bool isSolving_ = false;

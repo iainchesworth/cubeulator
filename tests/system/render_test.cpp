@@ -67,7 +67,8 @@ struct Content {
             colours.insert((static_cast<unsigned>(pixel.red() / 16) << 8) |
                            (static_cast<unsigned>(pixel.green() / 16) << 4) |
                            static_cast<unsigned>(pixel.blue() / 16));
-            if (pixel.hsvSaturationF() > 0.4 && pixel.valueF() > 0.25) {
+            if (static_cast<double>(pixel.hsvSaturationF()) > 0.4 &&
+                static_cast<double>(pixel.valueF()) > 0.25) {
                 ++coloured;
                 ++per_band[static_cast<std::size_t>(pixel.hsvHue() / 30) % 12];
             }

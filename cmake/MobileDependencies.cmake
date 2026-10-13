@@ -61,8 +61,8 @@ function(cube_import_onnxruntime)
     # target carries that directory as an interface include dir; on Linux
     # (and anywhere the static layout is used) it carries none, so the
     # include is not found ("onnxruntime_cxx_api.h: No such file or
-    # directory" in corner_detector.cpp / hand_presence.cpp). Do not depend
-    # on the target to say where its own headers are.
+    # directory" in hand_presence.cpp). Do not depend on the target to say
+    # where its own headers are.
     find_path(CUBE_ONNXRUNTIME_INCLUDE_DIR
         NAMES onnxruntime_cxx_api.h
         PATH_SUFFIXES onnxruntime
@@ -91,26 +91,11 @@ function(cube_import_bgfx)
     endif()
 endfunction()
 
-# CMake's FindThreads (transitively pulled in by abseil, itself pulled in by
-# protobuf/opencv4) fails outright under this project's NDK-chainloaded-under-
-# vcpkg toolchain: every detection strategy it tries fails in sequence -
-# CMAKE_HAVE_LIBC_PTHREAD's try_compile, -lpthreads, -lpthread, and even
-# "does the compiler accept -pthread" all report failure (confirmed in CI) -
-# which points to try_compile()'s isolated sub-invocation not correctly
-# inheriting the chainloaded NDK toolchain, not an actual absence of thread
-# support. Android's Bionic libc has bundled pthreads since API 21 (this
-# project targets API 28), so pre-seeding CMAKE_HAVE_LIBC_PTHREAD as a cached
-# TRUE - the standard workaround for this class of NDK/CMake interaction bug
-# - makes FindThreads skip its broken detection and use the (correct) libc
-# answer directly, without needing to fix the underlying toolchain plumbing.
-function(cube_workaround_android_findthreads)
-    set(CMAKE_HAVE_LIBC_PTHREAD 1 CACHE INTERNAL "Pre-seeded: Android's Bionic libc bundles pthreads (API 21+)")
-endfunction()
-
 function(cube_configure_mobile_dependencies)
-    if(ANDROID)
-        cube_workaround_android_findthreads()
-    endif()
+    # Whatever the platform needs done before the packages are found (the
+    # Android FindThreads workaround is the only one so far) is its own
+    # fragment's business: src/app/platform/<name>/platform.cmake.
+    cube_platform_prepare_dependencies()
 
     cube_import_opencv()
     cube_import_onnxruntime()
@@ -118,5 +103,5 @@ function(cube_configure_mobile_dependencies)
 
     message(STATUS
         "cube::opencv / cube::onnxruntime / cube::bgfx configured via vcpkg "
-        "(IOS=${IOS}, ANDROID=${ANDROID}).")
+        "(platform: ${CUBEULATOR_PLATFORM}).")
 endfunction()
