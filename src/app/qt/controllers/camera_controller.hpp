@@ -13,7 +13,7 @@ namespace cube::app {
 
 // Owns cube::platform::camera device enumeration/selection state for the
 // QML shell. Deliberately does not itself start/stop a capture session -
-// that's ScanSession's job - nor does it track OS camera-permission status,
+// that's DirectScan's job - nor does it track OS camera-permission status,
 // which CameraPermission (a thin QCameraPermission wrapper) owns instead;
 // this only tracks which devices exist and which one is selected.
 //

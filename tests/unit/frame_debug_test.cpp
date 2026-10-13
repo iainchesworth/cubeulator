@@ -10,12 +10,7 @@
 // The colour-mask/corner-mask stages are replicated inline (they live in
 // anonymous namespaces in face_observation.cpp / corner_observation.cpp);
 // constants here MUST be kept in sync with those files when tuning.
-// std::getenv is fine here (single-threaded debug harness, read-only);
-// silence MSVC's CRT deprecation the same way cube_platform's CMake does
-// for its own std::getenv uses.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
+// std::getenv is fine here (single-threaded debug harness, read-only).
 
 #include <catch2/catch_test_macros.hpp>
 

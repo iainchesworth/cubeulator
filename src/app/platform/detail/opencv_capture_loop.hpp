@@ -96,4 +96,14 @@ private:
     TimedFrame latest_;
 };
 
+// The cv::VideoCaptureAPIs backend this platform's camera implementation
+// opens devices through, and its name. camera_<os>.cpp both defines these and
+// constructs its loop from them, so anything that wants "what the shipped app
+// opens" - the hardware probes under tests/integration - asks here rather
+// than guessing. Defined by the platforms whose camera goes through
+// OpenCvCaptureLoop (Windows, Linux, macOS); the mobile cameras do not use
+// OpenCV, and nothing built for them calls these.
+[[nodiscard]] cv::VideoCaptureAPIs capture_backend() noexcept;
+[[nodiscard]] const char* capture_backend_name() noexcept;
+
 }  // namespace cube::platform::camera::detail

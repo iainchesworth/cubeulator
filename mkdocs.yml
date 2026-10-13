@@ -53,6 +53,7 @@ nav:
   - Testing & coverage: testing.md
   - Translations: i18n.md
   - Architecture: architecture.md
+  - Platform isolation: platform-isolation.md
   - Vision pipeline: vision-pipeline.md
   - Dependency strategy: dependency-strategy.md
   - Licensing: licensing.md

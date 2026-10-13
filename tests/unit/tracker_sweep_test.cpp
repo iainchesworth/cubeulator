@@ -47,9 +47,6 @@
 // stability tracker's motion score (fed the analysis-scale frame - it
 // normalises to a fixed internal resolution, so scores are comparable to
 // the live full-frame feed).
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

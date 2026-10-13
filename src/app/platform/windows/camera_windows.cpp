@@ -1,4 +1,5 @@
 #include "interfaces/camera.hpp"
+#include "platform/detail/capture_thread_scope.hpp"
 #include "platform/detail/opencv_capture_loop.hpp"
 
 #include <dshow.h>
@@ -10,30 +11,6 @@
 namespace cube::platform::camera {
 
 namespace {
-
-// enumerate_devices() below runs on a Qt thread-pool worker (see
-// CameraController), which carries no COM initialization of its own -
-// unlike opencv_capture_loop.cpp's ScopedCom (a different translation unit,
-// so not reusable here), MTA for the same reason: no message pump on this
-// thread to service STA marshaling, and nothing here is shared across
-// threads that would need it anyway.
-class ScopedCom {
-public:
-    ScopedCom() : hr_(CoInitializeEx(nullptr, COINIT_MULTITHREADED)) {}
-    ~ScopedCom() {
-        if (SUCCEEDED(hr_)) {
-            CoUninitialize();
-        }
-    }
-
-    ScopedCom(const ScopedCom&) = delete;
-    ScopedCom& operator=(const ScopedCom&) = delete;
-    ScopedCom(ScopedCom&&) = delete;
-    ScopedCom& operator=(ScopedCom&&) = delete;
-
-private:
-    HRESULT hr_;
-};
 
 std::string bstr_to_utf8(BSTR bstr) {
     if (bstr == nullptr) {
@@ -76,12 +53,25 @@ detail::OpenCvCaptureLoop& loop() {
     // sensor (monotone response curves) and that auto white balance
     // round-trips 0/1. This is the ONLY backend given that flag, because it
     // is the only one anyone has measured.
-    static detail::OpenCvCaptureLoop instance(cv::CAP_DSHOW,
+    static detail::OpenCvCaptureLoop instance(detail::capture_backend(),
                                               detail::OpenCvCaptureLoop::Photometry::supported);
     return instance;
 }
 
 }  // namespace
+
+namespace detail {
+
+// See loop() above for why this is DirectShow and not Media Foundation.
+cv::VideoCaptureAPIs capture_backend() noexcept {
+    return cv::CAP_DSHOW;
+}
+
+const char* capture_backend_name() noexcept {
+    return "CAP_DSHOW";
+}
+
+}  // namespace detail
 
 // Walks the SAME DirectShow video-capture-device enumeration that OpenCV's
 // CAP_DSHOW backend (see loop() above) resolves cv::VideoCapture::open's
@@ -101,7 +91,11 @@ detail::OpenCvCaptureLoop& loop() {
 // see what answers" probe the generic (Linux/macOS) fallback in
 // opencv_capture_loop.cpp uses.
 Result<std::vector<DeviceInfo>> enumerate_devices() {
-    const ScopedCom scoped_com;
+    // This runs on a Qt thread-pool worker (see CameraController), which
+    // carries no COM initialization of its own; the scope supplies the MTA
+    // one the capture loop uses too, for the same reason - no message pump
+    // on this thread to service STA marshaling.
+    const detail::CaptureThreadScope capture_thread_scope;
 
     ICreateDevEnum* dev_enum = nullptr;
     HRESULT hr = CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,

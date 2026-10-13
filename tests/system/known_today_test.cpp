@@ -74,24 +74,3 @@ TEST_CASE("known today: there is no back, and nothing takes keyboard focus",
         QByteArray(focused->metaObject()->className()).startsWith("AppButton");
     CHECK_FALSE(on_a_control);
 }
-
-TEST_CASE("known today: settings that drive a controller no screen uses", "[system][known-today]") {
-    // EXPECTED TO CHANGE - plan, Settings: "'Detect hands with AI' and
-    // 'Auto-advance' drive ScanSession, which no screen starts". Owner:
-    // scan lane (R6 removes ScanSession) and E3a.
-    App& app = App::fresh();
-    auto& legacy = app.runtime().scanSession();
-    app.click("launch.settings");
-    REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
-
-    const bool before = legacy.autoAdvance();
-    app.click("settings.autoAdvance");
-    CHECK(legacy.autoAdvance() == !before);
-
-    // A whole scan goes by without it being consulted: the scan screen's
-    // controller is DirectScan, and the legacy session never runs.
-    app.go("launch");
-    app.click("launch.startScan");
-    REQUIRE(app.wait_for([&]() { return app.runtime().directScan().running(); }));
-    CHECK_FALSE(legacy.running());
-}

@@ -6,11 +6,23 @@ namespace cube::platform::camera {
 namespace {
 
 detail::OpenCvCaptureLoop& loop() {
-    static detail::OpenCvCaptureLoop instance(cv::CAP_AVFOUNDATION);
+    static detail::OpenCvCaptureLoop instance(detail::capture_backend());
     return instance;
 }
 
 }  // namespace
+
+namespace detail {
+
+cv::VideoCaptureAPIs capture_backend() noexcept {
+    return cv::CAP_AVFOUNDATION;
+}
+
+const char* capture_backend_name() noexcept {
+    return "CAP_AVFOUNDATION";
+}
+
+}  // namespace detail
 
 // OpenCvCaptureLoop leaves DeviceInfo::facing at its unknown default, which
 // is correct here: desktop webcams face the user, and unknown already gets

@@ -27,18 +27,8 @@ include_guard(GLOBAL)
 cmake_file_api(QUERY API_VERSION 1 CODEMODEL 2)
 
 function(_cube_notices_platform out)
-    if(ANDROID)
-        set(p android)
-    elseif(IOS)
-        set(p ios)
-    elseif(WIN32)
-        set(p windows)
-    elseif(APPLE)
-        set(p macos)
-    else()
-        set(p linux)
-    endif()
-    set(${out} "${p}" PARENT_SCOPE)
+    # The platform name cmake/Platform.cmake already decided.
+    set(${out} "${CUBEULATOR_PLATFORM}" PARENT_SCOPE)
 endfunction()
 
 function(_cube_notices_common_args out app_target)
@@ -130,7 +120,7 @@ function(cube_add_third_party_notices app_target)
 
     # Desktop packages: the notices and the licence ride in every one. The
     # check comes first so a refused install leaves nothing behind.
-    if(NOT ANDROID AND NOT IOS)
+    if(CUBEULATOR_PLATFORM_DESKTOP)
         install(CODE "
             file(READ \"${json}\" _notices)
             string(JSON _n LENGTH \"\${_notices}\" unresolved)

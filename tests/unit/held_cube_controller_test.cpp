@@ -8,7 +8,6 @@
 
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
-#include "controllers/scan_session.hpp"
 #include "drawn_cube.hpp"
 #include "solve_controller.hpp"
 
@@ -55,8 +54,7 @@ constexpr int kFramesToDoubt = HeldCube::kFramesToDoubt + 1;
 // The app's camera and solver with a cube scanned, solved and being watched.
 struct Session {
     DirectScan scan;
-    cube::app::ScanSession legacy;
-    SolveController solve{legacy};
+    SolveController solve;
     HeldCube held{scan, solve};
     int holds_changed = 0;
     int moves_seen = 0;
@@ -408,8 +406,7 @@ TEST_CASE("a side still moving through the picture is not read", "[qt][controlle
 TEST_CASE("with no scan there is nothing to match, and watching never starts one",
           "[qt][controllers][held-cube]") {
     DirectScan scan;
-    cube::app::ScanSession legacy;
-    SolveController solve(legacy);
+    SolveController solve;
     HeldCube held(scan, solve);
     int completed = 0;
     QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });

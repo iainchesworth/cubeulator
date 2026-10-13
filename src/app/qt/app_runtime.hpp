@@ -39,7 +39,6 @@ public:
 
     // The controllers by the names the tests use.
     [[nodiscard]] CameraController& camera() noexcept { return controllers_.camera; }
-    [[nodiscard]] ScanSession& scanSession() noexcept { return controllers_.scanSession; }
     [[nodiscard]] DirectScan& directScan() noexcept { return controllers_.directScan; }
     [[nodiscard]] SettingsModel& settings() noexcept { return controllers_.settings; }
     [[nodiscard]] SolveController& solve() noexcept { return controllers_.solve; }

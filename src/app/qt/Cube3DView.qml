@@ -136,7 +136,7 @@ Item {
     // letter -> "ok" | "conflict". Each named face gets a thin frame drawn
     // just outside its sticker plane - green for a cleanly captured face,
     // warning-coloured while the face has an outstanding verification
-    // conflict (ScanSession.faceCaptureStates) - so the progress cube says
+    // conflict - so the progress cube says
     // not just WHAT was captured (the painted stickers) but how much of
     // the cube is banked and which face needs re-showing, at a glance and
     // on the rotating cube itself. The backing model only re-evaluates

@@ -40,11 +40,7 @@
 //      misclassification from an oracle merely redistributing an error it
 //      cannot pin.
 //
-// std::getenv is fine here (single-threaded, read-only); silence MSVC's CRT
-// deprecation the way the other offline harnesses do.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
+// std::getenv is fine here (single-threaded, read-only).
 
 #include <catch2/catch_test_macros.hpp>
 
