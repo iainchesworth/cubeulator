@@ -8,15 +8,6 @@
   ],
   "entries": [
     {
-      "file": "src/app/qt/AppState.qml",
-      "owner": "scan lane (feature/direct-scan)",
-      "reason": "The scan flow's messages. E2a splits navigation (experience) from the scan flow (scan); these travel with the scan flow. Expose a code, word it in QML.",
-      "literals": [
-        "Cube changed mid-scan — starting the capture over",
-        "One face looked misread — keep scanning, show faces again"
-      ]
-    },
-    {
       "file": "src/app/qt/CompleteScreen.qml",
       "owner": "experience lane (feature/app-experience)",
       "reason": "The Method statistic, which the design drops. E3d rebuilds Complete on the kit.",
@@ -47,54 +38,13 @@
       ]
     },
     {
-      "file": "src/app/qt/ScanScreen.qml",
-      "owner": "scan lane (feature/direct-scan)",
-      "reason": "The previous scan pipeline's screen, removed in R6. Not converted: it is going.",
-      "literals": [
-        "  [RAW]",
-        " ms",
-        " of 6 faces captured",
-        "CONF",
-        "CONFIDENCE",
-        "Confirm",
-        "Connecting to camera…",
-        "Face captured",
-        "Hand in view",
-        "Hold steadier",
-        "Hold steadier for a cleaner read",
-        "Hold steady — reading three faces…",
-        "Looking for the cube…",
-        "PROGRESS",
-        "Re-acquiring…",
-        "Re-orienting — hold the cube in view",
-        "Reading confirmed — advancing…",
-        "Reading three faces at once…",
-        "Retake",
-        "Scan didn't look right — keep scanning, show faces again",
-        "Show me any face — ",
-        "Show the whole cube",
-        "Tracking lost — show the cube again",
-        "\\nhealth ",
-        "\\npass   ",
-        "\\nreinit ",
-        "hand in frame",
-        "lost",
-        "or show a corner — three faces at once",
-        "shaky",
-        "track  "
-      ]
-    },
-    {
       "file": "src/app/qt/SettingsScreen.qml",
       "owner": "experience lane (feature/app-experience)",
       "reason": "Settings the design removes (the two ScanSession settings, cube motion, shader style) or moves behind a developer build. E3a rebuilds this screen on the kit and these go with it; none has an id because none survives.",
       "literals": [
-        "Auto-advance between faces",
         "Auto-rotate when idle",
         "CUBE MOTION",
-        "Detect hands with AI",
         "RENDERING",
-        "SCANNING",
         "Shader style for the 3D cube shown around the app.",
         "Test turn"
       ]
@@ -189,17 +139,6 @@
         "%1 move %2 asked %3 -> %4",
         " | after the move %1 (%2 off)",
         " | turned instead: %1"
-      ]
-    },
-    {
-      "file": "src/app/qt/controllers/scan_session.cpp",
-      "owner": "scan lane (feature/direct-scan)",
-      "reason": "ScanSession is removed in R6. Wording built in C++; nothing shows it once ScanScreen goes.",
-      "literals": [
-        " - keep showing faces",
-        "cube changed mid-scan",
-        "the %1-centred face",
-        "the least confident face"
       ]
     },
     {

@@ -107,10 +107,9 @@ if(CUBEULATOR_BUILD_APP)
     # qmlRegisterSingletonInstance in main.cpp rather than QML_ELEMENT,
     # since QML_ELEMENT's compile-time registration only works for sources
     # compiled directly into a qt_add_qml_module target. SolveController
-    # lives here (not in cube_app_qml, unlike before) for the same reason:
-    # it needs a real C++ reference to the live ScanSession instance
-    # (cube::model::ScanProgress can't cross into QML), which only works if
-    # both are constructed and wired together directly in main.cpp.
+    # lives here (not in cube_app_qml) for the same reason: the scan
+    # controller hands it a cube::solver::Cube, which cannot cross into QML,
+    # so the two are constructed and wired together in C++.
     # ---------------------------------------------------------------------
     add_library(cube_app_controllers STATIC
         qt/controllers/app_controllers.hpp
@@ -121,8 +120,6 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp
         qt/controllers/held_cube.cpp
-        qt/controllers/scan_session.hpp
-        qt/controllers/scan_session.cpp
         qt/controllers/settings_model.hpp
         qt/controllers/settings_model.cpp
         qt/controllers/bundled_models.hpp
@@ -142,29 +139,10 @@ if(CUBEULATOR_BUILD_APP)
     # binaries, which cube::vision's own filesystem-path-based tests
     # (tests/integration/hand_presence_integration_test.cpp) still rely on -
     # that's a Qt-free cube_lib API and can't read a Qt resource.
-    #
-    # The corner-detector weights are not distributed with the repository
-    # (assets/models/cube_corner_pose_PROVENANCE.md). A local copy is embedded
-    # when there is one; without it the previous scan pipeline's track mode
-    # finds no model and falls back, and the direct scan never asked for it.
-    set(_cube_app_models
-        "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
-    if(EXISTS "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-        list(APPEND _cube_app_models "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-    endif()
     qt_add_resources(cube_app_controllers "cube_app_models"
         PREFIX "/models"
         BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES ${_cube_app_models})
-    unset(_cube_app_models)
-
-    # The live M3T tracker (Phase 2) is desktop-only, like the vendored
-    # library itself; the scan session's env-gated live-lock hook compiles
-    # only where cube::track_m3t exists.
-    if(NOT ANDROID AND NOT IOS)
-        target_link_libraries(cube_app_controllers PRIVATE cube::track_m3t)
-        target_compile_definitions(cube_app_controllers PRIVATE CUBE_HAVE_M3T)
-    endif()
+        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
 
     target_link_libraries(cube_app_controllers
         PUBLIC
@@ -211,7 +189,6 @@ if(CUBEULATOR_BUILD_APP)
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
-            qt/ScanScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml
             qt/SettingsScreen.qml
