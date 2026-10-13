@@ -108,7 +108,7 @@ foreach(shard RANGE 1 ${CUBE_SYSTEM_WALK_SHARDS})
     # progress lines the run prints say where the time went.
     set_tests_properties(${walk_test} PROPERTIES
         LABELS "system"
-        TIMEOUT 1500
+        TIMEOUT 1200
         ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
     list(APPEND cube_system_walk_tests ${walk_test})
 endforeach()
@@ -120,7 +120,7 @@ add_test(NAME system.tour
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
 set_tests_properties(system.tour PROPERTIES
     LABELS "system"
-    TIMEOUT 1500
+    TIMEOUT 1200
     ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour")
 
 # The reach gate: whether the walk visited every screen, state and control in
