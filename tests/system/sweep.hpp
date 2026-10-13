@@ -77,10 +77,17 @@ inline QStringList press_every_control(App& app, const QString& screen,
             return false;
         }
         // A control below the bottom of the window has nowhere for a press to
-        // land. layout_test.cpp lists those; the sweep leaves them alone.
+        // land. layout_test.cpp lists those; the sweep leaves them alone. One
+        // inside a scrolling list is scrolled to first (App::click), so its
+        // place before the scroll says nothing.
+        bool scrolls = false;
+        for (QQuickItem* up = control->parentItem(); up != nullptr; up = up->parentItem()) {
+            scrolls =
+                scrolls || QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
+        }
         const QPointF centre =
             control->mapToScene(QPointF(control->width() / 2, control->height() / 2));
-        if (!QRectF(QPointF(0, 0), QSizeF(app.window().size())).contains(centre)) {
+        if (!scrolls && !QRectF(QPointF(0, 0), QSizeF(app.window().size())).contains(centre)) {
             return false;
         }
         INFO("pressing " << key.toStdString() << " on " << screen.toStdString());
