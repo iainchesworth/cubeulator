@@ -5,6 +5,7 @@
 // transforms, which need neither a GPU nor a display, so the offscreen
 // platform is enough and the suite runs the same on a headless CI machine.
 #include "qml_test_app.hpp"
+#include "test_platform.hpp"
 
 #include <catch2/catch_session.hpp>
 
@@ -28,13 +29,9 @@ QQmlEngine& qml_engine() {
 }  // namespace cube::test
 
 int main(int argc, char* argv[]) {
-#ifndef Q_OS_WIN
-    // Windows keeps its own platform plugin: it is the only one deployed
-    // beside the binaries there, and it needs no display for this either.
-    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
-        qputenv("QT_QPA_PLATFORM", "offscreen");
-    }
-#endif
+    // No window is ever shown, so no display is needed; which plugin stands
+    // in is the platform's to say.
+    cube::test::apply_default_qpa_platform();
     // The app's settings singleton reads its store on creation; keep the
     // tests away from the store the real app writes.
     QCoreApplication::setOrganizationName("Cubeulator");

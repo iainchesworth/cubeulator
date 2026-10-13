@@ -21,6 +21,11 @@ inline constexpr std::string_view git_describe = "@CUBEULATOR_GIT_DESCRIBE@";
 inline constexpr std::string_view git_branch = "@CUBEULATOR_GIT_BRANCH@";
 inline constexpr bool git_dirty = @CUBEULATOR_GIT_DIRTY@;
 
+// What this build targets: platform, architecture and compiler, e.g.
+// "Windows x86_64 (MSVC 1951)". Decided by CMake, which knows the platform
+// the build was configured for; nothing here asks the preprocessor.
+inline constexpr std::string_view build_target = "@CUBEULATOR_BUILD_TARGET@";
+
 // A multi-line, human-readable version + build-provenance block, suitable for
 // `--version` output or an About dialog.
 [[nodiscard]] std::string version_details();

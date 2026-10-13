@@ -6,6 +6,7 @@
 #include "app.hpp"
 #include "diagnostics.hpp"
 #include "reach.hpp"
+#include "test_platform.hpp"
 
 #include <catch2/catch_session.hpp>
 
@@ -59,16 +60,13 @@ int main(int argc, char* argv[]) {
         }
     }
 
-#if defined(Q_OS_LINUX)
-    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM") && !qEnvironmentVariableIsSet("DISPLAY") &&
-        !qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
-        std::fprintf(stderr,
-                     "cube_system_tests draws the real app and needs a display.\n"
-                     "  xvfb-run -a %s     (software GL: LIBGL_ALWAYS_SOFTWARE=1)\n",
-                     argv[0]);
+    // Which platforms need a session variable for this, and what to tell
+    // someone who has none, is the platform's to say (test_platform.hpp).
+    if (const QString problem = cube::test::display_problem(QString::fromLocal8Bit(argv[0]));
+        !problem.isEmpty()) {
+        std::fprintf(stderr, "cube_system_tests draws the real app and %s\n", qPrintable(problem));
         return 2;
     }
-#endif
 
     // The app's settings are a QSettings store keyed by organisation and
     // application name. Point it at a directory that goes away with the

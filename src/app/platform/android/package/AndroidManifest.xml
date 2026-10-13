@@ -5,7 +5,8 @@
   auto-detects and fills in most permissions/placeholders, but has no way to
   know cube_app's C++ requests CAMERA at runtime via Qt's cross-platform
   QCameraPermission (see CameraPermission.hpp), so that one is declared here
-  by hand. Wired in via QT_ANDROID_PACKAGE_SOURCE_DIR in CMakeLists.txt.
+  by hand. Wired in via QT_ANDROID_PACKAGE_SOURCE_DIR in
+  src/app/platform/android/platform.cmake.
 -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="org.qtproject.example"

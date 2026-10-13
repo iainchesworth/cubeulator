@@ -13,16 +13,10 @@
 find_package(Qt6 ${Qt6_FIND_VERSION} CONFIG QUIET COMPONENTS ${Qt6_FIND_COMPONENTS})
 
 if(NOT Qt6_FOUND)
-    if(WIN32)
-        set(_qt6_search_roots "C:/Qt" "$ENV{USERPROFILE}/Qt")
-        set(_qt6_arch_dirs "msvc2022_64" "msvc2019_64" "mingw_64")
-    elseif(APPLE)
-        set(_qt6_search_roots "$ENV{HOME}/Qt" "/opt/Qt" "/usr/local/opt/qt6" "/opt/homebrew/opt/qt6")
-        set(_qt6_arch_dirs "macos" "clang_64")
-    else()
-        set(_qt6_search_roots "$ENV{HOME}/Qt" "/opt/Qt" "/usr/lib/qt6" "/usr/lib/x86_64-linux-gnu/qt6")
-        set(_qt6_arch_dirs "gcc_64")
-    endif()
+    # Where an aqtinstall-style Qt lives is a fact about the platform, so it
+    # is declared by the platform's fragment (cmake/Platform.cmake).
+    set(_qt6_search_roots ${CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS})
+    set(_qt6_arch_dirs ${CUBEULATOR_PLATFORM_QT_ARCH_DIRS})
 
     set(_qt6_candidates "")
     foreach(root IN LISTS _qt6_search_roots)
