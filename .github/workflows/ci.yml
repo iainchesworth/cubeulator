@@ -397,16 +397,27 @@ jobs:
       - name: Install Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      # Qt 6.12 for Android is built against NDK r27c (27.2.12479018), JDK 21
-      # and SDK platform 36 / build-tools 36.0.0 (Qt for Android prerequisites,
-      # doc.qt.io/qt-6.12), and Qt advises an app to use the same NDK as the
-      # Qt libraries - so this is deliberately NOT the newest NDK (r30), it is
-      # the newest one Qt 6.12 supports. ubuntu-26.04's default JDK is 25;
-      # JAVA_HOME_21_X64 is preinstalled alongside it.
+      # NDK r28c (28.2.13676358), JDK 21, SDK platform 36 / build-tools 36.0.0.
+      #
+      # r28c is NEWER than the r27c (27.2.12479018) Qt 6.12's prerequisites
+      # name and its libraries were built with. Qt only *recommends* building
+      # an app with the same NDK "to avoid missing symbol errors"; it does not
+      # call a newer one unsupported, and its CMake does not check. That is a
+      # departure from Qt's tested configuration, taken on purpose (Iain,
+      # 2026-10-13): r28c's libc++ has std::expected::transform/and_then,
+      # std::format and std::print, ranges::contains/fold_left and mdspan,
+      # which r26b lacks (compile-probed), and it carries libc++'s fix for
+      # std::expected clobbering its has-value flag through tail padding
+      # (llvm-project#68552, #70494; an ABI change). Result<T> is
+      # std::expected throughout. If an APK misbehaves, r27c is Qt's
+      # documented NDK and the first thing to try.
+      #
+      # ubuntu-26.04's default JDK is 25; JAVA_HOME_21_X64 is preinstalled
+      # alongside it.
       - name: Install Android NDK, platform and build-tools
         run: |
-          sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
           test -d "$JAVA_HOME_21_X64" || { echo "::error::JDK 21 (JAVA_HOME_21_X64) is not preinstalled on this image"; exit 1; }
           echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
 
