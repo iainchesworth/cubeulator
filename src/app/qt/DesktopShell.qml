@@ -195,7 +195,6 @@ Item {
     // footer of its own, in a look the rest of the app does not have.
     Popup {
         id: aboutPlaceholder
-        objectName: "aboutPlaceholder"
         parent: Overlay.overlay
         anchors.centerIn: parent
         modal: true
@@ -211,6 +210,7 @@ Item {
         // Accessible attaches to an Item, so it sits on the content item
         // rather than on the Popup.
         contentItem: Column {
+            objectName: "about.placeholder"
             spacing: 8
             Accessible.role: Accessible.Dialog
             Accessible.name: qsTrId("about.title")
@@ -221,14 +221,14 @@ Item {
                 color: Theme.ink
             }
             Text {
-                objectName: "aboutVersion"
+                objectName: "about.version"
                 text: qsTrId("about.version").arg(AppInfo.version)
                 font.pixelSize: 16
                 color: Theme.ink
             }
             Item { width: 1; height: 8 }
             AppButton {
-                objectName: "aboutClose"
+                objectName: "about.close"
                 text: qsTrId("common.close")
                 variant: "secondary"
                 onClicked: aboutPlaceholder.close()

@@ -437,3 +437,17 @@ if(CUBEULATOR_BUILD_APP AND TARGET cube_app_desktop)
     catch_discover_tests(cube_desktop_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_desktop_tests>")
 endif()
+
+# The placeholder About, driven through the real window by the system tests
+# (tests/system, E0a). Added to that binary from here, deferred, as the
+# translation block above does, so that it does not matter whether tests/system
+# comes before or after this block in this file.
+if(CUBEULATOR_BUILD_APP AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/system/CMakeLists.txt")
+    function(cube_desktop_extend_system_tests)
+        if(TARGET cube_system_tests AND TARGET cube_app_desktop)
+            target_sources(cube_system_tests PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/system/desktop_shell_test.cpp")
+        endif()
+    endfunction()
+    cmake_language(DEFER CALL cube_desktop_extend_system_tests)
+endif()

@@ -78,7 +78,8 @@ void DesktopServices::registerWithQml() {
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "AppInfo", &info_);
 }
 
-DesktopIntegration::DesktopIntegration(QGuiApplication& /*app*/, QObject* parent) : QObject(parent) {
+DesktopIntegration::DesktopIntegration(QGuiApplication& /*app*/, QObject* parent)
+    : QObject(parent) {
     applyIdentity();
 }
 

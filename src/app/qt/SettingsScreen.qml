@@ -277,7 +277,7 @@ Rectangle {
             // Reads AppInfo, which only the desktop shell registers.
             visible: !AppState.isMobile
             AppButton {
-                objectName: "aboutRow"
+                objectName: "settings.about"
                 variant: "ghost"
                 text: qsTrId("settings.about")
                 onClicked: AppInfo.showAbout()
