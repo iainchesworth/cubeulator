@@ -1,15 +1,8 @@
-#include "controllers/camera_controller.hpp"
-#include "controllers/direct_scan.hpp"
-#include "controllers/frame_image_provider.hpp"
-#include "controllers/scan_session.hpp"
-#include "controllers/settings_model.hpp"
-#include "solve_controller.hpp"
+#include "app_runtime.hpp"
 
 #include <QGuiApplication>
-#include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSettings>
-#include <QtQml/qqml.h>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -113,47 +106,10 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
-    // Registered imperatively via qmlRegisterSingletonInstance rather than
-    // QML_ELEMENT: cube_app_controllers is a separate target from
-    // cube_app_qml specifically so its controllers are linkable into a
-    // Catch2 test binary without pulling in QQmlEngine, and QML_ELEMENT's
-    // compile-time registration only works for sources compiled directly
-    // into a qt_add_qml_module target.
-    cube::app::CameraController cameraController;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "CameraController", &cameraController);
-
-    cube::app::ScanSession scanSession;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "ScanSession", &scanSession);
-
-    // The scan screen's controller. ScanSession above is the previous scan
-    // pipeline, still registered because the settings screen binds to it,
-    // but no screen starts it.
-    cube::app::DirectScan directScan;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "DirectScan", &directScan);
-
-    cube::app::SettingsModel settingsModel;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settingsModel);
-
-    // Needs a real reference to scanSession (cube::model::ScanProgress can't
-    // cross into QML), so - like the three controllers above - it's
-    // constructed directly here rather than being QML-engine-owned; declared
-    // after scanSession so it's destroyed first.
-    SolveController solveController(scanSession);
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solveController);
-    QObject::connect(&directScan, &cube::app::DirectScan::scanCompleted, &solveController, [&]() {
-        if (const auto cube = directScan.cube(); cube.has_value()) {
-            solveController.solveCube(*cube);
-        }
-    });
-
-    QQmlApplicationEngine engine;
-    // addImageProvider takes ownership; directScan outlives engine (engine
-    // is declared - and so destroyed first - after directScan).
-    engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(
-                                             [&directScan]() { return directScan.latestFrame(); }));
-    engine.loadFromModule("Cubeulator", "Main");
-
-    if (engine.rootObjects().isEmpty()) {
+    // The controllers, their QML registration and the engine are built by
+    // AppRuntime, which tests/system boots the same way.
+    cube::app::AppRuntime runtime;
+    if (!runtime.load()) {
         return -1;
     }
 
