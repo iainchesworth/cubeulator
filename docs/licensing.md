@@ -189,7 +189,7 @@ tools/tests only.
 | boost-config, boost-mp11, boost-headers | 1.91.0 | BSL-1.0 | with onnxruntime | none for machine-executable object code (BSL-1.0 text) |
 | date, cxxopts, nlohmann-json, ms-gsl, safeint, optional-lite, wil (W only) | various | MIT / MIT / MIT / MIT / MIT / BSL-1.0 / MIT | with onnxruntime | notice |
 | fmt | 12.2.0 | MIT | all (`cube_lib`) | notice |
-| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **no - nothing links it** [V: the file API's link line of `cube_app` has no bgfx; `src/render` is a stub] | none until the render pipeline links it; the generator will start emitting it the day it does |
+| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **removed from the manifest** - it was declared but nothing linked it [V: the file API's link line of `cube_app` had no bgfx; `src/render` was a stub] | none |
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
 | vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
 
@@ -395,9 +395,11 @@ the plan needs is desktop and, later, Google Play.
 
 ### Option C - draw the cube without Quick 3D
 
-`src/render` is a bgfx stub; the cube is drawn today by `Cube3DView.qml`
-(Quick 3D) and `CubeView.qml` (Canvas 2D). Without Quick 3D the app would link
-only modules that have an LGPL option [V: section 2.2].
+The cube is drawn today by `Cube3DView.qml` (Quick 3D) and `CubeView.qml`
+(Canvas 2D). When this paper was written a bgfx stub under `src/render` was
+listed here as a third route; it held no rendering code and was removed (see
+the change log), so there is no second renderer to switch to. Without Quick 3D
+the app would link only modules that have an LGPL option [V: section 2.2].
 
 - **What it does for the licence:** the Qt set becomes available under
   LGPL-3.0 (or still GPL). Cubeulator's own GPL does not need to change.
@@ -417,9 +419,13 @@ only modules that have an LGPL option [V: section 2.2].
   Cubeulator's source being public makes the object-file duty easy to meet;
   the signing-key question does not go away.
 - **Rendering alternatives, none verified here:** keep `CubeView.qml` (2D
-  Canvas, already exists); a custom scene-graph item; the stub's bgfx via
-  `QQuickRenderControl` (bgfx is BSD-2-Clause [V]); or Qt 3D, which is not on
-  Qt's GPL-only list but whose maintenance status I did not check [I].
+  Canvas, already exists); a custom scene-graph item, of which
+  `QQuickRhiItem` is the public, supported one (in Qt Quick, which has an LGPL
+  option [V: section 2.2]; its header is in the Qt 6.12 install [V], and it
+  arrived in Qt 6.7 [I]); bgfx via `QQuickRenderControl` (bgfx is BSD-2-Clause
+  [V]; it would be added back from vcpkg, and needs its own device and swap
+  chain beside Qt's RHI [I]); or Qt 3D, which is not on Qt's GPL-only list but
+  whose maintenance status I did not check [I].
 - **Cost:** engineering. The solve lane owns `Cube3DView.qml` and the cel
   shaders, so this is theirs to size; it throws away the shader work.
 - **Consequence:** unblocks nothing on iOS by itself, and costs more than
@@ -490,9 +496,9 @@ conclusion.
   real command line, per platform and configuration), its QML imports, and the
   closure of each over vcpkg's `Depends` and Qt's SBOM edges. A vcpkg port
   that installs nothing outside `share/` is a build helper and is skipped.
-  Nothing is added by hand for a vcpkg port: the day `bgfx` is linked, it
-  appears; the day R6 removes onnxruntime, it and its dependency chain
-  disappear (M3T, GLEW and GLFW already have).
+  Nothing is added by hand for a vcpkg port: the day R6 removes onnxruntime,
+  it and its dependency chain disappear (M3T, GLEW, GLFW and bgfx already
+  have).
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists vendored code, models, icons and fonts, the licence
   elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
@@ -703,9 +709,10 @@ licence reference. This list exists so a reviewer knows what to look for.
 6. **GTK3 and about 45 LGPL/X11 ports reach Linux** through
    `opencv4[gtk]`, which exists to back `highgui`, which only the vendored M3T
    used (section 2.4). M3T is gone; the two features are still asked for.
-7. **bgfx is a declared dependency nothing links**; it would otherwise have
+7. **bgfx was a declared dependency nothing linked**; it would otherwise have
    looked like a shipped component. The inventory distinguishes declared from
-   linked because the generator reads the link line.
+   linked because the generator reads the link line. The declaration has since
+   been removed from `vcpkg.json`.
 8. **The plan's "Qt Quick 3D reading" is a known unknown**, listed under "What
    is not known" - this paper resolves it for Quick 3D (holds) and Shader
    Tools (does not).

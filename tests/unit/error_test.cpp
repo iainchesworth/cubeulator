@@ -28,9 +28,6 @@ TEST_CASE("to_string covers every CubeError value", "[error]") {
     REQUIRE(cube::to_string(CubeError::inference_provider_unavailable) ==
             "no suitable inference execution provider is available");
     REQUIRE(cube::to_string(CubeError::inference_failed) == "inference failed to produce a result");
-    REQUIRE(cube::to_string(CubeError::gpu_surface_unavailable) ==
-            "no GPU-compatible render surface is available");
-    REQUIRE(cube::to_string(CubeError::shader_compile_failed) == "a shader failed to compile");
     REQUIRE(cube::to_string(CubeError::locale_resource_not_found) ==
             "a locale resource file could not be found");
 }
