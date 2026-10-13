@@ -44,6 +44,7 @@ feasibility spike) or `CUBEULATOR PATCH` (added at vendoring time).
 | CUBEULATOR PATCH 2 | `src/renderer.cpp` | `Renderer::referenced_body_ptrs()` returned a reference to a temporary (`return {};`) - real undefined behaviour (MSVC C4172); now returns a function-local static empty vector. |
 | CUBEULATOR PATCH 3 | `src/body.cpp` | `Body::get_id()` had no return on the fall-through path (MSVC C4715, UB if reached); the enum's only remaining case is REGION, so return `region_id_`. |
 | CUBEULATOR PATCH 4 | `CMakeLists.txt` | Upstream adds MSVC's `-openmp:experimental` only for Release, but the OpenMP `simd` pragmas in `color_histograms.cpp` need it in every configuration (C7660 in RelWithDebInfo/Debug otherwise); add it to the all-config flags on WIN32. |
+| CUBEULATOR PATCH 5 | `include/m3t/camera.h` | `Camera` is a polymorphic base with pure virtuals and a non-virtual destructor (deleting a derived camera through a `Camera` pointer is UB, and GCC's `-Wnon-virtual-dtor` rejects deriving from it); add `virtual ~Camera() = default;`. |
 
 Build-configuration choices that are *not* source patches (upstream options,
 set by the wrapper in `third_party/CMakeLists.txt`): `M3T_WIN32_STATIC=OFF`,
