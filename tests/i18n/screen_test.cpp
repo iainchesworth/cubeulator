@@ -24,8 +24,12 @@
 #include <QGuiApplication>
 #include <QMetaObject>
 #include <QQmlComponent>
+#include <QDir>
+#include <QImage>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QStringList>
+#include <QSurfaceFormat>
 #include <QUrl>
 #include <QVariant>
 #include <QVariantList>
@@ -86,6 +90,13 @@ public:
 
     [[nodiscard]] QQuickItem* item() const { return screen_.get(); }
     [[nodiscard]] QQuickItem* root() const { return root_.get(); }
+
+    // Puts the screen in `window`, so that it can be drawn.
+    void show_in(QQuickWindow& window) {
+        window.resize(static_cast<int>(root_->width()), static_cast<int>(root_->height()));
+        root_->setParentItem(window.contentItem());
+        settle();
+    }
 
     // Positioners lay their children out when a window polishes them; there
     // is no window, so ask each, outermost first.
@@ -454,4 +465,35 @@ TEST_CASE("in a right-to-left language the 3D cube is the solver's cube and ever
     }
 
     in_language("en");
+}
+
+// A picture of a screen in a language, for whoever reviews what the pseudo-locale
+// and a right-to-left language look like. Hidden: it writes files, and the
+// system tests' screenshot tour (tests/system) is the permanent one.
+//
+//   CUBE_I18N_SHOT_DIR=out CUBE_I18N_SHOT_SCREEN=LaunchScreen CUBE_I18N_SHOT_LANG=xx //       cube_i18n_screen_tests "[.shots]"
+//
+// One picture a process: a second grabWindow() with the 3D cube in the scene
+// crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
+// hazards").
+TEST_CASE("a picture of a screen in a language", "[.shots]") {
+    const QString dir = qEnvironmentVariable("CUBE_I18N_SHOT_DIR");
+    const QString type = qEnvironmentVariable("CUBE_I18N_SHOT_SCREEN", QStringLiteral("LaunchScreen"));
+    const QString lang = qEnvironmentVariable("CUBE_I18N_SHOT_LANG", QStringLiteral("en"));
+    const QStringList size = qEnvironmentVariable("CUBE_I18N_SHOT_SIZE", QStringLiteral("900x640")).split('x');
+    REQUIRE_FALSE(dir.isEmpty());
+    REQUIRE(size.size() == 2);
+    REQUIRE(t::language().preview(lang));
+    QCoreApplication::processEvents();
+
+    Screen screen(type, size.at(0).toInt(), size.at(1).toInt());
+    QQuickWindow window;
+    screen.show_in(window);
+    QCoreApplication::processEvents();
+    const QImage image = window.grabWindow();
+    REQUIRE_FALSE(image.isNull());
+    QDir().mkpath(dir);
+    const QString file = QStringLiteral("%1/%2_%3_%4x%5.png").arg(dir, type, lang, size.at(0), size.at(1));
+    REQUIRE(image.save(file));
+    WARN("wrote " << str(file));
 }
