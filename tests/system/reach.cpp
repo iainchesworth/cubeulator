@@ -4,7 +4,9 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QJsonArray>
+#include <QJsonValue>
 #include <QQuickItem>
 #include <QQuickWindow>
 
@@ -167,17 +169,19 @@ void Reach::start() {
 }
 
 void Reach::activated(const QString& key, Layout layout) {
-    activated_.insert((key + "@" + to_string(layout)).toStdString());
+    seen_.activated.insert((key + "@" + to_string(layout)).toStdString());
 }
 
 void Reach::sample() {
+    QElapsedTimer cost;
+    cost.start();
     const QString screen = app_.screen();
     const Layout layout = app_.layout();
-    screens_.insert((screen + "@" + to_string(layout)).toStdString());
+    seen_.screens.insert((screen + "@" + to_string(layout)).toStdString());
 
     for (const StateDef& state : state_inventory()) {
         if (state.screen == screen && state.holds(app_)) {
-            states_.insert((state.screen + "." + state.name).toStdString());
+            seen_.states.insert((state.screen + "." + state.name).toStdString());
         }
     }
 
@@ -188,15 +192,29 @@ void Reach::sample() {
         const QVariant enabled = control->property("enabled");
         const bool is_enabled = control->isEnabled() && (!enabled.isValid() || enabled.toBool());
         if (is_enabled) {
-            discovered_.insert(key);
-            disabled_.erase(key);
-        } else if (discovered_.count(key) == 0) {
-            disabled_.insert(key);
+            seen_.discovered.insert(key);
+            seen_.disabled.erase(key);
+        } else if (seen_.discovered.count(key) == 0) {
+            seen_.disabled.insert(key);
         }
+    }
+    ++samples_;
+    sampling_ms_ += static_cast<double>(cost.nsecsElapsed()) / 1e6;
+}
+
+void Seen::merge(const Seen& other) {
+    screens.insert(other.screens.begin(), other.screens.end());
+    states.insert(other.states.begin(), other.states.end());
+    discovered.insert(other.discovered.begin(), other.discovered.end());
+    activated.insert(other.activated.begin(), other.activated.end());
+    disabled.insert(other.disabled.begin(), other.disabled.end());
+    // Disabled in one part and enabled in another is an enabled control.
+    for (const std::string& control : discovered) {
+        disabled.erase(control);
     }
 }
 
-std::vector<QString> Reach::gaps() const {
+std::vector<QString> gaps_of(const Seen& seen) {
     std::vector<QString> gaps;
 
     // A screen file nobody listed is a screen nobody tested.
@@ -215,7 +233,7 @@ std::vector<QString> Reach::gaps() const {
 
     for (const ScreenDef& screen : screen_inventory()) {
         for (const char* layout : {"narrow", "wide"}) {
-            if (screens_.count((screen.name + "@" + layout).toStdString()) == 0) {
+            if (seen.screens.count((screen.name + "@" + layout).toStdString()) == 0) {
                 gaps.push_back("screen " + screen.name + " never shown in the " + layout +
                                " layout");
             }
@@ -224,13 +242,13 @@ std::vector<QString> Reach::gaps() const {
 
     for (const StateDef& state : state_inventory()) {
         if (state.cannot_reach_because.isEmpty() &&
-            states_.count((state.screen + "." + state.name).toStdString()) == 0) {
+            seen.states.count((state.screen + "." + state.name).toStdString()) == 0) {
             gaps.push_back("state " + state.screen + "." + state.name + " never seen");
         }
     }
 
-    for (const std::string& control : discovered_) {
-        if (activated_.count(control) == 0 &&
+    for (const std::string& control : seen.discovered) {
+        if (seen.activated.count(control) == 0 &&
             unpressable_controls().count(QString::fromStdString(control)) == 0) {
             gaps.push_back("control " + QString::fromStdString(control) +
                            " was on screen but never pressed");
@@ -239,7 +257,7 @@ std::vector<QString> Reach::gaps() const {
     return gaps;
 }
 
-std::vector<QString> Reach::known_gaps() const {
+std::vector<QString> known_gaps_of(const Seen& seen) {
     std::vector<QString> out;
     for (const ScreenDef& screen : screen_inventory()) {
         if (!screen.reached_by_ui.isEmpty()) {
@@ -252,33 +270,35 @@ std::vector<QString> Reach::known_gaps() const {
     }
     for (const StateDef& state : state_inventory()) {
         if (!state.cannot_reach_because.isEmpty()) {
-            const bool seen = states_.count((state.screen + "." + state.name).toStdString()) != 0;
+            const bool seen_it =
+                seen.states.count((state.screen + "." + state.name).toStdString()) != 0;
             out.push_back("state " + state.screen + "." + state.name +
-                          (seen ? " (seen anyway) - " : " not reachable here - ") +
+                          (seen_it ? " (seen anyway) - " : " not reachable here - ") +
                           state.cannot_reach_because);
         }
     }
     for (const auto& [control, why] : unpressable_controls()) {
-        const bool pressed = activated_.count(control.toStdString()) != 0;
+        const bool pressed = seen.activated.count(control.toStdString()) != 0;
         out.push_back("control " + control +
                       (pressed ? " (pressed after all: remove it from the list) - "
                                : " cannot be pressed - ") +
                       why);
     }
-    for (const std::string& control : disabled_) {
+    for (const std::string& control : seen.disabled) {
         out.push_back("control " + QString::fromStdString(control) + " only ever seen disabled");
     }
     return out;
 }
 
-QString Reach::summary() const {
+QString summary_of(const Seen& seen) {
     QString text;
     const auto line = [&text](const QString& s) { text += s + "\n"; };
 
     int shown = 0;
     for (const ScreenDef& screen : screen_inventory()) {
         for (const char* layout : {"narrow", "wide"}) {
-            shown += static_cast<int>(screens_.count((screen.name + "@" + layout).toStdString()));
+            shown +=
+                static_cast<int>(seen.screens.count((screen.name + "@" + layout).toStdString()));
         }
     }
     const int screen_total = static_cast<int>(screen_inventory().size()) * 2;
@@ -288,14 +308,14 @@ QString Reach::summary() const {
     for (const StateDef& state : state_inventory()) {
         if (state.cannot_reach_because.isEmpty()) {
             ++state_total;
-            state_seen +=
-                static_cast<int>(states_.count((state.screen + "." + state.name).toStdString()));
+            state_seen += static_cast<int>(
+                seen.states.count((state.screen + "." + state.name).toStdString()));
         }
     }
 
     int pressed = 0;
-    for (const std::string& control : discovered_) {
-        pressed += static_cast<int>(activated_.count(control));
+    for (const std::string& control : seen.discovered) {
+        pressed += static_cast<int>(seen.activated.count(control));
     }
 
     line(QString("reach: screens %1/%2 (narrow and wide), states %3/%4, controls pressed %5/%6")
@@ -304,24 +324,37 @@ QString Reach::summary() const {
              .arg(state_seen)
              .arg(state_total)
              .arg(pressed)
-             .arg(discovered_.size()));
-    for (const QString& gap : gaps()) {
+             .arg(seen.discovered.size()));
+    for (const QString& gap : gaps_of(seen)) {
         line("  GAP    " + gap);
     }
-    for (const QString& gap : known_gaps()) {
+    for (const QString& gap : known_gaps_of(seen)) {
         line("  KNOWN  " + gap);
     }
     return text;
 }
 
-QJsonObject Reach::to_json() const {
-    const auto array = [](const std::set<std::string>& set) {
-        QJsonArray out;
-        for (const std::string& s : set) {
-            out.append(QString::fromStdString(s));
-        }
-        return out;
-    };
+namespace {
+
+[[nodiscard]] QJsonArray to_array(const std::set<std::string>& set) {
+    QJsonArray out;
+    for (const std::string& s : set) {
+        out.append(QString::fromStdString(s));
+    }
+    return out;
+}
+
+[[nodiscard]] std::set<std::string> from_array(const QJsonValue& value) {
+    std::set<std::string> out;
+    for (const QJsonValue& item : value.toArray()) {
+        out.insert(item.toString().toStdString());
+    }
+    return out;
+}
+
+}  // namespace
+
+QJsonObject to_json(const Seen& seen) {
     const auto strings = [](const std::vector<QString>& list) {
         QJsonArray out;
         for (const QString& s : list) {
@@ -330,14 +363,36 @@ QJsonObject Reach::to_json() const {
         return out;
     };
     return QJsonObject{
-        {"screens", array(screens_)},
-        {"states", array(states_)},
-        {"controlsDiscovered", array(discovered_)},
-        {"controlsActivated", array(activated_)},
-        {"gaps", strings(gaps())},
-        {"knownGaps", strings(known_gaps())},
-        {"summary", summary()},
+        {"screens", to_array(seen.screens)},
+        {"states", to_array(seen.states)},
+        {"controlsDiscovered", to_array(seen.discovered)},
+        {"controlsActivated", to_array(seen.activated)},
+        {"controlsDisabled", to_array(seen.disabled)},
+        {"gaps", strings(gaps_of(seen))},
+        {"knownGaps", strings(known_gaps_of(seen))},
+        {"summary", summary_of(seen)},
     };
+}
+
+Seen seen_from_json(const QJsonObject& report) {
+    Seen seen;
+    seen.screens = from_array(report.value("screens"));
+    seen.states = from_array(report.value("states"));
+    seen.discovered = from_array(report.value("controlsDiscovered"));
+    seen.activated = from_array(report.value("controlsActivated"));
+    seen.disabled = from_array(report.value("controlsDisabled"));
+    return seen;
+}
+
+QString Reach::summary() const {
+    return summary_of(seen_);
+}
+
+QJsonObject Reach::to_json() const {
+    QJsonObject report = cube::systest::to_json(seen_);
+    report.insert("samples", samples_);
+    report.insert("samplingMs", sampling_ms_);
+    return report;
 }
 
 }  // namespace cube::systest
