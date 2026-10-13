@@ -219,10 +219,20 @@ function(cube_configure_desktop_app target)
 
     set(_deploy_options "")
     if(WIN32)
-        # Dependencies that came from vcpkg (OpenCV, ONNX Runtime and their
-        # DLLs). Qt's own are deployed by windeployqt in the script below; a
-        # Qt DLL that appears in both lists is simply the same file twice.
-        install(FILES $<TARGET_RUNTIME_DLLS:${target}> DESTINATION "${_bindir}")
+        # Dependencies that came from vcpkg: OpenCV, ONNX Runtime and, under
+        # them, everything they load. Resolved transitively at install time
+        # (cmake/InstallRuntimeDependencies.cmake); Qt's own are deployed by
+        # windeployqt in the script below.
+        set(_dep_dirs "$<TARGET_FILE_DIR:${target}>")
+        if(DEFINED _VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+            list(INSERT _dep_dirs 0 "${_VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/bin")
+        endif()
+        install(CODE "
+            set(CUBE_EXE \"$<TARGET_FILE:${target}>\")
+            set(CUBE_DEP_DIRS \"${_dep_dirs}\")
+            set(CUBE_DEST_DIR \"${_bindir}\")
+        ")
+        install(SCRIPT "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/InstallRuntimeDependencies.cmake")
 
         # The C++ runtime goes beside the executable (app-local), rather than
         # windeployqt's default of bundling the 25 MB vc_redist installer,
