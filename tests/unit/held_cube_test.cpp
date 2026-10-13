@@ -35,12 +35,12 @@ namespace {
 // pair, as they are on a real cube.
 [[nodiscard]] SessionColours session() {
     SessionColours colours{};
-    colours[static_cast<std::size_t>(Color::White)] = {92.0F, 0.0F, 3.0F};
-    colours[static_cast<std::size_t>(Color::Yellow)] = {86.0F, -6.0F, 72.0F};
-    colours[static_cast<std::size_t>(Color::Green)] = {56.0F, -52.0F, 34.0F};
-    colours[static_cast<std::size_t>(Color::Blue)] = {36.0F, 8.0F, -52.0F};
-    colours[static_cast<std::size_t>(Color::Orange)] = {62.0F, 40.0F, 50.0F};
-    colours[static_cast<std::size_t>(Color::Red)] = {50.0F, 46.0F, 44.0F};
+    colours.at(static_cast<std::size_t>(Color::White)) = {92.0F, 0.0F, 3.0F};
+    colours.at(static_cast<std::size_t>(Color::Yellow)) = {86.0F, -6.0F, 72.0F};
+    colours.at(static_cast<std::size_t>(Color::Green)) = {56.0F, -52.0F, 34.0F};
+    colours.at(static_cast<std::size_t>(Color::Blue)) = {36.0F, 8.0F, -52.0F};
+    colours.at(static_cast<std::size_t>(Color::Orange)) = {62.0F, 40.0F, 50.0F};
+    colours.at(static_cast<std::size_t>(Color::Red)) = {50.0F, 46.0F, 44.0F};
     return colours;
 }
 
@@ -56,8 +56,8 @@ namespace {
         const auto sign = [cell](std::size_t shift) {
             return ((cell >> shift) & 1U) == 0U ? 1.0F : -1.0F;
         };
-        lab[cell] = colours[static_cast<std::size_t>(shown[cell])] +
-                    cv::Vec3f(sign(0) * wobble, sign(1) * wobble, sign(2) * wobble);
+        lab.at(cell) = colours.at(static_cast<std::size_t>(shown.at(cell))) +
+                       cv::Vec3f(sign(0) * wobble, sign(1) * wobble, sign(2) * wobble);
     }
     return lab;
 }
@@ -123,7 +123,7 @@ TEST_CASE("a side that is not on the cube shows no hold", "[vision][held-cube]")
     // Nine stickers that are no side of this cube at all.
     std::array<cv::Vec3f, 9> stripes{};
     for (std::size_t cell = 0; cell < 9; ++cell) {
-        stripes[cell] = session()[cell % 6];
+        stripes.at(cell) = session().at(cell % 6);
     }
     CHECK(read_hold(stripes, cube, session()).holds.empty());
 }
@@ -133,8 +133,8 @@ TEST_CASE("one sticker of the wrong colour is told apart even for red and orange
     // The narrowest gap sets how small a difference has to be noticed. On
     // the recorded scans red and orange were between 7.8 and 17.9 apart;
     // this session's are inside that range, towards the narrow end.
-    const float gap = colour_distance(session()[static_cast<std::size_t>(Color::Red)],
-                                      session()[static_cast<std::size_t>(Color::Orange)]);
+    const float gap = colour_distance(session().at(static_cast<std::size_t>(Color::Red)),
+                                      session().at(static_cast<std::size_t>(Color::Orange)));
     REQUIRE(gap > 7.8F);
     REQUIRE(gap < 17.9F);
     CHECK(gap / 9.0F > kHoldClearDistance);
@@ -161,7 +161,7 @@ TEST_CASE("a sticker with a finger across it is known not to have been found",
         REQUIRE(read.has_value());
         CHECK(read->stickers_found == 8);
         for (int cell = 0; cell < 9; ++cell) {
-            CHECK(read->found[static_cast<std::size_t>(cell)] == (cell != covered));
+            CHECK(read->found.at(static_cast<std::size_t>(cell)) == (cell != covered));
         }
     }
 }
@@ -179,8 +179,8 @@ TEST_CASE("a sticker that was not found says nothing about how the cube is held"
         read.lab = seen(cube, hold, 1.0F);
         read.found.fill(true);
         read.stickers_found = 8;
-        read.found[5] = false;
-        read.lab[5] = {68.0F, 14.0F, 20.0F};  // skin
+        read.found.at(5) = false;
+        read.lab.at(5) = {68.0F, 14.0F, 20.0F};  // skin
 
         const HoldReading found_only = read_hold(read, cube, session());
         const HoldReading all_nine = read_hold(read.lab, cube, session());
@@ -188,7 +188,7 @@ TEST_CASE("a sticker that was not found says nothing about how the cube is held"
         CHECK(found_only.distance <= all_nine.distance);
         spoiled += all_nine.shows(hold) ? 0 : 1;
         // Over green or blue there is no mistaking it for the sticker.
-        const Color under = camera_view(cube, hold)[5];
+        const Color under = camera_view(cube, hold).at(5);
         if (under == Color::Green || under == Color::Blue) {
             CHECK_FALSE(all_nine.shows(hold));
         }
@@ -209,10 +209,10 @@ TEST_CASE("stickers of the wrong colour are counted against the session's own co
     CHECK(cube::vision::stickers_off(read, expected, session()) == 0);
 
     // A glint: one sticker washed out towards white.
-    const std::size_t glint = expected[0] == Color::White ? 1 : 0;
-    read.lab[glint] = {96.0F, 0.0F, 1.0F};
+    const std::size_t glint = expected.at(0) == Color::White ? 1 : 0;
+    read.lab.at(glint) = {96.0F, 0.0F, 1.0F};
     CHECK(cube::vision::stickers_off(read, expected, session()) ==
-          (expected[glint] == Color::White ? 0 : 1));
+          (expected.at(glint) == Color::White ? 0 : 1));
 
     // A different side altogether.
     const std::array<Color, 9> other = camera_view(cube, Hold{Face::R, Face::U});

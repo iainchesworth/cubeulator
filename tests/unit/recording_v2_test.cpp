@@ -87,13 +87,13 @@ TEST_CASE("state oracle accepts a solved cube and real scrambles", "[recording]"
 TEST_CASE("state oracle refuses malformed and impossible states", "[recording]") {
     CHECK(state_string_problem("UUU").has_value());  // length
     std::string bad_char = kSolved;
-    bad_char[0] = 'X';
+    bad_char.at(0) = 'X';
     CHECK(state_string_problem(bad_char).has_value());  // alphabet
     std::string bad_centre = kSolved;
-    bad_centre[4] = 'R';
+    bad_centre.at(4) = 'R';
     CHECK(state_string_problem(bad_centre).has_value());  // centre convention
     std::string two_sticker_swap = kSolved;
-    two_sticker_swap[0] = 'R';  // U corner shows R...
+    two_sticker_swap.at(0) = 'R';  // U corner shows R...
     // ...without the matching change anywhere else: 10 R stickers, 8 U.
     CHECK(state_string_problem(two_sticker_swap).has_value());  // oracle (census/validity)
 }

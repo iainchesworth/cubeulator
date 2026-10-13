@@ -51,7 +51,7 @@ std::vector<Move> flatten(const Solution& solution) {
 
 bool has_adjacent_same_face(const std::vector<Move>& moves) {
     for (std::size_t i = 1; i < moves.size(); ++i) {
-        if (moves[i].face == moves[i - 1].face) {
+        if (moves.at(i).face == moves.at(i - 1).face) {
             return true;
         }
     }
@@ -83,7 +83,7 @@ bool in_phase_two_group(const Cube& cube) {
         }
     }
     for (std::size_t pos = 8; pos < 12; ++pos) {
-        if (cubie->ep[pos] < 8) {
+        if (cubie->ep.at(pos) < 8) {
             return false;
         }
     }
@@ -116,7 +116,7 @@ constexpr std::array<int, 9> kFactorial = {1, 1, 2, 6, 24, 120, 720, 5040, 40320
 int twist_value(const CubieCube& c) {
     int value = 0;
     for (std::size_t i = 0; i < 7; ++i) {
-        value = value * 3 + c.co[i];
+        value = value * 3 + c.co.at(i);
     }
     return value;
 }
@@ -124,17 +124,17 @@ int twist_value(const CubieCube& c) {
 void set_twist(CubieCube& c, int value) {
     int sum = 0;
     for (int i = 6; i >= 0; --i) {
-        c.co[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(value % 3);
+        c.co.at(static_cast<std::size_t>(i)) = static_cast<std::uint8_t>(value % 3);
         sum += value % 3;
         value /= 3;
     }
-    c.co[7] = static_cast<std::uint8_t>((3 - sum % 3) % 3);
+    c.co.at(7) = static_cast<std::uint8_t>((3 - sum % 3) % 3);
 }
 
 int flip_value(const CubieCube& c) {
     int value = 0;
     for (std::size_t i = 0; i < 11; ++i) {
-        value = value * 2 + c.eo[i];
+        value = value * 2 + c.eo.at(i);
     }
     return value;
 }
@@ -142,11 +142,11 @@ int flip_value(const CubieCube& c) {
 void set_flip(CubieCube& c, int value) {
     int sum = 0;
     for (int i = 10; i >= 0; --i) {
-        c.eo[static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(value % 2);
+        c.eo.at(static_cast<std::size_t>(i)) = static_cast<std::uint8_t>(value % 2);
         sum += value % 2;
         value /= 2;
     }
-    c.eo[11] = static_cast<std::uint8_t>(sum % 2);
+    c.eo.at(11) = static_cast<std::uint8_t>(sum % 2);
 }
 
 struct SliceNumbering {
@@ -159,8 +159,8 @@ SliceNumbering slice_numbering() {
     int next = 0;
     for (int mask = 4095; mask >= 0; --mask) {
         if (std::popcount(static_cast<unsigned>(mask)) == 4) {
-            n.index_of_mask[static_cast<std::size_t>(mask)] = static_cast<std::uint16_t>(next);
-            n.mask_of_index[static_cast<std::size_t>(next)] = static_cast<std::uint16_t>(mask);
+            n.index_of_mask.at(static_cast<std::size_t>(mask)) = static_cast<std::uint16_t>(next);
+            n.mask_of_index.at(static_cast<std::size_t>(next)) = static_cast<std::uint16_t>(mask);
             ++next;
         }
     }
@@ -170,19 +170,19 @@ SliceNumbering slice_numbering() {
 int slice_value(const CubieCube& c, const SliceNumbering& n) {
     unsigned mask = 0;
     for (std::size_t pos = 0; pos < 12; ++pos) {
-        if (c.ep[pos] >= 8) {
+        if (c.ep.at(pos) >= 8) {
             mask |= 1u << pos;
         }
     }
-    return n.index_of_mask[mask];
+    return n.index_of_mask.at(mask);
 }
 
 void set_slice(CubieCube& c, int value, const SliceNumbering& n) {
-    const unsigned mask = n.mask_of_index[static_cast<std::size_t>(value)];
+    const unsigned mask = n.mask_of_index.at(static_cast<std::size_t>(value));
     std::uint8_t next_slice = 8;
     std::uint8_t next_other = 0;
     for (std::size_t pos = 0; pos < 12; ++pos) {
-        c.ep[pos] = ((mask >> pos) & 1u) != 0 ? next_slice++ : next_other++;
+        c.ep.at(pos) = ((mask >> pos) & 1u) != 0 ? next_slice++ : next_other++;
     }
 }
 
@@ -201,16 +201,16 @@ int permutation_rank(const std::uint8_t* p, std::size_t n) {
 void unrank_permutation(int rank, std::uint8_t* p, std::size_t n) {
     std::array<std::uint8_t, 8> unused{};
     for (std::size_t i = 0; i < n; ++i) {
-        unused[i] = static_cast<std::uint8_t>(i);
+        unused.at(i) = static_cast<std::uint8_t>(i);
     }
     std::size_t remaining = n;
     for (std::size_t i = 0; i < n; ++i) {
-        const int place = kFactorial[n - 1 - i];
+        const int place = kFactorial.at(n - 1 - i);
         const auto pick = static_cast<std::size_t>(rank / place);
         rank %= place;
-        p[i] = unused[pick];
+        p[i] = unused.at(pick);
         for (std::size_t j = pick; j + 1 < remaining; ++j) {
-            unused[j] = unused[j + 1];
+            unused.at(j) = unused.at(j + 1);
         }
         --remaining;
     }
@@ -221,11 +221,11 @@ std::vector<std::uint16_t> move_table(std::size_t count, std::size_t moves,
                                       const std::vector<std::size_t>& indices, Set set, Get get) {
     std::vector<std::uint16_t> table(count * moves);
     for (std::size_t m = 0; m < moves; ++m) {
-        const CubieCube& move = move_cubie(indices[m]);
+        const CubieCube& move = move_cubie(indices.at(m));
         for (std::size_t v = 0; v < count; ++v) {
             CubieCube c;
             set(c, static_cast<int>(v));
-            table[v * moves + m] = static_cast<std::uint16_t>(get(multiply(c, move)));
+            table.at(v * moves + m) = static_cast<std::uint16_t>(get(multiply(c, move)));
         }
     }
     return table;
@@ -234,7 +234,7 @@ std::vector<std::uint16_t> move_table(std::size_t count, std::size_t moves,
 std::vector<std::size_t> all_moves() {
     std::vector<std::size_t> indices(kMoveCount);
     for (std::size_t i = 0; i < kMoveCount; ++i) {
-        indices[i] = i;
+        indices.at(i) = i;
     }
     return indices;
 }
@@ -249,20 +249,20 @@ std::vector<std::uint8_t> build_prune(std::size_t first_count, std::size_t secon
                                       const std::vector<std::uint16_t>& second_move) {
     constexpr std::uint8_t kUnset = 0xFF;
     std::vector<std::uint8_t> table(first_count * second_count, kUnset);
-    table[0] = 0;
+    table.at(0) = 0;
     for (std::uint8_t depth = 0; depth < kUnset - 1; ++depth) {
         std::size_t added = 0;
         for (std::size_t index = 0; index < table.size(); ++index) {
-            if (table[index] != depth) {
+            if (table.at(index) != depth) {
                 continue;
             }
             const std::size_t first = index / second_count;
             const std::size_t second = index % second_count;
             for (std::size_t m = 0; m < move_count; ++m) {
-                const std::size_t next = first_move[first * move_count + m] * second_count +
-                                         second_move[second * move_count + m];
-                if (table[next] == kUnset) {
-                    table[next] = static_cast<std::uint8_t>(depth + 1);
+                const std::size_t next = first_move.at(first * move_count + m) * second_count +
+                                         second_move.at(second * move_count + m);
+                if (table.at(next) == kUnset) {
+                    table.at(next) = static_cast<std::uint8_t>(depth + 1);
                     ++added;
                 }
             }
@@ -369,13 +369,13 @@ TEST_CASE("the first-use tables equal a direct construction, entry for entry",
             std::array<std::uint8_t, 4> p{};
             unrank_permutation(v, p.data(), 4);
             for (std::size_t k = 0; k < 4; ++k) {
-                c.ep[8 + k] = static_cast<std::uint8_t>(8 + p[k]);
+                c.ep.at(8 + k) = static_cast<std::uint8_t>(8 + p.at(k));
             }
         },
         [](const CubieCube& c) {
             std::array<std::uint8_t, 4> p{};
             for (std::size_t k = 0; k < 4; ++k) {
-                p[k] = static_cast<std::uint8_t>(c.ep[8 + k] - 8);
+                p.at(k) = static_cast<std::uint8_t>(c.ep.at(8 + k) - 8);
             }
             return permutation_rank(p.data(), 4);
         });
@@ -421,8 +421,8 @@ TEST_CASE("two-phase finds the one-move solution to a one-move scramble", "[two-
             REQUIRE(solution.has_value());
             const std::vector<Move> moves = flatten(*solution);
             REQUIRE(moves.size() == 1);
-            CHECK(moves[0].face == face);
-            CHECK(moves[0].turns == 4 - turns);
+            CHECK(moves.at(0).face == face);
+            CHECK(moves.at(0).turns == 4 - turns);
         }
     }
 }
@@ -442,8 +442,8 @@ TEST_CASE("two-phase solves a corpus of random scrambles in about twenty moves",
         CHECK_FALSE(has_adjacent_same_face(moves));
 
         REQUIRE(solution->steps.size() == 2);
-        CHECK(solution->steps[0].stage == Stage::Reduce);
-        CHECK(solution->steps[1].stage == Stage::Finish);
+        CHECK(solution->steps.at(0).stage == Stage::Reduce);
+        CHECK(solution->steps.at(1).stage == Stage::Finish);
 
         total += static_cast<double>(moves.size());
         longest = std::max(longest, moves.size());
@@ -463,12 +463,12 @@ TEST_CASE("two-phase's first phase ends exactly in the group the second phase ne
         REQUIRE(solution.has_value());
         REQUIRE(solution->steps.size() == 2);
 
-        const Cube halfway = apply_all(cube, solution->steps[0].moves);
+        const Cube halfway = apply_all(cube, solution->steps.at(0).moves);
         CHECK(in_phase_two_group(halfway));
 
         // And phase 2 itself never leaves it: only U, D and half turns.
         Cube state = halfway;
-        for (const Move& move : solution->steps[1].moves) {
+        for (const Move& move : solution->steps.at(1).moves) {
             state = state.apply(move);
             CHECK(in_phase_two_group(state));
         }
@@ -519,7 +519,7 @@ TEST_CASE("two-phase's tables can be built and used from several threads at once
             }
             const Cube cube = random_scramble(static_cast<unsigned>(500 + i), 100);
             const auto solution = solve_two_phase(cube);
-            ok[i] = solution.has_value() && apply_all(cube, flatten(*solution)).is_solved();
+            ok.at(i) = solution.has_value() && apply_all(cube, flatten(*solution)).is_solved();
         });
     }
     for (std::thread& t : threads) {
@@ -534,10 +534,10 @@ TEST_CASE("two-phase reports a valid but unreachable cube as unsolvable", "[two-
     std::array<std::array<Color, 9>, 6> facelets{};
     const Cube solved = Cube::solved();
     for (const Face face : kAllFaces) {
-        facelets[static_cast<std::size_t>(face)] = solved.face(face);
+        facelets.at(static_cast<std::size_t>(face)) = solved.face(face);
     }
-    std::swap(facelets[static_cast<std::size_t>(Face::U)][7],
-              facelets[static_cast<std::size_t>(Face::F)][1]);  // one edge flipped
+    std::swap(facelets.at(static_cast<std::size_t>(Face::U)).at(7),
+              facelets.at(static_cast<std::size_t>(Face::F)).at(1));  // one edge flipped
     const auto flipped = Cube::from_facelets(facelets);
     REQUIRE(flipped.has_value());
 

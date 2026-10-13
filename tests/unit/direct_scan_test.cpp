@@ -122,8 +122,8 @@ TEST_CASE("a side held square to the camera is read row-major as the camera sees
             const auto index = static_cast<std::size_t>(i);
             const cv::Point2f expected =
                 place(pose, static_cast<float>(i % 3 - 1), static_cast<float>(i / 3 - 1));
-            CHECK(cv::norm(read->centres[index] - expected) < 2.0);
-            CHECK(cv::norm(read->lab[index] - lab_of(paint(kMixed[index]))) < 3.0);
+            CHECK(cv::norm(read->centres.at(index) - expected) < 2.0);
+            CHECK(cv::norm(read->lab.at(index) - lab_of(paint(kMixed.at(index)))) < 3.0);
         }
     }
 }
@@ -135,10 +135,10 @@ TEST_CASE("a frame larger than the working size is read in its own pixels", "[di
 
     REQUIRE(read.has_value());
     CHECK(std::abs(read->pitch - pose.pitch) < 4.0F);
-    CHECK(cv::norm(read->centres[4] - pose.centre) < 5.0);
-    CHECK(cv::norm(read->centres[0] - place(pose, -1.0F, -1.0F)) < 5.0);
+    CHECK(cv::norm(read->centres.at(4) - pose.centre) < 5.0);
+    CHECK(cv::norm(read->centres.at(0) - place(pose, -1.0F, -1.0F)) < 5.0);
     for (std::size_t i = 0; i < 9; ++i) {
-        CHECK(nearest_colour(read->lab[i]) == kMixed[i]);
+        CHECK(nearest_colour(read->lab.at(i)) == kMixed.at(i));
     }
 }
 
@@ -206,7 +206,7 @@ TEST_CASE("the same side shown again in another orientation is still one side", 
     REQUIRE(scan.sides().size() == 1);
     // Reported the way it was last shown, so the display matches the hand.
     for (std::size_t i = 0; i < 9; ++i) {
-        CHECK(nearest_colour(scan.sides().front().lab[i]) == turned[i]);
+        CHECK(nearest_colour(scan.sides().front().lab.at(i)) == turned.at(i));
     }
 }
 
@@ -294,7 +294,7 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
         // The premise: named by colour alone, these sides are not a cube.
         std::array<cube::vision::CapturedFace, 6> faces{};
         for (std::size_t i = 0; i < 6; ++i) {
-            faces[i].lab = scan.sides()[i].lab;
+            faces.at(i).lab = scan.sides().at(i).lab;
         }
         const auto named = cube::vision::resolve_colors(faces);
         REQUIRE(named.has_value());

@@ -160,8 +160,8 @@ TEST_CASE("read_index keeps every parseable row and drops the rest", "[replay]")
                               "\n0,1000,640,360,1920,1080\n1,1033,640,360,1920,1080\n2,10");
     const auto rows = read_index(stream);
     REQUIRE(rows.size() == 2);
-    CHECK(rows[0].pass == 0);
-    CHECK(rows[1].t_ms == 1033);
+    CHECK(rows.at(0).pass == 0);
+    CHECK(rows.at(1).t_ms == 1033);
 }
 
 TEST_CASE("a synthetic recording round-trips from disk via the shared format", "[replay]") {
@@ -201,5 +201,5 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
         CHECK(frame.cols == row.w);
         CHECK(frame.rows == row.h);
     }
-    CHECK(rows[1].t_ms - rows[0].t_ms == 33);
+    CHECK(rows.at(1).t_ms - rows.at(0).t_ms == 33);
 }

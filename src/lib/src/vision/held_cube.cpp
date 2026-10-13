@@ -19,18 +19,19 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
     std::array<HoldFit, 24> fits{};
     const std::array<solver::Hold, 24> holds = solver::all_holds();
     for (std::size_t i = 0; i < holds.size(); ++i) {
-        const std::array<solver::Color, 9> shown = solver::camera_view(cube, holds[i]);
+        const std::array<solver::Color, 9> shown = solver::camera_view(cube, holds.at(i));
         float total = 0.0F;
         int cells = 0;
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            if (!counted[cell]) {
+            if (!counted.at(cell)) {
                 continue;
             }
-            total += colour_distance(lab[cell], colours[static_cast<std::size_t>(shown[cell])]);
+            total +=
+                colour_distance(lab.at(cell), colours.at(static_cast<std::size_t>(shown.at(cell))));
             ++cells;
         }
-        fits[i] = HoldFit{holds[i], cells > 0 ? total / static_cast<float>(cells)
-                                              : std::numeric_limits<float>::max()};
+        fits.at(i) = HoldFit{holds.at(i), cells > 0 ? total / static_cast<float>(cells)
+                                                    : std::numeric_limits<float>::max()};
     }
     // Stable, so holds that fit equally keep the order all_holds() gives
     // them and the answer does not depend on the sort.
@@ -52,7 +53,7 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
     const auto same_where_counted = [&counted](const std::array<solver::Color, 9>& a,
                                                const std::array<solver::Color, 9>& b) {
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            if (counted[cell] && a[cell] != b[cell]) {
+            if (counted.at(cell) && a.at(cell) != b.at(cell)) {
                 return false;
             }
         }
@@ -100,13 +101,13 @@ int stickers_off(const SideRead& read, const std::array<solver::Color, 9>& expec
                  const SessionColours& colours) {
     int off = 0;
     for (std::size_t cell = 0; cell < 9; ++cell) {
-        if (!read.found[cell]) {
+        if (!read.found.at(cell)) {
             continue;
         }
-        const auto own = static_cast<std::size_t>(expected[cell]);
-        const float to_own = colour_distance(read.lab[cell], colours[own]);
+        const auto own = static_cast<std::size_t>(expected.at(cell));
+        const float to_own = colour_distance(read.lab.at(cell), colours.at(own));
         for (std::size_t other = 0; other < colours.size(); ++other) {
-            if (other != own && colour_distance(read.lab[cell], colours[other]) < to_own) {
+            if (other != own && colour_distance(read.lab.at(cell), colours.at(other)) < to_own) {
                 ++off;
                 break;
             }

@@ -55,14 +55,14 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
     Cube cube = start;
 
     for (std::size_t i = 0; i < kCornerSlots.size(); ++i) {
-        const CornerSlot& slot = kCornerSlots[i];
+        const CornerSlot& slot = kCornerSlots.at(i);
 
         auto postcondition = [&](const Cube& c) {
             if (!cross_solved(c)) {
                 return false;
             }
             for (std::size_t j = 0; j <= i; ++j) {
-                if (!slot_solved(c, kCornerSlots[j])) {
+                if (!slot_solved(c, kCornerSlots.at(j))) {
                     return false;
                 }
             }
@@ -71,7 +71,7 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
         auto signature = [&](const Cube& c) {
             std::uint64_t rest = 0;
             for (std::size_t j = 0; j <= i; ++j) {
-                const CornerSlot& s = kCornerSlots[j];
+                const CornerSlot& s = kCornerSlots.at(j);
                 rest = detail::push_code(
                     rest, detail::piece_code_corner(c, Color::White, canonical_color(s.side_a),
                                                     canonical_color(s.side_b)));

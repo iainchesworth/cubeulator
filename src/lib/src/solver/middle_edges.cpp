@@ -79,7 +79,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
     };
 
     for (std::size_t i = 0; i < kEdgeSlots.size(); ++i) {
-        const EdgeSlot& target = kEdgeSlots[i];
+        const EdgeSlot& target = kEdgeSlots.at(i);
         const Color color_a = canonical_color(target.side_a);
         const Color color_b = canonical_color(target.side_b);
 
@@ -88,7 +88,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 return false;
             }
             for (std::size_t j = 0; j < i; ++j) {
-                if (!slot_solved(c, kEdgeSlots[j])) {
+                if (!slot_solved(c, kEdgeSlots.at(j))) {
                     return false;
                 }
             }
@@ -101,7 +101,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             return [&, track_target](const Cube& c) {
                 std::uint64_t rest = first_layer_corners_key(c);
                 for (std::size_t j = 0; j < i; ++j) {
-                    const EdgeSlot& s = kEdgeSlots[j];
+                    const EdgeSlot& s = kEdgeSlots.at(j);
                     rest = detail::push_code(rest,
                                              detail::piece_code_edge(c, canonical_color(s.side_a),
                                                                      canonical_color(s.side_b)));

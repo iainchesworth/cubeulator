@@ -54,8 +54,8 @@ constexpr bool four_quarter_turns_are_identity() {
 constexpr bool every_turn_undoes_its_inverse() {
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t turn = 0; turn < 3; ++turn) {
-            const CubieCube& move = kMoveCubies[face * 3 + turn];
-            const CubieCube& inverse = kMoveCubies[face * 3 + (2 - turn)];
+            const CubieCube& move = kMoveCubies.at(face * 3 + turn);
+            const CubieCube& inverse = kMoveCubies.at(face * 3 + (2 - turn));
             if (!is_identity(multiply(move, inverse))) {
                 return false;
             }
@@ -68,7 +68,7 @@ constexpr bool every_turn_undoes_its_inverse() {
 
 static_assert(four_quarter_turns_are_identity());
 static_assert(every_turn_undoes_its_inverse());
-static_assert(move_cubie(0).cp[0] == cube::solver::detail::kUBR);  // U: UBR takes URF's place
+static_assert(move_cubie(0).cp.at(0) == cube::solver::detail::kUBR);  // U: UBR takes URF's place
 
 TEST_CASE("every one of the 18 move cubies is what the facelet model does to a solved cube",
           "[cubie]") {
@@ -81,7 +81,7 @@ TEST_CASE("every one of the 18 move cubies is what the facelet model does to a s
         const auto decoded = to_cubie(Cube::solved().apply(move_from_index(m)));
         REQUIRE(decoded.has_value());
         CHECK(*decoded == move_cubie(m));
-        CHECK(kMoveCubies[m] == move_cubie(m));
+        CHECK(kMoveCubies.at(m) == move_cubie(m));
     }
 }
 
@@ -163,10 +163,10 @@ TEST_CASE("a cube that cannot be reached by turning has no cubie", "[cubie]") {
     std::array<std::array<Color, 9>, 6> facelets{};
     const Cube solved = Cube::solved();
     for (const Face face : kAllFaces) {
-        facelets[static_cast<std::size_t>(face)] = solved.face(face);
+        facelets.at(static_cast<std::size_t>(face)) = solved.face(face);
     }
-    std::swap(facelets[static_cast<std::size_t>(Face::U)][7],
-              facelets[static_cast<std::size_t>(Face::F)][1]);
+    std::swap(facelets.at(static_cast<std::size_t>(Face::U)).at(7),
+              facelets.at(static_cast<std::size_t>(Face::F)).at(1));
 
     const auto flipped = Cube::from_facelets(facelets);
     REQUIRE(flipped.has_value());

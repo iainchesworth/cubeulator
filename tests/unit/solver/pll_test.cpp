@@ -26,7 +26,7 @@ Cube scramble(unsigned seed, int move_count) {
 
     Cube cube = Cube::solved();
     for (int i = 0; i < move_count; ++i) {
-        cube = cube.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
+        cube = cube.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
     }
     return cube;
 }

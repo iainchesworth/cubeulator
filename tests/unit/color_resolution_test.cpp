@@ -33,14 +33,14 @@ SyntheticScan make_scan() {
     SyntheticScan scan;
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            scan.faces[face].lab[i] = palette.entries[face].lab;
-            scan.truth[face][i] = palette.entries[face].color;
+            scan.faces.at(face).lab.at(i) = palette.entries.at(face).lab;
+            scan.truth.at(face).at(i) = palette.entries.at(face).color;
         }
     }
     const auto swap_stickers = [&scan](std::size_t face_a, std::size_t cell_a, std::size_t face_b,
                                        std::size_t cell_b) {
-        std::swap(scan.faces[face_a].lab[cell_a], scan.faces[face_b].lab[cell_b]);
-        std::swap(scan.truth[face_a][cell_a], scan.truth[face_b][cell_b]);
+        std::swap(scan.faces.at(face_a).lab.at(cell_a), scan.faces.at(face_b).lab.at(cell_b));
+        std::swap(scan.truth.at(face_a).at(cell_a), scan.truth.at(face_b).at(cell_b));
     };
     swap_stickers(0, 0, 2, 8);
     swap_stickers(1, 1, 4, 7);
@@ -88,7 +88,7 @@ void add_noise(SyntheticScan& scan, float sigma, std::uint32_t seed) {
                 continue;
             }
             for (int channel = 0; channel < 3; ++channel) {
-                face.lab[i][channel] += std::clamp(noise(rng), -1.5F * sigma, 1.5F * sigma);
+                face.lab.at(i)[channel] += std::clamp(noise(rng), -1.5F * sigma, 1.5F * sigma);
             }
         }
     }
@@ -100,9 +100,9 @@ void require_recovered(const SyntheticScan& scan) {
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
             CAPTURE(face, i);
-            REQUIRE((*resolved)[face][i].color == scan.truth[face][i]);
-            REQUIRE((*resolved)[face][i].confidence >= 0.0F);
-            REQUIRE((*resolved)[face][i].confidence <= 1.0F);
+            REQUIRE((*resolved).at(face).at(i).color == scan.truth.at(face).at(i));
+            REQUIRE((*resolved).at(face).at(i).confidence >= 0.0F);
+            REQUIRE((*resolved).at(face).at(i).confidence <= 1.0F);
         }
     }
 }
@@ -417,7 +417,7 @@ TEST_CASE("resolve_colors recovers an unperturbed scan", "[vision]") {
     REQUIRE(resolved.has_value());
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            REQUIRE((*resolved)[face][i].confidence > 0.9F);
+            REQUIRE((*resolved).at(face).at(i).confidence > 0.9F);
         }
     }
 }
@@ -542,7 +542,7 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     std::array<CapturedFace, 6> faces{};
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            faces[face].lab[i] = measured[face][i].lab;
+            faces.at(face).lab.at(i) = measured.at(face).at(i).lab;
         }
     }
     const auto resolved = resolve_colors(faces);
@@ -550,7 +550,7 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
             CAPTURE(face, i);
-            REQUIRE((*resolved)[face][i].color == measured[face][i].expected);
+            REQUIRE((*resolved).at(face).at(i).color == measured.at(face).at(i).expected);
         }
     }
     // The three shaded cells are not merely named right, they are priced
@@ -559,14 +559,14 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     // nearest mean is red's).
     for (const std::size_t cell : {std::size_t{1}, std::size_t{2}, std::size_t{7}}) {
         CAPTURE(cell);
-        REQUIRE((*resolved)[0][cell].color == FacetColor::orange);
-        REQUIRE((*resolved)[0][cell].confidence > 0.0F);
+        REQUIRE((*resolved).at(0).at(cell).color == FacetColor::orange);
+        REQUIRE((*resolved).at(0).at(cell).confidence > 0.0F);
     }
 }
 
 TEST_CASE("resolve_colors rejects a scan with two identical centres", "[vision]") {
     SyntheticScan scan = make_scan();
-    scan.faces[1].lab[4] = scan.faces[0].lab[4];
+    scan.faces.at(1).lab.at(4) = scan.faces.at(0).lab.at(4);
 
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());
@@ -587,7 +587,7 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
     SECTION("NaN in an off-centre sticker") {
         SyntheticScan scan = make_scan();
-        scan.faces[2].lab[7][1] = nan_value;
+        scan.faces.at(2).lab.at(7)[1] = nan_value;
         const auto resolved = resolve_colors(scan.faces);
         REQUIRE_FALSE(resolved.has_value());
         REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
@@ -595,12 +595,12 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
     SECTION("NaN in a centre - the seed-separation guard cannot see it") {
         SyntheticScan scan = make_scan();
-        scan.faces[0].lab[4][0] = nan_value;
+        scan.faces.at(0).lab.at(4)[0] = nan_value;
         // Proof the existing guard is defeated: every pairwise comparison
         // against a NaN centre is false, so the loop that is supposed to
         // reject implausible seeds passes it through.
         for (std::size_t other = 1; other < 6; ++other) {
-            const cv::Vec3f diff = scan.faces[0].lab[4] - scan.faces[other].lab[4];
+            const cv::Vec3f diff = scan.faces.at(0).lab.at(4) - scan.faces.at(other).lab.at(4);
             REQUIRE_FALSE(std::sqrt(diff.dot(diff)) < 12.0F);
         }
         const auto resolved = resolve_colors(scan.faces);
@@ -611,7 +611,7 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
 TEST_CASE("resolve_colors rejects an infinite sample instead of hanging", "[vision]") {
     SyntheticScan scan = make_scan();
-    scan.faces[4].lab[0][2] = -std::numeric_limits<float>::infinity();
+    scan.faces.at(4).lab.at(0)[2] = -std::numeric_limits<float>::infinity();
 
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());

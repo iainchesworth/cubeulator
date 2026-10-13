@@ -106,17 +106,17 @@ std::optional<std::string> json_string_field(const std::string& text, const std:
         return std::nullopt;
     }
     ++pos;
-    while (pos < text.size() && (std::isspace(static_cast<unsigned char>(text[pos])) != 0)) {
+    while (pos < text.size() && (std::isspace(static_cast<unsigned char>(text.at(pos))) != 0)) {
         ++pos;
     }
-    if (pos >= text.size() || text[pos] != '"') {
+    if (pos >= text.size() || text.at(pos) != '"') {
         return std::nullopt;  // null or malformed - both read as absent
     }
     std::string value;
     for (++pos; pos < text.size(); ++pos) {
-        const char ch = text[pos];
+        const char ch = text.at(pos);
         if (ch == '\\' && pos + 1 < text.size()) {
-            const char next = text[++pos];
+            const char next = text.at(++pos);
             switch (next) {
                 case 'n':
                     value.push_back('\n');
@@ -147,23 +147,24 @@ std::optional<std::string> state_string_problem(const std::string& state) {
     }
     std::array<std::array<cube::solver::Color, 9>, 6> facelets{};
     for (std::size_t i = 0; i < 54; ++i) {
-        const auto face = face_from_letter(state[i]);
+        const auto face = face_from_letter(state.at(i));
         if (!face) {
-            return "state[" + std::to_string(i) + "] is '" + std::string(1, state[i]) +
+            return "state[" + std::to_string(i) + "] is '" + std::string(1, state.at(i)) +
                    "', expected one of URFDLB";
         }
-        const auto slot = kManifestFaceOrder[i / 9];
-        facelets[static_cast<std::size_t>(slot)][i % 9] = cube::solver::canonical_color(*face);
+        const auto slot = kManifestFaceOrder.at(i / 9);
+        facelets.at(static_cast<std::size_t>(slot)).at(i % 9) =
+            cube::solver::canonical_color(*face);
     }
     // Centres are positionally fixed by the format; a wrong centre letter
     // is caught here with a clearer message than the oracle's.
     static constexpr std::array<char, 6> kCentreLetters{'U', 'R', 'F', 'D', 'L', 'B'};
     for (std::size_t f = 0; f < 6; ++f) {
         const std::size_t centre = f * 9 + 4;
-        if (state[centre] != kCentreLetters[f]) {
+        if (state.at(centre) != kCentreLetters.at(f)) {
             return "state[" + std::to_string(centre) + "] must be the centre '" +
-                   std::string(1, kCentreLetters[f]) + "', got '" + std::string(1, state[centre]) +
-                   "'";
+                   std::string(1, kCentreLetters.at(f)) + "', got '" +
+                   std::string(1, state.at(centre)) + "'";
         }
     }
     const auto cube = cube::solver::Cube::from_facelets(facelets);

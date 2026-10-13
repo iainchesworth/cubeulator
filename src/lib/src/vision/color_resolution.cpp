@@ -113,8 +113,8 @@ constexpr float kShadingAxisWeight = 0.2F;
     std::array<std::size_t, face_count> load{};
 
     for (std::size_t face = 0; face < face_count; ++face) {
-        cluster[face * facelets_per_face + center_facelet_index] = static_cast<int>(face);
-        ++load[face];
+        cluster.at(face * facelets_per_face + center_facelet_index) = static_cast<int>(face);
+        ++load.at(face);
     }
 
     // Margins shift as clusters fill, so re-scan all unassigned samples for
@@ -124,17 +124,17 @@ constexpr float kShadingAxisWeight = 0.2F;
         int best_cluster = -1;
         float best_margin = -1.0F;
         for (std::size_t s = 0; s < kSampleCount; ++s) {
-            if (cluster[s] >= 0) {
+            if (cluster.at(s) >= 0) {
                 continue;
             }
             float nearest = kInf;
             float second = kInf;
             int nearest_cluster = -1;
             for (std::size_t c = 0; c < face_count; ++c) {
-                if (load[c] >= facelets_per_face) {
+                if (load.at(c) >= facelets_per_face) {
                     continue;
                 }
-                const float distance = assignment_distance(samples[s], means[c]);
+                const float distance = assignment_distance(samples.at(s), means.at(c));
                 if (distance < nearest) {
                     second = nearest;
                     nearest = distance;
@@ -170,8 +170,8 @@ constexpr float kShadingAxisWeight = 0.2F;
         if (best_sample == kSampleCount) {
             break;
         }
-        cluster[best_sample] = best_cluster;
-        ++load[static_cast<std::size_t>(best_cluster)];
+        cluster.at(best_sample) = best_cluster;
+        ++load.at(static_cast<std::size_t>(best_cluster));
     }
 
     // Pairwise swaps preserve the exactly-9 loads by construction; each swap
@@ -186,17 +186,18 @@ constexpr float kShadingAxisWeight = 0.2F;
                 continue;
             }
             for (std::size_t b = a + 1; b < kSampleCount; ++b) {
-                if (b % facelets_per_face == center_facelet_index || cluster[a] == cluster[b]) {
+                if (b % facelets_per_face == center_facelet_index ||
+                    cluster.at(a) == cluster.at(b)) {
                     continue;
                 }
-                const auto ca = static_cast<std::size_t>(cluster[a]);
-                const auto cb = static_cast<std::size_t>(cluster[b]);
-                const float current = assignment_distance(samples[a], means[ca]) +
-                                      assignment_distance(samples[b], means[cb]);
-                const float swapped = assignment_distance(samples[a], means[cb]) +
-                                      assignment_distance(samples[b], means[ca]);
+                const auto ca = static_cast<std::size_t>(cluster.at(a));
+                const auto cb = static_cast<std::size_t>(cluster.at(b));
+                const float current = assignment_distance(samples.at(a), means.at(ca)) +
+                                      assignment_distance(samples.at(b), means.at(cb));
+                const float swapped = assignment_distance(samples.at(a), means.at(cb)) +
+                                      assignment_distance(samples.at(b), means.at(ca));
                 if (swapped + kMinImprovement < current) {
-                    std::swap(cluster[a], cluster[b]);
+                    std::swap(cluster.at(a), cluster.at(b));
                     improved = true;
                 }
             }
@@ -445,7 +446,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     std::array<cv::Vec3f, kSampleCount> samples{};
     for (std::size_t face = 0; face < face_count; ++face) {
         for (std::size_t i = 0; i < facelets_per_face; ++i) {
-            samples[face * facelets_per_face + i] = faces[face].lab[i];
+            samples.at(face * facelets_per_face + i) = faces.at(face).lab.at(i);
         }
     }
 
@@ -482,11 +483,11 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     constexpr float kMinSeedSeparation = kMinCentreSeedSeparationLab;
     std::array<cv::Vec3f, face_count> means{};
     for (std::size_t face = 0; face < face_count; ++face) {
-        means[face] = faces[face].lab[center_facelet_index];
+        means.at(face) = faces.at(face).lab.at(center_facelet_index);
     }
     for (std::size_t a = 0; a < face_count; ++a) {
         for (std::size_t b = a + 1; b < face_count; ++b) {
-            if (lab_distance(means[a], means[b]) < kMinSeedSeparation) {
+            if (lab_distance(means.at(a), means.at(b)) < kMinSeedSeparation) {
                 return std::unexpected(CubeError::no_valid_cube_detected);
             }
         }
@@ -508,13 +509,13 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             // the sweep above has established. Checked rather than assumed
             // because the cost of being wrong here is an out-of-bounds write
             // at index SIZE_MAX, not a wrong mean.
-            if (next[s] < 0) {
+            if (next.at(s) < 0) {
                 continue;
             }
-            sums[static_cast<std::size_t>(next[s])] += samples[s];
+            sums.at(static_cast<std::size_t>(next.at(s))) += samples.at(s);
         }
         for (std::size_t c = 0; c < face_count; ++c) {
-            means[c] = sums[c] * (1.0F / static_cast<float>(facelets_per_face));
+            means.at(c) = sums.at(c) * (1.0F / static_cast<float>(facelets_per_face));
         }
 
         const bool stable = next == assignment;
@@ -539,7 +540,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     do {
         float total = 0.0F;
         for (std::size_t c = 0; c < face_count; ++c) {
-            total += lab_distance(means[c], palette.entries[permutation[c]].lab);
+            total += lab_distance(means.at(c), palette.entries.at(permutation.at(c)).lab);
         }
         if (total < best_total) {
             best_total = total;
@@ -559,10 +560,10 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         std::array<int, face_count + 1> name_counts{};
         bool any_unknown = false;
         for (std::size_t c = 0; c < face_count; ++c) {
-            const auto color = classify_lab(means[c]).color;
+            const auto color = classify_lab(means.at(c)).color;
             any_unknown = any_unknown || color == FacetColor::unknown;
-            hue_names[c] = static_cast<std::size_t>(color);
-            ++name_counts[static_cast<std::size_t>(color)];
+            hue_names.at(c) = static_cast<std::size_t>(color);
+            ++name_counts.at(static_cast<std::size_t>(color));
         }
         const bool all_distinct = std::all_of(name_counts.begin(), name_counts.end(),
                                               [](int count) { return count <= 1; });
@@ -577,8 +578,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         if (all_distinct && !any_unknown) {
             for (std::size_t c = 0; c < face_count; ++c) {
                 for (std::size_t p = 0; p < face_count; ++p) {
-                    if (static_cast<std::size_t>(palette.entries[p].color) == hue_names[c]) {
-                        best_permutation[c] = p;
+                    if (static_cast<std::size_t>(palette.entries.at(p).color) == hue_names.at(c)) {
+                        best_permutation.at(c) = p;
                         break;
                     }
                 }
@@ -588,7 +589,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
 
     std::array<std::array<Facelet, 9>, 6> resolved{};
     for (std::size_t s = 0; s < kSampleCount; ++s) {
-        const auto own = static_cast<std::size_t>(assignment[s]);
+        const auto own = static_cast<std::size_t>(assignment.at(s));
         // Priced in the ASSIGNMENT metric, necessarily: the margin reports
         // how safely the sample sits in the cluster the assignment chose,
         // and pricing it in a different metric would zero out exactly the
@@ -596,12 +597,12 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         // cell sits 22.8 plain-Lab from the red mean against 41.2 from its
         // own orange mean, so plain-Lab pricing calls a correct,
         // hue-unambiguous assignment confidence zero.
-        const float own_distance = assignment_distance(samples[s], means[own]);
+        const float own_distance = assignment_distance(samples.at(s), means.at(own));
         float rival_distance = std::numeric_limits<float>::max();
         for (std::size_t c = 0; c < face_count; ++c) {
             if (c != own) {
                 rival_distance =
-                    std::min(rival_distance, assignment_distance(samples[s], means[c]));
+                    std::min(rival_distance, assignment_distance(samples.at(s), means.at(c)));
             }
         }
         // Relative margin between the sample's own cluster and the nearest
@@ -612,8 +613,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             rival_distance > 0.0F
                 ? std::clamp((rival_distance - own_distance) / rival_distance, 0.0F, 1.0F)
                 : 0.0F;
-        resolved[s / facelets_per_face][s % facelets_per_face] = Facelet{
-            .color = palette.entries[best_permutation[own]].color, .confidence = confidence};
+        resolved.at(s / facelets_per_face).at(s % facelets_per_face) = Facelet{
+            .color = palette.entries.at(best_permutation.at(own)).color, .confidence = confidence};
     }
     return resolved;
 }
