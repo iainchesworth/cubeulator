@@ -1,7 +1,9 @@
 #include <cube/solver/solver.hpp>
 
+#include <cstddef>
 #include <random>
 #include <utility>
+#include <vector>
 
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
@@ -40,6 +42,48 @@ Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
 
 }  // namespace
 
+Solution merge_adjacent_moves(Solution solution) {
+    // One stack over the whole solution rather than a pass per step. The
+    // kept moves never have two neighbours on the same face, so an incoming
+    // move can only merge with the top of the stack; when that pair cancels,
+    // the entry beneath becomes the top and meets the next incoming move,
+    // which is how "R U U' R'" collapses completely in one pass. Each entry
+    // remembers the step it began in and never changes it, so a move merged
+    // across a boundary stays with the earlier stage.
+    struct Entry {
+        std::size_t step;
+        Move move;
+    };
+    std::vector<Entry> kept;
+
+    for (std::size_t step = 0; step < solution.steps.size(); ++step) {
+        for (const Move& move : solution.steps[step].moves) {
+            const int turns = ((move.turns % 4) + 4) % 4;
+            if (turns == 0) {
+                continue;
+            }
+            if (kept.empty() || kept.back().move.face != move.face) {
+                kept.push_back(Entry{step, Move{move.face, turns}});
+                continue;
+            }
+            const int merged = (kept.back().move.turns + turns) % 4;
+            if (merged == 0) {
+                kept.pop_back();
+            } else {
+                kept.back().move.turns = merged;
+            }
+        }
+    }
+
+    for (SolveStep& step : solution.steps) {
+        step.moves.clear();
+    }
+    for (const Entry& entry : kept) {
+        solution.steps[entry.step].moves.push_back(entry.move);
+    }
+    return solution;
+}
+
 Result<Solution> solve(const Cube& scrambled) {
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
@@ -70,7 +114,10 @@ Result<Solution> solve(const Cube& scrambled) {
         return std::unexpected(CubeError::no_solution);
     }
 
-    return solution;
+    // After the is_solved() check, not before: merging only rewrites the
+    // sequence into an equivalent one, so the check above is of the moves
+    // the stage solvers actually produced.
+    return merge_adjacent_moves(std::move(solution));
 }
 
 }  // namespace cube::solver
