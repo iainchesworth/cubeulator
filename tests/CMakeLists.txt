@@ -219,3 +219,10 @@ if(CUBEULATOR_BUILD_APP)
     catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")
 endif()
+
+# --- System tests: the whole application driven from its UI (tests/system) ---
+# Needs a platform that can draw; labelled `system` so CI's plain ctest legs
+# can exclude it. See docs/testing.md.
+if(CUBEULATOR_BUILD_APP)
+    add_subdirectory(system)
+endif()
