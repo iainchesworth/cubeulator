@@ -266,6 +266,32 @@ function(cube_configure_desktop_app target)
         ${_deploy_options})
     install(SCRIPT "${_cube_deploy_script}")
 
+    # macOS: sign the bundle after Qt has been deployed into it. Apple Silicon
+    # kills a process whose code carries no signature at all, so an ad-hoc one
+    # ("-") is the floor and the unsigned build still opens (from the
+    # Finder's right-click > Open, for an app that came off the internet).
+    # SIGNING: pass a Developer ID identity to sign for real; the hardened
+    # runtime and a secure timestamp it adds are what notarisation requires.
+    #   cmake -DCUBEULATOR_MACOS_CODESIGN_IDENTITY="Developer ID Application: ..."
+    # Notarising the .dmg afterwards (notarytool) is a separate, later step.
+    if(APPLE)
+        set(CUBEULATOR_MACOS_CODESIGN_IDENTITY "-" CACHE STRING
+            "codesign identity for Cubeulator.app: \"-\" is ad-hoc (no certificate), or a Developer ID")
+        install(CODE "
+            set(_app \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/Cubeulator.app\")
+            set(_identity \"${CUBEULATOR_MACOS_CODESIGN_IDENTITY}\")
+            set(_flags --force --deep)
+            if(NOT _identity STREQUAL \"-\")
+                list(APPEND _flags --options runtime --timestamp)
+            endif()
+            execute_process(COMMAND codesign \${_flags} --sign \"\${_identity}\" \"\${_app}\"
+                RESULT_VARIABLE _rc)
+            if(NOT _rc EQUAL 0)
+                message(FATAL_ERROR \"codesign failed (\${_rc}) for \${_app}\")
+            endif()
+        ")
+    endif()
+
     # The licence and the third-party notices are installed by
     # cube_add_third_party_notices() (cmake/ThirdPartyNotices.cmake), to the
     # root of the install, or share/doc/cubeulator on Linux.

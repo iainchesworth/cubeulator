@@ -19,6 +19,14 @@ CI builds each one on its own runner and uploads it as a build artifact
 (`.github/workflows/ci.yml`, job `build-and-test`). Nothing is released or
 published.
 
+### Publishing
+
+The same packages, built from a version tag by the `Release` workflow, are
+attached to a draft GitHub Release. See [Cutting a release](releasing.md).
+Both CI and the release run `packaging/check-package.sh` on what CPack wrote,
+which looks inside each package for Qt, the executable, the icon, the
+identifier and the notices.
+
 ### Building one locally
 
 Configure and build as usual, then package:
@@ -185,10 +193,12 @@ decided). It plugs in at two places:
 - **Windows**: after CPack writes the installer, sign it with `signtool`
   from a `CPACK_POST_BUILD_SCRIPTS` script. Until then SmartScreen warns on
   first run.
-- **macOS**: sign as `macdeployqt` deploys (`DEPLOY_TOOL_OPTIONS
-  -codesign=<identity>` in `cmake/DesktopPackaging.cmake`), then notarise the
-  `.dmg` with `notarytool`. Until then Gatekeeper refuses the app without a
-  manual override.
+- **macOS**: the bundle is signed ad hoc by default (Apple Silicon kills an
+  unsigned process, so this is the floor). Pass
+  `-DCUBEULATOR_MACOS_CODESIGN_IDENTITY="Developer ID Application: ..."` to
+  sign for real; the hardened runtime and timestamp it adds are what
+  notarisation requires. Then notarise the `.dmg` with `notarytool`. Until
+  then Gatekeeper wants the right-click > Open workaround.
 
 Linux packages are unsigned; repository signing is the repository's.
 

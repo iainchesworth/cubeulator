@@ -23,10 +23,10 @@
 #   * Windows - sign the installer after CPack writes it: a
 #     CPACK_POST_BUILD_SCRIPTS script that runs signtool on
 #     ${CPACK_PACKAGE_FILE_NAME}.exe. SmartScreen warns until it is signed.
-#   * macOS - sign and notarise the app inside the .dmg: macdeployqt's
-#     -codesign=<identity> (DEPLOY_TOOL_OPTIONS in DesktopPackaging.cmake),
-#     then notarytool on the .dmg. An unsigned app needs the user to
-#     override Gatekeeper.
+#   * macOS - the bundle is signed ad hoc, which Apple Silicon needs to run
+#     at all. For a real signature set CUBEULATOR_MACOS_CODESIGN_IDENTITY
+#     (cmake/DesktopPackaging.cmake), then notarise the .dmg with notarytool.
+#     Until then Gatekeeper needs the user's right-click > Open.
 # ---------------------------------------------------------------------------
 if(ANDROID OR IOS)
     message(STATUS
