@@ -28,7 +28,7 @@ file(MAKE_DIRECTORY "${CUBEULATOR_PACKAGING_DIR}")
 
 # Once at configure time so the file exists for the first build.
 function(_cube_stamp_rc)
-    set(CUBEULATOR_VERSION "${PROJECT_VERSION}")
+    set(CUBEULATOR_VERSION "${CUBEULATOR_VERSION_FULL}")
     set(SRC "${_rc_template}")
     set(DST "${_rc_file}")
     set(WORKDIR "${PROJECT_SOURCE_DIR}")
@@ -42,7 +42,7 @@ _cube_stamp_rc()
 add_custom_target(cube_app_resource ALL
     BYPRODUCTS "${_rc_file}"
     COMMAND "${CMAKE_COMMAND}"
-        "-DCUBEULATOR_VERSION=${PROJECT_VERSION}"
+        "-DCUBEULATOR_VERSION=${CUBEULATOR_VERSION_FULL}"
         "-DSRC=${_rc_template}"
         "-DDST=${_rc_file}"
         "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"

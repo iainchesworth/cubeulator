@@ -24,9 +24,15 @@ Where signing plugs in is the last section of [packaging.md](packaging.md).
 
 ## Steps
 
-1. **Bump the version.** `project(Cubeulator VERSION x.y.z ...)` in the
-   top-level `CMakeLists.txt` is the one place. The packages, the Windows
-   version resource, `Info.plist` and the AppStream release all follow it.
+1. **Bump the version.** `project(Cubeulator VERSION x.y.z ...)` and
+   `CUBEULATOR_VERSION_PRERELEASE` (`""`, or `"beta.1"` for `0.1.0-beta.1`) in
+   the top-level `CMakeLists.txt` are the one place, and
+   `python tools/release/prepare_release.py 0.1.0-beta.1` sets both and cuts
+   `CHANGELOG.md` in the same step. The package names, the installer's version,
+   the Windows version resource, the `.deb` and `.rpm` versions (`0.1.0~beta.1`
+   sorts before `0.1.0`, so `apt upgrade` moves a beta to the final) and the
+   AppStream release all follow it; `Info.plist` takes the numbers only, which
+   is what macOS accepts.
 2. **Land it on `main`** the usual way: a `develop` → `main` release PR (or a
    `hotfix/*`).
 3. **Tag the commit on `main`** and push the tag:
