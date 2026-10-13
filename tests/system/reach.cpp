@@ -169,8 +169,11 @@ void Reach::sample() {
 
     for (QQuickItem* control : app_.visible_controls()) {
         const std::string key = (app_.control_key(control) + "@" + to_string(layout)).toStdString();
+        // AppButton declares its own `enabled`; the item's own says whether a
+        // parent switched the whole row off.
         const QVariant enabled = control->property("enabled");
-        const bool is_enabled = !enabled.isValid() || enabled.toBool();
+        const bool is_enabled =
+            control->isEnabled() && (!enabled.isValid() || enabled.toBool());
         if (is_enabled) {
             discovered_.insert(key);
             disabled_.erase(key);

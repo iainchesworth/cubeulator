@@ -129,7 +129,8 @@ TEST_CASE("every setting on the screen can be pressed in both layouts", "[system
             }
             INFO("control " << key.toStdString());
             REQUIRE(control != nullptr);
-            if (control->property("enabled").isValid() && !control->property("enabled").toBool()) {
+            if (!control->isEnabled() ||
+                (control->property("enabled").isValid() && !control->property("enabled").toBool())) {
                 continue;
             }
             app.click(control);
