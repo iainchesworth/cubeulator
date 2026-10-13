@@ -138,12 +138,18 @@ void visit(QQuickItem* item, const std::function<void(QQuickItem*)>& fn) {
 // deprecation in Qt 6.13 and already warns on 6.12 (and warnings are errors
 // here); its replacement, flipped(), arrived in 6.9. The project still
 // accepts Qt 6.5, so both are kept.
-[[nodiscard]] QImage reflected(const QImage& image) {
-#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
-    return image.flipped(Qt::Horizontal);
-#else
-    return image.mirrored(true, false);
-#endif
+//
+// Chosen with `if constexpr` rather than the preprocessor, because shared
+// source takes no #if (docs/platform-isolation.md). It is a template so the
+// branch not taken is never instantiated, which is what lets the other
+// Qt's missing member compile.
+template <typename Image>
+[[nodiscard]] Image reflected(const Image& image) {
+    if constexpr (QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)) {
+        return image.flipped(Qt::Horizontal);
+    } else {
+        return image.mirrored(true, false);
+    }
 }
 
 }  // namespace
