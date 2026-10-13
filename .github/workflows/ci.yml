@@ -225,12 +225,26 @@ jobs:
           modules: "qtquick3d qtshadertools"
           cache: true
 
+      # AppleClang ships no OpenMP runtime, and the vendored M3T tracker
+      # (third_party/m3t) does find_package(OpenMP REQUIRED): without libomp
+      # configure fails with "Could NOT find OpenMP_C (missing:
+      # OpenMP_C_FLAGS OpenMP_C_LIB_NAMES)" (confirmed in CI). Homebrew's
+      # libomp is keg-only, so it is on no default search path; its prefix
+      # is handed to CMake via CMAKE_PREFIX_PATH below, which FindOpenMP's
+      # find_library()/find_path() honour.
+      - name: Install libomp (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install libomp
+          echo "OPENMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+
       - name: Configure
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
           EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-15' || '' }}
-        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER
+        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR${OPENMP_PREFIX:+;$OPENMP_PREFIX}" $EXTRA_CXX_COMPILER
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
