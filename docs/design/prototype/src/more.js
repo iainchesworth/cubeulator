@@ -1,6 +1,6 @@
 // ---- shared bits for the plainer screens ---------------------------------------
 // Language names are data, not strings: each is written in its own language and never translated.
-const LANGS = {en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español', ja: '日本語', zh: '简体中文', he: 'עברית', ar: 'العربية'};
+const LANGS = {en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español', ja: '日本語', zh: '简体中文', he: 'עברית', ar: 'العربية', yi: 'יידיש'};
 const row = (label, act, arg, o = {}) => `<button type="button" class="row" data-act="${act}"${arg ? ` data-arg="${arg}"` : ''}>${o.lead || ''}<span class="grow">${label}${o.sub ? `<br><span class="note">${o.sub}</span>` : ''}</span>${o.val ? `<span class="val">${o.val}</span>` : ''}${ico('chev-r', 'flip')}</button>`;
 const sw = (label, note, on, key) => `<button type="button" class="row" role="switch" aria-checked="${!!on}" data-act="tog" data-arg="${key}"><span class="grow">${label}${note ? `<br><span class="note">${note}</span>` : ''}</span><span class="switch"><i>${ico('check')}</i></span></button>`;
 const choice = (label, items, cur, key) => `<div class="setting"><span>${label}</span><div class="choice" role="radiogroup" aria-label="${label}">${items.map(([v, l]) => `<button type="button" class="btn" role="radio" aria-checked="${v === cur}" data-act="opt" data-arg="${key}=${v}">${v === cur ? ico('check') : ''}<span>${l}</span></button>`).join('')}</div></div>`;
@@ -234,7 +234,7 @@ screens.settings = {
       ${choice(t('settings.dev.backend', 'Direct3D 11'), [['auto', 'Auto'], ['d3d11', 'D3D11'], ['d3d12', 'D3D12'], ['vulkan', 'Vulkan']], st === 'restart-needed' ? 'vulkan' : 'auto', 'backend')}
       ${st === 'restart-needed' ? notice('caution', t('settings.dev.restart'), '') : ''}
       <div class="rows">${sw(t('settings.dev.stats'), '', o.stats, 'stats')}</div></div>` : '';
-    const langs = st === 'language' ? sheet(t('settings.section.language'), `<div class="rows">${[['system', t('settings.language.system', LANGS.en)]].concat(Object.entries(LANGS)).map(([k, v]) => `<button type="button" class="row" role="radio" aria-checked="${(P.d.lang || 'system') === k}" data-act="setLang" data-arg="${k}"><span class="grow"${k === 'he' || k === 'ar' ? ' dir="rtl"' : ''}>${v}</span>${(P.d.lang || 'system') === k ? ico('check') : ''}</button>`).join('')}</div>` + btn(t('common.close'), 'closeSheet', {v: 'ghost'})) : '';
+    const langs = st === 'language' ? sheet(t('settings.section.language'), `<div class="rows">${[['system', t('settings.language.system', LANGS.en)]].concat(Object.entries(LANGS)).map(([k, v]) => `<button type="button" class="row" role="radio" aria-checked="${(P.d.lang || 'system') === k}" data-act="setLang" data-arg="${k}"><span class="grow"${k === 'he' || k === 'ar' || k === 'yi' ? ' dir="rtl"' : ''}>${v}</span>${(P.d.lang || 'system') === k ? ico('check') : ''}</button>`).join('')}</div>` + btn(t('common.close'), 'closeSheet', {v: 'ghost'})) : '';
     const clear = st === 'confirm-clear' ? dialog(t('history.clear.title'), t('history.clear.body', P.d.history.length), btn(t('history.clear.keep'), 'closeSheet'), btn(t('history.clear.confirm'), 'histClear', {v: 'ghost'})) : '';
     return `<div class="screen">${topbar(t('common.settings'))}<div class="split"><div class="pane page" data-scroll="set"><div class="col">
       <div class="sect"><div class="eyebrow">${t('settings.section.language')}</div><div class="rows">${row(t('settings.section.language'), 'pick', 'settings.language', {val: P.d.lang && P.d.lang !== 'system' ? LANGS[P.d.lang] : t('settings.language.system', LANGS.en)})}</div></div>
@@ -264,7 +264,7 @@ Object.assign(actions, {
     applyOpts();
   },
   setLang(el) {
-    P.d.lang = el.dataset.arg; P.opts.dir = P.d.lang === 'he' || P.d.lang === 'ar' ? 'rtl' : 'ltr';
+    P.d.lang = el.dataset.arg; P.opts.dir = P.d.lang === 'he' || P.d.lang === 'ar' || P.d.lang === 'yi' ? 'rtl' : 'ltr';
     const prev = P.stack[P.stack.length - 1];
     if (prev && prev.screen === 'first-run') { P.stack.pop(); P.screen = 'first-run'; P.state = prev.state; } else P.state = 'main';
     applyOpts();
@@ -277,9 +277,9 @@ const LIC = [['Qt', 'LGPL-3.0-only or GPL-3.0-only'], ['Qt Quick 3D', 'GPL-3.0-o
 screens.about = {
   render() {
     return `<div class="screen">${topbar(t('about.title'))}<div class="page" data-scroll="about"><div class="col">
-      <div class="lockup"><span class="appicon" aria-hidden="true">${IDENTITY.icon || ''}</span><div><h1 class="t-title">${t('app.name')}</h1><div class="mono t-sec">${t('about.version', '1.0.0')}</div></div></div>
+      <div class="lockup"><span class="appicon" aria-hidden="true">${IDENTITY.icon || ''}</span><div><h1 class="t-title">${t('app.name')}</h1><div class="mono t-sec">${t('about.version', '1.0.0')}</div><div class="mono t-sec" dir="ltr">${t('about.build', 'windows-x64', 'a1b2c3d4')}</div>${btn(t('about.copyBuild'), 'noop', {v: 'ghost'})}</div></div>
       <div class="prose"><p>${t('about.what')}</p><p>${t('about.author', 'Iain Chesworth')}</p><p class="t-sec">${t('about.licence')}</p></div>
-      <div class="rows">${row(t('about.licences'), 'go', 'licences')}${row(t('about.privacy'), 'go', 'privacy')}${row(t('about.source'), 'noop', '', {val: 'github.com/iainchesworth/cubeulator'})}</div>
+      <div class="rows">${row(t('about.licences'), 'go', 'licences')}${row(t('about.privacy'), 'go', 'privacy')}${row(t('about.source'), 'noop', '', {val: 'github.com/iainchesworth/cubeulator'})}${row(t('about.copyDetails'), 'noop', '', {sub: t('about.copyDetails.note')})}</div>
       <p class="note">${t('about.trademark')}</p></div></div></div>`;
   }
 };

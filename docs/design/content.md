@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-381 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+386 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -617,6 +617,11 @@ Review the solution.
 | `about.licences` | Licences | Row. Opens the list of third-party notices. US: 'Licenses'. |
 | `about.privacy` | Privacy | Row. |
 | `about.trademark` | Cubeulator is not affiliated with the makers of any cube. | Small print. |
+| `about.build` | %1 · built from %2 | Monospace line under the version. %1 is the platform and architecture, such as windows-x64; %2 is the first eight characters of the source revision. Keep the dot between the parts. Only 'built from' is translated. |
+| `about.copyBuild` | Copy | Button beside the build line. Puts that line on the clipboard. |
+| `about.copyDetails` | Copy details for a bug report | Row in About. Puts a block of text on the clipboard. |
+| `about.copyDetails.note` | Text only: the version, this device and the app's settings. No picture, and nothing about your cube. | Note under the row. Must stay true of every build. |
+| `about.copied` | Copied | Replaces the button's label for two seconds after either copy, and is announced to a screen reader. |
 
 #### `licences`
 

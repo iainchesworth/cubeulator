@@ -173,8 +173,9 @@ value.
 | script | font | shipped |
 |---|---|---|
 | Latin | Archivo; IBM Plex Mono | In the app. About 400 KB |
-| Hebrew | Noto Sans Hebrew | In the app. About 110 KB |
-| Arabic | Noto Sans Arabic | In the app. About 825 KB |
+| Hebrew | Noto Sans Hebrew (variable, weights 100-900) | In the app. About 110 KB |
+| Yiddish | Noto Sans Hebrew, the same file | In the app |
+| Arabic | Noto Sans Arabic (variable, weights 100-900) | In the app. About 825 KB |
 | Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No |
 | Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No |
 
@@ -186,6 +187,9 @@ value.
   text is not drawn with Chinese forms.
 - All bundled fonts are under the SIL Open Font Licence and are listed in
   the generated notices (E0b).
+- The two Noto files are the ones ICL Forge, Countdown Solver and Automate
+  already bundle (`family.md` F4). A variable font gives weight 800 for
+  headings; E2a checks that Qt draws it on every desktop OS.
 
 ## Identity each platform needs
 
@@ -197,7 +201,7 @@ value.
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | Wired for CPack; not yet in the Windows resource or the Android manifest |
 | Publisher | Iain Chesworth | From `Packaging.cmake` |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |
-| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all eight languages | Written |
+| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |
 
 ## Per platform, the things that are easy to miss

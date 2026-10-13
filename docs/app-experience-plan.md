@@ -117,8 +117,10 @@ otherwise.
 **Decided since, all on 2026-10-13.** Where an answer differs from the
 default above, the answer stands.
 
-- 3: eight languages - the six above plus Hebrew and Arabic, so
-  right-to-left is in the first release (`docs/design/brief.md`).
+- 3: nine languages - the six above plus Hebrew, Arabic and Yiddish, so
+  right-to-left is in the first release (`docs/design/brief.md`). Hebrew and
+  Arabic are set in Noto Sans, the family's face, not IBM Plex
+  (`docs/design/family.md` D3, D4).
 - 5: the Apple stores are skipped for now; the question is deferred, not
   resolved (`LICENSE-NOTE.md` on `feature/ax-licences`).
 - 6: solve history is in, kept on the device (`docs/design/brief.md`).
@@ -386,32 +388,47 @@ Countdown Solver and Automate. The full account, with sources, is
   mostly shared already. The gaps are small and are cheapest to close in
   the sessions that are open now.
 
-Nothing below is decided until Iain says so. The decisions are D1 to D9 in
-`family.md`.
+**Decided on 2026-10-13** (`family.md` section 5), all by Iain:
+
+- D1: the publisher is **Iain Chesworth**, because the repository is under
+  `iainchesworth`, not `iainchesworthlabs`. D9 follows: the account and
+  `org.iainchesworth.cubeulator` stand.
+- D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
+  Forge; no other app is reskinned.
+- D3: Hebrew and Arabic are Noto Sans, the family's faces.
+- D4: Yiddish is in V1.0, so nine languages.
+- D5: strings are keyed by id.
+- D6: Copy details is in V1.0.
+- D7: no accent palettes. D8: no shared kit before V1.0 ships.
 
 **Before V1.0** - cheap now, a migration or a rework later. Each rides in a
 session that is already planned; none is a new session.
 
 | item | rides with | what changes |
 |---|---|---|
-| F1 publisher line | E4a, E3b | one string, "Iain Chesworth", in the version resource, `Info.plist`, AppStream, About (D1, decided) |
-| F2 setting keys | E2a, E3a | the keys named in `design/screens/settings.md` in the family's `group/name` style, listed in one place |
-| F3 language manager | E2b | its brief says **port** the family `LanguageManager` and its CI gates; add locale-aware numbers, plurals, the unwrapped-string lint |
-| F4 Hebrew and Arabic faces | E2a, before it bundles fonts | Noto Sans Hebrew and Noto Sans Arabic in place of the IBM Plex pair (D3, decided) |
-| F5 About build line | E3b | the compact version line and a **Copy** button on it |
+| F1 publisher line | E4a, E3b | one string, "Iain Chesworth", in the version resource, `Info.plist`, AppStream, About. It is what they already say |
+| F2 setting keys | E2a, E3a | the keys are named in `design/screens/settings.md`, in the family's `group/name` style |
+| F3 language manager and ids | E2b | its brief says **port** the family `LanguageManager` and its CI gates, key by id (`qsTrId`), and add locale-aware numbers, plurals and the unwrapped-string lint |
+| F4 Noto faces | E2a, before it bundles fonts | two `case` lines in `Theme.qml`, the 700 ceiling goes, and E2a checks that Qt draws weight 800 from the variable axis |
+| F4 Yiddish | E2b, E5 | the ninth language: its name in the list, Noto Sans Hebrew, a machine draft, RTL in the tour |
+| F5 build line | E3b | the build line and a **Copy** button on it |
+| F7 Copy details | E3b | a text block for a bug report: no picture, nothing about the cube. Specified in `design/screens/about.md` |
 | F9 token mapping | E2a | a note in `tokens.json` and `system.md`; no value moves |
 | machine-translation note | E5 | one sentence under the language list, as ICL Forge and Countdown Solver have |
+
+The design documents already carry D3, D4 and D6: `brief.md`, `system.md`,
+`platforms.md`, `settings.md`, `about.md`, `accessibility.md`, `strings.json`
+and the prototype.
 
 **V1.1** - after E3 and E5 have landed.
 
 | item | what |
 |---|---|
-| F7 Copy details | text-only diagnostics for a bug report: no picture, nothing about the cube (D6) |
-| Yiddish | the family's seventh language (D4) |
 | "Reviewed by" per language | said in the app, per language, once a fluent reader has looked |
 | F10 tour manifest | the screenshot tour gets a manifest and a check that documentation pictures are in it; a capture entry with `--page` and `--language` |
 | Docs skin | the documentation site skinned from `tokens.json` |
 | Dark neutrals | converge with ICL Forge's, if Iain wants it, in the direction he chooses |
+| Help points to Copy details | from **Trouble scanning** |
 | Back-ports | the list in `family.md` section 4, for the other repositories |
 
 Gate: every line of the checklist in `family.md` section 7 is true of
