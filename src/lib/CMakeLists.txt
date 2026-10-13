@@ -54,6 +54,10 @@ target_sources(cube_lib
         src/solver/middle_edges.cpp
         src/solver/oll.cpp
         src/solver/pll.cpp
+        src/solver/cubie.cpp
+        src/solver/two_phase.cpp
+        src/solver/cfop_last_layer.cpp
+        src/solver/cfop.cpp
         src/solver/solver.cpp
         src/solver/stepped_solution.cpp
         src/vision/vision.cpp

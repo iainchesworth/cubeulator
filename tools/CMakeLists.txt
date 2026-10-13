@@ -4,4 +4,5 @@
 if(NOT ANDROID AND NOT IOS)
     add_subdirectory(runner)
     add_subdirectory(scan)
+    add_subdirectory(cfop_tables)
 endif()

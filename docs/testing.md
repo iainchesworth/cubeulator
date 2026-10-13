@@ -46,8 +46,12 @@ the `SteppedSolution` tests (each of the latter runs a full solve) are
 tagged `[slow]` - every one drives one or more random scrambles through
 the searched first-two-layer stages. (The last layer itself is fixed-algorithm and takes
 milliseconds - see [last_layer.hpp](../src/lib/src/solver/last_layer.hpp) -
-so the corpus cost is the cross/corners/middle-edges searches.) Skip them
-for a fast local loop, or run only them:
+so the corpus cost is the cross/corners/middle-edges searches.) The
+intermediate and advanced solvers' corpus tests (`cfop_test.cpp`,
+`two_phase_test.cpp`) carry the same tag, though they are far faster - tens of
+milliseconds a solve, not seconds - because the advanced method's lookup
+tables take a few seconds to build in an unoptimised sanitizer build. Skip
+them for a fast local loop, or run only them:
 
 ```
 ctest --preset <preset> -LE slow   # everything except the slow solver corpus tests
