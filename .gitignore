@@ -228,6 +228,9 @@ ClientBin/
 # wants one skips when it is not there.
 /tests/data/captures/
 /docs/evidence/
+
+# Not distributed: see assets/models/cube_corner_pose_PROVENANCE.md.
+/assets/models/cube_corner_pose.onnx
 /build/
 build*/
 cmake-build-*/
