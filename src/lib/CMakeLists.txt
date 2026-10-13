@@ -47,6 +47,8 @@ target_sources(cube_lib
         src/solver/scan_conversion.cpp
         src/solver/scan_assembly.cpp
         src/solver/notation.cpp
+        src/solver/outside_view.cpp
+        src/solver/hold.cpp
         src/solver/cross.cpp
         src/solver/corners.cpp
         src/solver/middle_edges.cpp
@@ -83,6 +85,7 @@ target_sources(cube_lib
         src/vision/pose_from_corners.cpp
         src/vision/camera_intrinsics.cpp
         src/vision/direct_scan.cpp
+        src/vision/held_cube.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 

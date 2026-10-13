@@ -51,6 +51,47 @@ ctest --preset <preset> -LE slow   # everything except the slow solver corpus te
 ctest --preset <preset> -L slow    # just the slow solver corpus tests
 ```
 
+## QML tests (the solve screen)
+
+`cube_qml_tests` loads the app's own QML - `Cube3DView.qml` and
+`SolveScreen.qml`, with the app's own controllers behind them - and reads the
+3D cube back out of its scene: where each sticker sits and which way it
+faces, taken from the nodes' transforms. That is held to
+`cube::solver::Cube`, so the direction of every animated turn is checked
+against `Cube::apply` on what is actually drawn. No window is shown and
+nothing is rendered; it runs headless (offscreen platform off Windows) and
+is part of `ctest`.
+
+Camera frames in these and the controller tests are drawn
+([drawn_cube.hpp](../tests/unit/drawn_cube.hpp)), never recorded: a
+recording shows whoever was holding the cube.
+
+To *look* at the solve screen rather than check it, a hidden case puts the
+real screen in a window parked off-screen, drives it with drawn frames, and
+saves what it renders - one picture per run, chosen by name:
+
+```
+set CUBE_GALLERY_DIR=C:\some\dir
+set CUBE_GALLERY_SHOT=3-matched-another-way
+cube_qml_tests "[.gallery]"
+```
+
+The shot names are in
+[solve_screen_gallery_test.cpp](../tests/unit/solve_screen_gallery_test.cpp).
+It needs a GPU, so `ctest` never selects it.
+
+To *use* the solve screen without scanning a cube first, start the app with
+`CUBE_SOLVE_DEMO=<seed>`: it opens on the solve screen with a cube scrambled
+from that seed, camera off. `CUBE_SOLVE_DEMO_MOVE=<n>` opens it `n` moves in,
+and the solution is logged (run with `QT_FORCE_STDERR_LOGGING=1` to see it).
+
+To find out why the solve screen's camera took a move the way it did, start
+the app with `CUBE_HELD_LOG=<file>`. Each time what it makes of the cube
+changes, one line is appended: the move asked for, the verdict, how many of
+the nine stickers were found, and how far the side in view sits from the cube
+as it stood and from the cube after the move. Numbers only - no picture is
+kept.
+
 ## Hardware tests (camera)
 
 Two integration cases open a real camera, so they are fenced twice over: a
