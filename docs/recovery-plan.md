@@ -137,6 +137,17 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   hold that would look different is never less than 4.9 further off. Red
   against orange is the narrowest pair: 7.8 apart by tungsten light, 14.5
   to 17.9 by daylight.
+- **Fingers.** `read_side` needs six of the nine stickers and samples the
+  other three where they must be - and a cube being solved has fingers on
+  it, which read much like an orange sticker. Following the first live
+  solve, where a correct move was now and then called wrong, the solve
+  screen's matching counts only the stickers actually found
+  (`SideRead::found`). On the same five recordings that took steady reads
+  fitting no hold from 62 of 1,716 to 20. A mistake is now only called on a
+  side seen whole, with at least two stickers plainly the wrong colour, held
+  for most of a second; `CUBE_HELD_LOG` records what the camera made of each
+  change, for the next time it gets one wrong. The scan itself still counts
+  all nine.
 - **Proved on what is drawn.** `cube_qml_tests` loads the real
   `Cube3DView.qml` and `SolveScreen.qml` and reads every sticker's place
   back out of the 3D scene: all 18 moves land where `Cube::apply` puts

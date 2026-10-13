@@ -84,9 +84,15 @@ public:
     // glimpsed square-on while the cube is being handled changes nothing;
     // short enough that showing one on purpose feels immediate.
     static constexpr int kFramesToTrust = 8;
-    // A side that fits nothing is only called unknown after this long: a
-    // cube being turned in the hands passes through such frames all the time.
-    static constexpr int kFramesToDoubt = 15;
+    // Saying that something is wrong takes more than saying that it is
+    // right. A wrong turn has to be seen for this long...
+    static constexpr int kFramesToAccuse = 20;
+    // ...and a side that fits nothing for this long, a full second: a cube
+    // being handled passes through such frames all the time. Both are only
+    // ever said of a side seen whole - all nine stickers found - with at
+    // least two of them plainly the wrong colour. One sticker out is as
+    // likely a glint or a fingertip as a mistake, and is not called one.
+    static constexpr int kFramesToDoubt = 30;
 
     HeldCube(DirectScan& scan, SolveController& solve, QObject* parent = nullptr);
 
@@ -139,6 +145,14 @@ private:
     [[nodiscard]] std::optional<cube::solver::Face> side_turned_instead(
         const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
         float unmoved_distance) const;
+    // True when the read is the cube part-way through a half turn that was
+    // asked for: one quarter of it made, which is progress and not a mistake.
+    [[nodiscard]] bool half_way_there(const cube::vision::SideRead& read,
+                                      const cube::vision::SessionColours& colours) const;
+    // Appends what was just made of a frame to the file CUBE_HELD_LOG names,
+    // when it names one. Numbers only: no picture is kept.
+    void note(const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
+              const Verdict& verdict) const;
     void setSight(Sight sight, cube::solver::Face wrong_side = cube::solver::Face::U);
     void forget();
 

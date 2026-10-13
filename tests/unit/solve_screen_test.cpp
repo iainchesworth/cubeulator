@@ -20,6 +20,7 @@
 
 #include <QColor>
 #include <QMetaObject>
+#include <QPointF>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
@@ -27,6 +28,8 @@
 #include <QVariant>
 #include <QVariantMap>
 
+#include <array>
+#include <cmath>
 #include <memory>
 #include <optional>
 #include <set>
@@ -384,4 +387,72 @@ TEST_CASE("the camera turns the screen's cube to the hold it sees, and steps on 
 
     camera.setWatching(false);
     camera.restart();
+}
+
+TEST_CASE("the camera preview closes in on the cube and follows it", "[qml][solve-screen]") {
+    cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
+    const Screen screen;
+    QObject* preview = screen.find("solve.camera");
+    REQUIRE(preview != nullptr);
+    // Let go of a lost cube at once, rather than after the seconds a person gets.
+    REQUIRE(preview->setProperty("lostAfter", 40));
+    camera.setWatching(true);
+
+    const auto scale = [&]() { return preview->property("pictureScale").toDouble(); };
+    const auto whole = [&]() { return preview->property("wholeScale").toDouble(); };
+    // Where a pixel of the camera's picture lands in the preview.
+    const auto lands = [&](const cv::Point2f& pixel) {
+        return QPointF(preview->property("pictureX").toDouble() + pixel.x * scale(),
+                       preview->property("pictureY").toDouble() + pixel.y * scale());
+    };
+    const auto in_the_middle = [&](const cv::Point2f& pixel) {
+        const QPointF at = lands(pixel);
+        return std::abs(at.x() - preview->property("width").toDouble() / 2) < 3.0 &&
+               std::abs(at.y() - preview->property("height").toDouble() / 2) < 3.0;
+    };
+    const std::array<Color, 9> side =
+        cube::solver::camera_view(cube::solver::random_scramble(3), cube::solver::kStatedHold);
+    const auto show = [&](const cube::test::Pose& pose) {
+        camera.processFrame(cube::test::draw_side(side, pose));
+    };
+
+    // Nothing in view: the whole picture.
+    camera.processFrame(cube::test::room({640, 360}));
+    REQUIRE(wait_for([&]() { return std::abs(scale() - whole()) < 1e-3; }));
+
+    // A cube off to one side and small in the picture: brought to the
+    // middle, and bigger.
+    const cube::test::Pose pose{.centre = {180.0F, 110.0F}, .pitch = 30.0F};
+    show(pose);
+    REQUIRE(wait_for([&]() { return in_the_middle(pose.centre) && scale() > 1.8 * whole(); }));
+    const double closed_in = scale();
+
+    // Shifted by a few pixels, as a hand does: the view stays put.
+    cube::test::Pose shifted = pose;
+    shifted.centre.x += 5.0F;
+    const QPointF before = lands(pose.centre);
+    for (int i = 0; i < 10; ++i) {
+        show(shifted);
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
+    }
+    CHECK(std::abs(lands(pose.centre).x() - before.x()) < 0.5);
+    CHECK(std::abs(scale() - closed_in) < 1e-3);
+
+    // Carried across the frame: followed.
+    const cube::test::Pose across{.centre = {460.0F, 240.0F}, .pitch = 30.0F};
+    show(across);
+    REQUIRE(wait_for([&]() { return in_the_middle(across.centre); }));
+
+    // Hard against the edge of the picture the view goes as far as the
+    // picture does and no further: nothing outside the frame is shown.
+    const cube::test::Pose corner{.centre = {70.0F, 60.0F}, .pitch = 30.0F};
+    show(corner);
+    REQUIRE(wait_for([&]() { return std::abs(lands({0.0F, 0.0F}).x() - 2.0) < 0.5; }));
+    CHECK(lands({0.0F, 0.0F}).y() <= 2.0 + 0.5);
+
+    // Taken away: after a moment the view opens out again.
+    camera.processFrame(cube::test::room({640, 360}));
+    REQUIRE(wait_for([&]() { return std::abs(scale() - whole()) < 1e-3; }));
+
+    camera.setWatching(false);
 }

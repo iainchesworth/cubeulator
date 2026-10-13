@@ -1,5 +1,7 @@
 #include <catch2/catch_test_macros.hpp>
 
+#include "drawn_cube.hpp"
+
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
 #include <cube/solver/solver.hpp>
@@ -136,4 +138,83 @@ TEST_CASE("one sticker of the wrong colour is told apart even for red and orange
     REQUIRE(gap > 7.8F);
     REQUIRE(gap < 17.9F);
     CHECK(gap / 9.0F > kHoldClearDistance);
+}
+
+TEST_CASE("a sticker with a finger across it is known not to have been found",
+          "[vision][held-cube]") {
+    const Cube cube = cube::solver::random_scramble(6);
+    const std::array<Color, 9> side = camera_view(cube, kStatedHold);
+    const cube::test::Pose pose{};
+
+    const auto clear = cube::vision::read_side(cube::test::draw_side(side, pose));
+    REQUIRE(clear.has_value());
+    CHECK(clear->stickers_found == 9);
+    for (const bool found : clear->found) {
+        CHECK(found);
+    }
+
+    for (const int covered : {0, 2, 3, 5, 6, 8}) {
+        INFO("finger across sticker " << covered);
+        cv::Mat frame = cube::test::draw_side(side, pose);
+        cube::test::lay_finger(frame, pose, covered);
+        const auto read = cube::vision::read_side(frame);
+        REQUIRE(read.has_value());
+        CHECK(read->stickers_found == 8);
+        for (int cell = 0; cell < 9; ++cell) {
+            CHECK(read->found[static_cast<std::size_t>(cell)] == (cell != covered));
+        }
+    }
+}
+
+TEST_CASE("a sticker that was not found says nothing about how the cube is held",
+          "[vision][held-cube]") {
+    // What is sampled under a finger is the finger. Skin sits near orange and
+    // red, so over one of those it passes for the sticker; over any other
+    // colour, counted, it makes the side look like no side of the cube. Left
+    // out, the other eight say which side it is every time.
+    const Cube cube = cube::solver::random_scramble(6);
+    int spoiled = 0;
+    for (const Hold& hold : all_holds()) {
+        cube::vision::SideRead read;
+        read.lab = seen(cube, hold, 1.0F);
+        read.found.fill(true);
+        read.stickers_found = 8;
+        read.found[5] = false;
+        read.lab[5] = {68.0F, 14.0F, 20.0F};  // skin
+
+        const HoldReading found_only = read_hold(read, cube, session());
+        const HoldReading all_nine = read_hold(read.lab, cube, session());
+        CHECK(found_only.shows(hold));
+        CHECK(found_only.distance <= all_nine.distance);
+        spoiled += all_nine.shows(hold) ? 0 : 1;
+        // Over green or blue there is no mistaking it for the sticker.
+        const Color under = camera_view(cube, hold)[5];
+        if (under == Color::Green || under == Color::Blue) {
+            CHECK_FALSE(all_nine.shows(hold));
+        }
+        // And it is not counted as a sticker of the wrong colour either.
+        CHECK(cube::vision::stickers_off(read, camera_view(cube, hold), session()) == 0);
+    }
+    CHECK(spoiled >= 4);
+}
+
+TEST_CASE("stickers of the wrong colour are counted against the session's own colours",
+          "[vision][held-cube]") {
+    const Cube cube = cube::solver::random_scramble(6);
+    const std::array<Color, 9> expected = camera_view(cube, kStatedHold);
+    cube::vision::SideRead read;
+    read.lab = seen(cube, kStatedHold, 1.5F);
+    read.found.fill(true);
+    read.stickers_found = 9;
+    CHECK(cube::vision::stickers_off(read, expected, session()) == 0);
+
+    // A glint: one sticker washed out towards white.
+    const std::size_t glint = expected[0] == Color::White ? 1 : 0;
+    read.lab[glint] = {96.0F, 0.0F, 1.0F};
+    CHECK(cube::vision::stickers_off(read, expected, session()) ==
+          (expected[glint] == Color::White ? 0 : 1));
+
+    // A different side altogether.
+    const std::array<Color, 9> other = camera_view(cube, Hold{Face::R, Face::U});
+    CHECK(cube::vision::stickers_off(read, other, session()) >= 2);
 }
