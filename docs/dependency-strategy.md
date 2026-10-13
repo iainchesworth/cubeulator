@@ -22,6 +22,18 @@ because the Android NDK's `libc++` doesn't implement `<format>` (it needs
 locale support the NDK's minimal libc doesn't provide) — this was discovered
 via a real CI failure, not anticipated in advance.
 
+## Opt-in features
+
+Tracy is the one dependency that is **not** in the base list: it is the
+`profiling` manifest feature, selected by `-DCUBEULATOR_ENABLE_TRACY=ON` (the
+top-level `CMakeLists.txt` adds it to `VCPKG_MANIFEST_FEATURES` before
+`project()`, the way it already does for `tests`). A normal configure never
+resolves it, so the binary cache and every shipped package are unaffected.
+The feature asks for `tracy[on-demand]` for the target and
+`tracy[cli-tools]` as a `host` dependency, so a cross-build for a phone
+builds the capture/export tools for the machine that will run them. See
+[Profiling](profiling.md).
+
 ## Earlier plan and why it changed
 
 The original bootstrap spec scoped `opencv4`, `onnxruntime`, and `bgfx` to

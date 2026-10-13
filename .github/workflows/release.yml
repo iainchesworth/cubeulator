@@ -137,7 +137,7 @@ jobs:
             generators: NSIS
             artifact: windows-x64
           - name: macOS
-            os: macos-15
+            os: macos-26
             preset: macos-clang-release
             triplet: arm64-osx
             generators: DragNDrop
@@ -162,7 +162,7 @@ jobs:
       # one, so that nothing a release run does can end up in what the other
       # workflows trust. A cold cache only costs time.
       - name: Restore vcpkg binaries
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: ${{ matrix.triplet }}
 
@@ -195,10 +195,14 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
+      # The same Qt as ci.yml's legs, installed the same way (and see there why
+      # Windows takes aqtinstall from a pinned commit): a release ships what CI
+      # tested.
       - name: Install Qt (prebuilt)
         uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
+          aqtsource: ${{ runner.os == 'Windows' && 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7' || '' }}
           modules: "qtquick3d qtshadertools"
           cache: true
 
@@ -297,7 +301,7 @@ jobs:
           | Platform | Package |
           |---|---|
           | Windows 10 and later, 64-bit | \`Cubeulator-${VERSION}-windows-x64.exe\` |
-          | macOS 12 and later, Apple Silicon | \`Cubeulator-${VERSION}-macos-arm64.dmg\` |
+          | macOS 14.4 and later, Apple Silicon | \`Cubeulator-${VERSION}-macos-arm64.dmg\` |
           | Linux, Debian and Ubuntu | \`Cubeulator-${VERSION}-linux-x64.deb\` |
           | Linux, Fedora and openSUSE | \`Cubeulator-${VERSION}-linux-x64.rpm\` |
 

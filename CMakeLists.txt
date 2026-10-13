@@ -1,5 +1,5 @@
-# CMake 4 is required; the version range keeps policy behaviour current up to 4.3.
-cmake_minimum_required(VERSION 3.28...4.3)
+# CMake 4 is required; the version range keeps policy behaviour current up to 4.4.
+cmake_minimum_required(VERSION 3.28...4.4)
 
 # ---------------------------------------------------------------------------
 # Vendored vcpkg (git submodule at deps/vcpkg).
@@ -42,6 +42,12 @@ if(NOT DEFINED CUBEULATOR_BUILD_TESTS OR CUBEULATOR_BUILD_TESTS)
     list(APPEND VCPKG_MANIFEST_FEATURES "tests")
 endif()
 
+# Tracy is opt-in: the one switch (declared in cmake/Tracy.cmake) both makes
+# the profiler client resolvable and turns the instrumentation macros real.
+if(CUBEULATOR_ENABLE_TRACY)
+    list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
+endif()
+
 project(Cubeulator
     VERSION 0.1.0
     DESCRIPTION "A camera-driven, on-device Rubik's Cube solver"
@@ -68,6 +74,7 @@ include(Platform)
 include(CompilerWarnings)
 include(Sanitizers)
 include(Coverage)
+include(Tracy)
 include(MobileDependencies)
 include(VisionAssets)
 
@@ -112,3 +119,4 @@ include(Packaging)
 message(STATUS "Cubeulator ${PROJECT_VERSION}")
 message(STATUS "  Build app   : ${CUBEULATOR_BUILD_APP}")
 message(STATUS "  Build tests : ${CUBEULATOR_BUILD_TESTS}")
+message(STATUS "  Tracy       : ${CUBEULATOR_ENABLE_TRACY}")

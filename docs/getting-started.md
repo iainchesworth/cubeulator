@@ -4,12 +4,12 @@
 
 - A C++23 compiler: GCC 15+, Clang 21+, MSVC 14.51+, or AppleClang 17+.
 - CMake 4+ and Ninja.
-- Qt 6.8.x (prebuilt, via [aqtinstall](https://github.com/miurahr/aqtinstall))
+- Qt 6.12.x, the current LTS (prebuilt, via [aqtinstall](https://github.com/miurahr/aqtinstall))
   — only needed if you're building the desktop GUI shell (the default).
 - On macOS, an OpenMP runtime: AppleClang has none, and the vendored M3T
   tracker needs one. `brew install libomp`, then add its (keg-only) prefix to
   the configure line next to Qt's:
-  `-DCMAKE_PREFIX_PATH="<path-to-Qt>/6.8.3/macos;$(brew --prefix libomp)"`.
+  `-DCMAKE_PREFIX_PATH="<path-to-Qt>/6.12.0/macos;$(brew --prefix libomp)"`.
   This applies to `-DCUBEULATOR_BUILD_APP=OFF` too: the tracker is configured
   either way.
 - Git (vcpkg is vendored as a submodule and bootstraps itself automatically —
@@ -35,13 +35,13 @@ Install Qt locally with the pinned helper script, then configure and build:
 ```sh
 # Windows
 pwsh ci/install-qt.ps1
-cmake --preset windows-msvc-debug -DCMAKE_PREFIX_PATH=C:/Qt/6.8.3/msvc2022_64
+cmake --preset windows-msvc-debug -DCMAKE_PREFIX_PATH=C:/Qt/6.12.0/msvc2022_64
 cmake --build --preset windows-msvc-debug
 ctest --preset windows-msvc-debug
 
 # Linux/macOS
 ./ci/install-qt.sh
-cmake --preset linux-gcc-debug -DCMAKE_PREFIX_PATH=$HOME/Qt/6.8.3/gcc_64
+cmake --preset linux-gcc-debug -DCMAKE_PREFIX_PATH=$HOME/Qt/6.12.0/gcc_64
 cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```

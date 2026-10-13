@@ -13,7 +13,7 @@ a **draft** release; making it public is the click that is yours.
 | Platform | Package | Built by |
 |---|---|---|
 | Windows 10 and later, 64-bit | `Cubeulator-<version>-windows-x64.exe` (NSIS installer) | CPack `NSIS` |
-| macOS 12 and later, Apple Silicon | `Cubeulator-<version>-macos-arm64.dmg` | CPack `DragNDrop` |
+| macOS 14.4 and later, Apple Silicon | `Cubeulator-<version>-macos-arm64.dmg` | CPack `DragNDrop` |
 | Linux, Debian and Ubuntu | `Cubeulator-<version>-linux-x64.deb` | CPack `DEB` |
 | Linux, Fedora and openSUSE | `Cubeulator-<version>-linux-x64.rpm` | CPack `RPM` |
 | | `SHA256SUMS.txt` | the publish job |

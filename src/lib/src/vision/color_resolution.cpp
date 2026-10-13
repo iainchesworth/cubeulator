@@ -1,5 +1,6 @@
 #include <cube/vision/color_resolution.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/color_classification.hpp>
 
 #include <algorithm>
@@ -548,6 +549,7 @@ Facelet classify_lab(const cv::Vec3f& lab) {
 
 Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     const std::array<CapturedFace, 6>& faces) {
+    CUBE_ZONE_SCOPED_N("vision.resolve_colors");
     std::array<cv::Vec3f, kSampleCount> samples{};
     for (std::size_t face = 0; face < face_count; ++face) {
         for (std::size_t i = 0; i < facelets_per_face; ++i) {

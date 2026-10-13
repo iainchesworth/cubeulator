@@ -28,7 +28,7 @@ Full docs live at
 git clone --recurse-submodules https://github.com/iainchesworthlabs/cubeulator
 cd cubeulator
 ./ci/install-qt.sh   # or ci/install-qt.ps1 on Windows
-cmake --preset linux-gcc-debug -DCMAKE_PREFIX_PATH=$HOME/Qt/6.8.3/gcc_64
+cmake --preset linux-gcc-debug -DCMAKE_PREFIX_PATH=$HOME/Qt/6.12.0/gcc_64
 cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
