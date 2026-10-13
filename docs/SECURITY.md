@@ -42,7 +42,7 @@ does not verify.
 ### GPG signature (the maintainer's key)
 
 Each release also holds `SHA512SUMS`, its detached signature `SHA512SUMS.asc`,
-a signature beside every package, and the public key
+a signature beside every package and the SBOM, and the public key
 `cubeulator-signing-key.asc`:
 
 ```sh

@@ -45,10 +45,10 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop
 | `Cubeulator-<version>-macos-arm64.dmg` | macOS 14.4 and later, Apple Silicon |
 | `Cubeulator-<version>-linux-x64.deb` | Debian and Ubuntu |
 | `Cubeulator-<version>-linux-x64.rpm` | Fedora and openSUSE |
-| `SHA512SUMS` | one line per package |
-| `SHA512SUMS.asc`, `<package>.asc` | detached GPG signatures, from the project key |
+| `SHA512SUMS` | one line per package and for the SBOM |
+| `SHA512SUMS.asc`, `<file>.asc` | detached GPG signatures, from the project key, on the manifest, every package and the SBOM |
 | `cubeulator-signing-key.asc` | the public key, so that a download can be verified offline |
-| `Cubeulator-<version>.spdx.json` | an SPDX SBOM of the release files |
+| `Cubeulator-<version>.spdx.json` | an SPDX SBOM of the packages, checksummed and signed like them |
 
 Every package also carries a **build-provenance attestation** (Sigstore, from
 the workflow's own identity) and an SBOM attestation, held by GitHub, not as

@@ -103,17 +103,28 @@ informational (`continue-on-error`) and are never required.
 
 `main` only receives `develop`, `release/*`, `hotfix/*` and `support/*`
 (`branch-name-check.yml` enforces the pairing). The ruleset requires a pull
-request with 1 approval (dismiss stale), every check in the table above with
-"up to date" **on**, conversation resolution, and blocks force pushes and
-deletions. Releases are a deliberate human step ([Cutting a release](releasing.md)):
-the release PR is the decision, and the tag on the merge commit is the build.
+request, every check in the table above with "up to date" **on**, conversation
+resolution, and blocks force pushes and deletions. Releases are a deliberate
+human step ([Cutting a release](releasing.md)): the release PR is the decision,
+and the tag on the merge commit is the build.
 
-As configured (read from the ruleset on 2026-10-14) it has **no bypass actor**,
-unlike `develop-protection`: a release PR merges only with all nine checks green
-on its tip and an approval from someone other than its author. Both are a
-decision for the repository's owner, not something this page can paper over;
-what a release PR needs to merge is the first thing to settle before the first
-release.
+Set the same way as `develop-protection`, for the same reason (a solo
+maintainer, whose own approval GitHub does not count):
+
+- **0 required approvals**, stale reviews still dismissed on push.
+- **Merge commit only.** A squash or a rebase of a release PR would make
+  `develop` and `main` diverge, so the next release PR would re-list every
+  commit.
+- **The repository admin role can bypass through a pull request only**
+  (`bypass_mode: pull_request`): a direct push to `main` stays blocked even for
+  an admin, and a release PR whose required checks are not all green merges only
+  by someone choosing "merge without waiting" (`gh pr merge --admin`) on it.
+
+This was changed on 2026-10-14, on the maintainer's instruction. Before that it
+had no bypass actor and required one approval, which a solo author cannot give,
+so a release PR could not merge at all. The required checks are untouched: a
+release PR is expected to have them green, and bypassing them is a deliberate
+act, not something the ruleset allows by default.
 
 `release-check.yml` ("Release readiness") also runs on a pull request into
 `main`. It is advisory, not in the table above, and says whether the tree is a

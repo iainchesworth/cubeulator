@@ -346,6 +346,16 @@ jobs:
             exit 1
           fi
 
+      # The SBOM is made first, from the four packages alone, so that it is in
+      # the checksum manifest and under the same GPG signature as they are.
+      - name: Generate the SBOM (SPDX)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: dist/files
+          format: spdx-json
+          output-file: dist/files/Cubeulator-${{ needs.verify.outputs.version }}.spdx.json
+          upload-artifact: false
+
       # What a downloader checks against, whether or not the signing key exists.
       - name: Write SHA512SUMS
         shell: bash
@@ -432,20 +442,12 @@ jobs:
             gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 --armor --detach-sign "$1" 3<<<"$passphrase"
           }
           cd dist/files
-          for f in SHA512SUMS Cubeulator-*.exe Cubeulator-*.dmg Cubeulator-*.deb Cubeulator-*.rpm; do
+          for f in SHA512SUMS Cubeulator-*.exe Cubeulator-*.dmg Cubeulator-*.deb Cubeulator-*.rpm Cubeulator-*.spdx.json; do
             sign "$f"
             gpg --verify "$f.asc" "$f"
           done
           echo "signed=true" >> "$GITHUB_OUTPUT"
-          echo "Signed SHA512SUMS and four packages with key $keyid."
-
-      - name: Generate the SBOM (SPDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-        with:
-          path: dist/files
-          format: spdx-json
-          output-file: dist/files/Cubeulator-${{ needs.verify.outputs.version }}.spdx.json
-          upload-artifact: false
+          echo "Signed SHA512SUMS, the SBOM and four packages with key $keyid."
 
       # Keyless SLSA provenance: which repository, workflow and commit built
       # these bytes. The GPG signature says who vouches for them; the two are
