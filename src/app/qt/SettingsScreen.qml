@@ -73,7 +73,7 @@ Rectangle {
                     text: CameraController.busy
                         ? "Looking for cameras…"
                         : CameraController.devices.length > 0
-                            ? "Choose which device Cubeulator reads the cube's faces from."
+                            ? "Choose which device Cubeulator reads the cube's sides from."
                             : "No camera was detected. Plug one in, then refresh."
                     font.family: Theme.fontHeading; font.pixelSize: 12
                     color: Theme.inkMuted(0.6)
@@ -140,7 +140,7 @@ Rectangle {
             Toggle {
                 width: parent.width
                 checked: ScanSession.autoAdvance
-                label: "Auto-advance between faces"
+                label: "Auto-advance between sides"
                 onToggled: ScanSession.autoAdvance = !ScanSession.autoAdvance
             }
         }

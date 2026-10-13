@@ -115,7 +115,7 @@ Rectangle {
                     lineHeightMode: Text.ProportionalHeight
                 }
                 Text {
-                    text: "Point the camera, turn the cube through six faces, follow the moves."
+                    text: "Point the camera, turn the cube through six sides, follow the moves."
                     color: Theme.inkMuted(0.55)
                     font.family: Theme.fontHeading
                     font.pixelSize: 15
