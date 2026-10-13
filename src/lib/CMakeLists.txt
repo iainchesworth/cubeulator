@@ -97,22 +97,6 @@ set_source_files_properties(
     src/solver/cfop_last_layer.cpp
     PROPERTIES COMPILE_OPTIONS "${CUBEULATOR_CONSTEXPR_BUDGET}")
 
-# GCC 15 at -O2 reads std::next_permutation over the small std::array<uint8_t, N>
-# in fill_uperm_moves / fill_sperm_moves (two_phase_tables.hpp) as writing past
-# the array - "writing 16 bytes into a region of size 4
-# [-Werror=stringop-overflow=]", at offsets that are inside it - and -Werror
-# makes that fatal for every Linux Release build. The loops index within the
-# arrays; this is the false positive the warning is known for once swaps are
-# inlined and vectorised. Switched off, not turned into a non-error, for the
-# translation units that include the header; a rewrite of those two loops
-# that GCC reads correctly would let this go.
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set_property(SOURCE
-        src/solver/two_phase.cpp
-        src/solver/two_phase_tables.cpp
-        APPEND PROPERTY COMPILE_OPTIONS "-Wno-stringop-overflow")
-endif()
-
 add_dependencies(cube_lib cube_version)
 
 # Which cube/profiling.hpp the zone macros resolve to: CMake chooses the
