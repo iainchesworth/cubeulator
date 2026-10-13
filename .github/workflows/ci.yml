@@ -24,7 +24,15 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.legs }}
-  cancel-in-progress: true
+  # develop and main are the refs a pull request restores its vcpkg cache from
+  # (docs/ci.md, "The vcpkg binary cache"), and a cold ONNX Runtime build alone
+  # is 39 minutes on Windows. A push there that is cancelled by the next push
+  # restarts that package from nothing, so under a stream of merges it never
+  # finishes and the cache is never warmed: on 2026-10-13, 29 of the 31 push
+  # runs on develop were cancelled that way and none completed. Those runs go
+  # to the end (a newer push waits, and replaces any older one still waiting);
+  # everything else is superseded as before.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read

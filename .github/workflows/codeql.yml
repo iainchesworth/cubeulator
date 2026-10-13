@@ -11,7 +11,9 @@ on:
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Same rule as ci.yml: a push to develop or main finishes, because it is the
+  # run that stores the vcpkg cache pull requests restore from.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 jobs:
   analyze:
