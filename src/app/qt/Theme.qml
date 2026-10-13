@@ -159,15 +159,16 @@ QtObject {
     readonly property real targetHandsFull: 96  // the solve screen's two controls
 
     // ---- Language, script, direction ------------------------------------------
-    // "system" follows the device; otherwise a language tag such as "de".
-    readonly property string languageTag: SettingsState.language === "system"
+    // "" follows the device; otherwise a language tag such as "de". (A stored
+    // "system", from before the key was named, means the same as "".)
+    readonly property string languageTag: (SettingsState.language === "" || SettingsState.language === "system")
         ? Qt.locale().name : SettingsState.language
     readonly property var uiLocale: Qt.locale(languageTag)
     readonly property string languageCode: languageTag.split(/[-_]/)[0].toLowerCase()
     // "latin" | "hebrew" | "arabic" | "ja" | "zh"
     readonly property string script: {
         switch (languageCode) {
-        case "he": case "iw": return "hebrew";
+        case "he": case "iw": case "yi": case "ji": return "hebrew";   // Yiddish is written in Hebrew script
         case "ar": return "arabic";
         case "ja": return "ja";
         case "zh": return "zh";
@@ -179,7 +180,8 @@ QtObject {
     readonly property bool rtl: uiLocale.textDirection === Qt.RightToLeft
 
     // ---- Type -------------------------------------------------------------------
-    // Archivo for Latin, IBM Plex Sans Hebrew and Arabic for those scripts, the
+    // Archivo for Latin, Noto Sans Hebrew (also Yiddish) and Noto Sans Arabic
+    // for those scripts (the family's own faces: docs/design/family.md, D3), the
     // system's own for Japanese and Chinese, chosen by language so the shapes
     // are right (the two share code points, not forms). One family for the
     // whole UI in that language; every one of them draws Latin, so numbers and
@@ -211,15 +213,13 @@ QtObject {
     }
     readonly property string headingFamily: {
         switch (script) {
-        case "hebrew": return "IBM Plex Sans Hebrew";
-        case "arabic": return "IBM Plex Sans Arabic";
+        case "hebrew": return "Noto Sans Hebrew";
+        case "arabic": return "Noto Sans Arabic";
         case "ja": return firstInstalled(systemCjkFamilies("ja")) || fontHeading;
         case "zh": return firstInstalled(systemCjkFamilies("zh")) || fontHeading;
         default: return fontHeading;
         }
     }
-    // The scripts that have no extra-bold: their headings use 700.
-    readonly property int maxWeight: (script === "hebrew" || script === "arabic") ? 700 : 800
     // Scripts without capitals drop the eyebrow's tracking and capitalisation.
     readonly property bool hasCapitals: script === "latin"
 

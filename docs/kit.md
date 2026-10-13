@@ -71,12 +71,30 @@ KitPage {                       // page fill, margins, safe area, scrolls
 | `Theme.insets` (top, bottom, leading, trailing) | `SystemInsets` | on rotate / screen change | `SystemInsets.setOverride` |
 | `Theme.rtl`, `Theme.script`, `Theme.headingFamily` | `SettingsState.language` | yes | the setting |
 
-Persisted in `SettingsState` (`QSettings`, applied the moment they change):
-`themeMode` (existing), `language`, `marks`, `textSize`, `motion`, `advance`,
-`pace`, `explainStages`, `notation`, `sound`, `haptics`, `keepHistory`.
-Values are the ones in `strings.json` (`settings.*`): `system | large |
-larger`, `system | reduced | full`, `tap | timer`, `slow | steady | quick`. A
-stored value that is not one of these reads as the default.
+Persisted in `SettingsState` (`QSettings`, applied the moment they change),
+under the keys `docs/design/screens/settings.md` ("Persistence") names so that
+none needs a migration after the first release:
+
+| QML property | stored as | values (default first) |
+|---|---|---|
+| `language` | `language/code` | `""` same as this device, or `en de fr es ja zh-CN he ar yi` |
+| `themeMode` | `appearance/theme` | `system`, `light`, `dark` |
+| `textSize` | `appearance/textSize` | `system`, `large` (1.25), `larger` (1.5) |
+| `motion` | `appearance/motion` | `system`, `reduced`, `full` |
+| `marks` | `appearance/marks` | `true` |
+| `advance` | `solving/advance` | `tap`, `timer` |
+| `pace` | `solving/pace` | `steady`, `slow`, `quick` |
+| `explainStages` | `solving/explain` | `true` |
+| `notation` | `solving/notation` | `false` |
+| `sound`, `haptics` | `solving/sound`, `solving/haptics` | `true` |
+| `keepHistory` | `history/keep` | `true` |
+
+`themeMode` is the old name and the old screens read it; its value was stored
+as `appearance/themeMode` before the design named its keys, and an old value
+is carried over once. `camera/deviceId` and `firstRun/acknowledgedVersion` are
+named by the design too and are not persisted here: the camera and the
+first-run screen are E3a's. A stored value that is not one of those above reads
+as the default.
 
 Where each platform's setting is read (`platforms.md`, "Text size, motion,
 theme, language"):
@@ -161,10 +179,11 @@ Qt version did, on 6.8.3. Each is in the code where it bites and has a test.
    pairs and darken `outline` (about `#7E7B7A` in light), or accept the kit's
    workaround.
 3. **`font.families` does not exist** in 6.8's QML `font`, so there is no
-   fallback list. One family per language: Archivo; IBM Plex Sans Hebrew;
-   IBM Plex Sans Arabic; the system's CJK font, picked from
-   `Qt.fontFamilies()`. Every one of them draws Latin, so numbers and the app's
-   name still show. (`platforms.md` assumed per-glyph fallback.)
+   fallback list. One family per language: Archivo; Noto Sans Hebrew (also
+   Yiddish); Noto Sans Arabic; the system's CJK font, picked from
+   `Qt.fontFamilies()`. Every one of them draws Latin (checked in the Noto
+   files), so numbers and the app's name still show. (`platforms.md` assumed
+   per-glyph fallback.)
 4. **Safe areas.** Qt 6.8.3 has no public safe-area API
    (`QWindow::safeAreaMargins` is 6.9; the 6.8 accessor is QPA-private). On
    Android and iOS the insets are the difference between the screen's geometry
@@ -237,15 +256,22 @@ reading order.
 
 `src/app/qt/fonts/*.ttf` are compiled in under `:/fonts` and registered by
 `kit::installBundledFonts()` before any QML loads: Archivo 400, 700, 800; IBM
-Plex Mono 500; IBM Plex Sans Hebrew and Arabic 400, 700, each with its OFL
-text beside it. Fetched unmodified from the projects' own repositories; the
-sources, versions and checksums are in `src/app/qt/fonts/README.md` (1.5 MB in
-all). **The generated notices (E0b, `feature/ax-licences`) must list all four
-families**; that session needs to be told.
+Plex Mono 500; Noto Sans Hebrew and Noto Sans Arabic as one variable file each
+(weight 100 to 900), each with its OFL text beside it. Archivo and Plex Mono
+were fetched unmodified from the projects' own repositories; the two Noto
+files are the family's shared copies (ICL Forge's `apps/shared/theme`, decision
+D3 in `docs/design/family.md`). Sources, versions and checksums are in
+`src/app/qt/fonts/README.md` (about 1.8 MB in all, the Arabic file being
+825 KB). **The generated notices (E0b, `feature/ax-licences`) build from a
+manifest; each file here needs an entry in it when the branches meet**, and
+that session needs to be told.
 
-Two of the files carry legacy family names (Archivo ExtraBold, IBM Plex Mono
-Medm) beside the typographic ones. On Windows Qt resolves weights 800 and 500
-to the right faces (tested); macOS and Linux were not run.
+Three of the files carry legacy family names beside the typographic ones. On
+Windows Qt resolves weights 800 and 500 to the right faces, and the Noto
+files' named instances show as real styles including ExtraBold, so a Hebrew or
+Arabic title is 800 as in English (the earlier 700 ceiling is gone). macOS
+and Linux were not run. Yiddish (`yi`) maps to the Hebrew script and runs
+right to left.
 
 ## Proposed split of `AppState.qml`
 

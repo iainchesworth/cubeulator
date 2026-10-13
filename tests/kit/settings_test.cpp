@@ -7,11 +7,13 @@
 #include "kit_fixture.hpp"
 
 #include <QCoreApplication>
+#include <QLocale>
 #include <QQmlEngine>
 #include <QSettings>
 #include <QTemporaryDir>
 
 #include <memory>
+#include <utility>
 
 using namespace cube::test;
 
@@ -26,7 +28,7 @@ struct Change {
 const QList<Change>& changes() {
     static const QList<Change> list{
         {"themeMode", "system", "dark"},
-        {"language", "system", "de"},
+        {"language", "", "de"},
         {"marks", true, false},
         {"textSize", "system", "larger"},
         {"motion", "system", "reduced"},
@@ -96,6 +98,75 @@ TEST_CASE("Every setting is still set after a restart", "[kit][settings]") {
             CHECK(state->property(change.name) == change.changedValue);
         }
     }
+}
+
+TEST_CASE("Each setting is stored under the key the design names", "[kit][settings]") {
+    // docs/design/screens/settings.md, "Persistence": group/name keys, named
+    // before the first release so that none needs a migration after it.
+    StoreInTemporaryFolder fresh;
+    {
+        auto engine = std::make_unique<QQmlEngine>();
+        QObject* state = stateIn(*engine);
+        for (const Change& change : changes()) {
+            REQUIRE(state->setProperty(change.name, change.changedValue));
+        }
+        QCoreApplication::processEvents();
+    }
+    const QSettings store(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Cubeulator"),
+                          QStringLiteral("Cubeulator-kit-tests"));
+    const QList<std::pair<QString, QVariant>> expected{
+        {"language/code", "de"},
+        {"appearance/theme", "dark"},
+        {"appearance/textSize", "larger"},
+        {"appearance/motion", "reduced"},
+        {"appearance/marks", false},
+        {"solving/advance", "timer"},
+        {"solving/pace", "slow"},
+        {"solving/explain", false},
+        {"solving/notation", true},
+        {"solving/sound", false},
+        {"solving/haptics", false},
+        {"history/keep", false},
+    };
+    for (const auto& [key, value] : expected) {
+        INFO(key.toStdString());
+        REQUIRE(store.contains(key));
+        CHECK(store.value(key) == value);
+    }
+}
+
+TEST_CASE("A theme stored under the old key is carried over once", "[kit][settings][legacy]") {
+    StoreInTemporaryFolder fresh;
+    {
+        // What an install from before the design named its keys left behind.
+        QSettings old(QSettings::IniFormat, QSettings::UserScope, QStringLiteral("Cubeulator"),
+                      QStringLiteral("Cubeulator-kit-tests"));
+        old.setValue("appearance/themeMode", "dark");
+        old.sync();
+    }
+    {
+        auto first = std::make_unique<QQmlEngine>();
+        QObject* state = stateIn(*first);
+        CHECK(state->property("themeMode").toString() == "dark");
+        // The person then goes back to following the device.
+        REQUIRE(state->setProperty("themeMode", "system"));
+        QCoreApplication::processEvents();
+    }
+    {
+        // It must not be carried over again over their choice.
+        auto second = std::make_unique<QQmlEngine>();
+        CHECK(stateIn(*second)->property("themeMode").toString() == "system");
+    }
+}
+
+TEST_CASE("A language stored as \"system\" before the key was named means the device's", "[kit][settings][legacy]") {
+    resetKitState();
+    set("SettingsState", "language", "system");
+    CHECK_FALSE(get("Theme", "languageTag").toString().isEmpty());
+    CHECK(get("Theme", "languageTag").toString() == QLocale().name());
+    set("SettingsState", "language", "");
+    CHECK(get("Theme", "languageTag").toString() == QLocale().name());
+    resetKitState();
 }
 
 TEST_CASE("A setting applies live, in the tokens, with no restart", "[kit][settings]") {

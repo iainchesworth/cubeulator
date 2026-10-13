@@ -418,13 +418,14 @@ TEST_CASE("The language chooses the script, the direction and the type's familie
     // One family for the UI in each language, by script.
     CHECK(themeValue("headingFamily").toString() == "Archivo");
     set("SettingsState", "language", "he");
-    CHECK(themeValue("headingFamily").toString() == "IBM Plex Sans Hebrew");
+    CHECK(themeValue("headingFamily").toString() == "Noto Sans Hebrew");
     set("SettingsState", "language", "ar");
-    CHECK(themeValue("headingFamily").toString() == "IBM Plex Sans Arabic");
-    // No extra-bold in Hebrew or Arabic: headings use 700.
-    CHECK(themeValue("maxWeight").toInt() == 700);
-    set("SettingsState", "language", "en");
-    CHECK(themeValue("maxWeight").toInt() == 800);
+    CHECK(themeValue("headingFamily").toString() == "Noto Sans Arabic");
+    // Yiddish is written in Hebrew script and runs right to left.
+    set("SettingsState", "language", "yi");
+    CHECK(themeValue("script").toString() == "hebrew");
+    CHECK(themeValue("rtl").toBool());
+    CHECK(themeValue("headingFamily").toString() == "Noto Sans Hebrew");
     resetKitState();
 }
 

@@ -33,7 +33,7 @@ QFontInfo shown(QQuickItem* text) {
 TEST_CASE("The bundle holds the four families the design names", "[kit][fonts]") {
     const QStringList added = cube::app::kit::installBundledFonts();
     INFO("families the bundle registered: " << added.join(", ").toStdString());
-    for (const char* family : {"Archivo", "IBM Plex Mono", "IBM Plex Sans Hebrew", "IBM Plex Sans Arabic"}) {
+    for (const char* family : {"Archivo", "IBM Plex Mono", "Noto Sans Hebrew", "Noto Sans Arabic"}) {
         INFO(family);
         CHECK(QFontDatabase::hasFamily(family));
     }
@@ -66,16 +66,30 @@ TEST_CASE("The mono face is Plex Mono Medium for numerals", "[kit][fonts]") {
     CHECK(info.fixedPitch());
 }
 
-TEST_CASE("Hebrew and Arabic have a regular and a bold, and no more", "[kit][fonts]") {
+TEST_CASE("Hebrew and Arabic are drawn at every weight the design uses, from one variable file each",
+          "[kit][fonts]") {
     cube::app::kit::installBundledFonts();
-    for (const char* family : {"IBM Plex Sans Hebrew", "IBM Plex Sans Arabic"}) {
-        for (const int weight : {400, 700}) {
+    for (const char* family : {"Noto Sans Hebrew", "Noto Sans Arabic"}) {
+        for (const int weight : {400, 700, 800}) {
             const QFontInfo info = resolve(family, weight);
             INFO(family << " at " << weight << " resolved to '" << info.family().toStdString() << "' at "
                         << info.weight());
             CHECK(info.family() == family);
             CHECK(info.weight() == weight);
         }
+    }
+}
+
+TEST_CASE("The variable Noto files offer a real ExtraBold, not a synthetic one", "[kit][fonts]") {
+    cube::app::kit::installBundledFonts();
+    for (const char* family : {"Noto Sans Hebrew", "Noto Sans Arabic"}) {
+        const QStringList styles = QFontDatabase::styles(family);
+        INFO(family << " styles: " << styles.join(", ").toStdString());
+        // Named instances of the weight axis, as separate faces: what Qt
+        // matches a request for weight 800 to, rather than emboldening Bold.
+        CHECK(styles.contains("ExtraBold"));
+        CHECK(styles.contains("Regular"));
+        CHECK(styles.contains("Bold"));
     }
 }
 
@@ -107,7 +121,7 @@ TEST_CASE("The app shows Archivo with no Archivo installed", "[kit][fonts]") {
     CHECK(shown(body.get()).weight() == 400);
 }
 
-TEST_CASE("Numerals are drawn in Plex Mono, and a Hebrew UI in Plex Hebrew", "[kit][fonts]") {
+TEST_CASE("Numerals are drawn in Plex Mono, and Hebrew, Yiddish and Arabic UIs in Noto", "[kit][fonts]") {
     resetKitState();
     cube::app::kit::installBundledFonts();
 
@@ -116,12 +130,18 @@ TEST_CASE("Numerals are drawn in Plex Mono, and a Hebrew UI in Plex Hebrew", "[k
 
     set("SettingsState", "language", "he");
     auto hebrew = create("KitText", {{"text", "שלום"}, {"role", "title"}});
-    CHECK(shown(hebrew.get()).family() == "IBM Plex Sans Hebrew");
-    // No extra-bold in Hebrew: a title is 700.
-    CHECK(shown(hebrew.get()).weight() == 700);
+    CHECK(shown(hebrew.get()).family() == "Noto Sans Hebrew");
+    // The variable axis has an extra-bold, so a title is 800 in Hebrew as in English.
+    CHECK(shown(hebrew.get()).weight() == 800);
+
+    // Yiddish is written in Hebrew script, so it takes the Hebrew face.
+    set("SettingsState", "language", "yi");
+    auto yiddish = create("KitText", {{"text", "ייִדיש"}, {"role", "headline"}});
+    CHECK(shown(yiddish.get()).family() == "Noto Sans Hebrew");
 
     set("SettingsState", "language", "ar");
-    auto arabic = create("KitText", {{"text", "مرحبا"}, {"role", "body"}});
-    CHECK(shown(arabic.get()).family() == "IBM Plex Sans Arabic");
+    auto arabic = create("KitText", {{"text", "مرحبا"}, {"role", "title"}});
+    CHECK(shown(arabic.get()).family() == "Noto Sans Arabic");
+    CHECK(shown(arabic.get()).weight() == 800);
     resetKitState();
 }

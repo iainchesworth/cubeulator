@@ -12,27 +12,30 @@ picked up by `src/app/CMakeLists.txt`; adding one needs no code change.
 | `Archivo-Bold.ttf` | Archivo | 700 | headline, direction, bold body | `OFL-Archivo.txt` |
 | `Archivo-ExtraBold.ttf` | Archivo | 800 | display, title, instruction, labels | `OFL-Archivo.txt` |
 | `IBMPlexMono-Medium.ttf` | IBM Plex Mono | 500 | numerals, notation, key names | `OFL-IBMPlexMono.txt` |
-| `IBMPlexSansHebrew-Regular.ttf`, `-Bold.ttf` | IBM Plex Sans Hebrew | 400, 700 | Hebrew (no 800 exists) | `OFL-IBMPlexSansHebrew.txt` |
-| `IBMPlexSansArabic-Regular.ttf`, `-Bold.ttf` | IBM Plex Sans Arabic | 400, 700 | Arabic (no 800 exists) | `OFL-IBMPlexSansArabic.txt` |
+| `NotoSansHebrew.ttf` | Noto Sans Hebrew | 100 to 900 (variable) | Hebrew and Yiddish | `OFL-NotoSansHebrew.txt` |
+| `NotoSansArabic.ttf` | Noto Sans Arabic | 100 to 900 (variable) | Arabic | `OFL-NotoSansArabic.txt` |
 
 Japanese and Simplified Chinese use the system's own font, chosen by language
 (`Theme.headingFamily`); nothing for them is bundled.
 
 All are under the SIL Open Font Licence 1.1, which allows bundling and
 redistribution with the app and asks that the licence travel with the fonts.
-**The generated third-party notices (E0b) must list all four families.** The
-files are unmodified.
+**The generated third-party notices (E0b) must list all four families**, with
+a font manifest entry for each file here. The files are unmodified.
 
 ## Where they came from
 
-Fetched 2026-10-13, unmodified, with the licence text each project ships.
+Fetched or copied 2026-10-13, unmodified, with the licence text each project
+ships. Hebrew and Arabic were first bundled as IBM Plex Sans and replaced by
+Noto the same day (D3 in `docs/design/family.md`: Noto is the family's, and
+its variable files have an ExtraBold the Plex faces do not).
 
 | family | source | version |
 |---|---|---|
 | Archivo | https://github.com/Omnibus-Type/Archivo, `fonts/ttf/` and `OFL.txt` | commit `211127690e8ff106c36c935f7e5e697114cff103` (2026-09-02) |
 | IBM Plex Mono | https://github.com/IBM/plex release `@ibm/plex-mono@2.5.0`, `ibm-plex-mono.zip`, `fonts/complete/ttf/` | 2.5.0 |
-| IBM Plex Sans Hebrew | release `@ibm/plex-sans-hebrew@1.1.0`, `ibm-plex-sans-hebrew.zip` | 1.1.0 |
-| IBM Plex Sans Arabic | release `@ibm/plex-sans-arabic@1.1.0`, `ibm-plex-sans-arabic.zip` | 1.1.0 |
+| Noto Sans Hebrew | ICL Forge's shared copy, `apps/shared/theme/assets/fonts/NotoSansHebrew.ttf` (upstream https://github.com/notofonts/hebrew); the same file the family's other apps ship (`docs/design/family.md`, D3) | Version 3.001 |
+| Noto Sans Arabic | the same folder, `NotoSansArabic.ttf` (upstream https://github.com/notofonts/arabic) | Version 2.012 |
 
 SHA-256 of what is in this folder:
 
@@ -41,18 +44,20 @@ SHA-256 of what is in this folder:
 9fff67922ae2bc376a9e5c6d644eebf8c5b17f62a0f38e5f016e4b7e3903662f  Archivo-ExtraBold.ttf
 59fbfd8a9bb41301bfe950e7b097fd42d52af224a07761e2c1b2c959a4c9cf9a  Archivo-Regular.ttf
 98fbd727aae340b236955879dabed4d991aac9e8e90b3b2a67ce4a59221cc97c  IBMPlexMono-Medium.ttf
-b74f809dead12442ed56e02a12c3bcc02076c9ad4e32f17d0a9ca6fc1aafc89e  IBMPlexSansArabic-Bold.ttf
-8e0f1046c736bf939d4939ee3ae0116acf61cbcd6592deae7656761627080981  IBMPlexSansArabic-Regular.ttf
-628c5dac15f61b8c981629426cc75d2123cf25520926bf28fa1a060c2cd096fb  IBMPlexSansHebrew-Bold.ttf
-98cd8ca13fef47fb57c20faed17a346639bb418b7abeb096fd9693ea3eecc445  IBMPlexSansHebrew-Regular.ttf
+63111b5b2e074dd48cc67692e0a2726d86ee94c1c37fe8598257b7b4e87e869e  NotoSansArabic.ttf
+7ef36a2c3593758cdb622e1bdef4f84523e92fbc3ccc667438dd80ff54c2de88  NotoSansHebrew.ttf
 ```
 
 ## Notes for whoever uses them
 
 - Archivo ExtraBold and IBM Plex Mono Medium carry legacy family names
-  ("Archivo ExtraBold", "IBM Plex Mono Medm") alongside the typographic ones
-  ("Archivo", "IBM Plex Mono"). `tests/kit/fonts_test.cpp` checks that Qt
-  resolves weight 800 and weight 500 to the right faces on the platform the
-  suite runs on; run it on each platform before trusting it there.
+  ("Archivo ExtraBold", "IBM Plex Mono Medm"), and the Hebrew file's is "Noto
+  Sans Hebrew Thin" (its default instance), alongside the typographic ones.
+  `tests/kit/fonts_test.cpp` checks that Qt resolves weight 800 and weight 500
+  to the right faces, and that the variable files expose a real ExtraBold
+  style, on the platform the suite runs on; run it on each platform before
+  trusting it there.
+- The two Noto files are variable fonts. Qt on Windows exposes their named
+  instances as separate styles (tested); macOS and Linux were not run.
 - An update is: replace the file, update this table and the hashes, run
   `ctest -L fonts`.

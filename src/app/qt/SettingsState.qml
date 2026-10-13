@@ -45,12 +45,33 @@ QtObject {
         { key: "light", label: "Light" },
         { key: "dark", label: "Dark" }
     ]
+    //
+    // Stored as `appearance/theme` (docs/design/screens/settings.md,
+    // "Persistence"): the key is named for the design, the QML property keeps
+    // the name the existing screens read. Before the design named its keys it
+    // was `appearance/themeMode`; that value is carried over once, below.
     property Settings appearanceSettings: Settings {
         id: appearanceSettingsId
         category: "appearance"
-        property string themeMode: "system"
+        property string theme: "system"
     }
-    property alias themeMode: appearanceSettingsId.themeMode
+    property alias themeMode: appearanceSettingsId.theme
+
+    // The key this setting had before the design named it. "" when absent; the
+    // migration below empties it so that it is only ever carried over once.
+    property Settings legacyThemeSettings: Settings {
+        id: legacyThemeSettingsId
+        category: "appearance"
+        property string themeMode: ""
+    }
+    Component.onCompleted: {
+        const old = legacyThemeSettingsId.themeMode;
+        if (old === "")
+            return;
+        if (appearanceSettingsId.theme === "system" && (old === "light" || old === "dark"))
+            appearanceSettingsId.theme = old;
+        legacyThemeSettingsId.themeMode = "";
+    }
 
     // Which QRhi backends Qt actually supports on this platform (see
     // https://doc.qt.io/qt-6/qsgrendererinterface.html and the Qt 6.0
@@ -98,14 +119,16 @@ QtObject {
     // not one of these (a hand-edited file, a later version's choice) is read
     // as the default by whoever consumes it, never as an error.
 
-    // Appearance. "system" | a language tag ("en", "de", "fr", "es", "ja",
-    // "zh-CN", "he", "ar"). E2b turns this into the running translation.
+    // Language, stored as `language/code`. "" is "same as this device" (the
+    // design: absent means the same). Otherwise a language tag: en, de, fr, es,
+    // ja, zh-CN, he, ar, yi. E2b turns it into the running translation. A stored
+    // "system" from before the key was named is read as "".
     property Settings languageSettings: Settings {
         id: languageSettingsId
-        category: "appearance"
-        property string language: "system"
+        category: "language"
+        property string code: ""
     }
-    property alias language: languageSettingsId.language
+    property alias language: languageSettingsId.code
 
     // Marks on cube colours: a ring, slash, plus, dot or bar on each colour so
     // they can be told apart without hue. On by default.
@@ -142,14 +165,14 @@ QtObject {
         category: "solving"
         property string advance: "tap"
         property string pace: "steady"
-        property bool explainStages: true
+        property bool explain: true
         property bool notation: false
         property bool sound: true
         property bool haptics: true
     }
     property alias advance: solvingSettingsId.advance
     property alias pace: solvingSettingsId.pace
-    property alias explainStages: solvingSettingsId.explainStages
+    property alias explainStages: solvingSettingsId.explain
     property alias notation: solvingSettingsId.notation
     property alias sound: solvingSettingsId.sound
     property alias haptics: solvingSettingsId.haptics

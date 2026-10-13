@@ -34,7 +34,7 @@ Text {
 
     font.family: spec.family === "mono" ? Theme.fontMono : Theme.headingFamily
     font.pixelSize: pixelSize
-    font.weight: spec.family === "mono" ? spec.weight : Math.min(spec.weight, Theme.maxWeight)
+    font.weight: spec.weight
     font.capitalization: (spec.caps === true && Theme.hasCapitals) ? Font.AllUppercase : Font.MixedCase
     font.letterSpacing: (spec.tracking !== undefined && Theme.hasCapitals) ? spec.tracking * pixelSize : 0
     lineHeight: spec.line
