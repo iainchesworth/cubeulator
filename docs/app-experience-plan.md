@@ -127,13 +127,16 @@ default above, the answer stands.
 - A release build never saves a picture from the camera; recording failed
   scans is for developer builds (`brief.md` D7).
 - Source strings are British English (`brief.md` D10).
-- The app's identifier is `org.iainchesworth.cubeulator` (`brief.md` D12).
+- The app's identifier is `org.iainchesworthlabs.cubeulator` (`brief.md` D12).
+  It follows the repository's account, which became `iainchesworthlabs` on
+  2026-10-13.
 - Hebrew and Arabic are set in Noto Sans Hebrew and Noto Sans Arabic, the
   files the other apps ship (`design/family.md` D3).
 - Translations are keyed by id, as `strings.json` already is, not by the
   English text (`design/family.md` D5).
-- The publisher is written "Iain Chesworth" in About, the packages and the
-  copyright line (`design/family.md` D1).
+- The publisher is written "Iain Chesworth Labs" in About, the packages and
+  the store listing (`brief.md` D13, `design/family.md` D1). The copyright
+  line still names Iain Chesworth.
 
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
@@ -424,9 +427,11 @@ Countdown Solver and Automate. The full account, with sources, is
 
 **Decided on 2026-10-13** (`family.md` section 5), all by Iain:
 
-- D1: the publisher is **Iain Chesworth**, because the repository is under
-  `iainchesworth`, not `iainchesworthlabs`. D9 follows: the account and
-  `org.iainchesworth.cubeulator` stand.
+- D1: the publisher follows the account. It was "Iain Chesworth" while the
+  repository was under `iainchesworth`; the repository moved to
+  `iainchesworthlabs` the same day and Iain switched it to **Iain Chesworth
+  Labs**. D9 follows: the identifier is
+  `org.iainchesworthlabs.cubeulator`.
 - D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
   Forge; no other app is reskinned.
 - D3: Hebrew and Arabic are Noto Sans, the family's faces.
@@ -440,7 +445,7 @@ session that is already planned; none is a new session.
 
 | item | rides with | what changes |
 |---|---|---|
-| F1 publisher line | E4a, E3b | one string, "Iain Chesworth", in the version resource, `Info.plist`, AppStream, About. It is what they already say |
+| F1 publisher line | E4a, E3b | one string, "Iain Chesworth Labs", in the version resource, `Info.plist`, AppStream, About. E4a changes what it wrote, and the identifier with it |
 | F2 setting keys | E2a, E3a | the keys are named in `design/screens/settings.md`, in the family's `group/name` style |
 | F3 language manager and ids | E2b | its brief says **port** the family `LanguageManager` and its CI gates, key by id (`qsTrId`), and add locale-aware numbers, plurals and the unwrapped-string lint |
 | F4 Noto faces | E2a, before it bundles fonts | two `case` lines in `Theme.qml`, the 700 ceiling goes, and E2a checks that Qt draws weight 800 from the variable axis |

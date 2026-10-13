@@ -105,9 +105,10 @@ system's own setting multiplied in; text that wraps instead of eliding.
 **6. The publisher follows the account** *(Iain, 2026-10-13, D1)*. Iain
 Chesworth Labs, ICL, is the umbrella for his personal and shared work; its
 names are `iainchesworth`, `iainchesworthlabs` and `icl` (as in ICL Forge,
-`iclforge`). Cubeulator is under `iainchesworth`, so its publisher is
-**Iain Chesworth**. By the same rule an app under `iainchesworthlabs` would
-say Iain Chesworth Labs; that is for those repositories. No app shows a
+`iclforge`). Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so its
+publisher is **Iain Chesworth Labs**; it was "Iain Chesworth" while the
+repository was under `iainchesworth`, and Iain changed it when it moved. An
+app still under `iainchesworth` says Iain Chesworth. No app shows a
 publisher or a copyright line in its window today.
 
 ## 2. Side by side
@@ -125,7 +126,7 @@ publisher or a copyright line in its window today.
 | Smallest target | 48 px; 96 on solve | 30 px buttons (desktop) | 44 px on phone | 44 px on phone |
 | About is | a screen under Settings | a dialog, reached three ways | a card in Settings | the `#about` route |
 | About shows | icon, name, version, what, author, licence, three rows, small print | icon, name, tagline, what, **version block**, licence and trademark, third-party note, repository link, Licences and Close | name and version, **version block**, GitHub link, Third-Party Licenses | name, tagline, version, commit, commit date, homepage, language chips |
-| Copyright in the app | none ("Made by Iain Chesworth") | none (README and macOS bundle only) | none | none |
+| Copyright in the app | none ("Made by Iain Chesworth Labs") | none (README and macOS bundle only) | none | none |
 | Licences | generated screen (E0b) | `NOTICES.txt` in a read-only dialog (Crucible, Hearth; not Forge) | a dialog of five hard-coded entries | none |
 | Privacy in the app | a screen | prose in the docs | none | prose in the docs |
 | Diagnostics | none | save, copy, live view | a rotating log file | a diagnostics page, capture downloads |
@@ -137,8 +138,8 @@ publisher or a copyright line in its window today.
 | Pseudo-locale | planned, real | `xx`, environment only | none | `⟦…⟧` scan in a test |
 | Translation gates | planned lint | `update_translations`, no unfinished, `test_translations.cpp` | two grep jobs | key and placeholder parity |
 | Window size | remembered (E4a) | not remembered | fixed, min = max | n/a |
-| Identifier | `org.iainchesworth.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
-| GitHub account | `iainchesworth` | `iainchesworthlabs` | `iainchesworth` | `iainchesworthlabs` |
+| Identifier | `org.iainchesworthlabs.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
+| GitHub account | `iainchesworthlabs` (moved from `iainchesworth`, 2026-10-13) | `iainchesworthlabs` | `iainchesworth` | `iainchesworthlabs` |
 | Docs pictures | system-test tour (E0a) | manifest of 84, `take_pictures.py`, `check_doc_pictures.py` | by hand | `scripts/capture-doc-screenshots.js` |
 
 ## 3. The common features, and how the suite does them
@@ -150,21 +151,24 @@ today, and the proposal. Lane and timing are in section 6.
 
 - **Family.** Copyright appears in the README ("Copyright (C) 2026 Iain
   Chesworth.") and the macOS bundle ("Copyright (c) Iain Chesworth"). The
-  CPack vendor is "Iain Chesworth". No app shows it in a window.
+  CPack vendor was "Iain Chesworth"; Cubeulator's is "Iain Chesworth Labs"
+  on `develop` since its repository moved. No app shows it in a window.
 - **Identifiers.** Countdown Solver: `org.iainchesworth.countdownsolver`.
   ICL Forge has three schemes: `com.iainchesworthlabs.hearth` and
   `.forge-gui` on macOS, `com.iclforge.hearth` on Android
   (`apps/hearth/android/app/build.gradle.kts`). Cubeulator is decided
-  (`brief.md` D12) and matches Countdown Solver.
+  (`brief.md` D12) and follows Countdown Solver's pattern under its own
+  account.
 - **Decided (D1, D9).** One publisher string, used in the same five
   places: the Windows version resource, `Info.plist`, the AppStream
   `<developer>`, the store listing, and the About small print. The account
-  decides it: Cubeulator is under `iainchesworth`, so it is **Iain
-  Chesworth**, which is what the CPack vendor and the macOS copyright
-  already say. The copyright line is "Copyright © 2026 Iain Chesworth".
-  Iain Chesworth Labs remains the umbrella's name; Cubeulator does not
-  print it. Cubeulator stays under `iainchesworth` and keeps
-  `org.iainchesworth.cubeulator`; the outlier is ICL Forge's Android id.
+  decides it. Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so it
+  is **Iain Chesworth Labs** (`brief.md` D13), which is what the CPack
+  vendor on `develop` now says, and its identifier is
+  `org.iainchesworthlabs.cubeulator` (`brief.md` D12). Both were changed by Iain
+  the day the repository moved, before anything shipped. The copyright line
+  was not part of that decision and is still "Copyright © 2026 Iain
+  Chesworth". The outlier is ICL Forge's Android id.
 
 ### F2. Settings store and keys
 
@@ -415,7 +419,7 @@ All taken by Iain on 2026-10-13.
 
 | # | decision | answer | changes |
 |---|---|---|---|
-| D1 | How the publisher is written in the app | **Iain Chesworth**, because the repository is under `iainchesworth`, not `iainchesworthlabs` (asked twice, same answer). Copyright line "Copyright © 2026 Iain Chesworth" | nothing in E4a or E3b: it is what they already say; the rule is recorded |
+| D1 | How the publisher is written in the app | **Iain Chesworth Labs**. The rule is unchanged: the publisher follows the account. It was "Iain Chesworth" (asked twice, same answer) while the repository was under `iainchesworth`; the repository then moved to `iainchesworthlabs` and Iain switched it the same day. The copyright line was not part of the switch: "Copyright © 2026 Iain Chesworth" | E4a and E3b write "Iain Chesworth Labs" in the five places F1 lists |
 | D2 | Is Signal the suite's look | **Two looks, shared chassis.** Cubeulator stays Signal with ICL Forge; Countdown Solver and Automate keep Calm. What is shared is behaviour and structure, not palette | no reskin of any other app |
 | D3 | Hebrew and Arabic faces | **Noto Sans Hebrew and Noto Sans Arabic**, the family's | `Theme.qml`, `system.md`, `platforms.md`, the notices |
 | D4 | Yiddish | **In V1.0.** Nine languages: en de fr es ja zh he ar yi | `brief.md` D-table, `settings.md`, `platforms.md`, `accessibility.md`, E5's set, the prototype's list; plan "decided since" amended |
@@ -423,7 +427,7 @@ All taken by Iain on 2026-10-13.
 | D6 | Copy details | **In V1.0**, not V1.1 | E3b gains the build line, its **Copy** and the **Copy details** row; `screens/about.md` says exactly what is copied; `strings.json` gains five strings |
 | D7 | Accent palettes for Cubeulator | **No** | - |
 | D8 | A shared component kit across repositories | **Not before V1.0 ships.** Align by spec; revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |
-| D9 | Identifiers across the suite | **Follows D1.** `org.iainchesworth.cubeulator` and the `iainchesworth` account stand (D12). An identifier follows its repository's account. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | - |
+| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `org.iainchesworthlabs.cubeulator` (D12), changed by Iain on 2026-10-13 before anything shipped. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | - |
 
 ## 6. Where this lands
 
@@ -432,7 +436,7 @@ waits for the sessions in flight to finish.
 
 | item | session | when |
 |---|---|---|
-| F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0; already what E4a writes |
+| F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0; E4a changes what it wrote to "Iain Chesworth Labs" and the new identifier |
 | F2 setting keys | E2a ("settings that persist"), E3a | before V1.0 |
 | F3 language manager, ids and gates | E2b, which has not started: its brief says "port" and "ids" | before V1.0 |
 | F4 Noto faces | E2a, before it bundles fonts | before V1.0 |
