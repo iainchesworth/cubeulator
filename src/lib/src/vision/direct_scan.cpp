@@ -639,7 +639,12 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
 }
 
 Result<solver::Cube> SideScan::cube() const {
-    return scanned().transform([](const ScannedCube& scanned) { return scanned.cube; });
+    // By hand, not Result::transform: see scan_assembly.cpp.
+    const auto whole = scanned();
+    if (!whole) {
+        return std::unexpected(whole.error());
+    }
+    return whole->cube;
 }
 
 Result<ScannedCube> SideScan::scanned() const {
@@ -654,8 +659,11 @@ Result<ScannedCube> SideScan::scanned() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces[i].lab = groups_[captured[i]].fused;
     }
-    return resolve_colors(faces).and_then(
-        [&faces](const NamedSides& named) { return assemble(named, faces); });
+    const auto named = resolve_colors(faces);
+    if (!named) {
+        return std::unexpected(named.error());
+    }
+    return assemble(*named, faces);
 }
 
 }  // namespace cube::vision
