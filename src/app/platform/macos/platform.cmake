@@ -20,7 +20,6 @@ set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/macos/camera_macos.cpp
-    platform/macos/inference_env_macos.cpp
     platform/macos/paths_macos.cpp
     platform/macos/platform_info_macos.cpp
     platform/posix/capture_thread_scope_posix.cpp

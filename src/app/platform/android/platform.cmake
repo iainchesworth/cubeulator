@@ -20,7 +20,6 @@ set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/android/camera_android.cpp
-    platform/android/inference_env_android.cpp
     platform/android/paths_android.cpp
     platform/android/platform_info_android.cpp
     platform/posix/capture_thread_scope_posix.cpp

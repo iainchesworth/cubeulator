@@ -103,7 +103,6 @@ MINGW* | MSYS* | CYGWIN*)
     require "the windows platform plugin is bundled"                grep -q 'plugins[\\/]platforms[\\/]qwindows\.dll' "$contents"
     require "the QML modules are bundled"                           grep -q 'qml[\\/]QtQuick' "$contents"
     require "OpenCV and its codecs came along (transitive DLLs)"    grep -q 'bin[\\/]libpng16\.dll' "$contents"
-    require "ONNX Runtime came along"                               grep -q 'bin[\\/]onnxruntime\.dll' "$contents"
     require "the C++ runtime is installed app-locally"              grep -q 'bin[\\/]vcruntime140\.dll' "$contents"
     require "no 25 MB runtime installer is bundled"                 bash -c "! grep -q 'vc_redist' '$contents'"
     require "the licence is installed"                              grep -q 'LICENSE\.txt' "$contents"

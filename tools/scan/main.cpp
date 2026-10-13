@@ -19,7 +19,6 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/direct_scan.hpp>
 #include <cube/vision/held_cube.hpp>
-#include <cube/vision/temporal_fusion.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 

@@ -4,8 +4,8 @@
 #
 # Copies every DLL cube_app needs, transitively, that is not Qt's and not the
 # system's. $<TARGET_RUNTIME_DLLS:...> is not enough: it lists the DLLs of
-# the imported targets cube_app links directly (OpenCV, ONNX Runtime) and
-# misses what those load in turn - zlib, libpng, libjpeg, libwebp, protobuf,
+# the imported targets cube_app links directly (OpenCV) and misses what
+# those load in turn - zlib, libpng, libjpeg, libwebp, protobuf,
 # abseil, re2 - so the installed app would stop with STATUS_DLL_NOT_FOUND on
 # any machine without the vcpkg tree on PATH.
 #

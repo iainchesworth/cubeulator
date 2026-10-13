@@ -134,7 +134,7 @@ icons follow.
 - The `.deb` recommends `fonts-noto-cjk`, and the `.rpm` suggests
   `google-noto-sans-cjk-fonts`, for Japanese and Chinese text on a minimal
   install (`platforms.md`, "Fonts").
-- Qt, OpenCV and ONNX Runtime are inside the package, so its dependencies
+- Qt and OpenCV are inside the package, so its dependencies
   are the system libraries Qt's xcb and OpenGL plumbing loads. The list is in
   `packaging/linux/Packaging.cmake`; it is written down, not discovered,
   because dpkg-shlibdeps and rpm's scan would try to resolve the bundled

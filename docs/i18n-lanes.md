@@ -40,8 +40,6 @@
 | `DirectScanScreen.qml` | 163 | Recording this scan to  | none: needs a string |
 | `DirectScanScreen.qml` | 260 | Cancel | `common.cancel` |
 | `DirectScanScreen.qml` | 266 | Start over | `scan.startOver` |
-| `controllers/settings_model.cpp` | 20 | Hand-detection model not found on this device. | none: needs a string |
-| `controllers/settings_model.cpp` | 22 | No AI inference hardware detected. | none: needs a string |
 
 ### solve lane (feature/solve-guidance)
 

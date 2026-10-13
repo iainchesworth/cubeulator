@@ -67,8 +67,8 @@ set_source_files_properties("${_rc_file}" PROPERTIES
 set(_bindir "${CMAKE_INSTALL_BINDIR}")
 cube_install_desktop_executable(${target} "${_bindir}")
 
-# Dependencies that came from vcpkg: OpenCV, ONNX Runtime and, under them,
-# everything they load. Resolved transitively at install time
+# Dependencies that came from vcpkg: OpenCV and, under it, everything it
+# loads. Resolved transitively at install time
 # (cmake/InstallRuntimeDependencies.cmake); Qt's own are deployed by windeployqt
 # in the script below.
 set(_dep_dirs "$<TARGET_FILE_DIR:${target}>")

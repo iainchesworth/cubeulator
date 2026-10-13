@@ -25,14 +25,4 @@ struct ColorPalette {
 // the real correction mechanism for lighting-driven misreads.
 [[nodiscard]] ColorPalette default_palette();
 
-// Classifies a single BGR pixel sample against the palette by its
-// Euclidean (CIE76) distance to the nearest reference color in CIELAB
-// space. CIE76 rather than the more elaborate CIEDE2000 is a deliberate
-// simplification: the 6 reference colors are widely separated in color
-// space, so the extra perceptual-uniformity correction CIEDE2000 adds
-// doesn't change nearest-neighbor classification here, and CIE76 is far
-// simpler to implement correctly.
-[[nodiscard]] cube::model::Facelet classify_color(const cv::Vec3b& bgr_sample,
-                                                  const ColorPalette& palette);
-
 }  // namespace cube::vision

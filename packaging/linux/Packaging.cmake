@@ -11,8 +11,8 @@ list(APPEND CPACK_GENERATOR "TGZ")
 # AppStream metadata and icons in /usr/share.
 set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 
-# Qt, OpenCV and ONNX Runtime ship inside the package, so the dependencies
-# named here are only the system libraries Qt's xcb and OpenGL plumbing loads.
+# Qt and OpenCV ship inside the package, so the dependencies named here are
+# only the system libraries Qt's xcb and OpenGL plumbing loads.
 # They are listed rather than discovered because dpkg-shlibdeps and rpm's own
 # scan would also try to resolve the bundled libraries, and would either fail
 # or ask the distribution for libQt6*.so it does not have.

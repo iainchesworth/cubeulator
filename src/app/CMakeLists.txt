@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# cube_platform - the platform-abstraction interfaces (camera, inference_env,
+# cube_platform - the platform-abstraction interfaces (camera,
 # paths, platform_info, crash_handler), each with exactly one
 # compiled implementation per OS. Built unconditionally (not gated behind
 # CUBEULATOR_BUILD_APP) so the per-OS selection is exercised on every preset,
@@ -14,7 +14,6 @@
 add_library(cube_platform
     interfaces/camera.hpp
     interfaces/crash_handler.hpp
-    interfaces/inference_env.hpp
     interfaces/paths.hpp
     interfaces/platform_info.hpp
     platform/detail/capture_thread_scope.hpp
@@ -82,29 +81,12 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/held_cube.cpp
         qt/controllers/platform_facts.hpp
         qt/controllers/platform_facts.cpp
-        qt/controllers/settings_model.hpp
-        qt/controllers/settings_model.cpp
-        qt/controllers/bundled_models.hpp
-        qt/controllers/bundled_models.cpp
         qt/controllers/frame_image_provider.hpp
         qt/controllers/frame_image_provider.cpp
         qt/solve_controller.hpp
         qt/solve_controller.cpp)
 
     target_include_directories(cube_app_controllers PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
-
-    # Embeds the hand-detection ONNX model directly into cube_app_controllers'
-    # object code as a Qt resource (:/models/...) rather than relying on it
-    # being deployed as a loose file next to the executable - see
-    # bundled_models.cpp. cube_deploy_vision_assets() (VisionAssets.cmake)
-    # still separately copies the same file next to cube_app.exe/the test
-    # binaries, which cube::vision's own filesystem-path-based tests
-    # (tests/integration/hand_presence_integration_test.cpp) still rely on -
-    # that's a Qt-free cube_lib API and can't read a Qt resource.
-    qt_add_resources(cube_app_controllers "cube_app_models"
-        PREFIX "/models"
-        BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
 
     target_link_libraries(cube_app_controllers
         PUBLIC
@@ -211,7 +193,6 @@ if(CUBEULATOR_BUILD_APP)
     add_dependencies(cube_app cube_version)
 
     cube_deploy_sanitizer_runtime(cube_app)
-    cube_deploy_vision_assets(cube_app)
 
     set_target_properties(cube_app PROPERTIES
         WIN32_EXECUTABLE ON

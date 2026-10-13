@@ -10,7 +10,7 @@ Provenance of each file, so a reviewer knows what was copied and what was typed:
 
 | file | source |
 |---|---|
-| `Apache-2.0.txt` | verbatim copy of `assets/models/palm_detection_mediapipe_LICENSE.txt` (the unmodified Apache-2.0 text) |
+| `Apache-2.0.txt` | the unmodified Apache-2.0 text, first copied from the palm detection model's licence file (removed with the model in R6) |
 | `MPL-2.0.txt` | verbatim extract from vcpkg's `share/eigen3/copyright` (x64-windows, baseline 5b69863) |
 | `libpng-2.0.txt`, `Libpng.txt` | verbatim copy of vcpkg's `share/libpng/copyright` (it holds both licence versions) |
 | `IJG.txt` | verbatim "LEGAL ISSUES" section of `README.ijg` in the libjpeg-turbo 3.2.0 source that vcpkg unpacked (`D:/vcpkg-buildtrees/libjpeg-turbo/src/3.2.0-*.clean/`) |
