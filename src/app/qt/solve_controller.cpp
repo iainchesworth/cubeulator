@@ -7,6 +7,7 @@
 
 #include <cube/error.hpp>
 #include <cube/solver/notation.hpp>
+#include <cube/solver/outside_view.hpp>
 #include <cube/solver/scan_conversion.hpp>
 #include <cube/solver/solver.hpp>
 
@@ -136,6 +137,7 @@ void SolveController::beginSolve(const Cube& scrambled) {
 void SolveController::applySolveResult() {
     stepped_ = solveWatcher_.result();
     isSolving_ = false;
+    emit solutionChanged();
     emit stateChanged();
 }
 
@@ -147,6 +149,32 @@ QVariantList SolveController::rightColors() const {
 }
 QVariantList SolveController::leftColors() const {
     return face_colors(stepped_.current_cube(), Face::F);
+}
+
+QVariantMap SolveController::stickers() const {
+    QVariantMap sides;
+    for (const Face face : cube::solver::kAllFaces) {
+        QVariantList colors;
+        colors.reserve(9);
+        for (const cube::solver::Color color :
+             cube::solver::outside_view(stepped_.current_cube(), face)) {
+            colors.append(color_name(color));
+        }
+        sides.insert(face_letter(face), colors);
+    }
+    return sides;
+}
+
+QVariantList SolveController::moves() const {
+    QVariantList moves;
+    moves.reserve(stepped_.move_count());
+    for (const cube::solver::Move& move : stepped_.moves()) {
+        moves.append(QVariantMap{
+            {QStringLiteral("face"), face_letter(move.face)},
+            {QStringLiteral("turns"), move.turns},
+            {QStringLiteral("notation"), QString::fromStdString(cube::solver::to_string(move))}});
+    }
+    return moves;
 }
 
 QString SolveController::currentMoveNotation() const {
