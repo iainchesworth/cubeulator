@@ -1,6 +1,8 @@
 # App experience plan
 
-Written 2026-10-13. Status: **draft, awaiting Iain's review.**
+Written 2026-10-13. Status: **in effect.** E0a, E0b and E1 have reported;
+E2a and E4a are running. Nothing has been merged into
+`feature/app-experience` except the design. See [Integration](#integration).
 
 This covers everything a person meets in Cubeulator apart from the two things
 already in flight - reading the cube ([recovery-plan.md](recovery-plan.md))
@@ -111,6 +113,19 @@ otherwise.
 | 7 | Telemetry, crash upload | None. It keeps the privacy promise simple | E3 |
 | 8 | Who builds mobile capture | A separate workstream after R4, outside this plan. Desktop release does not wait for it | E4b |
 
+**Decided since, all on 2026-10-13.** Where an answer differs from the
+default above, the answer stands.
+
+- 3: eight languages - the six above plus Hebrew and Arabic, so
+  right-to-left is in the first release (`docs/design/brief.md`).
+- 5: the Apple stores are skipped for now; the question is deferred, not
+  resolved (`LICENSE-NOTE.md` on `feature/ax-licences`).
+- 6: solve history is in, kept on the device (`docs/design/brief.md`).
+- A release build never saves a picture from the camera; recording failed
+  scans is for developer builds (`brief.md` D7).
+- Source strings are British English (`brief.md` D10).
+- The app's identifier is `org.iainchesworth.cubeulator` (`brief.md` D12).
+
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
 Tools, which Qt publishes under GPLv3 or a commercial licence, not LGPL. If
@@ -123,19 +138,34 @@ it; it is not legal advice.
 
 ## Lanes
 
-Two sessions are active. Experience work stays out of their files until
-they land.
+Experience work stays out of the solve and scan lanes' files until they
+land. The table was corrected on 2026-10-13 from the solve lane's own
+account of `feature/solve-guidance` at `9e6f243`, checked against the
+branch.
 
 | lane | owns | experience work may |
 |---|---|---|
-| **Solve** - `feature/solve-guidance` | `Cube3DView.qml`, `CubeView.qml`, `SolveScreen.qml`, `solve_controller.*`, `src/lib` solver, `tests/qml_test_main.cpp`, `cube_qml_tests` | read. After it lands, E3d restyles the chrome around the cube; the cube view and what a move means stay theirs |
+| **Solve** - `feature/solve-guidance` | `Cube3DView.qml`, `SolveScreen.qml`, `solve_controller.*`, the `HeldCube` controller, `controllers/app_controllers.*`, `src/lib` solver and `vision/held_cube`, `tests/qml_test_main.cpp`, `tests/qml_test_app.hpp`, `cube_qml_tests` | read. After it lands, E3d restyles the chrome around the cube; the cube view and what a move means stay theirs |
 | **Scan** - `feature/direct-scan` | `DirectScanScreen.qml`, `direct_scan.*`, the scan flow in `AppState.qml`, `ScanSession` and `ScanScreen.qml` (removed in R6), the review and hand-entry screen (R3), `src/app/platform` | read. After R4, E3c restyles the chrome; reading behaviour stays theirs |
-| **Experience** - `feature/app-experience` | `Theme.qml`, `AppButton.qml`, `Icon.qml`, `Main.qml`, Launch, Permission, Settings and Complete screens, new About and Licences screens, `SettingsState.qml`, `main.cpp` start-up, translations, packaging, identity, `tests/system/`, `docs/design/` | - |
+| **Experience** - `feature/app-experience` | `Theme.qml`, `AppButton.qml`, `Icon.qml`, `Main.qml`, Launch, Permission, Settings and Complete screens, new About and Licences screens, `SettingsState.qml`, translations, packaging, identity, `tests/system/`, `docs/design/` | - |
+
+The solve lane crossed into the scan lane, because Iain asked for the
+camera on the solve screen: `direct_scan.{hpp,cpp}` in both the app and the
+library (watching a held cube, and `start()` closing a running camera
+first), and `AppState.qml` (`solveCamera`, `rescan()`, the camera kept for
+"solve"). Those changes travel with the solve branch.
+
+Two branches are stacked on the solve branch at `a27a36e` and land after it:
+`feature/solve-merge-adjacent-moves` and `bugfix/launch-cube-top-view`.
+
+`CubeView.qml` is no longer used by the solve screen. `CompleteScreen.qml`
+still draws its cube with it.
 
 Shared files: `src/app/CMakeLists.txt` and `tests/CMakeLists.txt` are
-append-only, each lane in its own block. `AppState.qml` is split in E2a into
-navigation (experience) and scan flow (scan), agreed with the scan lane
-before it is touched.
+append-only, each lane in its own block. `main.cpp` is shared by everyone
+and has its own rule under [Integration](#integration). `AppState.qml` is
+split in E2a into navigation (experience) and scan flow (scan), agreed with
+the scan and solve lanes before it is touched.
 
 Contracts every lane keeps:
 
@@ -152,10 +182,75 @@ Contracts every lane keeps:
 Found in the audit, belonging to the active lanes:
 
 - Solve: reaching Complete; leaving Solve; the hold instruction on phones;
-  the mock "AUTO" box and developer captions.
-- Scan: the "nothing is stored" promise against R4's automatic recording;
-  the two settings that die with `ScanSession`; `cameraError` text built in
-  C++.
+  the mock "AUTO" box and developer captions. **All four are dealt with on
+  `feature/solve-guidance`**: the last step is Finish and goes to Complete,
+  "Rescan" leaves the screen, the hold line is shared by both layouts, and a
+  real camera preview replaced the box. Its controls are named `solve.cube`,
+  `solve.next`, `solve.previous`, `solve.rescan` and `solve.rescanFromNote`.
+- Scan: the "nothing is stored" promise against R4's automatic recording
+  (settled: developer builds only); the two settings that die with
+  `ScanSession`; `cameraError` text built in C++.
+
+## Integration
+
+Added 2026-10-13. Five branches hold finished or running work and none
+contains another.
+
+| branch | lane | commits | pushed |
+|---|---|---|---|
+| `feature/solve-guidance` | solve | 9 on `fa81b2e` | no |
+| `feature/ax-system-tests` | E0a | 11 | yes; CI still running at the time of writing |
+| `feature/ax-licences` | E0b | 6 | no |
+| `feature/ax-desktop` | E4a | 5, running | no |
+| `feature/ax-kit` | E2a | running, uncommitted | no |
+
+**Start-up is contested.** Four of them changed `main.cpp` independently:
+
+- solve: `cube::app::AppControllers` - the controllers, `registerWithQml()`
+  and `addImageProviders(engine)` - plus a sixth controller, `HeldCube`,
+  made from `DirectScan&` and `SolveController&`. The solve screen does not
+  load without it. Also a `CUBE_SOLVE_DEMO` hook.
+- E0a: `cube::app::AppRuntime` - five controllers, their registration and
+  the engine that loads `Main.qml`.
+- E4a: `DesktopIntegration`, three lines around the engine.
+- E2a: `installBundledFonts()`, one line.
+
+One shape, applied by whichever lands second:
+
+- `AppControllers` is the only place a controller is made or registered.
+  Adding a controller means adding it there.
+- `AppRuntime` owns an `AppControllers` and the engine, and nothing else
+  about controllers.
+- `main.cpp` makes an `AppRuntime`. Fonts, desktop integration and any
+  later shell concern are single lines around it, as E4a and E2a already
+  wrote them.
+
+**Where the lines meet.** The solve branch lands on `feature/direct-scan`
+when Iain accepts it. The `ax` branches land on `feature/app-experience`.
+The two meet when `feature/app-experience` merges `feature/direct-scan`
+forward, and that merge is where the start-up shape is reconciled. The
+system-test session does it, because its tests are what prove the result.
+In the same change:
+
+- `known_today_test` stops asserting that Complete is unreachable and that
+  the solve screen has no exit.
+- The journey test walks Finish to Complete and the rescan way out.
+- `e554bcd`, the temporary CI trigger for the branch, is dropped.
+
+Order otherwise: E0a first, since it is the safety net; E0b; then E2a and
+E4a as they finish, each merging `feature/app-experience` before it lands.
+
+**Two hazards, reported by the solve lane and not yet reproduced here.**
+
+- A controller registered with `qmlRegisterSingletonInstance` serves one
+  `QQmlEngine` per process. A second engine gets null singletons. Both test
+  harnesses already keep to one engine each; the merged one must too.
+- A second `QQuickWindow::grabWindow()` with `Cube3DView` in the scene
+  crashed the process for the solve lane (Qt 6.8.3, Direct3D), so its
+  gallery test takes one picture per process. The screenshot tour takes
+  every picture in one process. In CI it runs on Linux under software GL,
+  where this has not been seen. On Windows it is the first thing to check
+  after the merge, on the solve screen first.
 
 ## Phases
 
