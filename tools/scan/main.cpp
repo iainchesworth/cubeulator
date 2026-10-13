@@ -395,7 +395,7 @@ int run_holds(const fs::path& session) {
             if (still) {
                 ++steady;
                 const auto fits =
-                    cube::vision::fit_holds(reads[i]->lab, scanned->cube, scanned->colours);
+                    cube::vision::fit_holds(*reads[i], scanned->cube, scanned->colours);
                 const auto best_view = cube::solver::camera_view(scanned->cube, fits[0].hold);
                 fit.push_back(fits[0].distance);
                 for (const cube::vision::HoldFit& other : fits) {
@@ -405,7 +405,7 @@ int run_holds(const fs::path& session) {
                     }
                 }
                 const cube::vision::HoldReading reading =
-                    cube::vision::read_hold(reads[i]->lab, scanned->cube, scanned->colours);
+                    cube::vision::read_hold(*reads[i], scanned->cube, scanned->colours);
                 if (reading.holds.empty()) {
                     now = "read fits no hold";
                 } else {

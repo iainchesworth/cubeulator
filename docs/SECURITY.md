@@ -3,7 +3,7 @@
 ## Reporting a vulnerability
 
 Please report security vulnerabilities privately using
-[GitHub's private vulnerability reporting](https://github.com/iainchesworth/cubeulator/security/advisories/new)
+[GitHub's private vulnerability reporting](https://github.com/iainchesworthlabs/cubeulator/security/advisories/new)
 rather than opening a public issue.
 
 ## Supported versions

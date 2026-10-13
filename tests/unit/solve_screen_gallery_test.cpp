@@ -29,6 +29,8 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QMouseEvent>
+#include <QPointF>
 #include <QQmlComponent>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -143,6 +145,45 @@ TEST_CASE("solve screen gallery", "[.gallery]") {
     const Cube strayed = scrambled.apply(Move{Face::U, 1}).apply(Move{Face::R, 1});
     show(frame_of(strayed, Hold{Face::U, Face::L}), doubt);
     snap("4-not-the-expected-side");
+
+    // The cube picked up with the mouse and dragged half-way round, button
+    // still down: real pointer events, through the window, to the screen's
+    // own drag handler.
+    if (wanted == "8-dragged") {
+        window.resize(900, 640);
+        screen->setWidth(900);
+        screen->setHeight(640);
+        window.show();
+        pass_time(400);
+        const auto mouse = [&window](QEvent::Type type, const QPointF& at, Qt::MouseButton button,
+                                     Qt::MouseButtons held) {
+            QMouseEvent event(type, at, window.mapToGlobal(at), button, held, Qt::NoModifier);
+            QCoreApplication::sendEvent(&window, &event);
+            QCoreApplication::processEvents();
+        };
+        mouse(QEvent::MouseButtonPress, {290.0, 340.0}, Qt::LeftButton, Qt::LeftButton);
+        for (int step = 1; step <= 34; ++step) {
+            mouse(QEvent::MouseMove, {290.0 + 10.0 * step, 340.0 - 3.0 * step}, Qt::NoButton,
+                  Qt::LeftButton);
+        }
+        snap("8-dragged");
+        mouse(QEvent::MouseButtonRelease, {630.0, 238.0}, Qt::LeftButton, Qt::NoButton);
+    }
+
+    // A turn of the wrong side, seen from the hold just matched.
+    show(frame_of(scrambled, other), trust);
+    for (const Face face : cube::solver::kAllFaces) {
+        const Cube wrong = scrambled.apply(Move{face, 1});
+        if (face != cube::solver::side_at(other, cube::solver::Place::Back) &&
+            solver.currentMoveFace() != cube::test::letter(face) &&
+            cube::solver::camera_view(wrong, other) !=
+                cube::solver::camera_view(scrambled, other)) {
+            camera.processFrame(cube::test::room({640, 360}));
+            show(frame_of(wrong, other), trust);
+            break;
+        }
+    }
+    snap("7-wrong-turn");
 
     // Back to how the screen asks, and on to a move on the back.
     show(frame_of(scrambled, cube::solver::kStatedHold), trust);

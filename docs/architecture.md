@@ -23,11 +23,11 @@ OS under `src/app/platform/`, selected by CMake at configure time
 
 ## C++23 patterns in use
 
-- **`Result<T> = std::expected<T, CubeError>`** ([error.hpp](https://github.com/iainchesworth/cubeulator/blob/develop/src/lib/include/cube/error.hpp))
+- **`Result<T> = std::expected<T, CubeError>`** ([error.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/develop/src/lib/include/cube/error.hpp))
   for every fallible operation, composed with `and_then`/`transform`/`or_else`
   rather than exceptions for expected failure modes.
 - **Deducing-`this` fluent builders**
-  ([scan_session_config.hpp](https://github.com/iainchesworth/cubeulator/blob/develop/src/lib/include/cube/scan_session_config.hpp))
+  ([scan_session_config.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/develop/src/lib/include/cube/scan_session_config.hpp))
   for types with several optional construction parameters.
 - Build-time git version stamp (`cmake/GenerateVersion.cmake` +
   `version.hpp.in`), re-run on every build so it tracks new commits without a

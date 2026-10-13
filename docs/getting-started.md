@@ -12,7 +12,7 @@
 ## Clone
 
 ```sh
-git clone --recurse-submodules https://github.com/iainchesworth/cubeulator
+git clone --recurse-submodules https://github.com/iainchesworthlabs/cubeulator
 cd cubeulator
 ```
 

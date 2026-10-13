@@ -103,6 +103,24 @@ Item {
     readonly property bool viewMoving: pitchSwing.running || yawSwing.running || holdSwing.running
     onViewMovingChanged: scheduleGuide()
 
+    // Dragging can turn the cube two ways. Left alone it spins cubeRoot, as
+    // on the launch screen. With dragTurnsView it moves the viewpoint
+    // instead: round the vertical and over the top, added to viewYaw and
+    // viewPitch, and letting go brings the view back to where they say. The
+    // solve screen uses this to look round the back of the cube without
+    // disturbing how it is held or the layer that is nudging - which carries
+    // on while it is dragged.
+    property bool dragTurnsView: false
+    property real dragYaw: 0
+    property real dragPitch: 0
+    // Lets go of a dragged view: it springs back.
+    function releaseView() {
+        // Any whole turns wound on are dropped first; the view looks the same
+        // without them and comes home the short way.
+        dragYaw = ((dragYaw + 180) % 360 + 360) % 360 - 180;
+        viewSpring.restart();
+    }
+
     // Skeleton mode: unpainted stickers render as dim translucent
     // placeholder panels instead of their uniform face colour, so a cube
     // with a partial faceletColors map reads as "filling in" one captured
@@ -681,11 +699,11 @@ Item {
             // upright on screen however far round it is turned.
             Node {
                 id: tiltNode
-                eulerRotation: Qt.vector3d(root.shownPitch, 0, 0)
+                eulerRotation: Qt.vector3d(root.shownPitch + root.dragPitch, 0, 0)
 
                 Node {
                     id: spinNode
-                    eulerRotation: Qt.vector3d(0, root.shownYaw, 0)
+                    eulerRotation: Qt.vector3d(0, root.shownYaw + root.dragYaw, 0)
 
                     Node {
                         id: cubeRoot
@@ -1014,8 +1032,11 @@ Item {
         onActiveChanged: {
             if (active) {
                 springAnim.stop();
+                viewSpring.stop();
                 lastX = centroid.position.x;
                 lastY = centroid.position.y;
+            } else if (root.dragTurnsView) {
+                root.releaseView();
             } else {
                 springAnim.start();
             }
@@ -1025,11 +1046,27 @@ Item {
                 return;
             var dx = centroid.position.x - lastX;
             var dy = centroid.position.y - lastY;
-            cubeRoot.eulerRotation.y = cubeRoot.eulerRotation.y + dx * 0.4;
-            cubeRoot.eulerRotation.x = Math.max(-85, Math.min(85, cubeRoot.eulerRotation.x - dy * 0.4));
+            if (root.dragTurnsView) {
+                // The cube follows the hand: dragged right it turns to the
+                // right, dragged down its top comes towards the viewer. It
+                // stops short of being seen from straight above or below.
+                root.dragYaw = root.dragYaw + dx * 0.5;
+                root.dragPitch = Math.max(-85 - root.shownPitch,
+                                          Math.min(85 - root.shownPitch, root.dragPitch + dy * 0.5));
+            } else {
+                cubeRoot.eulerRotation.y = cubeRoot.eulerRotation.y + dx * 0.4;
+                cubeRoot.eulerRotation.x = Math.max(-85, Math.min(85, cubeRoot.eulerRotation.x - dy * 0.4));
+            }
             lastX = centroid.position.x;
             lastY = centroid.position.y;
         }
+    }
+
+    // A dragged view let go: back to the viewpoint the screen asked for.
+    ParallelAnimation {
+        id: viewSpring
+        NumberAnimation { target: root; property: "dragYaw"; to: 0; duration: 550; easing.type: Easing.OutBack }
+        NumberAnimation { target: root; property: "dragPitch"; to: 0; duration: 550; easing.type: Easing.OutBack }
     }
 
     // Eases back to the presented orientation once the user lets go, rather
