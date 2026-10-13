@@ -270,6 +270,27 @@ screen, and **Rescan** is the way out of the solve screen
 the cube is held; the fake camera serves it too, so the journey asserts the
 camera is still on there and let go of when the screen is left.
 
+### Seams wanted from the other lanes
+
+Nothing here edits a lane's files; what the suite would like, for whoever
+owns them:
+
+- **Scan lane** - `DirectScanScreen.qml`: `objectName`s on the two buttons
+  (`scan.cancel`, `scan.startOver`) and on the headline and guidance texts
+  (`scan.headline`, `scan.guidance`), with accessible names. Today the suite
+  finds them by label, which a translation would break.
+- **Permission journeys** - "refused, then granted" cannot be walked on a
+  desktop: `AppState.beginScan()` skips the permission screen unless
+  `Qt.platform.os` is mobile, and `CameraPermission` reads Qt's own
+  `QCameraPermission`. A way to set the status for a test (an override read
+  at start-up) would let the suite put the screen up through its real route
+  and see the denied wording. Experience lane.
+- **Solve lane** - the solve screen's controls are named
+  (`solve.cube`, `solve.next`, `solve.previous`, `solve.rescan`,
+  `solve.rescanFromNote`), which is what this needed. The mistake note
+  (`solve.rescanFromNote`) is not staged yet: it needs a camera frame whose
+  held cube differs from the solver's, which the drawn frames could supply.
+
 ### Carrying this into the new experience
 
 The suite is written against today's six screens, but what it is built from
