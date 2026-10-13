@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <random>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include <cube/solver/notation.hpp>
@@ -282,6 +283,38 @@ bool same_contents(const A& a, const B& b) {
 }
 
 }  // namespace
+
+TEST_CASE("advance_permutation walks the same order as std::next_permutation, and wraps",
+          "[two-phase]") {
+    // It replaces std::next_permutation in the table builders (GCC 15's
+    // -Wstringop-overflow misreads the standard one there), so the table
+    // contents depend on it being the same sequence, including the wrap.
+    const auto check = []<std::size_t N>(std::integral_constant<std::size_t, N>) {
+        std::array<std::uint8_t, N> ours{};
+        std::array<std::uint8_t, N> theirs{};
+        for (std::size_t i = 0; i < N; ++i) {
+            ours[i] = theirs[i] = static_cast<std::uint8_t>(i);
+        }
+        std::size_t count = 0;
+        std::size_t factorial = 1;
+        for (std::size_t i = 2; i <= N; ++i) {
+            factorial *= i;
+        }
+        do {
+            REQUIRE(ours == theirs);
+            cube::solver::detail::advance_permutation(ours);
+            ++count;
+        } while (std::next_permutation(theirs.begin(), theirs.end()));
+        REQUIRE(count == factorial);
+        // theirs wrapped to ascending when next_permutation returned false;
+        // ours has wrapped the same way.
+        REQUIRE(ours == theirs);
+    };
+    check(std::integral_constant<std::size_t, 1>{});
+    check(std::integral_constant<std::size_t, 2>{});
+    check(std::integral_constant<std::size_t, 4>{});
+    check(std::integral_constant<std::size_t, 8>{});
+}
 
 TEST_CASE("the compile-time tables equal a direct construction, entry for entry", "[two-phase]") {
     using namespace reference;

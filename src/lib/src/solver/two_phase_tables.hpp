@@ -276,6 +276,38 @@ struct Phase1MoveTables {
 // Phase 2 move tables and the pruning tables - built on first use
 // ---------------------------------------------------------------------------
 
+// The next permutation in lexicographic order, wrapping from the last to the
+// first exactly like std::next_permutation. Written out instead of called:
+// GCC 15 inlines std::next_permutation's std::reverse of these small arrays
+// into the table constructor and then reports -Wstringop-overflow ("writing 16
+// bytes into a region of size 3") for writes the loop bounds rule out, which
+// -Werror turns into a failed Release build of two_phase.cpp. Plain indexed
+// swaps over a constant-size array give the compiler nothing to misread.
+template <std::size_t N>
+inline void advance_permutation(std::array<std::uint8_t, N>& p) noexcept {
+    std::size_t i = N - 1;
+    while (i > 0 && p[i - 1] >= p[i]) {
+        --i;
+    }
+    if (i > 0) {
+        std::size_t j = N - 1;
+        while (p[j] <= p[i - 1]) {
+            --j;
+        }
+        const std::uint8_t held = p[i - 1];
+        p[i - 1] = p[j];
+        p[j] = held;
+    }
+    // The suffix is in descending order; reversing it makes it the smallest.
+    // When i == 0 this reverses everything: the last permutation wraps to the
+    // first.
+    for (std::size_t lo = i, hi = N - 1; lo < hi; ++lo, --hi) {
+        const std::uint8_t held = p[lo];
+        p[lo] = p[hi];
+        p[hi] = held;
+    }
+}
+
 // The eight-element permutation move table, [rank * 10 + index into
 // kPhase2Moves], for the corners (`edges` false) or the U/D-layer edges. The
 // ten moves keep the U/D edges among positions 0..7, so both are the same
@@ -297,7 +329,7 @@ inline void fill_perm_moves(std::uint16_t* out, bool edges) noexcept {
             out[rank * kPhase2MoveCount + i] =
                 static_cast<std::uint16_t>(rank_permutation(q.data(), 8));
         }
-        static_cast<void>(std::next_permutation(p.begin(), p.end()));
+        advance_permutation(p);
     }
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kPermCount); ++rank) {
         std::uint16_t* const row = out + rank * kPhase2MoveCount;
@@ -321,7 +353,7 @@ inline void fill_sperm_moves(std::uint16_t* out) noexcept {
             out[rank * kPhase2MoveCount + i] =
                 static_cast<std::uint16_t>(rank_permutation(q.data(), 4));
         }
-        static_cast<void>(std::next_permutation(p.begin(), p.end()));
+        advance_permutation(p);
     }
 }
 
