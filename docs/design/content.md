@@ -1,0 +1,692 @@
+# Content
+
+How Cubeulator talks, the words it uses, and every string it shows.
+
+The strings live in [`strings.json`](strings.json), with a stable key and
+a note for translators on each. The table at the end of this page is
+generated from that file, and so is the wording in the prototype: neither
+can drift from it.
+
+## Voice
+
+The scan screen's guidance is the model: *"Hold one side of the cube
+square to the camera."* It says one thing, in the order the person does
+it, in words a ten-year-old knows.
+
+| do | so not |
+|---|---|
+| **Say what to do next.** "Hold it still" | Describe the system. "Detection unstable" |
+| **One instruction at a time** | "Hold the cube still and make sure it is well lit and square to the camera" |
+| **Plain words.** side, turn, top, the picture | face, move, U layer, orthographic view |
+| **Say what happened, then what to do.** "The camera is in use. Another program is using it. Close that program, then try again." | "Error: device busy" |
+| **Be exact about what is kept and lost.** "The 3 sides read so far will be lost." | "Are you sure?" |
+| **State facts flatly.** "This cube is already solved." | "Great news!" "Oops!" "Sorry" |
+| **Name the button for what it does.** Stop, Discard, Scan again | OK, Yes, Confirm |
+| **Address the person as "you"; the app is "Cubeulator"**, and only when it must be named | "we", "I", "the app" |
+| **Sentence case everywhere**, including buttons and titles | Title Case, ALL CAPS |
+
+Smaller rules:
+
+- A heading has no full stop. A sentence does, including a one-sentence
+  body. Guidance on the scan screen has none: it is an instruction read at
+  a glance, not prose.
+- An ellipsis (one character, `…`) means "this is happening now":
+  "Starting the camera…". Nowhere else.
+- No exclamation marks. "Solved" is enough.
+- Numbers are digits: "3 of 6 sides read". They are formatted by the
+  locale.
+- Never "please". Never "simply", "just" or "easy": if it were easy they
+  would not need telling.
+- A button's label and the title of where it leads use the same words.
+- The safe choice in a dialog says what stays: **Keep scanning**, **Keep
+  it**, **Keep editing**.
+
+## Glossary
+
+Each word has one meaning and each thing has one word. Translators get
+this table.
+
+| word | means | never |
+|---|---|---|
+| **cube** | The 3x3 puzzle. Also the picture of it on screen | Rubik's (a trade mark), puzzle |
+| **side** | One of the cube's six sides. Named by the colour of its centre ("the red side") or by where it is as held ("the top") | face (reads as a person's face; the repository is public and the rule is to say *side*) |
+| **sticker** | One of the nine coloured squares on a side | facelet, tile, cell, square |
+| **centre** | The middle sticker of a side. It never moves, so it names the side | - |
+| **piece** | One of the small blocks the cube is made of. Used only in the stage explanations and in "this cannot be a real cube" | cubie |
+| **layer** | A side together with the pieces that turn with it. Used only in the stage explanations ("bottom layer", "middle layer") | slice |
+| **turn** | One movement: a side turned a quarter or a half | move (cubers' word; see notation) |
+| **quarter turn, half turn** | 90 and 180 degrees | 90°, 180°, double |
+| **top, bottom, left, right, front, back** | The six sides as the person holds the cube: yellow centre on top, green centre facing them | up, down (as side names); U, D, L, R, F, B |
+| **to the left, to the right** | Which way the top or bottom goes, from where the person is | clockwise (for these sides) |
+| **upwards, downwards** | Which way the left or right side goes: the part facing the person moves up or down | away, towards; forwards, backwards |
+| **clockwise, anticlockwise** | Which way the front or back goes, **as seen from the front** | counter-clockwise (in the British source) |
+| **scan** | Showing the cube to the camera so that it is read | capture, detect |
+| **read** | What the app does to a side ("3 of 6 sides read") | captured, detected, recognised |
+| **the picture** | The cube drawn on the solve screen | model, render, 3D view |
+| **the camera picture** | What the camera sees, on the scan screen | preview, feed, frame |
+| **stage** | One of the five parts of the solve | step (a step would be a turn), phase |
+| **solve** | Following the turns. Also the record of one ("unfinished solve") | session, run |
+| **history** | The list of past solves | log, records |
+| **mark** | The shape drawn on a cube colour | pattern, symbol, icon |
+| **carry on** | Continue what was in progress | resume, proceed |
+| **this device** | The phone, tablet or computer | your computer, your phone |
+
+## Naming a turn
+
+A turn is shown as three parts, largest first, and read aloud as one
+sentence. What a turn *is* belongs to the solve lane; this is how it is
+worded.
+
+| notation | shown | spoken (`turn.*`) |
+|---|---|---|
+| U | **Top** · to the left · Quarter turn | Turn the top a quarter turn to the left. |
+| U' | **Top** · to the right · Quarter turn | Turn the top a quarter turn to the right. |
+| U2 | **Top** · either way · Half turn | Turn the top a half turn. |
+| D | **Bottom** · to the right · Quarter turn | Turn the bottom a quarter turn to the right. |
+| D' | **Bottom** · to the left · Quarter turn | Turn the bottom a quarter turn to the left. |
+| R | **Right** · upwards · Quarter turn | Turn the right side a quarter turn upwards. |
+| R' | **Right** · downwards · Quarter turn | Turn the right side a quarter turn downwards. |
+| L | **Left** · downwards · Quarter turn | Turn the left side a quarter turn downwards. |
+| L' | **Left** · upwards · Quarter turn | Turn the left side a quarter turn upwards. |
+| F | **Front** · clockwise · Quarter turn | Turn the front a quarter turn clockwise. |
+| F' | **Front** · anticlockwise · Quarter turn | Turn the front a quarter turn anticlockwise. |
+| B | **Back** · anticlockwise · Quarter turn · as seen from the front | Turn the back a quarter turn anticlockwise, as seen from the front. |
+| B' | **Back** · clockwise · Quarter turn · as seen from the front | Turn the back a quarter turn clockwise, as seen from the front. |
+| D2, R2, L2, F2, B2 | as U2 | as U2 |
+
+Why this way:
+
+- **Direction is always from where the person is.** In notation, a
+  clockwise turn of the bottom is clockwise *looking up at it from
+  underneath*, which from above goes the other way. That is the commonest
+  beginner's mistake. Here nobody has to imagine looking at a side they
+  cannot see.
+- **The top and bottom go left or right; the left and right go up or
+  down.** Those are the directions a thumb pushes.
+- **The back is the hard one.** It is given as seen from the front, with
+  those words added, and the picture shows it. E6 should watch this turn
+  in particular.
+- **The side's centre colour is shown beside its name**, as a swatch with
+  its mark, so "Top" can be checked against the cube.
+- **Left and right are never mirrored** in right-to-left languages. They
+  are the cube's left and right.
+
+## Notation
+
+Off by default (Settings > Solving > Show cube notation).
+
+- When on, the letters appear after the amount, in a key-name box, in the
+  mono face: `R'`. They never replace the words.
+- Notation is the standard one: U, D, L, R, F, B; an apostrophe for
+  anticlockwise as that side is faced; 2 for a half turn. It is **never
+  translated**, never mirrored, never shown in another script's digits.
+- **Review the solution** shows each stage's turns as one line of notation
+  when the setting is on, because that is how cubers read an algorithm.
+- The word "move" appears nowhere. Help > Cube notation explains the
+  letters to anyone who has switched them on.
+
+## The stages
+
+The solver's five stages, in plain names. "Orient" and "permute the last
+layer" are cubers' terms and are not used.
+
+| # | solver's name | shown as | what it does | why |
+|---|---|---|---|---|
+| 1 | Cross | **White cross** | Put the four white edge pieces on the bottom, each lined up with the colour of its side. | Everything else is built on this cross. |
+| 2 | White corners | **White corners** | Put the four white corners in place to finish the bottom layer. | That is one whole layer solved, and it stays solved from here on. |
+| 3 | Middle edges | **Middle layer** | Put the four edge pieces of the middle layer in place. | Two layers are then solved. Only the top is left. |
+| 4 | Orient last layer | **Yellow top** | Turn the top layer's pieces over until the whole top is yellow. | The pieces are already in the top layer. This only turns them the right way up. |
+| 5 | Permute last layer | **Top layer in order** | Move the top layer's pieces round to their own places. | They are the right way up but in the wrong order. Put them in order and the cube is solved. |
+
+"What" is always shown at a stage change. "Why" is shown when Settings >
+Solving > Explain each stage is on, which it is by default, and always in
+Review the solution.
+
+## For translators
+
+- **Source language: British English.** "Colour", "centre", "licence"
+  (noun), "anticlockwise", "carry on". A US English file is a translation
+  like any other.
+- **Keys are ids, not English.** A key never changes once a translation
+  exists for it. A string whose meaning changes gets a new key.
+- **Whole sentences.** Nothing is built by joining fragments, with one
+  exception that is a display layout and not a sentence: the three parts
+  of a turn (side, direction, amount) are shown on separate lines and are
+  translated as three labels. The spoken form is a whole sentence of its
+  own.
+- **Placeholders** are `%1`, `%2`; they may be reordered. `%n` is a count
+  and the string has plural forms: supply every form your language has
+  (Arabic has six; Japanese and Chinese have one).
+- **Length.** Design allows 40% more than the English. Buttons wrap rather
+  than cut off, but one or two words is the aim for anything on the solve
+  screen, which is read from arm's length.
+- **Do not translate:** Cubeulator; notation letters; key names (`Space`).
+- **Do translate** the six colour names, the six side names and the six
+  directions with great care: they are the product. Test them against a
+  real cube, held yellow on top and green in front.
+- **Capitals.** Small-capital labels are capitalised by the app, not in
+  the string. Write them in sentence case.
+- **Right to left.** Write "left" and "right" as the physical left and
+  right. The app does not swap them.
+- Machine drafts are allowed as a start. Each language needs one fluent
+  reader, with a cube, before release (plan, E5).
+
+## String inventory
+
+<!-- strings:begin -->
+378 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+
+
+#### `app`
+
+| key | English | note for translators |
+|---|---|---|
+| `app.name` | Cubeulator | The product name. Never translated, never transliterated. |
+| `app.tagline` | Scan. Solve. / In your hands. | The headline on the home screen. Two lines. Short, confident. 'In your hands' means both 'you do the turning' and 'the cube is in your hands'; keep whichever sense reads naturally. |
+
+#### `common`
+
+| key | English | note for translators |
+|---|---|---|
+| `common.back` | Back | Button. Goes to the previous screen. |
+| `common.close` | Close | Button. Closes a sheet or dialog. |
+| `common.cancel` | Cancel | Button. |
+| `common.done` | Done | Button. Leaves a screen the person has finished with. |
+| `common.help` | Help | Button and screen title. |
+| `common.settings` | Settings | Button and screen title. |
+| `common.home` | Home | Button. Goes to the first screen. |
+| `common.tryAgain` | Try again | Button. |
+| `common.lookAgain` | Look again | Button. Searches for cameras again. |
+| `common.on` | On | State of a switch. |
+| `common.off` | Off | State of a switch. |
+| `common.openDeviceSettings` | Open device settings | Button. Opens the operating system's settings, outside the app. |
+| `common.enterByHand` | Enter colours by hand | Button. Opens the screen where the cube's colours are typed in instead of scanned. |
+| `common.scanAgain` | Scan again | Button. |
+| `common.scanInstead` | Scan instead | Button on the hand-entry screen. Switches to the camera. |
+| `common.more` | More | Button. Opens a short list of less common actions. |
+| `common.carryOn` | Carry on | Button. Continue what was in progress. US: 'Continue'. |
+| `common.skipToContent` | Skip to the main content | Hidden link for keyboard and screen-reader users. |
+
+#### `colour`
+
+| key | English | note for translators |
+|---|---|---|
+| `colour.white` | White | A cube colour, as a label under a swatch. |
+| `colour.yellow` | Yellow | A cube colour. |
+| `colour.orange` | Orange | A cube colour. |
+| `colour.red` | Red | A cube colour. |
+| `colour.green` | Green | A cube colour. |
+| `colour.blue` | Blue | A cube colour. |
+| `colour.unset` | Not set | Read out for a sticker whose colour has not been entered yet. |
+
+#### `colourSide`
+
+| key | English | note for translators |
+|---|---|---|
+| `colourSide.white` | White side | A side of the cube is named by the colour of its centre sticker. Use the word for 'side', never 'face'. |
+| `colourSide.yellow` | Yellow side | See colourSide.white. |
+| `colourSide.orange` | Orange side | See colourSide.white. |
+| `colourSide.red` | Red side | See colourSide.white. |
+| `colourSide.green` | Green side | See colourSide.white. |
+| `colourSide.blue` | Blue side | See colourSide.white. |
+
+#### `mark`
+
+| key | English | note for translators |
+|---|---|---|
+| `mark.ring` | ring | The mark drawn on yellow stickers. Read by screen readers and used in Help. |
+| `mark.slash` | slash | The mark drawn on orange stickers: a short diagonal line. |
+| `mark.plus` | plus | The mark drawn on red stickers. |
+| `mark.dot` | dot | The mark drawn on green stickers. |
+| `mark.bar` | bar | The mark drawn on blue stickers. |
+| `mark.none` | no mark | White stickers carry no mark. |
+
+#### `side`
+
+| key | English | note for translators |
+|---|---|---|
+| `side.top` | Top | Which side of the cube to turn, as the person holds it. Shown very large on the solve screen; keep it to one or two short words. |
+| `side.bottom` | Bottom | See side.top. |
+| `side.left` | Left | See side.top. The left-hand side of the cube. |
+| `side.right` | Right | See side.top. The right-hand side of the cube. |
+| `side.front` | Front | See side.top. The side facing the person. |
+| `side.back` | Back | See side.top. The side facing away from the person. Not the 'Back' navigation button: that is common.back. |
+
+#### `dir`
+
+| key | English | note for translators |
+|---|---|---|
+| `dir.left` | to the left | Which way to turn the top or bottom, from where the person is holding the cube. Never mirrored in right-to-left languages: it is the physical left. |
+| `dir.right` | to the right | See dir.left. |
+| `dir.up` | upwards | Which way to turn the left or right side: the part facing the person moves up. |
+| `dir.down` | downwards | Which way to turn the left or right side: the part facing the person moves down. |
+| `dir.cw` | clockwise | Which way to turn the front or back, always as seen from the front. |
+| `dir.ccw` | anticlockwise | See dir.cw. US: 'counterclockwise'. |
+| `dir.either` | either way | Shown for a half turn, where the direction does not matter. |
+| `dir.seenFromFront` | as seen from the front | Added under a turn of the back side, because the person cannot see it. |
+
+#### `amount`
+
+| key | English | note for translators |
+|---|---|---|
+| `amount.quarter` | Quarter turn | How far to turn: 90 degrees. |
+| `amount.half` | Half turn | How far to turn: 180 degrees. |
+
+#### `turn`
+
+| key | English | note for translators |
+|---|---|---|
+| `turn.U1` | Turn the top a quarter turn to the left. | A whole instruction as one sentence. Read by screen readers and listed in Review the solution. 18 of these: six sides, three turns each. |
+| `turn.U3` | Turn the top a quarter turn to the right. | See turn.U1. |
+| `turn.U2` | Turn the top a half turn. | See turn.U1. |
+| `turn.D1` | Turn the bottom a quarter turn to the right. | See turn.U1. |
+| `turn.D3` | Turn the bottom a quarter turn to the left. | See turn.U1. |
+| `turn.D2` | Turn the bottom a half turn. | See turn.U1. |
+| `turn.R1` | Turn the right side a quarter turn upwards. | See turn.U1. Avoid any phrase that reads as the idiom 'right side up'. |
+| `turn.R3` | Turn the right side a quarter turn downwards. | See turn.U1. |
+| `turn.R2` | Turn the right side a half turn. | See turn.U1. |
+| `turn.L1` | Turn the left side a quarter turn downwards. | See turn.U1. |
+| `turn.L3` | Turn the left side a quarter turn upwards. | See turn.U1. |
+| `turn.L2` | Turn the left side a half turn. | See turn.U1. |
+| `turn.F1` | Turn the front a quarter turn clockwise. | See turn.U1. |
+| `turn.F3` | Turn the front a quarter turn anticlockwise. | See turn.U1. |
+| `turn.F2` | Turn the front a half turn. | See turn.U1. |
+| `turn.B1` | Turn the back a quarter turn anticlockwise, as seen from the front. | See turn.U1. |
+| `turn.B3` | Turn the back a quarter turn clockwise, as seen from the front. | See turn.U1. |
+| `turn.B2` | Turn the back a half turn. | See turn.U1. |
+
+#### `stage`
+
+| key | English | note for translators |
+|---|---|---|
+| `stage.1.title` | White cross | Name of the first of five stages of the solve. |
+| `stage.1.what` | Put the four white edge pieces on the bottom, each lined up with the colour of its side. | What this stage does, in one sentence. |
+| `stage.1.why` | Everything else is built on this cross. | Why this stage is done, for someone learning the method. |
+| `stage.2.title` | White corners | Name of the second stage. |
+| `stage.2.what` | Put the four white corners in place to finish the bottom layer. | What this stage does. |
+| `stage.2.why` | That is one whole layer solved, and it stays solved from here on. | Why. |
+| `stage.3.title` | Middle layer | Name of the third stage. |
+| `stage.3.what` | Put the four edge pieces of the middle layer in place. | What this stage does. |
+| `stage.3.why` | Two layers are then solved. Only the top is left. | Why. |
+| `stage.4.title` | Yellow top | Name of the fourth stage. Cubers call it 'orienting the last layer'; do not use that phrase. |
+| `stage.4.what` | Turn the top layer's pieces over until the whole top is yellow. | What this stage does. |
+| `stage.4.why` | The pieces are already in the top layer. This only turns them the right way up. | Why. |
+| `stage.5.title` | Top layer in order | Name of the fifth stage. Cubers call it 'permuting the last layer'; do not use that phrase. |
+| `stage.5.what` | Move the top layer's pieces round to their own places. | What this stage does. |
+| `stage.5.why` | They are the right way up but in the wrong order. Put them in order and the cube is solved. | Why. |
+
+#### `home`
+
+| key | English | note for translators |
+|---|---|---|
+| `home.lede` | Show your cube to the camera, then follow one turn at a time until it is solved. | One sentence under the headline on the home screen. |
+| `home.scan` | Scan a cube | The main button. Starts the camera. |
+| `home.history` | History | Button. Opens the list of past solves. |
+| `home.findingCamera` | Looking for a camera… | Shown briefly at start-up on a computer. |
+| `home.noCamera.title` | No camera found | Heading of a notice. |
+| `home.noCamera.body` | Plug one in and look again, or enter the colours by hand. | Body of the notice. |
+| `home.unsupported.title` | Scanning is not ready on this device yet | Heading of a notice on a device whose camera this version cannot use. |
+| `home.unsupported.body` | This version cannot use this device's camera. You can enter the colours by hand instead. | Body of the notice. |
+| `home.resume.title` | Unfinished solve | Heading of a card offering to continue a solve that was left part-way. |
+| `home.resume.body` | Turn %1 of %2 | %1 is the turn reached, %2 the total. Both are numbers in the reader's own digits. |
+| `home.resume.discard` | Discard | Button. Throws the unfinished solve away. |
+| `home.discard.title` | Discard this solve? | Dialog title. |
+| `home.discard.body` | You would need to scan the cube again to solve it. | Dialog body. |
+| `home.discard.keep` | Keep it | Dialog button: the safe choice. |
+
+#### `firstRun`
+
+| key | English | note for translators |
+|---|---|---|
+| `firstRun.title` | Solve your cube, one turn at a time | Headline of the welcome screen shown once, on first launch. |
+| `firstRun.step1.title` | Scan | First of three numbered steps. |
+| `firstRun.step1.body` | Show each of the cube's six sides to the camera. | Step body. |
+| `firstRun.step2.title` | Hold | Second step. |
+| `firstRun.step2.body` | Prop this device up and hold the cube the way the picture shows. | Step body. 'This device' is a phone, tablet or computer. |
+| `firstRun.step3.title` | Turn | Third step. |
+| `firstRun.step3.body` | Follow one turn at a time until it is solved. | Step body. |
+| `firstRun.need.title` | You will need | Heading above a short list. |
+| `firstRun.need.cube` | An ordinary 3x3 cube with coloured stickers and dark plastic between them. | List item. 3x3 means three squares along each edge. |
+| `firstRun.need.light` | Bright, even light with no glare on the stickers. | List item. |
+| `firstRun.start` | Get started | Button. Leaves the welcome screen. |
+| `firstRun.language` | Language | Button on the welcome screen. Opens the list of languages. |
+
+#### `permission`
+
+| key | English | note for translators |
+|---|---|---|
+| `permission.title` | Camera access | Screen title. |
+| `permission.body` | Cubeulator reads your cube's colours through the camera. | First paragraph. |
+| `permission.point1` | The camera picture is used on this device only. | Reassurance, one of three. |
+| `permission.point2` | No picture is saved, uploaded or shared. | Reassurance. Must stay true: see docs/design/screens/privacy.md. |
+| `permission.point3` | You can take access away again at any time in your device's settings. | Reassurance. |
+| `permission.allow` | Allow camera | Button. Makes the operating system show its own permission prompt. |
+| `permission.notNow` | Not now | Button. Goes back without allowing. |
+| `permission.refused.title` | Camera access is off | Screen title after the person refused, or when the device forbids it. |
+| `permission.refused.body` | Cubeulator cannot scan without the camera. You can allow it in your device's settings, or enter the colours by hand. | Body. |
+| `permission.askAgain` | Ask again | Button. Tries the system prompt once more. |
+| `permission.system.camera` | Cubeulator uses the camera to read the colours on your cube. Pictures stay on this device. | The reason shown by iOS and macOS inside their own permission prompt (NSCameraUsageDescription). One or two sentences. |
+
+#### `scan`
+
+| key | English | note for translators |
+|---|---|---|
+| `scan.title.starting` | Starting the camera… | Headline on the scan screen. |
+| `scan.title.progress` | %1 of 6 sides read | Headline. %1 is 0 to 5. |
+| `scan.title.complete` | Cube read | Headline when all six sides are read and make a valid cube. |
+| `scan.guide.settling` | Setting the camera's exposure and colour balance… | Guidance under the headline. Nothing is read while this shows. |
+| `scan.guide.first` | Hold one side of the cube square to the camera | Guidance before any side is read. 'Square to' means facing it flat, not at an angle. |
+| `scan.guide.inView` | Hold it still | Guidance when a side is seen but moving. |
+| `scan.guide.reading` | Reading this side. Hold it there | Guidance while a side is being read. |
+| `scan.guide.next` | Turn to a side that is not filled in below, square to the camera | Guidance between sides. 'Below' refers to the row of six small squares at the bottom of the screen. |
+| `scan.guide.seenBefore` | This side is already read. Turn to another one | Guidance when the side shown has been read before. |
+| `scan.guide.conflict` | These six sides do not make a valid cube yet. Show each side again, square to the camera. | Guidance when six sides are read but something is wrong. |
+| `scan.guide.complete` | All six sides make a valid cube. Working out the solution… | Guidance when the scan has finished. |
+| `scan.guide.resuming` | Starting the camera again. The sides already read are kept. | Guidance when the app comes back after being in the background. |
+| `scan.stuck.title` | Not reading? | Heading of a hint that appears after ten seconds without progress. |
+| `scan.stuck.body` | Use bright, even light. Tilt the cube until there is no glare on the stickers. Fill about half the picture with one side. | Hint body. Three short instructions. |
+| `scan.startOver` | Start over | Button. Forgets the sides read so far. |
+| `scan.checkColours` | Check the colours | Button. Opens the screen where each sticker can be corrected. |
+| `scan.more.enter` | Enter the rest by hand | Item in the More sheet. |
+| `scan.more.chooseCamera` | Choose a camera | Item in the More sheet, on a computer with more than one camera. |
+| `scan.more.switchCamera` | Switch camera | Item in the More sheet, on a phone: front or back camera. |
+| `scan.more.help` | Help with scanning | Item in the More sheet. |
+| `scan.picker.title` | Choose a camera | Title of the list of cameras. |
+| `scan.camera.none.title` | No camera found | Headline. |
+| `scan.camera.none.body` | Plug in a camera and look again, or enter the colours by hand. | Guidance. |
+| `scan.camera.busy.title` | The camera is in use | Headline. |
+| `scan.camera.busy.body` | Another program is using it. Close that program, then try again. | Guidance. |
+| `scan.camera.blocked.title` | Camera access is blocked | Headline. |
+| `scan.camera.blocked.body` | This device's settings do not let Cubeulator use the camera. Allow it there, then try again. | Guidance. |
+| `scan.camera.lost.title` | The camera stopped | Headline. |
+| `scan.camera.lost.body` | It may have been unplugged. The sides already read are kept. | Guidance. |
+| `scan.camera.failed.title` | The camera could not start | Headline. |
+| `scan.camera.failed.body` | Try again. If it keeps happening, report it with this code: %1 | Guidance. %1 is a short error code such as E-CAM-12. |
+| `scan.solveFailed.title` | No solution found | Headline. Rare. |
+| `scan.solveFailed.body` | The cube was read, but Cubeulator could not work out how to solve it. Check the colours, or scan again. | Guidance. |
+| `scan.leave.title` | Stop scanning? | Dialog title. |
+| `scan.leave.body` | *one:* The side read so far will be lost.<br>*other:* The %n sides read so far will be lost. | Dialog body. %n is 1 to 6. |
+| `scan.leave.keep` | Keep scanning | Dialog button: the safe choice. |
+| `scan.leave.confirm` | Stop | Dialog button. |
+| `scan.restart.title` | Start over? | Dialog title. |
+| `scan.restart.keep` | Keep these | Dialog button: the safe choice. 'These' are the sides read so far. |
+| `scan.a11y.preview` | Camera picture | Screen-reader name of the live camera view. |
+| `scan.a11y.sideRead` | Side %1 of 6 read. | Announced by a screen reader each time a side is read. |
+| `scan.a11y.chipEmpty` | Side %1: not read yet | Screen-reader name of an empty chip. |
+| `scan.a11y.chipRead` | Side %1: read. %2 | Screen-reader name of a filled chip. %2 is a colourSide string such as 'Red side'. |
+| `scan.a11y.chipInView` | Side %1: read, and in view now. %2 | Screen-reader name of the chip for the side currently shown to the camera. |
+| `scan.a11y.cubeSeen` | A side is in view. | Announced once when the camera first sees a side. |
+
+#### `review`
+
+| key | English | note for translators |
+|---|---|---|
+| `review.title.check` | Check the colours | Screen title when checking a scan. |
+| `review.title.enter` | Enter the colours | Screen title when entering a cube by hand. |
+| `review.intro.enter` | Pick a colour, then tap each sticker of that colour. Do one side at a time. It does not matter which way up you hold each side. | Instruction at the top of hand entry. |
+| `review.intro.check` | Compare each side with your cube. Tap a colour, then tap any sticker that is wrong. | Instruction at the top when checking a scan. |
+| `review.centre` | The centre never changes. It names the side. | Shown when the person taps a centre sticker, which cannot be edited. |
+| `review.palette` | Colour to paint with | Screen-reader name of the row of six colour buttons. |
+| `review.sidePicker` | Side to edit | Screen-reader name of the row of six side buttons. |
+| `review.status.empty` | 48 stickers to fill in | Status line before anything is entered. A cube has 54 stickers; the six centres are already set. |
+| `review.status.partial` | *one:* %n sticker to go<br>*other:* %n stickers to go | Status line during hand entry. |
+| `review.status.miscount` | The colours do not add up | Status headline when some colour is used more or fewer than nine times. |
+| `review.status.miscountOver` | Too many: %1 | %1 is a list such as 'red (10), blue (11)'. |
+| `review.status.miscountUnder` | Too few: %1 | %1 is a list such as 'orange (8), green (7)'. |
+| `review.status.countItem` | %1 (%2) | One item in those lists. %1 is a colour name in lower case, %2 how many stickers have it. |
+| `review.status.impossible` | This cannot be a real cube | Status headline when every colour appears nine times but the pieces do not fit together. |
+| `review.status.impossibleBody` | One sticker is probably on the wrong piece. Check each side against your cube again. | Status body. |
+| `review.status.valid` | This is a valid cube | Status headline when the colours make a cube that can be solved. |
+| `review.solve` | Solve | The main button. Works out the solution. |
+| `review.clearSide` | Clear this side | Button. Unsets the eight stickers round the centre of the side being edited. |
+| `review.working` | Working out the solution… | Shown after Solve is pressed. |
+| `review.failed.title` | No solution found | Headline. Rare. |
+| `review.failed.body` | Cubeulator could not work out how to solve this cube. Try again, or scan it instead. | Body. |
+| `review.discard.title` | Discard these colours? | Dialog title. |
+| `review.discard.body` | What you have entered will be lost. | Dialog body. |
+| `review.discard.keep` | Keep editing | Dialog button: the safe choice. |
+| `review.discard.confirm` | Discard | Dialog button. |
+| `review.a11y.sticker` | %1, row %2, column %3: %4 | Screen-reader name of one sticker. %1 is a colourSide string, %2 and %3 are 1 to 3, %4 a colour name or colour.unset. |
+| `review.a11y.sideDone` | %1: complete | Screen-reader name of a side button when all nine stickers are set. %1 is a colourSide string. |
+| `review.a11y.sideLeft` | *one:* %1: %n sticker to go<br>*other:* %1: %n stickers to go | Screen-reader name of a side button. %1 is a colourSide string. |
+
+#### `solve`
+
+| key | English | note for translators |
+|---|---|---|
+| `solve.working` | Working out the solution… | Shown while the solution is computed. |
+| `solve.failed.title` | No solution found | Headline. Rare. |
+| `solve.failed.body` | Cubeulator could not work out how to solve this cube. Check the colours, or scan it again. | Body. |
+| `solve.alreadySolved.title` | This cube is already solved | Headline when a solved cube is scanned. |
+| `solve.alreadySolved.body` | There is nothing to do. Mix it up and scan it again. | Body. |
+| `solve.hold.title` | Hold the cube like this | Headline of the step before the first turn. |
+| `solve.hold.body` | Yellow centre on top. Green centre facing you. Keep it this way round for the whole solve. | Body. Three short sentences. |
+| `solve.hold.match` | Your cube should match the picture. | Line under the picture of the cube. |
+| `solve.hold.ready` | I am holding it like this | The main button. Starts the first turn. |
+| `solve.hold.check` | Something looks wrong? Check the colours | Secondary button. |
+| `solve.holdResume.title` | Carry on from turn %1 | Headline when returning to an unfinished solve. |
+| `solve.holdResume.body` | Hold the cube with the yellow centre on top and the green centre facing you. It should match the picture. | Body. |
+| `solve.matches` | It matches | Button. |
+| `solve.differs` | It does not match | Button. Opens advice for when the cube and the picture disagree. |
+| `solve.holdLine` | Yellow on top · green facing you | A reminder that stays on the solve screen the whole time. Keep it short. The dot is a separator. |
+| `solve.progress` | Turn %1 of %2 | Progress through the solve. Numbers in the reader's own digits. |
+| `solve.stageOf` | Stage %1 of %2 | Which of the five stages. Shown in small capitals. |
+| `solve.next` | Next turn | The main button on the solve screen. Very large. |
+| `solve.previous` | Back one | Button. Undoes the last turn on screen so the person can undo it on the cube. |
+| `solve.finish` | Finish | Replaces 'Next turn' on the last turn. |
+| `solve.hint.touch` | Make the turn, then tap the cube. | Shown once, on the first turn of a first solve, on touch devices. |
+| `solve.hint.keys` | Make the turn, then press Space. | The same, on a computer. 'Space' is the space bar. |
+| `solve.stageDone.title` | %1 done | Headline between stages. %1 is a stage title such as 'White cross'. |
+| `solve.stageDone.check` | Check your cube matches the picture. | Line asking the person to compare. |
+| `solve.stageDone.next` | Next: %1 | %1 is the next stage's title. |
+| `solve.auto.tapToPause` | Tap anywhere to pause | Shown in timer mode. |
+| `solve.auto.keysToPause` | Press Space to pause | The same, on a computer. |
+| `solve.paused` | Paused | Title of the pause menu, and of the paused state in timer mode. |
+| `solve.menu.hold` | How to hold the cube | Menu item. |
+| `solve.menu.lost` | My cube does not match | Menu item. |
+| `solve.menu.leave` | Leave this solve | Menu item. |
+| `solve.menu.leaveNote` | Your place is kept. Carry on from Home. | Small text under 'Leave this solve'. |
+| `solve.lost.title` | Cube and picture do not match | Headline. |
+| `solve.lost.body` | One turn probably went the wrong way. Try these in order. | Body. |
+| `solve.lost.step1` | Check how you are holding it: yellow centre on top, green centre facing you. | First thing to try. |
+| `solve.lost.step2` | Go back one turn and compare again. | Second thing to try. |
+| `solve.lost.step3` | Scan the cube again. Cubeulator solves it from where it is now. | Third thing to try. |
+| `solve.lost.goBack` | Go back one turn | Button. |
+| `solve.lost.rescan` | Scan the cube again | Button. |
+| `solve.lost.carryOn` | Carry on anyway | Button. |
+| `solve.a11y.menu` | Pause and options | Screen-reader name of the menu button on the solve screen. |
+| `solve.a11y.cube` | The cube as it should look now. %1 | Screen-reader description of the picture of the cube. %1 is the current turn sentence. |
+| `solve.a11y.progress` | Turn %1 of %2. %3, stage %4 of %5. | Read when the turn changes. %3 is a stage title. |
+| `solve.a11y.notation` | In notation: %1 | Read after the turn sentence when notation is switched on. %1 is letters such as R' or U2; do not translate it. |
+
+#### `complete`
+
+| key | English | note for translators |
+|---|---|---|
+| `complete.eyebrow` | Solve complete | Small heading above 'Solved'. |
+| `complete.title` | Solved | The big word on the finishing screen. |
+| `complete.turns` | Turns | Label above a number. |
+| `complete.time` | Time | Label above a duration such as 12:40. |
+| `complete.scanAnother` | Scan another cube | The main button. |
+| `complete.review` | Review the solution | Button. Opens the list of every turn. |
+| `complete.notSolved` | My cube is not solved | Button for when the real cube did not end up solved. |
+| `complete.notSolved.title` | Not solved? | Sheet title. |
+| `complete.notSolved.body` | One turn somewhere probably went the wrong way. Scan the cube again and Cubeulator solves it from where it is now. | Sheet body. |
+
+#### `solution`
+
+| key | English | note for translators |
+|---|---|---|
+| `solution.title` | The solution | Screen title. |
+| `solution.summary` | *one:* %n turn in 5 stages<br>*other:* %n turns in 5 stages | Line under the title. |
+| `solution.method` | Method: layer by layer, the one most people learn first. | One line for learners. |
+| `solution.play` | Play | Button. Plays the turns one after another. |
+| `solution.pause` | Pause | Button. |
+| `solution.next` | Next | Button. Next turn. |
+| `solution.previous` | Previous | Button. Previous turn. |
+| `solution.startAgain` | Start again | Button. Returns to the first turn. |
+| `solution.atStart` | The cube as it was scanned | Caption under the cube before the first turn. |
+| `solution.atEnd` | Solved | Caption under the cube after the last turn. |
+| `solution.stageTurns` | *one:* %n turn<br>*other:* %n turns | How many turns a stage has. |
+| `solution.a11y.turn` | Turn %1. %2 | Screen-reader name of one row in the list. %2 is a turn sentence. |
+
+#### `history`
+
+| key | English | note for translators |
+|---|---|---|
+| `history.title` | History | Screen title. |
+| `history.empty.title` | No solves yet | Heading of the empty list. |
+| `history.empty.body` | Cubes you solve are listed here, on this device only. | Body of the empty list. |
+| `history.item.done` | *one:* %n turn · %1<br>*other:* %n turns · %1 | One row. %1 is a duration such as 12:40. The dot is a separator. |
+| `history.item.unfinished` | Unfinished · turn %1 of %2 | One row, for a solve left part-way. |
+| `history.delete` | Delete | Button on one row. |
+| `history.clear` | Clear history | Button. Deletes every entry. |
+| `history.off.title` | History is off | Heading shown when the setting is off. |
+| `history.off.body` | Solves are not being kept. You can turn history on in Settings. | Body. |
+| `history.off.open` | Open Settings | Button. |
+| `history.delete.title` | Delete this solve? | Dialog title. |
+| `history.delete.keep` | Keep it | Dialog button: the safe choice. |
+| `history.clear.title` | Clear all history? | Dialog title. |
+| `history.clear.body` | *one:* %n solve will be deleted from this device.<br>*other:* %n solves will be deleted from this device. | Dialog body. |
+| `history.clear.keep` | Keep them | Dialog button: the safe choice. |
+| `history.clear.confirm` | Clear | Dialog button. |
+
+#### `settings`
+
+| key | English | note for translators |
+|---|---|---|
+| `settings.section.language` | Language | Section heading and row label. |
+| `settings.language.system` | Same as this device (%1) | First choice in the language list. %1 is the language's own name, such as Deutsch. |
+| `settings.section.appearance` | Appearance | Section heading. |
+| `settings.theme` | Theme | Row label. |
+| `settings.theme.system` | Same as this device | Choice. |
+| `settings.theme.light` | Light | Choice. |
+| `settings.theme.dark` | Dark | Choice. |
+| `settings.marks` | Marks on cube colours | Switch. Draws a small shape on each colour. |
+| `settings.marks.note` | A shape on each colour, so they can be told apart without relying on colour. | Explanation under the switch. |
+| `settings.textSize` | Text size | Row label. |
+| `settings.textSize.system` | Same as this device | Choice. |
+| `settings.textSize.large` | Large | Choice. |
+| `settings.textSize.larger` | Larger | Choice. |
+| `settings.motion` | Motion | Row label. |
+| `settings.motion.system` | Same as this device | Choice. |
+| `settings.motion.reduced` | Reduced | Choice. Turns animations off. |
+| `settings.motion.full` | Full | Choice. |
+| `settings.section.solving` | Solving | Section heading. |
+| `settings.advance` | Move to the next turn | Row label: how the solve screen advances. |
+| `settings.advance.tap` | When I tap | Choice. |
+| `settings.advance.timer` | On a timer | Choice. |
+| `settings.pace` | Pace | Row label, shown when 'On a timer' is chosen. |
+| `settings.pace.slow` | Slow | Choice. About six seconds a turn. |
+| `settings.pace.steady` | Steady | Choice. About four seconds a turn. |
+| `settings.pace.quick` | Quick | Choice. About two and a half seconds a turn. |
+| `settings.explain` | Explain each stage | Switch. |
+| `settings.explain.note` | Says what each stage does and why, as you reach it. | Explanation under the switch. |
+| `settings.notation` | Show cube notation | Switch. |
+| `settings.notation.note` | Adds the letters cubers use, such as R U R'. | Explanation under the switch. The letters are not translated. |
+| `settings.sound` | Sound | Switch. A soft click when a side is read or a turn advances. |
+| `settings.haptics` | Vibration | Switch. Phones only. |
+| `settings.speak` | Read turns aloud | Switch. Proposed; see brief.md open question 3. |
+| `settings.section.camera` | Camera | Section heading. |
+| `settings.camera.finding` | Looking for cameras… | Status. |
+| `settings.camera.choose` | Cubeulator reads the cube with this camera. | Text above the list of cameras. |
+| `settings.camera.none` | No camera was found. Plug one in, then look again. | Status. |
+| `settings.camera.allowed` | Camera access is allowed. | Status on phones and macOS. |
+| `settings.camera.refused` | Camera access is not allowed. | Status on phones and macOS. |
+| `settings.camera.unsupported` | This version cannot use this device's camera yet. | Status. |
+| `settings.section.history` | History | Section heading. |
+| `settings.history.keep` | Keep a history of solves | Switch. |
+| `settings.history.note` | Kept on this device only. No pictures are kept. | Explanation under the switch. |
+| `settings.section.about` | About | Section heading. |
+| `settings.about` | About Cubeulator | Row. Opens the About screen. |
+| `settings.section.developer` | Developer | Section heading. Developer builds only; may stay in English. |
+| `settings.dev.backend` | Graphics backend. Running %1. | Developer builds only. |
+| `settings.dev.restart` | Restart Cubeulator to switch to this backend. | Developer builds only. |
+| `settings.dev.cubeStyle` | Cube style | Developer builds only. |
+| `settings.dev.stats` | Show frame rate | Developer builds only. |
+
+#### `about`
+
+| key | English | note for translators |
+|---|---|---|
+| `about.title` | About Cubeulator | Screen title, and the macOS menu item. |
+| `about.version` | Version %1 | %1 is a version number such as 1.0.0. |
+| `about.what` | A camera-driven solver for the 3x3 cube. | One-line description. |
+| `about.author` | Made by %1. | %1 is the author's name. |
+| `about.licence` | Free software under the GNU General Public License, version 3 or later. | Do not translate the licence's name. |
+| `about.source` | Source code | Link. Opens a web page. |
+| `about.licences` | Licences | Row. Opens the list of third-party notices. US: 'Licenses'. |
+| `about.privacy` | Privacy | Row. |
+| `about.trademark` | Cubeulator is not affiliated with the makers of any cube. | Small print. |
+
+#### `licences`
+
+| key | English | note for translators |
+|---|---|---|
+| `licences.title` | Licences | Screen title. |
+| `licences.intro` | Cubeulator is built with these components. Each is used under its own licence. | Text above the list. |
+| `licences.own` | Cubeulator | First row: the app's own licence. |
+| `licences.unavailable.title` | The notices could not be loaded | Heading. |
+| `licences.unavailable.body` | They are also published with the source code at %1. | Body. %1 is a web address. |
+
+#### `privacy`
+
+| key | English | note for translators |
+|---|---|---|
+| `privacy.title` | Privacy | Screen title. |
+| `privacy.camera.title` | The camera | Heading. |
+| `privacy.camera.body` | The camera picture is used on this device to read your cube's colours. No picture is saved, and nothing is sent anywhere. | Body. For builds that save no pictures. |
+| `privacy.history.title` | Solve history | Heading. |
+| `privacy.history.body` | Cubeulator keeps a list of the cubes you have solved: the colours, the turns, the date and how long it took. It stays on this device. You can clear it, or turn it off, in Settings. | Body. |
+| `privacy.network.title` | The internet | Heading. |
+| `privacy.network.body` | Cubeulator does not use the internet. It has no accounts, no adverts and no tracking. | Body. |
+| `privacy.recordings.title` | Pictures of failed scans | Heading. Only in builds that can keep them. |
+| `privacy.recordings.body` | If a scan fails, Cubeulator can keep the pictures from that scan on this device, so that you can send them to help fix the problem. They show whatever the camera saw, which may include you. This is off unless you turn it on, and nothing is sent unless you send it. | Body. Only in builds that can keep them. |
+| `privacy.recordings.keep` | Keep pictures of failed scans | Switch. Only in builds that can keep them. Off by default. |
+| `privacy.recordings.manage` | Manage saved scans | Button. Only in builds that can keep them. |
+
+#### `help`
+
+| key | English | note for translators |
+|---|---|---|
+| `help.title` | Help | Screen title. |
+| `help.howItWorks` | How it works | Topic. |
+| `help.scanning` | Scanning the cube | Topic. |
+| `help.entering` | Entering colours by hand | Topic. |
+| `help.holding` | Holding the cube | Topic. |
+| `help.turns` | What the words mean | Topic. |
+| `help.lost` | If the cube does not match | Topic. |
+| `help.cubes` | Which cubes work | Topic. |
+| `help.notation` | Cube notation | Topic. |
+| `help.keys` | Keyboard | Topic. Computers only. |
+
+#### `menu`
+
+| key | English | note for translators |
+|---|---|---|
+| `menu.file` | File | Menu bar, macOS. |
+| `menu.newScan` | New Scan | Menu item, macOS. Title case as macOS menus are. |
+| `menu.view` | View | Menu bar, macOS. |
+| `menu.window` | Window | Menu bar, macOS. |
+| `menu.settings` | Settings… | Menu item, macOS application menu. |
+| `menu.quit` | Quit Cubeulator | Menu item, macOS. |
+| `menu.helpItem` | Cubeulator Help | Menu item, macOS Help menu. |
+| `menu.enterByHand` | Enter Colours by Hand | Menu item, macOS File menu. Title case as macOS menus are. |
+
+#### `store`
+
+| key | English | note for translators |
+|---|---|---|
+| `store.summary` | Scan your cube with the camera, then follow one turn at a time until it is solved. | The one-line description in app stores and software centres. 80 characters at most in every language. |
+| `store.caption.1` | Scan. Solve. In your hands. | Caption on the first store screenshot. The same line as app.tagline, on one line. |
+| `store.caption.2` | Show each side to the camera | Caption on the screenshot of the scan screen. |
+| `store.caption.3` | Follow one turn at a time | Caption on the screenshot of the solve screen. |
+| `store.caption.4` | See what each stage is for | Caption on the screenshot of a stage change. |
+| `store.caption.5` | Colours you can tell apart | Caption on the screenshot showing the marks on cube colours, in the dark theme. |
+| `store.caption.6` | Solved | Caption on the screenshot of the finishing screen. |
+<!-- strings:end -->
+
+### Still to write
+
+Help's topic bodies (`help.*.body`) are written with the Help screen spec,
+after the first review of the prototype. Their titles are above.

@@ -399,5 +399,14 @@
   "menu.window": ["Window", "Menu bar, macOS."],
   "menu.settings": ["Settings…", "Menu item, macOS application menu."],
   "menu.quit": ["Quit Cubeulator", "Menu item, macOS."],
-  "menu.helpItem": ["Cubeulator Help", "Menu item, macOS Help menu."]
+  "menu.helpItem": ["Cubeulator Help", "Menu item, macOS Help menu."],
+  "menu.enterByHand": ["Enter Colours by Hand", "Menu item, macOS File menu. Title case as macOS menus are."],
+
+  "store.summary": ["Scan your cube with the camera, then follow one turn at a time until it is solved.", "The one-line description in app stores and software centres. 80 characters at most in every language."],
+  "store.caption.1": ["Scan. Solve. In your hands.", "Caption on the first store screenshot. The same line as app.tagline, on one line."],
+  "store.caption.2": ["Show each side to the camera", "Caption on the screenshot of the scan screen."],
+  "store.caption.3": ["Follow one turn at a time", "Caption on the screenshot of the solve screen."],
+  "store.caption.4": ["See what each stage is for", "Caption on the screenshot of a stage change."],
+  "store.caption.5": ["Colours you can tell apart", "Caption on the screenshot showing the marks on cube colours, in the dark theme."],
+  "store.caption.6": ["Solved", "Caption on the screenshot of the finishing screen."]
 }

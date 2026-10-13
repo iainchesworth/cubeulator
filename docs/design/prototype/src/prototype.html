@@ -71,6 +71,10 @@ svg.cvd{position:absolute;width:0;height:0}
 .mapcard li button:hover{background:var(--pg-bg)}
 .mapcard li button:focus-visible{outline:2px solid var(--pg-fg)}
 .mapcard li span{display:block;font:400 12px/1.35 var(--f-head);color:var(--pg-muted)}
+.icons{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:8px}
+.icons figure{margin:0;display:flex;flex-direction:column;gap:6px;font:500 11px/1.2 var(--f-mono);color:var(--pg-muted)}
+.icons .tile{background:#F3F2F2;display:grid;place-items:center;border:1px solid var(--pg-line)}
+.icons svg{display:block;width:100%;height:100%}
 .loops{margin-top:20px;border-collapse:collapse;font-size:13px}
 .loops td{padding:4px 12px 4px 0;border-bottom:1px solid var(--pg-line);vertical-align:top}
 .loops td:first-child{font-family:var(--f-mono);white-space:nowrap}
@@ -341,7 +345,7 @@ canvas{display:block;width:100%;height:100%}
 
 <script>
 /*__DATA__*/
-const {STR, JOURNEY, MARKS} = DATA;
+const {STR, JOURNEY, MARKS, IDENTITY} = DATA;
 const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app'), device = $('#device');
 
@@ -977,7 +981,9 @@ function showMap(on) {
   map.innerHTML = `<h2>The journey</h2><p>Every screen and every state, from docs/design/journey.md. The top row is the way through; the second row hangs off Home and Settings. Dashed boxes belong to the scan lane, double-ruled to the solve lane. Choose any state to see it.</p>
     <div class="spine">${spine}</div><div class="spine">${side}</div>
     <table class="loops">${LOOPS.map(l => `<tr><td>${l[0]}</td><td>${l[1]}</td></tr>`).join('')}</table>
-    <div class="maprow">${JOURNEY.map(s => `<div class="mapcard"><h3>${s.screen}</h3><div class="lane">${s.lane} lane${screens[s.screen] ? '' : ' · next cut'}</div><ul>${s.states.map(x => `<li><button type="button" data-map="${s.screen}.${x.id}">${s.screen}.${x.id}<span>${esc(x.when)}</span></button></li>`).join('')}</ul></div>`).join('')}</div>`;
+    <div class="maprow">${JOURNEY.map(s => `<div class="mapcard"><h3>${s.screen}</h3><div class="lane">${s.lane} lane${screens[s.screen] ? '' : ' · next cut'}</div><ul>${s.states.map(x => `<li><button type="button" data-map="${s.screen}.${x.id}">${s.screen}.${x.id}<span>${esc(x.when)}</span></button></li>`).join('')}</ul></div>`).join('')}</div>
+    <h2 style="margin-top:32px">Identity</h2><p>The icon proposal, from docs/design/identity: the app's own drawing of a cube with its top layer part-way through a turn. The small version drops the grid lines.</p>
+    <div class="icons">${[['icon', 128], ['icon-dark', 128], ['icon-android-foreground', 128], ['icon-mono', 128], ['icon-small', 48], ['icon-small', 32], ['icon-small', 16]].map(([n, px]) => `<figure><div class="tile" style="width:${px}px;height:${px}px">${IDENTITY[n] || ''}</div><figcaption>${n.replace('icon-', '').replace('icon', 'light')} ${px}</figcaption></figure>`).join('')}</div>`;
 }
 $('#p-map').addEventListener('click', () => showMap($('#map').hidden));
 $('#map').addEventListener('click', e => { const b = e.target.closest('[data-map]'); if (!b) return; const [s, st] = b.dataset.map.split('.'); showMap(false); go(s, st, {picked: true}); });

@@ -151,6 +151,7 @@ def main():
         "STR": {k: v[0] for k, v in strings.items()},
         "JOURNEY": journey,
         "MARKS": marks,
+        "IDENTITY": {f.stem: f.read_text(encoding="utf-8") for f in sorted((ROOT / "identity").glob("*.svg"))},
     }
     html = html.replace("/*__TOKENS__*/", css_vars(tokens))
     html = html.replace("/*__DATA__*/", "const DATA = " + json.dumps(data, ensure_ascii=False) + ";")

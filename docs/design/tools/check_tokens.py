@@ -6,6 +6,7 @@ exits non-zero if any pairing misses its target. Run from anywhere:
 
     python docs/design/tools/check_tokens.py            # check, print summary
     python docs/design/tools/check_tokens.py --markdown # print the tables
+    python docs/design/tools/check_tokens.py --write    # put them in system.md
 
 Contrast is WCAG 2.x relative-luminance contrast. Colour-vision figures use
 the Machado, Oliveira and Fernandes (2009) matrices at full severity, with
@@ -158,6 +159,12 @@ def main():
     if len(set(marks)) != len(marks):
         failures.append("two cube colours share a mark")
 
+    if "--write" in sys.argv:
+        doc = TOKENS.parent / "system.md"
+        begin, end = "<!-- measured:begin -->", "<!-- measured:end -->"
+        head, rest = doc.read_text(encoding="utf-8").split(begin, 1)
+        doc.write_text(head + begin + "\n" + "\n".join(out) + "\n" + end + rest.split(end, 1)[1],
+                       encoding="utf-8", newline="\n")
     if markdown:
         print("\n".join(out))
     else:

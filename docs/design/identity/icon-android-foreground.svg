@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<polygon points="512.0,327.7 751.4,465.9 512.0,604.2 272.6,465.9" fill="#201E1D" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<polygon points="751.4,465.9 512.0,604.2 512.0,788.5 751.4,650.2" fill="#F3F2F2" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<polygon points="272.6,465.9 512.0,604.2 512.0,788.5 272.6,650.2" fill="#F3F2F2" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<line x1="671.6" y1="512.0" x2="671.6" y2="696.3" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="352.4" y1="512.0" x2="352.4" y2="696.3" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="591.8" y1="558.1" x2="591.8" y2="742.4" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="432.2" y1="558.1" x2="432.2" y2="742.4" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="751.4" y1="558.1" x2="512.0" y2="696.3" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="272.6" y1="558.1" x2="512.0" y2="696.3" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<polygon points="737.0,421.0 430.1,503.7 430.1,595.8 737.0,513.2" fill="#F3F2F2" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<polygon points="287.0,326.5 430.1,503.7 430.1,595.8 287.0,418.6" fill="#F3F2F2" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<line x1="634.7" y1="448.6" x2="634.7" y2="540.7" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="334.7" y1="385.5" x2="334.7" y2="477.7" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="532.4" y1="476.1" x2="532.4" y2="568.3" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="382.4" y1="444.6" x2="382.4" y2="536.8" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<polygon points="593.9,243.9 737.0,421.0 430.1,503.7 287.0,326.5" fill="#EC3013" stroke="#201E1D" stroke-width="27.6" stroke-linejoin="round"/>
+<line x1="641.6" y1="302.9" x2="334.7" y2="385.5" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="491.6" y1="271.4" x2="634.7" y2="448.6" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="689.3" y1="362.0" x2="382.4" y2="444.6" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+<line x1="389.3" y1="298.9" x2="532.4" y2="476.1" stroke="#201E1D" stroke-width="12.8" stroke-linecap="round"/>
+</svg>
