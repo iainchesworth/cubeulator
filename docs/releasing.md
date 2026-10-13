@@ -219,6 +219,14 @@ summary. Download it, install the package on a machine, read the notes. The dry
 run's signatures verify against the `cubeulator-signing-key.asc` in the same
 artifact, and against nothing else.
 
+It can be run from any branch that has the workflow file, without a tag, and so
+before the first release PR has merged (checked on 2026-10-14, from a scratch
+branch):
+
+```sh
+gh workflow run release.yml --ref <branch> -f dry_run=true
+```
+
 Dry-run attestations are real attestations of files that were never released;
 they sit in the repository's attestations list under that run and are harmless.
 
