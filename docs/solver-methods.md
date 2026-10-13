@@ -7,7 +7,7 @@ than one engine with a setting.
 
 | method | what it is | moves (mean) | longest seen | time (desktop) |
 |---|---|---|---|---|
-| `Beginner` | Layer by layer: cross, white corners, middle edges, 2-look OLL, 2-look PLL | 100.7 | 135 | 1.3 s |
+| `Beginner` | Layer by layer: cross, white corners, middle edges, 2-look OLL, 2-look PLL | 100.7 | 135 | 0.1 s |
 | `Intermediate` | CFOP: cross, first-two-layers pairs, one-sequence OLL, one-sequence PLL | 52.1 | 62 | 3 ms |
 | `Advanced` | Kociemba's two-phase search | 20.3 | 22 | 37 ms |
 
@@ -15,7 +15,13 @@ Measured on the same random scrambles (100-move scrambles from
 `random_scramble`, 300 to 1500 cubes per row), a clang `-O2` desktop build.
 These have not been measured on a phone; expect a small multiple of the
 desktop figure. `Beginner` needed a table-driven `Cube::apply` to stay
-interactive, the other two were written to be cheap from the start.
+interactive, and then to search over the position of the pieces it is
+building rather than over whole cubes (`piece_search.hpp`: 1.3 s was 12 to 15
+times that); the other two were written to be cheap from the start. The
+`Beginner` figure was measured again after that change, on an MSVC
+`RelWithDebInfo` build with `cube_solve_bench` (25-move scrambles, 28 solves:
+1.8 s to 0.12 s a solve, the same solutions), the others are as first
+measured.
 
 `Beginner` is unchanged by the other two and remains the default.
 
