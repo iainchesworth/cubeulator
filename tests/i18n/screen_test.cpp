@@ -17,7 +17,6 @@
 
 #include <cube/solver/cube.hpp>
 #include <cube/solver/notation.hpp>
-#include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QColor>
@@ -32,8 +31,6 @@
 #include <QSurfaceFormat>
 #include <QUrl>
 #include <QVariant>
-#include <QVariantList>
-#include <QVariantMap>
 
 #include <functional>
 #include <memory>
@@ -445,16 +442,10 @@ Item {
     return {};
 }
 
-[[nodiscard]] QVariantMap painting(const Cube& cube) {
-    QVariantMap sides;
-    for (const Face face : cube::solver::kAllFaces) {
-        QVariantList colours;
-        for (const Color colour : cube::solver::outside_view(cube, face)) {
-            colours.append(paint(colour).name());
-        }
-        sides.insert(letter(face), colours);
-    }
-    return sides;
+// A fresh JavaScript object each time, as the screens assign it; a QVariantMap
+// would not repaint an unchanged cube on Qt 6.12. See cube::test::painting().
+[[nodiscard]] QVariant painting(const Cube& cube) {
+    return QVariant::fromValue(cube::test::painting(t::engine(), cube, &paint));
 }
 
 }  // namespace

@@ -279,7 +279,17 @@ jobs:
       - name: Install Qt (prebuilt)
         uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
+          # Windows only. Qt 6.11+ moved the Windows kits into per-architecture
+          # repository folders, which aqtinstall's last release (3.3.0, the
+          # action's default) predates: it fails with "Failed to locate XML
+          # data for Qt version '6.12.0'". "Support Qt 6.11+ for Windows x64"
+          # (7e5a5c3d, 2026-03-01) is on aqtinstall master but unreleased, so
+          # the Windows leg installs this pinned master commit. Linux and macOS
+          # still use the legacy layout the release handles, so they keep it.
+          # Drop this once a release after 3.3.0 exists and the action's
+          # aqtversion default moves to it.
+          aqtsource: ${{ runner.os == 'Windows' && 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7' || '' }}
           modules: "qtquick3d qtshadertools"
           cache: true
 
@@ -357,10 +367,18 @@ jobs:
       - name: Install Android SDK
         uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
-      - name: Install Android NDK
+      # Qt 6.12 for Android is built against NDK r27c (27.2.12479018), JDK 21
+      # and SDK platform 36 / build-tools 36.0.0 (Qt for Android prerequisites,
+      # doc.qt.io/qt-6.12), and Qt advises an app to use the same NDK as the
+      # Qt libraries - so this is deliberately NOT the newest NDK (r30), it is
+      # the newest one Qt 6.12 supports. ubuntu-26.04's default JDK is 25;
+      # JAVA_HOME_21_X64 is preinstalled alongside it.
+      - name: Install Android NDK, platform and build-tools
         run: |
-          sdkmanager --install "ndk;26.1.10909125"
-          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/26.1.10909125" >> "$GITHUB_ENV"
+          sdkmanager --install "ndk;27.2.12479018" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/27.2.12479018" >> "$GITHUB_ENV"
+          test -d "$JAVA_HOME_21_X64" || { echo "::error::JDK 21 (JAVA_HOME_21_X64) is not preinstalled on this image"; exit 1; }
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
 
       # gperf (a transitive dependency, built as a host tool regardless of
       # target triplet) needs these from the system package manager to build
@@ -397,7 +415,7 @@ jobs:
       - name: Install Qt (prebuilt, Android)
         uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
           target: android
           arch: android_arm64_v8a
           modules: "qtquick3d qtshadertools"

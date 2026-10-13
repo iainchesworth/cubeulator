@@ -43,9 +43,9 @@ that a plain desktop configure doesn't:
 
 ```
 cmake --preset android-clang-debug \
-  -DCMAKE_PREFIX_PATH=<path-to-Qt>/6.8.3/android_arm64_v8a \
-  -DQT_HOST_PATH=<path-to-Qt>/6.8.3/<desktop-kit> \
-  -DQT_HOST_PATH_CMAKE_DIR=<path-to-Qt>/6.8.3/<desktop-kit>/lib/cmake \
+  -DCMAKE_PREFIX_PATH=<path-to-Qt>/6.12.0/android_arm64_v8a \
+  -DQT_HOST_PATH=<path-to-Qt>/6.12.0/<desktop-kit> \
+  -DQT_HOST_PATH_CMAKE_DIR=<path-to-Qt>/6.12.0/<desktop-kit>/lib/cmake \
   -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH \
   -DANDROID_SDK_ROOT=<path-to-Android-SDK>
 ```

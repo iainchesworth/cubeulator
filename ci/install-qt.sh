@@ -7,7 +7,7 @@
 # Then configure with -DCMAKE_PREFIX_PATH=<OUTDIR>/<QtVersion>/<arch>.
 set -euo pipefail
 
-QT_VERSION="6.8.3"
+QT_VERSION="6.12.0"
 OUT_DIR="${1:-$HOME/Qt}"
 
 case "$(uname -s)" in
