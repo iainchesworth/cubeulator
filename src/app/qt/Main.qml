@@ -10,6 +10,13 @@ ApplicationWindow {
     title: "Cubeulator"
     color: Theme.paper
 
+    // Component kit (E2a): publishes this window's size and safe area to Theme,
+    // makes the content follow the language's direction, and binds back per
+    // platform to Navigator. It fills the window and sits beneath everything
+    // that follows. Navigator is not routing the screens yet (docs/kit.md,
+    // "Proposed split of AppState.qml"), so back does nothing until it is.
+    KitWindowBindings { window: root }
+
     Loader {
         id: screens
         anchors.fill: parent

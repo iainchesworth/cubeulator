@@ -25,6 +25,10 @@ namespace cube::test {
 // The one QML engine of the run, made in kit_test_main.cpp.
 [[nodiscard]] QQmlEngine& engine();
 
+// The folder this run keeps its QSettings in, so a test that points them
+// elsewhere can put them back.
+[[nodiscard]] QString settingsRoot();
+
 // A QML singleton of the "Cubeulator" module: "Theme", "SettingsState",
 // "Navigator", "SystemTextScale"...
 [[nodiscard]] QObject* singleton(const char* name);

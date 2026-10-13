@@ -22,11 +22,15 @@
 
 namespace {
 QQmlEngine* g_engine = nullptr;
+QString g_settingsRoot;
 }
 
 namespace cube::test {
 QQmlEngine& engine() {
     return *g_engine;
+}
+QString settingsRoot() {
+    return g_settingsRoot;
 }
 }  // namespace cube::test
 
@@ -42,7 +46,8 @@ int main(int argc, char* argv[]) {
     // from the defaults.
     QTemporaryDir store;
     QSettings::setDefaultFormat(QSettings::IniFormat);
-    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, store.path());
+    g_settingsRoot = store.path();
+    QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, g_settingsRoot);
 
     QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
 
