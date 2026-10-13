@@ -396,3 +396,12 @@ if(CUBEULATOR_BUILD_APP)
         message(WARNING "Python 3 not found: the translation gates that are scripts are not registered")
     endif()
 endif()
+
+# --- Third-party notices (E0b, docs/licensing.md) --------------------------
+# Fails when a component that ships has no notice: a linked library, a Qt
+# module or QML import, a deployed DLL, a file under assets/, a directory
+# under third_party/. Append-only block of the licensing workstream.
+if(TARGET cube_app)
+    include(ThirdPartyNotices)
+    cube_add_third_party_notices_test(cube_app)
+endif()
