@@ -87,6 +87,81 @@ QtObject {
         return opts;
     }
 
+    // ---- Settings the design adds (E2a) -------------------------------------
+    // Everything in Settings that the design's Settings screen lists
+    // (docs/design/strings.json, settings.*; docs/design/journey.md). Each is
+    // persisted the moment it changes and applied live: Theme turns the
+    // appearance ones into tokens, and nothing here needs a restart.
+    //
+    // The value names are the ones the Settings screen and the prototype use,
+    // so a stored value means the same to every screen. A stored value that is
+    // not one of these (a hand-edited file, a later version's choice) is read
+    // as the default by whoever consumes it, never as an error.
+
+    // Appearance. "system" | a language tag ("en", "de", "fr", "es", "ja",
+    // "zh-CN", "he", "ar"). E2b turns this into the running translation.
+    property Settings languageSettings: Settings {
+        id: languageSettingsId
+        category: "appearance"
+        property string language: "system"
+    }
+    property alias language: languageSettingsId.language
+
+    // Marks on cube colours: a ring, slash, plus, dot or bar on each colour so
+    // they can be told apart without hue. On by default.
+    property Settings marksSettings: Settings {
+        id: marksSettingsId
+        category: "appearance"
+        property bool marks: true
+    }
+    property alias marks: marksSettingsId.marks
+
+    // "system" (as the device, multiplier 1) | "large" (1.25) | "larger" (1.5).
+    // Multiplied with the operating system's own text size in Theme.textScale.
+    property Settings textSizeSettings: Settings {
+        id: textSizeSettingsId
+        category: "appearance"
+        property string textSize: "system"
+    }
+    property alias textSize: textSizeSettingsId.textSize
+
+    // "system" (as the device) | "reduced" | "full". Theme.reducedMotion.
+    property Settings motionSettings: Settings {
+        id: motionSettingsId
+        category: "appearance"
+        property string motion: "system"
+    }
+    property alias motion: motionSettingsId.motion
+
+    // Solving. How a turn is advanced: "tap" (a tap on the cube or either
+    // button, or Space) | "timer" (the paced solve). Pace applies to the timer
+    // only: "slow" (about six seconds a turn) | "steady" (four) | "quick"
+    // (two and a half).
+    property Settings solvingSettings: Settings {
+        id: solvingSettingsId
+        category: "solving"
+        property string advance: "tap"
+        property string pace: "steady"
+        property bool explainStages: true
+        property bool notation: false
+        property bool sound: true
+        property bool haptics: true
+    }
+    property alias advance: solvingSettingsId.advance
+    property alias pace: solvingSettingsId.pace
+    property alias explainStages: solvingSettingsId.explainStages
+    property alias notation: solvingSettingsId.notation
+    property alias sound: solvingSettingsId.sound
+    property alias haptics: solvingSettingsId.haptics
+
+    // History, kept on this device only.
+    property Settings historySettings: Settings {
+        id: historySettingsId
+        category: "history"
+        property bool keep: true
+    }
+    property alias keepHistory: historySettingsId.keep
+
     // GraphicsInfo.api (a running window's actual backend) -> display name.
     readonly property var graphicsApiNames: ({
         0: "Unknown", 1: "Software", 2: "OpenVG", 3: "OpenGL",

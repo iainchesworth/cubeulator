@@ -311,3 +311,88 @@ if(CUBEULATOR_BUILD_APP)
         endif()
     endif()
 endif()
+
+# ---------------------------------------------------------------------------
+# Component kit (E2a, docs/kit.md): the design system's tokens, controls,
+# layout primitives, navigation and the developer gallery, in qt/kit/, in the
+# same "Cubeulator" module so that Theme and the legacy screens keep working
+# unchanged. Appended here as one block; nothing above was edited for it.
+# ---------------------------------------------------------------------------
+if(CUBEULATOR_BUILD_APP)
+    # A "developer build" has the component gallery and, when E3a lands, the
+    # settings that are not for a person solving a cube. On unless the build
+    # type is a release one; override with -DCUBEULATOR_DEVELOPER_BUILD=ON|OFF.
+    if(CMAKE_BUILD_TYPE MATCHES "^(Release|MinSizeRel)$")
+        set(_cube_kit_developer_default OFF)
+    else()
+        set(_cube_kit_developer_default ON)
+    endif()
+    option(CUBEULATOR_DEVELOPER_BUILD
+        "Developer build: component gallery and developer-only settings" ${_cube_kit_developer_default})
+    unset(_cube_kit_developer_default)
+    if(CUBEULATOR_DEVELOPER_BUILD)
+        target_compile_definitions(cube_app_qml PRIVATE CUBEULATOR_DEVELOPER_BUILD=1)
+    else()
+        target_compile_definitions(cube_app_qml PRIVATE CUBEULATOR_DEVELOPER_BUILD=0)
+    endif()
+
+    # Singletons need the property set explicitly, as for Theme above:
+    # "pragma Singleton" alone was not enough to register them as singletons.
+    set(_cube_kit_singletons
+        qt/kit/KitIcons.qml
+        qt/kit/Navigator.qml)
+    set_source_files_properties(${_cube_kit_singletons} PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
+    qt_target_qml_sources(cube_app_qml
+        QML_FILES
+            ${_cube_kit_singletons}
+            qt/kit/KitIcon.qml
+            qt/kit/KitText.qml
+            qt/kit/KitFocusRing.qml
+            qt/kit/KitKeyName.qml
+            qt/kit/KitButton.qml
+            qt/kit/KitWindowBindings.qml
+            qt/kit/KitGallery.qml)
+
+    # The helpers the QML reads the system through, one per setting, like
+    # SystemTheme above (QML_ELEMENT / QML_SINGLETON in each header).
+    target_sources(cube_app_qml PRIVATE
+        qt/kit/Announcer.hpp
+        qt/kit/Announcer.cpp
+        qt/kit/BuildInfo.hpp
+        qt/kit/BuildInfo.cpp
+        qt/kit/SystemChangeWatcher.hpp
+        qt/kit/SystemChangeWatcher.cpp
+        qt/kit/SystemInsets.hpp
+        qt/kit/SystemInsets.cpp
+        qt/kit/SystemMotion.hpp
+        qt/kit/SystemMotion.cpp
+        qt/kit/SystemTextScale.hpp
+        qt/kit/SystemTextScale.cpp
+        qt/kit/bundled_fonts.hpp
+        qt/kit/bundled_fonts.cpp
+        qt/kit/system_query.hpp)
+    if(APPLE)
+        target_sources(cube_app_qml PRIVATE qt/kit/system_query_apple.mm)
+    else()
+        target_sources(cube_app_qml PRIVATE qt/kit/system_query.cpp)
+    endif()
+
+    # The kit's own headers include each other by bare name, like the rest of
+    # qt/; main.cpp reaches bundled_fonts.hpp as "kit/bundled_fonts.hpp".
+    target_include_directories(cube_app_qml PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/qt/kit")
+
+    # Fonts: every .ttf and .otf under qt/fonts/ is compiled in under :/fonts
+    # and registered at start-up (kit/bundled_fonts.cpp). Their licences sit
+    # beside them; the generated notices (E0b) must list them.
+    file(GLOB _cube_kit_fonts CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/qt/fonts/*.ttf"
+        "${CMAKE_CURRENT_SOURCE_DIR}/qt/fonts/*.otf")
+    if(_cube_kit_fonts)
+        qt_add_resources(cube_app_qml "kit_fonts"
+            PREFIX "/fonts"
+            BASE "${CMAKE_CURRENT_SOURCE_DIR}/qt/fonts"
+            FILES ${_cube_kit_fonts})
+    endif()
+    unset(_cube_kit_fonts)
+endif()

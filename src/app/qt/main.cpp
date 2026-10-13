@@ -5,6 +5,9 @@
 #include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
 
+// Component kit (E2a).
+#include "kit/bundled_fonts.hpp"
+
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -112,6 +115,11 @@ int main(int argc, char* argv[]) {
     applyPersistedGraphicsBackend();
 
     QGuiApplication app(argc, argv);
+
+    // Component kit (E2a): the design's fonts are compiled in; register
+    // them before any QML asks for a family, so the app shows Archivo
+    // whether or not the machine has it installed.
+    cube::app::kit::installBundledFonts();
 
     // Registered imperatively via qmlRegisterSingletonInstance rather than
     // QML_ELEMENT: cube_app_controllers is a separate target from

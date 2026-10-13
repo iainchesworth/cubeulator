@@ -16,6 +16,9 @@ ApplicationWindow {
         // Each screen fades in rather than replacing the last in one frame.
         onLoaded: screenFade.restart()
         sourceComponent: {
+            // Component kit (E2a): the gallery, developer builds only.
+            if (BuildInfo.galleryRequested)
+                return galleryScreen;
             switch (AppState.screen) {
             case "permission": return permissionScreen;
             case "scan": return scanScreen;
@@ -39,4 +42,6 @@ ApplicationWindow {
     Component { id: solveScreen; SolveScreen {} }
     Component { id: settingsScreen; SettingsScreen {} }
     Component { id: completeScreen; CompleteScreen {} }
+    // Component kit (E2a).
+    Component { id: galleryScreen; KitGallery {} }
 }

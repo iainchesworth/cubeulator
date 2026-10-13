@@ -219,3 +219,69 @@ if(CUBEULATOR_BUILD_APP)
     catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")
 endif()
+
+# --- Component kit tests (E2a) ----------------------------------------------
+# The kit's controls loaded for real in the app's own "Cubeulator" QML module,
+# on the same pattern as cube_qml_tests (the solve lane's harness, on
+# feature/solve-guidance): Catch2, a QGuiApplication on the offscreen
+# platform, one QML engine for the whole run. Separate from it because that
+# harness arrives with the solve lane's controllers refactor and this one
+# needs none of the controllers: the kit does not touch the camera, the scan
+# or the solver. Fold the two together once both are on one branch.
+if(CUBEULATOR_BUILD_APP)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Test)
+
+    add_executable(cube_kit_tests
+        kit/kit_test_main.cpp
+        kit/kit_fixture.hpp
+        kit/kit_fixture.cpp
+        kit/theme_tokens_test.cpp
+        kit/system_helpers_test.cpp
+        kit/navigator_test.cpp
+        kit/button_test.cpp)
+
+    target_link_libraries(cube_kit_tests
+        PRIVATE
+            $<LINK_LIBRARY:WHOLE_ARCHIVE,cube_app_qml>
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::Test
+            Catch2::Catch2)
+
+    # The token file the kit is held to, and a place to read the fonts from.
+    target_compile_definitions(cube_kit_tests PRIVATE
+        "CUBE_KIT_TOKENS_JSON=\"${CMAKE_SOURCE_DIR}/docs/design/tokens.json\""
+        "CUBE_KIT_SOURCE_DIR=\"${CMAKE_SOURCE_DIR}\"")
+    target_include_directories(cube_kit_tests PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/kit"
+        "${CMAKE_SOURCE_DIR}/src/app/qt")
+
+    # As cube_qml_tests: the Qt runtime and the QML modules the app imports are
+    # copied next to cube_app.exe when it is built, and this binary sits in
+    # the same directory.
+    add_dependencies(cube_kit_tests cube_app)
+
+    # Two things windeployqt does not copy for the app, because the app does
+    # not need them: the offscreen platform plugin (the tests run without a
+    # display on every platform, Windows included) and Qt Test, for sending
+    # keys and clicks through a window.
+    if(WIN32)
+        add_custom_command(TARGET cube_kit_tests POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "${QT6_INSTALL_PREFIX}/${QT6_INSTALL_PLUGINS}/platforms/qoffscreen$<$<CONFIG:Debug>:d>.dll"
+                "$<TARGET_FILE_DIR:cube_kit_tests>/platforms/"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                "$<TARGET_FILE:Qt6::Test>" "$<TARGET_FILE_DIR:cube_kit_tests>/"
+            COMMENT "Copying Qt's offscreen platform plugin and Qt Test for cube_kit_tests")
+    endif()
+
+    cube_deploy_sanitizer_runtime(cube_kit_tests)
+
+    catch_discover_tests(cube_kit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_kit_tests>")
+endif()
