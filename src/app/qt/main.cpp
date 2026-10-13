@@ -5,11 +5,16 @@
 #include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
 
+#include <cube/solver/solver.hpp>
+
+#include <QtQml/qqml.h>
 #include <QGuiApplication>
+#include <QMetaObject>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSettings>
-#include <QtQml/qqml.h>
+
+#include <memory>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -155,6 +160,26 @@ int main(int argc, char* argv[]) {
 
     if (engine.rootObjects().isEmpty()) {
         return -1;
+    }
+
+    // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
+    // scrambled from that seed, no camera and no scan. For working on the
+    // solve screen itself - trying how a move is shown does not need a real
+    // cube read first.
+    bool demo = false;
+    const unsigned demo_seed = qEnvironmentVariable("CUBE_SOLVE_DEMO").toUInt(&demo);
+    if (demo) {
+        solveController.solveCube(cube::solver::random_scramble(demo_seed));
+        QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
+        auto show_when_solved = std::make_shared<QMetaObject::Connection>();
+        *show_when_solved =
+            QObject::connect(&solveController, &SolveController::stateChanged, app_state,
+                             [&solveController, app_state, show_when_solved]() {
+                                 if (!solveController.isSolving()) {
+                                     app_state->setProperty("screen", QStringLiteral("solve"));
+                                     QObject::disconnect(*show_when_solved);
+                                 }
+                             });
     }
 
     return QGuiApplication::exec();
