@@ -13,6 +13,7 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QSet>
 #include <QString>
 #include <QStringList>
