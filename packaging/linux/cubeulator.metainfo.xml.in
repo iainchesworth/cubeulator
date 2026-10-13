@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AppStream metadata. Software centres do not list an application without it.
+  Configured by cmake/DesktopPackaging.cmake. The summary and description are
+  `store.summary` and `about.what` in docs/design/strings.json.
+
+  Not here yet, on purpose: <screenshots>. They come from the system tests'
+  screenshot tour (docs/design/identity/README.md) and need somewhere to be
+  hosted; both are E6.
+-->
+<component type="desktop-application">
+  <id>@CUBEULATOR_APP_ID@</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <name>@CUBEULATOR_APP_DISPLAY_NAME@</name>
+  <summary>@CUBEULATOR_STORE_SUMMARY@</summary>
+  <description>
+    <p>@CUBEULATOR_ABOUT_WHAT@</p>
+  </description>
+
+  <developer id="@CUBEULATOR_DEVELOPER_ID@">
+    <name>@CUBEULATOR_PUBLISHER@</name>
+  </developer>
+
+  <launchable type="desktop-id">@CUBEULATOR_APP_ID@.desktop</launchable>
+  <icon type="stock">@CUBEULATOR_APP_ID@</icon>
+  <url type="homepage">@PROJECT_HOMEPAGE_URL@</url>
+  <url type="bugtracker">@PROJECT_HOMEPAGE_URL@/issues</url>
+
+  <keywords>
+    <keyword>cube</keyword>
+    <keyword>rubik</keyword>
+    <keyword>solver</keyword>
+    <keyword>puzzle</keyword>
+  </keywords>
+
+  <provides>
+    <binary>cubeulator</binary>
+  </provides>
+
+  <recommends>
+    <display_length compare="ge">360</display_length>
+  </recommends>
+
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="@PROJECT_VERSION@" date="@CUBEULATOR_RELEASE_DATE@" />
+  </releases>
+</component>

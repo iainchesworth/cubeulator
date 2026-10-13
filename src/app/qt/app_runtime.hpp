@@ -1,6 +1,7 @@
 #pragma once
 
 #include "controllers/app_controllers.hpp"
+#include "desktop/desktop_integration.hpp"
 
 #include <QQmlApplicationEngine>
 
@@ -47,6 +48,11 @@ private:
     // Declared after the controllers, and so destroyed before them: the
     // engine's image provider borrows directScan.
     AppControllers controllers_;
+    // What DesktopShell.qml reads (KeepAwake, AppInfo). Part of the runtime,
+    // not of main(), so that a test boots the same Main.qml with the same
+    // singletons. Window geometry and the process's identity are not here:
+    // they are what only the real application does (desktop_integration.hpp).
+    DesktopServices desktop_;
     QQmlApplicationEngine engine_;
 };
 

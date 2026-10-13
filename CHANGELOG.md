@@ -19,6 +19,14 @@ project adheres to [Semantic Versioning](https://semver.org/).
   (MSVC's compiler number is unchanged; a missing compiler reads
   `unknown compiler` as before), and the Android manifest moved to
   `src/app/platform/android/package/`.
+- Every tool CI uses is pinned exactly (CMake, Ninja, NSIS, gcovr, zizmor, the
+  docs toolchain) and the actions are at their newest release that is at least
+  a week old ([docs/ci.md](docs/ci.md)).
+- The desktop shell follows the platform-isolation rule: keep awake, the
+  process identity and the window traits are one implementation per platform
+  behind `interfaces/desktop_shell.hpp`, and each platform's packaging CMake is
+  reached from its fragment (`packaging/<name>/`), so no shared file tests the
+  OS ([docs/platform-isolation.md](docs/platform-isolation.md)).
 
 ### Removed
 
@@ -34,6 +42,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- Desktop packages for Windows (NSIS installer), macOS (`.dmg`) and Linux
+  (`.deb`, `.rpm`), each with the app icon, the version, the identifier
+  `com.iainchesworthlabs.cubeulator` and the third-party notices; built and
+  checked in CI on every push, and attached to a draft GitHub Release by the
+  `Release` workflow on a version tag ([docs/packaging.md](docs/packaging.md),
+  [docs/releasing.md](docs/releasing.md)).
+- Window manners on all three desktops: 960 x 680 default, 360 x 560 minimum,
+  remembered size, position and maximised state, a position off every screen
+  ignored; keyboard shortcuts for Settings, Help, a new scan, full screen and
+  quit; the macOS menu bar; a `KeepAwake` helper (wired to nothing yet).
+- App icons rasterised from `docs/design/identity/` at build time.
 - Tracy profiler instrumentation, the same as the rest of the application
   family: `cube/profiling.hpp` macros (zones, frames, plots, messages) behind
   `CUBEULATOR_ENABLE_TRACY` and an opt-in `profiling` vcpkg feature, with

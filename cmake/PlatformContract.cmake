@@ -19,6 +19,7 @@ set(CUBE_PLATFORM_CONTRACT_VARIABLES
     CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
     CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     CUBEULATOR_PLATFORM_QT_ARCH_DIRS
+    CUBEULATOR_PLATFORM_NOTICES_DIR
     CUBEULATOR_PLATFORM_SOURCES
     CUBEULATOR_PLATFORM_LINK_LIBRARIES
     CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES
@@ -29,7 +30,9 @@ set(CUBE_PLATFORM_CONTRACT_HOOKS
     cube_platform_prepare_dependencies
     cube_platform_deploy_qt_runtime
     cube_platform_deploy_qt_library
-    cube_platform_configure_packaging)
+    cube_platform_configure_packaging
+    cube_platform_configure_desktop_shell
+    cube_platform_configure_desktop_app)
 
 # Forgets whatever a previous fragment declared, so that checking several in a
 # row cannot let one pass on another's variables. A macro: it has to unset in
