@@ -15,6 +15,9 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS "")
 
+# Not installed by CPack: see the packaging note below.
+set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
+
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/ios/camera_ios.cpp
     platform/ios/paths_ios.cpp
@@ -40,3 +43,16 @@ endfunction()
 
 macro(cube_platform_configure_packaging)
 endmacro()
+
+# A phone has no desktop shell of its own: the OS owns the window and the
+# process's identity. The shared library still builds, with the implementation
+# that does nothing (the screens' keep-awake request is answered "not held"
+# until E4b).
+function(cube_platform_configure_desktop_shell target)
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/app/platform/posix/desktop_shell_mobile.cpp")
+endfunction()
+
+# Nothing to install: Real packaging is Xcode's archive+export, not CMake.
+function(cube_platform_configure_desktop_app target)
+endfunction()

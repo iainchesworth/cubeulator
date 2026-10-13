@@ -22,7 +22,7 @@ turns the `platform-isolation` check red.
 src/app/
   interfaces/        what the shell needs from a platform: one header each
     camera.hpp  paths.hpp
-    platform_info.hpp  crash_handler.hpp
+    platform_info.hpp  crash_handler.hpp  desktop_shell.hpp
   platform/
     windows/ macos/ linux/ android/ ios/
                      one implementation per interface, plus platform.cmake
@@ -56,6 +56,9 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | Work before packages are found | `cube_platform_prepare_dependencies()` | `cmake/MobileDependencies.cmake` |
 | Qt runtime next to the app (windeployqt) | `cube_platform_deploy_qt_runtime()` | `src/app/CMakeLists.txt` |
 | Installers (NSIS, DragNDrop, DEB/RPM) | `cube_platform_configure_packaging()` | `cmake/Packaging.cmake` |
+| Keep awake, process identity, window traits (desktop shell) | `cube_platform_configure_desktop_shell()` adds `platform/<name>/desktop_shell_<name>.cpp`, behind `interfaces/desktop_shell.hpp` | `src/app/CMakeLists.txt` (`cube_app_desktop`), `src/app/desktop/` |
+| The app as an installable program (file name, version resource or bundle, install rules, Qt deployment) | `cube_platform_configure_desktop_app()`, which includes `packaging/<name>/ConfigureApp.cmake` | `cmake/DesktopPackaging.cmake` |
+| Where the licence and notices install | `CUBEULATOR_PLATFORM_NOTICES_DIR` | `cmake/ThirdPartyNotices.cmake` |
 
 The full contract is the header comment of `cmake/Platform.cmake`; a fragment
 that forgets part of it fails configure by name, not three files away.
@@ -98,6 +101,11 @@ this?"* The cases already in the tree:
 | `#if defined(_WIN32)` COM guard in the capture loop | `platform/detail/capture_thread_scope.hpp`; one definition per platform |
 | `#ifdef _WIN32` / `__APPLE__` / `__linux__` and compiler/arch macros building the version line | CMake works the line out (`cube_describe_build_target`) and stamps it into `version.hpp` |
 | `Qt.platform.os` ladders in QML | `interfaces/platform_info.hpp`, exposed to QML as the `PlatformFacts` singleton |
+| `Qt.platform.os === "osx"` for the menu bar and full-screen chord | `Traits::native_menu_bar` in `interfaces/desktop_shell.hpp`, read as `AppInfo.nativeMenuBar` |
+| `#ifdef _WIN32` AppUserModelID, `#ifndef Q_OS_MACOS` window icon, `#ifdef Q_OS_MACOS` full-screen hint | `apply_process_identity()` and `Traits` in `interfaces/desktop_shell.hpp`, one definition per platform |
+| `#ifdef CUBE_DESKTOP_SHELL` around the desktop shell in `main()` and `AppRuntime` | the shell is built everywhere; a phone's `Traits` leave the geometry alone and its identity step does nothing |
+| `if(WIN32)` / `if(APPLE)` / `if(UNIX AND NOT APPLE)` in the packaging CMake | `packaging/<name>/ConfigureApp.cmake` and `Packaging.cmake`, reached from the fragment's hooks |
+| `#if defined(Q_OS_WIN)` around an assertion in a shared test | the assertion in `tests/platform/<name>/desktop/` |
 | `#ifndef Q_OS_WIN` choosing the test display | a value the fragment supplies, generated into `cube_test_platform_facts.hpp` (`tests/platform_facts.hpp.in`) |
 | `#if defined(Q_OS_LINUX)` "needs a display" check in the system tests | the same header: which session variables the platform uses, and the advice when none is set |
 | `#ifdef __linux__` XDG test cases | `tests/platform/linux/` |

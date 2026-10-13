@@ -127,7 +127,8 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11/GL headers, GLU for glew).
@@ -163,14 +164,11 @@ jobs:
       # It must match the compiler; it pins libomp5 to 23, which supersedes
       # the libomp-21-dev this job used with Clang 21.
       #
-      # libclang-rt-23-dev: the sanitizer runtimes. The debug preset this job
-      # builds links with -fsanitize=address, and clang-23 only Recommends its
-      # runtime, which ci/install-llvm.sh (--no-install-recommends) does not
-      # install: the link of bin/cube_scan failed with "cannot find
-      # .../lib/clang/23/lib/x86_64-pc-linux-gnu/libclang_rt.asan.a" after the
-      # whole library had compiled. The package ships the runtimes under
-      # lib/clang/23/lib/linux/libclang_rt.<name>-x86_64.a, which clang falls
-      # back to when the per-target directory has none.
+      # libclang-rt-23-dev: the sanitizer runtimes (libclang_rt.asan.a, ...)
+      # this job's -fsanitize=address,undefined build links. The archive only
+      # lists it as a Recommends of libclang-common-23-dev, and
+      # install-llvm.sh installs with --no-install-recommends, so without it
+      # every link fails with "cannot find .../libclang_rt.asan_static.a".
       - name: Install Clang 23
         run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev libclang-rt-23-dev
 
@@ -236,9 +234,9 @@ jobs:
           # regresses on the SDK, macos-15 is the known-good fallback. The iOS
           # job stays on macos-15 for an unrelated vcpkg reason (see ios-build).
           all='[
-            {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux"},
-            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
-            {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows"}
+            {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux",   "package_generators": "DEB;RPM",    "package_artifact": "cubeulator-linux-x64"},
+            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx",  "package_generators": "DragNDrop", "package_artifact": "cubeulator-macos-arm64"},
+            {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows", "package_generators": "NSIS",      "package_artifact": "cubeulator-windows-x64"}
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
@@ -325,7 +323,8 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships
       # GCC 13/14/15 side by side out of the box (unlike ubuntu-24.04, which
@@ -355,6 +354,22 @@ jobs:
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+
+      # E4a: tools CPack's package generators need. makensis has to be present
+      # at configure time (cmake/Packaging.cmake looks for it then); rpmbuild
+      # and fakeroot are for the .rpm and for root-owned files in the .deb.
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
+            choco install nsis --version 3.13.0 --no-progress -y
+          }
+
+      - name: Install packaging tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y rpm fakeroot desktop-file-utils appstream
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -401,6 +416,7 @@ jobs:
         run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR${OPENMP_PREFIX:+;$OPENMP_PREFIX}" $EXTRA_CXX_COMPILER
 
       - name: Build
+        id: build
         run: cmake --build --preset ${{ matrix.preset }}
 
       # The system tests (tests/system, label "system") draw the real app
@@ -413,7 +429,7 @@ jobs:
       # runners' graphics is what this step finds out, and it is reported
       # rather than forced green (docs/testing.md, "System tests").
       - name: System tests (experimental off Linux)
-        if: runner.os != 'Linux'
+        if: ${{ !cancelled() && runner.os != 'Linux' && steps.build.outcome == 'success' }}
         continue-on-error: true
         run: ctest --preset ${{ matrix.preset }} -L system --output-on-failure
 
@@ -424,6 +440,55 @@ jobs:
           name: system-test-output-${{ matrix.triplet }}
           path: build/${{ matrix.preset }}/system-test-output
           if-no-files-found: ignore
+
+      # E4a: one installable package per desktop OS, built from the tree just
+      # tested and kept as a build artifact. Nothing is released or published.
+      # How the packages are put together is docs/packaging.md.
+      # Runs whenever the build did, whatever the test steps said: whether a
+      # package can be made does not depend on a unit test, and a red test
+      # should not hide a packaging problem on a platform that is slow to
+      # report one.
+      - name: Package
+        id: package
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+          PACKAGE_GENERATORS: ${{ matrix.package_generators }}
+        # CPack writes the package to the directory it is run from, the
+        # workspace root; its staging tree is there too, kept short because
+        # NSIS stops at 260 characters.
+        run: cpack --config "build/${CMAKE_PRESET}/CPackConfig.cmake" -G "${PACKAGE_GENERATORS}"
+
+      - name: Upload package
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.package_artifact }}
+          path: |
+            Cubeulator-*.exe
+            Cubeulator-*.dmg
+            Cubeulator-*.deb
+            Cubeulator-*.rpm
+          if-no-files-found: error
+
+      # A package that built but is missing its Qt (a deploy script that
+      # quietly did nothing on a platform) is worse than a failed job. Run
+      # after the upload so the artifact can still be looked at. The release
+      # workflow runs the same script on the same packages.
+      - name: Check the package contents
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        shell: bash
+        run: packaging/check-package.sh .
+
+      # After the upload, so that a metadata complaint cannot lose the package.
+      - name: Validate desktop entry and AppStream metadata (Linux)
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+        run: |
+          desktop-file-validate "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.desktop"
+          appstreamcli validate --no-net "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.metainfo.xml"
 
       # Saved even when a later step fails: otherwise a red leg throws away every
       # package vcpkg had already built and the next attempt starts from nothing
@@ -516,7 +581,8 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # All platforms share the same Qt/QML shell (see docs/architecture.md),
       # so this leg installs Qt for Android same as build-and-test installs
@@ -643,7 +709,8 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # Unsigned build only (see the ios-clang-* preset's
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
@@ -686,7 +753,7 @@ jobs:
 
     steps:
       # fetch-depth: 0 is required - see the comment on build-and-test.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -700,9 +767,10 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # The vcpkg build dependencies (see build-and-test; libglu1-mesa-dev is
       # glew's glu.pc, which a stock runner lacks and every Linux leg tripped
@@ -718,12 +786,14 @@ jobs:
           libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
 
       - name: Install gcovr
-        run: pip install --quiet gcovr
+        run: pip install --quiet gcovr==8.6
 
+      # The Qt the app ships on: the build legs' version and action pin, so the
+      # system tests run the Qt that users run, and share the legs' Qt cache.
       - name: Install Qt (prebuilt)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
           modules: "qtquick3d qtshadertools"
           cache: true
 
@@ -764,6 +834,10 @@ jobs:
       # 80% gate of the Coverage job below until the numbers have been looked
       # at. QML is not in this report - gcov cannot see it; the reach report
       # in the artifact above is the QML measure.
+      # --gcov-ignore-parse-errors: the same negative branch count in cube.cpp
+      # the Coverage job below reads past (gcc bug 68080). This report is not
+      # gated, but a gcovr that exits 64 here still fails the whole job, and
+      # this is an `if: always()` step on a run that otherwise passed.
       - name: App coverage report
         if: always()
         run: >
@@ -771,7 +845,7 @@ jobs:
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
-          --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
+          --gcov-ignore-parse-errors negative_hits.warn_once_per_file
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage-app.html
           --json-summary build/coverage-app.json
@@ -829,7 +903,8 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
 
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
       # out of the box - see the equivalent comment on build-and-test above.
@@ -840,7 +915,7 @@ jobs:
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
       - name: Install gcovr
-        run: pip install --quiet gcovr
+        run: pip install --quiet gcovr==8.6
 
       # No GUI app needed to measure coverage of cube::lib/cube::platform, so
       # this leg skips the Qt install entirely.
@@ -863,26 +938,21 @@ jobs:
       # those counters are correct (checked: 64-bit, none negative). 1e12
       # keeps the detector for a counter that really has gone wrong.
       #
-      # --gcov-ignore-parse-errors=negative_hits.warn_once_per_file: the same
-      # bug from the other side. gcov derives some arc counts by subtracting
-      # others, and the test binaries run threads (the async recorder, capture
-      # loops) whose non-atomic counter updates race, so now and then a
-      # derived branch count comes out negative and gcovr aborts the whole
-      # report with "NegativeHits ... cube.cpp:39 Got negative hit value" and
-      # exit 64 before the 80% gate is evaluated. It is intermittent (the same
-      # tree passed on develop a few hours earlier). The offending line is
-      # skipped and reported once per file on stderr; the gate still runs.
-      # -fprofile-update=atomic would remove the cause, at a lock-prefixed add
-      # per counter in the -O0 corpus loops above, which is not worth it for a
-      # gate that only needs the percentages.
+      # --gcov-ignore-parse-errors negative_hits.warn_once_per_file: with the
+      # CFOP and two-phase corpora in the tests, a branch counter in cube.cpp
+      # (the `switch (face)` of Cube::at(), cube.cpp:39) is read back negative
+      # - the same gcc bug 68080, now past what the threshold above can
+      # excuse - and gcovr stops before it has read any report. The hit is
+      # taken as zero and named once per file, which can only lower the branch
+      # figure the gate below holds, never raise it.
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
-          --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
           --gcov-suspicious-hits-threshold 1000000000000
+          --gcov-ignore-parse-errors negative_hits.warn_once_per_file
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage.html
           --fail-under-line 80 --fail-under-branch 80

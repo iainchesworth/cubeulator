@@ -10,6 +10,7 @@
 #include <catch2/catch_session.hpp>
 
 #include <QCoreApplication>
+#include <QFont>
 #include <QGuiApplication>
 #include <QSettings>
 #include <QTemporaryDir>
@@ -47,6 +48,22 @@ int main(int argc, char* argv[]) {
     qunsetenv("CUBEULATOR_LOCALE");
 
     QGuiApplication app(argc, argv);
+
+    // The app's own face (Archivo) is not installed on a test machine and the
+    // repository ships none yet, so every string is set in the machine's
+    // default: Segoe UI on a Windows runner, DejaVu Sans, a good deal wider, on
+    // a Linux one. A layout that holds in one and not the other is a layout
+    // that depends on the font, so a developer can say which face to check
+    // against: CUBE_I18N_TEST_FONT="DejaVu Sans" on a machine that has it, or
+    // any wide face (Verdana) where it does not.
+    if (const QString family = qEnvironmentVariable("CUBE_I18N_TEST_FONT"); !family.isEmpty()) {
+        // The screens ask for Archivo by name, so it is the name that is
+        // substituted; setting the application font would not reach them.
+        QFont::insertSubstitution(QStringLiteral("Archivo"), family);
+        QFont font = QGuiApplication::font();
+        font.setFamily(family);
+        QGuiApplication::setFont(font);
+    }
 
     // Controllers first, so that the engine is torn down before them, as in
     // the app.

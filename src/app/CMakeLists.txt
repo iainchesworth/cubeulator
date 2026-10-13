@@ -302,3 +302,58 @@ if(CUBEULATOR_BUILD_APP)
 
     target_link_libraries(cube_app PRIVATE cube_app_runtime)
 endif()
+
+# E4a - desktop packaging and manners (experience lane; this block only).
+#
+# cube_app_desktop holds what the shells add to start-up: the remembered window
+# geometry, the KeepAwake helper and the process identity. It is a separate
+# static library so that the tests link it without the QML module. What
+# differs between platforms - keep awake, identity, window traits - is the
+# platform's own (interfaces/desktop_shell.hpp), added to the library by the
+# fragment's cube_platform_configure_desktop_shell(); and
+# cube_platform_configure_desktop_app() gives cube_app its icon, version
+# resource or bundle metadata, and install rules. Nothing here tests the OS.
+# See docs/packaging.md and docs/platform-isolation.md.
+# ===========================================================================
+if(CUBEULATOR_BUILD_APP)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick)
+
+    add_library(cube_app_desktop STATIC
+        desktop/desktop_integration.hpp
+        desktop/desktop_integration.cpp
+        desktop/keep_awake.hpp
+        desktop/keep_awake.cpp
+        desktop/window_geometry.hpp
+        desktop/window_geometry.cpp
+        interfaces/desktop_shell.hpp)
+    target_include_directories(cube_app_desktop PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(cube_app_desktop
+        PUBLIC
+            cube::lib
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
+    cube_platform_configure_desktop_shell(cube_app_desktop)
+
+    # AppRuntime owns what the screens read from the shell (KeepAwake,
+    # AppInfo), so that the system tests boot the same Main.qml with the same
+    # singletons the app has.
+    target_link_libraries(cube_app_runtime PUBLIC cube_app_desktop)
+    target_link_libraries(cube_app PRIVATE cube_app_desktop)
+
+    # DesktopShell.qml: shortcuts, the macOS menu bar and the placeholder
+    # About. Added here rather than to the module's own file list above.
+    qt_target_qml_sources(cube_app_qml QML_FILES qt/DesktopShell.qml)
+
+    # A phone is packaged by its own tools (androiddeployqt, Xcode), which is
+    # why only a desktop gets an installable program here.
+    if(CUBEULATOR_PLATFORM_DESKTOP)
+        include(DesktopPackaging)
+        cube_configure_desktop_app(cube_app)
+    endif()
+endif()

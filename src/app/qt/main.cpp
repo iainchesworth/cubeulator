@@ -1,4 +1,5 @@
 #include "app_runtime.hpp"
+#include "desktop/desktop_integration.hpp"
 #include "interfaces/crash_handler.hpp"
 
 #include <cube/profiling.hpp>
@@ -63,13 +64,21 @@ int main(int argc, char* argv[]) {
     CUBE_THREAD_NAME("main");
     CUBE_APP_INFO(cube::version_details());
 
+    // E4a - the process's identity (AppUserModelID, desktop file name, window
+    // icon) and the remembered window geometry: what only the real application
+    // does with its window. Declared before the runtime so that it outlives
+    // the engine. The singletons DesktopShell.qml reads are the runtime's.
+    cube::app::DesktopIntegration desktop(app);
+
     // The controllers (cube::app::AppControllers), their registration as QML
     // singletons and the engine that loads Main.qml are one AppRuntime, which
     // tests/system boots the same way.
     cube::app::AppRuntime runtime;
+    desktop.prepare(runtime.engine());  // E4a: the window's initial geometry
     if (!runtime.load()) {
         return -1;
     }
+    desktop.attach(runtime.engine());  // E4a: start remembering it
     SolveController& solveController = runtime.solve();
     QQmlApplicationEngine& engine = runtime.engine();
 
