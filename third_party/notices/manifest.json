@@ -20,7 +20,7 @@
       "If Quick 3D ever leaves the app, Qt's LGPL-3.0-only option becomes available and this changes (docs/licensing.md)."
     ],
     "elected": "GPL-3.0-only",
-    "expectedQtVersion": "6.8",
+    "expectedQtVersion": "6.12",
     "fileAliases": {
       "qt6entrypoint": "qtbase/EntryPointPrivate",
       "qwindows": "qtbase/QWindowsIntegrationPlugin",
@@ -124,9 +124,9 @@
         "qtdeclarative/QuickControls2Universal",
         "qtdeclarative/QuickControls2UniversalStyleImpl",
         "qtdeclarative/QuickControls2WindowsStyleImpl",
-        "qtdeclarative/QuickEffectsPrivate",
+        "qtdeclarative/QuickEffects",
         "qtdeclarative/QuickLayouts",
-        "qtdeclarative/QuickShapesPrivate",
+        "qtdeclarative/QuickShapes",
         "qtdeclarative/QuickTemplates2",
         "qtdeclarative/effectsplugin",
         "qtdeclarative/modelsplugin",
