@@ -229,19 +229,6 @@
       "notes": "chevron-left, chevron-right, check, alert-triangle and help-circle are on Lucide's list of icons derived from Feather."
     },
     {
-      "id": "corner-detector-weights",
-      "name": "Corner-detector weights (cube_corner_pose.onnx)",
-      "version": "",
-      "license": "AGPL-3.0-only",
-      "copyright": "Derived from Ultralytics YOLO11n-pose pretrained weights (AGPL-3.0).",
-      "homepage": "",
-      "kind": "model",
-      "files": [
-        "assets/models/cube_corner_pose.onnx"
-      ],
-      "blocking": "AGPL-derived weights are not cleared for distribution. Remove assets/models/cube_corner_pose.onnx before building a package (see assets/models/cube_corner_pose_PROVENANCE.md). src/app/CMakeLists.txt embeds the file whenever it exists."
-    },
-    {
       "id": "font-archivo",
       "name": "Archivo (typeface)",
       "version": "commit 211127690e8f (2026-09-02)",
@@ -303,8 +290,7 @@
     }
   ],
   "ignoredFiles": {
-    "_comment": "Files under assets/ and third_party/ that are not shipped works, so need no component.",
-    "assets/models/cube_corner_pose_PROVENANCE.md": "documentation; the weights it describes are not distributed"
+    "_comment": "Files under assets/ and third_party/ that are not shipped works, so need no component."
   },
   "ignoredDirs": {
     "third_party/notices/": "this inventory"
