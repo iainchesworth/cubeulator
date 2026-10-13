@@ -245,11 +245,11 @@ struct Candidate {
             }
             const float aspect = std::max(min_rect.size.width, min_rect.size.height) /
                                  std::min(min_rect.size.width, min_rect.size.height);
-            if (aspect > max_aspect) {
+            if (static_cast<double>(aspect) > max_aspect) {
                 continue;
             }
-            const double rect_area =
-                static_cast<double>(min_rect.size.width) * min_rect.size.height;
+            const double rect_area = static_cast<double>(min_rect.size.width) *
+                                     static_cast<double>(min_rect.size.height);
             if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
                 continue;
             }
@@ -416,7 +416,8 @@ Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerH
     }
     std::size_t interior = 0;
     for (const auto& center : centers) {
-        if (cv::pointPolygonTest(hull, center, true) > kInteriorDepthPitchRatio * pitch) {
+        if (cv::pointPolygonTest(hull, center, true) >
+            static_cast<double>(kInteriorDepthPitchRatio * pitch)) {
             ++interior;
         }
     }

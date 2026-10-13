@@ -659,17 +659,20 @@ TEST_CASE("centre-anchored classification against the captured centre palette",
         std::printf("  centre naming: ");
         for (std::size_t f = 0; f < kFaces; ++f) {
             std::printf("%c=%s(L%.1f,a%.1f,b%.1f,C%.1f) ", "URFDLB"[f], color_name(naming.color[f]),
-                        centres[f][0], centres[f][1], centres[f][2],
-                        std::hypot(centres[f][1], centres[f][2]));
+                        static_cast<double>(centres[f][0]), static_cast<double>(centres[f][1]),
+                        static_cast<double>(centres[f][2]),
+                        static_cast<double>(std::hypot(centres[f][1], centres[f][2])));
         }
         std::printf(
             "\n  centre separations: min=%.1f max=%.1f (seed floor %.1f, closest legit pair "
             "%.1f)\n",
-            naming.min_separation, naming.max_separation, cube::vision::kMinCentreSeedSeparationLab,
-            cube::vision::kClosestCentrePairLab);
+            static_cast<double>(naming.min_separation), static_cast<double>(naming.max_separation),
+            static_cast<double>(cube::vision::kMinCentreSeedSeparationLab),
+            static_cast<double>(cube::vision::kClosestCentrePairLab));
         std::printf("  naming margin: best=%.1f runner-up=%.1f (gap %.1f over 720 permutations)\n",
-                    naming.best_total, naming.runner_up_total,
-                    naming.runner_up_total - naming.best_total);
+                    static_cast<double>(naming.best_total),
+                    static_cast<double>(naming.runner_up_total),
+                    static_cast<double>(naming.runner_up_total - naming.best_total));
         // Per-face exposure spread, the drift the offset variants exist to
         // cancel.
         std::printf("  per-face mean L:");
@@ -678,7 +681,7 @@ TEST_CASE("centre-anchored classification against the captured centre palette",
             for (std::size_t k = 0; k < kCells; ++k) {
                 sum += clip.lab[f][k][0];
             }
-            std::printf(" %c=%.1f", "URFDLB"[f], sum / 9.0F);
+            std::printf(" %c=%.1f", "URFDLB"[f], static_cast<double>(sum / 9.0F));
         }
         std::printf("\n");
 
@@ -841,7 +844,8 @@ TEST_CASE("centre-anchored classification against the captured centre palette",
                     char text[64];
                     std::snprintf(text, sizeof(text), " %c%zu(%s->%s,L%.0f)", "URFDLB"[f], k,
                                   color_name(incumbent[f][k].color),
-                                  color_name((*variants[v])[f][k].color), clip.lab[f][k][0]);
+                                  color_name((*variants[v])[f][k].color),
+                                  static_cast<double>(clip.lab[f][k][0]));
                     cells += text;
                 }
             }

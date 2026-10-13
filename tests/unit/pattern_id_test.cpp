@@ -334,10 +334,11 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             pose && pose->orientation_valid ? *input.q_obs : Quat{1.0F, 0.0F, 0.0F, 0.0F};
         std::fprintf(out, "%s,%d,%lld,%d,%d,%.6f,%.6f,%.6f,%.6f,%d,%s,%s,%d,%.4f", clip.c_str(),
                      row.pass, static_cast<long long>(row.t_ms),
-                     pose && pose->orientation_valid ? 1 : 0, face_good ? 1 : 0, q[0], q[1], q[2],
-                     q[3], corner_pose ? 1 : 0, state_name(track.state),
-                     track.front_face ? face_name(*track.front_face) : "-", track.epoch,
-                     face_good ? static_cast<double>(face->geometry_confidence) : 0.0);
+                     pose && pose->orientation_valid ? 1 : 0, face_good ? 1 : 0,
+                     static_cast<double>(q[0]), static_cast<double>(q[1]),
+                     static_cast<double>(q[2]), static_cast<double>(q[3]), corner_pose ? 1 : 0,
+                     state_name(track.state), track.front_face ? face_name(*track.front_face) : "-",
+                     track.epoch, face_good ? static_cast<double>(face->geometry_confidence) : 0.0);
         std::fprintf(out, ",%s,%s,%d", model_name(placement.model), path_name(placement.path),
                      placement.matched_cells);
         // Same frame, same detections, affine instead of the homography the
@@ -445,7 +446,7 @@ TEST_CASE("PatternIdRollsMatchBodyRelabel", "[vision][capture-routing]") {
         const auto face = static_cast<cube::model::Face>(f);
         // The four rolls of `face`: lattice elements that keep it in place.
         std::vector<std::array<int, 9>> rolls;
-        for (int g = 0; g < kLatticeSize; ++g) {
+        for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
             if (kFacePermutation[static_cast<std::size_t>(g)][f] != face) {
                 continue;
             }

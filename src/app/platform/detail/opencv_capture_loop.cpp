@@ -72,7 +72,7 @@ OpenCvCaptureLoop::~OpenCvCaptureLoop() {
 }
 
 Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
-    const ScopedCom scoped_com;
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     // A simple index probe: friendly device names aren't reliably available
     // across OpenCV's desktop backends, so devices are identified by index.
@@ -97,7 +97,7 @@ Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
 }
 
 Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
-    const ScopedCom scoped_com;
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     if (is_capturing()) {
         return std::unexpected(CubeError::camera_start_failed);
@@ -131,13 +131,14 @@ Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
         as_found_ = PhotometrySnapshot{};
     }
 
-    capture_thread_ = std::jthread([this](std::stop_token token) { run(token); });
+    stop_requested_.store(false, std::memory_order_relaxed);
+    capture_thread_ = std::thread([this] { run(); });
     return {};
 }
 
 void OpenCvCaptureLoop::stop() {
     if (capture_thread_.joinable()) {
-        capture_thread_.request_stop();
+        stop_requested_.store(true, std::memory_order_release);
         capture_thread_.join();
     }
 
@@ -273,11 +274,11 @@ void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
     latest_ = TimedFrame{.frame = frame.clone(), .t_ms = now_ms};
 }
 
-void OpenCvCaptureLoop::run(std::stop_token stop_token) {
-    const ScopedCom scoped_com;
+void OpenCvCaptureLoop::run() {
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     cv::Mat frame;
-    while (!stop_token.stop_requested()) {
+    while (!stop_requested_.load(std::memory_order_acquire)) {
         if (!capture_.read(frame) || frame.empty()) {
             continue;
         }

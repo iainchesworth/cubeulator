@@ -375,6 +375,19 @@ if(CUBEULATOR_BUILD_APP)
 endif()
 
 # ---------------------------------------------------------------------------
+# Third-party notices (docs/licensing.md). Generated from the build so they
+# cannot drift from what ships: the cube_third_party_notices target writes
+# third-party-notices.json and THIRD-PARTY-NOTICES.txt before cube_app links,
+# embeds them as :/licences/* for the About and Licences screens, and installs
+# the text file with LICENSE into every desktop package. Append-only block of
+# the licensing workstream (E0b).
+# ---------------------------------------------------------------------------
+if(TARGET cube_app)
+    include(ThirdPartyNotices)
+    cube_add_third_party_notices(cube_app)
+endif()
+
+# ---------------------------------------------------------------------------
 # cube_app_runtime - the application's start-up, shared by cube_app (main.cpp)
 # and the system tests (tests/system): the controllers (AppControllers),
 # their registration as QML singletons, the language (cube_app_i18n) and the

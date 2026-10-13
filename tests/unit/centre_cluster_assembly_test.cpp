@@ -160,6 +160,9 @@ RollFit best_roll(const std::array<cv::Vec3f, 9>& sample,
 // way a mean does not.
 std::array<cv::Vec3f, 9> consensus(const std::vector<std::array<cv::Vec3f, 9>>& aligned) {
     std::array<cv::Vec3f, 9> out{};
+    if (aligned.empty()) {
+        return out;  // no readings, no median (indexing values[0] below would be UB)
+    }
     for (std::size_t k = 0; k < 9; ++k) {
         for (int component = 0; component < 3; ++component) {
             std::vector<float> values;

@@ -1079,7 +1079,8 @@ namespace {
         }
         // The blob must FILL its rect like a solid face, not a hull around
         // scattered content.
-        const double rect_area = static_cast<double>(rect.size.width) * rect.size.height;
+        const double rect_area =
+            static_cast<double>(rect.size.width) * static_cast<double>(rect.size.height);
         if (area / rect_area < 0.80) {
             continue;
         }

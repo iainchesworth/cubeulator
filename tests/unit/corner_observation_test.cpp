@@ -67,7 +67,6 @@ FacetColor classify_lab(const cv::Vec3f& lab) {
 // Isometric screen bases for the documented corner pose, pitch 40px: the
 // top face's rhombus edges run down-right (+col) and down-left (+row); the
 // side faces share the diagonal top edges and drop straight down.
-constexpr float kPitch = 40.0F;
 const cv::Point2f kSharedCorner(200.0F, 200.0F);
 const cv::Point2f kColIso(34.641F, 20.0F);       // pitch * (cos30, sin30)
 const cv::Point2f kRowIsoLeft(-34.641F, 20.0F);  // top face row basis

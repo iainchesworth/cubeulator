@@ -96,7 +96,9 @@ TEST_CASE("rectification lands each sticker in its canonical cell", "[face_proje
         p[static_cast<std::size_t>(axis_u)] = u;
         p[static_cast<std::size_t>(axis_v)] = v;
         const cv::Matx31d c =
-            rotation * cv::Matx31d(p[0], p[1], p[2]) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+            rotation * cv::Matx31d(static_cast<double>(p[0]), static_cast<double>(p[1]),
+                                   static_cast<double>(p[2])) +
+            cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         const cv::Matx33d k = camera();
         return cv::Point(static_cast<int>(std::lround(k(0, 0) * c(0, 0) / c(2, 0) + k(0, 2))),
                          static_cast<int>(std::lround(k(1, 1) * c(1, 0) / c(2, 0) + k(1, 2))));
