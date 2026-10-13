@@ -37,7 +37,7 @@ TEST_CASE("every control on the launch, permission and complete screens can be p
         App& app = App::fresh();
         app.resize(size_for(layout));
         app.go(screen);
-        app.settle();
+        app.pump(80);
 
         const QStringList pressed = press_every_control(app, screen);
         INFO("pressed " << pressed.join(", ").toStdString());
@@ -54,12 +54,12 @@ TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]")
         App& app = App::fresh();
         auto& solve = app.runtime().solve();
         if (solve.totalMoves() == 0) {
-            solve.solveCube(cube::solver::random_scramble(41));
+            solve.solveCube(cube::systest::scramble(41));
         }
         REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
         app.resize(size_for(layout));
         app.go("solve");
-        app.settle();
+        app.pump(120);
 
         // One step in, so Previous has something to undo: a step lands when
         // its turn has played, which a sweep that moves straight on from
@@ -98,7 +98,10 @@ TEST_CASE("every control on the settings screen can be pressed", "[system][sweep
         App& app = App::fresh();
         app.resize(size_for(layout));
         app.go("settings");
-        app.settle();
+        app.pump(80);
+
+        // The speed chips are enabled only while the cube turns by itself.
+        app.settings_state().setProperty("cubeAutoRotate", true);
 
         // "Back" leaves; it has a case of its own (settings_test.cpp).
         cube::systest::SweepOptions options;

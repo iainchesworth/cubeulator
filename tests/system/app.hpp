@@ -10,6 +10,8 @@
 // would see: which screen is up, what is on it, what a grab of the window
 // looks like.
 
+#include <cube/solver/solver.hpp>
+
 #include <QImage>
 #include <QList>
 #include <QPoint>
@@ -40,6 +42,16 @@ enum class Layout { narrow, wide };
 
 [[nodiscard]] inline const char* to_string(Layout layout) noexcept {
     return layout == Layout::wide ? "wide" : "narrow";
+}
+
+// The cube the walk scrambles: ten turns, not the library's default 25.
+// What the walk needs is a valid cube that is not solved, scanned and then
+// solved by the real solver; the solver's cost grows with how far from solved
+// the cube is, and the walk solves it a dozen times, in a build that has no
+// optimisation on a machine that renders in software.
+inline constexpr int kScrambleMoves = 10;
+[[nodiscard]] inline solver::Cube scramble(unsigned seed) {
+    return solver::random_scramble(seed, kScrambleMoves);
 }
 
 // A window size on each side of the breakpoint: a phone held upright, and a

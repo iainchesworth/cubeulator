@@ -88,8 +88,9 @@ struct Content {
 
 TEST_CASE("the 3D cube on the launch screen is drawn, in colour, and moves", "[system][render]") {
     App& app = App::fresh();
-    // Idle spin on (the default): the picture should change by itself.
-    REQUIRE(app.settings_state().property("cubeAutoRotate").toBool());
+    // Idle spin on (the app's default; the walk's baseline has it off): the
+    // picture should change by itself.
+    app.settings_state().setProperty("cubeAutoRotate", true);
     app.settle();
 
     const QString api = app.graphics_api();

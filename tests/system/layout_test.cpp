@@ -39,13 +39,14 @@ void show(App& app, const Screen& screen) {
         // One solution serves every size; the controller keeps it.
         auto& solve = app.runtime().solve();
         if (solve.totalMoves() == 0) {
-            solve.solveCube(cube::solver::random_scramble(21));
+            solve.solveCube(cube::systest::scramble(21));
         }
         REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
     }
     app.go(screen.name);
     REQUIRE(app.screen() == screen.name);
-    app.settle();
+    // Where things are does not wait for the fade-in: a pause is enough.
+    app.pump(80);
 }
 
 }  // namespace

@@ -158,7 +158,7 @@ const std::vector<StateDef>& state_inventory() {
 // ---------------------------------------------------------------------------
 
 Reach::Reach(App& app) : app_(app) {
-    sampler_.setInterval(25);
+    sampler_.setInterval(50);
     QObject::connect(&sampler_, &QTimer::timeout, [this]() { sample(); });
 }
 
