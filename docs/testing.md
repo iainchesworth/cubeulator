@@ -258,21 +258,34 @@ box has to hold a spread of colour and has to change as it turns - so an
 environment that silently loses 3D fails loudly instead of producing blank
 screenshots.
 
-**Vsync off, and a case that says so.** `system_test_main.cpp` sets
-`QSG_NO_VSYNC=1` (unless the environment already has it). With vsync on, the
-scene graph's threaded loop paces animations and QML Timers by the swap of
-each frame, and in this harness on Qt 6.12 that clock did not tick: a `Timer`
-reported `running` and never fired. The scan screen hands over to the solution
-on a Timer, so every journey case finished its solve, stayed on the scan
-screen, and waited out its timeout - the walk's whole budget went on two
-cases, and on Linux CI the job ran into ctest's 900 s with no output to say
-why. (`QSG_RENDER_LOOP=basic` cured it too; vsync-off keeps the loop the app
-ships with.) The `[timers]` case, first in the walk, starts a Timer and a
-NumberAnimation in the live scene and fails in two seconds, by name, if either
-does not advance, so a regression of this kind is not a timeout again.
-Whether the shipped app, running under a real event loop and a real display,
-is exposed to the same thing is not known: nothing here shows it is, and
-nothing rules it out.
+**The basic render loop with vsync off, and a case that says so.**
+`system_test_main.cpp` sets `QSG_RENDER_LOOP=basic` and `QSG_NO_VSYNC=1`
+(unless the environment already has them). With the platform's threaded loop
+and vsync on, two things went wrong on Qt 6.12 (Windows, D3D11; the same suite
+passed on Qt 6.8):
+
+- QML `Timer`s and animations did not advance: a `Timer` reported `running` and
+  never fired. The scan screen hands over to the solution on a Timer, so every
+  journey case finished its solve, stayed on the scan screen, and waited out its
+  timeout - the walk's whole budget went on two cases, and on Linux CI the job
+  ran into ctest's 900 s with no output to say why. Vsync off cured this with
+  the threaded loop kept. The `[timers]` case, first in the walk, starts a Timer
+  and a NumberAnimation in the live scene and fails in two seconds, by name, if
+  either does not advance, so a regression of this kind is not a timeout again.
+- About one run in ten, the walk died with an access violation on the render
+  thread, always at the press that leaves the launch screen (the one that
+  destroys its 3D view). A minidump showed the render thread, inside
+  Qt Quick's scene-graph sync with the main thread waiting on it, calling
+  through a freed connection. It happened in a different case each time but
+  at that same press, and four walks at once made it happen about one in eight.
+  The basic loop renders on the GUI thread, so there is no second thread to
+  race: 24 walks at four at a time did not do it.
+
+A test wants frames that happen when it asks, at the pace it sets, so it pins
+both. The application itself runs with whatever the platform picks. A person
+using it passes the same press (Start scanning), so the second of these is
+not only a test's problem; how likely it is outside a tight click-and-pump
+loop is not known.
 
 ### The screenshot tour
 

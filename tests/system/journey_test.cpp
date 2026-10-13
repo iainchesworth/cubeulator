@@ -54,7 +54,7 @@ void start_scan_from_launch(App& app) {
 // another, and every screen fades in. If a session's timers and animations do
 // not advance, nothing that waits on them can pass, and it shows up as a
 // timeout in whichever journey case waits first. This names it, in seconds.
-// See QSG_NO_VSYNC in system_test_main.cpp.
+// See the render loop settings in system_test_main.cpp.
 TEST_CASE("QML timers and animations advance in this session", "[system][timers]") {
     App& app = App::fresh();
     QQmlComponent component(&app.runtime().engine());

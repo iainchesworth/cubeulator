@@ -74,15 +74,30 @@ int main(int argc, char* argv[]) {
     if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
         qputenv("CUBEULATOR_LOCALE", "en");
     }
-    // Vsync off. With it on, the scene graph's threaded render loop paces
-    // animations and QML Timers by the swap of each frame; in this harness
-    // (one window, driven from QTest's event loop) on Qt 6.12 that clock did
-    // not tick - a Timer reported running and never fired, so the scan screen
-    // never handed over to the solution and the journey waited out its
-    // timeout, a case at a time. With vsync off the loop paces them from its
-    // own timer, so they advance whatever the display does. Seen on Windows
-    // (D3D11); the same run on Qt 6.8 did not do it. The [timers] case in
-    // journey_test.cpp checks it holds, so a regression is named, not a timeout.
+    // The basic render loop, and vsync off. Two things went wrong with the
+    // threaded loop and vsync on, on Qt 6.12 (Windows, D3D11; the same suite
+    // passed on Qt 6.8):
+    //
+    // - Animations and QML Timers did not advance: a Timer reported running
+    //   and never fired, so the scan screen never handed over to the solution
+    //   and the journey waited out its timeout, a case at a time. Vsync off
+    //   cured this with the threaded loop kept; the [timers] case in
+    //   journey_test.cpp checks it holds, so a regression is named, not a
+    //   timeout.
+    // - One walk in ten or so died with an access violation on the render
+    //   thread (a call through a freed connection, from Qt6Quick inside the
+    //   scene-graph sync, while the main thread waited), always at the press
+    //   that leaves the launch screen - the one that destroys its 3D view.
+    //   The basic loop renders on the GUI thread, so there is no second
+    //   thread to race; it does not do this.
+    //
+    // A test wants frames that happen when it asks, on its own thread, at the
+    // pace it sets, so it pins both. The application is run with whatever the
+    // platform picks; a person using it is exposed to the second of these, at
+    // the press that starts a scan, and nothing here says how likely that is.
+    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP")) {
+        qputenv("QSG_RENDER_LOOP", "basic");
+    }
     if (!qEnvironmentVariableIsSet("QSG_NO_VSYNC")) {
         qputenv("QSG_NO_VSYNC", "1");
     }
