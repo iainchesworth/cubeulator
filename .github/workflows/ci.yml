@@ -281,6 +281,53 @@ jobs:
             build/${{ matrix.preset }}/Cubeulator-*.rpm
           if-no-files-found: error
 
+      # A package that built but is missing its Qt (a deploy script that
+      # quietly did nothing on a platform) is worse than a failed job. Run
+      # after the upload so the artifact can still be looked at.
+      - name: Check the package contents (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+        run: |
+          installer=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.exe)
+          "/c/Program Files/7-Zip/7z.exe" l "$installer" | tee /tmp/contents.txt
+          grep -q 'Cubeulator.exe' /tmp/contents.txt
+          grep -q 'Qt6Core.dll' /tmp/contents.txt
+          grep -q 'qwindows.dll' /tmp/contents.txt
+
+      - name: Check the package contents (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+        run: |
+          dmg=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.dmg)
+          hdiutil attach "$dmg" -mountpoint /tmp/cubeulator-dmg -nobrowse -quiet
+          trap 'hdiutil detach /tmp/cubeulator-dmg -quiet' EXIT
+          app=/tmp/cubeulator-dmg/Cubeulator.app
+          test -x "$app/Contents/MacOS/Cubeulator"
+          test -d "$app/Contents/Frameworks/QtCore.framework"
+          test -f "$app/Contents/Resources/Cubeulator.icns"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -qx "org.iainchesworth.cubeulator"
+          /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
+
+      - name: Check the package contents (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+        run: |
+          deb=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.deb)
+          dpkg-deb -c "$deb" | tee /tmp/contents.txt
+          dpkg-deb -f "$deb" Package Version Depends Recommends
+          grep -q 'libQt6Core.so' /tmp/contents.txt
+          grep -q ' ./usr/bin/cubeulator' /tmp/contents.txt
+          grep -q 'org.iainchesworth.cubeulator.desktop' /tmp/contents.txt
+          grep -q 'icons/hicolor/scalable/apps/org.iainchesworth.cubeulator.svg' /tmp/contents.txt
+          dpkg-deb -f "$deb" Recommends | grep -q fonts-noto-cjk
+          rpm -qlp build/${CMAKE_PRESET}/Cubeulator-*.rpm | grep -q 'libQt6Core.so'
+
       # After the upload, so that a metadata complaint cannot lose the package.
       - name: Validate desktop entry and AppStream metadata (Linux)
         if: runner.os == 'Linux'

@@ -217,11 +217,20 @@ function(cube_configure_desktop_app target)
         BUNDLE DESTINATION .
         RUNTIME DESTINATION "${_bindir}")
 
+    set(_deploy_options "")
     if(WIN32)
         # Dependencies that came from vcpkg (OpenCV, ONNX Runtime and their
         # DLLs). Qt's own are deployed by windeployqt in the script below; a
         # Qt DLL that appears in both lists is simply the same file twice.
         install(FILES $<TARGET_RUNTIME_DLLS:${target}> DESTINATION "${_bindir}")
+
+        # The C++ runtime goes beside the executable (app-local), rather than
+        # windeployqt's default of bundling the 25 MB vc_redist installer,
+        # which nothing in the installer would run.
+        set(CMAKE_INSTALL_SYSTEM_RUNTIME_DESTINATION "${_bindir}")
+        set(CMAKE_INSTALL_UCRT_LIBRARIES FALSE)
+        include(InstallRequiredSystemLibraries)
+        set(_deploy_options NO_COMPILER_RUNTIME)
     endif()
 
     if(UNIX AND NOT APPLE)
@@ -242,7 +251,8 @@ function(cube_configure_desktop_app target)
     qt_generate_deploy_qml_app_script(
         TARGET ${target}
         OUTPUT_SCRIPT _cube_deploy_script
-        NO_UNSUPPORTED_PLATFORM_ERROR)
+        NO_UNSUPPORTED_PLATFORM_ERROR
+        ${_deploy_options})
     install(SCRIPT "${_cube_deploy_script}")
 
     # The licence, in every package.

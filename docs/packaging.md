@@ -93,7 +93,12 @@ icons follow.
   shortcut pinned from the Start menu.
 - **Installer**: NSIS from CPack, with the icon on the installer, the
   uninstaller and Settings > Apps, a licence page, one Start menu shortcut and
-  an uninstaller.
+  an uninstaller. It installs for all users and asks for elevation.
+- **C++ runtime**: installed beside the executable (`InstallRequiredSystemLibraries`),
+  not as windeployqt's 25 MB `vc_redist.x64.exe`, which nothing would run.
+- **Short paths**: the staged Qt tree is deep. Run `cpack -B <short dir>` if the
+  build directory's own path is long; past 260 characters NSIS cannot open
+  the files.
 
 ### macOS
 
