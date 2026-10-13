@@ -7,12 +7,18 @@ ApplicationWindow {
     width: 900
     height: 640
     visible: true
-    title: "Cubeulator"
+    title: qsTrId("app.name")
     color: Theme.paper
 
     Loader {
         id: screens
         anchors.fill: parent
+        // Right-to-left languages mirror the layout - what is first goes last,
+        // the back button and the chevrons change sides. The cube, the camera
+        // picture and anything that describes the object in the hand opt out
+        // where they are drawn (docs/i18n.md).
+        LayoutMirroring.enabled: LanguageManager.rtl
+        LayoutMirroring.childrenInherit: true
         // Each screen fades in rather than replacing the last in one frame.
         onLoaded: screenFade.restart()
         sourceComponent: {

@@ -1,0 +1,1048 @@
+<title>Cubeulator Prototype</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: a workbench. One bar of prototype controls, then the app itself in a
+   device frame. On a phone the frame goes away and the app is the page. */
+/*__TOKENS__*/
+:root{
+  --pg-bg:#D6D3D2; --pg-fg:#201E1D; --pg-muted:#514E4D; --pg-line:#A8A4A3; --pg-panel:#F3F2F2; --pg-frame:#201E1D;
+  --f-head:'Archivo','Helvetica Neue',Arial,'Noto Sans',sans-serif;
+  --f-mono:'IBM Plex Mono',ui-monospace,'Cascadia Mono',Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --pg-bg:#0C0B0B; --pg-fg:#F3F2F2; --pg-muted:#B0ACAB; --pg-line:#4A4745; --pg-panel:#1A1918; --pg-frame:#8C8988; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --pg-bg:#0C0B0B; --pg-fg:#F3F2F2; --pg-muted:#B0ACAB; --pg-line:#4A4745; --pg-panel:#1A1918; --pg-frame:#8C8988; color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--pg-bg);color:var(--pg-fg);font-family:var(--f-head);font-size:14px;overflow:hidden}
+button,select{font:inherit;color:inherit}
+svg.cvd{position:absolute;width:0;height:0}
+
+/* ---- the workbench ------------------------------------------------------ */
+.bench{height:100%;display:flex;flex-direction:column}
+.pbar{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 14px;padding:8px 16px;background:var(--pg-panel);border-bottom:2px solid var(--pg-frame)}
+.pbar h1{font:800 13px/1 var(--f-head);letter-spacing:.1em;text-transform:uppercase;margin:0 6px 9px 0}
+.pf{display:flex;flex-direction:column;gap:3px;min-width:0}
+.pf label{font:700 10px/1 var(--f-head);letter-spacing:.08em;text-transform:uppercase;color:var(--pg-muted)}
+.pf select,.pbtn{height:30px;border:1px solid var(--pg-line);background:var(--pg-panel);border-radius:0;padding:0 8px;font-size:13px;max-width:100%}
+.pbtn{cursor:pointer;font-weight:700}
+.pbtn:hover,.pf select:hover{border-color:var(--pg-fg)}
+.pbar :focus-visible{outline:2px solid var(--pg-fg);outline-offset:2px}
+.popts{display:contents}
+.pgrow{flex:1}
+#p-toggle{display:none}
+.stagewrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;padding:16px;position:relative}
+.device{position:relative;background:var(--paper);color:var(--ink);border:2px solid var(--pg-frame);overflow:hidden;flex:none}
+.device[data-size="phone"]{width:390px;height:min(780px,100%)}
+.device[data-size="side"]{width:min(780px,100%);height:min(390px,100%)}
+.device[data-size="desktop"]{width:min(1180px,100%);height:min(740px,100%)}
+@media (max-width:699px){
+  .pbar{padding:6px 16px;gap:6px 8px;align-items:center}
+  .pbar h1,.pgrow{display:none}
+  #p-toggle{display:block}
+  .popts{display:none}
+  .pbar.open .popts{display:contents}
+  .pf.size{display:none}
+  .pbar>.pf{flex:1 1 0}
+  .pbar>.pf label{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+  .pbar>.pf select{width:100%}
+  .pbtn{padding:0 8px}
+  .stagewrap{padding:0}
+  .device,.device[data-size]{width:100%;height:100%;border:0}
+}
+#map{position:absolute;inset:0;background:var(--pg-bg);overflow:auto;padding-block:20px;padding-inline:16px;z-index:5}
+#map h2{font:800 22px/1.1 var(--f-head);margin:0 0 4px}
+#map p{margin:0 0 16px;color:var(--pg-muted);max-width:70ch;line-height:1.45}
+.spine{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-bottom:8px}
+.node{border:2px solid var(--pg-fg);background:var(--pg-panel);padding:8px 10px;min-width:118px;cursor:pointer;text-align:start;border-radius:0;display:flex;flex-direction:column;gap:3px}
+.node:hover{background:var(--pg-bg)}
+.node b{font:800 15px/1.1 var(--f-head)}
+.node small{font:500 11px/1.2 var(--f-mono);color:var(--pg-muted)}
+.node.lane-scan{border-style:dashed}.node.lane-solve{border-style:double;border-width:4px}
+.arrow{align-self:center;font:500 18px/1 var(--f-mono);color:var(--pg-muted)}
+.maprow{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;margin-top:20px}
+.mapcard{background:var(--pg-panel);border:1px solid var(--pg-line);padding:12px}
+.mapcard h3{font:800 15px/1.1 var(--f-head);margin:0 0 2px}
+.mapcard .lane{font:500 11px/1.2 var(--f-mono);color:var(--pg-muted);margin-bottom:8px}
+.mapcard ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.mapcard li button{all:unset;cursor:pointer;display:block;width:100%;padding:4px 6px;font:500 12px/1.3 var(--f-mono);box-sizing:border-box}
+.mapcard li button:hover{background:var(--pg-bg)}
+.mapcard li button:focus-visible{outline:2px solid var(--pg-fg)}
+.mapcard li span{display:block;font:400 12px/1.35 var(--f-head);color:var(--pg-muted)}
+.icons{display:flex;flex-wrap:wrap;gap:16px;align-items:flex-end;margin-bottom:8px}
+.icons figure{margin:0;display:flex;flex-direction:column;gap:6px;font:500 11px/1.2 var(--f-mono);color:var(--pg-muted)}
+.icons .tile{background:#F3F2F2;display:grid;place-items:center;border:1px solid var(--pg-line)}
+.icons svg{display:block;width:100%;height:100%}
+.loops{margin-top:20px;border-collapse:collapse;font-size:13px}
+.loops td{padding:4px 12px 4px 0;border-bottom:1px solid var(--pg-line);vertical-align:top}
+.loops td:first-child{font-family:var(--f-mono);white-space:nowrap}
+
+/* ---- the app: tokens come from tokens.json ------------------------------- */
+.app{position:absolute;inset:0;container:app / size;--ts:1;--rem:calc(16px * var(--ts));
+  font:400 var(--rem)/1.45 var(--f-head);color:var(--ink);background:var(--paper);display:flex;flex-direction:column}
+.app *{min-width:0}
+.app h1,.app h2,.app p{margin:0}
+.screen{flex:1;min-height:0;display:flex;flex-direction:column;position:relative;overflow:hidden auto}
+.screen.enter{animation:fade var(--m-screen,280ms) cubic-bezier(.22,.61,.36,1)}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.t-display{font:800 calc(var(--rem)*2.25)/1 var(--f-head);letter-spacing:-.01em;text-wrap:balance}
+.t-title{font:800 calc(var(--rem)*1.75)/1.1 var(--f-head);text-wrap:balance}
+.t-headline{font:700 calc(var(--rem)*1.375)/1.2 var(--f-head);text-wrap:balance}
+.t-small{font-size:calc(var(--rem)*.875)}
+.t-sec{color:var(--inkSecondary)}
+.eyebrow{font:700 calc(var(--rem)*.8125)/1.2 var(--f-head);letter-spacing:.1em;text-transform:uppercase;color:var(--accentText)}
+.mono{font-family:var(--f-mono);font-weight:500;font-variant-numeric:tabular-nums}
+.app :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.on-cam :focus-visible{outline-color:var(--ov-ink)}
+.ico{width:1.25em;height:1.25em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+[dir="rtl"] .ico.flip{transform:scaleX(-1)}
+
+.btn{font:800 var(--rem)/1.2 var(--f-head);min-height:48px;padding:10px 18px;border:2px solid transparent;background:none;color:var(--ink);
+  display:inline-flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;border-radius:0;text-align:start;-webkit-tap-highlight-color:transparent}
+.btn.primary{background:var(--accentFill);color:var(--onAccent)}
+.btn.primary:hover{background:var(--accentFillHover)}
+.btn.primary:active{background:var(--accentFillPress)}
+.btn.secondary{border-color:var(--outline)}
+.btn.ghost{color:var(--accentText);padding-inline:10px}
+.btn.secondary:hover,.btn.ghost:hover{background:var(--hoverWash)}
+.btn.secondary:active,.btn.ghost:active{background:var(--pressWash)}
+.btn.block{display:flex;width:100%;justify-content:space-between}
+.btn.thumb{min-height:56px}
+.btn.giant{min-height:96px;font-size:calc(var(--rem)*1.25);padding-inline:12px}
+.btn[disabled]{color:var(--inkDisabled);border-color:var(--divider);background:none;cursor:default}
+.btn.primary[disabled]{background:var(--surface);color:var(--inkDisabled);border-color:var(--divider)}
+.kbd{font:500 calc(var(--rem)*.8125)/1 var(--f-mono);border:1px solid currentColor;padding:3px 6px;opacity:.85}
+.iconbtn{width:56px;height:56px;display:inline-grid;place-items:center;background:none;border:2px solid transparent;border-radius:0;color:var(--ink);cursor:pointer;flex:none}
+.iconbtn:hover{background:var(--hoverWash)}
+.iconbtn .ico{width:26px;height:26px}
+
+.notice{display:flex;gap:12px;padding:12px 14px;border:2px solid var(--outline);background:var(--surface);align-items:flex-start}
+.notice .ico{margin-top:2px;color:var(--caution);width:22px;height:22px}
+.notice strong{display:block;font-weight:800}
+.notice .acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.card{border:2px solid var(--ink);padding:12px 14px;display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
+.card .acts{display:flex;gap:8px;flex-wrap:wrap}
+
+.scrim{position:absolute;inset:0;background:rgba(20,19,18,.6);display:flex;align-items:flex-end;justify-content:center;z-index:20}
+.sheet,.dialog{background:var(--paper);color:var(--ink);border:2px solid var(--ink);padding:20px;display:flex;flex-direction:column;gap:12px;width:100%;max-height:100%;overflow:auto}
+.sheet{border-inline:0;border-bottom:0}
+.sheet .btn,.dialog .btn{min-height:56px}
+.sheet .note{color:var(--inkSecondary);font-size:calc(var(--rem)*.875);margin-top:-8px;padding-inline:20px}
+.dialog{max-width:400px;margin:auto 16px}
+.dialog .acts{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:8px}
+.dialog .acts .btn{flex:1 1 auto}
+.sheet ol{margin:0;padding-inline-start:1.4em;display:flex;flex-direction:column;gap:6px}
+@container app (min-width:600px){.scrim{align-items:center}.sheet{max-width:440px;border:2px solid var(--ink)}}
+
+.stk{display:grid;place-items:center;background:var(--c);--c:var(--surface)}
+.stk svg{width:100%;height:100%;display:block}
+.stk[data-c="white"]{--c:var(--cube-white);color:var(--mark-white)}
+.stk[data-c="yellow"]{--c:var(--cube-yellow);color:var(--mark-yellow)}
+.stk[data-c="orange"]{--c:var(--cube-orange);color:var(--mark-orange)}
+.stk[data-c="red"]{--c:var(--cube-red);color:var(--mark-red)}
+.stk[data-c="green"]{--c:var(--cube-green);color:var(--mark-green)}
+.stk[data-c="blue"]{--c:var(--cube-blue);color:var(--mark-blue)}
+.swatch{width:1.5em;height:1.5em;border:2px solid var(--cubeEdge);flex:none}
+canvas{display:block;width:100%;height:100%}
+[hidden]{display:none!important}
+.home-cube,.hold-cube,.done-cube,.solve-stage{position:relative}
+.home-cube canvas,.hold-cube canvas,.done-cube canvas,.solve-stage canvas{position:absolute;inset:0}
+.work{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;flex:1;padding:24px;text-align:center}
+.dots{display:flex;gap:8px}.dots i{width:12px;height:12px;background:var(--accent);animation:pulse 1.2s infinite}
+.dots i:nth-child(2){animation-delay:.2s}.dots i:nth-child(3){animation-delay:.4s}
+@keyframes pulse{0%,100%{opacity:.25}40%{opacity:1}}
+.still .dots i{animation:none;opacity:1}
+.topbar{display:flex;align-items:center;gap:8px;min-height:56px;padding-inline:4px 16px;border-bottom:2px solid var(--divider);flex:none}
+.topbar h1{font:800 calc(var(--rem)*1.125)/1.2 var(--f-head)}
+.pad{padding:24px;display:flex;flex-direction:column;gap:16px}
+
+/* ---- home ------------------------------------------------------------------ */
+.home{display:grid;grid-template-rows:auto minmax(110px,1fr) auto;padding:24px;gap:16px}
+.home-cube{min-height:0}
+.home-copy{display:flex;flex-direction:column;gap:12px}
+.home-actions{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.home-foot{display:flex;flex-wrap:wrap;gap:0 4px;border-top:2px solid var(--divider);padding-top:8px;justify-content:space-between}
+.status-line{display:flex;gap:10px;align-items:center;color:var(--inkSecondary)}
+@container app (min-width:840px){
+  .home{grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;padding:0;gap:0}
+  .home>.eyebrow{grid-column:1;padding:40px 40px 0}
+  .home-copy{grid-column:1;grid-row:2;padding:24px 40px 32px;justify-content:center;max-width:560px}
+  .home-cube{grid-column:2;grid-row:1 / span 2;background:var(--surface);border-inline-start:2px solid var(--divider);padding:40px}
+  .home .t-display{font-size:calc(var(--rem)*2.75)}
+  .home-actions{flex-direction:row;flex-wrap:wrap}
+  .home-actions .btn.block{width:auto;gap:24px}
+  .home-foot{justify-content:flex-start;gap:0 16px;margin-top:24px}
+}
+@container app (max-height:479px){
+  .home{grid-template-columns:1fr 1.3fr;grid-template-rows:auto 1fr;padding:16px 24px;gap:8px 24px}
+  .home>.eyebrow{grid-column:1 / -1}
+  .home-cube{grid-column:1;grid-row:2}
+  .home-copy{grid-column:2;grid-row:2;gap:8px}
+  .home .t-display{font-size:calc(var(--rem)*1.5)}
+  .home .lede{display:none}
+}
+
+/* ---- scan -------------------------------------------------------------------- */
+.scan{background:#141312;color:var(--ov-ink);overflow:hidden}
+.scan canvas.cam{position:absolute;inset:0}
+.scan-top,.scan-bottom{position:absolute;inset-inline:0;padding:16px;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.scan-top{top:0;align-items:flex-start}
+.scan-bottom{bottom:0;align-items:center;gap:12px}
+.scan-top>*,.scan-bottom>*{pointer-events:auto}
+.panel{background:rgba(20,19,18,var(--ov-panel-a));padding:12px 16px;display:flex;flex-direction:column;gap:4px;max-width:520px;width:100%}
+.panel .t-headline{display:flex;gap:10px;align-items:center}
+.panel p{color:var(--ov-inkSecondary)}
+.panel.caution .ico{color:var(--ov-caution)}
+.panel.done .ico{color:var(--ov-ok)}
+.proto-tag{position:absolute;inset-inline-end:8px;top:8px;font:500 11px/1 var(--f-mono);color:#8C8988;pointer-events:none}
+.chips{display:flex;gap:8px;justify-content:center;width:100%}
+.chip{flex:0 1 96px;min-width:44px;aspect-ratio:1;background:rgba(20,19,18,var(--ov-panel-a));border:1px solid var(--ov-outline);position:relative;padding:5px}
+.chip .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px;width:100%;height:100%;direction:ltr}
+.chip.inview{border:3px solid var(--ov-ink);padding:3px}
+.chip.inview::before{content:"";position:absolute;inset-inline-start:50%;top:-11px;margin-inline-start:-7px;border:7px solid transparent;border-top-color:var(--ov-ink);border-bottom:0}
+.chip.ok{border:3px solid var(--ov-ok);padding:3px}
+.chip .tick{position:absolute;inset-inline-end:-6px;top:-6px;width:20px;height:20px;background:var(--ov-ok);color:#141312;display:grid;place-items:center}
+.chip .tick .ico{width:14px;height:14px;stroke-width:3.2}
+.chip .fill{position:absolute;inset-inline:5px;bottom:5px;height:6px;background:rgba(243,242,242,.25)}
+.chip .fill i{display:block;height:100%;background:var(--ov-ok);animation:fill var(--dur,1300ms) linear forwards}
+@keyframes fill{from{width:0}to{width:100%}}
+.chip.arrive{animation:arrive 240ms ease-out}
+@keyframes arrive{0%{transform:scale(.8)}55%{transform:scale(1.08)}100%{transform:scale(1)}}
+.scan-btns,.scan-ctx{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;width:100%}
+.scan .btn.secondary{color:var(--ov-ink);border-color:var(--ov-outline);background:rgba(20,19,18,var(--ov-panel-a))}
+.scan .btn.secondary:hover{background:#2E2C2A}
+.scan .btn.secondary[disabled]{color:#8C8988;border-color:#4A4745}
+.scan .btn.primary{background:#FF5A3D;color:#1A1918}
+.scan-btns .btn{flex:1 1 0;max-width:200px;padding-inline:8px}
+@container app (max-height:479px){
+  .scan-bottom{inset-inline-start:auto;top:0;width:auto;justify-content:flex-end;align-items:flex-end}
+  .scan-top{inset-inline-end:40%}
+  .chips{display:grid;grid-template-columns:repeat(3,56px);width:auto}
+  .scan-btns{flex-direction:column;align-items:flex-end;width:auto}
+  .scan-btns .btn{flex:none;min-width:180px}
+}
+
+/* ---- solve ------------------------------------------------------------------- */
+.solve{overflow:hidden}
+.solve-bar{display:flex;align-items:center;gap:8px;padding-inline-end:16px;flex:none}
+.solve-bar .where{flex:1;display:flex;flex-direction:column;gap:2px}
+.prog{height:6px;background:var(--divider);flex:none;position:relative}
+.prog i{position:absolute;inset-block:0;inset-inline-start:0;background:var(--accent)}
+.prog b{position:absolute;inset-block:-3px;width:2px;background:var(--ink)}
+.solve-body{flex:1;min-height:0;display:flex;flex-direction:column}
+.solve-stage{flex:1;min-height:140px;position:relative;cursor:pointer;border:0;background:none;padding:0;display:block;width:100%}
+.holdline{display:flex;gap:8px;align-items:center;justify-content:center;padding:4px 16px;color:var(--inkSecondary);font-size:calc(var(--rem)*.875);flex-wrap:wrap;text-align:center}
+.holdline .swatch{width:1.1em;height:1.1em}
+.solve-side{display:flex;flex-direction:column;flex:none}
+.ins{padding:8px 20px 12px;display:flex;flex-direction:column;gap:4px}
+.ins-side{display:flex;align-items:center;gap:12px;font:800 calc(var(--rem)*2)/1.1 var(--f-head)}
+.ins-side .swatch{width:1em;height:1em}
+.ins-dir{display:flex;align-items:center;gap:10px;font:700 calc(var(--rem)*1.5)/1.15 var(--f-head)}
+.ins-dir .ico{width:1.3em;height:1.3em;stroke-width:2.6;color:var(--accentText)}
+.ins-amt{display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:calc(var(--rem)*1.125);color:var(--inkSecondary)}
+.hint{background:var(--accentTint);padding:8px 20px;font-weight:700}
+.solve-btns{display:grid;grid-template-columns:1fr 2fr;gap:8px;padding:8px 16px 16px}
+.stages{display:none}
+.autobar{height:8px;background:var(--divider);margin:0 16px}
+.autobar i{display:block;height:100%;background:var(--accent);animation:drain var(--dur,4000ms) linear forwards}
+@keyframes drain{from{width:100%}to{width:0}}
+.stagedone{padding:12px 20px;display:flex;flex-direction:column;gap:6px;background:var(--accentTint)}
+.stagedone .t-headline{display:flex;gap:10px;align-items:center}
+.stagedone .ico{color:var(--ok);stroke-width:3}
+.hold{flex:1;min-height:0;display:flex;flex-direction:column}
+.hold-cube{flex:1;min-height:140px}
+.hold-copy{padding:8px 24px 20px;display:flex;flex-direction:column;gap:10px}
+.hold-copy .btn{margin-top:4px}
+@container app (min-width:840px){
+  .solve-body{flex-direction:row}
+  .solve-main{flex:1;display:flex;flex-direction:column;min-height:0}
+  .solve-side{width:380px;border-inline-start:2px solid var(--divider);justify-content:flex-end}
+  .stages{display:flex;flex-direction:column;flex:1;min-height:0;overflow:auto}
+  .stage-row{display:flex;gap:12px;padding:12px 16px;border-bottom:1px solid var(--divider)}
+  .stage-row .n{width:32px;height:32px;flex:none;display:grid;place-items:center;border:2px solid var(--outline);font:500 14px/1 var(--f-mono)}
+  .stage-row.cur{background:var(--accentTint)}
+  .stage-row.cur .n{background:var(--accentFill);color:var(--onAccent);border-color:var(--accentFill)}
+  .stage-row.done .n{border-color:var(--ok);color:var(--ok)}
+  .stage-row.done .n .ico{width:18px;height:18px;stroke-width:3}
+  .stage-row b{font-weight:800}
+  .stage-row p{color:var(--inkSecondary);font-size:calc(var(--rem)*.875);margin-top:4px}
+  .ins{align-items:center;text-align:center;padding-bottom:20px}
+  .hold{flex-direction:row}
+  .hold-cube{flex:1.2}
+  .hold-copy{flex:1;justify-content:center;padding:40px;border-inline-start:2px solid var(--divider);background:var(--surface)}
+}
+@container app (max-height:479px){
+  .solve-body{flex-direction:row}
+  .solve-main{flex:1;display:flex;flex-direction:column;min-height:0}
+  .solve-side{width:46%;justify-content:center}
+  .holdline{display:none}
+  .ins-side{font-size:calc(var(--rem)*1.5)}.ins-dir{font-size:calc(var(--rem)*1.25)}
+  .btn.giant{min-height:72px}
+  .hold{flex-direction:row}.hold-cube{flex:1}.hold-copy{flex:1.2;justify-content:center;padding:12px 20px}
+}
+@container app (max-width:839px) and (min-height:480px){.solve-main{display:contents}}
+
+/* ---- complete ------------------------------------------------------------------ */
+.complete{display:grid;grid-template-rows:minmax(120px,1fr) auto;padding:24px;gap:16px}
+.done-copy{display:flex;flex-direction:column;gap:12px}
+.underline{height:5px;width:120px;background:var(--accent);transform-origin:0 50%;animation:sweep 900ms cubic-bezier(.22,.61,.36,1)}
+[dir="rtl"] .underline{transform-origin:100% 50%}
+@keyframes sweep{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.stats{display:grid;grid-template-columns:1fr 1fr;border:2px solid var(--divider)}
+.stats div{padding:12px 16px}.stats div+div{border-inline-start:2px solid var(--divider)}
+.stats .mono{font-size:calc(var(--rem)*2);line-height:1.1}
+.done-actions{display:flex;flex-direction:column;gap:8px}
+@container app (min-width:840px){
+  .complete{grid-template-columns:5fr 7fr;grid-template-rows:1fr;padding:0;gap:0}
+  .complete .done-cube{background:var(--surface);border-inline-end:2px solid var(--divider);padding:40px}
+  .done-copy{padding:40px;justify-content:center;max-width:620px}
+  .complete .t-display{font-size:calc(var(--rem)*4)}
+  .done-actions{flex-direction:row;flex-wrap:wrap}.done-actions .btn.block{width:auto}
+}
+@container app (max-height:479px){
+  .complete{grid-template-columns:1fr 1.4fr;grid-template-rows:1fr;padding:12px 24px}
+  .done-copy{gap:8px;justify-content:center}.stats .mono{font-size:calc(var(--rem)*1.25)}
+}
+.still *,.still *::before{animation-duration:1ms!important;animation-iteration-count:1!important}
+/*__CSS_MORE__*/
+</style>
+
+<svg class="cvd" aria-hidden="true">
+  <filter id="cvd-protan"><feColorMatrix type="matrix" values="0.152286 1.052583 -0.204868 0 0  0.114503 0.786281 0.099216 0 0  -0.003882 -0.048116 1.051998 0 0  0 0 0 1 0"/></filter>
+  <filter id="cvd-deutan"><feColorMatrix type="matrix" values="0.367322 0.860646 -0.227968 0 0  0.280085 0.672501 0.047413 0 0  -0.011820 0.042940 0.968881 0 0  0 0 0 1 0"/></filter>
+  <filter id="cvd-tritan"><feColorMatrix type="matrix" values="1.255528 -0.076749 -0.178779 0 0  -0.078411 0.930809 0.147602 0 0  0.004733 0.691367 0.303900 0 0  0 0 0 1 0"/></filter>
+  <filter id="cvd-grey"><feColorMatrix type="matrix" values="0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0.2126 0.7152 0.0722 0 0  0 0 0 1 0"/></filter>
+</svg>
+
+<div class="bench">
+  <div class="pbar" id="pbar">
+    <h1>Cubeulator prototype</h1>
+    <div class="pf"><label for="p-screen">Screen</label><select id="p-screen"></select></div>
+    <div class="pf"><label for="p-state">State</label><select id="p-state"></select></div>
+    <button class="pbtn" id="p-map" type="button">Map</button>
+    <button class="pbtn" id="p-run" type="button" hidden>Run the scan</button>
+    <span class="pgrow"></span>
+    <button class="pbtn" id="p-toggle" type="button" aria-expanded="false">Options</button>
+    <div class="popts">
+      <div class="pf size"><label for="p-size">Size</label><select id="p-size"><option value="desktop">Desktop</option><option value="phone">Phone</option><option value="side">Phone, sideways</option></select></div>
+      <div class="pf"><label for="p-theme">Theme</label><select id="p-theme"><option value="auto">As this device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
+      <div class="pf"><label for="p-dir">Direction</label><select id="p-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option></select></div>
+      <div class="pf"><label for="p-text">Text size</label><select id="p-text"><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
+      <div class="pf"><label for="p-strings">Strings</label><select id="p-strings"><option value="en">English</option><option value="pseudo">40% longer</option></select></div>
+      <div class="pf"><label for="p-marks">Colour marks</label><select id="p-marks"><option value="on">On</option><option value="off">Off</option></select></div>
+      <div class="pf"><label for="p-cvd">See as</label><select id="p-cvd"><option value="none">Full colour</option><option value="protan">Protanopia</option><option value="deutan">Deuteranopia</option><option value="tritan">Tritanopia</option><option value="grey">No colour</option></select></div>
+      <div class="pf"><label for="p-motion">Motion</label><select id="p-motion"><option value="auto">As this device</option><option value="full">Full</option><option value="reduced">Reduced</option></select></div>
+      <div class="pf"><label for="p-advance">Next turn</label><select id="p-advance"><option value="tap">When I tap</option><option value="timer">On a timer</option></select></div>
+      <div class="pf"><label for="p-notation">Notation</label><select id="p-notation"><option value="off">Off</option><option value="on">On</option></select></div>
+    </div>
+  </div>
+  <div class="stagewrap">
+    <div class="device" id="device" data-size="desktop"><div class="app" id="app"></div></div>
+    <div id="map" hidden></div>
+  </div>
+</div>
+
+<script>
+/*__DATA__*/
+const {STR, JOURNEY, MARKS, IDENTITY} = DATA;
+const $ = (s, r = document) => r.querySelector(s);
+const app = $('#app'), device = $('#device');
+
+const P = {
+  screen: 'home', state: 'default', stack: [], entered: false,
+  opts: {size: 'desktop', theme: 'auto', dir: 'ltr', ts: 1, pseudo: false, marks: true, cvd: 'none', motion: 'auto', advance: 'tap', notation: false, explain: true},
+  d: {resume: null, hinted: false, t0: 0, elapsed: 0}
+};
+const reduced = () => P.opts.motion === 'reduced' || (P.opts.motion === 'auto' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+const narrow = () => matchMedia('(max-width:699px)').matches;
+const touch = () => narrow() || P.opts.size !== 'desktop';
+
+// ---- strings ---------------------------------------------------------------
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/\n/g, '<br>');
+function pseudo(s) {
+  const map = {a: 'å', e: 'é', i: 'ï', o: 'ö', u: 'ü', c: 'ç', n: 'ñ', s: 'š', A: 'Å', E: 'É', O: 'Ö', S: 'Š', C: 'Ç'};
+  const body = s.replace(/%\d|%n|[a-zA-Z]/g, m => m[0] === '%' ? m : (map[m] || m));
+  const extra = Math.ceil(s.replace(/%\d|%n/g, '').length * 0.4);
+  let pad = '';
+  for (let i = 0; i < extra; i++) pad += (i % 6 === 5 ? ' ' : 'ẋ');
+  return body + (extra ? ' ' + pad.trim() : '');
+}
+function t(key, ...a) {
+  let s = STR[key];
+  if (s === undefined) return '⟦' + key + '⟧';
+  if (typeof s === 'object') { const n = a.shift(); s = (n === 1 ? s.one : s.other).replace('%n', n); }
+  if (P.opts.pseudo && key !== 'app.name') s = pseudo(s);
+  return esc(s).replace(/%(\d)/g, (m, i) => a[i - 1] !== undefined ? a[i - 1] : m);
+}
+
+// ---- small parts -------------------------------------------------------------
+const ICONS = {
+  'chev-l': '<path d="M15 6l-6 6 6 6"/>', 'chev-r': '<path d="M9 6l6 6-6 6"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>', x: '<path d="M6 6l12 12M18 6L6 18"/>',
+  alert: '<path d="M12 3L2 20h20L12 3z"/><path d="M12 10v4M12 17v.01"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>', more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9c0-2 2.5-2.7 3.5-1 .7 1.200 0 1.800-1 2.700-.7.600-1 1-1 2"/><path d="M12 17v.01"/>',
+  settings: '<path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.500"/><circle cx="8" cy="17" r="2.500"/>',
+  history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  grid: '<path d="M4 4h16v16H4zM4 9.330h16M4 14.670h16M9.330 4v16M14.670 4v16"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.200"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.520 0 4.930 1 6.740 2.740L21 8"/><path d="M21 3v5h-5"/>',
+  'a-left': '<path d="M20 12H4M10 6l-6 6 6 6"/>', 'a-right': '<path d="M4 12h16M14 6l6 6-6 6"/>',
+  'a-up': '<path d="M12 20V4M6 10l6-6 6 6"/>', 'a-down': '<path d="M12 4v16M6 14l6 6 6-6"/>',
+  'a-cw': '<path d="M21 12a9 9 0 1 1-9-9c2.520 0 4.930 1 6.740 2.740L21 8"/><path d="M21 3v5h-5"/>',
+  'a-ccw': '<path d="M3 12a9 9 0 1 0 9-9 9.750 9.750 0 0 0-6.740 2.740L3 8"/><path d="M3 3v5h5"/>',
+  'a-both': '<path d="M4 12h16M8 8l-4 4 4 4M16 8l4 4-4 4"/>'
+};
+const ico = (n, cls = '') => `<svg class="ico ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n] || ''}</svg>`;
+const MARK_SVG = {
+  ring: '<circle cx="50" cy="50" r="19" fill="none" stroke="currentColor" stroke-width="9"/>',
+  dot: '<circle cx="50" cy="50" r="17" fill="currentColor"/>',
+  plus: '<path d="M43 24h14v19h19v14H57v19H43V57H24V43h19z" fill="currentColor"/>',
+  slash: '<path d="M30 78L22 70 70 22l8 8z" fill="currentColor"/>',
+  bar: '<path d="M22 42h56v16H22z" fill="currentColor"/>'
+};
+const stk = (c, cls = '') => `<span class="stk ${cls}" data-c="${c || ''}">${c && P.opts.marks && MARKS[c] !== 'none' ? `<svg viewBox="0 0 100 100" aria-hidden="true">${MARK_SVG[MARKS[c]]}</svg>` : ''}</span>`;
+function btn(label, act, o = {}) {
+  return `<button type="button" class="btn ${o.v || 'secondary'} ${o.cls || ''}" data-act="${act}"${o.arg ? ` data-arg="${o.arg}"` : ''}${o.dis ? ' disabled' : ''}${o.label ? ` aria-label="${o.label}"` : ''}>${o.icon ? ico(o.icon, o.flip ? 'flip' : '') : ''}<span>${label}</span>${o.trail ? ico(o.trail, 'flip') : ''}${o.kbd ? `<span class="kbd" dir="ltr">${o.kbd}</span>` : ''}</button>`;
+}
+const dialog = (title, body, safe, risky) => `<div class="scrim"><div class="dialog" role="alertdialog" aria-modal="true" aria-label="${title}"><h2 class="t-headline">${title}</h2>${body ? `<p>${body}</p>` : ''}<div class="acts">${safe}${risky}</div></div></div>`;
+const sheet = (title, inner) => `<div class="scrim" data-act="closeSheet"><div class="sheet" role="dialog" aria-modal="true" aria-label="${title}"><h2 class="t-headline">${title}</h2>${inner}</div></div>`;
+const working = text => `<div class="work" role="status"><div class="dots" aria-hidden="true"><i></i><i></i><i></i></div><p class="t-headline">${text}</p></div>`;
+
+//<engine>
+// ---- the cube: 26 pieces, each with a place and the stickers it carries ------
+const AX = {U: [0, 1, 0], D: [0, -1, 0], F: [0, 0, 1], B: [0, 0, -1], R: [1, 0, 0], L: [-1, 0, 0]};
+// Held as the solve asks: yellow on top, green facing you.
+const FACE_COL = {U: 'yellow', D: 'white', F: 'green', B: 'blue', R: 'orange', L: 'red'};
+function rotv(v, n, a) {
+  const c = Math.cos(a), s = Math.sin(a), d = n[0] * v[0] + n[1] * v[1] + n[2] * v[2];
+  const x = [n[1] * v[2] - n[2] * v[1], n[2] * v[0] - n[0] * v[2], n[0] * v[1] - n[1] * v[0]];
+  return [v[0] * c + x[0] * s + n[0] * d * (1 - c), v[1] * c + x[1] * s + n[1] * d * (1 - c), v[2] * c + x[2] * s + n[2] * d * (1 - c)];
+}
+const r3 = v => v.map(x => Math.round(x) + 0);
+const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+function newCube() {
+  const cs = [];
+  for (let x = -1; x <= 1; x++) for (let y = -1; y <= 1; y++) for (let z = -1; z <= 1; z++) {
+    if (!x && !y && !z) continue;
+    const st = [];
+    for (const f in AX) if (dot(AX[f], [x, y, z]) === 1) st.push({n: AX[f].slice(), c: FACE_COL[f]});
+    cs.push({p: [x, y, z], st});
+  }
+  return cs;
+}
+const cloneCube = c => c.map(q => ({p: q.p.slice(), st: q.st.map(s => ({n: s.n.slice(), c: s.c}))}));
+// A turn is clockwise seen from outside its side: minus a quarter about the side's outward axis.
+const turnAngle = t => -Math.PI / 2 * (t === 3 ? -1 : t);
+function applyMove(cube, m) {
+  const n = AX[m.f], a = turnAngle(m.t);
+  for (const q of cube) if (dot(q.p, n) === 1) { q.p = r3(rotv(q.p, n, a)); for (const s of q.st) s.n = r3(rotv(s.n, n, a)); }
+  return cube;
+}
+const parseMoves = str => str.trim().split(/\s+/).map(w => ({f: w[0], t: w.endsWith('2') ? 2 : w.endsWith("'") ? 3 : 1}));
+const inverse = ms => ms.slice().reverse().map(m => ({f: m.f, t: 4 - m.t}));
+const notation = m => m.f + (m.t === 2 ? '2' : m.t === 3 ? "'" : '');
+const isSolved = cube => cube.every(q => q.st.every(s => { for (const f in AX) if (dot(AX[f], s.n) === 1) return FACE_COL[f] === s.c; }));
+// A layer-by-layer solution built backwards, so every stage really ends where its name says.
+const STAGES = ["F R' D L2 F' D2 B", "R U R' U' U L' U' L U U2 R U R'", "U R U' R' U' F' U F U L' U L U F U' F'", "F R U R' U' F' U R U R' U R U2 R'", "R U' R U R U R U' R' U' R2 U"];
+const SOL = (() => {
+  const moves = [], stages = [];
+  for (const s of STAGES) { const ms = parseMoves(s); stages.push({from: moves.length, to: moves.length + ms.length}); moves.push(...ms); }
+  const start = newCube();
+  for (const m of inverse(moves)) applyMove(start, m);
+  return {moves, stages, start};
+})();
+//</engine>
+
+// ---- drawing the cube ----------------------------------------------------------
+function viewer(yaw, pitch, flip) {
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return v => {
+    if (flip) v = [-v[0], -v[1], v[2]];
+    const x = v[0] * cy + v[2] * sy, z = -v[0] * sy + v[2] * cy;
+    return [x, v[1] * cp - z * sp, v[1] * sp + z * cp];
+  };
+}
+function cssVar(name) { return getComputedStyle(device).getPropertyValue(name).trim(); }
+let PAL = null;
+function palette() {
+  PAL = {body: cssVar('--cubeBody'), col: {}, ink: {}};
+  for (const c in MARKS) { PAL.col[c] = cssVar('--cube-' + c); PAL.ink[c] = cssVar('--mark-' + c); }
+}
+function drawMark(ctx, name, p, ink) {
+  const m = MARKS[name];
+  if (!m || m === 'none') return;
+  ctx.save();
+  ctx.transform(p[1][0] - p[0][0], p[1][1] - p[0][1], p[3][0] - p[0][0], p[3][1] - p[0][1], p[0][0], p[0][1]);
+  ctx.translate(.5, .5); ctx.scale(.82, .82); ctx.translate(-.5, -.5);
+  ctx.fillStyle = ink; ctx.strokeStyle = ink; ctx.beginPath();
+  if (m === 'ring') { ctx.lineWidth = .09; ctx.arc(.5, .5, .19, 0, 7); ctx.stroke(); }
+  else if (m === 'dot') { ctx.arc(.5, .5, .17, 0, 7); ctx.fill(); }
+  else if (m === 'plus') { ctx.rect(.43, .24, .14, .52); ctx.rect(.24, .43, .52, .14); ctx.fill(); }
+  else if (m === 'slash') { ctx.moveTo(.3, .78); ctx.lineTo(.22, .7); ctx.lineTo(.7, .22); ctx.lineTo(.78, .3); ctx.closePath(); ctx.fill(); }
+  else if (m === 'bar') { ctx.rect(.22, .42, .56, .16); ctx.fill(); }
+  ctx.restore();
+}
+// o: {yaw, pitch, flip, turn:{f, angle}, cx, cy, s}. Returns the centres of stickers that face the viewer.
+function drawCube(ctx, cube, o) {
+  const V = viewer(o.yaw, o.pitch, o.flip), tn = o.turn ? AX[o.turn.f] : null, quads = [], facing = [];
+  const pr = v => [o.cx + o.s * v[0], o.cy - o.s * v[1]];
+  for (const q of cube) {
+    const inL = tn && dot(q.p, tn) === 1;
+    const X = v => V(inL ? rotv(v, tn, o.turn.angle) : v);
+    for (const f in AX) {
+      const d = AX[f], nv = X(d);
+      if (nv[2] <= 0.002) continue;
+      const u = [d[1], d[2], d[0]], w = [d[2], d[0], d[1]];
+      const quad = (h, off) => [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([a, b]) =>
+        X([q.p[0] + d[0] * off + (u[0] * a + w[0] * b) * h, q.p[1] + d[1] * off + (u[1] * a + w[1] * b) * h, q.p[2] + d[2] * off + (u[2] * a + w[2] * b) * h]));
+      const body = quad(.5, .5), z = (body[0][2] + body[2][2]) / 2;
+      quads.push({pts: body.map(pr), z, fill: PAL.body});
+      const st = q.st.find(s => s.n[0] === d[0] && s.n[1] === d[1] && s.n[2] === d[2]);
+      if (st) {
+        const sp = quad(.42, .503).map(pr);
+        quads.push({pts: sp, z: z + .002, fill: PAL.col[st.c], mark: st.c});
+        if (nv[2] > .93) facing.push({x: (sp[0][0] + sp[2][0]) / 2, y: (sp[0][1] + sp[2][1]) / 2});
+      }
+    }
+  }
+  quads.sort((a, b) => a.z - b.z);
+  for (const q of quads) {
+    ctx.beginPath(); ctx.moveTo(q.pts[0][0], q.pts[0][1]);
+    for (let i = 1; i < 4; i++) ctx.lineTo(q.pts[i][0], q.pts[i][1]);
+    ctx.closePath(); ctx.fillStyle = q.fill; ctx.fill();
+    if (q.mark && P.opts.marks && !o.plain) drawMark(ctx, q.mark, q.pts, PAL.ink[q.mark]);
+  }
+  return facing;
+}
+// The nine colours of one side as the camera sees it, row by row.
+const SIDE_VIEW = {F: [0, 0], R: [-Math.PI / 2, 0], B: [Math.PI, 0], L: [Math.PI / 2, 0], U: [0, Math.PI / 2], D: [0, -Math.PI / 2]};
+function sideColours(cube, f) {
+  const V = viewer(...SIDE_VIEW[f]), out = [];
+  for (const q of cube) for (const s of q.st) if (dot(s.n, AX[f]) === 1) { const p = V(q.p); out.push({x: Math.round(p[0]), y: Math.round(p[1]), c: s.c}); }
+  return out.sort((a, b) => b.y - a.y || a.x - b.x).map(o => o.c);
+}
+
+// ---- scenes: what each canvas shows. They outlive re-renders. -------------------
+const YAW = -32 * Math.PI / 180, PITCH = 24 * Math.PI / 180;
+const ease = x => x < .5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
+const S = {cube: cloneCube(SOL.start), turn: 0, anim: null, autoT: 0};
+const sim = {phase: 'starting', sides: [], auto: true, timer: 0, t0: 0};
+const ORDER = ['F', 'R', 'B', 'L', 'U', 'D'];
+const scenes = {
+  home: {
+    cube: newCube(), t0: performance.now(),
+    live: () => !reduced(),
+    draw(ctx, w, h, now) {
+      const yaw = YAW + (reduced() ? 0 : (now - this.t0) / 1000 * .35);
+      drawCube(ctx, this.cube, {yaw, pitch: PITCH, flip: true, cx: w / 2, cy: h / 2, s: Math.min(w, h) / 6});
+    }
+  },
+  solve: {
+    live: now => !!S.anim || (!reduced() && pendingMove() && ['move', 'move-hint', 'last-move', 'auto', 'turning'].includes(P.state)),
+    draw(ctx, w, h, now) {
+      let turn = null;
+      if (S.anim) {
+        const k = Math.min(1, (now - S.anim.t0) / S.anim.dur);
+        turn = {f: S.anim.m.f, angle: turnAngle(S.anim.m.t) * ease(k)};
+        if (k >= 1) { const done = S.anim; S.anim = null; done.then(); turn = null; }
+      }
+      const m = pendingMove();
+      if (!turn && m && P.screen === 'solve' && ['move', 'move-hint', 'last-move', 'auto'].includes(P.state)) {
+        // The layer the next turn moves leans the way it has to go.
+        const lean = reduced() ? .16 : .2 * (0.5 - 0.5 * Math.cos((now % 1800) / 1800 * 2 * Math.PI));
+        turn = {f: m.f, angle: turnAngle(m.t === 2 ? 1 : m.t) * lean};
+      }
+      drawCube(ctx, S.cube, {yaw: YAW, pitch: PITCH, turn, cx: w / 2, cy: h / 2 + h * .02, s: Math.min(w, h) / 5.6});
+    }
+  },
+  scan: {
+    live: () => ['in-view', 'next-side', 'looking', 'seen-before', 'conflict', 'stuck'].includes(sim.phase) && !reduced(),
+    draw(ctx, w, h, now) {
+      const ph = sim.phase, off = ['starting', 'resuming'].includes(ph) || ph.startsWith('camera-');
+      ctx.fillStyle = off ? '#141312' : '#3A3634'; ctx.fillRect(0, 0, w, h);
+      if (off || ph === 'settling') return;
+      const cur = ph === 'seen-before' ? sim.sides[0] : ORDER[Math.min(sim.sides.length, 5)];
+      const shown = ['complete', 'solve-failed'].includes(ph) ? 'D' : cur;
+      let [yaw, pitch] = SIDE_VIEW[shown] || [0, 0];
+      const k = reduced() ? 0 : now / 1000;
+      const square = ['in-view', 'reading', 'seen-before', 'complete', 'solve-failed'].includes(ph);
+      if (!square) { yaw += .7 + .25 * Math.sin(k * 1.1); pitch += .45 + .15 * Math.cos(k * .9); }
+      else if (ph === 'in-view') { yaw += .05 * Math.sin(k * 5); pitch += .04 * Math.cos(k * 4); }
+      const pts = drawCube(ctx, SOL.start, {plain: true, yaw, pitch, cx: w / 2, cy: h * .46, s: Math.min(w, h) / (ph === 'looking' ? 9 : 6.4)});
+      if (!square || pts.length !== 9) return;
+      const counting = ph !== 'in-view' && ph !== 'seen-before';
+      for (const p of pts) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, 8, 0, 7);
+        ctx.fillStyle = '#141312'; ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, counting ? 6 : 4.5, 0, 7);
+        if (counting) { ctx.fillStyle = cssVar('--ov-ok'); ctx.fill(); }
+        else { ctx.strokeStyle = cssVar('--ov-ink'); ctx.lineWidth = 2.5; ctx.stroke(); }
+      }
+    }
+  }
+};
+let views = [], raf = 0;
+function loop(now) {
+  raf = 0;
+  let again = false;
+  for (const v of views) {
+    const dpr = Math.min(2, devicePixelRatio || 1), w = v.c.clientWidth, h = v.c.clientHeight;
+    if (!w || !h) continue;
+    if (v.c.width !== Math.round(w * dpr) || v.c.height !== Math.round(h * dpr)) { v.c.width = Math.round(w * dpr); v.c.height = Math.round(h * dpr); }
+    const ctx = v.c.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
+    v.scene.draw(ctx, w, h, now);
+    if (v.scene.live(now)) again = true;
+  }
+  if (again) redraw();
+}
+function redraw() { if (!raf) raf = requestAnimationFrame(loop); }
+
+// ---- the solve -----------------------------------------------------------------
+const N = SOL.moves.length;
+const pendingMove = () => S.turn < N ? SOL.moves[S.turn] : null;
+const stageOf = i => Math.max(0, SOL.stages.findIndex(s => i < s.to));
+const SIDE = {U: 'top', D: 'bottom', L: 'left', R: 'right', F: 'front', B: 'back'};
+function dirOf(m) {
+  if (m.t === 2) return 'either';
+  const cw = m.t === 1;
+  return {U: cw ? 'left' : 'right', D: cw ? 'right' : 'left', R: cw ? 'up' : 'down', L: cw ? 'down' : 'up', F: cw ? 'cw' : 'ccw', B: cw ? 'ccw' : 'cw'}[m.f];
+}
+const DIR_ICON = {left: 'a-left', right: 'a-right', up: 'a-up', down: 'a-down', cw: 'a-cw', ccw: 'a-ccw', either: 'a-both'};
+function solveReset(at = 0) {
+  S.cube = cloneCube(SOL.start); S.anim = null; S.turn = 0;
+  for (let i = 0; i < at; i++) applyMove(S.cube, SOL.moves[i]);
+  S.turn = at;
+}
+function landState() {
+  if (S.turn >= N) return null;
+  if (S.turn > 0 && SOL.stages.some(s => s.from === S.turn) && !S.skipStage) return 'stage-done';
+  if (S.turn === N - 1) return 'last-move';
+  return P.opts.advance === 'timer' ? 'auto' : 'move';
+}
+function play(m, then) {
+  if (S.anim) { const a = S.anim; S.anim = null; a.then(); }
+  const dur = reduced() ? 0 : 380;
+  if (!dur) return then();
+  S.anim = {m, t0: performance.now(), dur, then};
+  redraw();
+}
+function nextTurn() {
+  if (P.screen !== 'solve' || S.turn >= N) return;
+  if (S.anim) { const a = S.anim; S.anim = null; a.then(); if (S.turn >= N || P.screen !== 'solve') return; }
+  const m = SOL.moves[S.turn];
+  P.d.hinted = true; S.skipStage = false; clearTimeout(S.autoT);
+  P.state = 'turning';
+  play(m, () => {
+    applyMove(S.cube, m); S.turn++;
+    const st = landState();
+    if (!st) { P.d.resume = null; P.d.elapsed = P.d.t0 ? Math.round((Date.now() - P.d.t0) / 1000) : 0; go('complete', 'default', {push: false}); }
+    else { P.state = st; render(); armTimer(); }
+  });
+  render();
+}
+function prevTurn() {
+  if (P.screen !== 'solve' || S.turn <= 0) return;
+  if (S.anim) { const a = S.anim; S.anim = null; a.then(); }
+  const m = SOL.moves[S.turn - 1], inv = {f: m.f, t: 4 - m.t};
+  clearTimeout(S.autoT);
+  play(inv, () => { applyMove(S.cube, inv); S.turn--; S.skipStage = true; P.state = P.opts.advance === 'timer' ? 'auto-paused' : (S.turn === N - 1 ? 'last-move' : 'move'); render(); });
+}
+const pace = () => ({slow: 6000, steady: 4000, quick: 2500})[P.opts.pace] || 4000;
+function armTimer() {
+  clearTimeout(S.autoT);
+  if (P.screen === 'solve' && P.state === 'auto') S.autoT = setTimeout(nextTurn, pace());
+}
+
+// ---- screens --------------------------------------------------------------------
+const screens = {};
+const topbar = (title, right = '') => `<div class="topbar">${`<button type="button" class="iconbtn" data-act="back" aria-label="${t('common.back')}">${ico('chev-l', 'flip')}</button>`}<h1>${title}</h1><span style="flex:1"></span>${right}</div>`;
+
+screens.home = {
+  render(st) {
+    const resume = (st === 'resume' || st === 'confirm-discard') ? (P.d.resume || {turn: 23, total: N}) : null;
+    const foot = [['history', 'home.history', 'history'], ['help', 'common.help', 'help'], ['settings', 'common.settings', 'settings']]
+      .map(([i, k, to]) => btn(t(k), 'go', {v: 'ghost', icon: i, arg: to})).join('');
+    let notice = '', scan = btn(t('home.scan'), 'scan', {v: resume ? 'secondary' : 'primary', cls: 'block thumb', trail: 'chev-r'}), enterV = 'secondary';
+    if (st === 'finding-camera') notice = `<div class="status-line" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${t('home.findingCamera')}</div>`;
+    if (st === 'no-camera') {
+      notice = `<div class="notice" role="status">${ico('alert')}<div><strong>${t('home.noCamera.title')}</strong><span>${t('home.noCamera.body')}</span><div class="acts">${btn(t('common.lookAgain'), 'pick', {icon: 'refresh', arg: 'home.finding-camera'})}</div></div></div>`;
+      scan = btn(t('home.scan'), 'scan', {v: 'primary', cls: 'block thumb', dis: true}); enterV = 'primary';
+    }
+    if (st === 'camera-unsupported') {
+      notice = `<div class="notice" role="status">${ico('alert')}<div><strong>${t('home.unsupported.title')}</strong><span>${t('home.unsupported.body')}</span></div></div>`;
+      scan = ''; enterV = 'primary';
+    }
+    const card = resume ? `<div class="card"><div><strong>${t('home.resume.title')}</strong><div class="t-sec mono">${t('home.resume.body', resume.turn + 1, resume.total)}</div></div><div class="acts">${btn(t('common.carryOn'), 'resume', {v: 'primary'})}${btn(t('home.resume.discard'), 'pick', {v: 'ghost', arg: 'home.confirm-discard'})}</div></div>` : '';
+    const enter = btn(t('common.enterByHand'), 'go', {v: enterV, cls: 'block' + (enterV === 'primary' ? ' thumb' : ''), arg: 'review', trail: 'chev-r'});
+    const order = enterV === 'primary' ? enter + scan : scan + enter;
+    const dlg = st === 'confirm-discard' ? dialog(t('home.discard.title'), t('home.discard.body'), btn(t('home.discard.keep'), 'pick', {arg: 'home.resume'}), btn(t('home.resume.discard'), 'discardSolve', {v: 'ghost'})) : '';
+    return `<div class="screen home">
+      <div class="eyebrow">${t('app.name')}</div>
+      <div class="home-cube"><canvas data-scene="home" aria-hidden="true"></canvas></div>
+      <div class="home-copy"><h1 class="t-display">${t('app.tagline')}</h1><p class="lede t-sec">${t('home.lede')}</p>
+        ${card}${notice}<div class="home-actions">${order}</div><div class="home-foot">${foot}</div></div>${dlg}</div>`;
+  }
+};
+
+function scanCopy(ph, n) {
+  const cam = k => [t('scan.camera.' + k + '.title'), t('scan.camera.' + k + '.body', 'E-CAM-12'), 'caution'];
+  switch (ph) {
+    case 'starting': return [t('scan.title.starting'), '', ''];
+    case 'resuming': return [t('scan.title.starting'), t('scan.guide.resuming'), ''];
+    case 'settling': return [t('scan.title.progress', n), t('scan.guide.settling'), ''];
+    case 'looking': return [t('scan.title.progress', 0), t('scan.guide.first'), ''];
+    case 'in-view': return [t('scan.title.progress', n), t('scan.guide.inView'), ''];
+    case 'reading': return [t('scan.title.progress', n), t('scan.guide.reading'), ''];
+    case 'seen-before': return [t('scan.title.progress', n), t('scan.guide.seenBefore'), ''];
+    case 'conflict': return [t('scan.title.progress', 6), t('scan.guide.conflict'), 'caution'];
+    case 'complete': return [t('scan.title.complete'), t('scan.guide.complete'), 'done'];
+    case 'solve-failed': return [t('scan.solveFailed.title'), t('scan.solveFailed.body'), 'caution'];
+    case 'camera-none': return cam('none');
+    case 'camera-busy': return cam('busy');
+    case 'camera-blocked': return cam('blocked');
+    case 'camera-lost': return cam('lost');
+    case 'camera-failed': return cam('failed');
+    default: return [t('scan.title.progress', n), t('scan.guide.next'), ''];
+  }
+}
+screens.scan = {
+  render(st) {
+    const over = ['more', 'camera-picker', 'confirm-leave', 'confirm-restart'].includes(st);
+    const ph = sim.phase, n = sim.sides.length;
+    const [head, guide, kind] = scanCopy(ph, n);
+    const done = ph === 'complete';
+    const chips = Array.from({length: 6}, (_, i) => {
+      const f = sim.sides[i], inview = ph === 'seen-before' && i === 0;
+      const cls = (f ? (done ? ' ok' : inview ? ' inview' : '') : '') + (sim.arrived === i ? ' arrive' : '');
+      const name = f ? t(inview ? 'scan.a11y.chipInView' : 'scan.a11y.chipRead', i + 1, t('colourSide.' + FACE_COL[f])) : t('scan.a11y.chipEmpty', i + 1);
+      const fill = !f && i === n && ph === 'reading' ? '<span class="fill"><i></i></span>' : '';
+      return `<div class="chip${cls}" role="img" aria-label="${name}">${f ? `<div class="grid">${sideColours(SOL.start, f).map(c => stk(c)).join('')}</div>` : ''}${done ? `<span class="tick">${ico('check')}</span>` : ''}${fill}</div>`;
+    }).join('');
+    sim.arrived = -1;
+    let ctx = '';
+    if (ph === 'conflict') ctx = btn(t('scan.checkColours'), 'go', {v: 'primary', cls: 'thumb', arg: 'review'});
+    if (ph === 'solve-failed') ctx = btn(t('scan.checkColours'), 'go', {v: 'primary', cls: 'thumb', arg: 'review'}) + btn(t('common.scanAgain'), 'scanRestart', {cls: 'thumb'});
+    if (ph.startsWith('camera-')) ctx = btn(t(ph === 'camera-none' ? 'common.lookAgain' : 'common.tryAgain'), 'scanRetry', {v: 'primary', cls: 'thumb', icon: 'refresh'})
+      + (ph === 'camera-blocked' ? btn(t('common.openDeviceSettings'), 'noop', {cls: 'thumb'}) : '') + btn(t('common.enterByHand'), 'go', {cls: 'thumb', arg: 'review'});
+    const hint = ph === 'stuck' ? `<div class="panel"><strong>${t('scan.stuck.title')}</strong><p>${t('scan.stuck.body')}</p></div>` : '';
+    if (ph === 'stuck') ctx = btn(t('scan.more.enter'), 'go', {cls: 'thumb', arg: 'review'}) + btn(t('scan.more.help'), 'go', {cls: 'thumb', arg: 'help.scanning'});
+    let layer = '';
+    if (st === 'more') layer = sheet(t('common.more'), btn(t('scan.more.enter'), 'go', {cls: 'block', arg: 'review', icon: 'grid'})
+      + btn(t(touch() ? 'scan.more.switchCamera' : 'scan.more.chooseCamera'), touch() ? 'closeSheet' : 'pick', {cls: 'block', arg: 'scan.camera-picker', icon: 'refresh'})
+      + btn(t('scan.more.help'), 'go', {cls: 'block', arg: 'help.scanning', icon: 'help'}) + btn(t('common.settings'), 'go', {cls: 'block', arg: 'settings', icon: 'settings'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'}));
+    if (st === 'camera-picker') layer = sheet(t('scan.picker.title'), btn('Integrated Camera', 'closeSheet', {cls: 'block', icon: 'check'}) + btn('USB Camera', 'closeSheet', {cls: 'block'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'}));
+    if (st === 'confirm-leave') layer = dialog(t('scan.leave.title'), t('scan.leave.body', Math.max(1, n)), btn(t('scan.leave.keep'), 'closeSheet'), btn(t('scan.leave.confirm'), 'home', {v: 'ghost'}));
+    if (st === 'confirm-restart') layer = dialog(t('scan.restart.title'), t('scan.leave.body', Math.max(1, n)), btn(t('scan.restart.keep'), 'closeSheet'), btn(t('scan.startOver'), 'scanRestart', {v: 'ghost'}));
+    const icon = kind === 'caution' ? ico('alert') : kind === 'done' ? ico('check') : '';
+    return `<div class="screen scan on-cam">
+      <canvas class="cam" data-scene="scan" role="img" aria-label="${t('scan.a11y.preview')}"></canvas>
+      <span class="proto-tag">drawn stand-in for the camera</span>
+      <div class="scan-top"><div class="panel ${kind}" role="status" aria-live="polite"><h1 class="t-headline">${icon}<span>${head}</span></h1>${guide ? `<p>${guide}</p>` : ''}</div>${hint}</div>
+      <div class="scan-bottom">${ctx ? `<div class="scan-ctx">${ctx}</div>` : ''}<div class="chips">${chips}</div>
+        <div class="scan-btns">${btn(t('common.cancel'), 'scanCancel', {cls: 'thumb'})}${done ? '' : btn(t('scan.startOver'), 'scanStartOver', {cls: 'thumb', dis: n === 0})}${done ? '' : btn(t('common.more'), 'pick', {cls: 'thumb', arg: 'scan.more', icon: 'more'})}</div></div>${layer}</div>`;
+  }
+};
+const DUR = {starting: 900, settling: 1300, looking: 1600, 'in-view': 900, reading: 1300, 'next-side': 1500, complete: 2200};
+function scanSet(ph) { sim.phase = ph; P.state = ph; render(); scanArm(); }
+function scanArm() {
+  clearTimeout(sim.timer);
+  if (!sim.auto || P.screen !== 'scan' || !DUR[sim.phase] || P.state !== sim.phase) return;
+  sim.timer = setTimeout(() => {
+    const ph = sim.phase;
+    if (ph === 'starting') return scanSet('settling');
+    if (ph === 'settling') return scanSet(sim.sides.length ? 'next-side' : 'looking');
+    if (ph === 'looking' || ph === 'next-side') return scanSet('in-view');
+    if (ph === 'in-view') return scanSet('reading');
+    if (ph === 'reading') { sim.arrived = sim.sides.length; sim.sides.push(ORDER[sim.sides.length]); return scanSet(sim.sides.length === 6 ? 'complete' : 'next-side'); }
+    if (ph === 'complete') { solveReset(0); P.d.t0 = Date.now(); go('solve', 'hold', {push: false}); }
+  }, reduced() ? Math.min(DUR[sim.phase], 900) : DUR[sim.phase]);
+}
+function scanPick(st) {   // jumped to from the state picker
+  sim.auto = false; clearTimeout(sim.timer);
+  const need = {looking: 0, 'next-side': 2, 'seen-before': 2, stuck: 3, conflict: 6, complete: 6, 'solve-failed': 6, 'camera-lost': 3, resuming: 3};
+  if (['more', 'camera-picker', 'confirm-leave', 'confirm-restart'].includes(st)) { if (sim.sides.length < 2) sim.sides = ORDER.slice(0, 2); if (!DUR[sim.phase] || sim.phase === 'complete') sim.phase = 'next-side'; return; }
+  if (st in need) sim.sides = ORDER.slice(0, need[st]);
+  if (['starting', 'settling', 'camera-none', 'camera-busy', 'camera-blocked', 'camera-failed'].includes(st)) sim.sides = [];
+  sim.phase = st;
+}
+
+function insBlock(m) {
+  const d = dirOf(m), back = m.f === 'B' && m.t !== 2;
+  return `<div class="ins" aria-live="polite" aria-label="${t('turn.' + m.f + m.t)}">
+    <div class="ins-side">${stk(FACE_COL[m.f], 'swatch')}<span>${t('side.' + SIDE[m.f])}</span></div>
+    <div class="ins-dir"><span dir="ltr">${ico(DIR_ICON[d])}</span><span>${t('dir.' + d)}</span></div>
+    <div class="ins-amt"><span>${t(m.t === 2 ? 'amount.half' : 'amount.quarter')}${back ? ' · ' + t('dir.seenFromFront') : ''}</span>${P.opts.notation ? `<span class="kbd" dir="ltr">${notation(m)}</span>` : ''}</div></div>`;
+}
+const holdLine = () => `<div class="holdline">${stk('yellow', 'swatch')}${stk('green', 'swatch')}<span>${t('solve.holdLine')}</span></div>`;
+screens.solve = {
+  render(st) {
+    if (st === 'working') return `<div class="screen solve">${working(t('solve.working'))}</div>`;
+    if (st === 'failed' || st === 'already-solved') {
+      const k = st === 'failed' ? 'failed' : 'alreadySolved';
+      return `<div class="screen solve">${topbar('')}<div class="work"><h1 class="t-title">${t('solve.' + k + '.title')}</h1><p class="t-sec">${t('solve.' + k + '.body')}</p>
+        ${st === 'failed' ? btn(t('scan.checkColours'), 'go', {v: 'primary', cls: 'thumb', arg: 'review'}) : ''}${btn(t(st === 'failed' ? 'common.scanAgain' : 'complete.scanAnother'), 'scan', {v: st === 'failed' ? 'secondary' : 'primary', cls: 'thumb'})}${btn(t('common.home'), 'home', {v: 'ghost'})}</div></div>`;
+    }
+    if (st === 'hold' || st === 'hold-resume') {
+      const r = st === 'hold-resume';
+      return `<div class="screen solve">${topbar('')}<div class="hold"><div class="hold-cube"><canvas data-scene="solve" role="img" aria-label="${t('solve.hold.match')}"></canvas></div>
+        <div class="hold-copy"><h1 class="t-title">${r ? t('solve.holdResume.title', S.turn + 1) : t('solve.hold.title')}</h1>
+        <p>${t(r ? 'solve.holdResume.body' : 'solve.hold.body')}</p>${r ? '' : `<p class="t-sec">${t('solve.hold.match')}</p>`}
+        ${btn(t(r ? 'solve.matches' : 'solve.hold.ready'), 'holdReady', {v: 'primary', cls: 'giant block', trail: 'chev-r'})}
+        ${r ? btn(t('solve.differs'), 'pick', {cls: 'thumb block', arg: 'solve.lost'}) : btn(t('solve.hold.check'), 'go', {v: 'ghost', arg: 'review'})}</div></div></div>`;
+    }
+    const m = pendingMove() || SOL.moves[N - 1], sg = stageOf(Math.min(S.turn, N - 1));
+    const ticks = SOL.stages.slice(1).map(s => `<b style="inset-inline-start:${s.from / N * 100}%"></b>`).join('');
+    const bar = `<div class="solve-bar"><button type="button" class="iconbtn" data-act="pick" data-arg="solve.menu" aria-label="${t('solve.a11y.menu')}">${ico('pause')}</button>
+      <div class="where"><span class="eyebrow">${t('solve.stageOf', sg + 1, 5)} · ${t('stage.' + (sg + 1) + '.title')}</span></div>
+      <span class="mono">${t('solve.progress', Math.min(S.turn + 1, N), N)}</span></div>
+      <div class="prog" role="progressbar" aria-valuemin="0" aria-valuemax="${N}" aria-valuenow="${S.turn}"><i style="width:${S.turn / N * 100}%"></i>${ticks}</div>`;
+    const stages = `<div class="stages">${SOL.stages.map((s, i) => {
+      const cls = i < sg ? 'done' : i === sg ? 'cur' : '';
+      return `<div class="stage-row ${cls}"><span class="n">${i < sg ? ico('check') : i + 1}</span><div><b>${t('stage.' + (i + 1) + '.title')}</b>${i === sg && P.opts.explain ? `<p>${t('stage.' + (i + 1) + '.what')} ${t('stage.' + (i + 1) + '.why')}</p>` : ''}</div></div>`;
+    }).join('')}</div>`;
+    const fwdKey = touch() ? '' : 'Space';
+    let lower;
+    if (st === 'stage-done') {
+      lower = `<div class="stagedone" role="status"><h2 class="t-headline">${ico('check')}<span>${t('solve.stageDone.title', t('stage.' + sg + '.title'))}</span></h2>
+        <p><strong>${t('solve.stageDone.check')}</strong></p><p><strong>${t('solve.stageDone.next', t('stage.' + (sg + 1) + '.title'))}</strong>${P.opts.explain ? ' ' + t('stage.' + (sg + 1) + '.what') + ' ' + t('stage.' + (sg + 1) + '.why') : ''}</p></div>
+        <div class="solve-btns" style="grid-template-columns:1fr 1fr">${btn(t('solve.differs'), 'pick', {cls: 'giant', arg: 'solve.lost'})}${btn(t('common.carryOn'), 'stageGo', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
+    } else if (st === 'auto') {
+      lower = insBlock(m) + `<div class="autobar" style="--dur:${pace()}ms"><i></i></div><div class="solve-btns" style="grid-template-columns:1fr">${btn(t(touch() ? 'solve.auto.tapToPause' : 'solve.auto.keysToPause'), 'autoPause', {cls: 'giant', icon: 'pause'})}</div>`;
+    } else if (st === 'auto-paused') {
+      lower = insBlock(m) + `<div class="solve-btns">${btn(t('solve.previous'), 'prev', {cls: 'giant', dis: S.turn === 0})}${btn(t('common.carryOn'), 'autoGo', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
+    } else {
+      const hint = (st === 'move-hint' || (S.turn === 0 && !P.d.hinted)) ? `<div class="hint">${t(touch() ? 'solve.hint.touch' : 'solve.hint.keys')}</div>` : '';
+      lower = hint + insBlock(m) + `<div class="solve-btns">${btn(t('solve.previous'), 'prev', {cls: 'giant', dis: S.turn === 0})}${btn(t(S.turn === N - 1 ? 'solve.finish' : 'solve.next'), 'next', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
+    }
+    let layer = '';
+    if (st === 'menu') layer = sheet(t('solve.paused'), btn(t('common.carryOn'), 'closeSheet', {v: 'primary', cls: 'block'}) + btn(t('solve.menu.hold'), 'go', {cls: 'block', arg: 'help.holding'})
+      + btn(t('solve.menu.lost'), 'pick', {cls: 'block', arg: 'solve.lost'}) + btn(t('common.settings'), 'go', {cls: 'block', arg: 'settings', icon: 'settings'})
+      + btn(t('solve.menu.leave'), 'leaveSolve', {v: 'ghost', cls: 'block'}) + `<p class="note">${t('solve.menu.leaveNote')}</p>`);
+    if (st === 'lost') layer = sheet(t('solve.lost.title'), `<p>${t('solve.lost.body')}</p><ol><li>${t('solve.lost.step1')}</li><li>${t('solve.lost.step2')}</li><li>${t('solve.lost.step3')}</li></ol>`
+      + btn(t('solve.lost.goBack'), 'lostBack', {cls: 'block', dis: S.turn === 0}) + btn(t('solve.lost.rescan'), 'scan', {v: 'primary', cls: 'block'}) + btn(t('solve.lost.carryOn'), 'closeSheet', {v: 'ghost', cls: 'block'}));
+    const tapAct = st === 'stage-done' ? 'stageGo' : st === 'auto' ? 'autoPause' : st === 'auto-paused' ? 'autoGo' : 'next';
+    return `<div class="screen solve">${bar}<div class="solve-body"><div class="solve-main">
+      <button type="button" class="solve-stage" data-act="${tapAct}" tabindex="-1" aria-label="${t('solve.a11y.cube', t('turn.' + m.f + m.t))}"><canvas data-scene="solve"></canvas></button>${holdLine()}</div>
+      <div class="solve-side">${stages}${lower}</div></div>${layer}</div>`;
+  }
+};
+
+screens.complete = {
+  render(st) {
+    const sec = P.d.elapsed || 760, time = String(Math.floor(sec / 60)).padStart(2, '0') + ':' + String(sec % 60).padStart(2, '0');
+    const layer = st === 'not-solved' ? sheet(t('complete.notSolved.title'), `<p>${t('complete.notSolved.body')}</p>` + btn(t('solve.lost.rescan'), 'scan', {v: 'primary', cls: 'block'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'})) : '';
+    return `<div class="screen complete"><div class="done-cube"><canvas data-scene="solve" aria-hidden="true"></canvas></div>
+      <div class="done-copy"><div class="eyebrow">${t('complete.eyebrow')}</div><h1 class="t-display">${t('complete.title')}</h1><div class="underline"></div>
+      <div class="stats"><div><div class="eyebrow t-sec">${t('complete.turns')}</div><div class="mono">${N}</div></div><div><div class="eyebrow t-sec">${t('complete.time')}</div><div class="mono" dir="ltr">${time}</div></div></div>
+      <div class="done-actions">${btn(t('complete.scanAnother'), 'scan', {v: 'primary', cls: 'block thumb', trail: 'chev-r'})}${btn(t('complete.review'), 'go', {cls: 'block', arg: 'solution', trail: 'chev-r'})}${btn(t('common.done'), 'home', {v: 'ghost'})}</div>
+      <div>${btn(t('complete.notSolved'), 'pick', {v: 'ghost', arg: 'complete.not-solved'})}</div></div>${layer}</div>`;
+  }
+};
+
+function placeholder(screen) {
+  const j = JOURNEY.find(s => s.screen === screen);
+  return `<div class="screen">${topbar(screen)}<div class="pad"><div class="notice">${ico('alert')}<div><strong>Not drawn in this cut</strong><span>This screen comes in the next cut of the prototype. Its states, from the journey:</span></div></div>
+    <div>${(j ? j.states : []).map(s => `<p style="margin-bottom:8px"><span class="mono t-small">${screen}.${s.id}</span><br><span class="t-sec t-small">${esc(s.when)}</span></p>`).join('')}</div></div></div>`;
+}
+
+// ---- moving between screens ---------------------------------------------------------
+function go(screen, state, o = {}) {
+  if (o.push !== false) P.stack.push({screen: P.screen, state: P.screen === 'scan' ? sim.phase : (P.screen === 'solve' && ['menu', 'lost'].includes(P.state)) ? restState() : P.state});
+  clearTimeout(sim.timer); clearTimeout(S.autoT);
+  P.entered = P.screen !== screen;
+  P.screen = screen; P.state = state || 'default';
+  if (screen === 'scan' && !o.picked && !o.resume) { sim.auto = true; sim.sides = []; sim.phase = 'starting'; P.state = 'starting'; }
+  if (screen === 'scan' && o.resume) { sim.auto = true; P.state = sim.phase; }
+  if (screen === 'scan' && o.picked) scanPick(P.state);
+  if (screen === 'solve' && o.picked) {
+    if (['hold', 'working', 'move-hint'].includes(state)) { solveReset(0); P.d.hinted = false; }
+    else if (state === 'stage-done') solveReset(SOL.stages[1].from);
+    else if (state === 'last-move') solveReset(N - 1);
+    else if (state === 'hold-resume') solveReset(23);
+    else if (S.turn === 0 || S.turn >= N) solveReset(9);
+    S.skipStage = state !== 'stage-done';
+  }
+  if (screen === 'complete') solveReset(N);
+  const sc = screens[screen];
+  if (sc && sc.enter) { const r = sc.enter(P.state, o); if (r) P.state = r; }
+  render();
+  if (screen === 'scan') scanArm();
+  armTimer();
+}
+const OVER = {scan: ['more', 'camera-picker', 'confirm-leave', 'confirm-restart'], solve: ['menu', 'lost'], complete: ['not-solved'], home: ['confirm-discard'],
+  settings: ['language', 'confirm-clear'], history: ['confirm-delete', 'confirm-clear'], review: ['confirm-discard'], permission: ['system']};
+const BASE = {scan: () => sim.phase, solve: () => restState(), home: () => homeState(), settings: () => 'main', history: () => histState(), review: () => reviewState(),
+  permission: () => P.d.permRefused ? 'refused' : 'ask'};
+function popBack() {
+  const prev = P.stack.pop();
+  if (!prev) return go('home', homeState(), {push: false});
+  go(prev.screen, prev.state, {push: false, resume: true});
+}
+function back() {
+  if ((OVER[P.screen] || []).includes(P.state)) return actions.closeSheet();
+  if (P.screen === 'scan') return actions.scanCancel();
+  if (P.screen === 'solve') return actions.leaveSolve();
+  if (P.screen === 'complete') return actions.home();
+  if (P.screen === 'home') return;
+  if (P.screen === 'review') { if (RV.dirty) { RV.then = null; P.state = 'confirm-discard'; return render(); } RV.f = null; }
+  if (P.screen === 'solution') solStop();
+  popBack();
+}
+const homeState = () => P.d.resume ? 'resume' : 'default';
+const restState = () => landState() === 'stage-done' ? 'stage-done' : P.opts.advance === 'timer' ? 'auto-paused' : S.turn === N - 1 ? 'last-move' : 'move';
+const actions = {
+  go(el) { const [sc, st] = el.dataset.arg.split('.'); go(sc, st || 'default'); },
+  pick(el) { const [s, st] = el.dataset.arg.split('.'); if (s === P.screen) { P.state = st; if (s === 'scan') { clearTimeout(sim.timer); } render(); armTimer(); } else go(s, st, {picked: true}); },
+  back,
+  home() { P.stack = []; go('home', homeState(), {push: false}); },
+  scan() { P.d.resume = null; if (touch() && !P.d.camAllowed) return go('permission', 'default'); go('scan', 'starting'); },
+  noop() {},
+  resume() { solveReset((P.d.resume || {turn: 23}).turn); go('solve', 'hold-resume'); },
+  discardSolve() { P.d.resume = null; go('home', 'default', {push: false}); },
+  closeSheet(el, ev) {
+    if (ev && el && el.classList.contains('scrim') && ev.target !== el) return;
+    const prev = P.stack[P.stack.length - 1];
+    if (P.screen === 'settings' && P.state === 'language' && prev && prev.screen === 'first-run') return popBack();
+    P.state = (BASE[P.screen] || (() => 'default'))();
+    render();
+    if (P.screen === 'scan') scanArm();
+    armTimer();
+  },
+  scanCancel() { if (sim.sides.length && !sim.phase.startsWith('camera-')) { P.state = 'confirm-leave'; clearTimeout(sim.timer); render(); } else actions.home(); },
+  scanStartOver() { P.state = 'confirm-restart'; clearTimeout(sim.timer); render(); },
+  scanRestart() { sim.sides = []; sim.auto = true; scanSet('looking'); },
+  scanRetry() { sim.auto = true; scanSet('starting'); },
+  holdReady() { S.skipStage = true; P.state = P.opts.advance === 'timer' ? 'auto' : S.turn === N - 1 ? 'last-move' : (P.d.hinted || S.turn > 0) ? 'move' : 'move-hint'; render(); armTimer(); },
+  stageGo() { S.skipStage = true; P.state = P.opts.advance === 'timer' ? 'auto' : (S.turn === N - 1 ? 'last-move' : 'move'); render(); armTimer(); },
+  next: nextTurn, prev: prevTurn,
+  autoPause() { clearTimeout(S.autoT); P.state = 'auto-paused'; render(); },
+  autoGo() { P.state = 'auto'; render(); armTimer(); },
+  lostBack() { P.state = 'move'; prevTurn(); },
+  leaveSolve() { P.d.resume = S.turn < N ? {turn: S.turn, total: N} : null; actions.home(); }
+};
+
+/*__JS_MORE__*/
+
+function render() {
+  const keep = document.activeElement && app.contains(document.activeElement) ? document.activeElement.dataset : null;
+  const sc = screens[P.screen], scrolls = {};
+  app.querySelectorAll('[data-scroll]').forEach(e => { scrolls[e.dataset.scroll] = e.scrollTop; });
+  app.innerHTML = sc ? sc.render(P.state) : placeholder(P.screen);
+  app.querySelectorAll('[data-scroll]').forEach(e => { if (scrolls[e.dataset.scroll]) e.scrollTop = scrolls[e.dataset.scroll]; });
+  const cur = app.querySelector('.turnrow.cur');
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({block: 'nearest'});
+  const root = app.firstElementChild;
+  if (P.entered) root.classList.add('enter');
+  P.entered = false;
+  app.classList.toggle('still', reduced());
+  views = [...app.querySelectorAll('canvas[data-scene]')].map(c => ({c, scene: scenes[c.dataset.scene]}));
+  redraw();
+  if (keep && keep.act) { const el = app.querySelector(`[data-act="${keep.act}"]${keep.arg ? `[data-arg="${keep.arg}"]` : ''}`); if (el) el.focus({preventScroll: true}); }
+  const first = app.querySelector('.dialog .btn, .sheet .btn');
+  if (first && !app.querySelector('.scrim :focus')) first.focus({preventScroll: true});
+  syncBar();
+}
+
+// ---- the workbench controls ---------------------------------------------------------
+const pScreen = $('#p-screen'), pState = $('#p-state');
+function syncBar() {
+  if (pScreen.options.length !== JOURNEY.length) pScreen.innerHTML = JOURNEY.map(s => `<option value="${s.screen}">${s.screen}</option>`).join('');
+  pScreen.value = P.screen;
+  const j = JOURNEY.find(s => s.screen === P.screen);
+  const want = (j ? j.states : []).map(s => s.id).join();
+  if (pState.dataset.for !== P.screen + want) { pState.innerHTML = (j ? j.states : []).map(s => `<option value="${s.id}">${s.id}</option>`).join(''); pState.dataset.for = P.screen + want; }
+  if ([...pState.options].some(o => o.value === P.state)) pState.value = P.state;
+  $('#p-run').hidden = !(P.screen === 'scan' && !sim.auto);
+}
+function syncSelects() {
+  const o = P.opts;
+  for (const [id, v] of [['#p-size', o.size], ['#p-theme', o.theme], ['#p-dir', o.dir], ['#p-text', String(o.ts)], ['#p-strings', o.pseudo ? 'pseudo' : 'en'],
+    ['#p-marks', o.marks ? 'on' : 'off'], ['#p-cvd', o.cvd], ['#p-motion', o.motion], ['#p-advance', o.advance], ['#p-notation', o.notation ? 'on' : 'off']]) $(id).value = v;
+}
+function applyOpts() {
+  const o = P.opts;
+  syncSelects();
+  device.dataset.size = o.size;
+  if (o.theme === 'auto') delete device.dataset.appTheme; else device.dataset.appTheme = o.theme;
+  device.dir = o.dir;
+  app.style.setProperty('--ts', o.ts);
+  device.style.filter = o.cvd === 'none' ? '' : `url(#cvd-${o.cvd})`;
+  palette();
+  try { localStorage.setItem('cubeulator-proto', JSON.stringify(narrow() ? {...o, size: SAVED_SIZE} : o)); } catch (e) {}
+  render();
+}
+const bind = (id, key, conv = v => v) => $(id).addEventListener('change', e => { P.opts[key] = conv(e.target.value); applyOpts(); armTimer(); });
+bind('#p-size', 'size'); bind('#p-theme', 'theme'); bind('#p-dir', 'dir'); bind('#p-text', 'ts', Number);
+bind('#p-strings', 'pseudo', v => v === 'pseudo'); bind('#p-marks', 'marks', v => v === 'on'); bind('#p-cvd', 'cvd');
+bind('#p-motion', 'motion'); bind('#p-notation', 'notation', v => v === 'on');
+$('#p-advance').addEventListener('change', e => {
+  P.opts.advance = e.target.value;
+  if (P.screen === 'solve' && ['move', 'auto', 'auto-paused', 'move-hint'].includes(P.state)) P.state = e.target.value === 'timer' ? 'auto' : 'move';
+  applyOpts(); armTimer();
+});
+pScreen.addEventListener('change', e => { const j = JOURNEY.find(s => s.screen === e.target.value); go(j.screen, j.states[0].id, {picked: true}); });
+pState.addEventListener('change', e => go(P.screen, e.target.value, {push: false, picked: true}));
+$('#p-run').addEventListener('click', () => { sim.auto = true; if (!DUR[sim.phase]) scanSet(sim.sides.length >= 6 ? 'complete' : 'next-side'); else scanSet(sim.phase); });
+$('#p-toggle').addEventListener('click', e => { const open = $('#pbar').classList.toggle('open'); e.target.setAttribute('aria-expanded', open); });
+
+const LOOPS = [
+  ['solve → scan', 'My cube does not match: scan the cube again. The new scan replaces the solve.'],
+  ['complete → scan', 'Scan another cube; or My cube is not solved.'],
+  ['scan ↔ review', 'Check the colours from a scan that does not add up; Scan instead from hand entry.'],
+  ['solve → home → solve', 'Leaving keeps the solve. Home offers Carry on.'],
+  ['scan, solve → settings, help', 'Opened from the More sheet or the pause menu. Back returns with the scan or solve as it was.']
+];
+function showMap(on) {
+  const map = $('#map');
+  map.hidden = !on; device.hidden = on;
+  $('#p-map').textContent = on ? 'Back to the app' : 'Map';
+  if (!on) return render();
+  const node = n => { const j = JOURNEY.find(s => s.screen === n); return `<button type="button" class="node lane-${j.lane}" data-map="${n}.${j.states[0].id}"><b>${n}</b><small>${j.states.length} states · ${j.lane}</small></button>`; };
+  const spine = ['first-run', 'home', 'permission', 'scan', 'review', 'solve', 'complete', 'solution'].map(node).join('<span class="arrow">→</span>');
+  const side = ['history', 'settings', 'about', 'licences', 'privacy', 'help'].map(node).join('');
+  map.innerHTML = `<h2>The journey</h2><p>Every screen and every state, from docs/design/journey.md. The top row is the way through; the second row hangs off Home and Settings. Dashed boxes belong to the scan lane, double-ruled to the solve lane. Choose any state to see it.</p>
+    <div class="spine">${spine}</div><div class="spine">${side}</div>
+    <table class="loops">${LOOPS.map(l => `<tr><td>${l[0]}</td><td>${l[1]}</td></tr>`).join('')}</table>
+    <div class="maprow">${JOURNEY.map(s => `<div class="mapcard"><h3>${s.screen}</h3><div class="lane">${s.lane} lane${screens[s.screen] ? '' : ' · next cut'}</div><ul>${s.states.map(x => `<li><button type="button" data-map="${s.screen}.${x.id}">${s.screen}.${x.id}<span>${esc(x.when)}</span></button></li>`).join('')}</ul></div>`).join('')}</div>
+    <h2 style="margin-top:32px">Identity</h2><p>The icon proposal, from docs/design/identity: the app's own drawing of a cube with its top layer part-way through a turn. The small version drops the grid lines.</p>
+    <div class="icons">${[['icon', 128], ['icon-dark', 128], ['icon-android-foreground', 128], ['icon-mono', 128], ['icon-small', 48], ['icon-small', 32], ['icon-small', 16]].map(([n, px]) => `<figure><div class="tile" style="width:${px}px;height:${px}px">${IDENTITY[n] || ''}</div><figcaption>${n.replace('icon-', '').replace('icon', 'light')} ${px}</figcaption></figure>`).join('')}</div>`;
+}
+$('#p-map').addEventListener('click', () => showMap($('#map').hidden));
+$('#map').addEventListener('click', e => { const b = e.target.closest('[data-map]'); if (!b) return; const [s, st] = b.dataset.map.split('.'); showMap(false); go(s, st, {picked: true}); });
+
+app.addEventListener('click', e => {
+  const el = e.target.closest('[data-act]');
+  if (!el || el.disabled) return;
+  const fn = actions[el.dataset.act];
+  if (fn) fn(el, e);
+});
+document.addEventListener('keydown', e => {
+  const tgt = e.target instanceof Element ? e.target : document.body;
+  if (!$('#map').hidden || tgt.closest('.pbar')) return;
+  if (e.key === 'Escape') { e.preventDefault(); return back(); }
+  if (P.screen === 'review' && /^[1-6]$/.test(e.key) && !app.querySelector('.scrim')) { RV.colour = Object.keys(MARKS)[+e.key - 1]; RV.centre = false; return render(); }
+  if (P.screen !== 'solve' || app.querySelector('.scrim')) return;
+  const onControl = tgt.closest('button,select,a');
+  const fwd = P.opts.dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight', bwd = P.opts.dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
+  const advance = () => { const st = P.state; if (['hold', 'hold-resume'].includes(st)) actions.holdReady(); else if (st === 'stage-done') actions.stageGo(); else if (st === 'auto') actions.autoPause(); else if (st === 'auto-paused') actions.autoGo(); else nextTurn(); };
+  if ((e.key === ' ' || e.key === 'Enter') && !onControl) { e.preventDefault(); advance(); }
+  else if (e.key === fwd || e.key === 'PageDown') { e.preventDefault(); advance(); }
+  else if (e.key === bwd || e.key === 'PageUp') { e.preventDefault(); prevTurn(); }
+});
+new ResizeObserver(redraw).observe(app);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { palette(); redraw(); });
+new MutationObserver(() => { palette(); redraw(); }).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+
+try { Object.assign(P.opts, JSON.parse(localStorage.getItem('cubeulator-proto') || '{}')); } catch (e) {}
+const SAVED_SIZE = P.opts.size;
+if (narrow()) P.opts.size = 'phone';
+let seen = false;
+try { seen = !!localStorage.getItem('cubeulator-proto-seen'); } catch (e) {}
+if (!seen) { P.screen = 'first-run'; P.state = 'welcome'; }
+applyOpts();
+</script>

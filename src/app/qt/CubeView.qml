@@ -10,6 +10,9 @@ import Cubeulator
 // iso view. D/L/B are never drawn; a move on one of them shows the hidden-
 // face badge below instead of a (misleading) on-cube arrow.
 Canvas {
+    // The cube never mirrors: it is the object in the hand, not a layout.
+    LayoutMirroring.enabled: false
+    LayoutMirroring.childrenInherit: true
     id: root
     renderStrategy: Canvas.Cooperative
 

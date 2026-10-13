@@ -1,4 +1,5 @@
 #include "controllers/app_controllers.hpp"
+#include "i18n/language_manager.hpp"
 
 #include <cube/solver/solver.hpp>
 
@@ -126,6 +127,8 @@ int main(int argc, char* argv[]) {
     // Declared after the controllers, and so destroyed before them.
     QQmlApplicationEngine engine;
     controllers.addImageProviders(engine);
+    // The language - translators, direction, locale - before the first frame.
+    cube::i18n::install(app, engine);
     engine.loadFromModule("Cubeulator", "Main");
 
     if (engine.rootObjects().isEmpty()) {
