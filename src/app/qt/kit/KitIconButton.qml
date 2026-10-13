@@ -99,13 +99,14 @@ AbstractButton {
             border.width: Theme.borderHair
             border.color: Theme.outline
         }
+        // The button carries the name; the tooltip's words are not read twice.
+        // (Accessible attaches to Items, not to a Popup: the content is the one.)
         contentItem: KitText {
             text: root.text
             role: "small"
             wrapMode: Text.NoWrap
             Accessible.ignored: true
         }
-        Accessible.ignored: true
     }
 
     Keys.onReturnPressed: event => {

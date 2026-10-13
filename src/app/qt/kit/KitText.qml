@@ -27,11 +27,15 @@ Text {
     wrapMode: Text.Wrap
     elide: Text.ElideNone
 
+    // The size in pixels, worked out once: letter spacing is a multiple of it,
+    // and reading `font.pixelSize` back inside `font.letterSpacing` is a loop.
+    readonly property real pixelSize: Math.round(Theme.typeSize(role, variant))
+
     font.family: spec.family === "mono" ? Theme.fontMono : Theme.headingFamily
-    font.pixelSize: Math.round(Theme.typeSize(role, variant))
+    font.pixelSize: pixelSize
     font.weight: spec.family === "mono" ? spec.weight : Math.min(spec.weight, Theme.maxWeight)
     font.capitalization: (spec.caps === true && Theme.hasCapitals) ? Font.AllUppercase : Font.MixedCase
-    font.letterSpacing: (spec.tracking !== undefined && Theme.hasCapitals) ? spec.tracking * font.pixelSize : 0
+    font.letterSpacing: (spec.tracking !== undefined && Theme.hasCapitals) ? spec.tracking * pixelSize : 0
     lineHeight: spec.line
     lineHeightMode: Text.ProportionalHeight
 

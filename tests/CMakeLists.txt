@@ -237,6 +237,7 @@ if(CUBEULATOR_BUILD_APP)
         kit/kit_fixture.cpp
         kit/theme_tokens_test.cpp
         kit/text_test.cpp
+        kit/fonts_test.cpp
         kit/system_helpers_test.cpp
         kit/settings_test.cpp
         kit/navigator_test.cpp
