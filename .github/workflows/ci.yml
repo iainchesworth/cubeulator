@@ -38,8 +38,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
+      # clang-format comes from a pinned PyPI wheel, not apt: the apt package
+      # is whatever Ubuntu ships, so a runner-image bump could change the
+      # formatting rules under an unchanged tree. Pinning also lets a
+      # developer install exactly this version locally
+      # (`pip install -r ci/requirements-lint.txt`), and Dependabot's pip
+      # ecosystem for /ci keeps the pin current. The wheel is ~1.5 MB and
+      # needs no root.
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install clang-format (pinned)
+        run: |
+          uv venv "$RUNNER_TEMP/lint-venv"
+          uv pip install --python "$RUNNER_TEMP/lint-venv/bin/python" --requirement ci/requirements-lint.txt
+          echo "$RUNNER_TEMP/lint-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/lint-venv/bin/clang-format" --version
 
       - name: Check formatting
         run: |
@@ -92,21 +106,32 @@ jobs:
       # package was 1:18.0 (noble's stock version), too old to parse
       # <expected> at all - cascading into "no template named 'Result'"/"no
       # member 'expected'" errors on every file (confirmed in CI on that
-      # image). ubuntu-26.04 ships clang-21 directly (20/21/22 side by side),
-      # so no LLVM apt-repo pin is needed anymore - just install it.
+      # image).
       #
-      # libomp-21-dev: the vendored M3T tracker (third_party/m3t) does
+      # Clang 23 is the current release, and ubuntu-26.04 only carries 20-22,
+      # so it comes from apt.llvm.org (ci/install-llvm.sh verifies the
+      # archive key against a pinned fingerprint). Caveat: that archive keeps
+      # one build per major - a snapshot of LLVM's release/23.x branch,
+      # rebuilt as the branch moves - so this is the latest 23.x, not a
+      # frozen version, and the gate can shift between runs. clang-format,
+      # which must be deterministic, is a pinned wheel (see that job). When a
+      # clang-tidy 23 wheel exists on PyPI, move it into
+      # ci/requirements-lint.txt and drop this install.
+      #
+      # libomp-23-dev: the vendored M3T tracker (third_party/m3t) does
       # find_package(OpenMP REQUIRED) for C and C++. GCC ships libgomp, but
       # clang++ only has an OpenMP runtime with LLVM's libomp, so without it
       # configure stops at "Could NOT find OpenMP_CXX (missing:
       # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
-      - name: Install Clang 21
-        run: sudo apt-get install -y clang-21 clang-tidy-21 libomp-21-dev
+      # It must match the compiler; it pins libomp5 to 23, which supersedes
+      # the libomp-21-dev this job used with Clang 21.
+      - name: Install Clang 23
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
           cmake --preset linux-gcc-debug
-          -DCMAKE_CXX_COMPILER=clang++-21
+          -DCMAKE_CXX_COMPILER=clang++-23
           -DCUBEULATOR_BUILD_APP=OFF
 
       # A full build (not just configure) is required here: Ninja's compile
@@ -126,7 +151,7 @@ jobs:
         run: |
           jq -r '.[].file' build/linux-gcc-debug/compile_commands.json \
             | grep -E '/(src|tests)/' \
-            | xargs clang-tidy-21 -p build/linux-gcc-debug --warnings-as-errors='*'
+            | xargs clang-tidy-23 -p build/linux-gcc-debug --warnings-as-errors='*'
 
       # Saved even when a later step fails: otherwise a red leg throws away every
       # package vcpkg had already built and the next attempt starts from nothing
