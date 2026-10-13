@@ -28,11 +28,6 @@ set(CUBEULATOR_PLATFORM_LINK_LIBRARIES "")
 set(CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES "")
 set(CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS "")
 
-# No live tracker on a phone: GLEW/GLFW have no mobile story, and the phone
-# port swaps the tracker implementation, not the seam.
-set(CUBEULATOR_PLATFORM_CONTROLLER_SOURCES qt/controllers/live_track_none.cpp)
-set(CUBEULATOR_PLATFORM_CONTROLLER_LINK_LIBRARIES "")
-
 set(CUBEULATOR_PLATFORM_APP_PROPERTIES "")
 
 function(cube_platform_prepare_dependencies)

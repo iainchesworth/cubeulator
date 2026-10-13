@@ -22,8 +22,8 @@
 # Facts:
 #   CUBEULATOR_PLATFORM_DISPLAY_NAME   How the platform is written in the
 #                                      version block ("Windows", "macOS").
-#   CUBEULATOR_PLATFORM_DESKTOP        ON where the vendored M3T tracker, the
-#                                      developer tools and CPack packaging
+#   CUBEULATOR_PLATFORM_DESKTOP        ON where the developer tools, CPack
+#                                      packaging and the installed notices
 #                                      exist; OFF on phones.
 #   CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM
 #                                      The Qt platform plugin the test
@@ -57,9 +57,6 @@
 #   CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS
 #                                      Defines for first-party targets that
 #                                      call into the platform's C runtime.
-#   CUBEULATOR_PLATFORM_CONTROLLER_SOURCES, CUBEULATOR_PLATFORM_CONTROLLER_LINK_LIBRARIES
-#                                      The platform's choice of live tracker
-#                                      (qt/controllers/live_track_*.cpp).
 #   CUBEULATOR_PLATFORM_APP_PROPERTIES Target properties for cube_app, as
 #                                      <property> <value> pairs.
 #

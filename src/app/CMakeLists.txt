@@ -68,10 +68,9 @@ if(CUBEULATOR_BUILD_APP)
     # qmlRegisterSingletonInstance in main.cpp rather than QML_ELEMENT,
     # since QML_ELEMENT's compile-time registration only works for sources
     # compiled directly into a qt_add_qml_module target. SolveController
-    # lives here (not in cube_app_qml, unlike before) for the same reason:
-    # it needs a real C++ reference to the live ScanSession instance
-    # (cube::model::ScanProgress can't cross into QML), which only works if
-    # both are constructed and wired together directly in main.cpp.
+    # lives here (not in cube_app_qml) for the same reason: the scan
+    # controller hands it a cube::solver::Cube, which cannot cross into QML,
+    # so the two are constructed and wired together in C++.
     # ---------------------------------------------------------------------
     add_library(cube_app_controllers STATIC
         qt/controllers/app_controllers.hpp
@@ -82,11 +81,8 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp
         qt/controllers/held_cube.cpp
-        qt/controllers/live_track.hpp
         qt/controllers/platform_facts.hpp
         qt/controllers/platform_facts.cpp
-        qt/controllers/scan_session.hpp
-        qt/controllers/scan_session.cpp
         qt/controllers/settings_model.hpp
         qt/controllers/settings_model.cpp
         qt/controllers/bundled_models.hpp
@@ -94,11 +90,7 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/frame_image_provider.hpp
         qt/controllers/frame_image_provider.cpp
         qt/solve_controller.hpp
-        qt/solve_controller.cpp
-        # The live tracker behind qt/controllers/live_track.hpp: the platform
-        # fragment names the implementation (M3T where it exists, none on
-        # phones), so scan_session.cpp has no branch for either.
-        ${CUBEULATOR_PLATFORM_CONTROLLER_SOURCES})
+        qt/solve_controller.cpp)
 
     target_include_directories(cube_app_controllers PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
 
@@ -110,21 +102,10 @@ if(CUBEULATOR_BUILD_APP)
     # binaries, which cube::vision's own filesystem-path-based tests
     # (tests/integration/hand_presence_integration_test.cpp) still rely on -
     # that's a Qt-free cube_lib API and can't read a Qt resource.
-    #
-    # The corner-detector weights are not distributed with the repository
-    # (assets/models/cube_corner_pose_PROVENANCE.md). A local copy is embedded
-    # when there is one; without it the previous scan pipeline's track mode
-    # finds no model and falls back, and the direct scan never asked for it.
-    set(_cube_app_models
-        "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
-    if(EXISTS "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-        list(APPEND _cube_app_models "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
-    endif()
     qt_add_resources(cube_app_controllers "cube_app_models"
         PREFIX "/models"
         BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES ${_cube_app_models})
-    unset(_cube_app_models)
+        FILES "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
 
     target_link_libraries(cube_app_controllers
         PUBLIC
@@ -135,11 +116,7 @@ if(CUBEULATOR_BUILD_APP)
         PRIVATE
             cube::warnings
             cube::sanitizers
-            cube::coverage
-            # What the chosen live tracker links against: cube::track_m3t on
-            # the desktops (the vendored library is desktop-only), nothing
-            # on phones.
-            ${CUBEULATOR_PLATFORM_CONTROLLER_LINK_LIBRARIES})
+            cube::coverage)
 
     # STATIC: cube_app_qml is embedded directly into the cube_app executable
     # (via WHOLE_ARCHIVE below), not loaded as a runtime plugin from a
@@ -175,7 +152,6 @@ if(CUBEULATOR_BUILD_APP)
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
-            qt/ScanScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml
             qt/SettingsScreen.qml

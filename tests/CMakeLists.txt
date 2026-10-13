@@ -42,12 +42,9 @@ add_executable(cube_unit_tests
     unit/version_test.cpp
     unit/model_test.cpp
     unit/grid_detection_test.cpp
-    unit/pose_refiner_test.cpp
-    unit/face_projection_test.cpp
     unit/session_palette_test.cpp
     unit/face_observation_test.cpp
     unit/temporal_fusion_test.cpp
-    unit/track_fusion_test.cpp
     unit/color_resolution_test.cpp
     unit/corner_observation_test.cpp
     unit/edge_observation_test.cpp
@@ -70,12 +67,7 @@ add_executable(cube_unit_tests
     unit/raw_probe_test.cpp
     unit/union_assembly_test.cpp
     unit/frame_recording_test.cpp
-    unit/pipeline_scaffold_test.cpp
     unit/recording_v2_test.cpp
-    unit/groundtruth_test.cpp
-    unit/corner_detector_test.cpp
-    unit/pose_from_corners_test.cpp
-    unit/camera_intrinsics_test.cpp
     unit/direct_scan_test.cpp
     unit/held_cube_test.cpp
     unit/color_classification_test.cpp
@@ -147,11 +139,7 @@ add_executable(cube_integration_tests
     # Hardware verification of the lock's effect on real pixels: hidden
     # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
     # double fence as the probe above.
-    integration/camera_lock_verification_test.cpp
-    # Detector + tracking loop together on a committed capture frame: it
-    # needs the deployed ONNX model beside the binary, which is exactly
-    # what this suite (unlike the fast unit one) arranges below.
-    integration/refine_cadence_test.cpp)
+    integration/camera_lock_verification_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -186,33 +174,6 @@ cube_deploy_vision_assets(cube_integration_tests)
 catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_integration_tests>")
 
-# --- Vendored M3T tracker smoke tests (desktop only) ----------------------
-# A separate tiny executable rather than more cases in cube_unit_tests:
-# linking cube::m3t would hang GLEW/GLFW/OpenMP (and their DLL loads on
-# Windows) onto every fast-suite test process, purely for two hidden smoke
-# cases. Here that runtime baggage is confined to one binary. The heavy
-# cases are doubly fenced like the camera probes: hidden "[.m3t-smoke]" tag
-# AND a CUBE_M3T_SMOKE opt-in (they create a GL context and generate a
-# region model); one trivial visible case keeps the link line exercised in
-# every ordinary ctest run. Run the smoke checks with:
-#   set CUBE_M3T_SMOKE=1 && cube_m3t_tests "[.m3t-smoke]"
-if(TARGET cube::m3t)
-    add_executable(cube_m3t_tests unit/m3t_vendored_test.cpp)
-
-    target_link_libraries(cube_m3t_tests
-        PRIVATE
-            cube::m3t
-            cube_test_platform
-            cube::warnings
-            cube::sanitizers
-            cube::coverage
-            Catch2::Catch2WithMain)
-
-    cube_deploy_sanitizer_runtime(cube_m3t_tests)
-
-    catch_discover_tests(cube_m3t_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
-endif()
-
 # --- Qt controller tests: needs a QCoreApplication for Qt's meta-object
 # machinery (signals/slots, NOTIFY properties), so it can't use
 # Catch2::Catch2WithMain's auto-generated main() like the two binaries
@@ -220,9 +181,6 @@ endif()
 # cube_app_controllers only exists then; doesn't affect the coverage gate
 # (linux-gcc-coverage builds with CUBEULATOR_BUILD_APP=OFF).
 if(CUBEULATOR_BUILD_APP)
-    # Qml as well as Core: scan_session_binding_test drives the controllers
-    # through real QML bindings, which is the only way to cover the
-    # property-notification path the scan screen actually depends on.
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Qml)
 
     add_executable(cube_qt_controller_tests
@@ -231,8 +189,6 @@ if(CUBEULATOR_BUILD_APP)
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
-        unit/scan_session_test.cpp
-        unit/scan_session_binding_test.cpp
         unit/settings_model_test.cpp
         unit/solve_controller_test.cpp)
 

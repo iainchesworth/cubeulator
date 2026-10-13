@@ -20,7 +20,6 @@ AppControllers::AppControllers() {
 
 void AppControllers::registerWithQml() {
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "CameraController", &camera);
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "ScanSession", &scanSession);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "DirectScan", &directScan);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settings);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "PlatformFacts", &platform);

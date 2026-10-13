@@ -73,64 +73,18 @@ QtObject {
     function showSolutionWhenReady() {
         if (scanComplete && !completeBeat.running && !SolveController.isSolving && screen === "scan") {
             scanComplete = false;
-            scanError = "";
-            scanRetryMessage = "";
             screen = "solve";
         }
     }
 
-    // SolveController reports solveReady once a completed scan's assembled
-    // cube has its solve queued, or scanRejected if its legacy fallback
-    // conversion failed - ScanSession's own scanCompleted isn't enough on
-    // its own, since on the fallback path a completed scan isn't
-    // necessarily a valid one (see solve_controller.cpp).
+    // The solve lands on its worker and announces itself through
+    // stateChanged; that is one of the two things showSolutionWhenReady
+    // waits for.
     property var solveControllerConnections: Connections {
         target: SolveController
-        function onSolveReady() {
-            scanError = "";
-            scanRetryMessage = "";
-            state.screen = "solve";
-        }
-        function onScanRejected(reason) {
-            scanError = reason;
-        }
         function onStateChanged() {
             state.showSolutionWhenReady();
         }
-    }
-
-    // Set by onScanRejected above; ScanScreen.qml shows it and clears it on
-    // the next successful solveReady. The scan has already restarted (see
-    // SolveController::onScanCompleted's restartScan() call) - the user
-    // stays on the scan screen and just keeps showing faces.
-    property string scanError: ""
-
-    // Free-form recovery: six captured faces failed to resolve/assemble
-    // into a buildable cube, ScanSession dropped the most-suspect slot, and
-    // scanning continues at 5 of 6. Slots carry no face identity, so the
-    // banner can't name WHICH face was misread - the wording stays generic.
-    // Transient: cleared by the timer (the count in the scan prompt already
-    // shows the dropped slot) or by the next successful solve.
-    property string scanRetryMessage: ""
-    property var scanSessionConnections: Connections {
-        target: ScanSession
-        function onScanNeedsRetry(reason) {
-            scanRetryMessage = "One face looked misread — keep scanning, show faces again";
-            scanRetryTimer.restart();
-        }
-        // A layer was turned mid-scan: every capture predating it described
-        // a sticker arrangement that no longer exists, so ScanSession
-        // cleared ALL slots (facesScanned is back to 0). Same transient
-        // banner strip; the wording explains the reset so the emptied
-        // progress row doesn't read as a bug.
-        function onScanInvalidated(reason) {
-            scanRetryMessage = "Cube changed mid-scan — starting the capture over";
-            scanRetryTimer.restart();
-        }
-    }
-    property var scanRetryTimer: Timer {
-        interval: 6000
-        onTriggered: state.scanRetryMessage = ""
     }
 
     readonly property int scanned: DirectScan.sidesRead

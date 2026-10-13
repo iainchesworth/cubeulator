@@ -32,10 +32,6 @@ set(CUBEULATOR_PLATFORM_LINK_LIBRARIES "")
 set(CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES "")
 set(CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS "")
 
-# The live M3T tracker is desktop-only, like the vendored library itself.
-set(CUBEULATOR_PLATFORM_CONTROLLER_SOURCES qt/controllers/live_track_m3t.cpp)
-set(CUBEULATOR_PLATFORM_CONTROLLER_LINK_LIBRARIES cube::track_m3t)
-
 set(CUBEULATOR_PLATFORM_APP_PROPERTIES "")
 
 function(cube_platform_prepare_dependencies)

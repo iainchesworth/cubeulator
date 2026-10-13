@@ -49,7 +49,7 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Progress
 
-**2026-10-13.** R0 done; R1 started; R2 done; R3 half done.
+**2026-10-13.** R0, R2 done; R1 started; R3 half done; R6 half done; R4 not run.
 
 - **R0.** Previous tip tagged `archive/tracking-first`. Webcam frames
   showing the user (`tests/data/captures`, `docs/evidence`) are removed from
@@ -162,6 +162,16 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   across a stage boundary (`F2 F2`), which undoes itself. Grabbing a window
   with the 3D cube in it a second time brings the process down (Qt 6.8.3,
   Direct3D); only the hidden gallery test grabs at all.
+
+- **R6, first half.** Brought forward ahead of R4: nothing in the app had
+  started the previous pipelines since the direct scan landed, and their
+  untested code was what kept the coverage gate shut. Removed: the
+  tracking pipeline (corner detector, pose from corners, the detect-track
+  loop, pose refiner, face projection, track fusion), the vendored M3T
+  tracker and its glew/glfw dependencies, the offline runner, and the
+  previous scan controller and screen with the two settings that drove
+  them. Still to go: the classical cascade those sat on, the hand detector
+  and onnxruntime, and the old pipeline's documents.
 
 ## Why it does not work today
 

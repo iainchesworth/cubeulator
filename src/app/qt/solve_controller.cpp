@@ -1,18 +1,14 @@
 #include "solve_controller.hpp"
 
-#include "controllers/scan_session.hpp"
-
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
 #include <cube/error.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
-#include <cube/solver/scan_conversion.hpp>
 #include <cube/solver/solver.hpp>
 
 using cube::solver::Cube;
-using cube::solver::cube_from_scan;
 using cube::solver::Face;
 using cube::solver::solve;
 using cube::solver::SteppedSolution;
@@ -85,40 +81,12 @@ SteppedSolution solve_stepped(Cube scrambled) {
 
 }  // namespace
 
-SolveController::SolveController(cube::app::ScanSession& scanSession, QObject* parent)
-    : QObject(parent), scanSession_(scanSession) {
+SolveController::SolveController(QObject* parent) : QObject(parent) {
     // Safe placeholder so topColors()/etc. never read an empty stepped_
     // before the first real scan completes.
     stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
     connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this,
             &SolveController::applySolveResult);
-    connect(&scanSession_, &cube::app::ScanSession::scanCompleted, this,
-            &SolveController::onScanCompleted);
-}
-
-void SolveController::onScanCompleted() {
-    // Free-form scans arrive pre-assembled: ScanSession only emits
-    // scanCompleted once cube::solver::assemble_scanned_faces() has
-    // produced a validated Cube, exposed via assembledCube() - consume
-    // that directly, skipping the holding-convention cube_from_scan()
-    // conversion entirely. The fallback below only runs when no assembled
-    // cube is set (a ScanSession whose progress was populated without the
-    // free-form pipeline), keeping the legacy construction path - and its
-    // rejection handling - intact.
-    if (const auto assembled = scanSession_.assembledCube(); assembled.has_value()) {
-        beginSolve(*assembled);
-        emit solveReady();
-        return;
-    }
-
-    const auto scanned_cube = cube_from_scan(scanSession_.progress());
-    if (!scanned_cube.has_value()) {
-        scanSession_.restartScan();
-        emit scanRejected(QString::fromStdString(std::string(to_string(scanned_cube.error()))));
-        return;
-    }
-    beginSolve(*scanned_cube);
-    emit solveReady();
 }
 
 void SolveController::solveCube(const Cube& cube) {

@@ -48,9 +48,8 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | System libraries (`strmiids`, `dbghelp`, ...) | `CUBEULATOR_PLATFORM_LINK_LIBRARIES` | `src/app/CMakeLists.txt` |
 | Qt libraries a platform file needs | `CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES` | `src/app/CMakeLists.txt` |
 | C-runtime defines (`_CRT_SECURE_NO_WARNINGS`) | `CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS` | `cube_platform`, every test target |
-| The live tracker implementation | `CUBEULATOR_PLATFORM_CONTROLLER_SOURCES` / `_LINK_LIBRARIES` | `cube_app_controllers` |
 | `cube_app` target properties (Android's manifest) | `CUBEULATOR_PLATFORM_APP_PROPERTIES` | `cube_app` |
-| Is this a desktop (M3T tracker, dev tools, CPack) | `CUBEULATOR_PLATFORM_DESKTOP` | `third_party`, `tools`, `src/track_m3t`, packaging |
+| Is this a desktop (dev tools, CPack, installed notices) | `CUBEULATOR_PLATFORM_DESKTOP` | `tools`, packaging, third-party notices |
 | Where an installed Qt lives | `CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS` / `_QT_ARCH_DIRS` | `cmake/FindQt6.cmake` |
 | The name in the version block | `CUBEULATOR_PLATFORM_DISPLAY_NAME` | `src/lib` (`build_target`) |
 | Default Qt plugin for the test binaries | `CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM` | `tests/` |
@@ -98,7 +97,6 @@ this?"* The cases already in the tree:
 | `#ifdef _WIN32` minidump filter in `main.cpp` | `interfaces/crash_handler.hpp`; `windows/crash_handler_windows.cpp` installs it, `posix/crash_handler_posix.cpp` has nothing to install |
 | `#if defined(_WIN32)` COM guard in the capture loop | `platform/detail/capture_thread_scope.hpp`; one definition per platform |
 | `#ifdef _WIN32` / `__APPLE__` / `__linux__` and compiler/arch macros building the version line | CMake works the line out (`cube_describe_build_target`) and stamps it into `version.hpp` |
-| `#ifdef CUBE_HAVE_M3T` around the live tracker in `scan_session.cpp` | `controllers/live_track.hpp`; `live_track_m3t.cpp` on the desktops, `live_track_none.cpp` on phones, chosen in the fragment |
 | `Qt.platform.os` ladders in QML | `interfaces/platform_info.hpp`, exposed to QML as the `PlatformFacts` singleton |
 | `#ifndef Q_OS_WIN` choosing the test display | a value the fragment supplies, generated into `cube_test_platform_facts.hpp` (`tests/platform_facts.hpp.in`) |
 | `#if defined(Q_OS_LINUX)` "needs a display" check in the system tests | the same header: which session variables the platform uses, and the advice when none is set |
