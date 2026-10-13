@@ -91,22 +91,38 @@ const std::vector<PropertySpec>& property_specs() {
     // exposure, and the 0.25=manual / 0.75=auto convention that OpenCV's
     // DSHOW backend commonly (but not universally) exposes for auto flags.
     static const std::vector<PropertySpec> specs = {
-        {cv::CAP_PROP_AUTO_WB, "CAP_PROP_AUTO_WB", {0, 1}},
-        {cv::CAP_PROP_WB_TEMPERATURE,
-         "CAP_PROP_WB_TEMPERATURE",
-         {2000, 2800, 3200, 4000, 5000, 6500, 10000}},
-        {cv::CAP_PROP_AUTO_EXPOSURE, "CAP_PROP_AUTO_EXPOSURE", {0, 0.25, 0.75, 1, 2, 3}},
-        {cv::CAP_PROP_EXPOSURE, "CAP_PROP_EXPOSURE", {-11, -9, -7, -6, -5, -4, -3, -2, -1, 0}},
-        {cv::CAP_PROP_BRIGHTNESS, "CAP_PROP_BRIGHTNESS", {0, 32, 64, 128, 192, 255}},
-        {cv::CAP_PROP_CONTRAST, "CAP_PROP_CONTRAST", {0, 32, 64, 128, 192, 255}},
-        {cv::CAP_PROP_SATURATION, "CAP_PROP_SATURATION", {0, 32, 64, 128, 192, 255}},
-        {cv::CAP_PROP_GAIN, "CAP_PROP_GAIN", {0, 32, 64, 128, 192, 255}},
-        {cv::CAP_PROP_GAMMA, "CAP_PROP_GAMMA", {1, 2, 5, 72, 100, 150, 200, 300}},
-        {cv::CAP_PROP_SHARPNESS, "CAP_PROP_SHARPNESS", {0, 32, 64, 128, 192, 255}},
-        {cv::CAP_PROP_BACKLIGHT, "CAP_PROP_BACKLIGHT", {0, 1, 2, 3}},
-        {cv::CAP_PROP_ZOOM, "CAP_PROP_ZOOM", {100, 150, 200, 300, 500}},
-        {cv::CAP_PROP_FOCUS, "CAP_PROP_FOCUS", {0, 30, 60, 120, 250}},
-        {cv::CAP_PROP_AUTOFOCUS, "CAP_PROP_AUTOFOCUS", {0, 1}},
+        {.id = cv::CAP_PROP_AUTO_WB, .name = "CAP_PROP_AUTO_WB", .candidates = {0, 1}},
+        {.id = cv::CAP_PROP_WB_TEMPERATURE,
+         .name = "CAP_PROP_WB_TEMPERATURE",
+         .candidates = {2000, 2800, 3200, 4000, 5000, 6500, 10000}},
+        {.id = cv::CAP_PROP_AUTO_EXPOSURE,
+         .name = "CAP_PROP_AUTO_EXPOSURE",
+         .candidates = {0, 0.25, 0.75, 1, 2, 3}},
+        {.id = cv::CAP_PROP_EXPOSURE,
+         .name = "CAP_PROP_EXPOSURE",
+         .candidates = {-11, -9, -7, -6, -5, -4, -3, -2, -1, 0}},
+        {.id = cv::CAP_PROP_BRIGHTNESS,
+         .name = "CAP_PROP_BRIGHTNESS",
+         .candidates = {0, 32, 64, 128, 192, 255}},
+        {.id = cv::CAP_PROP_CONTRAST,
+         .name = "CAP_PROP_CONTRAST",
+         .candidates = {0, 32, 64, 128, 192, 255}},
+        {.id = cv::CAP_PROP_SATURATION,
+         .name = "CAP_PROP_SATURATION",
+         .candidates = {0, 32, 64, 128, 192, 255}},
+        {.id = cv::CAP_PROP_GAIN,
+         .name = "CAP_PROP_GAIN",
+         .candidates = {0, 32, 64, 128, 192, 255}},
+        {.id = cv::CAP_PROP_GAMMA,
+         .name = "CAP_PROP_GAMMA",
+         .candidates = {1, 2, 5, 72, 100, 150, 200, 300}},
+        {.id = cv::CAP_PROP_SHARPNESS,
+         .name = "CAP_PROP_SHARPNESS",
+         .candidates = {0, 32, 64, 128, 192, 255}},
+        {.id = cv::CAP_PROP_BACKLIGHT, .name = "CAP_PROP_BACKLIGHT", .candidates = {0, 1, 2, 3}},
+        {.id = cv::CAP_PROP_ZOOM, .name = "CAP_PROP_ZOOM", .candidates = {100, 150, 200, 300, 500}},
+        {.id = cv::CAP_PROP_FOCUS, .name = "CAP_PROP_FOCUS", .candidates = {0, 30, 60, 120, 250}},
+        {.id = cv::CAP_PROP_AUTOFOCUS, .name = "CAP_PROP_AUTOFOCUS", .candidates = {0, 1}},
     };
     return specs;
 }
@@ -183,8 +199,11 @@ Photometry sample(cv::VideoCapture& capture) {
         return Photometry{};
     }
     const auto n = static_cast<double>(counted);
-    return Photometry{total.mean_l / n, total.mean_chroma / n, total.mean_b / n, total.mean_g / n,
-                      total.mean_r / n};
+    return Photometry{.mean_l = total.mean_l / n,
+                      .mean_chroma = total.mean_chroma / n,
+                      .mean_b = total.mean_b / n,
+                      .mean_g = total.mean_g / n,
+                      .mean_r = total.mean_r / n};
 }
 
 std::string fixed2(double value) {

@@ -16,7 +16,8 @@ SteppedSolution SteppedSolution::from(const Cube& start, const Solution& solutio
             stepped.cubes_.push_back(cube);
         }
         const int range_end = static_cast<int>(stepped.moves_.size());
-        stepped.stage_ranges_.push_back(StageRange{step.stage, range_start, range_end});
+        stepped.stage_ranges_.push_back(
+            StageRange{.stage = step.stage, .start_index = range_start, .end_index = range_end});
     }
 
     return stepped;

@@ -244,7 +244,7 @@ ControlResult hold_white_balance(cv::VideoCapture& capture, PhotometrySnapshot& 
         if (!held.has_value()) {
             return std::nullopt;
         }
-        return *held / *automatic - 1.0;
+        return (*held / *automatic) - 1.0;
     };
 
     if (reported >= kMinKelvin && reported <= kMaxKelvin) {
@@ -309,10 +309,18 @@ PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockR
         std::optional<double> override_value;
     };
     const std::array<Step, kPhotometryControls.size()> steps{
-        Step{PhotometryControl::auto_white_balance, request.lock_auto_white_balance, std::nullopt},
-        Step{PhotometryControl::exposure, request.lock_exposure, request.exposure},
-        Step{PhotometryControl::brightness, request.lock_brightness, request.brightness},
-        Step{PhotometryControl::saturation, request.lock_saturation, request.saturation}};
+        Step{.control = PhotometryControl::auto_white_balance,
+             .requested = request.lock_auto_white_balance,
+             .override_value = std::nullopt},
+        Step{.control = PhotometryControl::exposure,
+             .requested = request.lock_exposure,
+             .override_value = request.exposure},
+        Step{.control = PhotometryControl::brightness,
+             .requested = request.lock_brightness,
+             .override_value = request.brightness},
+        Step{.control = PhotometryControl::saturation,
+             .requested = request.lock_saturation,
+             .override_value = request.saturation}};
 
     for (const Step& step : steps) {
         if (!step.requested) {
