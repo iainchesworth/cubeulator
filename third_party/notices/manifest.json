@@ -168,6 +168,17 @@
         "qtsvg/QSvgPlugin",
         "qtsvg/Svg"
       ]
+    },
+    "testOnlyModules": {
+      "_comment": [
+        "Qt modules that only test executables load. A test copies the module's shared library into the runtime",
+        "directory because that directory is shared by the app and the tests (CMAKE_RUNTIME_OUTPUT_DIRECTORY), so the",
+        "deployment scan sees a file that is evidence of the test, not of the app.",
+        "The deployment scan ignores a file that maps to a module listed here. Nothing else changes: if the app itself",
+        "links or imports one of these, the link line and QML imports still add it, with its whole licence closure.",
+        "An id that is not in qt-modules.json (renamed or dropped by a Qt upgrade) is reported as unresolved."
+      ],
+      "qtbase/Test": "QtTest (Qt6Test.dll), copied next to cube_system_tests by tests/system/CMakeLists.txt: it sends the input events. The third-party code bundled in it (qtbase/Test_Attribution_*: Catch2, the FFTW cycle counter, Linux perf and valgrind headers) is reached only through it, so it is a notice duty only if Qt6Test ships."
     }
   },
   "licenseElections": {

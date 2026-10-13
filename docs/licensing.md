@@ -468,7 +468,9 @@ conclusion.
   licences for ports whose manifest says `license: null`.
 - **The test** (`third_party_notices_complete`, label `licensing`) re-runs the
   generator with the deployment directory added - every Qt module, plugin and
-  vcpkg DLL beside the executable - and fails if anything is unresolved, if a
+  vcpkg DLL beside the executable, except the test-only Qt modules named in
+  `qt.testOnlyModules` (QtTest, which `cube_system_tests` copies into the
+  directory it shares with the app) - and fails if anything is unresolved, if a
   component has no licence or text, if a licence text the build needs is not
   in `third_party/notices/licences/`, or if the deployment holds a component
   the embedded notices do not list. It also fails for: a file under `assets/`
@@ -487,6 +489,7 @@ Maintaining it:
 | add a vcpkg dependency | nothing; it is picked up. A port with `license: null` needs a `portLicences` line. |
 | vendor code under `third_party/` or add a file under `assets/` | add a `components` entry (or `ignoredFiles`) in `manifest.json` |
 | add a QML `import` of a new Qt module | add it to `qt.qmlImports`; the module may need to be added to `qt-modules.json` |
+| a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
 | add the bundled fonts | add the files under `assets/fonts/`; the planned manifest entries start emitting; verify their copyright lines against the fonts |
 | add a platform (Linux, macOS) | run the Qt SBOM tool on that platform's Qt install; its components are over-included until then (the JSON says `qtPlatformVerified:false`) |
