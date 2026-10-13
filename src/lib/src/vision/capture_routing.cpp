@@ -124,6 +124,25 @@ CapturedFace relabel_capture(const CapturedFace& captured, cube::model::Face epo
     return out;
 }
 
+void slot_to_outside_view(const cube::model::Face body_face, CapturedFace& slot) noexcept {
+    switch (body_face) {
+        case cube::model::Face::D:
+        case cube::model::Face::R:
+        case cube::model::Face::B:
+            // Mirror-handed solver layouts: one column flip restores a
+            // camera-handed view (the residual roll is the search's job).
+            for (int row = 0; row < 3; ++row) {
+                std::swap(slot.lab[static_cast<std::size_t>(row * 3)],
+                          slot.lab[static_cast<std::size_t>(row * 3 + 2)]);
+            }
+            break;
+        case cube::model::Face::U:
+        case cube::model::Face::F:
+        case cube::model::Face::L:
+            break;
+    }
+}
+
 float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
                                  cube::model::Face epoch_body_face, int lattice_index) {
     const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(epoch_body_face)];

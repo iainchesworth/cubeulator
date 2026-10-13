@@ -59,6 +59,8 @@ private:
     // Called from run() only, between grabs - never with a read() in
     // flight. Consumes whatever request is pending and publishes a report.
     void service_photometry_requests();
+    // Puts a frame in the mailbox, stamped now.
+    void publish(const cv::Mat& frame);
 
     cv::VideoCaptureAPIs backend_;
     Photometry photometry_;

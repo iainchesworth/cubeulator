@@ -60,6 +60,7 @@ target_sources(cube_lib
         src/vision/face_grid_fit.cpp
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
+        src/vision/track_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
@@ -81,6 +82,7 @@ target_sources(cube_lib
         src/vision/corner_detector.cpp
         src/vision/pose_from_corners.cpp
         src/vision/camera_intrinsics.cpp
+        src/vision/direct_scan.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 

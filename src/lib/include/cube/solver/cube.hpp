@@ -26,6 +26,11 @@ enum class Color : std::uint8_t { White, Yellow, Green, Blue, Orange, Red };
 // solved. Cross-solving deliberately targets D (White) so the beginner
 // method's first two stages build on the hidden bottom face, leaving U
 // (Yellow) for the last-layer stages where the arrow overlay matters most.
+// L/R follow from the standard Western (BOY) scheme of every physical cube:
+// white-up green-front puts red on the RIGHT, so our yellow-up green-front
+// frame (that orientation rotated 180 degrees about the front-back axis)
+// puts red on the LEFT and orange on the right. Getting this handedness
+// wrong makes every correctly-captured real cube unsolvable.
 [[nodiscard]] constexpr Color canonical_color(Face face) noexcept {
     switch (face) {
         case Face::U:
@@ -33,9 +38,9 @@ enum class Color : std::uint8_t { White, Yellow, Green, Blue, Orange, Red };
         case Face::D:
             return Color::White;
         case Face::L:
-            return Color::Orange;
-        case Face::R:
             return Color::Red;
+        case Face::R:
+            return Color::Orange;
         case Face::F:
             return Color::Green;
         case Face::B:

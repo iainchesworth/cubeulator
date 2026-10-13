@@ -1,15 +1,15 @@
 #include "controllers/frame_image_provider.hpp"
 
-#include "controllers/scan_session.hpp"
+#include <utility>
 
 namespace cube::app {
 
-FrameImageProvider::FrameImageProvider(ScanSession& session)
-    : QQuickImageProvider(QQuickImageProvider::Image), session_(session) {}
+FrameImageProvider::FrameImageProvider(std::function<cv::Mat()> latest_frame)
+    : QQuickImageProvider(QQuickImageProvider::Image), latest_frame_(std::move(latest_frame)) {}
 
 QImage FrameImageProvider::requestImage(const QString& /*id*/, QSize* size,
                                          const QSize& /*requestedSize*/) {
-    const cv::Mat frame = session_.latestFrame();
+    const cv::Mat frame = latest_frame_();
     if (frame.empty()) {
         if (size) {
             *size = QSize(0, 0);

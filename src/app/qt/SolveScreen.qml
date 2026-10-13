@@ -51,7 +51,8 @@ Rectangle {
             property var copy: null
             readonly property var range: SolveController.stageRanges[idx]
             readonly property bool isCurrent: SolveController.currentStageIndex === idx
-            readonly property bool isDone: range && SolveController.moveIndex >= range.endIndex
+            // No range yet while the solve is still running.
+            readonly property bool isDone: range !== undefined && SolveController.moveIndex >= range.endIndex
             width: ListView.view ? ListView.view.width : 320
             height: isCurrent ? (detailCol.implicitHeight + Theme.space3 * 2) : 56
             color: isCurrent ? Theme.accent100 : "transparent"
@@ -196,7 +197,9 @@ Rectangle {
         Row {
             width: parent.width
             padding: Theme.space3
-            Text { text: "Solving — beginner method"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.inkMuted(0.6); width: parent.width - 160 }
+            // Every move is named for a side as held this way; without it the
+            // moves mean nothing.
+            Text { text: "Hold yellow on top, green facing you"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink; width: parent.width - 160 }
             Text { text: AppState.elapsedLabel() + " · " + SolveController.moveIndex + "/" + SolveController.totalMoves; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
         }
         Rectangle { width: parent.width; height: 2; color: Theme.divider }

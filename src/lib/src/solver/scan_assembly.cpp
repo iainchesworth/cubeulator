@@ -41,9 +41,9 @@ constexpr Face face_for_center_color(Color color) noexcept {
             return Face::U;
         case Color::White:
             return Face::D;
-        case Color::Orange:
-            return Face::L;
         case Color::Red:
+            return Face::L;
+        case Color::Orange:
             return Face::R;
         case Color::Green:
             return Face::F;
@@ -108,6 +108,22 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         face_assigned[face_index] = true;
         base[face_index] = converted;
         input_index_of_face[face_index] = input_index;
+
+        // Handedness correction. An outside-view capture relates to the
+        // solver's cross-unfolded layout by a pure rotation only where
+        // that layout is camera-handed (U, F, L); on D, R, B it is
+        // MIRROR-handed - the same fact the guided path's per-face
+        // tables encode (scan_conversion.cpp) - and no quarter-rotation
+        // bridges a reflection. Those inputs take one fixed flip here,
+        // centre-pinned because which face an input is only becomes
+        // known now; the rotation search below absorbs whatever
+        // in-plane rotation remains, so WHICH reflection is immaterial.
+        if (face == Face::D || face == Face::R || face == Face::B) {
+            for (int row = 0; row < 3; ++row) {
+                std::swap(base[face_index][static_cast<std::size_t>(row * 3)],
+                          base[face_index][static_cast<std::size_t>(row * 3 + 2)]);
+            }
+        }
     }
 
     // Step 2: precompute the four rotations of every face once, rather
@@ -248,6 +264,390 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
 Result<Cube> assemble_scanned_faces(const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
     return assemble_scanned_faces_with_mapping(faces).transform(
         [](const AssembledScan& assembled) { return assembled.cube; });
+}
+
+RotationHint rotation_hint_for_tracked_scan(const std::array<std::array<model::Facelet, 9>, 6>& faces,
+                                            const std::array<int, 6>& model_face_ids) noexcept {
+    // Solver-frame outward axis per Face - the same embedding cube.cpp's
+    // face_from_normal/position_of derivation fixes (X runs L->R, Y D->U,
+    // Z B->F).
+    constexpr auto axis_of_face = [](Face face) -> std::array<int, 3> {
+        switch (face) {
+            case Face::R:
+                return {1, 0, 0};
+            case Face::L:
+                return {-1, 0, 0};
+            case Face::U:
+                return {0, 1, 0};
+            case Face::D:
+                return {0, -1, 0};
+            case Face::F:
+                return {0, 0, 1};
+            case Face::B:
+                return {0, 0, -1};
+        }
+        return {0, 0, 0};
+    };
+
+    // Pin every input to its cube position by centre colour, exactly as
+    // the assembly search itself will - a hint keyed any other way could
+    // disagree with the search about which face it is advising.
+    std::array<Face, 6> face_of_input{};
+    std::array<bool, 6> face_taken{};
+    std::array<bool, 6> id_taken{};
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const int id = model_face_ids[i];
+        if (id < 0 || id >= 6 || id_taken[static_cast<std::size_t>(id)]) {
+            return {};
+        }
+        id_taken[static_cast<std::size_t>(id)] = true;
+        const auto color = to_solver_color(faces[i][model::center_facelet_index].color);
+        if (!color) {
+            return {};
+        }
+        const Face face = face_for_center_color(*color);
+        if (face_taken[static_cast<std::size_t>(face)]) {
+            return {};
+        }
+        face_taken[static_cast<std::size_t>(face)] = true;
+        face_of_input[i] = face;
+    }
+
+    // The body->solver rotation, column a = the image of body axis +e_a.
+    // Each centre correspondence contributes one signed column; opposite
+    // body faces must agree on it, and the columns must compose to a
+    // proper rotation (det +1) - det 0 means two body axes claimed one
+    // solver axis, det -1 a reflection, both misread centres, no advice.
+    std::array<std::array<int, 3>, 3> column{};
+    std::array<bool, 3> column_set{};
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const int id = model_face_ids[i];
+        const int body_axis = id / 2;
+        const int sign = (id % 2 == 0) ? 1 : -1;
+        const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
+        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1], sign * solver_axis[2]};
+        if (!column_set[static_cast<std::size_t>(body_axis)]) {
+            column[static_cast<std::size_t>(body_axis)] = image;
+            column_set[static_cast<std::size_t>(body_axis)] = true;
+        } else if (column[static_cast<std::size_t>(body_axis)] != image) {
+            return {};
+        }
+    }
+    const auto& cx = column[0];
+    const auto& cy = column[1];
+    const auto& cz = column[2];
+    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+                    cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
+    if (det != 1) {
+        return {};
+    }
+
+    RotationHint hint;
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const int id = model_face_ids[i];
+        const int body_axis = id / 2;
+        const int sign = (id % 2 == 0) ? 1 : -1;
+        // Outside-view sampling axes, matching face_projection.cpp: the
+        // cyclic pair on negative body faces, swapped on positive ones.
+        const int axis_u = (sign > 0) ? (body_axis + 2) % 3 : (body_axis + 1) % 3;
+        const int axis_v = (sign > 0) ? (body_axis + 1) % 3 : (body_axis + 2) % 3;
+        const Face face = face_of_input[i];
+
+        // Where each captured cell's sticker lands on the solver face:
+        // body-frame cell centre -> solver frame -> the (row, col) formulas
+        // documented in cube.hpp. assembled[j] = captured[source_of[j]].
+        std::array<int, 9> source_of{};
+        source_of.fill(-1);
+        for (int row = 0; row < 3; ++row) {
+            for (int col = 0; col < 3; ++col) {
+                std::array<int, 3> p{};
+                p[static_cast<std::size_t>(body_axis)] = sign;
+                p[static_cast<std::size_t>(axis_u)] = col - 1;
+                p[static_cast<std::size_t>(axis_v)] = row - 1;
+                std::array<int, 3> q{};
+                for (int k = 0; k < 3; ++k) {
+                    q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
+                                                     column[1][static_cast<std::size_t>(k)] * p[1] +
+                                                     column[2][static_cast<std::size_t>(k)] * p[2];
+                }
+                int assembled_index = -1;
+                switch (face) {
+                    case Face::U:
+                    case Face::D:
+                        assembled_index = (q[2] + 1) * 3 + (q[0] + 1);
+                        break;
+                    case Face::R:
+                    case Face::L:
+                        assembled_index = (1 - q[1]) * 3 + (q[2] + 1);
+                        break;
+                    case Face::F:
+                    case Face::B:
+                        assembled_index = (1 - q[1]) * 3 + (q[0] + 1);
+                        break;
+                }
+                if (assembled_index < 0 || assembled_index > 8) {
+                    return {};
+                }
+                source_of[static_cast<std::size_t>(assembled_index)] = row * 3 + col;
+            }
+        }
+
+        // The digit is the k whose candidate array matches the geometry.
+        // The search rotates the CORRECTED capture (assembly flips D, R,
+        // B inputs before building rotations - see the correction in
+        // assemble_scanned_faces_with_mapping), so the flip composes into
+        // the comparison here: candidate[j] = captured[flip[C_k[j]]] on
+        // corrected faces, captured[C_k[j]] otherwise. A proper rotation
+        // always yields exactly one k; anything else is a convention
+        // breach upstream, so the whole hint degrades.
+        constexpr std::array<int, 9> kFlipColumns = {2, 1, 0, 5, 4, 3, 8, 7, 6};
+        const bool flip_corrected = face == Face::D || face == Face::R || face == Face::B;
+        std::array<int, 9> gather = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+        int digit = RotationHint::kNoHint;
+        for (int k = 0; k < 4; ++k) {
+            bool matches = true;
+            for (std::size_t j = 0; j < gather.size(); ++j) {
+                const int captured_index =
+                    flip_corrected ? kFlipColumns[static_cast<std::size_t>(gather[j])] : gather[j];
+                if (captured_index != source_of[j]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                digit = k;
+                break;
+            }
+            std::array<int, 9> next{};
+            for (std::size_t j = 0; j < next.size(); ++j) {
+                next[j] = gather[kClockwiseSource[j]];
+            }
+            gather = next;
+        }
+        if (digit == RotationHint::kNoHint) {
+            return {};
+        }
+        hint.quarter_turns[i] = digit;
+    }
+    return hint;
+}
+
+RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Facelet, 9>, 6>& faces,
+                                          const std::array<model::Face, 6>& body_faces) noexcept {
+    // Solver-frame outward axis per Face - the same embedding the tracked
+    // producer above pins against (X runs L->R, Y D->U, Z B->F).
+    constexpr auto axis_of_face = [](Face face) -> std::array<int, 3> {
+        switch (face) {
+            case Face::R:
+                return {1, 0, 0};
+            case Face::L:
+                return {-1, 0, 0};
+            case Face::U:
+                return {0, 1, 0};
+            case Face::D:
+                return {0, -1, 0};
+            case Face::F:
+                return {0, 0, 1};
+            case Face::B:
+                return {0, 0, -1};
+        }
+        return {0, 0, 0};
+    };
+    // A body label's outward axis, by NAME: the store's slots are the
+    // solver layout of their body face, so a model::Face name means in the
+    // body frame exactly what the solver Face name means in the solver
+    // frame. (model::Face and Face order their enumerators differently -
+    // which is why this goes through names, never through indices.)
+    constexpr auto body_axis_of = [](model::Face face) -> int {
+        switch (face) {
+            case model::Face::R:
+            case model::Face::L:
+                return 0;
+            case model::Face::U:
+            case model::Face::D:
+                return 1;
+            case model::Face::F:
+            case model::Face::B:
+                return 2;
+        }
+        return 0;
+    };
+    constexpr auto body_sign_of = [](model::Face face) -> int {
+        switch (face) {
+            case model::Face::U:
+            case model::Face::R:
+            case model::Face::F:
+                return 1;
+            case model::Face::D:
+            case model::Face::L:
+            case model::Face::B:
+                return -1;
+        }
+        return 1;
+    };
+
+    // Pin every input to its cube position by centre colour, exactly as
+    // the assembly search itself will - a hint keyed any other way could
+    // disagree with the search about which face it is advising.
+    std::array<Face, 6> face_of_input{};
+    std::array<bool, 6> face_taken{};
+    std::array<bool, 6> body_taken{};
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const auto body_index = static_cast<std::size_t>(body_faces[i]);
+        if (body_index >= body_taken.size() || body_taken[body_index]) {
+            return {};
+        }
+        body_taken[body_index] = true;
+        const auto color = to_solver_color(faces[i][model::center_facelet_index].color);
+        if (!color) {
+            return {};
+        }
+        const Face face = face_for_center_color(*color);
+        if (face_taken[static_cast<std::size_t>(face)]) {
+            return {};
+        }
+        face_taken[static_cast<std::size_t>(face)] = true;
+        face_of_input[i] = face;
+    }
+
+    // The body->solver rotation, column a = the image of body axis +e_a.
+    // Each centre correspondence contributes one signed column; opposite
+    // body faces must agree on it, and the columns must compose to a
+    // proper rotation (det +1) - det 0 means two body axes claimed one
+    // solver axis, det -1 a reflection, both misread centres, no advice.
+    std::array<std::array<int, 3>, 3> column{};
+    std::array<bool, 3> column_set{};
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const int body_axis = body_axis_of(body_faces[i]);
+        const int sign = body_sign_of(body_faces[i]);
+        const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
+        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1], sign * solver_axis[2]};
+        if (!column_set[static_cast<std::size_t>(body_axis)]) {
+            column[static_cast<std::size_t>(body_axis)] = image;
+            column_set[static_cast<std::size_t>(body_axis)] = true;
+        } else if (column[static_cast<std::size_t>(body_axis)] != image) {
+            return {};
+        }
+    }
+    const auto& cx = column[0];
+    const auto& cy = column[1];
+    const auto& cz = column[2];
+    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+                    cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
+    if (det != 1) {
+        return {};
+    }
+
+    constexpr std::array<int, 9> kFlipColumns = {2, 1, 0, 5, 4, 3, 8, 7, 6};
+    RotationHint hint;
+    for (std::size_t i = 0; i < faces.size(); ++i) {
+        const model::Face body = body_faces[i];
+        const Face face = face_of_input[i];
+        // Two independent column flips meet in this function, on two
+        // different keys. The SEAM flip (slot_to_outside_view) was applied
+        // on the BODY label before these inputs existed - undone per cell
+        // below so the cell indexes the slot's solver layout again - while
+        // the search's own correction keys on the PINNED solver face and
+        // composes into the digit comparison, exactly as in the tracked
+        // producer.
+        const bool seam_flipped =
+            body == model::Face::D || body == model::Face::R || body == model::Face::B;
+
+        // Where each input cell's sticker lands on the solver face:
+        // body-frame sticker position (position_of's embedding, applied to
+        // the body NAME) -> solver frame -> the (row, col) formulas
+        // documented in cube.hpp. assembled[j] = input[source_of[j]].
+        std::array<int, 9> source_of{};
+        source_of.fill(-1);
+        for (int cell = 0; cell < 9; ++cell) {
+            const int body_cell = seam_flipped ? kFlipColumns[static_cast<std::size_t>(cell)] : cell;
+            const int row = body_cell / 3;
+            const int col = body_cell % 3;
+            std::array<int, 3> p{};
+            switch (body) {
+                case model::Face::U:
+                    p = {col - 1, 1, row - 1};
+                    break;
+                case model::Face::D:
+                    p = {col - 1, -1, row - 1};
+                    break;
+                case model::Face::R:
+                    p = {1, 1 - row, col - 1};
+                    break;
+                case model::Face::L:
+                    p = {-1, 1 - row, col - 1};
+                    break;
+                case model::Face::F:
+                    p = {col - 1, 1 - row, 1};
+                    break;
+                case model::Face::B:
+                    p = {col - 1, 1 - row, -1};
+                    break;
+            }
+            std::array<int, 3> q{};
+            for (int k = 0; k < 3; ++k) {
+                q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
+                                                 column[1][static_cast<std::size_t>(k)] * p[1] +
+                                                 column[2][static_cast<std::size_t>(k)] * p[2];
+            }
+            int assembled_index = -1;
+            switch (face) {
+                case Face::U:
+                case Face::D:
+                    assembled_index = (q[2] + 1) * 3 + (q[0] + 1);
+                    break;
+                case Face::R:
+                case Face::L:
+                    assembled_index = (1 - q[1]) * 3 + (q[2] + 1);
+                    break;
+                case Face::F:
+                case Face::B:
+                    assembled_index = (1 - q[1]) * 3 + (q[0] + 1);
+                    break;
+            }
+            if (assembled_index < 0 || assembled_index > 8) {
+                return {};
+            }
+            source_of[static_cast<std::size_t>(assembled_index)] = cell;
+        }
+
+        // The digit is the k whose candidate array matches the geometry.
+        // The search rotates the CORRECTED capture (assembly flips D, R,
+        // B inputs before building rotations - see the correction in
+        // assemble_scanned_faces_with_mapping), so the flip composes into
+        // the comparison here: candidate[j] = input[flip[C_k[j]]] on
+        // corrected faces, input[C_k[j]] otherwise. A proper rotation
+        // always yields exactly one k; anything else is a convention
+        // breach upstream, so the whole hint degrades.
+        const bool flip_corrected = face == Face::D || face == Face::R || face == Face::B;
+        std::array<int, 9> gather = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+        int digit = RotationHint::kNoHint;
+        for (int k = 0; k < 4; ++k) {
+            bool matches = true;
+            for (std::size_t j = 0; j < gather.size(); ++j) {
+                const int input_index =
+                    flip_corrected ? kFlipColumns[static_cast<std::size_t>(gather[j])] : gather[j];
+                if (input_index != source_of[j]) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                digit = k;
+                break;
+            }
+            std::array<int, 9> next{};
+            for (std::size_t j = 0; j < next.size(); ++j) {
+                next[j] = gather[kClockwiseSource[j]];
+            }
+            gather = next;
+        }
+        if (digit == RotationHint::kNoHint) {
+            return {};
+        }
+        hint.quarter_turns[i] = digit;
+    }
+    return hint;
 }
 
 }  // namespace cube::solver

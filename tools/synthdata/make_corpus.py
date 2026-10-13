@@ -2,7 +2,7 @@
 clips with EXACT auto-generated ground truth, so Phases 1-2 have a fully
 labelled development corpus before real footage exists.
 
-One command emits five clip classes, each an on-disk recording per
+One command emits seven clip classes, each an on-disk recording per
 src/lib/include/cube/vision/frame_recording.hpp (rec_%06d.jpg JPEG q90 at
 640x480 + index.csv) with manifest.json and a groundtruth/ sidecar per
 docs/ground-truth-format.md:
@@ -12,6 +12,10 @@ docs/ground-truth-format.md:
     occlusion     300 frames, sweeping finger occluders + 3 full gaps
     absent        120 frames, background only
     exit-reentry  300 frames, 4 full frame exits and returns
+    sweep         430 frames, six steady face holds, fixed 32-frame turns
+                  (stress case: turn rate exceeds the tracker read gate)
+    sweep_gentle  same six holds, each transition sized from its actual
+                  angle so the rotation rate stays under 2.2 deg/frame
 
 Labels are analytic (projected from the known pose), hence written with
 "interpolated": false - they are exact, better than hand-clicked.
@@ -428,6 +432,25 @@ def quat_slerp(q0: np.ndarray, q1: np.ndarray, t: float) -> np.ndarray:
     return (math.sin((1 - t) * th) * q0 + math.sin(t * th) * q1) / math.sin(th)
 
 
+def quat_from_R(R: np.ndarray) -> np.ndarray:
+    """Shepperd's method, (x, y, z, w) matching the helpers above."""
+    t = float(np.trace(R))
+    if t > 0:
+        s = math.sqrt(t + 1.0) * 2
+        q = np.array([(R[2, 1] - R[1, 2]) / s, (R[0, 2] - R[2, 0]) / s,
+                      (R[1, 0] - R[0, 1]) / s, 0.25 * s])
+    else:
+        i = int(np.argmax(np.diag(R)))
+        j, k = (i + 1) % 3, (i + 2) % 3
+        s = math.sqrt(1.0 + R[i, i] - R[j, j] - R[k, k]) * 2
+        q = np.zeros(4)
+        q[i] = 0.25 * s
+        q[j] = (R[j, i] + R[i, j]) / s
+        q[k] = (R[k, i] + R[i, k]) / s
+        q[3] = (R[k, j] - R[j, k]) / s
+    return q / np.linalg.norm(q)
+
+
 def R_from_quat(q: np.ndarray) -> np.ndarray:
     x, y, z, w = q / np.linalg.norm(q)
     return np.array(
@@ -605,6 +628,118 @@ def build_freerot(rng: np.random.Generator, frames: int = 400, seg: int = 80) ->
         py = 240 + 18 * math.cos(2 * math.pi * i / 211)
         z = 11.5 + 0.4 * math.sin(i * 0.02)
         specs.append({"R": R_from_quat(q), "tvec": tvec_for(px, py, z), "occluders": []})
+    return specs
+
+
+def build_sweep(frames_hold: int = 45, frames_turn: int = 32) -> list[dict]:
+    """Six-face sweep: each face presented near-face-on and STEADY, with
+    smooth quarter-turn transitions between (~1.6 s per quarter turn at
+    the corpus frame rate - the deliberate presentation the P0.3 script
+    prescribes, not a flick) - the six-face-coverage clip
+    class the Phase 6 exact-state gate rides on. A mild fixed tilt keeps
+    two or three faces visible throughout, so the tracker never sits in
+    the exact face-on degeneracy and every face's centre gets observed."""
+    tilt = rx(math.radians(-18)) @ ry(math.radians(22))
+    face_targets = [       # model face brought toward the camera, in sweep order
+        np.eye(3),         # -z
+        ry(math.radians(90)),   # +x
+        ry(math.radians(180)),  # +z
+        ry(math.radians(270)),  # -x
+        rx(math.radians(-90)),  # +y
+        rx(math.radians(90)),   # -y
+    ]
+    quats = [quat_from_R(tilt @ g) for g in face_targets]
+    z = 10.4
+    specs: list[dict] = []
+    for k, q in enumerate(quats):
+        Rt = R_from_quat(q)
+        for _ in range(frames_hold):
+            i = len(specs)
+            a = math.radians(2.0) * math.sin(i * 0.11)
+            b = math.radians(2.5) * math.sin(i * 0.077 + 0.8)
+            dx = 0.25 * math.sin(i * 0.31)
+            dy = 0.25 * math.cos(i * 0.27)
+            specs.append({"R": rx(a) @ ry(b) @ Rt,
+                          "tvec": tvec_for(320 + dx, 246 + dy, z),
+                          "occluders": [], "steady": True})
+        if k + 1 < len(quats):
+            for i in range(frames_turn):
+                qq = quat_slerp(q, quats[k + 1], (i + 1) / (frames_turn + 1))
+                specs.append({"R": R_from_quat(qq), "tvec": tvec_for(320, 246, z),
+                              "occluders": []})
+    return specs
+
+
+#: sweep_gentle per-frame rotation-rate ceiling, deg/frame - a deliberate
+#: margin under the tracker read-gate spec (kGaugeEvalMaxTurnDeg = 2.5
+#: deg/frame in detect_track_loop.hpp).
+GENTLE_MAX_TURN_RATE_DEG = 2.2
+
+
+def build_sweep_gentle(frames_hold: int = 45,
+                       max_rate_deg: float = GENTLE_MAX_TURN_RATE_DEG) -> list[dict]:
+    """Gentle six-face sweep: the same six 45-frame steady holds as
+    build_sweep (same tilt, hold order, wobble and jitter formulas), but
+    every transition is sized from its ACTUAL rotation angle so the
+    per-frame rotation rate stays under max_rate_deg - a margin below the
+    tracker's 2.5 deg/frame read-gate spec, which build_sweep's fixed
+    32-frame transitions deliberately exceed (the stress case: its final
+    180-deg flip runs ~5.6 deg/frame and slips the tracker). The
+    transitions differ in angle (90, 90, 90, 120, 180 deg between the
+    tilted hold targets), so each gets its own frame count,
+    ceil(angle / max_rate_deg): >= 41 frames for a 90-deg quarter turn
+    and >= 82 for the final flip. Each transition slerps between the
+    actual wobbled boundary poses, so the hold-edge steps obey the same
+    bound as the interior slerp steps."""
+    tilt = rx(math.radians(-18)) @ ry(math.radians(22))
+    face_targets = [       # model face brought toward the camera, in sweep order
+        np.eye(3),         # -z
+        ry(math.radians(90)),   # +x
+        ry(math.radians(180)),  # +z
+        ry(math.radians(270)),  # -x
+        rx(math.radians(-90)),  # +y
+        rx(math.radians(90)),   # -y
+    ]
+    hold_Rs = [R_from_quat(quat_from_R(tilt @ g)) for g in face_targets]
+    z = 10.4
+
+    def hold_spec(Rt: np.ndarray, i: int) -> dict:
+        # Identical hold-frame formula to build_sweep (i = global index).
+        a = math.radians(2.0) * math.sin(i * 0.11)
+        b = math.radians(2.5) * math.sin(i * 0.077 + 0.8)
+        dx = 0.25 * math.sin(i * 0.31)
+        dy = 0.25 * math.cos(i * 0.27)
+        return {"R": rx(a) @ ry(b) @ Rt,
+                "tvec": tvec_for(320 + dx, 246 + dy, z),
+                "occluders": [], "steady": True}
+
+    specs: list[dict] = []
+    for k, Rt in enumerate(hold_Rs):
+        if k > 0:
+            # Slerp from the actual last wobbled pose of the previous hold
+            # to the actual first wobbled pose of this one. The frame count
+            # depends on the endpoint angle, and the endpoint wobble depends
+            # on the frame count (global-index wobble), so iterate to a
+            # fixed point - converges in a couple of steps because the
+            # wobble drifts well under a degree per frame of index shift.
+            q_from = quat_from_R(specs[-1]["R"])
+            base = len(specs)
+            frames_turn = 1
+            for _ in range(64):
+                q_to = quat_from_R(hold_spec(Rt, base + frames_turn)["R"])
+                need = max(1, math.ceil(quat_angle_deg(q_from, q_to) / max_rate_deg))
+                if need <= frames_turn:
+                    break
+                frames_turn = need
+            # frames_turn >= angle / max_rate_deg, and the slerp below takes
+            # frames_turn + 1 equal steps, so every step is < max_rate_deg.
+            assert quat_angle_deg(q_from, q_to) / (frames_turn + 1) < max_rate_deg
+            for i in range(frames_turn):
+                qq = quat_slerp(q_from, q_to, (i + 1) / (frames_turn + 1))
+                specs.append({"R": R_from_quat(qq), "tvec": tvec_for(320, 246, z),
+                              "occluders": []})
+        for _ in range(frames_hold):
+            specs.append(hold_spec(Rt, len(specs)))
     return specs
 
 
@@ -839,7 +974,8 @@ def write_preview(out_root: Path, clip: str, p: int) -> Path:
 # Main
 # =============================================================================
 
-ALL_CLASSES = ["steady", "freerot", "occlusion", "absent", "exit-reentry"]
+ALL_CLASSES = ["steady", "freerot", "occlusion", "absent", "exit-reentry", "sweep",
+               "sweep_gentle"]
 
 
 def main(argv=None) -> None:
@@ -882,6 +1018,15 @@ def main(argv=None) -> None:
         elif cls == "absent":
             specs = build_absent()
             motion = f"synthetic: background only, no cube; scramble: {scramble_txt}"
+        elif cls == "sweep":
+            specs = build_sweep()
+            motion = ("synthetic: six-face sweep, steady holds with quarter-turn "
+                      f"transitions; scramble: {scramble_txt}")
+        elif cls == "sweep_gentle":
+            specs = build_sweep_gentle()
+            motion = ("synthetic: six-face sweep, steady holds with rate-bounded "
+                      f"transitions (< {GENTLE_MAX_TURN_RATE_DEG} deg/frame); "
+                      f"scramble: {scramble_txt}")
         else:
             specs = build_exit_reentry()
             motion = f"synthetic: 4 full frame exits and re-entries; scramble: {scramble_txt}"
@@ -906,6 +1051,28 @@ def main(argv=None) -> None:
         elif cls == "absent":
             assert all(t == frozenset({"absent"}) for t in tags)
             assert info["reentries"] == []
+        elif cls == "sweep":
+            assert info["reentries"] == []
+            assert all("in_frame" in t for t in tags)
+            steady_frames = sum(1 for t in tags if "steady" in t)
+            assert steady_frames == 6 * 45, steady_frames
+        elif cls == "sweep_gentle":
+            assert info["reentries"] == []
+            assert all("in_frame" in t for t in tags)
+            # Six 45-frame steady windows (the same holds as sweep), with
+            # rate-bounded turning runs between them.
+            steady_runs = [s for s in info["segments"] if "steady" in s["tags"]]
+            assert len(steady_runs) == 6 and all(
+                s["end"] - s["start"] + 1 == 45 for s in steady_runs), steady_runs
+            # The load-bearing bound: measured per-frame rotation rate over
+            # the WHOLE clip (hold wobble, boundary steps and slerp interiors
+            # alike) stays under the 2.2 deg/frame margin below the tracker
+            # read-gate spec (kGaugeEvalMaxTurnDeg = 2.5).
+            max_rate = max(
+                quat_angle_deg(quat_from_R(specs[i]["R"]),
+                               quat_from_R(specs[i + 1]["R"]))
+                for i in range(len(specs) - 1))
+            assert max_rate < GENTLE_MAX_TURN_RATE_DEG, max_rate
         else:  # exit-reentry
             assert len(info["reentries"]) == 4, info["reentries"]
             assert len(absent_runs) == 4 and all(

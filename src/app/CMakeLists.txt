@@ -115,6 +115,8 @@ if(CUBEULATOR_BUILD_APP)
     add_library(cube_app_controllers STATIC
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
+        qt/controllers/direct_scan.hpp
+        qt/controllers/direct_scan.cpp
         qt/controllers/scan_session.hpp
         qt/controllers/scan_session.cpp
         qt/controllers/settings_model.hpp
@@ -136,12 +138,21 @@ if(CUBEULATOR_BUILD_APP)
     # binaries, which cube::vision's own filesystem-path-based tests
     # (tests/integration/hand_presence_integration_test.cpp) still rely on -
     # that's a Qt-free cube_lib API and can't read a Qt resource.
+    #
+    # The corner-detector weights are not distributed with the repository
+    # (assets/models/cube_corner_pose_PROVENANCE.md). A local copy is embedded
+    # when there is one; without it the previous scan pipeline's track mode
+    # finds no model and falls back, and the direct scan never asked for it.
+    set(_cube_app_models
+        "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx")
+    if(EXISTS "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
+        list(APPEND _cube_app_models "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
+    endif()
     qt_add_resources(cube_app_controllers "cube_app_models"
         PREFIX "/models"
         BASE "${PROJECT_SOURCE_DIR}/assets/models"
-        FILES
-            "${PROJECT_SOURCE_DIR}/assets/models/palm_detection_mediapipe_2023feb_int8.onnx"
-            "${PROJECT_SOURCE_DIR}/assets/models/cube_corner_pose.onnx")
+        FILES ${_cube_app_models})
+    unset(_cube_app_models)
 
     # The live M3T tracker (Phase 2) is desktop-only, like the vendored
     # library itself; the scan session's env-gated live-lock hook compiles
@@ -197,6 +208,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
             qt/ScanScreen.qml
+            qt/DirectScanScreen.qml
             qt/SolveScreen.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml

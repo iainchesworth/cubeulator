@@ -23,9 +23,76 @@ using cube::model::FacetColor;
 
 constexpr std::size_t kSampleCount = face_count * facelets_per_face;
 
+// Plain Euclidean Lab. Still the right metric where it remains in use:
+// the seed-separation guard (kMinCentreSeedSeparationLab and the
+// kClosestCentrePairLab ceiling above it were MEASURED in this metric, so
+// changing the guard's metric would silently re-derive both constants)
+// and the cluster-naming permutation (which has the hue-first override
+// for exactly the distortion that defeats it). Per-sample cluster
+// ASSIGNMENT must not use it - see assignment_distance below.
 [[nodiscard]] float lab_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
     const cv::Vec3f diff = a - b;
     return std::sqrt(diff.dot(diff));
+}
+
+// Down-weight on the two shading-carried Lab axes (lightness and chroma)
+// in the per-sample assignment metric; the hue residual keeps full
+// weight. MEASURED on the freerot clip's winning fused sub-epoch, where
+// plain Euclidean assignment produced 6 red/orange misnames: replaying
+// that scan through this clustering gives ZERO misnames for every weight
+// in [0.05, 0.5], so 0.2 sits mid-plateau, away from both cliffs - 1.0
+// is the defect, and 0.0 (pure hue) collapses white, because a
+// near-neutral sample carries no hue evidence at all and L and C are the
+// only axes that separate white from everything washed (measured: 12
+// misnames at 0.0, all white/near-neutral cells). That white constraint
+// is also why this is ONE weight on both axes rather than a lower one on
+// chroma: the same shading argument applies to both, and chroma is half
+// of what keeps white apart.
+constexpr float kShadingAxisWeight = 0.2F;
+
+// Assignment distance between a sample and a cluster mean: the Lab
+// difference split into lightness / chroma / hue components (dC along
+// the mean chroma direction, dH the residual - CIE94's decomposition
+// without its scaling knees), with the shading-carried axes L and C
+// down-weighted and hue at full weight. At weight 1.0 this IS
+// lab_distance.
+//
+// WHY HUE-AWARE AND NOT MERELY L-WEIGHTED. Measured on the freerot fused
+// sub-epoch: shading acts as a near-scalar on the whole Lab vector - the
+// R face's shade-darkened orange cell (33.3, 27.0, 38.8) is its own
+// orange seed (60.1, 45.9, 63.6) scaled by ~0.58 in all three channels.
+// It therefore sits nearer the RED seed under plain Lab (22.8 against
+// 41.2) and STILL nearer in pure (a,b) (19.0 against 31.2): chroma
+// shrinks with the shade, so wL*dL^2 + da^2 + db^2 cannot fix the
+// assignment at ANY wL (measured: 6 misnames at wL 0.5, 0.2, 0.1 and
+// 0.0 alike). What shading does not move is the hue direction - 55.2
+// degrees on that cell against 54.2 on its seed, with red at 31.4 - so
+// the hue residual is the axis that must keep full weight.
+//
+// WHITE/YELLOW REGRESSION RISK, measured both ways. On freerot the
+// white/yellow assignment margin is 10.6 under this metric against 23.7
+// plain - reduced, never close. On the closest white/yellow material the
+// real 11-recording corpus produced (runD's warm-cast whites against
+// live1's washed yellows, seeds 14.9 Lab apart), the worst white
+// sample's margin is -2.0 under plain Lab - nearer the yellow mean,
+// rescued only by the exactly-9 constraint - and +3.5 here: the L
+// dominance that carried the shading was also drowning the hue evidence
+// that actually separates that pair. No second regime needed: the
+// down-weighted L and C terms stay decisive precisely when hue carries
+// no information (near-neutral samples), which is the only case that
+// needs them.
+[[nodiscard]] float assignment_distance(const cv::Vec3f& sample, const cv::Vec3f& mean) {
+    const float dl = sample[0] - mean[0];
+    const float da = sample[1] - mean[1];
+    const float db = sample[2] - mean[2];
+    const float chroma_sample = std::hypot(sample[1], sample[2]);
+    const float chroma_mean = std::hypot(mean[1], mean[2]);
+    const float dc = chroma_sample - chroma_mean;
+    // |dc| <= sqrt(da^2+db^2) by the reverse triangle inequality, so the
+    // hue residual is non-negative up to rounding; the clamp guards the
+    // rounding.
+    const float dh_squared = std::max(0.0F, da * da + db * db - dc * dc);
+    return std::sqrt(kShadingAxisWeight * (dl * dl + dc * dc) + dh_squared);
 }
 
 // Exactly-9-per-cluster assignment of the 54 samples to the 6 cluster
@@ -66,7 +133,7 @@ constexpr std::size_t kSampleCount = face_count * facelets_per_face;
                 if (load[c] >= facelets_per_face) {
                     continue;
                 }
-                const float distance = lab_distance(samples[s], means[c]);
+                const float distance = assignment_distance(samples[s], means[c]);
                 if (distance < nearest) {
                     second = nearest;
                     nearest = distance;
@@ -123,10 +190,10 @@ constexpr std::size_t kSampleCount = face_count * facelets_per_face;
                 }
                 const auto ca = static_cast<std::size_t>(cluster[a]);
                 const auto cb = static_cast<std::size_t>(cluster[b]);
-                const float current =
-                    lab_distance(samples[a], means[ca]) + lab_distance(samples[b], means[cb]);
-                const float swapped =
-                    lab_distance(samples[a], means[cb]) + lab_distance(samples[b], means[ca]);
+                const float current = assignment_distance(samples[a], means[ca]) +
+                                      assignment_distance(samples[b], means[cb]);
+                const float swapped = assignment_distance(samples[a], means[cb]) +
+                                      assignment_distance(samples[b], means[ca]);
                 if (swapped + kMinImprovement < current) {
                     std::swap(cluster[a], cluster[b]);
                     improved = true;
@@ -627,11 +694,18 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     std::array<std::array<Facelet, 9>, 6> resolved{};
     for (std::size_t s = 0; s < kSampleCount; ++s) {
         const auto own = static_cast<std::size_t>(assignment[s]);
-        const float own_distance = lab_distance(samples[s], means[own]);
+        // Priced in the ASSIGNMENT metric, necessarily: the margin reports
+        // how safely the sample sits in the cluster the assignment chose,
+        // and pricing it in a different metric would zero out exactly the
+        // cells the metric exists for - a freerot shade-darkened orange
+        // cell sits 22.8 plain-Lab from the red mean against 41.2 from its
+        // own orange mean, so plain-Lab pricing calls a correct,
+        // hue-unambiguous assignment confidence zero.
+        const float own_distance = assignment_distance(samples[s], means[own]);
         float rival_distance = std::numeric_limits<float>::max();
         for (std::size_t c = 0; c < face_count; ++c) {
             if (c != own) {
-                rival_distance = std::min(rival_distance, lab_distance(samples[s], means[c]));
+                rival_distance = std::min(rival_distance, assignment_distance(samples[s], means[c]));
             }
         }
         // Relative margin between the sample's own cluster and the nearest

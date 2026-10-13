@@ -7,6 +7,7 @@
 #include <cube/vision/edge_observation.hpp>
 #include <cube/vision/face_observation.hpp>
 #include <cube/vision/pose_from_corners.hpp>
+#include <cube/vision/track_fusion.hpp>
 
 #include <opencv2/calib3d.hpp>
 #include <opencv2/core.hpp>
@@ -398,8 +399,13 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("m3t_health_frac", dt.health_frac);
         track_trace.add("m3t_reinits", static_cast<std::int64_t>(dt.reinits));
         result.track_faces = dt.faces;
+        result.gauge_epoch = dt.gauge_epoch;
+        result.stitch_candidates = dt.stitch_candidates;
         track_trace.add("derived_faces", static_cast<std::int64_t>(dt.faces.size()));
         track_trace.add("gauge_epoch", static_cast<std::int64_t>(dt.gauge_epoch));
+        track_trace.add("read_grade", dt.read_grade);
+        track_trace.add("stitched", dt.stitched);
+        track_trace.add("stitch_snap_deg", dt.stitch_snap_deg);
         track_trace.add("gauge_slip", dt.gauge_slip);
         track_trace.add("gauge_pinned_err", dt.gauge_pinned_err);
         track_trace.add("refine_applied", dt.refine_applied);
@@ -427,8 +433,10 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // source (it still runs in stage B as a trace-only instrument until
     // the app's colour path moves in Phases 4-5). Frontality gates
     // capture grade: a grazing face's cells are slivers no sampler
-    // should trust (threshold provisional, swept at the Phase 3 gate).
-    constexpr double kTrackCaptureFrontality = 0.4;
+    // should trust (threshold provisional, swept at the Phase 3 gate;
+    // shared with the app's live track-mode sampler via track_fusion.hpp
+    // since P6.12 - the two must agree byte-for-byte).
+    using fusion::kTrackCaptureFrontality;
     const bool track_geometry = loop_.has_tracker() && dt.track_live && !dt.faces.empty();
     // Rectification homographies per derived face (identity-size with
     // dt.faces), kept for stage E's sub-pixel grid refinement.
@@ -440,7 +448,11 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             face_view.quad = derived.quad;
             face_view.frontal_deg = static_cast<float>(
                 std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
-            face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
+            // P6.2: capture grade = geometric frontality AND the loop's
+            // tracker-quality read grade (quasi-static, health-current).
+            // The legacy accept-streak/gauge-margin compensations have no
+            // tracked-path equivalent - this gate is their replacement.
+            face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality && dt.read_grade;
             if (face_view.capture_grade) {
                 face_view.rectified = rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
             }

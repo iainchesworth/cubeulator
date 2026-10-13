@@ -83,8 +83,8 @@ TEST_CASE("R turn cycles U/F/D/B's right-hand columns in the expected direction"
         REQUIRE(c.at(Face::F, row, 2) == Color::White);   // received from D
     }
     for (int i = 0; i < 9; ++i) {
-        REQUIRE(c.at(Face::R, i) == Color::Red);
-        REQUIRE(c.at(Face::L, i) == Color::Orange);
+        REQUIRE(c.at(Face::R, i) == Color::Orange);
+        REQUIRE(c.at(Face::L, i) == Color::Red);
     }
 }
 
@@ -96,9 +96,9 @@ TEST_CASE("U turn cycles F/R/B/L's top rows in the expected direction", "[cube]"
 
     for (int col = 0; col < 3; ++col) {
         CAPTURE(col);
-        REQUIRE(c.at(Face::F, 0, col) == Color::Red);     // received from R
+        REQUIRE(c.at(Face::F, 0, col) == Color::Orange);  // received from R
         REQUIRE(c.at(Face::L, 0, col) == Color::Green);   // received from F
-        REQUIRE(c.at(Face::B, 0, col) == Color::Orange);  // received from L
+        REQUIRE(c.at(Face::B, 0, col) == Color::Red);     // received from L
         REQUIRE(c.at(Face::R, 0, col) == Color::Blue);    // received from B
     }
     for (int i = 0; i < 9; ++i) {
@@ -116,9 +116,9 @@ TEST_CASE("F turn cycles U/R/D/L's F-adjacent lines in the expected direction", 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
         REQUIRE(c.at(Face::R, i, 2) == Color::Yellow);  // received from U
-        REQUIRE(c.at(Face::D, 2, i) == Color::Red);     // received from R
+        REQUIRE(c.at(Face::D, 2, i) == Color::Orange);  // received from R
         REQUIRE(c.at(Face::L, i, 2) == Color::White);   // received from D
-        REQUIRE(c.at(Face::U, 2, i) == Color::Orange);  // received from L
+        REQUIRE(c.at(Face::U, 2, i) == Color::Red);     // received from L
     }
 }
 
@@ -146,9 +146,9 @@ TEST_CASE("D turn cycles F/R/B/L's bottom rows in the expected direction", "[cub
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
         REQUIRE(c.at(Face::R, 2, i) == Color::Green);   // received from F
-        REQUIRE(c.at(Face::B, 2, i) == Color::Red);     // received from R
+        REQUIRE(c.at(Face::B, 2, i) == Color::Orange);  // received from R
         REQUIRE(c.at(Face::L, 2, i) == Color::Blue);    // received from B
-        REQUIRE(c.at(Face::F, 2, i) == Color::Orange);  // received from L
+        REQUIRE(c.at(Face::F, 2, i) == Color::Red);     // received from L
     }
 }
 
@@ -161,9 +161,9 @@ TEST_CASE("B turn cycles U/L/D/R's B-adjacent lines in the expected direction", 
     for (int i = 0; i < 3; ++i) {
         CAPTURE(i);
         REQUIRE(c.at(Face::L, i, 0) == Color::Yellow);  // received from U
-        REQUIRE(c.at(Face::D, 0, i) == Color::Orange);  // received from L
+        REQUIRE(c.at(Face::D, 0, i) == Color::Red);     // received from L
         REQUIRE(c.at(Face::R, i, 0) == Color::White);   // received from D
-        REQUIRE(c.at(Face::U, 0, i) == Color::Red);     // received from R
+        REQUIRE(c.at(Face::U, 0, i) == Color::Orange);  // received from R
     }
 }
 
@@ -217,8 +217,8 @@ TEST_CASE("locate_edge finds every edge of a solved cube on its own two faces", 
     // full edge list.
     for (auto [a, b, face_a, face_b] : {
              Case{Color::Yellow, Color::Green, Face::U, Face::F},
-             Case{Color::White, Color::Red, Face::D, Face::R},
-             Case{Color::Green, Color::Red, Face::F, Face::R},
+             Case{Color::White, Color::Orange, Face::D, Face::R},
+             Case{Color::Green, Color::Orange, Face::F, Face::R},
          }) {
         const auto loc = solved.locate_edge(a, b);
         REQUIRE(loc.face_a == face_a);
@@ -234,12 +234,12 @@ TEST_CASE("locate_edge finds every edge of a solved cube on its own two faces", 
 }
 
 TEST_CASE("locate_edge tracks a piece through a move", "[cube]") {
-    // Before R: the White/Red edge sits at DR (White on D, Red on R). A
-    // single R turn carries the DR position to FR (see the golden R-turn
-    // test above: R's layer stays on R, and D's content becomes F's), with
-    // White now on F and Red still on R.
+    // Before R: the White/Orange edge sits at DR (White on D, Orange on
+    // R). A single R turn carries the DR position to FR (see the golden
+    // R-turn test above: R's layer stays on R, and D's content becomes
+    // F's), with White now on F and Orange still on R.
     const Cube c = Cube::solved().apply(Move{Face::R, 1});
-    const auto loc = c.locate_edge(Color::White, Color::Red);
+    const auto loc = c.locate_edge(Color::White, Color::Orange);
     REQUIRE(loc.face_a == Face::F);
     REQUIRE(loc.face_b == Face::R);
 }
@@ -269,13 +269,13 @@ TEST_CASE("from_facelets rejects a malformed facelet arrangement", "[cube]") {
 
 TEST_CASE("locate_corner finds a solved cube's corners on all three of their faces", "[cube]") {
     const Cube solved = Cube::solved();
-    const auto loc = solved.locate_corner(Color::Yellow, Color::Green, Color::Red);
+    const auto loc = solved.locate_corner(Color::Yellow, Color::Green, Color::Orange);
     REQUIRE(loc.face_a == Face::U);
     REQUIRE(loc.face_b == Face::F);
     REQUIRE(loc.face_c == Face::R);
     REQUIRE(solved.at(loc.face_a, loc.index_a) == Color::Yellow);
     REQUIRE(solved.at(loc.face_b, loc.index_b) == Color::Green);
-    REQUIRE(solved.at(loc.face_c, loc.index_c) == Color::Red);
+    REQUIRE(solved.at(loc.face_c, loc.index_c) == Color::Orange);
 }
 
 namespace {
@@ -310,11 +310,11 @@ TEST_CASE("solved and randomly scrambled cubes are solvable", "[cube]") {
 TEST_CASE("a single twisted corner is physically valid but not solvable", "[cube]") {
     // The URF corner sits at (1, 1, 1); its three stickers are U index 8
     // (= (z+1)*3 + (x+1)), R index 2 (= (1-y)*3 + (z+1)) and F index 2
-    // (= (1-y)*3 + (x+1)), holding Yellow/Red/Green on a solved cube.
+    // (= (1-y)*3 + (x+1)), holding Yellow/Orange/Green on a solved cube.
     // 3-cycling the three colours around those fixed positions is exactly
     // a physical twist of that one cubie in place: the colour set stays
-    // {Yellow, Red, Green}, so the colour-count and axis-pair checks still
-    // pass, but the corner twist sum becomes 1 or 2 (mod 3).
+    // {Yellow, Orange, Green}, so the colour-count and axis-pair checks
+    // still pass, but the corner twist sum becomes 1 or 2 (mod 3).
     for (bool clockwise : {false, true}) {
         CAPTURE(clockwise);
         auto facelets = solved_facelets();
@@ -324,9 +324,9 @@ TEST_CASE("a single twisted corner is physically valid but not solvable", "[cube
         if (clockwise) {
             u[8] = Color::Green;
             r[2] = Color::Yellow;
-            f[2] = Color::Red;
+            f[2] = Color::Orange;
         } else {
-            u[8] = Color::Red;
+            u[8] = Color::Orange;
             r[2] = Color::Green;
             f[2] = Color::Yellow;
         }
@@ -355,13 +355,13 @@ TEST_CASE("two swapped corners are not solvable but a single quarter turn is", "
     // Exchanging the URF and ULF corner cubies while preserving their
     // orientations touches only two stickers: the two cubies share Yellow
     // on their U facets and Green on their F facets, so the whole swap
-    // reduces to exchanging the x-axis-facet stickers, R index 2 (Red)
-    // and L index 2 (Orange). That is a single corner transposition (odd
+    // reduces to exchanging the x-axis-facet stickers, R index 2 (Orange)
+    // and L index 2 (Red). That is a single corner transposition (odd
     // permutation) with the edge permutation untouched (even) - unequal
     // parities, unreachable.
     auto facelets = solved_facelets();
-    facelets[static_cast<std::size_t>(Face::R)][2] = Color::Orange;
-    facelets[static_cast<std::size_t>(Face::L)][2] = Color::Red;
+    facelets[static_cast<std::size_t>(Face::R)][2] = Color::Red;
+    facelets[static_cast<std::size_t>(Face::L)][2] = Color::Orange;
 
     const auto result = Cube::from_facelets(facelets);
     REQUIRE(result.has_value());
@@ -388,8 +388,8 @@ TEST_CASE("centres permuted from canonical are not solvable", "[cube]") {
     fill(Face::B, Color::Yellow);
     fill(Face::D, Color::Blue);
     fill(Face::F, Color::White);
-    fill(Face::L, Color::Orange);
-    fill(Face::R, Color::Red);
+    fill(Face::L, Color::Red);
+    fill(Face::R, Color::Orange);
 
     const auto result = Cube::from_facelets(facelets);
     REQUIRE(result.has_value());

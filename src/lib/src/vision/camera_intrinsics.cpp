@@ -3,6 +3,7 @@
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 #include <limits>
@@ -11,16 +12,30 @@
 namespace cube::vision {
 
 CameraIntrinsics CameraIntrinsics::scaled_to(cv::Size size) const {
-    if (calibrated_size.width <= 0 || calibrated_size.height <= 0) {
+    if (calibrated_size.width <= 0 || calibrated_size.height <= 0 || size.width <= 0 || size.height <= 0) {
         return *this;
     }
-    const double scale_x = static_cast<double>(size.width) / calibrated_size.width;
-    const double scale_y = static_cast<double>(size.height) / calibrated_size.height;
+    // Same sensor, square pixels: a capture mode with a DIFFERENT aspect
+    // ratio than the calibration is a centre crop of the wider field plus
+    // one uniform scale, never an anamorphic squash - a webcam's 16:9
+    // mode drops rows from its 4:3 sensor readout, it does not stretch
+    // them. The per-axis scaling this replaces silently manufactured
+    // anisotropy on exactly that case (measured: a 640x480 calibration
+    // scaled onto a 640x360 stream produced fx 616.4 / fy 461.6, ratio
+    // 1.335 - physically impossible for square pixels, and poison for
+    // every PnP consumer downstream). The uniform scale is the ratio of
+    // the dimension the target mode keeps in full; the OTHER dimension
+    // loses (scaled calibration extent - target extent) pixels split
+    // evenly across both edges, which moves the principal point by the
+    // near-edge crop. Same-aspect rescales have zero crop, so the
+    // historical linear behaviour is unchanged there.
+    const double scale = std::max(static_cast<double>(size.width) / calibrated_size.width,
+                                  static_cast<double>(size.height) / calibrated_size.height);
     CameraIntrinsics out = *this;
-    out.fx = fx * scale_x;
-    out.fy = fy * scale_y;
-    out.cx = cx * scale_x;
-    out.cy = cy * scale_y;
+    out.fx = fx * scale;
+    out.fy = fy * scale;
+    out.cx = cx * scale - (calibrated_size.width * scale - size.width) / 2.0;
+    out.cy = cy * scale - (calibrated_size.height * scale - size.height) / 2.0;
     out.calibrated_size = size;
     return out;
 }

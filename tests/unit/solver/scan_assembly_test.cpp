@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <random>
+#include <vector>
 
 #include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
@@ -19,6 +20,7 @@ using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
 using cube::solver::RotationHint;
+using cube::solver::rotation_hint_for_tracked_scan;
 
 namespace {
 
@@ -63,6 +65,20 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
     return rotated;
 }
 
+// A capture as an outside viewer - a camera pointed at the face - sees it.
+// The solver's cross-unfolded layout is camera-handed on U, F, L and
+// MIRROR-handed on D, R, B (assembly reverses this exact flip after
+// pinning each input's face by centre), so the outside view of those three
+// faces is the column-flipped solver array.
+std::array<Color, 9> outside_view(Face face, std::array<Color, 9> stickers) {
+    if (face == Face::D || face == Face::R || face == Face::B) {
+        for (int row = 0; row < 3; ++row) {
+            std::swap(stickers[static_cast<std::size_t>(row * 3)], stickers[static_cast<std::size_t>(row * 3 + 2)]);
+        }
+    }
+    return stickers;
+}
+
 Cube scrambled_cube(std::mt19937& rng, int move_count) {
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     std::uniform_int_distribution<int> turn_dist{1, 3};
@@ -74,12 +90,13 @@ Cube scrambled_cube(std::mt19937& rng, int move_count) {
 }
 
 // The cube's six faces as model facelets in solver-Face input order with no
-// extra rotation - the "camera happened to capture everything canonically"
-// baseline the free-form tests then perturb.
+// extra rotation, in the assembler's outside-view input convention - the
+// "camera happened to capture everything canonically" baseline the
+// free-form tests then perturb.
 std::array<std::array<Facelet, 9>, 6> model_faces_of(const Cube& cube) {
     std::array<std::array<Facelet, 9>, 6> faces{};
     for (Face face : kAllFaces) {
-        faces[static_cast<std::size_t>(face)] = to_model_face(cube.face(face));
+        faces[static_cast<std::size_t>(face)] = to_model_face(outside_view(face, cube.face(face)));
     }
     return faces;
 }
@@ -93,12 +110,12 @@ TEST_CASE("assembly round-trips scrambled cubes through per-face rotation and or
         std::mt19937 rng{seed};
         const Cube original = scrambled_cube(rng, 25);
 
-        // Capture each face as the camera might: rotated by an arbitrary
-        // number of quarter turns, independently per face.
+        // Capture each face as the camera might: the outside view, rotated
+        // by an arbitrary number of quarter turns, independently per face.
         std::uniform_int_distribution<int> rotation_dist{0, 3};
         std::array<std::array<Color, 9>, 6> captured{};
         for (Face face : kAllFaces) {
-            std::array<Color, 9> stickers = original.face(face);
+            std::array<Color, 9> stickers = outside_view(face, original.face(face));
             const int rotations = rotation_dist(rng);
             for (int r = 0; r < rotations; ++r) {
                 stickers = rotated_clockwise(stickers);
@@ -289,4 +306,172 @@ TEST_CASE("a cross-face sticker swap that keeps colour counts is rejected", "[sc
     const auto result = assemble_scanned_faces(captured);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == cube::CubeError::invalid_cube_state);
+}
+
+namespace {
+
+// The 24 proper rotations of the cube as signed axis permutations,
+// column[a] = the image of body axis +e_a in the solver frame. Generated
+// from all 6 axis permutations x 8 sign choices, keeping determinant +1.
+std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
+    std::vector<std::array<std::array<int, 3>, 3>> orientations;
+    std::array<int, 3> perm = {0, 1, 2};
+    do {
+        for (int signs = 0; signs < 8; ++signs) {
+            std::array<std::array<int, 3>, 3> column{};
+            for (int a = 0; a < 3; ++a) {
+                column[static_cast<std::size_t>(a)][static_cast<std::size_t>(perm[static_cast<std::size_t>(a)])] =
+                    ((signs >> a) & 1) != 0 ? -1 : 1;
+            }
+            const auto& cx = column[0];
+            const auto& cy = column[1];
+            const auto& cz = column[2];
+            const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+                            cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
+            if (det == 1) {
+                orientations.push_back(column);
+            }
+        }
+    } while (std::next_permutation(perm.begin(), perm.end()));
+    return orientations;
+}
+
+Face face_of_direction(const std::array<int, 3>& d) {
+    if (d[0] == 1) return Face::R;
+    if (d[0] == -1) return Face::L;
+    if (d[1] == 1) return Face::U;
+    if (d[1] == -1) return Face::D;
+    return d[2] == 1 ? Face::F : Face::B;
+}
+
+// The facelet layout documented in cube.hpp, restated here from that spec
+// (not lifted from any implementation) so a mis-derived producer cannot
+// agree with a mis-derived test.
+int solver_index_of(Face face, const std::array<int, 3>& q) {
+    switch (face) {
+        case Face::U:
+        case Face::D:
+            return (q[2] + 1) * 3 + (q[0] + 1);
+        case Face::R:
+        case Face::L:
+            return (1 - q[1]) * 3 + (q[2] + 1);
+        case Face::F:
+        case Face::B:
+            return (1 - q[1]) * 3 + (q[0] + 1);
+    }
+    return 0;
+}
+
+}  // namespace
+
+TEST_CASE("the tracked-scan hint producer derives digits that re-orient every capture", "[scan_assembly]") {
+    // For each of the 24 ways the tracked body can sit in the solver frame,
+    // sample a scrambled cube through the body-frame cell convention
+    // (face_projection.cpp's: col along +axis(a+1), row along +axis(a+2)),
+    // then require the produced digit to rotate each capture onto the
+    // solver facelet layout exactly, and hinted assembly to round-trip.
+    std::mt19937 rng{20260804};
+    const Cube cube = scrambled_cube(rng, 30);
+    for (const auto& column : all_body_orientations()) {
+        std::array<std::array<Facelet, 9>, 6> captured{};
+        std::array<std::array<Color, 9>, 6> captured_colors{};
+        std::array<int, 6> body_ids{};
+        std::array<Face, 6> shown{};
+        for (int id = 0; id < 6; ++id) {
+            const int body_axis = id / 2;
+            const int sign = (id % 2 == 0) ? 1 : -1;
+            std::array<int, 3> outward{};
+            for (int k = 0; k < 3; ++k) {
+                outward[static_cast<std::size_t>(k)] =
+                    sign * column[static_cast<std::size_t>(body_axis)][static_cast<std::size_t>(k)];
+            }
+            const Face face = face_of_direction(outward);
+            // face_projection.cpp's outside-view axes: cyclic pair on
+            // negative body faces, swapped on positive ones.
+            const int axis_u = (sign > 0) ? (body_axis + 2) % 3 : (body_axis + 1) % 3;
+            const int axis_v = (sign > 0) ? (body_axis + 1) % 3 : (body_axis + 2) % 3;
+            std::array<Color, 9> colors{};
+            for (int row = 0; row < 3; ++row) {
+                for (int col = 0; col < 3; ++col) {
+                    std::array<int, 3> p{};
+                    p[static_cast<std::size_t>(body_axis)] = sign;
+                    p[static_cast<std::size_t>(axis_u)] = col - 1;
+                    p[static_cast<std::size_t>(axis_v)] = row - 1;
+                    std::array<int, 3> q{};
+                    for (int k = 0; k < 3; ++k) {
+                        q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
+                                                         column[1][static_cast<std::size_t>(k)] * p[1] +
+                                                         column[2][static_cast<std::size_t>(k)] * p[2];
+                    }
+                    colors[static_cast<std::size_t>(row * 3 + col)] =
+                        cube.face(face)[static_cast<std::size_t>(solver_index_of(face, q))];
+                }
+            }
+            captured_colors[static_cast<std::size_t>(id)] = colors;
+            captured[static_cast<std::size_t>(id)] = to_model_face(colors);
+            body_ids[static_cast<std::size_t>(id)] = id;
+            shown[static_cast<std::size_t>(id)] = face;
+        }
+
+        const RotationHint hint = rotation_hint_for_tracked_scan(captured, body_ids);
+        for (std::size_t i = 0; i < captured.size(); ++i) {
+            REQUIRE(hint.quarter_turns[i] >= 0);
+            // Digits are defined over the search's arrays, i.e. AFTER
+            // assembly's handedness flip on D/R/B - outside_view applies
+            // that same self-inverse flip.
+            std::array<Color, 9> reoriented = outside_view(shown[i], captured_colors[i]);
+            for (int k = 0; k < hint.quarter_turns[i]; ++k) {
+                reoriented = rotated_clockwise(reoriented);
+            }
+            REQUIRE(reoriented == cube.face(shown[i]));
+        }
+
+        const auto assembled = assemble_scanned_faces_with_mapping(captured, &hint);
+        REQUIRE(assembled.has_value());
+        REQUIRE(assembled->cube == cube);
+    }
+}
+
+TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a rotation", "[scan_assembly]") {
+    std::mt19937 rng{20260804};
+    const Cube cube = scrambled_cube(rng, 30);
+    const auto faces = model_faces_of(cube);  // input order = Face enum: U,D,L,R,F,B
+    // Body ids that make the body frame coincide with the solver frame:
+    // +x shows R, -x L, +y U, -y D, +z F, -z B.
+    const std::array<int, 6> identity_ids = {2, 3, 1, 0, 4, 5};
+
+    const RotationHint good = rotation_hint_for_tracked_scan(faces, identity_ids);
+    for (const int digit : good.quarter_turns) {
+        REQUIRE(digit != RotationHint::kNoHint);
+    }
+
+    SECTION("a repeated body id is not a bijection") {
+        std::array<int, 6> repeated = identity_ids;
+        repeated[5] = repeated[0];
+        const RotationHint hint = rotation_hint_for_tracked_scan(faces, repeated);
+        for (const int digit : hint.quarter_turns) {
+            REQUIRE(digit == RotationHint::kNoHint);
+        }
+    }
+
+    SECTION("swapping which body axis shows L and R composes a reflection") {
+        // Opposite-face ids swapped: both centre correspondences still
+        // agree on the x column's DIRECTION (-x), so the pair check
+        // passes - but the columns then form det -1, a mirror.
+        std::array<int, 6> mirrored = identity_ids;
+        std::swap(mirrored[2], mirrored[3]);
+        const RotationHint hint = rotation_hint_for_tracked_scan(faces, mirrored);
+        for (const int digit : hint.quarter_turns) {
+            REQUIRE(digit == RotationHint::kNoHint);
+        }
+    }
+
+    SECTION("an unknown centre colour cannot pin a cube position") {
+        auto unknown_centre = faces;
+        unknown_centre[0][4].color = FacetColor::unknown;
+        const RotationHint hint = rotation_hint_for_tracked_scan(unknown_centre, identity_ids);
+        for (const int digit : hint.quarter_turns) {
+            REQUIRE(digit == RotationHint::kNoHint);
+        }
+    }
 }

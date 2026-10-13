@@ -16,6 +16,7 @@
 #include <cube/vision/pose_estimation.hpp>
 #include <cube/vision/stability.hpp>
 #include <cube/vision/temporal_fusion.hpp>
+#include <cube/vision/track_fusion.hpp>
 
 #include <QElapsedTimer>
 #include <QFutureWatcher>
@@ -30,10 +31,12 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <fstream>
+#include <utility>
 #include <vector>
 
 namespace cube::app {
@@ -266,8 +269,8 @@ public:
     //   "face":   "U"/"D"/"L"/"R"/"F"/"B" - the slot's canonical cube
     //             position GUESSED from its centre colour alone, via the
     //             same mapping the assembler anchors on (White -> D,
-    //             Yellow -> U, Green -> F, Blue -> B, Orange -> L,
-    //             Red -> R); "?" when the centre classifies as unknown.
+    //             Yellow -> U, Green -> F, Blue -> B, Red -> L,
+    //             Orange -> R); "?" when the centre classifies as unknown.
     //   "colors": 9 CSS colour strings (provisional classify_lab), the
     //             slot's stickers row-major as the camera saw them.
     // Display-only preview: slot content is now stored in solver facelet
@@ -299,6 +302,14 @@ public:
     // Q_PROPERTY - only SolveController consumes it, and cube::solver::Cube
     // can't cross into QML anyway.
     [[nodiscard]] std::optional<cube::solver::Cube> assembledCube() const;
+
+    // P6.12 diagnostics seam (not QML API): total observations held across
+    // every sub-epoch's aggregators in the track-mode fusion store. Exists
+    // so the replay-driven controller test can assert the live track path
+    // actually FEEDS fusion (the live-demo diagnosis measured exactly this
+    // wiring absent) without reaching into private state. 0 in legacy mode
+    // by construction.
+    [[nodiscard]] int trackFusionObservations() const;
 
 public slots:
     void start(const QString& deviceId);
@@ -424,6 +435,22 @@ private:
         // span. Consumed by handleAnalysisFinished to advance the
         // GUI-owned IdleGate.
         int cool_hue_pixels = 0;
+        // --- P6.12 track-mode capture surface --------------------------
+        // The continuous track OWNED the pose this pass (M3T live and
+        // stepped) - the exact condition under which the offline runner
+        // feeds its fusion store. Distinct from pose_from_track only in
+        // intent: this is capture policy, that is display provenance.
+        bool track_locked = false;
+        // The loop's content-identity epoch for this pass's reads; the
+        // GUI-side feed keys sub-epochs off it. Meaningless (-1) unless
+        // track_locked.
+        int track_gauge_epoch = -1;
+        // Capture-grade tracked faces' per-cell reads (stage D-F
+        // composition over the loop's derived faces, sampled on the
+        // worker at analysis scale) - what handleAnalysisFinished feeds
+        // into the fusion store. Empty on legacy, lost, or read-refused
+        // passes; the per-face centre-purity bar is applied at feed time.
+        std::vector<cube::vision::fusion::TrackedFaceRead> track_face_samples;
     };
 
     // corner_armed is captured on the GUI thread when the pass is queued so
@@ -471,6 +498,18 @@ private:
     void finalizeIfComplete();
     void resetAggregators();
     void resetReading();
+    // --- P6.12 track-mode fusion (GUI thread only) -------------------------
+    // Feeds this pass's capture-grade tracked reads into the fusion store
+    // under their content-keyed sub-epoch (shared feed, track_fusion.hpp).
+    void feedTrackFusion(const AnalysisResult& result);
+    // The track-mode completion path: registration + best-sub-epoch
+    // selection on a COPY of the store, progress-count refresh, and - at
+    // six converged faces - resolve -> rotation hint -> assembly, ending in
+    // the same scanCompleted contract finalizeIfComplete() honours. On a
+    // resolve/assembly refusal the scan simply continues (fusion keeps
+    // accumulating and a later attempt retries with more evidence); no
+    // slot-dropping, which has no fusion equivalent.
+    void maybeFinalizeTrackFusion();
 
     QTimer poll_timer_;
     mutable std::mutex frame_mutex_;
@@ -653,8 +692,35 @@ private:
 
     // The identity-keyed slot store and its full commit policy (verified
     // updates, quarantine, strikes, layer-turn detection, epoch recovery)
-    // - see capture_routing.hpp. GUI thread only.
+    // - see capture_routing.hpp. GUI thread only. LEGACY-PIPELINE ONLY
+    // since P6.12: in track mode the fusion store below is the capture
+    // surface and the router is never fed (Phase 7 deletes this path).
     cube::vision::CaptureRouter router_;
+
+    // --- P6.12 track-mode fusion state (GUI thread only) -------------------
+    // The sub-epoch fusion store and its per-epoch generation counters -
+    // the SAME structures the offline runner replays (track_fusion.hpp),
+    // fed from each locked pass's capture-grade tracked reads. This is
+    // track mode's capture surface: the legacy aggregators_/router_ above
+    // stay untouched (the OrientationTracker is never fed while M3T owns
+    // the pose, so every legacy gate correctly no-ops).
+    cube::vision::fusion::FusionStore track_fusion_;
+    std::map<int, int> track_fusion_generation_;
+    // Latches true on the first fed observation and holds until
+    // restartScan(): facesScanned() answers from fusion exactly while the
+    // track pipeline is actually producing evidence, and from the router
+    // otherwise - the legacy path's numbers are untouched by construction.
+    bool track_fusion_active_ = false;
+    // The best registration-merged sub-epoch's converged-face count, as of
+    // the last completion attempt - what facesScanned() reports in track
+    // mode (fusion faces are anonymous body ids, like router slots).
+    int track_fusion_faces_ = 0;
+    // Completion attempts run only when the store's convergence signature
+    // (total face slots, total converged) moves: registration copies the
+    // store and scores up to 24 permutations per sub-epoch pair, which is
+    // pointless work while no new evidence has settled - and a failed
+    // resolve retried on identical evidence would fail identically.
+    std::pair<int, int> track_fusion_attempt_sig_{-1, -1};
 
     // Set by finalizeIfComplete() on a successful assembly; cleared by
     // restartScan(). progress_ is populated (assembled positions) at the

@@ -15,7 +15,11 @@
 // enforced here, not hoped for.
 
 #include <cube/model/facelet.hpp>
+#include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/camera_intrinsics.hpp>
+#include <cube/vision/color_resolution.hpp>
+#include <cube/vision/temporal_fusion.hpp>
+#include <cube/vision/track_fusion.hpp>
 #include <cube/vision/corner_detector.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/groundtruth.hpp>
@@ -298,6 +302,34 @@ struct ClipMetrics {
     // (trace field gauge_slip) - compare against gt_track_repins, the
     // ground-truth count of registration slips, on the console line.
     int gauge_slips_detected = 0;
+
+    // P6.1 end-to-end: pose-derived reads fused per (epoch, face id),
+    // best epoch's six faces resolved, assembled, and compared to the
+    // manifest's oracle state. Both sides are centre-anchored (the
+    // manifest format fixes centre letters positionally; the assembler
+    // pins orientation by centre colours through the same scheme), so
+    // exact-state match is plain Cube equality - whole-cube rotation is
+    // already factored out of both representations.
+    int fusion_best_epoch = -1;
+    int fusion_epoch_faces = 0;      // face ids with enough observations in the best epoch
+    int fusion_epoch_converged = 0;  // ... that also passed the aggregator's convergence gate
+    int fusion_epoch_distinct = 0;   // ... counting one physical colour once (P6.15)
+    bool exact_state_match = false;
+    std::string e2e_outcome = "not-attempted";  // the per-clip refusal attribution
+    // P6.15: what the chain actually built, in the manifest's own 54-char
+    // encoding - empty unless assembly succeeded. On an UNLABELLED clip
+    // this is the whole report (outcome "assembled-no-oracle"); on a
+    // labelled one it is the mismatch's evidence.
+    std::string assembled_state;
+    // P6.3 content registration across epochs: verified merges and
+    // refused ones (a shared face beyond the verify radius).
+    int register_merges = 0;
+    int register_refusals = 0;
+    // P6.6 content-keyed sub-epochs: times the feed-time takeover
+    // detector froze a generation's aggregators because an incoming
+    // centre jumped implausibly far from a settled slot's fused centre
+    // (a tracker slip without an epoch bump).
+    int fusion_generation_splits = 0;
 };
 
 // Locked-and-correct bound (docs/pipeline-plan.md Phase 2 exit gate): a
@@ -872,6 +904,13 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
     out << "  \"cells_classified\": " << m.cells_classified << ",\n";
     out << "  \"cells_unknown\": " << m.cells_unknown << ",\n";
     out << "  \"trace_violations\": " << m.trace_violations << ",\n";
+    out << "  \"e2e_outcome\": \"" << m.e2e_outcome << "\",\n";
+    out << "  \"assembled_state\": \"" << m.assembled_state << "\",\n";
+    out << "  \"exact_state_match\": " << (m.exact_state_match ? "true" : "false") << ",\n";
+    out << "  \"fusion_best_epoch\": " << m.fusion_best_epoch << ",\n";
+    out << "  \"fusion_epoch_faces\": " << m.fusion_epoch_faces << ",\n";
+    out << "  \"fusion_epoch_converged\": " << m.fusion_epoch_converged << ",\n";
+    out << "  \"fusion_epoch_distinct\": " << m.fusion_epoch_distinct << ",\n";
     const auto write_map = [&out](const char* key, const auto& map, auto&& value_writer, bool trailing_comma) {
         out << "  \"" << key << "\": {";
         bool first = true;
@@ -953,6 +992,67 @@ void write_metrics_json(const fs::path& path, const ClipMetrics& m) {
         out << "  }\n";
     }
     out << "}\n";
+}
+
+// The manifest's face order at offsets 0,9,..,45 - shared by the state
+// string's reader and its writer below, which must agree or the round
+// trip silently transposes faces.
+constexpr std::array<cube::solver::Face, 6> kManifestFaceOrder{
+    cube::solver::Face::U, cube::solver::Face::R, cube::solver::Face::F,
+    cube::solver::Face::D, cube::solver::Face::L, cube::solver::Face::B,
+};
+
+// The manifest's oracle state as a solver Cube (P6.1). Mirrors the
+// recorder's validated parsing: centres positionally fixed, letters ->
+// canonical colours. nullopt for clips without a state or with an
+// unparseable one (the recorder's oracle should have refused those at
+// write time).
+std::optional<cube::solver::Cube> manifest_cube(const std::string& state) {
+    if (state.size() != 54) {
+        return std::nullopt;
+    }
+    std::array<std::array<cube::solver::Color, 9>, 6> facelets{};
+    for (std::size_t i = 0; i < 54; ++i) {
+        cube::solver::Face face{};
+        switch (state[i]) {
+            case 'U': face = cube::solver::Face::U; break;
+            case 'R': face = cube::solver::Face::R; break;
+            case 'F': face = cube::solver::Face::F; break;
+            case 'D': face = cube::solver::Face::D; break;
+            case 'L': face = cube::solver::Face::L; break;
+            case 'B': face = cube::solver::Face::B; break;
+            default: return std::nullopt;
+        }
+        facelets[static_cast<std::size_t>(kManifestFaceOrder[i / 9])][i % 9] = cube::solver::canonical_color(face);
+    }
+    auto cube = cube::solver::Cube::from_facelets(facelets);
+    if (!cube.has_value()) {
+        return std::nullopt;
+    }
+    return *cube;
+}
+
+// manifest_cube's inverse (P6.15): the 54-character state string an
+// assembled cube would have carried in a manifest. An UNLABELLED clip has
+// nothing to compare against, so the only honest report of what the
+// pipeline built is the state itself - printed for a human to eyeball
+// against the recording (and to paste back as the oracle once confirmed).
+std::string manifest_state_string(const cube::solver::Cube& cube) {
+    std::string state;
+    state.reserve(54);
+    for (const auto face : kManifestFaceOrder) {
+        for (int index = 0; index < 9; ++index) {
+            const cube::solver::Color color = cube.at(face, index);
+            char letter = '?';
+            for (const auto candidate : cube::solver::kAllFaces) {
+                if (cube::solver::canonical_color(candidate) == color) {
+                    letter = "UDLRFB"[static_cast<std::size_t>(candidate)];
+                }
+            }
+            state.push_back(letter);
+        }
+    }
+    return state;
 }
 
 // Per-clip camera intrinsics (P2.9): intrinsics.txt is the calibration
@@ -1060,6 +1160,16 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     // locked-and-correct frame - or marking it failed (-1) if the cube
     // goes absent again (or the clip ends) first.
     int track_pinned_perm = -1;
+    // P6.1/P6.6 fusion store + per-epoch generation counters. The store's
+    // shape, the content-keyed sub-epoch scheme, the takeover detector
+    // and the registration pass all live in cube/vision/track_fusion.hpp
+    // since P6.12 - ONE definition shared with the live app's track-mode
+    // capture path (scan_session.cpp); the rationale comments moved with
+    // the code.
+    cube::vision::fusion::FusionStore fusion;
+    // Current generation per gauge_epoch (starts at 0).
+    std::map<int, int> fusion_generation;
+    const auto manifest = recording::read_manifest(dir.string());
     // Rectified-stability state: previous steady frame's most-frontal
     // rectified face (float grey for phaseCorrelate), its model face id
     // and pass number - only same-face, consecutive-pass pairs score.
@@ -1127,6 +1237,27 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
             const bool cells_from_track =
                 result.track.phase == pipeline::TrackPhase::locked && result.track.pose_source == "m3t";
             score_keyframe(keyframe->second, result, cells_from_track, metrics);
+        }
+
+        // --- P6.1: fusion feed -----------------------------------------
+        // Capture-grade tracked faces' per-cell reads accumulate under
+        // their epoch-local identity; a sampled centre (purity > 0) is
+        // the "this face was really read" proxy. The content-keyed
+        // sub-epoch and its feed-time takeover detector are the shared
+        // implementation (track_fusion.hpp) - the app's live feed applies
+        // the identical conditions and the identical add.
+        if (result.track.pose_source == "m3t" && result.track.phase == pipeline::TrackPhase::locked) {
+            for (std::size_t f = 0; f < result.track_faces.size() && f < result.faces.faces.size(); ++f) {
+                if (!result.faces.faces[f].capture_grade || result.samples.faces[f].purity[4] <= 0.0F) {
+                    continue;
+                }
+                cube::vision::FaceObservation observation;
+                observation.lab = result.samples.faces[f].lab;
+                observation.cell_purity = result.samples.faces[f].purity;
+                const auto fed = cube::vision::fusion::add_observation(
+                    fusion, fusion_generation, result.gauge_epoch, result.track_faces[f].face, observation);
+                metrics.fusion_generation_splits += fed.generation_split ? 1 : 0;
+            }
         }
 
         // --- P2.7: tracked-pose scoring --------------------------------
@@ -1277,8 +1408,102 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
     if (reentry_pending_t >= 0) {
         metrics.gt_reacq_ms.push_back(-1.0);  // clip ended with the event still unresolved
     }
+
+    // --- P6.3: content-based cross-epoch registration ------------------
+    // The whole pass - candidate scoring in the hue-aware decomposed cell
+    // cost, the P6.11 radius/margin bars, drift-tolerant verify,
+    // never-overwrite with incumbent-yield, and cell re-indexing on
+    // transplant - is the shared implementation in track_fusion.cpp
+    // (P6.12), where its measurement rationale moved with it. The app's
+    // live completion path runs the identical pass.
+    {
+        const auto registration = cube::vision::fusion::register_epochs(fusion);
+        metrics.register_merges += registration.merges;
+        metrics.register_refusals += registration.refusals;
+    }
+
+    // --- P6.1 finalize: best sub-epoch -> resolve -> assemble -> oracle ---
+    // "Best" = most DISTINCT converged faces (P6.15), ties to most
+    // converged aggregators (the photometric gate), then to most
+    // sufficiently-observed - one sub-epoch must carry all six faces, the
+    // plan's identity-lifetime bar (shared selection, track_fusion.hpp).
+    {
+        const auto best = cube::vision::fusion::best_sub_epoch(fusion);
+        metrics.fusion_best_epoch = best.sub_epoch;
+        metrics.fusion_epoch_faces = best.observed;
+        metrics.fusion_epoch_converged = best.converged;
+        metrics.fusion_epoch_distinct = best.distinct;
+    }
+    // P6.15: the chain runs to completion for EVERY clip; the oracle only
+    // decides how the finished result is reported. It used to short-circuit
+    // to "no-oracle-state" whenever the manifest carried no true state,
+    // which meant resolve_colors and the assembler were never called on an
+    // unlabelled clip - and both live recordings are unlabelled, so a
+    // genuine refusal deep in the chain (P6.15's duplicated face) read as
+    // "nothing to check" for as long as it existed. What CANNOT be checked
+    // is the comparison, not the pipeline.
+    const std::optional<cube::solver::Cube> oracle =
+        (manifest.has_value() && manifest->state.has_value()) ? manifest_cube(*manifest->state) : std::nullopt;
+    if (metrics.fusion_best_epoch < 0) {
+        metrics.e2e_outcome = "no-tracked-reads";
+    } else if (metrics.fusion_epoch_converged < 6) {
+        metrics.e2e_outcome =
+            fusion[metrics.fusion_best_epoch].size() < 6 ? "insufficient-faces" : "unconverged-faces";
+    } else if (metrics.fusion_epoch_distinct < 6) {
+        // P6.15: six converged slots, fewer than six physical faces. Named
+        // apart from resolve-failed because it is a different fact about
+        // the scan - resolve_colors refuses the same store, but as "these
+        // captures are not a cube", which reads like a colour problem. The
+        // scan is a face short and cannot finish until the missing one is
+        // shown, and that is what a user (and the app's progress ring)
+        // must be told.
+        metrics.e2e_outcome = "duplicate-faces";
+    } else {
+        std::array<cube::vision::CapturedFace, 6> captured{};
+        std::array<int, 6> body_face_ids{};
+        std::size_t slot = 0;
+        for (auto& [face_id, aggregator] : fusion[metrics.fusion_best_epoch]) {
+            if (aggregator.converged() && slot < 6) {
+                body_face_ids[slot] = face_id;
+                captured[slot++] = aggregator.capture();
+            }
+        }
+        const auto resolved = cube::vision::resolve_colors(captured);
+        if (!resolved.has_value()) {
+            metrics.e2e_outcome = "resolve-failed";
+        } else {
+            // P6.4: a tracked scan's captures carry their body-frame
+            // orientation, so the assembler gets the quarter-turn hint -
+            // tie-break advice only, the search and its bars are unchanged.
+            const cube::solver::RotationHint hint =
+                cube::solver::rotation_hint_for_tracked_scan(*resolved, body_face_ids);
+            const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(*resolved, &hint);
+            if (!assembled.has_value()) {
+                metrics.e2e_outcome = "assembly-failed";
+            } else {
+                metrics.assembled_state = manifest_state_string(assembled->cube);
+                if (!oracle.has_value()) {
+                    metrics.e2e_outcome = "assembled-no-oracle";
+                } else if (assembled->cube == *oracle) {
+                    metrics.exact_state_match = true;
+                    metrics.e2e_outcome = "exact-match";
+                } else {
+                    metrics.e2e_outcome = "state-mismatch";
+                }
+            }
+        }
+    }
+
     write_metrics_json(out_dir / "metrics.json", metrics);
 
+    std::printf("  end-to-end: %s  (sub-epoch %d: %d/6 observed, %d/6 converged, %d/6 distinct; "
+                "%d registered merges, %d refusals, %d generation splits)\n",
+                metrics.e2e_outcome.c_str(), metrics.fusion_best_epoch, metrics.fusion_epoch_faces,
+                metrics.fusion_epoch_converged, metrics.fusion_epoch_distinct, metrics.register_merges,
+                metrics.register_refusals, metrics.fusion_generation_splits);
+    if (!metrics.assembled_state.empty() && !oracle.has_value()) {
+        std::printf("  assembled state (no oracle to check it against): %s\n", metrics.assembled_state.c_str());
+    }
     std::printf("%-12s frames %4d/%4d  det %5.1f%%  pose %5.1f%%  locked %5.1f%%  epochs %2d  unknown-cells %5.1f%%%s\n",
                 metrics.clip.c_str(), metrics.frames_replayed, metrics.frames_indexed,
                 100.0 * metrics.frames_detected / std::max(1, metrics.frames_replayed),

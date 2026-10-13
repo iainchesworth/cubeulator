@@ -317,6 +317,20 @@ static_assert(RoutingConfig{}.content_equiv_lab <= RoutingConfig{}.same_face_cen
 [[nodiscard]] CapturedFace relabel_capture(const CapturedFace& captured,
                                            cube::model::Face epoch_body_face, int lattice_index);
 
+// The store-to-assembly seam. The store keeps every slot in the SOLVER
+// layout of its body face - orientation_lattice's ingestion tables bake
+// the D/R/B mirror in on the way in, which is what keeps the store closed
+// under kBodyRelabel re-anchors. Assembly's input contract is OUTSIDE-VIEW
+// captures (scan_assembly.hpp). This is the one place the two conventions
+// meet: a body face whose solver layout is mirror-handed (D, R, B) flips
+// back to a camera view here; the other three are already rotations of
+// one, which assembly's own search absorbs - so a single fixed flip is
+// enough and WHICH roll it lands on is immaterial. Before this seam
+// existed, store slots fed assembly raw: correct under only the 3 of 24
+// gauges that preserve the handedness classes, and no green test noticed,
+// because none composed the store with assembly on a scrambled cube.
+void slot_to_outside_view(cube::model::Face body_face, CapturedFace& slot) noexcept;
+
 // Content distance used by epoch registration, in census-L1-equivalent
 // points: census L1 plus centre Lab scaled so one content_equiv_lab of
 // centre drift costs as much as one sticker reclassification (2 points) -

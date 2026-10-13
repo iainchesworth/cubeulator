@@ -3,10 +3,9 @@ import QtQuick
 import Cubeulator
 
 // Screen-routing state, delegating to real controllers for each phase:
-// CameraController/ScanSession own the scan phase, SolveController owns the
+// CameraController/DirectScan own the scan phase, SolveController owns the
 // solve phase (moves, stickers, stage progress) via a real
-// cube::solver::solve() fed the actual scanned cube (ScanSession's
-// free-form-assembled cube - see solve_controller.hpp).
+// cube::solver::solve() fed the cube DirectScan read.
 QtObject {
     id: state
 
@@ -28,15 +27,44 @@ QtObject {
     // waiting for a "grant access" button press: on desktop, beginScan()
     // goes straight to "scan" without ever visiting the permission screen
     // (see isMobile above), so nothing else would trigger it in time for
-    // ScanSession.start() to have a selectedDeviceId ready.
+    // DirectScan.start() to have a selectedDeviceId ready.
     Component.onCompleted: CameraController.refreshDevices()
 
     // Starts/stops the live capture to match the screen shown.
     onScreenChanged: {
         if (screen === "scan") {
-            ScanSession.start(CameraController.selectedDeviceId);
-        } else if (ScanSession.running || ScanSession.starting) {
-            ScanSession.stop();
+            DirectScan.start(CameraController.selectedDeviceId);
+        } else {
+            scanComplete = false;
+            completeBeat.stop();
+            if (DirectScan.running || DirectScan.starting)
+                DirectScan.stop();
+        }
+    }
+
+    // A finished scan stays on screen for a beat: long enough to see the
+    // sixth side arrive and all six confirmed. The solve starts the moment
+    // the scan completes and runs behind that, so the wait is spent looking
+    // at the result rather than at a spinner. The solve screen follows when
+    // the beat has passed AND the solution is ready, whichever comes later.
+    property bool scanComplete: false
+    property var directScanConnections: Connections {
+        target: DirectScan
+        function onScanCompleted() {
+            state.scanComplete = true;
+            completeBeat.restart();
+        }
+    }
+    property var completeBeat: Timer {
+        interval: 1400
+        onTriggered: state.showSolutionWhenReady()
+    }
+    function showSolutionWhenReady() {
+        if (scanComplete && !completeBeat.running && !SolveController.isSolving && screen === "scan") {
+            scanComplete = false;
+            scanError = "";
+            scanRetryMessage = "";
+            screen = "solve";
         }
     }
 
@@ -54,6 +82,9 @@ QtObject {
         }
         function onScanRejected(reason) {
             scanError = reason;
+        }
+        function onStateChanged() {
+            state.showSolutionWhenReady();
         }
     }
 
@@ -91,7 +122,7 @@ QtObject {
         onTriggered: state.scanRetryMessage = ""
     }
 
-    readonly property int scanned: ScanSession.facesScanned
+    readonly property int scanned: DirectScan.sidesRead
 
     // Thin passthrough so CompleteScreen.qml's move-count readout doesn't
     // need its own SolveController binding.

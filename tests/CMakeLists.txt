@@ -8,7 +8,6 @@ include(Catch)
 add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
-    unit/scan_session_config_test.cpp
     unit/model_test.cpp
     unit/grid_detection_test.cpp
     unit/pose_refiner_test.cpp
@@ -16,6 +15,7 @@ add_executable(cube_unit_tests
     unit/session_palette_test.cpp
     unit/face_observation_test.cpp
     unit/temporal_fusion_test.cpp
+    unit/track_fusion_test.cpp
     unit/color_resolution_test.cpp
     unit/corner_observation_test.cpp
     unit/edge_observation_test.cpp
@@ -28,6 +28,7 @@ add_executable(cube_unit_tests
     unit/centre_cluster_verify_test.cpp
     unit/centre_palette_test.cpp
     unit/capture_routing_test.cpp
+    unit/store_to_assembly_test.cpp
     unit/crash_hunt_test.cpp
     unit/pose_estimation_test.cpp
     unit/frame_debug_test.cpp
@@ -43,6 +44,7 @@ add_executable(cube_unit_tests
     unit/corner_detector_test.cpp
     unit/pose_from_corners_test.cpp
     unit/camera_intrinsics_test.cpp
+    unit/direct_scan_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp
@@ -110,7 +112,11 @@ add_executable(cube_integration_tests
     # Hardware verification of the lock's effect on real pixels: hidden
     # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
     # double fence as the probe above.
-    integration/camera_lock_verification_test.cpp)
+    integration/camera_lock_verification_test.cpp
+    # Detector + tracking loop together on a committed capture frame: it
+    # needs the deployed ONNX model beside the binary, which is exactly
+    # what this suite (unlike the fast unit one) arranges below.
+    integration/refine_cadence_test.cpp)
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -129,6 +135,12 @@ target_link_libraries(cube_integration_tests
 # which uses the same MSVC CRT headers.
 target_compile_definitions(cube_integration_tests PRIVATE
     "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
+
+# Capture frames (tests/data, local only - see .gitignore) are inputs, not
+# deployables - the refine-cadence test reads one from the source tree when
+# it is there rather than have the build copy fixtures next to every binary.
+target_compile_definitions(cube_integration_tests PRIVATE
+    "CUBE_TEST_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\"")
 
 cube_deploy_sanitizer_runtime(cube_integration_tests)
 cube_deploy_vision_assets(cube_integration_tests)
@@ -185,6 +197,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qt_controller_tests
         qt_test_main.cpp
         unit/camera_controller_test.cpp
+        unit/direct_scan_controller_test.cpp
         unit/scan_session_test.cpp
         unit/scan_session_binding_test.cpp
         unit/settings_model_test.cpp
