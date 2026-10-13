@@ -206,7 +206,7 @@ OKLab distance x 100 between two swatches as seen with each kind of colour visio
 |---|---|---|
 | **Archivo** (OFL) | Everything in Latin script | Regular 400, Bold 700, ExtraBold 800 |
 | **IBM Plex Mono** (OFL) | Numbers that change (turn count, time), notation, key names | Medium 500 |
-| **IBM Plex Sans Hebrew**, **IBM Plex Sans Arabic** (OFL) | Hebrew and Arabic | Regular 400, Bold 700. There is no 800; headings use 700 |
+| **Noto Sans Hebrew**, **Noto Sans Arabic** (OFL) | Hebrew and Arabic | One variable file each, weight 100 to 900, so headings keep 800. The same files ICL Forge, Countdown Solver and Automate ship (`family.md` D3) |
 | The system's own | Japanese, Simplified Chinese | Not bundled; see `platforms.md` |
 
 The fonts are loaded from the app's resources at start-up. A machine

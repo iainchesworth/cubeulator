@@ -403,9 +403,9 @@ told otherwise.
 |---|---|---|---|
 | D1 | How the publisher is written in the app: *Iain Chesworth Labs*, *ICL*, or *Iain Chesworth*. Today the CPack vendor and the macOS copyright say "Iain Chesworth" | "Iain Chesworth Labs" in About and the packages; copyright line "Copyright © 2026 Iain Chesworth" | E4a, E3b |
 | D2 | Is Signal the suite's look? Countdown Solver and Automate are Calm | Cubeulator stays Signal; no other app is reskinned by this plan | nothing here |
-| D3 | Hebrew and Arabic faces | Noto Sans Hebrew and Noto Sans Arabic (the family's) | E2a, when it bundles fonts |
+| D3 | Hebrew and Arabic faces | **Noto Sans Hebrew and Noto Sans Arabic** (the family's). *(Iain, 2026-10-13.)* The files ICL Forge vendors are variable, weight 100 to 900, so the 700 ceiling goes | E2a, when it bundles fonts |
 | D4 | Yiddish | Not in V1.0 (decision 3 stands); added in V1.1 if wanted | E5 |
-| D5 | Catalogue by source text (the family) or by id (`strings.json`) | ids | E2b |
+| D5 | Catalogue by source text (the family) or by id (`strings.json`) | **ids.** *(Iain, 2026-10-13.)* | E2b |
 | D6 | Copy details in V1.0 or V1.1 | V1.1; the build line and the Copy button on it ride with E3b | E3b |
 | D7 | Accent palettes for Cubeulator | No | - |
 | D8 | A shared component kit across repositories | Not before V1.0 ships. Revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |

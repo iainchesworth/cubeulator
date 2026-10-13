@@ -173,8 +173,8 @@ value.
 | script | font | shipped |
 |---|---|---|
 | Latin | Archivo; IBM Plex Mono | In the app. About 400 KB |
-| Hebrew | IBM Plex Sans Hebrew | In the app. About 100 KB |
-| Arabic | IBM Plex Sans Arabic | In the app. About 300 KB |
+| Hebrew | Noto Sans Hebrew | In the app. About 110 KB |
+| Arabic | Noto Sans Arabic | In the app. About 825 KB |
 | Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No |
 | Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No |
 

@@ -126,6 +126,10 @@ default above, the answer stands.
   scans is for developer builds (`brief.md` D7).
 - Source strings are British English (`brief.md` D10).
 - The app's identifier is `org.iainchesworth.cubeulator` (`brief.md` D12).
+- Hebrew and Arabic are set in Noto Sans Hebrew and Noto Sans Arabic, the
+  files the other apps ship (`design/family.md` D3).
+- Translations are keyed by id, as `strings.json` already is, not by the
+  English text (`design/family.md` D5).
 
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
@@ -322,10 +326,11 @@ complete.
   banner, progress); layout primitives with size classes and safe areas; a
   navigation stack with back handling; settings that persist; a
   developer-only gallery screen.
-- *E2b Translations plumbing.* Linguist in the build, live language
-  switching, a pseudo-locale (longer, accented strings), locale-aware
-  numbers and times, plural forms, and a lint that fails on an unwrapped
-  user-visible string.
+- *E2b Translations plumbing.* Linguist in the build, keyed by id; the
+  family's `LanguageManager` and its CI gates ported rather than written a
+  third time (`design/family.md` F3); live language switching, a
+  pseudo-locale (longer, accented strings), locale-aware numbers and times,
+  plural forms, and a lint that fails on an unwrapped user-visible string.
 
 Gate: every kit component is reachable by keyboard, has a name and role,
 meets the target size, and holds 4.5:1 contrast in both themes; the
@@ -390,7 +395,7 @@ session that is already planned; none is a new session.
 | F1 publisher line | E4a, E3b | one string in the version resource, `Info.plist`, AppStream, About (after D1) |
 | F2 setting keys | E2a, E3a | the keys named in `design/screens/settings.md` in the family's `group/name` style, listed in one place |
 | F3 language manager | E2b | its brief says **port** the family `LanguageManager` and its CI gates; add locale-aware numbers, plurals, the unwrapped-string lint |
-| F4 Hebrew and Arabic faces | E2a, before it bundles fonts | Noto Sans Hebrew and Noto Sans Arabic in place of the IBM Plex pair (after D3) |
+| F4 Hebrew and Arabic faces | E2a, before it bundles fonts | Noto Sans Hebrew and Noto Sans Arabic in place of the IBM Plex pair (D3, decided) |
 | F5 About build line | E3b | the compact version line and a **Copy** button on it |
 | F9 token mapping | E2a | a note in `tokens.json` and `system.md`; no value moves |
 | machine-translation note | E5 | one sentence under the language list, as ICL Forge and Countdown Solver have |
