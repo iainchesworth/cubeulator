@@ -47,7 +47,8 @@ Catalogue read_catalogue(const QString& path) {
                 in_message = true;
                 current = Entry{};
                 current.id = xml.attributes().value(QLatin1String("id")).toString();
-                current.plural = xml.attributes().value(QLatin1String("numerus")) == QLatin1String("yes");
+                current.plural =
+                    xml.attributes().value(QLatin1String("numerus")) == QLatin1String("yes");
             } else if (in_message && name == QLatin1String("source")) {
                 current.source = xml.readElementText(QXmlStreamReader::IncludeChildElements);
             } else if (in_message && name == QLatin1String("extracomment")) {
@@ -60,13 +61,16 @@ Catalogue read_catalogue(const QString& path) {
                     while (!xml.atEnd()) {
                         xml.readNext();
                         if (xml.isStartElement() && xml.name() == QLatin1String("numerusform")) {
-                            current.forms.append(xml.readElementText(QXmlStreamReader::IncludeChildElements));
-                        } else if (xml.isEndElement() && xml.name() == QLatin1String("translation")) {
+                            current.forms.append(
+                                xml.readElementText(QXmlStreamReader::IncludeChildElements));
+                        } else if (xml.isEndElement() &&
+                                   xml.name() == QLatin1String("translation")) {
                             break;
                         }
                     }
                 } else {
-                    current.forms.append(xml.readElementText(QXmlStreamReader::IncludeChildElements));
+                    current.forms.append(
+                        xml.readElementText(QXmlStreamReader::IncludeChildElements));
                 }
             }
         } else if (xml.isEndElement() && xml.name() == QLatin1String("message")) {
@@ -98,7 +102,8 @@ std::vector<Source> read_strings() {
         if (pair.at(0).isObject()) {
             s.plural = true;
             const QJsonObject forms = pair.at(0).toObject();
-            s.forms = {forms.value(QStringLiteral("one")).toString(), forms.value(QStringLiteral("other")).toString()};
+            s.forms = {forms.value(QStringLiteral("one")).toString(),
+                       forms.value(QStringLiteral("other")).toString()};
         } else {
             s.forms = {pair.at(0).toString()};
         }
@@ -108,7 +113,8 @@ std::vector<Source> read_strings() {
 }
 
 std::vector<Language> read_languages() {
-    const QJsonDocument doc = QJsonDocument::fromJson(read_file(QStringLiteral(CUBE_LANGUAGES_JSON)));
+    const QJsonDocument doc =
+        QJsonDocument::fromJson(read_file(QStringLiteral(CUBE_LANGUAGES_JSON)));
     REQUIRE(doc.isObject());
     std::vector<Language> out;
     auto parse = [](const QJsonObject& o, bool pseudo) {

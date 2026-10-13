@@ -41,7 +41,8 @@ struct Installed {
         }
         if (file != QLatin1String("en")) {
             // A catalogue with nothing finished in it is a valid, empty file.
-            if (language.load(QStringLiteral(":/i18n/cubeulator_") + file + QStringLiteral(".qm"))) {
+            if (language.load(QStringLiteral(":/i18n/cubeulator_") + file +
+                              QStringLiteral(".qm"))) {
                 QCoreApplication::installTranslator(&language);
             }
         }
@@ -94,7 +95,8 @@ TEST_CASE("a language with no translation yet shows the English", "[i18n][runtim
     }
 }
 
-TEST_CASE("English shows strings.json, and the plural forms are chosen by the count", "[i18n][runtime][plural]") {
+TEST_CASE("English shows strings.json, and the plural forms are chosen by the count",
+          "[i18n][runtime][plural]") {
     const QLocale previous = QLocale();
     QLocale::setDefault(QLocale(QStringLiteral("en_GB")));
     Installed installed(QStringLiteral("en"));
@@ -114,7 +116,8 @@ TEST_CASE("English shows strings.json, and the plural forms are chosen by the co
     QLocale::setDefault(previous);
 }
 
-TEST_CASE("every plural string resolves for every count in every language", "[i18n][runtime][plural]") {
+TEST_CASE("every plural string resolves for every count in every language",
+          "[i18n][runtime][plural]") {
     const QLocale previous = QLocale();
     for (const Language& l : read_languages()) {
         QLocale::setDefault(QLocale(l.tag));
@@ -138,7 +141,8 @@ TEST_CASE("every plural string resolves for every count in every language", "[i1
     QLocale::setDefault(previous);
 }
 
-TEST_CASE("the pseudo-locale answers every id with the bracketed, accented string", "[i18n][runtime][pseudo]") {
+TEST_CASE("the pseudo-locale answers every id with the bracketed, accented string",
+          "[i18n][runtime][pseudo]") {
     Installed installed(QStringLiteral("xx"));
     const QString shown = tr_id(QStringLiteral("home.scan"));
     CHECK(shown.startsWith(QLatin1Char('[')));
@@ -152,7 +156,8 @@ TEST_CASE("the pseudo-locale answers every id with the bracketed, accented strin
 // language, write a catalogue per language whose forms are named after their
 // index and ask which one each count gets. The expectations are the CLDR's
 // categories for the form counts Qt's table gives (languages.json: "plurals").
-TEST_CASE("each language's plural rule picks the form its language has", "[i18n][runtime][plural]") {
+TEST_CASE("each language's plural rule picks the form its language has",
+          "[i18n][runtime][plural]") {
     QTemporaryDir dir;
     REQUIRE(dir.isValid());
     const QLocale previous = QLocale();
@@ -166,20 +171,29 @@ TEST_CASE("each language's plural rule picks the form its language has", "[i18n]
     auto french = [](int n) { return n <= 1 ? 0 : 1; };
     auto single = [](int) { return 0; };
     auto arabic = [](int n) {
-        if (n == 0) return 0;
-        if (n == 1) return 1;
-        if (n == 2) return 2;
+        if (n == 0)
+            return 0;
+        if (n == 1)
+            return 1;
+        if (n == 2)
+            return 2;
         const int r = n % 100;
-        if (r >= 3 && r <= 10) return 3;
-        if (r >= 11 && r <= 99) return 4;
+        if (r >= 3 && r <= 10)
+            return 3;
+        if (r >= 11 && r <= 99)
+            return 4;
         return 5;
     };
     const Expect expectations[] = {
-        {QStringLiteral("en"), +english_like}, {QStringLiteral("de"), +english_like},
-        {QStringLiteral("es"), +english_like}, {QStringLiteral("fr"), +french},
-        {QStringLiteral("ja"), +single},       {QStringLiteral("zh-CN"), +single},
+        {QStringLiteral("en"), +english_like},
+        {QStringLiteral("de"), +english_like},
+        {QStringLiteral("es"), +english_like},
+        {QStringLiteral("fr"), +french},
+        {QStringLiteral("ja"), +single},
+        {QStringLiteral("zh-CN"), +single},
         // Qt's table has two forms for Hebrew and Yiddish: one, and the rest.
-        {QStringLiteral("he"), +english_like}, {QStringLiteral("yi"), +english_like},
+        {QStringLiteral("he"), +english_like},
+        {QStringLiteral("yi"), +english_like},
         {QStringLiteral("ar"), +arabic},
     };
 
@@ -204,17 +218,20 @@ TEST_CASE("each language's plural rule picks the form its language has", "[i18n]
         const QString qm = dir.filePath(QStringLiteral("plural_%1.qm").arg(l.file));
         QFile out(ts);
         REQUIRE(out.open(QIODevice::WriteOnly));
-        out.write(QStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?><!DOCTYPE TS>"
-                                 "<TS version=\"2.1\" language=\"%1\" sourcelanguage=\"en_GB\"><context><name></name>"
-                                 "<message id=\"t.plural\" numerus=\"yes\"><source>%Ln thing</source>"
-                                 "<translation>%2</translation></message></context></TS>")
-                      .arg(l.tag, forms)
-                      .toUtf8());
+        out.write(
+            QStringLiteral("<?xml version=\"1.0\" encoding=\"utf-8\"?><!DOCTYPE TS>"
+                           "<TS version=\"2.1\" language=\"%1\" "
+                           "sourcelanguage=\"en_GB\"><context><name></name>"
+                           "<message id=\"t.plural\" numerus=\"yes\"><source>%Ln thing</source>"
+                           "<translation>%2</translation></message></context></TS>")
+                .arg(l.tag, forms)
+                .toUtf8());
         out.close();
 
         QProcess lrelease;
-        lrelease.start(QStringLiteral(CUBE_LRELEASE_EXECUTABLE),
-                       {QStringLiteral("-idbased"), QStringLiteral("-silent"), ts, QStringLiteral("-qm"), qm});
+        lrelease.start(
+            QStringLiteral(CUBE_LRELEASE_EXECUTABLE),
+            {QStringLiteral("-idbased"), QStringLiteral("-silent"), ts, QStringLiteral("-qm"), qm});
         REQUIRE(lrelease.waitForFinished(30000));
         REQUIRE(lrelease.exitCode() == 0);
 
@@ -225,7 +242,8 @@ TEST_CASE("each language's plural rule picks the form its language has", "[i18n]
         QLocale::setDefault(QLocale(QStringLiteral("en_GB")));
         for (int n = 0; n <= 130; ++n) {
             INFO(str(l.code) << " n=" << n);
-            CHECK(tr_id(QStringLiteral("t.plural"), n) == QStringLiteral("form%1").arg(expect->form(n)));
+            CHECK(tr_id(QStringLiteral("t.plural"), n) ==
+                  QStringLiteral("form%1").arg(expect->form(n)));
         }
         QCoreApplication::removeTranslator(&translator);
     }

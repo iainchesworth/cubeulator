@@ -2,8 +2,8 @@
 // setLanguage() changes, and that it changes all of it before anything is
 // re-read. The family's tst_LanguageSwitching.qml is the model; this is the
 // part of it that needs no screen (the screens are in screen_test.cpp).
-#include "catalogue.hpp"
 #include "i18n/language_manager.hpp"
+#include "catalogue.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -13,9 +13,9 @@
 #include <QQmlEngine>
 #include <QSettings>
 
-using cube::i18n::LanguageManager;
 using cube::i18n::canonicalCode;
 using cube::i18n::languageForUiLanguages;
+using cube::i18n::LanguageManager;
 using cube::i18n::loadLanguages;
 
 namespace {
@@ -51,7 +51,8 @@ struct Fresh {
 
 }  // namespace
 
-TEST_CASE("the languages of the app are the nine, English first, in their own names", "[i18n][manager]") {
+TEST_CASE("the languages of the app are the nine, English first, in their own names",
+          "[i18n][manager]") {
     Fresh fresh;
     QQmlEngine engine;
     LanguageManager manager(*qGuiApp, engine);
@@ -66,9 +67,11 @@ TEST_CASE("the languages of the app are the nine, English first, in their own na
     CHECK(codes == QStringList{QStringLiteral("en"), QStringLiteral("de"), QStringLiteral("fr"),
                                QStringLiteral("es"), QStringLiteral("ja"), QStringLiteral("zh-CN"),
                                QStringLiteral("he"), QStringLiteral("ar"), QStringLiteral("yi")});
-    CHECK(names == QStringList{QStringLiteral("English"), QStringLiteral("Deutsch"), QStringLiteral("Français"),
-                               QStringLiteral("Español"), QStringLiteral("日本語"), QStringLiteral("简体中文"),
-                               QStringLiteral("עברית"), QStringLiteral("العربية"), QStringLiteral("יידיש")});
+    CHECK(names == QStringList{QStringLiteral("English"), QStringLiteral("Deutsch"),
+                               QStringLiteral("Français"), QStringLiteral("Español"),
+                               QStringLiteral("日本語"), QStringLiteral("简体中文"),
+                               QStringLiteral("עברית"), QStringLiteral("العربية"),
+                               QStringLiteral("יידיש")});
     // The pseudo-locale is a fixture, never a choice.
     CHECK_FALSE(codes.contains(QStringLiteral("xx")));
 }
@@ -84,7 +87,8 @@ TEST_CASE("the manager's set is the set the catalogues are made for", "[i18n][ma
         CHECK(mine[i].plurals == theirs[i].plurals);
         CHECK(mine[i].rtl == theirs[i].rtl);
         // languages.json's idea of direction is checked against Qt's.
-        CHECK(QLocale(mine[i].tag).textDirection() == (mine[i].rtl ? Qt::RightToLeft : Qt::LeftToRight));
+        CHECK(QLocale(mine[i].tag).textDirection() ==
+              (mine[i].rtl ? Qt::RightToLeft : Qt::LeftToRight));
     }
 }
 
@@ -95,12 +99,28 @@ TEST_CASE("a language is recognised however a system writes it", "[i18n][manager
         const char* code;
     };
     const Row rows[] = {
-        {"en", "en"},    {"EN-gb", "en"},  {"de-AT", "de"},  {"fr_CA", "fr"},         {"es-419", "es"},
-        {"ja_JP", "ja"}, {"zh", "zh-CN"},  {"zh_CN", "zh-CN"}, {"zh-Hans-CN", "zh-CN"}, {"zh-SG", "zh-CN"},
+        {"en", "en"},
+        {"EN-gb", "en"},
+        {"de-AT", "de"},
+        {"fr_CA", "fr"},
+        {"es-419", "es"},
+        {"ja_JP", "ja"},
+        {"zh", "zh-CN"},
+        {"zh_CN", "zh-CN"},
+        {"zh-Hans-CN", "zh-CN"},
+        {"zh-SG", "zh-CN"},
         // Traditional Chinese is not one of the nine; it is not guessed at.
-        {"zh-TW", ""},   {"zh-Hant", ""},  {"zh-HK", ""},
-        {"he_IL", "he"}, {"iw", "he"},     {"ar-EG", "ar"},  {"yi", "yi"},            {"ji", "yi"},
-        {"pt-BR", ""},   {"xx", ""},       {"", ""},
+        {"zh-TW", ""},
+        {"zh-Hant", ""},
+        {"zh-HK", ""},
+        {"he_IL", "he"},
+        {"iw", "he"},
+        {"ar-EG", "ar"},
+        {"yi", "yi"},
+        {"ji", "yi"},
+        {"pt-BR", ""},
+        {"xx", ""},
+        {"", ""},
     };
     for (const Row& r : rows) {
         INFO(r.tag);
@@ -110,12 +130,14 @@ TEST_CASE("a language is recognised however a system writes it", "[i18n][manager
 
 TEST_CASE("the device's language is the first of its preferences the app has", "[i18n][manager]") {
     const auto languages = loadLanguages();
-    CHECK(languageForUiLanguages({QStringLiteral("pt-BR"), QStringLiteral("nl-NL"), QStringLiteral("de-DE")},
-                                 languages) == QLatin1String("de"));
-    CHECK(languageForUiLanguages({QStringLiteral("zh-Hant-TW"), QStringLiteral("ja-JP")}, languages) ==
-          QLatin1String("ja"));
+    CHECK(languageForUiLanguages(
+              {QStringLiteral("pt-BR"), QStringLiteral("nl-NL"), QStringLiteral("de-DE")},
+              languages) == QLatin1String("de"));
+    CHECK(languageForUiLanguages({QStringLiteral("zh-Hant-TW"), QStringLiteral("ja-JP")},
+                                 languages) == QLatin1String("ja"));
     CHECK(languageForUiLanguages({QStringLiteral("zh-Hant-TW")}, languages) == QLatin1String("en"));
-    CHECK(languageForUiLanguages({QStringLiteral("sv"), QStringLiteral("da")}, languages) == QLatin1String("en"));
+    CHECK(languageForUiLanguages({QStringLiteral("sv"), QStringLiteral("da")}, languages) ==
+          QLatin1String("en"));
     CHECK(languageForUiLanguages({}, languages) == QLatin1String("en"));
 }
 
@@ -181,7 +203,8 @@ TEST_CASE("setLanguage changes everything a switch touches, and saves it", "[i18
     REQUIRE_FALSE(manager.rtl());
 
     int announced = 0;
-    QObject::connect(&manager, &LanguageManager::currentLanguageChanged, &manager, [&announced]() { ++announced; });
+    QObject::connect(&manager, &LanguageManager::currentLanguageChanged, &manager,
+                     [&announced]() { ++announced; });
 
     SECTION("to a right-to-left language and back") {
         REQUIRE(manager.setLanguage(QStringLiteral("he")));
@@ -276,7 +299,8 @@ TEST_CASE("numbers, dates and times follow the app's language", "[i18n][manager]
     CHECK(qtTrId("scan.leave.body", 3).contains(QLocale().toString(3)));
 }
 
-TEST_CASE("a string with no translation shows its English through the manager", "[i18n][manager][fallback]") {
+TEST_CASE("a string with no translation shows its English through the manager",
+          "[i18n][manager][fallback]") {
     Fresh fresh;
     QQmlEngine engine;
     LanguageManager manager(*qGuiApp, engine);

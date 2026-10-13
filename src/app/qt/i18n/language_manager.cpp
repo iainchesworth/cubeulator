@@ -34,7 +34,8 @@ constexpr auto kLanguagesResource = ":/i18n/languages.json";
     return info;
 }
 
-[[nodiscard]] const LanguageInfo* find(const std::vector<LanguageInfo>& languages, const QString& code) {
+[[nodiscard]] const LanguageInfo* find(const std::vector<LanguageInfo>& languages,
+                                       const QString& code) {
     for (const LanguageInfo& l : languages) {
         if (!l.pseudo && l.code == code) {
             return &l;
@@ -70,7 +71,8 @@ std::vector<LanguageInfo> loadLanguages(const QByteArray& json) {
 }
 
 QString canonicalCode(const QString& tag, const std::vector<LanguageInfo>& languages) {
-    const QStringList parts = tag.trimmed().replace(QLatin1Char('_'), QLatin1Char('-')).split(QLatin1Char('-'));
+    const QStringList parts =
+        tag.trimmed().replace(QLatin1Char('_'), QLatin1Char('-')).split(QLatin1Char('-'));
     if (parts.isEmpty() || parts.first().isEmpty()) {
         return {};
     }
@@ -98,8 +100,10 @@ QString canonicalCode(const QString& tag, const std::vector<LanguageInfo>& langu
     if (language == QLatin1String("zh")) {
         const bool traditional = script == QLatin1String("hant") || region == QLatin1String("TW") ||
                                  region == QLatin1String("HK") || region == QLatin1String("MO");
-        return traditional ? QString{} : (find(languages, QStringLiteral("zh-CN")) != nullptr ? QStringLiteral("zh-CN")
-                                                                                              : QString{});
+        return traditional
+                   ? QString{}
+                   : (find(languages, QStringLiteral("zh-CN")) != nullptr ? QStringLiteral("zh-CN")
+                                                                          : QString{});
     }
     for (const LanguageInfo& l : languages) {
         if (!l.pseudo && l.code.section(QLatin1Char('-'), 0, 0).toLower() == language) {
@@ -109,7 +113,8 @@ QString canonicalCode(const QString& tag, const std::vector<LanguageInfo>& langu
     return {};
 }
 
-QString languageForUiLanguages(const QStringList& uiLanguages, const std::vector<LanguageInfo>& languages) {
+QString languageForUiLanguages(const QStringList& uiLanguages,
+                               const std::vector<LanguageInfo>& languages) {
     for (const QString& tag : uiLanguages) {
         if (const QString code = canonicalCode(tag, languages); !code.isEmpty()) {
             return code;
@@ -118,8 +123,8 @@ QString languageForUiLanguages(const QStringList& uiLanguages, const std::vector
     return QStringLiteral("en");
 }
 
-LanguageManager::LanguageManager(QGuiApplication& app, QQmlEngine& engine, QString translationBasename,
-                                 QObject* parent)
+LanguageManager::LanguageManager(QGuiApplication& app, QQmlEngine& engine,
+                                 QString translationBasename, QObject* parent)
     : QObject(parent),
       app_(app),
       engine_(engine),
@@ -140,7 +145,8 @@ LanguageManager::LanguageManager(QGuiApplication& app, QQmlEngine& engine, QStri
 
 void LanguageManager::applyInitialLanguage() {
     const QSettings settings;
-    const QString saved = canonicalCode(settings.value(QLatin1String(kSettingsKey)).toString(), languages_);
+    const QString saved =
+        canonicalCode(settings.value(QLatin1String(kSettingsKey)).toString(), languages_);
     selected_ = saved;
 
     // The override first: it exists for the pseudo-locale and for runs that
@@ -157,7 +163,8 @@ void LanguageManager::applyInitialLanguage() {
             apply(*find(languages_, code));
             return;
         }
-        qWarning("i18n: %s=%s is not a language of this app; ignored", kLocaleEnvOverride, qUtf8Printable(env));
+        qWarning("i18n: %s=%s is not a language of this app; ignored", kLocaleEnvOverride,
+                 qUtf8Printable(env));
     }
 
     if (!saved.isEmpty()) {
@@ -195,14 +202,16 @@ QVariantMap LanguageManager::deviceLanguage() const {
 
 bool LanguageManager::hasOverride() const {
     const QSettings settings;
-    return !canonicalCode(settings.value(QLatin1String(kSettingsKey)).toString(), languages_).isEmpty();
+    return !canonicalCode(settings.value(QLatin1String(kSettingsKey)).toString(), languages_)
+                .isEmpty();
 }
 
 bool LanguageManager::setLanguage(const QString& code) {
     const QString canonical = canonicalCode(code, languages_);
     const LanguageInfo* language = canonical.isEmpty() ? nullptr : find(languages_, canonical);
     if (language == nullptr) {
-        qWarning("LanguageManager::setLanguage: %s is not a language of this app", qUtf8Printable(code));
+        qWarning("LanguageManager::setLanguage: %s is not a language of this app",
+                 qUtf8Printable(code));
         return false;
     }
     {
@@ -224,7 +233,8 @@ bool LanguageManager::preview(const QString& code) {
     const QString canonical = canonicalCode(code, languages_);
     const LanguageInfo* language = canonical.isEmpty() ? nullptr : find(languages_, canonical);
     if (language == nullptr) {
-        qWarning("LanguageManager::preview: %s is not a language of this app", qUtf8Printable(code));
+        qWarning("LanguageManager::preview: %s is not a language of this app",
+                 qUtf8Printable(code));
         return false;
     }
     apply(*language);
@@ -260,7 +270,8 @@ void LanguageManager::apply(const LanguageInfo& language) {
     if (base_translator_.load(prefix + QStringLiteral("en.qm"))) {
         app_.installTranslator(&base_translator_);
     } else {
-        qWarning("i18n: no English catalogue (%sen.qm): strings will show their ids", qUtf8Printable(prefix));
+        qWarning("i18n: no English catalogue (%sen.qm): strings will show their ids",
+                 qUtf8Printable(prefix));
     }
 
     if (language.file != QLatin1String("en")) {

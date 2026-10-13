@@ -67,12 +67,15 @@ TEST_CASE("every catalogue holds exactly the ids of strings.json", "[i18n][catal
             FAIL_CHECK("missing id " << str(id) << " (run tools/i18n/strings_to_ts.py --write)");
         }
         for (const QString& id : have - expected) {
-            FAIL_CHECK("id " << str(id) << " is not in strings.json (run tools/i18n/strings_to_ts.py --write)");
+            FAIL_CHECK(
+                "id " << str(id)
+                      << " is not in strings.json (run tools/i18n/strings_to_ts.py --write)");
         }
     }
 }
 
-TEST_CASE("the English catalogue is strings.json, notes and plural forms included", "[i18n][catalogue]") {
+TEST_CASE("the English catalogue is strings.json, notes and plural forms included",
+          "[i18n][catalogue]") {
     const Catalogue en = read_catalogue(catalogue_path(read_languages().front()));
     for (const Source& s : read_strings()) {
         const Entry* e = en.find(s.id);
@@ -90,7 +93,8 @@ TEST_CASE("the English catalogue is strings.json, notes and plural forms include
     }
 }
 
-TEST_CASE("a plural message has exactly the number of forms its language has", "[i18n][catalogue][plural]") {
+TEST_CASE("a plural message has exactly the number of forms its language has",
+          "[i18n][catalogue][plural]") {
     const auto languages = read_languages();
     for (const Language& l : languages) {
         const Catalogue c = read_catalogue(catalogue_path(l));
@@ -108,7 +112,8 @@ TEST_CASE("a plural message has exactly the number of forms its language has", "
     }
 }
 
-TEST_CASE("nothing is empty, unfinished or obsolete where the language says it is done", "[i18n][catalogue]") {
+TEST_CASE("nothing is empty, unfinished or obsolete where the language says it is done",
+          "[i18n][catalogue]") {
     const auto languages = read_languages();
     for (const Language& l : languages) {
         const Catalogue c = read_catalogue(catalogue_path(l));
@@ -129,7 +134,8 @@ TEST_CASE("nothing is empty, unfinished or obsolete where the language says it i
         // language is whole once E5 has translated it and languages.json says
         // so; until then its unfinished entries are what falls back to English.
         if (l.translated) {
-            INFO(str(l.code) << " is marked translated and has " << unfinished << " unfinished entries");
+            INFO(str(l.code) << " is marked translated and has " << unfinished
+                             << " unfinished entries");
             CHECK(unfinished == 0);
         }
     }
@@ -169,7 +175,8 @@ TEST_CASE("brand terms survive translation in every catalogue", "[i18n][catalogu
                     continue;
                 }
                 for (const QString& form : e.forms) {
-                    INFO(str(c.language) << " / " << str(e.id) << " [" << str(term) << "]: " << str(form));
+                    INFO(str(c.language)
+                         << " / " << str(e.id) << " [" << str(term) << "]: " << str(form));
                     CHECK(form.contains(term));
                 }
             }
@@ -209,7 +216,8 @@ TEST_CASE("the pseudo-locale is longer, accented and bracketed", "[i18n][catalog
             REQUIRE(pseudo_text.endsWith(QLatin1Char(']')));
             // content.md allows a translation 40% more than the English; the
             // pseudo-locale takes all of it, and the brackets besides.
-            CHECK(pseudo_text.size() >= plain.size() + static_cast<qsizetype>(plain.size() * 0.4) - 2);
+            CHECK(pseudo_text.size() >=
+                  plain.size() + static_cast<qsizetype>(plain.size() * 0.4) - 2);
             CHECK(argument_placeholders(pseudo_text) == argument_placeholders(plain));
             // Nothing is left looking untouched: a plain ASCII vowel
             // surviving outside a placeholder would be a string that was not

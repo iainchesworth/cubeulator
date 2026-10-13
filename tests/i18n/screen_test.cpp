@@ -21,11 +21,11 @@
 #include <cube/solver/solver.hpp>
 
 #include <QColor>
+#include <QDir>
 #include <QGuiApplication>
+#include <QImage>
 #include <QMetaObject>
 #include <QQmlComponent>
-#include <QDir>
-#include <QImage>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QStringList>
@@ -137,7 +137,8 @@ public:
         QQuickItem* found = nullptr;
         visit(screen_.get(), [&](QQuickItem* item) {
             if (found == nullptr && item->isVisible() &&
-                QString::fromLatin1(item->metaObject()->className()).startsWith(QLatin1String("AppButton")) &&
+                QString::fromLatin1(item->metaObject()->className())
+                    .startsWith(QLatin1String("AppButton")) &&
                 item->property("text").toString() == text) {
                 found = item;
             }
@@ -154,11 +155,12 @@ public:
     [[nodiscard]] QStringList labels_outside_buttons() const {
         QStringList bad;
         visit(screen_.get(), [&](QQuickItem* item) {
-            if (!item->isVisible() ||
-                !QString::fromLatin1(item->metaObject()->className()).startsWith(QLatin1String("AppButton"))) {
+            if (!item->isVisible() || !QString::fromLatin1(item->metaObject()->className())
+                                           .startsWith(QLatin1String("AppButton"))) {
                 return;
             }
-            const QRectF box = item->mapRectToItem(screen_.get(), QRectF(0, 0, item->width(), item->height()));
+            const QRectF box =
+                item->mapRectToItem(screen_.get(), QRectF(0, 0, item->width(), item->height()));
             visit(item, [&](QQuickItem* inner) {
                 if (inner == item || !inner->isVisible() || !inner->inherits("QQuickText")) {
                     return;
@@ -230,7 +232,8 @@ struct PermissionWords {
     }
 };
 
-TEST_CASE("a screen that is up changes language without being made again", "[i18n][screen][switch]") {
+TEST_CASE("a screen that is up changes language without being made again",
+          "[i18n][screen][switch]") {
     in_language("en");
     Screen screen("PermissionScreen", 900, 640);
     const PermissionWords words(screen);
@@ -273,7 +276,8 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
         const char* what;
     };
     const Size sizes[] = {{900, 640, "wide"}, {390, 780, "narrow"}};
-    for (const char* type : {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen"}) {
+    for (const char* type :
+         {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen"}) {
         for (const Size& size : sizes) {
             in_language("xx");
             Screen screen(type, size.w, size.h);
@@ -322,7 +326,8 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
     }
 }
 
-TEST_CASE("right to left mirrors the layout, and left to right puts it back", "[i18n][screen][rtl]") {
+TEST_CASE("right to left mirrors the layout, and left to right puts it back",
+          "[i18n][screen][rtl]") {
     // The permission screen's wide layout: the copy and the buttons in the
     // leading half, the reassurances in the trailing half.
     in_language("en");
@@ -348,7 +353,8 @@ TEST_CASE("right to left mirrors the layout, and left to right puts it back", "[
     CHECK(screen.left_of(act) < screen.item()->width() / 2);
 }
 
-TEST_CASE("the cube view is not mirrored, however the screen around it is", "[i18n][screen][rtl][cube]") {
+TEST_CASE("the cube view is not mirrored, however the screen around it is",
+          "[i18n][screen][rtl][cube]") {
     in_language("he");
     Screen screen("CompleteScreen", 900, 640);
     // The screen is mirrored...
@@ -359,7 +365,8 @@ TEST_CASE("the cube view is not mirrored, however the screen around it is", "[i1
         const QString cls = QString::fromLatin1(item->metaObject()->className());
         // The screen's own inline component wraps CubeView; QML names the
         // class after the type.
-        if (cls.startsWith(QLatin1String("CubeView")) || cls.startsWith(QLatin1String("BobbingCube"))) {
+        if (cls.startsWith(QLatin1String("CubeView")) ||
+            cls.startsWith(QLatin1String("BobbingCube"))) {
             cubes.append(item);
         }
     }
@@ -395,12 +402,18 @@ Item {
 
 [[nodiscard]] QColor paint(Color colour) {
     switch (colour) {
-        case Color::White: return {250, 250, 250};
-        case Color::Yellow: return {240, 220, 0};
-        case Color::Green: return {0, 160, 60};
-        case Color::Blue: return {0, 70, 200};
-        case Color::Orange: return {250, 120, 0};
-        case Color::Red: return {200, 0, 30};
+        case Color::White:
+            return {250, 250, 250};
+        case Color::Yellow:
+            return {240, 220, 0};
+        case Color::Green:
+            return {0, 160, 60};
+        case Color::Blue:
+            return {0, 70, 200};
+        case Color::Orange:
+            return {250, 120, 0};
+        case Color::Red:
+            return {200, 0, 30};
     }
     return {};
 }
@@ -419,8 +432,10 @@ Item {
 
 }  // namespace
 
-TEST_CASE("in a right-to-left language the 3D cube is the solver's cube and every turn goes the solver's way",
-          "[i18n][screen][rtl][cube]") {
+TEST_CASE(
+    "in a right-to-left language the 3D cube is the solver's cube and every turn goes the solver's "
+    "way",
+    "[i18n][screen][rtl][cube]") {
     in_language("ar");
     REQUIRE(QGuiApplication::layoutDirection() == Qt::RightToLeft);
 
@@ -456,7 +471,8 @@ TEST_CASE("in a right-to-left language the 3D cube is the solver's cube and ever
         const int before = view->property("played").toInt();
         QVariant started;
         REQUIRE(QMetaObject::invokeMethod(view, "playMove", Q_RETURN_ARG(QVariant, started),
-                                          Q_ARG(QVariant, letter(move.face)), Q_ARG(QVariant, move.turns)));
+                                          Q_ARG(QVariant, letter(move.face)),
+                                          Q_ARG(QVariant, move.turns)));
         REQUIRE(started.toBool());
         REQUIRE(wait_for([&]() { return view->property("played").toInt() > before; }));
         // The layer turned the way the solver turns it: the stickers read
@@ -471,16 +487,19 @@ TEST_CASE("in a right-to-left language the 3D cube is the solver's cube and ever
 // and a right-to-left language look like. Hidden: it writes files, and the
 // system tests' screenshot tour (tests/system) is the permanent one.
 //
-//   CUBE_I18N_SHOT_DIR=out CUBE_I18N_SHOT_SCREEN=LaunchScreen CUBE_I18N_SHOT_LANG=xx //       cube_i18n_screen_tests "[.shots]"
+//   CUBE_I18N_SHOT_DIR=out CUBE_I18N_SHOT_SCREEN=LaunchScreen CUBE_I18N_SHOT_LANG=xx //
+//   cube_i18n_screen_tests "[.shots]"
 //
 // One picture a process: a second grabWindow() with the 3D cube in the scene
 // crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
 // hazards").
 TEST_CASE("a picture of a screen in a language", "[.shots]") {
     const QString dir = qEnvironmentVariable("CUBE_I18N_SHOT_DIR");
-    const QString type = qEnvironmentVariable("CUBE_I18N_SHOT_SCREEN", QStringLiteral("LaunchScreen"));
+    const QString type =
+        qEnvironmentVariable("CUBE_I18N_SHOT_SCREEN", QStringLiteral("LaunchScreen"));
     const QString lang = qEnvironmentVariable("CUBE_I18N_SHOT_LANG", QStringLiteral("en"));
-    const QStringList size = qEnvironmentVariable("CUBE_I18N_SHOT_SIZE", QStringLiteral("900x640")).split('x');
+    const QStringList size =
+        qEnvironmentVariable("CUBE_I18N_SHOT_SIZE", QStringLiteral("900x640")).split('x');
     REQUIRE_FALSE(dir.isEmpty());
     REQUIRE(size.size() == 2);
     REQUIRE(t::language().preview(lang));
@@ -493,7 +512,8 @@ TEST_CASE("a picture of a screen in a language", "[.shots]") {
     const QImage image = window.grabWindow();
     REQUIRE_FALSE(image.isNull());
     QDir().mkpath(dir);
-    const QString file = QStringLiteral("%1/%2_%3_%4x%5.png").arg(dir, type, lang, size.at(0), size.at(1));
+    const QString file =
+        QStringLiteral("%1/%2_%3_%4x%5.png").arg(dir, type, lang, size.at(0), size.at(1));
     REQUIRE(image.save(file));
     WARN("wrote " << str(file));
 }
