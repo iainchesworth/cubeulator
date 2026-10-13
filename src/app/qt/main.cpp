@@ -1,8 +1,13 @@
 #include "app_runtime.hpp"
 
+#include <cube/solver/solver.hpp>
+
 #include <QGuiApplication>
+#include <QMetaObject>
 #include <QQuickWindow>
 #include <QSettings>
+
+#include <memory>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -106,11 +111,45 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
-    // The controllers, their QML registration and the engine are built by
-    // AppRuntime, which tests/system boots the same way.
+    // The controllers (cube::app::AppControllers), their registration as QML
+    // singletons and the engine that loads Main.qml are one AppRuntime, which
+    // tests/system boots the same way.
     cube::app::AppRuntime runtime;
     if (!runtime.load()) {
         return -1;
+    }
+    SolveController& solveController = runtime.solve();
+    QQmlApplicationEngine& engine = runtime.engine();
+
+    // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
+    // scrambled from that seed, no camera and no scan. For working on the
+    // solve screen itself - trying how a move is shown does not need a real
+    // cube read first. CUBE_SOLVE_DEMO_MOVE=<n> opens it n moves in.
+    bool demo = false;
+    const unsigned demo_seed = qEnvironmentVariable("CUBE_SOLVE_DEMO").toUInt(&demo);
+    if (demo) {
+        const int moves_in = qEnvironmentVariable("CUBE_SOLVE_DEMO_MOVE").toInt();
+        solveController.solveCube(cube::solver::random_scramble(demo_seed));
+        QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
+        app_state->setProperty("solveCamera", false);
+        auto show_when_solved = std::make_shared<QMetaObject::Connection>();
+        *show_when_solved = QObject::connect(
+            &solveController, &SolveController::stateChanged, app_state,
+            [&solveController, app_state, show_when_solved, moves_in]() {
+                if (solveController.isSolving()) {
+                    return;
+                }
+                QObject::disconnect(*show_when_solved);
+                QStringList solution;
+                for (const QVariant& move : solveController.moves()) {
+                    solution.append(move.toMap().value(QStringLiteral("notation")).toString());
+                }
+                qInfo("CUBE_SOLVE_DEMO: %s", qPrintable(solution.join(QLatin1Char(' '))));
+                for (int i = 0; i < moves_in; ++i) {
+                    solveController.nextMove();
+                }
+                app_state->setProperty("screen", QStringLiteral("solve"));
+            });
     }
 
     return QGuiApplication::exec();
