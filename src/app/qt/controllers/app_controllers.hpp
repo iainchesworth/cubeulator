@@ -3,7 +3,6 @@
 #include "controllers/camera_controller.hpp"
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
-#include "controllers/scan_session.hpp"
 #include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
 
@@ -31,11 +30,10 @@ struct AppControllers {
     CameraController camera;
     // The previous scan pipeline: still here because the settings screen
     // binds to it, but no screen starts it.
-    ScanSession scanSession;
     // The scan screen's controller.
     DirectScan directScan;
     SettingsModel settings;
-    SolveController solve{scanSession};
+    SolveController solve;
     // How the cube is held while it is solved: the solve screen turns its
     // cube to match and words each move from it. It watches the camera's
     // frames against the solver's cube, hence the two it is made from.

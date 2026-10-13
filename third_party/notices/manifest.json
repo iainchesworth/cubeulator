@@ -185,61 +185,6 @@
   },
   "components": [
     {
-      "id": "m3t",
-      "name": "M3T region-based object tracker",
-      "version": "f02106186a1e756450226b3b793e309506817c58",
-      "license": "MIT",
-      "copyright": "Copyright (c) 2023 Manuel Stoiber, German Aerospace Center (DLR)",
-      "homepage": "https://github.com/DLR-RM/3DObjectTracking",
-      "kind": "vendored",
-      "linkedLibrary": [
-        "m3t"
-      ],
-      "files": [
-        "third_party/m3t/"
-      ],
-      "licenseFile": "third_party/m3t/LICENSE",
-      "platforms": [
-        "windows",
-        "macos",
-        "linux"
-      ],
-      "notes": "Vendored under third_party/m3t, desktop only. Removed by recovery plan R6."
-    },
-    {
-      "id": "m3t-filesystem",
-      "name": "filesystem (header-only std::filesystem shim, bundled in M3T)",
-      "version": "",
-      "license": "MIT",
-      "copyright": "Copyright (c) 2018 BrainStone",
-      "homepage": "",
-      "kind": "vendored",
-      "parent": "m3t",
-      "notes": "third_party/m3t/third_party/filesystem/filesystem.h: a short include shim; the file records only the author, not an upstream URL."
-    },
-    {
-      "id": "m3t-nanoflann",
-      "name": "nanoflann (bundled in M3T)",
-      "version": "",
-      "license": "BSD-2-Clause",
-      "copyright": "Copyright 2008-2009 Marius Muja (mariusm@cs.ubc.ca). All rights reserved.\nCopyright 2008-2009 David G. Lowe (lowe@cs.ubc.ca). All rights reserved.\nCopyright 2011-2021 Jose Luis Blanco (joseluisblancoc@gmail.com). All rights reserved.",
-      "homepage": "https://github.com/jlblancoc/nanoflann",
-      "kind": "vendored",
-      "parent": "m3t",
-      "notes": "third_party/m3t/third_party/nanoflann."
-    },
-    {
-      "id": "m3t-tinyobjloader",
-      "name": "tinyobjloader (bundled in M3T)",
-      "version": "",
-      "license": "MIT",
-      "copyright": "Copyright (c) 2012-2018 Syoyo Fujita and many contributors.",
-      "homepage": "https://github.com/tinyobjloader/tinyobjloader",
-      "kind": "vendored",
-      "parent": "m3t",
-      "notes": "third_party/m3t/third_party/tiny_obj_loader."
-    },
-    {
       "id": "mediapipe-palm-detection",
       "name": "MediaPipe palm detection model (int8 ONNX, via the OpenCV Zoo)",
       "version": "2023feb",

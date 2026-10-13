@@ -1,7 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "controllers/direct_scan.hpp"
-#include "controllers/scan_session.hpp"
 #include "drawn_cube.hpp"
 #include "solve_controller.hpp"
 
@@ -275,19 +274,15 @@ TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
           "[qt][controllers][direct-scan]") {
     const Cube cube = cube::solver::random_scramble(5);
     DirectScan scan;
-    cube::app::ScanSession legacy;
-    SolveController solver(legacy);
-    int ready = 0;
-    QObject::connect(&solver, &SolveController::solveReady, [&ready]() { ++ready; });
+    SolveController solver;
     QObject::connect(&scan, &DirectScan::scanCompleted, &solver,
                      [&]() { solver.solveCube(*scan.cube()); });
 
     show_cube(scan, cube);
 
-    // Solving has started, and nothing has asked for the solve screen: the
-    // finished scan stays on show while the solution is worked out.
+    // Solving has started. When to show the solution is the caller's to
+    // decide, so the finished scan can stay on show meanwhile.
     REQUIRE(solver.isSolving());
-    CHECK(ready == 0);
 
     // The solve runs on a worker; its result lands through the event loop.
     QElapsedTimer waited;
@@ -298,5 +293,4 @@ TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
     REQUIRE_FALSE(solver.isSolving());
     CHECK(solver.totalMoves() > 0);
     CHECK(solver.atStart());
-    CHECK(ready == 0);
 }
