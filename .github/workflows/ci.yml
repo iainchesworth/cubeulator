@@ -756,12 +756,19 @@ jobs:
       - name: Test
         run: ctest --preset linux-gcc-coverage
 
+      # --gcov-suspicious-hits-threshold: gcovr 8 stops with "SuspiciousHits ...
+      # cube.cpp:283 Got suspicious hit value" (gcc bug 68080's signature)
+      # for any line hit more than its default threshold. The solver's slow
+      # corpus tests run an -O0, -fno-inline build of Cube::at() ~5.8e10 times;
+      # those counters are correct (checked: 64-bit, none negative). 1e12
+      # keeps the detector for a counter that really has gone wrong.
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-suspicious-hits-threshold 1000000000000
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage.html
           --fail-under-line 80 --fail-under-branch 80
