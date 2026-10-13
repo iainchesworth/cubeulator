@@ -21,7 +21,7 @@ Conventions:
   test uses it.
 - An accessible name is the visible label unless the table gives another.
 - "Leading" and "trailing" are the start and end of a line of text: left
-  and right in English, swapped in Hebrew and Arabic.
+  and right in English, swapped in Hebrew, Arabic and Yiddish.
 - Sizes are in device-independent pixels at a text scale of 1.0.
 - Where a screen belongs to another lane, the spec is a proposal for its
   chrome and states. How the cube is read and what a turn means are not

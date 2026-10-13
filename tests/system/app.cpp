@@ -4,6 +4,7 @@
 #include "reach.hpp"
 
 #include "app_runtime.hpp"
+#include "i18n/language_manager.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -135,6 +136,7 @@ void App::reset() {
     FakeCamera::instance().reset();
     scan.restart();
 
+    reset_language();
     settings_state_->setProperty("themeMode", "light");
     settings_state_->setProperty("shaderStyleIndex", 0);
     settings_state_->setProperty("cubeAutoRotate", true);
@@ -457,6 +459,21 @@ void App::resize(QSize size) {
         wait_for([&]() { return window_->size() == size; }, 3000);
     }
     pump(60);
+}
+
+void App::reset_language() {
+    auto* language =
+        runtime_->engine().singletonInstance<cube::i18n::LanguageManager*>("Cubeulator",
+                                                                           "LanguageManager");
+    if (language == nullptr) {
+        return;
+    }
+    // Forget a saved choice, then switch without saving a new one: what a
+    // restart would find is a device that has no opinion, and what is on
+    // screen is English.
+    language->useSystemLanguage();
+    language->preview(QStringLiteral("en"));
+    pump(30);
 }
 
 void App::set_theme(const QString& mode) {

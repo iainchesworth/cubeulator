@@ -9,7 +9,8 @@ class QQuickWindow;
 namespace cube::app {
 
 // The application as it runs: the controllers (AppControllers - the one place
-// they are made and registered) and the engine that loads Main.qml.
+// they are made and registered), the language (cube::i18n::install) and the
+// engine that loads Main.qml.
 //
 // main() and the system tests (tests/system) construct this one class, so a
 // test boots exactly what a user boots and nothing is wired by hand twice.

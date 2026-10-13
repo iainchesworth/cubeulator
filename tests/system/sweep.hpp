@@ -18,6 +18,8 @@
 #include <QString>
 #include <QStringList>
 
+#include <functional>
+
 namespace cube::systest {
 
 // Controls a sweep leaves alone, by key (see App::control_key).
@@ -26,6 +28,9 @@ struct SweepOptions {
     // How many passes: a control that was disabled in one (Previous, at the
     // start of a solution) may be enabled by a press later in the next.
     int passes = 3;
+    // Called after each press, with the control's key: for putting back what a
+    // press changed beyond the app's own state (the language, for one).
+    std::function<void(const QString&)> after_press;
 };
 
 namespace detail {
@@ -93,6 +98,9 @@ inline QStringList press_every_control(App& app, const QString& screen,
         }
         INFO("pressing " << key.toStdString() << " on " << screen.toStdString());
         app.click(control);
+        if (options.after_press) {
+            options.after_press(key);
+        }
         if (app.screen() != screen) {
             app.go(screen);
             app.settle();

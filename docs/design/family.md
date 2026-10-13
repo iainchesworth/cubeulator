@@ -1,7 +1,8 @@
 # The family
 
-Written 2026-10-13. Status: **proposal for Iain.** Nothing here is decided
-until a line says *(Iain, date)*. It is not legal advice.
+Written 2026-10-13. Status: **decisions D1 to D9 taken the same day**
+*(Iain)*, recorded in section 5; everything else here is survey or
+proposal. It is not legal advice.
 
 Iain builds more than one app. This page records what the others do, so
 that Cubeulator's experience plan lines up with them where that is cheap and
@@ -45,7 +46,7 @@ handoff still exists*, is half answered: its tokens survive in a shipping
 file, and `tokens.json` can be checked against it instead of standing on its
 own.
 
-Where they differ, Cubeulator is the more careful one (section 3, F8): the
+Where they differ, Cubeulator is the more careful one (section 3, F9): the
 light-theme label on ICL Forge's red button measures **3.95:1**, red as text
 **3.76:1**; Cubeulator's `accentFill`/`accentText` pair fixes both (6.46:1).
 
@@ -91,21 +92,24 @@ system's own setting multiplied in; text that wraps instead of eliding.
 
 **5. Cubeulator is behind in these** (section 3 has the recipes):
 
-| | family does | Cubeulator plans |
-|---|---|---|
-| build details in About | commit, target, dirty flag, in a block, copyable | "Version 1.0.0" only |
-| diagnostics | save or copy a text file, secrets withheld | nothing |
-| Hebrew and Arabic faces | Noto Sans Hebrew, Noto Sans Arabic, already vendored three times | IBM Plex Sans Hebrew and Arabic, none bundled yet |
-| language set | en fr de es ar he **yi** | en de fr es ja zh he ar (no yi) |
-| setting keys | `appearance/theme`, `language/code`, `firstRun/acknowledgedVersion` | "a stable key", unnamed |
-| machine-translation note | an in-app sentence under the language list | in `brief.md`, not in the app |
-| pictures in the docs | generated from a manifest and checked | a screenshot tour is planned |
+| | family does | Cubeulator planned | decided |
+|---|---|---|---|
+| build details in About | commit, target, dirty flag, in a block, copyable | "Version 1.0.0" only | the compact line and **Copy** in About (F5) |
+| diagnostics | save or copy a text file, secrets withheld | nothing | **Copy details** in V1.0 (D6, F7) |
+| Hebrew and Arabic faces | Noto Sans Hebrew, Noto Sans Arabic, already vendored three times | IBM Plex Sans Hebrew and Arabic, none bundled yet | Noto (D3, F4) |
+| language set | en fr de es ar he **yi** | en de fr es ja zh he ar (no yi) | Yiddish in V1.0: nine languages (D4, F4) |
+| setting keys | `appearance/theme`, `language/code`, `firstRun/acknowledgedVersion` | "a stable key", unnamed | named in F2 |
+| machine-translation note | an in-app sentence under the language list | in `brief.md`, not in the app | in E5 |
+| pictures in the docs | generated from a manifest and checked | a screenshot tour is planned | manifest and capture entry (F10) |
 
-**6. The publisher is Iain Chesworth Labs, ICL** *(Iain, 2026-10-13)*: the
-umbrella for his personal and shared work. Its names are `iainchesworth`,
-`iainchesworthlabs` and `icl` (as in ICL Forge, `iclforge`). No app shows a
-publisher or a copyright line in its window today. Decision D1 asks how it
-is written in the app.
+**6. The publisher follows the account** *(Iain, 2026-10-13, D1)*. Iain
+Chesworth Labs, ICL, is the umbrella for his personal and shared work; its
+names are `iainchesworth`, `iainchesworthlabs` and `icl` (as in ICL Forge,
+`iclforge`). Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so its
+publisher is **Iain Chesworth Labs** *(Iain, 2026-10-13, asked again after
+the move)*. While it sat under `iainchesworth` the answer was Iain
+Chesworth, by the same rule. No app shows a publisher or a copyright line
+in its window today.
 
 ## 2. Side by side
 
@@ -114,7 +118,7 @@ is written in the app.
 | Style | square, flat, red | square, flat, red; Forge uses Fusion, the others Basic | rounded cards, teal | rounded, glow, blur, teal |
 | Theme setting | system, light, dark | system, light, dark; **palette** signal, ink, console, system | system, light, dark (resets on launch) | light, dark; **accent** of four |
 | Latin faces | Archivo; IBM Plex Mono | Archivo; system mono (none bundled) | IBM Plex Sans; IBM Plex Mono | Bricolage Grotesque; Hanken Grotesk; system mono |
-| Hebrew, Arabic | IBM Plex Sans Hebrew, Arabic (planned) | Noto Sans Hebrew, Noto Sans Arabic | the same Noto faces | the same Noto faces, by `unicode-range` |
+| Hebrew, Arabic | Noto Sans Hebrew, Noto Sans Arabic (D3; was IBM Plex Sans) | Noto Sans Hebrew, Noto Sans Arabic | the same Noto faces | the same Noto faces, by `unicode-range` |
 | Japanese, Chinese | the system's, chosen by language | not shipped | not shipped | the system's, by `html[lang]` |
 | Type sizes | rem, times `textScale` | px times `fontScale` | px | px and rem |
 | Text size setting | device, 1.25, 1.5 (times the OS's) | 100, 125, 150, 175 %, system | none | none |
@@ -122,20 +126,20 @@ is written in the app.
 | Smallest target | 48 px; 96 on solve | 30 px buttons (desktop) | 44 px on phone | 44 px on phone |
 | About is | a screen under Settings | a dialog, reached three ways | a card in Settings | the `#about` route |
 | About shows | icon, name, version, what, author, licence, three rows, small print | icon, name, tagline, what, **version block**, licence and trademark, third-party note, repository link, Licences and Close | name and version, **version block**, GitHub link, Third-Party Licenses | name, tagline, version, commit, commit date, homepage, language chips |
-| Copyright in the app | none ("Made by Iain Chesworth") | none (README and macOS bundle only) | none | none |
+| Copyright in the app | none ("Made by Iain Chesworth Labs") | none (README and macOS bundle only) | none | none |
 | Licences | generated screen (E0b) | `NOTICES.txt` in a read-only dialog (Crucible, Hearth; not Forge) | a dialog of five hard-coded entries | none |
 | Privacy in the app | a screen | prose in the docs | none | prose in the docs |
 | Diagnostics | none | save, copy, live view | a rotating log file | a diagnostics page, capture downloads |
 | Help in the app | Help screens, F1 | `?` and F1 open About | none | a link to the contributing guide |
 | Settings store | `QSettings`, org and app `Cubeulator` | `QSettings`, org `iclforge`; a migration from old names | `QSettings`; only the language persists | `localStorage`, mirrored to the server |
 | Language mechanism | Linguist, live switch (E2b) | Linguist, shared `LanguageManager`, live switch | Linguist, `LanguageManager` (the original) | catalogues in JS, `AquaI18n`, live switch |
-| Languages | en de fr es ja zh he ar | en fr de es ar he yi | en fr de es ar he yi | en de es fr ar he ja zh yi |
+| Languages | en de fr es ja zh he ar yi (D4; was eight, no yi) | en fr de es ar he yi | en fr de es ar he yi | en de es fr ar he ja zh yi |
 | Source spelling | British | British ("Licences") | mixed ("Licenses") | mixed |
 | Pseudo-locale | planned, real | `xx`, environment only | none | `⟦…⟧` scan in a test |
 | Translation gates | planned lint | `update_translations`, no unfinished, `test_translations.cpp` | two grep jobs | key and placeholder parity |
 | Window size | remembered (E4a) | not remembered | fixed, min = max | n/a |
-| Identifier | `org.iainchesworth.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
-| GitHub account | `iainchesworth` | `iainchesworthlabs` | `iainchesworth` | `iainchesworthlabs` |
+| Identifier | `com.iainchesworthlabs.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
+| GitHub account | `iainchesworthlabs` (moved 2026-10-13) | `iainchesworthlabs` | `iainchesworth` | `iainchesworthlabs` |
 | Docs pictures | system-test tour (E0a) | manifest of 84, `take_pictures.py`, `check_doc_pictures.py` | by hand | `scripts/capture-doc-screenshots.js` |
 
 ## 3. The common features, and how the suite does them
@@ -147,17 +151,24 @@ today, and the proposal. Lane and timing are in section 6.
 
 - **Family.** Copyright appears in the README ("Copyright (C) 2026 Iain
   Chesworth.") and the macOS bundle ("Copyright (c) Iain Chesworth"). The
-  CPack vendor is "Iain Chesworth". No app shows it in a window.
+  CPack vendor was "Iain Chesworth" in all of them when surveyed;
+  Cubeulator's became "Iain Chesworth Labs" on `develop` with the move. No
+  app shows it in a window.
 - **Identifiers.** Countdown Solver: `org.iainchesworth.countdownsolver`.
   ICL Forge has three schemes: `com.iainchesworthlabs.hearth` and
   `.forge-gui` on macOS, `com.iclforge.hearth` on Android
   (`apps/hearth/android/app/build.gradle.kts`). Cubeulator is decided
-  (`brief.md` D12) and matches Countdown Solver.
-- **Proposal.** One publisher string, used in the same five places: the
-  Windows version resource, `Info.plist`, the AppStream `<developer>`, the
-  store listing, and the About small print. Default: **Iain Chesworth
-  Labs**, with the copyright line in the person's name. Long form, short
-  form or the person alone is D1.
+  (`brief.md` D12) and takes the form of ICL Forge's macOS apps.
+- **Decided (D1, D9).** One publisher string, used in the same five
+  places: the Windows version resource, `Info.plist`, the AppStream
+  `<developer>`, the store listing, and the About small print. The account
+  decides it. Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so it
+  is **Iain Chesworth Labs**; `cmake/Packaging.cmake` on `develop` already
+  says so. The copyright line stays in the person's name: "Copyright ©
+  2026 Iain Chesworth". The identifier follows the account too:
+  **`com.iainchesworthlabs.cubeulator`**, the form ICL Forge's macOS apps
+  already use. Both were put to Iain again after the move. The outlier in
+  the suite is still ICL Forge's Android id.
 
 ### F2. Settings store and keys
 
@@ -222,19 +233,20 @@ today, and the proposal. Lane and timing are in section 6.
      (Countdown never calls `QLocale::setDefault`, so they follow the
      operating system), plural coverage per language, the unwrapped-string
      lint.
-  2. One real fork, for E2b and Iain (D5): the family writes
+  2. **Ids** *(Iain, 2026-10-13, D5)*. The family writes
      `qsTr("English text")`, so a reworded English string invalidates its
      translations; `strings.json` has ids, which keep them. Qt supports ids
-     (`qsTrId`, `lupdate -idbased`). The mechanism, the gates and the
-     manager are the same either way. The lean is **ids**, because the
-     design already has them and eight languages is where a reworded
-     English string costs most.
+     (`qsTrId`, `lupdate -idbased`). The mechanism, the manager and the
+     gates are the family's either way; `test_translations`-style checks
+     match source sets by id. Nine languages is where a reworded English
+     string costs most.
 
 ### F4. Language set and faces
 
 - **Set.** en fr de es ar he yi in Countdown and ICL Forge; Automate adds
-  ja and zh. Cubeulator has de, fr, es, ar, he and adds ja and zh, and omits
-  yi. Five are in all four apps: de, es, fr, ar, he.
+  ja and zh. Cubeulator had de, fr, es, ar, he, ja and zh, and omitted yi.
+  Five are in all four apps: de, es, fr, ar, he. With Yiddish (D4) it is
+  nine: en de fr es ja zh he ar yi.
 - **Faces.** Hebrew and Arabic are Noto Sans Hebrew and Noto Sans Arabic in
   all three (`apps/shared/theme/assets/fonts`;
   `src/app/resources/fonts` in Countdown; `assets/web/vendor/fonts` in
@@ -243,13 +255,21 @@ today, and the proposal. Lane and timing are in section 6.
   Sans Hebrew and Arabic in `headingFamily`, with a 700-weight ceiling
   (`maxWeight`) because Plex has no ExtraBold in those scripts; no font file
   is in the tree yet.
-- **Proposal.** Use Noto Sans Hebrew and Noto Sans Arabic: the same files and
-  the same OFL notices as the other three, and Yiddish comes free. The change
-  is two `case` lines in `Theme.qml`, so it should be made *before* E2a
-  bundles the files (D3). Check that the files ICL Forge vendors have an
-  ExtraBold; if they do, the ceiling goes. Japanese and Chinese stay the
-  system's, chosen by language, as Automate does. Yiddish for Cubeulator is
-  D4.
+- **Decided (D3, D4).** Noto Sans Hebrew and Noto Sans Arabic: the same
+  files and the same OFL notices as the other three.
+  - Both ICL Forge files are variable fonts with a weight axis of 100 to 900
+    (checked: `NotoSansHebrew.ttf`, 110 KB; `NotoSansArabic.ttf`, 825 KB).
+    ExtraBold exists, so the 700 ceiling (`maxWeight`) in `Theme.qml` goes.
+    E2a should check that Qt draws weight 800 from the variable axis on each
+    desktop OS.
+  - Arabic is 825 KB, not the "about 300 KB" `platforms.md` said for the
+    Plex face.
+  - Yiddish uses Noto Sans Hebrew, as in ICL Forge. Its name in the list is
+    יידיש, as Countdown Solver's `kLanguages` writes it.
+  - The change in `Theme.qml` is two `case` lines, made before E2a bundles
+    the files. Japanese and Chinese stay the system's, chosen by language,
+    as Automate does.
+  - Yiddish is in V1.0: nine languages, three of them right to left.
 
 ### F5. About
 
@@ -302,14 +322,13 @@ today, and the proposal. Lane and timing are in section 6.
 - **Cubeulator.** Nothing is planned. The repository is public, the app
   runs on five platforms, and on a phone the camera backend does not work
   yet; a person filing "it doesn't scan" has nothing to paste.
-- **Proposal.** **Copy details** in About (and offered from **Trouble
-  scanning** in Help): text only. Version line; operating system and
-  version; Qt runtime; graphics backend; whether a camera was found and
+- **Decided (D6): in V1.0.** **Copy details** in About (Help can point to it
+  later): text only. Version line; operating system
+  and version; Qt runtime; graphics backend; whether a camera was found and
   which backend; app language, theme, text size, motion; window size and
   pixel ratio. **Never** a picture, a colour read from the cube, or a
   device name. The screen says what it contains, in the plan's own voice:
-  "No picture, and nothing about your cube." Whether it is V1.0 or V1.1 is
-  D6.
+  "No picture, and nothing about your cube."
 
 ### F8. Help, shortcuts and names
 
@@ -359,8 +378,8 @@ used as text is 3.76:1.
      in which direction, is a look-and-feel choice for Iain with the two
      side by side; the measured set is Cubeulator's.
   3. Offer `accentFill`/`accentText` to ICL Forge (section 4).
-  4. Accent palettes (Ink, Console) for Cubeulator are D7. Default: no. Red
-     is the product's one accent, and the cube is the colour.
+  4. No accent palettes (Ink, Console) for Cubeulator *(Iain, 2026-10-13,
+     D7)*. Red is the product's one accent, and the cube is the colour.
 
 ### F10. Docs and pictures
 
@@ -394,22 +413,21 @@ For Iain. Not scheduled in this plan, and not this repository's to change.
 | Countdown Solver | persist the theme (only the language survives a restart); the Licences dialog in `qsTr`; accessible names and a focus ring; "Licences"; numbers that follow the app's language |
 | Automate | a Licences screen and a licence line in About; one spelling (British, with ICL Forge); the same Noto faces are already shared |
 
-## 5. Decisions for Iain
+## 5. Decisions
 
-None blocks anything running. The default is what the plan assumes until
-told otherwise.
+All taken by Iain on 2026-10-13.
 
-| # | decision | default | blocks |
+| # | decision | answer | changes |
 |---|---|---|---|
-| D1 | How the publisher is written in the app: *Iain Chesworth Labs*, *ICL*, or *Iain Chesworth*. Today the CPack vendor and the macOS copyright say "Iain Chesworth" | "Iain Chesworth Labs" in About and the packages; copyright line "Copyright © 2026 Iain Chesworth" | E4a, E3b |
-| D2 | Is Signal the suite's look? Countdown Solver and Automate are Calm | Cubeulator stays Signal; no other app is reskinned by this plan | nothing here |
-| D3 | Hebrew and Arabic faces | Noto Sans Hebrew and Noto Sans Arabic (the family's) | E2a, when it bundles fonts |
-| D4 | Yiddish | Not in V1.0 (decision 3 stands); added in V1.1 if wanted | E5 |
-| D5 | Catalogue by source text (the family) or by id (`strings.json`) | ids | E2b |
-| D6 | Copy details in V1.0 or V1.1 | V1.1; the build line and the Copy button on it ride with E3b | E3b |
-| D7 | Accent palettes for Cubeulator | No | - |
-| D8 | A shared component kit across repositories | Not before V1.0 ships. Revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |
-| D9 | Identifiers across the suite. Iain Chesworth Labs spans two accounts: `iainchesworth` (Cubeulator, Countdown Solver) and `iainchesworthlabs` (ICL Forge, Automate). An identifier follows its repository's account: `org.iainchesworth.*` here and in Countdown Solver (D12), `com.iainchesworthlabs.*` on ICL Forge's macOS apps. The outlier is ICL Forge's Android `com.iclforge.hearth`. Also: should Cubeulator's source live under `iainchesworthlabs` with the ICL family? That would change the source address in About and the identifier | Keep D12 and the account as they are; ICL Forge's outlier is for Iain to tidy | before a store release of any of them |
+| D1 | How the publisher is written in the app | **Iain Chesworth Labs**: the publisher follows the account, and the repository moved to `iainchesworthlabs` on 2026-10-13 *(Iain, asked again after the move; before it, "Iain Chesworth")*. Copyright line "Copyright © 2026 Iain Chesworth" | E4a: version resource, `Info.plist`, AppStream developer. E3b: About. `Packaging.cmake` on `develop` already says it |
+| D2 | Is Signal the suite's look | **Two looks, shared chassis.** Cubeulator stays Signal with ICL Forge; Countdown Solver and Automate keep Calm. What is shared is behaviour and structure, not palette | no reskin of any other app |
+| D3 | Hebrew and Arabic faces | **Noto Sans Hebrew and Noto Sans Arabic**, the family's | `Theme.qml`, `system.md`, `platforms.md`, the notices |
+| D4 | Yiddish | **In V1.0.** Nine languages: en de fr es ja zh he ar yi | `brief.md` D-table, `settings.md`, `platforms.md`, `accessibility.md`, E5's set, the prototype's list; plan "decided since" amended |
+| D5 | Catalogue by source text (the family) or by id (`strings.json`) | **Ids** | E2b's brief: `qsTrId`, `lupdate -idbased`, ids matched in the translation tests |
+| D6 | Copy details | **In V1.0**, not V1.1 | E3b gains the build line, its **Copy** and the **Copy details** row; `screens/about.md` says exactly what is copied; `strings.json` gains five strings |
+| D7 | Accent palettes for Cubeulator | **No** | - |
+| D8 | A shared component kit across repositories | **Not before V1.0 ships.** Align by spec; revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |
+| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `com.iainchesworthlabs.cubeulator`, matching ICL Forge's macOS `com.iainchesworthlabs.*` *(Iain, 2026-10-13, after the move, chosen over `org.iainchesworthlabs.` and over keeping the old id; D12 amended)*. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | E4a: bundle id, Linux app id and desktop file name, Android package |
 
 ## 6. Where this lands
 
@@ -418,19 +436,21 @@ waits for the sessions in flight to finish.
 
 | item | session | when |
 |---|---|---|
-| F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0, after D1 |
+| F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0; already what E4a writes |
 | F2 setting keys | E2a ("settings that persist"), E3a | before V1.0 |
-| F3 language manager and gates | E2b, which has not started: its brief says "port" | before V1.0 |
-| F4 faces | E2a, before it bundles fonts | before V1.0, after D3 |
-| F4 Yiddish | E5 | V1.1, after D4 |
+| F3 language manager, ids and gates | E2b, which has not started: its brief says "port" and "ids" | before V1.0 |
+| F4 Noto faces | E2a, before it bundles fonts | before V1.0 |
+| F4 Yiddish | E5, with E2b's list | before V1.0 |
 | F5 build line and Copy | E3b | before V1.0 |
 | F6 licences | E3b | nothing to do; two checks |
-| F7 Copy details | E3b | V1.1, or V1.0 on D6 |
+| F7 Copy details | E3b | before V1.0 |
 | F8 Help, About, naming | E3a, E3b | already designed; recorded here |
 | F9 token mapping | E2a, as a note | before V1.0; value changes V1.1 |
 | F10 tour manifest and capture entry | E0a's successor, E5 | before E5; skin at E6 |
 | machine-translation note under the language list | E5 | before V1.0 |
 | a "reviewed by" line per language | E5, E6 | V1.1 |
+| dark neutrals converge with ICL Forge's | Iain, side by side | V1.1, if wanted |
+| back-ports to the other repositories (section 4) | their own plans | not scheduled |
 
 ## 7. The checklist
 
@@ -457,6 +477,9 @@ What an app in the suite has, so a new one starts from it:
 - Whether ICL Forge's published design canvas still opens.
 - Which of the machine translations have had a fluent reader. ICL Forge and
   Countdown Solver say in the app that theirs have not.
-- Whether the other apps will be reskinned (D2).
-- Whether the suite wants one component kit (D8).
-- How the publisher is written in the app (D1).
+- When the suite wants one component kit (D8: not before V1.0 ships).
+- Who reads the Yiddish, Hebrew and Arabic drafts before release.
+- Whether Qt draws weight 800 from Noto's variable axis on all five
+  platforms (E2a checks; F4).
+- How the publisher is written in the other apps. Cubeulator's is decided
+  (D1).

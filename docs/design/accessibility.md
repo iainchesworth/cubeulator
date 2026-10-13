@@ -135,7 +135,8 @@ Rules for every screen:
 | solution | The title and summary | The turn sentence when the selected turn changes |
 | history | The title, then how many entries | "Deleted." |
 | settings | The title | The new value when a setting is changed by a key |
-| about, licences, privacy, help | The title | - |
+| about | The title | "Copied", after either copy |
+| licences, privacy, help | The title | - |
 
 Durations are spoken as durations ("12 minutes 40 seconds"), not as
 "twelve forty". Notation, when on, is spelt out letter by letter and
@@ -252,8 +253,8 @@ the layer, the arrow icon and the words.
 
 ## Right to left
 
-Hebrew and Arabic ship in the first release, so this is tested, not
-planned.
+Hebrew, Arabic and Yiddish ship in the first release, so this is tested,
+not planned.
 
 **Mirrors:** the order of things across the screen; leading and trailing
 margins; which side the back control, the chevrons and the primary action

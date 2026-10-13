@@ -133,6 +133,9 @@ public:
     // ---- window ------------------------------------------------------------
     void resize(QSize size);
     void set_theme(const QString& mode);  // "system" | "light" | "dark"
+    // English, left to right, and no saved choice: the baseline a test starts
+    // from, whatever a case did with the language.
+    void reset_language();
     // The scene graph's graphics API ("OpenGL", "Direct3D11", "Software"...).
     [[nodiscard]] QString graphics_api() const;
     // The window as rendered, in device pixels.

@@ -319,6 +319,16 @@ sends keys, and finding by accessible name is one more lookup beside
 `find(objectName)`. The contract that makes it cheap is the plan's: every
 interactive item has an `objectName` and an accessible name.
 
+## Translation tests
+
+`ctest -L i18n` (or `-R i18n` plus the `[i18n]` Catch cases) runs the
+translation gates: the catalogues against `docs/design/strings.json`, a lint
+for user-visible literals, the ids the code asks for, what each catalogue
+holds, a raw id never reaching the screen, the language manager, and the
+converted screens switched live between English, the pseudo-locale and Hebrew.
+They need Python 3 and Qt's Linguist tools, which the Qt install has. What
+each one is for, and what to do when it fails, is in [Translations](i18n.md).
+
 ## Coverage gate
 
 CI's `Coverage (Linux, GCC)` job builds the `linux-gcc-coverage` preset

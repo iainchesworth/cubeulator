@@ -23,7 +23,7 @@ seen changing.
 
 | section | setting | control | values (default first) | strings | objectName |
 |---|---|---|---|---|---|
-| Language | Language | list row showing the current choice; opens the list | Same as this device; then the eight | `settings.section.language`, `settings.language.system` | `settings.language` |
+| Language | Language | list row showing the current choice; opens the list | Same as this device; then the nine | `settings.section.language`, `settings.language.system` | `settings.language` |
 | Appearance | Theme | choice | Same as this device, Light, Dark | `settings.section.appearance`, `settings.theme`, `settings.theme.system`, `settings.theme.light`, `settings.theme.dark` | `settings.theme` |
 | | Marks on cube colours | switch, with a note | On | `settings.marks`, `settings.marks.note` | `settings.marks` |
 | | Text size | choice | Same as this device, Large (1.25), Larger (1.5). Multiplies the system's own setting | `settings.textSize`, `settings.textSize.system`, `settings.textSize.large`, `settings.textSize.larger` | `settings.textSize` |
@@ -61,7 +61,7 @@ interactive. `objectName`: `settings.markLegend`.
 
 **Language names** are each written in their own language and are never
 translated: English, Deutsch, Français, Español, 日本語, 简体中文, עברית,
-العربية. They are data, not strings. "Same as this device" follows the
+العربية, יידיש. They are data, not strings. "Same as this device" follows the
 system's choice for this app, where the system has one.
 
 **Every change applies at once**, on every screen, without a restart and
@@ -80,8 +80,8 @@ states below applies; they are named separately so that each is tested.
 ### `settings.language`
 
 The list of languages: a sheet on compact, a centred panel from medium
-up. A radio list; the current one has a check. Hebrew and Arabic names are
-set right to left within their rows. Choosing one applies it and closes
+up. A radio list; the current one has a check. Hebrew, Arabic and Yiddish
+names are set right to left within their rows. Choosing one applies it and closes
 the list. **Close**, Esc and back close it without changing anything.
 
 Opened from the first-run screen, it returns there.
@@ -151,3 +151,20 @@ Each setting is stored under a stable key and read at start-up before
 the first screen is shown, so the app never flashes the wrong theme or
 language. The system test "every setting changed and still set after a
 restart" walks the table above.
+
+The keys are written in the style ICL Forge and Countdown Solver use,
+`group/name` in one `QSettings` store (organisation and application both
+`Cubeulator`; `family.md` F2). They are named now because a key renamed
+after the first release needs a migration.
+
+| key | setting |
+|---|---|
+| `language/code` | Language. Absent means "same as this device" |
+| `appearance/theme` | Theme |
+| `appearance/textSize` | Text size |
+| `appearance/motion` | Motion |
+| `appearance/marks` | Marks on cube colours |
+| `solving/advance`, `solving/pace`, `solving/explain`, `solving/notation`, `solving/sound`, `solving/haptics` | The Solving section |
+| `camera/deviceId` | The remembered camera, by the system's device id |
+| `history/keep` | Keep a history of solves |
+| `firstRun/acknowledgedVersion` | The first-run screen's last version shown; a later version can show it again |

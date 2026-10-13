@@ -88,6 +88,13 @@ TEST_CASE("every control on the settings screen can be pressed", "[system][sweep
         // "Back" leaves; it has a case of its own (settings_test.cpp).
         cube::systest::SweepOptions options;
         options.skip.insert("settings.back");
+        // Each language chip switches the whole app; English again, so the
+        // rest of the sweep (and the checks after it) read what they expect.
+        options.after_press = [&app](const QString& key) {
+            if (key.startsWith("settings.language.")) {
+                app.reset_language();
+            }
+        };
         const QStringList pressed = press_every_control(app, "settings", options);
         INFO("pressed " << pressed.join(", ").toStdString());
         REQUIRE(pressed.size() > 10);

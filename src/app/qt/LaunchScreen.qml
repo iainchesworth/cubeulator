@@ -14,7 +14,8 @@ Rectangle {
         spacing: Theme.space4
 
         Text {
-            text: "SCAN · SOLVE · IN YOUR HANDS"
+            text: qsTrId("app.name")
+            font.capitalization: Font.AllUppercase
             color: Theme.accent
             font.family: Theme.fontHeading
             font.pixelSize: 11
@@ -31,6 +32,8 @@ Rectangle {
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue
                 showStats: SettingsState.statsForNerds && !root.wide
+                LayoutMirroring.enabled: false
+                LayoutMirroring.childrenInherit: true
             }
         }
 
@@ -41,13 +44,13 @@ Rectangle {
             AppButton {
                 width: parent.width; height: 46
                 variant: "primary"; block: true
-                objectName: "launch.startScan"; text: "Start scan"; trailingIcon: "chevron-right"
+                objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
                 onClicked: AppState.beginScan()
             }
             AppButton {
                 width: parent.width; height: 44
                 variant: "secondary"; block: true
-                objectName: "launch.solveHistory"; text: "Solve history"; trailingIcon: "chevron-right"
+                objectName: "launch.solveHistory"; text: qsTrId("home.history"); trailingIcon: "chevron-right"
             }
             Rectangle { width: parent.width; height: 1; color: Theme.divider }
             Item {
@@ -56,13 +59,13 @@ Rectangle {
                 AppButton {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    objectName: "launch.language"; variant: "ghost"; text: "English"; leadingIcon: "globe"
+                    objectName: "launch.language"; variant: "ghost"; text: LanguageManager.currentLanguageName; leadingIcon: "globe"
                     onClicked: AppState.openSettings()
                 }
                 AppButton {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    objectName: "launch.settings"; variant: "ghost"; text: "Settings"; leadingIcon: "menu"
+                    objectName: "launch.settings"; variant: "ghost"; text: qsTrId("common.settings"); leadingIcon: "menu"
                     onClicked: AppState.openSettings()
                 }
             }
@@ -91,7 +94,8 @@ Rectangle {
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.margins: leftPane.pad
-                text: "CUBEULATOR"
+                text: qsTrId("app.name")
+                font.capitalization: Font.AllUppercase
                 color: Theme.accent
                 font.family: Theme.fontHeading
                 font.pixelSize: 11
@@ -106,16 +110,20 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: Theme.space3
                 Text {
-                    text: "Scan. Solve.\nIn your hands."
+                    text: qsTrId("app.tagline")
                     color: Theme.ink
                     font.family: Theme.fontHeading
                     font.weight: Font.ExtraBold
                     font.pixelSize: 44
                     lineHeight: 0.98
                     lineHeightMode: Text.ProportionalHeight
+                    // The line break is the author's; a longer line is not cut
+                    // off or run into the other pane, it wraps.
+                    width: parent.width
+                    wrapMode: Text.WordWrap
                 }
                 Text {
-                    text: "Point the camera, turn the cube through six faces, follow the moves."
+                    text: qsTrId("home.lede")
                     color: Theme.inkMuted(0.55)
                     font.family: Theme.fontHeading
                     font.pixelSize: 15
@@ -127,10 +135,10 @@ Rectangle {
                     topPadding: Theme.space3
                     AppButton {
                         height: 46; variant: "primary"
-                        objectName: "launch.startScan"; text: "Start scan"; trailingIcon: "chevron-right"
+                        objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
                         onClicked: AppState.beginScan()
                     }
-                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: "Solve history" }
+                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: qsTrId("home.history") }
                 }
             }
 
@@ -139,8 +147,8 @@ Rectangle {
                 anchors.bottom: parent.bottom
                 anchors.margins: leftPane.pad
                 spacing: Theme.space6
-                AppButton { objectName: "launch.language"; variant: "ghost"; text: "English"; leadingIcon: "globe"; onClicked: AppState.openSettings() }
-                AppButton { objectName: "launch.settings"; variant: "ghost"; text: "Settings"; leadingIcon: "menu"; onClicked: AppState.openSettings() }
+                AppButton { objectName: "launch.language"; variant: "ghost"; text: LanguageManager.currentLanguageName; leadingIcon: "globe"; onClicked: AppState.openSettings() }
+                AppButton { objectName: "launch.settings"; variant: "ghost"; text: qsTrId("common.settings"); leadingIcon: "menu"; onClicked: AppState.openSettings() }
             }
         }
 
@@ -149,7 +157,7 @@ Rectangle {
             height: parent.height
             color: Theme.surface
 
-            Rectangle { width: 2; height: parent.height; color: Theme.divider }
+            Rectangle { anchors.left: parent.left; width: 2; height: parent.height; color: Theme.divider }
 
             Cube3DView {
                 width: 320; height: 320
@@ -158,6 +166,8 @@ Rectangle {
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue
                 showStats: SettingsState.statsForNerds && root.wide
+                LayoutMirroring.enabled: false
+                LayoutMirroring.childrenInherit: true
             }
         }
     }

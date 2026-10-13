@@ -74,6 +74,18 @@ int main(int argc, char* argv[]) {
     // application name. Point it at a directory that goes away with the
     // process, so a run neither reads the developer's real settings nor
     // leaves its own behind.
+    // The words the tests look for are English, whatever language the machine
+    // is in: the app takes its language from this before the device
+    // (docs/i18n.md). A run that wants another sets it.
+    if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
+        qputenv("CUBEULATOR_LOCALE", "en");
+    }
+    // The words the tests look for are English, whatever language the machine
+    // is in: the app takes its language from this before the device
+    // (docs/i18n.md). A run that wants another sets it.
+    if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
+        qputenv("CUBEULATOR_LOCALE", "en");
+    }
     QCoreApplication::setOrganizationName("Cubeulator");
     QCoreApplication::setApplicationName("Cubeulator-system-tests");
     QSettings::setDefaultFormat(QSettings::IniFormat);
