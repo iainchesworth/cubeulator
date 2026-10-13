@@ -23,7 +23,7 @@ Cube random_scramble(unsigned seed, int move_count) noexcept {
 
     Cube cube = Cube::solved();
     for (int i = 0; i < move_count; ++i) {
-        cube = cube.apply(Move{kAllFaces.at(face_dist(rng)), turn_dist(rng)});
+        cube = cube.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
     }
     return cube;
 }
@@ -39,7 +39,7 @@ Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
     for (const Move& m : *moves) {
         cube = cube.apply(m);
     }
-    solution.steps.push_back(SolveStep{stage, std::move(*moves)});
+    solution.steps.push_back(SolveStep{.stage = stage, .moves = std::move(*moves)});
     return {};
 }
 
@@ -67,7 +67,8 @@ Solution merge_adjacent_moves(Solution solution) {
                 continue;
             }
             if (kept.empty() || kept.back().move.face != move.face) {
-                kept.push_back(Entry{step, Move{move.face, turns}});
+                kept.push_back(
+                    Entry{.step = step, .move = Move{.face = move.face, .turns = turns}});
                 continue;
             }
             const int merged = (kept.back().move.turns + turns) % 4;

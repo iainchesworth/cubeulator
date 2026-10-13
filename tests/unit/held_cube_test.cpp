@@ -97,14 +97,14 @@ TEST_CASE("a side that is not on the cube shows no hold", "[vision][held-cube]")
     int changed = 0;
     for (const Hold& hold : all_holds()) {
         for (const Face face : cube::solver::kAllFaces) {
-            const Cube moved = cube.apply(Move{face, 1});
+            const Cube moved = cube.apply(Move{.face = face, .turns = 1});
             if (camera_view(moved, hold) == camera_view(cube, hold)) {
                 continue;  // the move did not touch the side the camera sees
             }
             if (cube::solver::side_at(hold, cube::solver::Place::Back) == face) {
                 // The side that was turned: the cube before the move shows
                 // the very same nine colours, held a quarter turn round.
-                CHECK(read_hold(seen(moved, hold), cube, session()).holds.size() >= 1);
+                CHECK(!read_hold(seen(moved, hold), cube, session()).holds.empty());
                 continue;
             }
             ++changed;
@@ -215,6 +215,6 @@ TEST_CASE("stickers of the wrong colour are counted against the session's own co
           (expected.at(glint) == Color::White ? 0 : 1));
 
     // A different side altogether.
-    const std::array<Color, 9> other = camera_view(cube, Hold{Face::R, Face::U});
+    const std::array<Color, 9> other = camera_view(cube, Hold{.up = Face::R, .front = Face::U});
     CHECK(cube::vision::stickers_off(read, other, session()) >= 2);
 }

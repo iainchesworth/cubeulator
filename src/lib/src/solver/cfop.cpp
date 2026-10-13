@@ -59,15 +59,15 @@ constexpr PieceTransitions make_piece_transitions() noexcept {
         for (std::size_t q = 0; q < detail::kCornerCount; ++q) {
             const std::size_t from = move.cp.at(q);
             for (std::size_t o = 0; o < 3; ++o) {
-                t.corner.at(m).at(from * 3 + o) =
-                    static_cast<std::uint8_t>(q * 3 + (o + move.co.at(q)) % 3);
+                t.corner.at(m).at((from * 3) + o) =
+                    static_cast<std::uint8_t>((q * 3) + ((o + move.co.at(q)) % 3));
             }
         }
         for (std::size_t q = 0; q < detail::kEdgeCount; ++q) {
             const std::size_t from = move.ep.at(q);
             for (std::size_t o = 0; o < 2; ++o) {
-                t.edge.at(m).at(from * 2 + o) =
-                    static_cast<std::uint8_t>(q * 2 + (o + move.eo.at(q)) % 2);
+                t.edge.at(m).at((from * 2) + o) =
+                    static_cast<std::uint8_t>((q * 2) + ((o + move.eo.at(q)) % 2));
             }
         }
     }
@@ -87,13 +87,13 @@ std::uint64_t pack_state(const CubieCube& cube, std::span<const TrackedPiece> tr
         if (tracked[i].corner) {
             for (std::size_t pos = 0; pos < detail::kCornerCount; ++pos) {
                 if (cube.cp.at(pos) == tracked[i].id) {
-                    code = pos * 3 + cube.co.at(pos);
+                    code = (pos * 3) + cube.co.at(pos);
                 }
             }
         } else {
             for (std::size_t pos = 0; pos < detail::kEdgeCount; ++pos) {
                 if (cube.ep.at(pos) == tracked[i].id) {
-                    code = pos * 2 + cube.eo.at(pos);
+                    code = (pos * 2) + cube.eo.at(pos);
                 }
             }
         }
@@ -106,7 +106,7 @@ std::uint64_t pack_state(const CubieCube& cube, std::span<const TrackedPiece> tr
 std::uint64_t solved_state(std::span<const TrackedPiece> tracked) noexcept {
     std::uint64_t state = 0;
     for (std::size_t i = 0; i < tracked.size(); ++i) {
-        const std::uint64_t code = tracked[i].corner ? tracked[i].id * 3u : tracked[i].id * 2u;
+        const std::uint64_t code = tracked[i].corner ? tracked[i].id * 3U : tracked[i].id * 2U;
         state |= code << (5 * i);
     }
     return state;
@@ -116,7 +116,7 @@ std::uint64_t step(const PieceTransitions& t, std::span<const TrackedPiece> trac
                    std::uint64_t state, std::size_t move) noexcept {
     std::uint64_t next = 0;
     for (std::size_t i = 0; i < tracked.size(); ++i) {
-        const std::size_t code = (state >> (5 * i)) & 31u;
+        const std::size_t code = (state >> (5 * i)) & 31U;
         const std::uint64_t moved =
             tracked[i].corner ? t.corner.at(move).at(code) : t.edge.at(move).at(code);
         next |= moved << (5 * i);
@@ -160,7 +160,7 @@ std::optional<std::vector<std::uint8_t>> shortest_sequence(const CubieCube& cube
 
     std::vector<std::uint8_t> moves;
     for (std::size_t m = 0; m < kMoveCount; ++m) {
-        if (((face_mask >> (m / 3)) & 1u) != 0) {
+        if (((face_mask >> (m / 3)) & 1U) != 0) {
             moves.push_back(static_cast<std::uint8_t>(m));
         }
     }
@@ -183,7 +183,7 @@ std::optional<std::vector<std::uint8_t>> shortest_sequence(const CubieCube& cube
         for (std::int32_t i = b; backward.parent.at(static_cast<std::size_t>(i)) >= 0;
              i = backward.parent.at(static_cast<std::size_t>(i))) {
             const std::uint8_t m = backward.move.at(static_cast<std::size_t>(i));
-            path.push_back(static_cast<std::uint8_t>(m / 3 * 3 + (2 - m % 3)));
+            path.push_back(static_cast<std::uint8_t>((m / 3 * 3) + (2 - (m % 3))));
         }
         return path;
     };
@@ -231,7 +231,7 @@ CubieCube apply_moves(CubieCube cube, std::span<const std::uint8_t> moves) noexc
 
 // Face order is U D L R F B; these are bit positions in a face mask.
 constexpr unsigned face_bit(Face face) noexcept {
-    return 1u << static_cast<unsigned>(face);
+    return 1U << static_cast<unsigned>(face);
 }
 constexpr unsigned kAllButBottom = face_bit(Face::U) | face_bit(Face::L) | face_bit(Face::R) |
                                    face_bit(Face::F) | face_bit(Face::B);
@@ -244,10 +244,10 @@ constexpr unsigned kAllFacesMask = kAllButBottom | face_bit(Face::D);
 // The four cross edges are DR, DF, DL, DB (pieces 4..7) and the white face
 // is the bottom, as for the beginner method.
 constexpr std::array<TrackedPiece, 4> kCrossPieces = {{
-    {false, detail::kDR},
-    {false, detail::kDF},
-    {false, detail::kDL},
-    {false, detail::kDB},
+    {.corner = false, .id = detail::kDR},
+    {.corner = false, .id = detail::kDF},
+    {.corner = false, .id = detail::kDL},
+    {.corner = false, .id = detail::kDB},
 }};
 
 // ---------------------------------------------------------------------------
@@ -314,12 +314,12 @@ std::optional<std::vector<std::uint8_t>> plan_pair(const CubieCube& cube, std::s
     }
     for (std::size_t s = 0; s < kSlotCount; ++s) {
         if (done.at(s)) {
-            tracked.at(count++) = {true, slot_corner(s)};
-            tracked.at(count++) = {false, slot_edge(s)};
+            tracked.at(count++) = {.corner = true, .id = slot_corner(s)};
+            tracked.at(count++) = {.corner = false, .id = slot_edge(s)};
         }
     }
-    tracked.at(count++) = {true, slot_corner(slot)};
-    tracked.at(count++) = {false, slot_edge(slot)};
+    tracked.at(count++) = {.corner = true, .id = slot_corner(slot)};
+    tracked.at(count++) = {.corner = false, .id = slot_edge(slot)};
     return shortest_sequence(cube, std::span<const TrackedPiece>(tracked.data(), count), mask,
                              max_side, node_limit);
 }
@@ -428,14 +428,14 @@ Result<Solution> solve_cfop_stages(const Cube& scrambled) {
         return std::unexpected(CubeError::no_solution);
     }
     cube = apply_moves(cube, *cross);
-    solution.steps.push_back(SolveStep{Stage::Cross, to_moves(*cross)});
+    solution.steps.push_back(SolveStep{.stage = Stage::Cross, .moves = to_moves(*cross)});
 
     // --- F2L: the four pairs.
     std::vector<std::uint8_t> f2l;
     if (!solve_f2l(cube, f2l)) {
         return std::unexpected(CubeError::no_solution);
     }
-    solution.steps.push_back(SolveStep{Stage::F2l, to_moves(f2l)});
+    solution.steps.push_back(SolveStep{.stage = Stage::F2l, .moves = to_moves(f2l)});
 
     // --- OLL, then PLL: one table entry each. An entry is missing only for
     // a case a valid cube cannot reach (or a malformed table), and applying
@@ -447,7 +447,8 @@ Result<Solution> solve_cfop_stages(const Cube& scrambled) {
     for (const Move& move : *oll) {
         cube = multiply(cube, move_cubie(move_index(move)));
     }
-    solution.steps.push_back(SolveStep{Stage::Oll, std::vector<Move>(oll->begin(), oll->end())});
+    solution.steps.push_back(
+        SolveStep{.stage = Stage::Oll, .moves = std::vector<Move>(oll->begin(), oll->end())});
 
     const std::optional<std::span<const Move>> pll = pll_algorithm(cube);
     if (!pll.has_value()) {
@@ -456,7 +457,8 @@ Result<Solution> solve_cfop_stages(const Cube& scrambled) {
     for (const Move& move : *pll) {
         cube = multiply(cube, move_cubie(move_index(move)));
     }
-    solution.steps.push_back(SolveStep{Stage::Pll, std::vector<Move>(pll->begin(), pll->end())});
+    solution.steps.push_back(
+        SolveStep{.stage = Stage::Pll, .moves = std::vector<Move>(pll->begin(), pll->end())});
 
     // Verified against the facelet model, the one the rest of the app
     // trusts, before it is handed out.

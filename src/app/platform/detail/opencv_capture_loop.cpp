@@ -219,7 +219,7 @@ void OpenCvCaptureLoop::service_photometry_requests() {
     PhotometryLockReport report =
         apply_lock(capture_, request, as_found_, [this](const cv::Mat& frame) { publish(frame); });
     std::scoped_lock lock(photometry_mutex_);
-    report_ = std::move(report);
+    report_ = report;
 }
 
 void OpenCvCaptureLoop::publish(const cv::Mat& frame) {

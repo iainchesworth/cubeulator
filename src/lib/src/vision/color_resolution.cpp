@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cube/vision/color_resolution.hpp>
 
 #include <cube/profiling.hpp>
@@ -92,8 +93,8 @@ constexpr float kShadingAxisWeight = 0.2F;
     // |dc| <= sqrt(da^2+db^2) by the reverse triangle inequality, so the
     // hue residual is non-negative up to rounding; the clamp guards the
     // rounding.
-    const float dh_squared = std::max(0.0F, da * da + db * db - dc * dc);
-    return std::sqrt(kShadingAxisWeight * (dl * dl + dc * dc) + dh_squared);
+    const float dh_squared = std::max(0.0F, (da * da) + (db * db) - (dc * dc));
+    return std::sqrt((kShadingAxisWeight * ((dl * dl) + (dc * dc))) + dh_squared);
 }
 
 // Exactly-9-per-cluster assignment of the 54 samples to the 6 cluster
@@ -113,7 +114,7 @@ constexpr float kShadingAxisWeight = 0.2F;
     std::array<std::size_t, face_count> load{};
 
     for (std::size_t face = 0; face < face_count; ++face) {
-        cluster.at(face * facelets_per_face + center_facelet_index) = static_cast<int>(face);
+        cluster.at((face * facelets_per_face) + center_facelet_index) = static_cast<int>(face);
         ++load.at(face);
     }
 
@@ -386,7 +387,8 @@ Facelet classify_lab(const cv::Vec3f& lab) {
         return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
     }
     if (near_neutral && lab[1] > kNeutralWhiteMinA) {
-        const float confidence = std::clamp(1.0F - chroma / (2.0F * kWhiteChromaFloor), 0.0F, 1.0F);
+        const float confidence =
+            std::clamp(1.0F - (chroma / (2.0F * kWhiteChromaFloor)), 0.0F, 1.0F);
         return Facelet{.color = FacetColor::white, .confidence = confidence};
     }
     // A green-ward near-neutral falls THROUGH to the hue bands below. It
@@ -446,7 +448,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     std::array<cv::Vec3f, kSampleCount> samples{};
     for (std::size_t face = 0; face < face_count; ++face) {
         for (std::size_t i = 0; i < facelets_per_face; ++i) {
-            samples.at(face * facelets_per_face + i) = faces.at(face).lab.at(i);
+            samples.at((face * facelets_per_face) + i) = faces.at(face).lab.at(i);
         }
     }
 
@@ -534,7 +536,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     // larger cost. 6! = 720 permutations - brute force is exact and trivial.
     const ColorPalette palette = default_palette();
     std::array<std::size_t, face_count> permutation{};
-    std::iota(permutation.begin(), permutation.end(), std::size_t{0});
+    std::ranges::iota(permutation, std::size_t{0});
     std::array<std::size_t, face_count> best_permutation = permutation;
     float best_total = std::numeric_limits<float>::max();
     do {
@@ -546,7 +548,7 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             best_total = total;
             best_permutation = permutation;
         }
-    } while (std::next_permutation(permutation.begin(), permutation.end()));
+    } while (std::ranges::next_permutation(permutation).found);
 
     // Hue-first override of the distance matching: washed cluster means
     // suffer the same distortion classify_lab() was rebuilt around (chroma
@@ -565,8 +567,8 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             hue_names.at(c) = static_cast<std::size_t>(color);
             ++name_counts.at(static_cast<std::size_t>(color));
         }
-        const bool all_distinct = std::all_of(name_counts.begin(), name_counts.end(),
-                                              [](int count) { return count <= 1; });
+        const bool all_distinct =
+            std::ranges::all_of(name_counts, [](int count) { return count <= 1; });
         // An UNKNOWN cluster mean disqualifies the whole override, even
         // when the six names are formally distinct. The palette has no
         // `unknown` entry, so the lookup below would find no match for that

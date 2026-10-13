@@ -99,10 +99,10 @@ void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& d
         for (int i = turns(rng); i > 0; --i) {
             stickers = turned_clockwise(stickers);
         }
-        show(
-            scan, stickers,
-            Pose{.centre = {320.0F + shift(rng), 180.0F + shift(rng) / 2.0F}, .degrees = tilt(rng)},
-            drawing);
+        show(scan, stickers,
+             Pose{.centre = {320.0F + shift(rng), 180.0F + (shift(rng) / 2.0F)},
+                  .degrees = tilt(rng)},
+             drawing);
         scan.add(std::nullopt);  // the cube turns to its next side
     }
 }
@@ -121,7 +121,7 @@ TEST_CASE("a side held square to the camera is read row-major as the camera sees
         for (int i = 0; i < 9; ++i) {
             const auto index = static_cast<std::size_t>(i);
             const cv::Point2f expected =
-                place(pose, static_cast<float>(i % 3 - 1), static_cast<float>(i / 3 - 1));
+                place(pose, static_cast<float>((i % 3) - 1), static_cast<float>((i / 3) - 1));
             CHECK(cv::norm(read->centres.at(index) - expected) < 2.0);
             CHECK(cv::norm(read->lab.at(index) - lab_of(paint(kMixed.at(index)))) < 3.0);
         }
@@ -190,7 +190,7 @@ TEST_CASE("a side that moves between frames is not read", "[direct-scan]") {
     SideScan scan;
     for (int i = 0; i < 30; ++i) {
         scan.add(read_side(
-            draw_side(kMixed, Pose{.centre = {200.0F + 9.0F * static_cast<float>(i), 180.0F}})));
+            draw_side(kMixed, Pose{.centre = {200.0F + (9.0F * static_cast<float>(i)), 180.0F}})));
         CHECK_FALSE(scan.reading());
     }
     CHECK(scan.sides().empty());

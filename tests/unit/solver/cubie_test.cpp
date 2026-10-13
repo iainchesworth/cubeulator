@@ -54,8 +54,8 @@ constexpr bool four_quarter_turns_are_identity() {
 constexpr bool every_turn_undoes_its_inverse() {
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t turn = 0; turn < 3; ++turn) {
-            const CubieCube& move = kMoveCubies.at(face * 3 + turn);
-            const CubieCube& inverse = kMoveCubies.at(face * 3 + (2 - turn));
+            const CubieCube& move = kMoveCubies.at((face * 3) + turn);
+            const CubieCube& inverse = kMoveCubies.at((face * 3) + (2 - turn));
             if (!is_identity(multiply(move, inverse))) {
                 return false;
             }
@@ -101,7 +101,7 @@ TEST_CASE("a quarter turn has the classical effect on the cubie model", "[cubie]
     // else, and turning the top never changes an orientation. These are the
     // standard definitions (Kociemba's cpU/epU), which is what the two
     // solvers' coordinates and tables assume.
-    const CubieCube& u = move_cubie(move_index(Move{Face::U, 1}));
+    const CubieCube& u = move_cubie(move_index(Move{.face = Face::U, .turns = 1}));
     CHECK(u.cp == std::array<std::uint8_t, 8>{3, 0, 1, 2, 4, 5, 6, 7});
     CHECK(u.ep == std::array<std::uint8_t, 12>{3, 0, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11});
     for (const std::uint8_t twist : u.co) {
@@ -131,7 +131,7 @@ TEST_CASE("four quarter turns of any face come back to the start", "[cubie]") {
     for (const Face face : kAllFaces) {
         CubieCube state;
         for (int i = 0; i < 4; ++i) {
-            state = multiply(state, move_cubie(move_index(Move{face, 1})));
+            state = multiply(state, move_cubie(move_index(Move{.face = face, .turns = 1})));
         }
         CHECK(is_identity(state));
     }

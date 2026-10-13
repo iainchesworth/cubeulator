@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
@@ -7,7 +8,6 @@
 
 #include <opencv2/imgproc.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <tuple>
@@ -115,7 +115,7 @@ template <typename T>
         if (static_cast<float>(area) / (shorter * longer) < kMinBlobFill) {
             continue;
         }
-        blobs.push_back(Blob{rect.center, std::sqrt(shorter * longer)});
+        blobs.push_back(Blob{.centre = rect.center, .side = std::sqrt(shorter * longer)});
     }
     return blobs;
 }
@@ -244,10 +244,10 @@ struct Lattice {
             continue;
         }
 
-        const auto [min_a, max_a] = std::minmax_element(
-            cells.begin(), cells.end(), [](const auto& l, const auto& r) { return l.x < r.x; });
-        const auto [min_b, max_b] = std::minmax_element(
-            cells.begin(), cells.end(), [](const auto& l, const auto& r) { return l.y < r.y; });
+        const auto [min_a, max_a] = std::ranges::minmax_element(
+            cells, [](const auto& l, const auto& r) { return l.x < r.x; });
+        const auto [min_b, max_b] = std::ranges::minmax_element(
+            cells, [](const auto& l, const auto& r) { return l.y < r.y; });
         const cv::Point low(min_a->x, min_b->y);
         // Anything other than a full three-by-three span leaves the lattice's
         // position on the side unknown by a row or a column.
@@ -258,7 +258,7 @@ struct Lattice {
         bool duplicate = false;
         for (cv::Point& cell : cells) {
             cell -= low;
-            bool& slot = taken.at(static_cast<std::size_t>(cell.y * 3 + cell.x));
+            bool& slot = taken.at(static_cast<std::size_t>((cell.y * 3) + cell.x));
             duplicate = duplicate || slot;
             slot = true;
         }
@@ -315,7 +315,7 @@ struct Upright {
     const int x = static_cast<int>(std::lround(centre.x));
     const int y = static_cast<int>(std::lround(centre.y));
     const cv::Rect patch =
-        cv::Rect(x - half_width, y - half_width, 2 * half_width + 1, 2 * half_width + 1) &
+        cv::Rect(x - half_width, y - half_width, (2 * half_width) + 1, (2 * half_width) + 1) &
         cv::Rect(0, 0, bgr.cols, bgr.rows);
     if (patch.area() < 9) {
         return std::nullopt;
@@ -455,7 +455,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
                                            const std::array<CapturedFace, 6>& faces) {
     const Result<solver::Cube> direct = solver::assemble_scanned_faces(named);
     if (direct.has_value()) {
-        return ScannedCube{*direct, colours_of(named, faces)};
+        return ScannedCube{.cube = *direct, .colours = colours_of(named, faces)};
     }
 
     Result<ScannedCube> best = std::unexpected(direct.error());
@@ -481,7 +481,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
             }
             if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
                 cube.has_value()) {
-                best = ScannedCube{*cube, colours_of(exchanged, faces)};
+                best = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
                 best_distance = distance;
             }
         }
@@ -545,8 +545,8 @@ float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
     const float d_chroma = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
     const float d_a = a[1] - b[1];
     const float d_b = a[2] - b[2];
-    const float hue_squared = std::max(d_a * d_a + d_b * d_b - d_chroma * d_chroma, 0.0F);
-    return std::sqrt(kShadingWeight * (d_lightness * d_lightness + d_chroma * d_chroma) +
+    const float hue_squared = std::max((d_a * d_a) + (d_b * d_b) - (d_chroma * d_chroma), 0.0F);
+    return std::sqrt((kShadingWeight * ((d_lightness * d_lightness) + (d_chroma * d_chroma))) +
                      hue_squared);
 }
 
@@ -614,7 +614,7 @@ std::vector<SideScan::Side> SideScan::sides() const {
     // stray capture in place of a side that is actually being used.
     std::vector<std::size_t> shown = captured_by_support();
     shown.resize(std::min<std::size_t>(shown.size(), 6));
-    std::sort(shown.begin(), shown.end());
+    std::ranges::sort(shown);
 
     std::vector<Side> out;
     for (const std::size_t i : shown) {
@@ -638,7 +638,7 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
             captured.push_back(i);
         }
     }
-    std::stable_sort(captured.begin(), captured.end(), [this](std::size_t l, std::size_t r) {
+    std::ranges::stable_sort(captured, [this](std::size_t l, std::size_t r) {
         return groups_.at(l).reads.size() > groups_.at(r).reads.size();
     });
     return captured;

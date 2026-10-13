@@ -160,7 +160,7 @@ std::optional<std::string> state_string_problem(const std::string& state) {
     // is caught here with a clearer message than the oracle's.
     static constexpr std::array<char, 6> kCentreLetters{'U', 'R', 'F', 'D', 'L', 'B'};
     for (std::size_t f = 0; f < 6; ++f) {
-        const std::size_t centre = f * 9 + 4;
+        const std::size_t centre = (f * 9) + 4;
         if (state.at(centre) != kCentreLetters.at(f)) {
             return "state[" + std::to_string(centre) + "] must be the centre '" +
                    std::string(1, kCentreLetters.at(f)) + "', got '" +
@@ -220,7 +220,7 @@ std::optional<Manifest> read_manifest(const std::string& dir) {
     std::stringstream buffer;
     buffer << file.rdbuf();
     const std::string text = buffer.str();
-    if (text.find('{') == std::string::npos) {
+    if (!text.contains('{')) {
         return std::nullopt;
     }
     Manifest manifest;
@@ -346,7 +346,7 @@ void AsyncRecorder::push(const cv::Mat& full_bgr, std::int64_t t_ms) {
         ++stats_.dropped;
         return;
     }
-    queue_.push_back(Job{full_bgr.clone(), t_ms});
+    queue_.push_back(Job{.full = full_bgr.clone(), .t_ms = t_ms});
     stats_.queue_peak = std::max(stats_.queue_peak, static_cast<int>(queue_.size()));
     lock.unlock();
     cv_.notify_one();
@@ -357,7 +357,7 @@ AsyncRecorder::Stats AsyncRecorder::stop() {
         return stats_;
     }
     {
-        std::lock_guard lock(mutex_);
+        std::scoped_lock lock(mutex_);
         stopping_ = true;
     }
     cv_.notify_one();
@@ -400,7 +400,7 @@ void AsyncRecorder::writer_loop() {
         index.flush();
         ++pass_;
         {
-            std::lock_guard lock(mutex_);
+            std::scoped_lock lock(mutex_);
             ++stats_.written;
         }
     }

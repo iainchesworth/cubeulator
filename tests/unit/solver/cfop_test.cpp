@@ -149,7 +149,7 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
                         flip_sum += e % 2;
                         e /= 2;
                     }
-                    state.co.at(3) = static_cast<std::uint8_t>((3 - twist_sum % 3) % 3);
+                    state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
                     state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
                     for (std::size_t i = 0; i < 4; ++i) {
                         state.cp.at(i) = corners.at(i);
@@ -249,7 +249,7 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
             flip_sum += static_cast<int>(edges % 2);
             edges /= 2;
         }
-        state.co.at(3) = static_cast<std::uint8_t>((3 - twist_sum % 3) % 3);
+        state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
         state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
         REQUIRE(cube::solver::detail::oll_case(state) == index);
         same(oll_algorithm(state), generated_words::kOllWords.at(index));
@@ -406,10 +406,10 @@ TEST_CASE("cfop gives the same solution every time and from several threads", "[
 
     std::array<bool, 4> same{};
     std::vector<std::thread> threads;
-    for (std::size_t i = 0; i < same.size(); ++i) {
-        threads.emplace_back([&same, &cube, &reference, i] {
+    for (bool& i : same) {
+        threads.emplace_back([&same, &cube, &reference, &i] {
             const auto again = solve_cfop(cube);
-            same.at(i) = again.has_value() && flatten(*again) == flatten(*reference);
+            i = again.has_value() && flatten(*again) == flatten(*reference);
         });
     }
     for (std::thread& t : threads) {

@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace cube::solver {
 
@@ -123,7 +124,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         if (face == Face::D || face == Face::R || face == Face::B) {
             for (int row = 0; row < 3; ++row) {
                 std::swap(base.at(face_index).at(static_cast<std::size_t>(row * 3)),
-                          base.at(face_index).at(static_cast<std::size_t>(row * 3 + 2)));
+                          base.at(face_index).at(static_cast<std::size_t>((row * 3) + 2)));
             }
         }
     }
@@ -213,7 +214,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         int score = 0;
         digits = combo;
         for (std::size_t face_index = 0; face_index < candidate.size(); ++face_index) {
-            if (hint_digit_of_face.at(face_index) == static_cast<int>(digits & 3U)) {
+            if (std::cmp_equal(hint_digit_of_face.at(face_index), digits & 3U)) {
                 ++score;
             }
             digits >>= 2U;
@@ -230,7 +231,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
             if (survivor_count == kMaxHintSurvivors) {
                 return std::unexpected(CubeError::invalid_cube_state);
             }
-            survivors.at(survivor_count++) = Survivor{*cube, score};
+            survivors.at(survivor_count++) = Survivor{.cube = *cube, .best_score = score};
         }
     }
 
@@ -255,13 +256,14 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
             // ambiguity stands, same failure and remedy as unhinted.
             return std::unexpected(CubeError::invalid_cube_state);
         }
-        return AssembledScan{survivors.at(best)->cube, input_index_of_face};
+        return AssembledScan{.cube = survivors.at(best)->cube,
+                             .input_index_of_face = input_index_of_face};
     }
 
     if (!found) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
-    return AssembledScan{*found, input_index_of_face};
+    return AssembledScan{.cube = *found, .input_index_of_face = input_index_of_face};
 }
 
 Result<Cube> assemble_scanned_faces(
@@ -347,9 +349,9 @@ RotationHint rotation_hint_for_tracked_scan(
     const auto& cx = column.at(0);
     const auto& cy = column.at(1);
     const auto& cz = column.at(2);
-    const int det = cx.at(0) * (cy.at(1) * cz.at(2) - cy.at(2) * cz.at(1)) -
-                    cy.at(0) * (cx.at(1) * cz.at(2) - cx.at(2) * cz.at(1)) +
-                    cz.at(0) * (cx.at(1) * cy.at(2) - cx.at(2) * cy.at(1));
+    const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
+                    (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
+                    (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
     if (det != 1) {
         return {};
     }
@@ -379,29 +381,29 @@ RotationHint rotation_hint_for_tracked_scan(
                 std::array<int, 3> q{};
                 for (int k = 0; k < 3; ++k) {
                     q.at(static_cast<std::size_t>(k)) =
-                        column.at(0).at(static_cast<std::size_t>(k)) * p.at(0) +
-                        column.at(1).at(static_cast<std::size_t>(k)) * p.at(1) +
-                        column.at(2).at(static_cast<std::size_t>(k)) * p.at(2);
+                        (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
+                        (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
+                        (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
                 }
                 int assembled_index = -1;
                 switch (face) {
                     case Face::U:
                     case Face::D:
-                        assembled_index = (q.at(2) + 1) * 3 + (q.at(0) + 1);
+                        assembled_index = ((q.at(2) + 1) * 3) + (q.at(0) + 1);
                         break;
                     case Face::R:
                     case Face::L:
-                        assembled_index = (1 - q.at(1)) * 3 + (q.at(2) + 1);
+                        assembled_index = ((1 - q.at(1)) * 3) + (q.at(2) + 1);
                         break;
                     case Face::F:
                     case Face::B:
-                        assembled_index = (1 - q.at(1)) * 3 + (q.at(0) + 1);
+                        assembled_index = ((1 - q.at(1)) * 3) + (q.at(0) + 1);
                         break;
                 }
                 if (assembled_index < 0 || assembled_index > 8) {
                     return {};
                 }
-                source_of.at(static_cast<std::size_t>(assembled_index)) = row * 3 + col;
+                source_of.at(static_cast<std::size_t>(assembled_index)) = (row * 3) + col;
             }
         }
 
@@ -547,9 +549,9 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
     const auto& cx = column.at(0);
     const auto& cy = column.at(1);
     const auto& cz = column.at(2);
-    const int det = cx.at(0) * (cy.at(1) * cz.at(2) - cy.at(2) * cz.at(1)) -
-                    cy.at(0) * (cx.at(1) * cz.at(2) - cx.at(2) * cz.at(1)) +
-                    cz.at(0) * (cx.at(1) * cy.at(2) - cx.at(2) * cy.at(1));
+    const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
+                    (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
+                    (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
     if (det != 1) {
         return {};
     }
@@ -604,23 +606,23 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
             std::array<int, 3> q{};
             for (int k = 0; k < 3; ++k) {
                 q.at(static_cast<std::size_t>(k)) =
-                    column.at(0).at(static_cast<std::size_t>(k)) * p.at(0) +
-                    column.at(1).at(static_cast<std::size_t>(k)) * p.at(1) +
-                    column.at(2).at(static_cast<std::size_t>(k)) * p.at(2);
+                    (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
+                    (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
+                    (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
             }
             int assembled_index = -1;
             switch (face) {
                 case Face::U:
                 case Face::D:
-                    assembled_index = (q.at(2) + 1) * 3 + (q.at(0) + 1);
+                    assembled_index = ((q.at(2) + 1) * 3) + (q.at(0) + 1);
                     break;
                 case Face::R:
                 case Face::L:
-                    assembled_index = (1 - q.at(1)) * 3 + (q.at(2) + 1);
+                    assembled_index = ((1 - q.at(1)) * 3) + (q.at(2) + 1);
                     break;
                 case Face::F:
                 case Face::B:
-                    assembled_index = (1 - q.at(1)) * 3 + (q.at(0) + 1);
+                    assembled_index = ((1 - q.at(1)) * 3) + (q.at(0) + 1);
                     break;
             }
             if (assembled_index < 0 || assembled_index > 8) {

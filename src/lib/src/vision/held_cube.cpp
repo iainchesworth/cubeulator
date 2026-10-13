@@ -1,8 +1,8 @@
+#include <algorithm>
 #include <cube/vision/held_cube.hpp>
 
 #include <cube/profiling.hpp>
 
-#include <algorithm>
 #include <cstddef>
 #include <limits>
 
@@ -30,13 +30,14 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
                 colour_distance(lab.at(cell), colours.at(static_cast<std::size_t>(shown.at(cell))));
             ++cells;
         }
-        fits.at(i) = HoldFit{holds.at(i), cells > 0 ? total / static_cast<float>(cells)
-                                                    : std::numeric_limits<float>::max()};
+        fits.at(i) = HoldFit{.hold = holds.at(i),
+                             .distance = cells > 0 ? total / static_cast<float>(cells)
+                                                   : std::numeric_limits<float>::max()};
     }
     // Stable, so holds that fit equally keep the order all_holds() gives
     // them and the answer does not depend on the sort.
-    std::stable_sort(fits.begin(), fits.end(),
-                     [](const HoldFit& a, const HoldFit& b) { return a.distance < b.distance; });
+    std::ranges::stable_sort(
+        fits, [](const HoldFit& a, const HoldFit& b) { return a.distance < b.distance; });
     return fits;
 }
 
@@ -84,7 +85,7 @@ std::array<HoldFit, 24> fit_holds(const SideRead& read, const solver::Cube& cube
 }
 
 bool HoldReading::shows(const solver::Hold& hold) const noexcept {
-    return std::find(holds.begin(), holds.end(), hold) != holds.end();
+    return std::ranges::find(holds, hold) != holds.end();
 }
 
 HoldReading read_hold(const std::array<cv::Vec3f, 9>& lab, const solver::Cube& cube,

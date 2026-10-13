@@ -76,7 +76,7 @@ bool may_follow(int face, int last) noexcept {
     if (face == last) {
         return false;
     }
-    return !(last == (face ^ 1) && face < last);
+    return last != (face ^ 1) || face >= last;
 }
 
 class TwoPhaseSearch {
@@ -103,12 +103,12 @@ public:
     [[nodiscard]] std::size_t phase1_length() const noexcept { return best_phase1_length_; }
 
 private:
-    int prune1(int twist, int slice) const noexcept {
-        return p2_.twist_slice_prune.at(static_cast<std::size_t>(twist) * kSliceCount +
+    [[nodiscard]] int prune1(int twist, int slice) const noexcept {
+        return p2_.twist_slice_prune.at((static_cast<std::size_t>(twist) * kSliceCount) +
                                         static_cast<std::size_t>(slice));
     }
-    int prune1_flip(int flip, int slice) const noexcept {
-        return p2_.flip_slice_prune.at(static_cast<std::size_t>(flip) * kSliceCount +
+    [[nodiscard]] int prune1_flip(int flip, int slice) const noexcept {
+        return p2_.flip_slice_prune.at((static_cast<std::size_t>(flip) * kSliceCount) +
                                        static_cast<std::size_t>(slice));
     }
 
@@ -146,12 +146,13 @@ private:
                 if (spend_node()) {
                     return;
                 }
-                const auto m = static_cast<std::size_t>(face * 3 + turn);
+                const auto m = static_cast<std::size_t>((face * 3) + turn);
                 const int next_twist =
-                    p1_.twist.at(static_cast<std::size_t>(twist) * kMoveCount + m);
-                const int next_flip = p1_.flip.at(static_cast<std::size_t>(flip) * kMoveCount + m);
+                    p1_.twist.at((static_cast<std::size_t>(twist) * kMoveCount) + m);
+                const int next_flip =
+                    p1_.flip.at((static_cast<std::size_t>(flip) * kMoveCount) + m);
                 const int next_slice =
-                    p1_.slice.at(static_cast<std::size_t>(slice) * kMoveCount + m);
+                    p1_.slice.at((static_cast<std::size_t>(slice) * kMoveCount) + m);
                 const int h =
                     std::max(prune1(next_twist, next_slice), prune1_flip(next_flip, next_slice));
                 if (h >= depth_left) {
@@ -197,12 +198,12 @@ private:
         }
     }
 
-    int prune2_corners(int cperm, int sperm) const noexcept {
-        return p2_.cperm_sperm_prune.at(static_cast<std::size_t>(cperm) * kSlicePermCount +
+    [[nodiscard]] int prune2_corners(int cperm, int sperm) const noexcept {
+        return p2_.cperm_sperm_prune.at((static_cast<std::size_t>(cperm) * kSlicePermCount) +
                                         static_cast<std::size_t>(sperm));
     }
-    int prune2_edges(int uedge, int sperm) const noexcept {
-        return p2_.uedge_sperm_prune.at(static_cast<std::size_t>(uedge) * kSlicePermCount +
+    [[nodiscard]] int prune2_edges(int uedge, int sperm) const noexcept {
+        return p2_.uedge_sperm_prune.at((static_cast<std::size_t>(uedge) * kSlicePermCount) +
                                         static_cast<std::size_t>(sperm));
     }
 
@@ -220,11 +221,11 @@ private:
                 return false;
             }
             const int next_cperm =
-                p2_.cperm_move.at(static_cast<std::size_t>(cperm) * kPhase2MoveCount + i);
+                p2_.cperm_move.at((static_cast<std::size_t>(cperm) * kPhase2MoveCount) + i);
             const int next_uedge =
-                p2_.uedge_move.at(static_cast<std::size_t>(uedge) * kPhase2MoveCount + i);
+                p2_.uedge_move.at((static_cast<std::size_t>(uedge) * kPhase2MoveCount) + i);
             const int next_sperm =
-                p2_.sperm_move.at(static_cast<std::size_t>(sperm) * kPhase2MoveCount + i);
+                p2_.sperm_move.at((static_cast<std::size_t>(sperm) * kPhase2MoveCount) + i);
             const int h = std::max(prune2_corners(next_cperm, next_sperm),
                                    prune2_edges(next_uedge, next_sperm));
             if (h >= depth_left) {
@@ -280,8 +281,8 @@ Result<Solution> solve_two_phase(const Cube& scrambled) {
     }
 
     Solution solution;
-    solution.steps.push_back(SolveStep{Stage::Reduce, {}});
-    solution.steps.push_back(SolveStep{Stage::Finish, {}});
+    solution.steps.push_back(SolveStep{.stage = Stage::Reduce, .moves = {}});
+    solution.steps.push_back(SolveStep{.stage = Stage::Finish, .moves = {}});
     const std::vector<std::uint8_t>& indices = search.solution();
     for (std::size_t i = 0; i < indices.size(); ++i) {
         const std::size_t step = i < search.phase1_length() ? 0 : 1;

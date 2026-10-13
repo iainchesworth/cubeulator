@@ -116,7 +116,7 @@ constexpr std::array<int, 9> kFactorial = {1, 1, 2, 6, 24, 120, 720, 5040, 40320
 int twist_value(const CubieCube& c) {
     int value = 0;
     for (std::size_t i = 0; i < 7; ++i) {
-        value = value * 3 + c.co.at(i);
+        value = (value * 3) + c.co.at(i);
     }
     return value;
 }
@@ -128,13 +128,13 @@ void set_twist(CubieCube& c, int value) {
         sum += value % 3;
         value /= 3;
     }
-    c.co.at(7) = static_cast<std::uint8_t>((3 - sum % 3) % 3);
+    c.co.at(7) = static_cast<std::uint8_t>((3 - (sum % 3)) % 3);
 }
 
 int flip_value(const CubieCube& c) {
     int value = 0;
     for (std::size_t i = 0; i < 11; ++i) {
-        value = value * 2 + c.eo.at(i);
+        value = (value * 2) + c.eo.at(i);
     }
     return value;
 }
@@ -171,7 +171,7 @@ int slice_value(const CubieCube& c, const SliceNumbering& n) {
     unsigned mask = 0;
     for (std::size_t pos = 0; pos < 12; ++pos) {
         if (c.ep.at(pos) >= 8) {
-            mask |= 1u << pos;
+            mask |= 1U << pos;
         }
     }
     return n.index_of_mask.at(mask);
@@ -182,7 +182,7 @@ void set_slice(CubieCube& c, int value, const SliceNumbering& n) {
     std::uint8_t next_slice = 8;
     std::uint8_t next_other = 0;
     for (std::size_t pos = 0; pos < 12; ++pos) {
-        c.ep.at(pos) = ((mask >> pos) & 1u) != 0 ? next_slice++ : next_other++;
+        c.ep.at(pos) = ((mask >> pos) & 1U) != 0 ? next_slice++ : next_other++;
     }
 }
 
@@ -193,7 +193,7 @@ int permutation_rank(const std::uint8_t* p, std::size_t n) {
         for (std::size_t j = i + 1; j < n; ++j) {
             smaller += p[j] < p[i] ? 1 : 0;
         }
-        rank = rank * static_cast<int>(n - i) + smaller;
+        rank = (rank * static_cast<int>(n - i)) + smaller;
     }
     return rank;
 }
@@ -225,7 +225,7 @@ std::vector<std::uint16_t> move_table(std::size_t count, std::size_t moves,
         for (std::size_t v = 0; v < count; ++v) {
             CubieCube c;
             set(c, static_cast<int>(v));
-            table.at(v * moves + m) = static_cast<std::uint16_t>(get(multiply(c, move)));
+            table.at((v * moves) + m) = static_cast<std::uint16_t>(get(multiply(c, move)));
         }
     }
     return table;
@@ -259,8 +259,8 @@ std::vector<std::uint8_t> build_prune(std::size_t first_count, std::size_t secon
             const std::size_t first = index / second_count;
             const std::size_t second = index % second_count;
             for (std::size_t m = 0; m < move_count; ++m) {
-                const std::size_t next = first_move.at(first * move_count + m) * second_count +
-                                         second_move.at(second * move_count + m);
+                const std::size_t next = (first_move.at((first * move_count) + m) * second_count) +
+                                         second_move.at((second * move_count) + m);
                 if (table.at(next) == kUnset) {
                     table.at(next) = static_cast<std::uint8_t>(depth + 1);
                     ++added;
@@ -296,9 +296,9 @@ TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[
         const auto p = permutation_of_rank<4>(rank);
         unsigned seen = 0;
         for (const std::uint8_t v : p) {
-            seen |= 1u << v;
+            seen |= 1U << v;
         }
-        REQUIRE(seen == 0xFu);
+        REQUIRE(seen == 0xFU);
         CHECK(rank_permutation(p.data(), 4) == static_cast<int>(rank));
     }
 
@@ -307,13 +307,12 @@ TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[
         const auto p = permutation_of_rank<8>(rank);
         unsigned seen = 0;
         for (const std::uint8_t v : p) {
-            seen |= 1u << v;
+            seen |= 1U << v;
         }
-        REQUIRE(seen == 0xFFu);
+        REQUIRE(seen == 0xFFU);
         REQUIRE(rank_permutation(p.data(), 8) == static_cast<int>(rank));
         if (rank > 0) {
-            REQUIRE(
-                std::lexicographical_compare(previous.begin(), previous.end(), p.begin(), p.end()));
+            REQUIRE(std::ranges::lexicographical_compare(previous, p));
         }
         previous = p;
     }
@@ -416,7 +415,7 @@ TEST_CASE("two-phase solves an already-solved cube with no moves", "[two-phase]"
 TEST_CASE("two-phase finds the one-move solution to a one-move scramble", "[two-phase]") {
     for (const Face face : kAllFaces) {
         for (int turns = 1; turns <= 3; ++turns) {
-            const Cube cube = Cube::solved().apply(Move{face, turns});
+            const Cube cube = Cube::solved().apply(Move{.face = face, .turns = turns});
             const auto solution = solve_two_phase(cube);
             REQUIRE(solution.has_value());
             const std::vector<Move> moves = flatten(*solution);
@@ -512,6 +511,7 @@ TEST_CASE("two-phase's tables can be built and used from several threads at once
     // background prepare() racing for it must both come out right.
     std::array<bool, 4> ok{};
     std::vector<std::thread> threads;
+    threads.reserve(ok.size());
     for (std::size_t i = 0; i < ok.size(); ++i) {
         threads.emplace_back([&ok, i] {
             if (i % 2 == 0) {

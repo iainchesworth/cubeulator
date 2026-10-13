@@ -74,11 +74,11 @@ TEST_CASE("state oracle accepts a solved cube and real scrambles", "[recording]"
     using cube::solver::Face;
     using cube::solver::Move;
     const auto scrambled = cube::solver::Cube::solved()
-                               .apply(Move{Face::R, 1})
-                               .apply(Move{Face::U, 2})
-                               .apply(Move{Face::F, 3})
-                               .apply(Move{Face::L, 1})
-                               .apply(Move{Face::D, 1});
+                               .apply(Move{.face = Face::R, .turns = 1})
+                               .apply(Move{.face = Face::U, .turns = 2})
+                               .apply(Move{.face = Face::F, .turns = 3})
+                               .apply(Move{.face = Face::L, .turns = 1})
+                               .apply(Move{.face = Face::D, .turns = 1});
     const auto problem = state_string_problem(state_string_of(scrambled));
     INFO(problem.value_or(""));
     CHECK(!problem.has_value());
@@ -146,7 +146,7 @@ TEST_CASE("async recorder writes a sound dual-stream recording", "[recording]") 
     REQUIRE(!recorder.start(dir.string(), manifest, true).has_value());
     const cv::Mat frame(720, 1280, CV_8UC3, cv::Scalar(40, 80, 120));
     for (int i = 0; i < 12; ++i) {
-        recorder.push(frame, 1000 + 33 * i);
+        recorder.push(frame, 1000 + (33 * i));
     }
     const auto stats = recorder.stop();
     CHECK(stats.pushed == 12);
