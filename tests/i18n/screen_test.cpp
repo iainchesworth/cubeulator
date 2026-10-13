@@ -315,13 +315,15 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
                 const double content_w = text->property("contentWidth").toDouble();
                 const double content_h = text->property("contentHeight").toDouble();
                 const bool wraps = text->property("wrapMode").toInt() != 0;
-                // The box the string was given holds it: across for a line
-                // that does not wrap, down for one that does.
-                if (!wraps) {
-                    CHECK(content_w <= text->width() + 0.5);
-                } else {
+                // The box the string was given holds it: down, for one that
+                // wraps; and across for every one, wrapped or not. A wrapped
+                // line that is still wider than its box is a word with no
+                // place to break, or a box measured by something other than
+                // the text it holds.
+                if (wraps) {
                     CHECK(content_h <= text->height() + 0.5);
                 }
+                CHECK(content_w <= text->width() + 0.5);
                 // And it stays inside the window: nothing runs off an edge.
                 const QPointF at = text->mapToItem(screen.item(), QPointF(0, 0));
                 CHECK(at.x() >= -0.5);
@@ -499,6 +501,98 @@ TEST_CASE(
     }
 
     in_language("en");
+}
+
+// AppButton on its own: a label wraps in the room it is given and takes its
+// whole width again when the room comes back; a label is never wider than the
+// box it is set in, in any script (a button sized by one measurement of the
+// string and a text laid out by another is how a chip came to run a pixel past
+// its row).
+namespace {
+
+[[nodiscard]] std::unique_ptr<QQuickItem> make_button(const QString& text, double max_width) {
+    QQmlComponent component(&t::engine());
+    component.setData(R"QML(
+        import QtQuick
+        import Cubeulator
+        AppButton {}
+    )QML",
+                      QUrl(QStringLiteral("qrc:/i18n_test_button.qml")));
+    REQUIRE_FALSE(component.isError());
+    std::unique_ptr<QQuickItem> button(qobject_cast<QQuickItem*>(component.create()));
+    REQUIRE(button != nullptr);
+    REQUIRE(button->setProperty("text", text));
+    REQUIRE(button->setProperty("maxWidth", max_width));
+    QCoreApplication::processEvents();
+    return button;
+}
+
+[[nodiscard]] QQuickItem* label_of(QQuickItem* button) {
+    QQuickItem* found = nullptr;
+    std::function<void(QQuickItem*)> walk = [&](QQuickItem* item) {
+        if (found == nullptr && item->inherits("QQuickText")) {
+            found = item;
+        }
+        for (QQuickItem* child : item->childItems()) {
+            walk(child);
+        }
+    };
+    walk(button);
+    return found;
+}
+
+}  // namespace
+
+TEST_CASE("a button wraps in a narrow room and takes its whole width again in a wide one",
+          "[i18n][screen][button]") {
+    const QString text = QStringLiteral("Same as this device (Deutsch) and rather more besides");
+    auto button = make_button(text, -1);
+    QQuickItem* label = label_of(button.get());
+    REQUIRE(label != nullptr);
+
+    // Room to spare: one line, as wide as the label.
+    const double whole = button->width();
+    const double one_line = label->height();
+    CHECK(whole > 200);
+    CHECK(label->property("contentWidth").toDouble() <= label->width() + 0.5);
+
+    // A narrow room: the same label on more lines, the button no wider than it
+    // was told, nothing wider than the box it is in.
+    REQUIRE(button->setProperty("maxWidth", 160.0));
+    QCoreApplication::processEvents();
+    CHECK(button->width() <= 160.5);
+    CHECK(label->height() > one_line * 1.5);
+    CHECK(label->property("contentWidth").toDouble() <= label->width() + 0.5);
+    CHECK(button->height() >= label->height());
+
+    // And the room comes back: the whole label on one line again, which is
+    // what a window being widened does to a chip row.
+    REQUIRE(button->setProperty("maxWidth", 600.0));
+    QCoreApplication::processEvents();
+    CHECK(button->width() == whole);
+    CHECK(label->height() == one_line);
+    CHECK(button->height() == 44);
+}
+
+TEST_CASE("a label is not wider than the box it is set in, in any of the nine scripts",
+          "[i18n][screen][button]") {
+    // The nine languages, each in itself, as the language row shows them, and
+    // the longest of the interface strings in a script that shapes (Arabic).
+    const QStringList names = {
+        QStringLiteral("English"), QStringLiteral("Deutsch"), QStringLiteral("Français"),
+        QStringLiteral("Español"), QStringLiteral("日本語"),  QStringLiteral("简体中文"),
+        QStringLiteral("עברית"),   QStringLiteral("العربية"), QStringLiteral("יידיש")};
+    for (const QString& name : names) {
+        for (const double max_width : {-1.0, 60.0}) {
+            INFO(name.toStdString() << " in " << max_width);
+            auto button = make_button(name, max_width);
+            QQuickItem* label = label_of(button.get());
+            REQUIRE(label != nullptr);
+            CHECK(label->property("contentWidth").toDouble() <= label->width() + 0.5);
+            // And the button holds the label: nothing hangs out of it.
+            CHECK(label->width() <= button->width() + 0.5);
+        }
+    }
 }
 
 // A picture of a screen in a language, for whoever reviews what the pseudo-locale
