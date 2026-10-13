@@ -557,12 +557,19 @@ The screen reachable from the menu, in this order:
 | 3 | No warranty | `This program comes with ABSOLUTELY NO WARRANTY; for details see the licence.` | s.0 (2); s.15-16 |
 | 4 | Licence grant | `This is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3 or (at your option) any later version.` | s.0 (2) |
 | 5 | View the licence | button opening the full GPL-3.0 text, offline (a Qt resource), with the gnu.org URL beside it | s.0 (2) "how to view a copy" |
-| 6 | Source | `Source code: https://github.com/iainchesworth/cubeulator` plus, when the build is a tagged release, the tag; selectable and openable | s.6 Corresponding Source / offer |
+| 6 | Source | `Source code: https://github.com/iainchesworthlabs/cubeulator` plus, when the build is a tagged release, the tag; selectable and openable | s.6 Corresponding Source / offer |
 | 7 | Third-party licences | button to the Licences screen; one line: `Cubeulator uses Qt and other open-source software; see Licences.` | the other licences' notice duties |
 | 8 | Qt statement | `This application uses Qt <version> under the GNU General Public License v3. Qt source: https://download.qt.io/official_releases/qt/` | Qt is conveyed in the package; its Corresponding Source must be offered [L] |
 
 Rules:
 
+- The **publisher string** (store listing, installer metadata, an optional
+  "Published by" line) is "Iain Chesworth Labs"; the repository is
+  `github.com/iainchesworthlabs/cubeulator`. The **copyright line** in item 2
+  is a separate matter: it names the copyright holder, it is not a rename,
+  and the repository's `LICENSE` is the plain GPL text with no holder line, so
+  who is named there (Iain Chesworth, or the Labs) is Iain's decision. Until he
+  decides, the generated notices keep "Copyright (C) 2026 Iain Chesworth".
 - The text of items 3 and 4 is **not** to be paraphrased: it is the GPL's own
   recommended notice; changing it is a legal decision.
 - Items 1-6 must be reachable in **no more than two taps/clicks from any

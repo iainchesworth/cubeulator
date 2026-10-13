@@ -10,8 +10,8 @@
     "name": "Cubeulator",
     "license": "GPL-3.0-or-later",
     "copyright": "Copyright (C) 2026 Iain Chesworth",
-    "homepage": "https://github.com/iainchesworth/cubeulator",
-    "source": "https://github.com/iainchesworth/cubeulator"
+    "homepage": "https://github.com/iainchesworthlabs/cubeulator",
+    "source": "https://github.com/iainchesworthlabs/cubeulator"
   },
   "qt": {
     "_comment": [
