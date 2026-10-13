@@ -762,6 +762,7 @@ jobs:
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage-app.html
           --json-summary build/coverage-app.json
@@ -852,12 +853,26 @@ jobs:
       # corpus tests run an -O0, -fno-inline build of Cube::at() ~5.8e10 times;
       # those counters are correct (checked: 64-bit, none negative). 1e12
       # keeps the detector for a counter that really has gone wrong.
+      #
+      # --gcov-ignore-parse-errors=negative_hits.warn_once_per_file: the same
+      # bug from the other side. gcov derives some arc counts by subtracting
+      # others, and the test binaries run threads (the async recorder, capture
+      # loops) whose non-atomic counter updates race, so now and then a
+      # derived branch count comes out negative and gcovr aborts the whole
+      # report with "NegativeHits ... cube.cpp:39 Got negative hit value" and
+      # exit 64 before the 80% gate is evaluated. It is intermittent (the same
+      # tree passed on develop a few hours earlier). The offending line is
+      # skipped and reported once per file on stderr; the gate still runs.
+      # -fprofile-update=atomic would remove the cause, at a lock-prefixed add
+      # per counter in the -O0 corpus loops above, which is not worth it for a
+      # gate that only needs the percentages.
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-ignore-parse-errors=negative_hits.warn_once_per_file
           --gcov-suspicious-hits-threshold 1000000000000
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage.html
