@@ -154,8 +154,16 @@ jobs:
       # which must be deterministic, is a pinned wheel (see that job). When a
       # clang-tidy 23 wheel exists on PyPI, move it into
       # ci/requirements-lint.txt and drop this install.
+      #
+      # libclang-rt-23-dev: the linux-gcc-debug preset builds with
+      # -fsanitize=address,undefined, and clang-23 from apt.llvm.org does not
+      # carry the sanitizer runtimes (libclang_rt.asan*.a): without this
+      # package the Build step below fails at the first link with "cannot
+      # find .../clang/23/lib/x86_64-pc-linux-gnu/libclang_rt.asan.a", and
+      # clang-tidy is never reached. The Ubuntu clang-21 that this job used
+      # before bundled them.
       - name: Install Clang 23
-        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libclang-rt-23-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
