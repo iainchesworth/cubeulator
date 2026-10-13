@@ -65,6 +65,11 @@ add_dependencies(cube_system_tests cube_app)
 # What windeployqt does not copy for cube_app because the app never needs it:
 # QtTest, which sends the input events. Without it the binary dies at
 # start-up with STATUS_DLL_NOT_FOUND.
+#
+# The directory is also the one the third_party_notices_complete test scans for
+# what the app deploys. Qt6Test is not the app's, so the manifest lists it
+# under qt.testOnlyModules (third_party/notices/manifest.json); a further Qt
+# module copied here for a test needs a line there too.
 if(WIN32)
     add_custom_command(TARGET cube_system_tests POST_BUILD
         COMMAND "${CMAKE_COMMAND}" -E copy_if_different
