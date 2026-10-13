@@ -58,9 +58,9 @@ Needs, besides the build's own tools:
 | | value |
 |---|---|
 | Display name | Cubeulator |
-| Identifier | `org.iainchesworth.cubeulator`, on every platform (Iain, 2026-10-13): the macOS bundle id, the Linux app id and desktop file name, later the Android package and iOS bundle id |
-| Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the copyright lines, the AppStream developer and CPack's vendor and contact |
-| Windows AppUserModelID | `IainChesworth.Cubeulator` |
+| Identifier | `com.iainchesworthlabs.cubeulator`, on every platform (Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`; it follows the account; until then it had the `org` prefix and the old account): the macOS bundle id, the Linux app id and desktop file name, later the Android package and iOS bundle id |
+| Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the AppStream developer and CPack's vendor and contact. The copyright line (`CUBEULATOR_COPYRIGHT_HOLDER`) stays in Iain's own name: "Copyright (C) 2026 Iain Chesworth" |
+| Windows AppUserModelID | `IainChesworthLabs.Cubeulator`, following the publisher |
 | Executable | `Cubeulator.exe`, `Cubeulator.app`, `cubeulator` |
 | Version | `project(VERSION)` in the top-level `CMakeLists.txt`, through `cmake/GenerateVersion.cmake`: in `cube/version.hpp`, the Windows version resource, `Info.plist`, the AppStream release and every package's file name |
 
@@ -86,7 +86,7 @@ icons follow.
 
 - **Version resource** (`Cubeulator.rc.in`): company, product name, file
   description, version, copyright. Properties > Details shows them.
-- **AppUserModelID**: the process sets `IainChesworth.Cubeulator` for itself
+- **AppUserModelID**: the process sets `IainChesworthLabs.Cubeulator` for itself
   at start-up (`desktop_integration.cpp`) and the installer stamps the same
   value on the Start menu shortcut (`StampShortcut.ps1`), so that the
   taskbar groups the pinned shortcut with the running window. If stamping

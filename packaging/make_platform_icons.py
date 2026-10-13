@@ -454,7 +454,7 @@ def main(argv=None):
     ap.add_argument("--identity", type=Path, required=True, help="docs/design/identity")
     ap.add_argument("--out", type=Path, required=True, help="output directory")
     ap.add_argument("--basename", default="Cubeulator", help="file name of the .ico and .icns")
-    ap.add_argument("--app-id", default="org.iainchesworth.cubeulator", help="Linux icon name")
+    ap.add_argument("--app-id", default="com.iainchesworthlabs.cubeulator", help="Linux icon name")
     args = ap.parse_args(argv)
     build(args.identity, args.out, args.basename, args.app_id)
     return 0

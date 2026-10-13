@@ -312,7 +312,7 @@ jobs:
           test -x "$app/Contents/MacOS/Cubeulator"
           test -d "$app/Contents/Frameworks/QtCore.framework"
           test -f "$app/Contents/Resources/Cubeulator.icns"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -qx "org.iainchesworth.cubeulator"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -qx "com.iainchesworthlabs.cubeulator"
           /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
 
       - name: Check the package contents (Linux)
@@ -326,8 +326,8 @@ jobs:
           dpkg-deb -f "$deb" Package Version Depends Recommends
           grep -q 'libQt6Core.so' /tmp/contents.txt
           grep -q ' ./usr/bin/cubeulator' /tmp/contents.txt
-          grep -q 'org.iainchesworth.cubeulator.desktop' /tmp/contents.txt
-          grep -q 'icons/hicolor/scalable/apps/org.iainchesworth.cubeulator.svg' /tmp/contents.txt
+          grep -q 'com.iainchesworthlabs.cubeulator.desktop' /tmp/contents.txt
+          grep -q 'icons/hicolor/scalable/apps/com.iainchesworthlabs.cubeulator.svg' /tmp/contents.txt
           dpkg-deb -f "$deb" Recommends | grep -q fonts-noto-cjk
           rpm -qlp build/${CMAKE_PRESET}/Cubeulator-*.rpm | grep -q 'libQt6Core.so'
 
@@ -337,8 +337,8 @@ jobs:
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
         run: |
-          desktop-file-validate "build/${CMAKE_PRESET}/packaging/org.iainchesworth.cubeulator.desktop"
-          appstreamcli validate --no-net "build/${CMAKE_PRESET}/packaging/org.iainchesworth.cubeulator.metainfo.xml"
+          desktop-file-validate "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.desktop"
+          appstreamcli validate --no-net "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.metainfo.xml"
 
   android-build:
     name: Android (arm64-v8a)

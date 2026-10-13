@@ -70,8 +70,8 @@ private:
 };
 
 // The identifier on every platform (docs/design/platforms.md, "Identity").
-inline constexpr const char* kAppId = "org.iainchesworth.cubeulator";
+inline constexpr const char* kAppId = "com.iainchesworthlabs.cubeulator";
 // Windows only: groups the taskbar button with its shortcut.
-inline constexpr const wchar_t* kAppUserModelId = L"IainChesworth.Cubeulator";
+inline constexpr const wchar_t* kAppUserModelId = L"IainChesworthLabs.Cubeulator";
 
 }  // namespace cube::app

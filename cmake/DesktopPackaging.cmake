@@ -297,9 +297,9 @@ function(cube_configure_desktop_app target)
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
             "${PROJECT_SOURCE_DIR}/docs/design/strings.json")
 
-        configure_file("${PROJECT_SOURCE_DIR}/packaging/linux/org.iainchesworth.cubeulator.desktop.in"
+        configure_file("${PROJECT_SOURCE_DIR}/packaging/linux/cubeulator.desktop.in"
             "${CUBEULATOR_PACKAGING_DIR}/${CUBEULATOR_APP_ID}.desktop" @ONLY)
-        configure_file("${PROJECT_SOURCE_DIR}/packaging/linux/org.iainchesworth.cubeulator.metainfo.xml.in"
+        configure_file("${PROJECT_SOURCE_DIR}/packaging/linux/cubeulator.metainfo.xml.in"
             "${CUBEULATOR_PACKAGING_DIR}/${CUBEULATOR_APP_ID}.metainfo.xml" @ONLY)
 
         install(FILES "${CUBEULATOR_PACKAGING_DIR}/${CUBEULATOR_APP_ID}.desktop"
