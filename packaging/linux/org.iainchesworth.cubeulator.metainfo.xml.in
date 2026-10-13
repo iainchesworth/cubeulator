@@ -19,8 +19,8 @@
     <p>@CUBEULATOR_ABOUT_WHAT@</p>
   </description>
 
-  <developer id="com.github.iainchesworth">
-    <name>Iain Chesworth</name>
+  <developer id="@CUBEULATOR_DEVELOPER_ID@">
+    <name>@CUBEULATOR_PUBLISHER@</name>
   </developer>
 
   <launchable type="desktop-id">@CUBEULATOR_APP_ID@.desktop</launchable>

@@ -36,11 +36,11 @@ BEGIN
         // 0809: English (United Kingdom); 04B0: Unicode.
         BLOCK "080904B0"
         BEGIN
-            VALUE "CompanyName", "Iain Chesworth"
+            VALUE "CompanyName", "@CUBEULATOR_PUBLISHER@"
             VALUE "FileDescription", "Cubeulator"
             VALUE "FileVersion", "@CUBEULATOR_VERSION@"
             VALUE "InternalName", "Cubeulator"
-            VALUE "LegalCopyright", "Copyright (C) 2026 Iain Chesworth"
+            VALUE "LegalCopyright", "@CUBEULATOR_COPYRIGHT@"
             VALUE "OriginalFilename", "Cubeulator.exe"
             VALUE "ProductName", "Cubeulator"
             VALUE "ProductVersion", "@CUBEULATOR_VERSION@"

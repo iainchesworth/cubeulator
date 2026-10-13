@@ -59,6 +59,7 @@ Needs, besides the build's own tools:
 |---|---|
 | Display name | Cubeulator |
 | Identifier | `org.iainchesworth.cubeulator`, on every platform (Iain, 2026-10-13): the macOS bundle id, the Linux app id and desktop file name, later the Android package and iOS bundle id |
+| Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the copyright lines, the AppStream developer and CPack's vendor and contact |
 | Windows AppUserModelID | `IainChesworth.Cubeulator` |
 | Executable | `Cubeulator.exe`, `Cubeulator.app`, `cubeulator` |
 | Version | `project(VERSION)` in the top-level `CMakeLists.txt`, through `cmake/GenerateVersion.cmake`: in `cube/version.hpp`, the Windows version resource, `Info.plist`, the AppStream release and every package's file name |

@@ -2,19 +2,20 @@
 
 ## Workflows
 
-| Workflow | Purpose | Blocking? |
-| --- | --- | --- |
-| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), iOS build-only (release only), coverage gate | Yes (desktop legs + coverage) |
-| `codeql.yml` | Static analysis (C++) | Yes |
-| `branch-name-check.yml` | Enforces gitflow branch naming | Yes |
-| `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes |
-| `osv-scanner.yml` | Scans `vcpkg.json` against the OSV database | No (visible only) |
-| `zizmor.yml` | Lints the workflow YAML itself | No (visible only) |
-| `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) |
-| `docs.yml` | Builds and publishes the mkdocs site to GitHub Pages | N/A (push to `main` only) |
+| Workflow | Purpose | Blocking? | In the merge queue? |
+| --- | --- | --- | --- |
+| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
+| `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
+| `branch-name-check.yml` | Enforces gitflow branch naming | Yes | Yes (skipped, a pass) |
+| `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes | Yes |
+| `osv-scanner.yml` | Scans `vcpkg.json` against the OSV database | No (visible only) | No |
+| `zizmor.yml` | Lints the workflow YAML itself | No (visible only) | No |
+| `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) | No |
+| `docs.yml` | Builds and publishes the mkdocs site to GitHub Pages | N/A (push to `main` only) | No |
 
-See [Branch protection](branch-protection.md) for exactly which checks are
-configured as required on `main`.
+See [Branch protection and the merge queue](branch-protection.md) for which
+checks are required on `develop` and `main`, how the queue is configured, and
+the `merge_group` rule a workflow has to follow to be part of it.
 
 ## Dependencies
 

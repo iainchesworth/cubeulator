@@ -126,6 +126,8 @@ function(cube_configure_desktop_app target)
             set(DST "${_rc_file}")
             set(WORKDIR "${PROJECT_SOURCE_DIR}")
             set(CUBEULATOR_ICON_FILE "${_ico_file}")
+            set(CUBEULATOR_PUBLISHER "${CUBEULATOR_PUBLISHER}")
+            set(CUBEULATOR_COPYRIGHT "${CUBEULATOR_COPYRIGHT}")
             include("${PROJECT_SOURCE_DIR}/cmake/GenerateVersion.cmake")
         endfunction()
         _cube_stamp_rc()
@@ -139,6 +141,8 @@ function(cube_configure_desktop_app target)
                 "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"
                 "-DWORKDIR=${PROJECT_SOURCE_DIR}"
                 "-DCUBEULATOR_ICON_FILE=${_ico_file}"
+                "-DCUBEULATOR_PUBLISHER=${CUBEULATOR_PUBLISHER}"
+                "-DCUBEULATOR_COPYRIGHT=${CUBEULATOR_COPYRIGHT}"
                 -P "${PROJECT_SOURCE_DIR}/cmake/GenerateVersion.cmake"
             COMMENT "Stamping the Windows version resource"
             VERBATIM)
@@ -170,7 +174,6 @@ function(cube_configure_desktop_app target)
         set(CUBEULATOR_BUNDLE_ID "${CUBEULATOR_APP_ID}")
         set(CUBEULATOR_BUNDLE_NAME "${CUBEULATOR_APP_DISPLAY_NAME}")
         set(CUBEULATOR_BUNDLE_VERSION "${PROJECT_VERSION}")
-        set(CUBEULATOR_COPYRIGHT "Copyright (C) 2026 Iain Chesworth")
         set(CUBEULATOR_ICNS_NAME "Cubeulator.icns")
         set(_plist "${CUBEULATOR_PACKAGING_DIR}/Info.plist")
         configure_file("${PROJECT_SOURCE_DIR}/packaging/macos/Info.plist.in" "${_plist}" @ONLY)
