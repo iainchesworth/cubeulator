@@ -185,8 +185,8 @@ Photometry sample(cv::VideoCapture& capture) {
         return Photometry{};
     }
     const auto n = static_cast<double>(counted);
-    return Photometry{total.mean_l / n, total.mean_chroma / n, total.mean_b / n,
-                      total.mean_g / n, total.mean_r / n};
+    return Photometry{total.mean_l / n, total.mean_chroma / n, total.mean_b / n, total.mean_g / n,
+                      total.mean_r / n};
 }
 
 std::string fixed2(double value) {
@@ -228,8 +228,8 @@ TEST_CASE("camera property probe reports real DirectShow capability", "[.camera-
                              .count();
 
     log(std::string("backend=") + kBackendName + " open+first-frame=" + std::to_string(open_ms) +
-        "ms first_frame_ok=" + (got_first ? "yes" : "no") +
-        " size=" + std::to_string(first.cols) + "x" + std::to_string(first.rows) +
+        "ms first_frame_ok=" + (got_first ? "yes" : "no") + " size=" + std::to_string(first.cols) +
+        "x" + std::to_string(first.rows) +
         " fourcc=" + std::to_string(static_cast<long long>(capture.get(cv::CAP_PROP_FOURCC))) +
         " fps=" + fixed2(capture.get(cv::CAP_PROP_FPS)));
     REQUIRE(got_first);
@@ -259,7 +259,8 @@ TEST_CASE("camera property probe reports real DirectShow capability", "[.camera-
             // Tolerance rather than equality: white-balance temperature in
             // particular is quantised to a driver step, so an accepted
             // 6500 can legitimately read back as 6496.
-            const bool ok = std::abs(readback - candidate) <= std::max(0.5, 0.02 * std::abs(candidate));
+            const bool ok =
+                std::abs(readback - candidate) <= std::max(0.5, 0.02 * std::abs(candidate));
             sweep += " " + fixed2(candidate) + "->" + fixed2(readback) + (ok ? "[ok]" : "[no]");
             if (ok) {
                 accepted.push_back(candidate);
@@ -327,9 +328,8 @@ TEST_CASE("camera property probe reports real DirectShow capability", "[.camera-
         const Photometry cool = sample(capture);
         log("   WB 2800K: L=" + fixed2(warm.mean_l) + " B=" + fixed2(warm.mean_b) +
             " R=" + fixed2(warm.mean_r) + " | WB 6500K: L=" + fixed2(cool.mean_l) +
-            " B=" + fixed2(cool.mean_b) + " R=" + fixed2(cool.mean_r) +
-            " | dB=" + fixed2(cool.mean_b - warm.mean_b) +
-            " dR=" + fixed2(cool.mean_r - warm.mean_r));
+            " B=" + fixed2(cool.mean_b) + " R=" + fixed2(cool.mean_r) + " | dB=" +
+            fixed2(cool.mean_b - warm.mean_b) + " dR=" + fixed2(cool.mean_r - warm.mean_r));
 
         for (const double auto_value : {0.0, 0.25, 0.75, 1.0, 3.0}) {
             const double ae = set_and_read(capture, cv::CAP_PROP_AUTO_EXPOSURE, auto_value);
@@ -426,7 +426,8 @@ TEST_CASE("camera property probe reports real DirectShow capability", "[.camera-
         const bool opened = capture.set(cv::CAP_PROP_SETTINGS, 1);
         log("\nCAP_PROP_SETTINGS set() returned " + std::string(opened ? "true" : "false"));
     } else {
-        log("\nCAP_PROP_SETTINGS not attempted (set CUBE_CAMERA_PROBE_SETTINGS_DIALOG=1; it opens a modal dialog)");
+        log("\nCAP_PROP_SETTINGS not attempted (set CUBE_CAMERA_PROBE_SETTINGS_DIALOG=1; it opens "
+            "a modal dialog)");
     }
 
     capture.release();

@@ -26,8 +26,8 @@ TEST_CASE("parse_move accepts every face letter", "[notation]") {
         char letter;
         Face face;
     };
-    for (auto [letter, face] : {Case{'U', Face::U}, Case{'D', Face::D}, Case{'L', Face::L}, Case{'R', Face::R},
-                                 Case{'F', Face::F}, Case{'B', Face::B}}) {
+    for (auto [letter, face] : {Case{'U', Face::U}, Case{'D', Face::D}, Case{'L', Face::L},
+                                Case{'R', Face::R}, Case{'F', Face::F}, Case{'B', Face::B}}) {
         const auto move = parse_move(std::string_view(&letter, 1));
         REQUIRE(move.has_value());
         REQUIRE(move->face == face);
@@ -45,13 +45,13 @@ TEST_CASE("parse_algorithm splits on whitespace and preserves order", "[notation
     const auto moves = parse_algorithm("F R U R' U' F'");
     REQUIRE(moves.has_value());
     REQUIRE(*moves == std::vector<Move>{
-                           Move{Face::F, 1},
-                           Move{Face::R, 1},
-                           Move{Face::U, 1},
-                           Move{Face::R, 3},
-                           Move{Face::U, 3},
-                           Move{Face::F, 3},
-                       });
+                          Move{Face::F, 1},
+                          Move{Face::R, 1},
+                          Move{Face::U, 1},
+                          Move{Face::R, 3},
+                          Move{Face::U, 3},
+                          Move{Face::F, 3},
+                      });
 }
 
 TEST_CASE("parse_algorithm tolerates repeated/leading/trailing whitespace", "[notation]") {

@@ -19,11 +19,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/color_classification.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
-#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/idle_gate.hpp>
@@ -115,8 +115,8 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
     }
     block_size = std::max(block_size, 7);
     cv::Mat brightness_mask;
-    cv::adaptiveThreshold(v_eq, brightness_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY, block_size,
-                          5.0);
+    cv::adaptiveThreshold(v_eq, brightness_mask, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                          cv::THRESH_BINARY, block_size, 5.0);
     cv::Mat value_floor;
     cv::threshold(hsv_channels[2], value_floor, 44, 255, cv::THRESH_BINARY);
     cv::bitwise_and(brightness_mask, value_floor, brightness_mask);
@@ -146,7 +146,8 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
         // Sync: corner_observation relaxed to 4-8 vertices + fill >= 0.55
         // (the F4 low-light recovery).
         if (approx.size() < 4 || approx.size() > 8 || !cv::isContourConvex(approx)) {
-            std::printf("  corner-candidate reject poly: area=%.0f vertices=%zu\n", area, approx.size());
+            std::printf("  corner-candidate reject poly: area=%.0f vertices=%zu\n", area,
+                        approx.size());
             continue;
         }
         ++pass_poly;
@@ -168,8 +169,8 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
         }
         ++final_count;
     }
-    std::printf("corner replica: contours=%zu pass_area=%d pass_poly=%d final=%d (floor 18)\n", contours.size(),
-                pass_area, pass_poly, final_count);
+    std::printf("corner replica: contours=%zu pass_area=%d pass_poly=%d final=%d (floor 18)\n",
+                contours.size(), pass_area, pass_poly, final_count);
     return final_count;
 }
 
@@ -188,8 +189,9 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     const auto bright = detail::find_square_candidates(frame);
     std::printf("bright-path candidates: %zu\n", bright.size());
     for (const auto& candidate : bright) {
-        std::printf("  bright cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n", candidate.center.x,
-                    candidate.center.y, candidate.area, candidate.bounds.width, candidate.bounds.height);
+        std::printf("  bright cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n",
+                    candidate.center.x, candidate.center.y, candidate.area, candidate.bounds.width,
+                    candidate.bounds.height);
     }
 
     // Stage 1a': inverted-brightness candidates (light-lattice cubes).
@@ -197,32 +199,35 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     std::printf("dark-path candidates: %zu\n", dark.size());
     for (const auto& candidate : dark) {
         std::printf("  dark cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n", candidate.center.x,
-                    candidate.center.y, candidate.area, candidate.bounds.width, candidate.bounds.height);
+                    candidate.center.y, candidate.area, candidate.bounds.width,
+                    candidate.bounds.height);
     }
 
     // Stage 1b/1c: saturation and white candidate sources (replicas).
     const auto saturated = replica_saturation_candidates(frame);
     std::printf("saturation candidates: %zu\n", saturated.size());
     for (const auto& candidate : saturated) {
-        std::printf("  sat cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x, candidate.center.y,
-                    candidate.area);
+        std::printf("  sat cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x,
+                    candidate.center.y, candidate.area);
     }
     const auto white = replica_white_candidates(frame);
     std::printf("white candidates: %zu\n", white.size());
     for (const auto& candidate : white) {
-        std::printf("  white cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x, candidate.center.y,
-                    candidate.area);
+        std::printf("  white cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x,
+                    candidate.center.y, candidate.area);
     }
 
     // Stage 2: lattice fit over the bright path alone, then bright+dark.
     const auto fit = detail::fit_lattice_detailed(bright, frame.size());
-    const std::string fit_status = fit ? "inliers=" + std::to_string(fit->inlier_count) : std::string("none");
+    const std::string fit_status =
+        fit ? "inliers=" + std::to_string(fit->inlier_count) : std::string("none");
     std::printf("lattice(bright only): %s\n", fit_status.c_str());
 
     auto combined = bright;
     combined.insert(combined.end(), dark.begin(), dark.end());
     const auto fit2 = detail::fit_lattice_detailed(combined, frame.size());
-    const std::string fit2_status = fit2 ? "inliers=" + std::to_string(fit2->inlier_count) : std::string("none");
+    const std::string fit2_status =
+        fit2 ? "inliers=" + std::to_string(fit2->inlier_count) : std::string("none");
     std::printf("lattice(bright+dark): %s\n", fit2_status.c_str());
 
     // Stage 3: the real observe_face verdict, with per-cell samples - the
@@ -230,8 +235,9 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     // vs glare vs classification drift).
     const auto face = observe_face(frame);
     if (face.has_value()) {
-        std::printf("observe_face: OK conf=%.2f face_quad=(%.0f,%.0f)-(%.0f,%.0f)\n", face->geometry_confidence,
-                    face->face_quad[0].x, face->face_quad[0].y, face->face_quad[2].x, face->face_quad[2].y);
+        std::printf("observe_face: OK conf=%.2f face_quad=(%.0f,%.0f)-(%.0f,%.0f)\n",
+                    face->geometry_confidence, face->face_quad[0].x, face->face_quad[0].y,
+                    face->face_quad[2].x, face->face_quad[2].y);
         const char* names[] = {"unknown", "white", "yellow", "red", "orange", "green", "blue"};
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
@@ -244,10 +250,11 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
                 const auto& lab = face->lab[index];
                 // classify_lab is the production (hue-based) classifier;
                 // nearest_palette_color shows what naive distance would say.
-                std::printf("  cell[%d,%d] center=(%.0f,%.0f) lab=(%.0f,%.0f,%.0f) -> %s (naive: %s)\n", row, col,
-                            center.x, center.y, lab[0], lab[1], lab[2],
-                            names[static_cast<int>(classify_lab(lab).color)],
-                            names[static_cast<int>(nearest_palette_color(lab))]);
+                std::printf(
+                    "  cell[%d,%d] center=(%.0f,%.0f) lab=(%.0f,%.0f,%.0f) -> %s (naive: %s)\n",
+                    row, col, center.x, center.y, lab[0], lab[1], lab[2],
+                    names[static_cast<int>(classify_lab(lab).color)],
+                    names[static_cast<int>(nearest_palette_color(lab))]);
             }
         }
     } else {
@@ -260,32 +267,39 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     std::printf("completion placements: %zu\n", placements.size());
     for (const auto& placement : placements) {
         const auto center = [&](float u, float v) {
-            const double x = placement.transform.at<double>(0, 0) * u + placement.transform.at<double>(0, 1) * v +
+            const double x = placement.transform.at<double>(0, 0) * u +
+                             placement.transform.at<double>(0, 1) * v +
                              placement.transform.at<double>(0, 2);
-            const double y = placement.transform.at<double>(1, 0) * u + placement.transform.at<double>(1, 1) * v +
+            const double y = placement.transform.at<double>(1, 0) * u +
+                             placement.transform.at<double>(1, 1) * v +
                              placement.transform.at<double>(1, 2);
             return cv::Point2f(static_cast<float>(x), static_cast<float>(y));
         };
         const cv::Point2f anchor = center(0.0F, 0.0F);
         const cv::Point2f col_end = center(1.0F, 0.0F);
         std::printf(
-            "  placement: anchor=(%.0f,%.0f) pitch=%.1f inliers=%d gap_mean=%.1f gap_peak=%.1f contrast=%.1f "
+            "  placement: anchor=(%.0f,%.0f) pitch=%.1f inliers=%d gap_mean=%.1f gap_peak=%.1f "
+            "contrast=%.1f "
             "cell_mad=%.2f min_l=%.2f edge=%.1f%s\n",
-            anchor.x, anchor.y, std::hypot(col_end.x - anchor.x, col_end.y - anchor.y), placement.inlier_count,
-            placement.mean_gap_deviation, placement.peak_gap_deviation, placement.anchor_contrast, placement.cell_mad,
-            placement.min_cell_lightness, placement.boundary_contrast, placement.accepted ? " ACCEPTED" : "");
+            anchor.x, anchor.y, std::hypot(col_end.x - anchor.x, col_end.y - anchor.y),
+            placement.inlier_count, placement.mean_gap_deviation, placement.peak_gap_deviation,
+            placement.anchor_contrast, placement.cell_mad, placement.min_cell_lightness,
+            placement.boundary_contrast, placement.accepted ? " ACCEPTED" : "");
     }
 
     // Optional overlay dump: CUBE_DEBUG_OVERLAY=<path.png> draws the
     // accepted grid (face quad + cell quads) over the frame for visual
     // placement verification.
-    if (const char* overlay_path = std::getenv("CUBE_DEBUG_OVERLAY"); overlay_path != nullptr && face.has_value()) {
+    if (const char* overlay_path = std::getenv("CUBE_DEBUG_OVERLAY");
+        overlay_path != nullptr && face.has_value()) {
         cv::Mat overlay = frame.clone();
-        const auto draw_quad = [&](const std::array<cv::Point2f, 4>& corners, const cv::Scalar& colour) {
+        const auto draw_quad = [&](const std::array<cv::Point2f, 4>& corners,
+                                   const cv::Scalar& colour) {
             std::vector<cv::Point> points;
             points.reserve(corners.size());
             for (const auto& corner : corners) {
-                points.emplace_back(static_cast<int>(std::lround(corner.x)), static_cast<int>(std::lround(corner.y)));
+                points.emplace_back(static_cast<int>(std::lround(corner.x)),
+                                    static_cast<int>(std::lround(corner.y)));
             }
             cv::polylines(overlay, points, true, colour, 1, cv::LINE_AA);
         };
@@ -300,8 +314,9 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     // Stage 4: corner-path candidate replica, then the real verdict.
     replica_corner_candidates(frame);
     const auto corner = observe_corner(frame);
-    const std::string corner_status =
-        corner.has_value() ? "OK conf=" + std::to_string(corner->geometry_confidence) : std::string("FAILED");
+    const std::string corner_status = corner.has_value()
+                                          ? "OK conf=" + std::to_string(corner->geometry_confidence)
+                                          : std::string("FAILED");
     std::printf("observe_corner: %s\n", corner_status.c_str());
 
     // Stage 5: the two-face edge path with its funnel exposed - candidate
@@ -310,16 +325,18 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     detail::EdgeDiagnostics edge_diag;
     const auto edge = detail::observe_edge_diagnosed(frame, nullptr, &edge_diag);
     std::printf(
-        "observe_edge: %s candidates=%zu splits=%d basis_sets=%d best[split_x=%.0f L=%d R=%d pitch_ratio=%.2f "
+        "observe_edge: %s candidates=%zu splits=%d basis_sets=%d best[split_x=%.0f L=%d R=%d "
+        "pitch_ratio=%.2f "
         "shared_px=%.1f]\n",
         edge.has_value() ? "OK" : "FAILED", edge_diag.candidate_count, edge_diag.splits_evaluated,
-        edge_diag.basis_sets, edge_diag.best_split_x, edge_diag.best_left_inliers, edge_diag.best_right_inliers,
-        edge_diag.best_pitch_ratio, edge_diag.best_shared_edge_px);
+        edge_diag.basis_sets, edge_diag.best_split_x, edge_diag.best_left_inliers,
+        edge_diag.best_right_inliers, edge_diag.best_pitch_ratio, edge_diag.best_shared_edge_px);
     if (edge.has_value()) {
         const auto edge_pose = project_cube_from_edge(*edge, frame.size());
         if (edge_pose.has_value()) {
-            std::printf("  edge pose: q=(%.3f,%.3f,%.3f,%.3f) reproj=%.3f\n", edge_pose->orientation[0],
-                        edge_pose->orientation[1], edge_pose->orientation[2], edge_pose->orientation[3],
+            std::printf("  edge pose: q=(%.3f,%.3f,%.3f,%.3f) reproj=%.3f\n",
+                        edge_pose->orientation[0], edge_pose->orientation[1],
+                        edge_pose->orientation[2], edge_pose->orientation[3],
                         edge_pose->max_reproj_fraction);
         } else {
             std::printf("  edge pose: FAILED\n");
@@ -397,13 +414,15 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     const std::string dir_path(dir);
     std::ifstream index_stream(dir_path + "/" + std::string(recording::kIndexCsvName));
     if (!index_stream) {
-        SKIP("no " << recording::kIndexCsvName << " under " << dir_path << " - not a recording directory");
+        SKIP("no " << recording::kIndexCsvName << " under " << dir_path
+                   << " - not a recording directory");
     }
 
     const auto rows = recording::read_index(index_stream);
     std::printf("replay: %s (%zu passes)\n", dir_path.c_str(), rows.size());
     std::printf(
-        "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,qz,"
+        "pass,t_ms,dt_ms,face,face_conf,corner,corner_conf,face_gated,corner_gated,pose,qw,qx,qy,"
+        "qz,"
         "state,gate,front,epoch,src,belief,certain,certain_front,"
         // Refusal forensics, appended so existing column-index parsers are
         // unaffected. theta/margin are the tracker's own resolved numbers;
@@ -455,23 +474,35 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
     cube::vision::OrientationTracker tracker;
     const auto state_name = [](cube::vision::TrackState state) {
         switch (state) {
-            case cube::vision::TrackState::lost: return "lost";
-            case cube::vision::TrackState::acquiring: return "acquiring";
-            case cube::vision::TrackState::locked: return "locked";
-            case cube::vision::TrackState::coasting: return "coasting";
+            case cube::vision::TrackState::lost:
+                return "lost";
+            case cube::vision::TrackState::acquiring:
+                return "acquiring";
+            case cube::vision::TrackState::locked:
+                return "locked";
+            case cube::vision::TrackState::coasting:
+                return "coasting";
         }
         return "?";
     };
     const auto gate_name = [](cube::vision::TrackGate gate) {
         switch (gate) {
-            case cube::vision::TrackGate::accepted: return "accepted";
-            case cube::vision::TrackGate::anchored: return "anchored";
-            case cube::vision::TrackGate::no_observation: return "no-obs";
-            case cube::vision::TrackGate::basin: return "basin";
-            case cube::vision::TrackGate::margin: return "margin";
-            case cube::vision::TrackGate::omega_outlier: return "omega-outlier";
-            case cube::vision::TrackGate::implausible: return "implausible";
-            case cube::vision::TrackGate::slip_evidence: return "slip-evidence";
+            case cube::vision::TrackGate::accepted:
+                return "accepted";
+            case cube::vision::TrackGate::anchored:
+                return "anchored";
+            case cube::vision::TrackGate::no_observation:
+                return "no-obs";
+            case cube::vision::TrackGate::basin:
+                return "basin";
+            case cube::vision::TrackGate::margin:
+                return "margin";
+            case cube::vision::TrackGate::omega_outlier:
+                return "omega-outlier";
+            case cube::vision::TrackGate::implausible:
+                return "implausible";
+            case cube::vision::TrackGate::slip_evidence:
+                return "slip-evidence";
         }
         return "?";
     };
@@ -538,15 +569,18 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             // resolution as their replacements - only the index reveals
             // the wrap. Report and carry on; the surviving final lap is
             // still a valid contiguous clip.
-            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass,
+                        static_cast<long long>(row.t_ms));
             continue;
         }
-        const cv::Mat frame = cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread(dir_path + "/" + recording::frame_filename(row.pass), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             // Secondary guard for a file that is missing outright or was
             // left behind by an earlier run at a different resolution
             // (the fresh-truncated index doesn't describe those frames).
-            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass, static_cast<long long>(row.t_ms));
+            std::printf("%d,%lld,,overwritten,,,,,,,,,,\n", row.pass,
+                        static_cast<long long>(row.t_ms));
             continue;
         }
 
@@ -564,8 +598,9 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         const cube::vision::PoseSeed* seed = seed_prior ? &*seed_prior : nullptr;
 
         const auto all_cells_in_frame = [&](const auto& cells) {
-            return std::all_of(cells.begin(), cells.end(),
-                               [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
+            return std::all_of(
+                cells.begin(), cells.end(),
+                [&](const cube::vision::StickerQuad& cell) { return cell_in_frame(cell, frame); });
         };
 
         // Pose-only fits are split off exactly as analyze() splits them:
@@ -594,10 +629,10 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             corner_hint = cube::vision::compute_corner_hint(*seed_prior);
         }
         const auto observed_corner = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
-        const bool corner_gated =
-            observed_corner.has_value() &&
-            !(all_cells_in_frame(observed_corner->top.cells) && all_cells_in_frame(observed_corner->lower_left.cells) &&
-              all_cells_in_frame(observed_corner->lower_right.cells));
+        const bool corner_gated = observed_corner.has_value() &&
+                                  !(all_cells_in_frame(observed_corner->top.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_left.cells) &&
+                                    all_cells_in_frame(observed_corner->lower_right.cells));
         std::optional<cube::vision::CornerObservation> corner;
         if (observed_corner.has_value() && !corner_gated) {
             corner = *observed_corner;
@@ -610,12 +645,14 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         const char* pose_src = "none";
         bool face_pose = false;
         if (corner.has_value()) {
-            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_corner(*corner, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 pose_src = "corner";
             }
         } else if (face.has_value()) {
-            if (const auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (const auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 pose_src = "face";
                 face_pose = true;
@@ -635,7 +672,8 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             if (seed_prior) {
                 edge_hint = cube::vision::compute_edge_hint(*seed_prior);
             }
-            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
+            if (const auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr);
+                edge.has_value()) {
                 if (const auto projected = project_cube_from_edge(*edge, frame.size(), seed);
                     projected.has_value()) {
                     pose = *projected;
@@ -663,9 +701,12 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             };
             if (corner_pose && corner.has_value()) {
                 track_in.centre_lab_count = 3;
-                track_in.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
-                track_in.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[0] =
+                    lab_entry(corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[1] =
+                    lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[2] =
+                    lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && face.has_value()) {
                 // Positive face-family provenance, as live: an edge pose
                 // coexisting with a pose-failed face observation must not
@@ -700,20 +741,23 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
                                : 0;
         idle_gate.on_pass(cool_hue, track.state == cube::vision::TrackState::lost);
 
-        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass, static_cast<long long>(row.t_ms),
-                    static_cast<long long>(dt_ms), face.has_value() ? 1 : 0,
-                    face.has_value() ? face->geometry_confidence : 0.0F, corner.has_value() ? 1 : 0,
-                    corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0, corner_gated ? 1 : 0,
-                    pose.has_value() && pose->orientation_valid ? 1 : 0);
+        std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass,
+                    static_cast<long long>(row.t_ms), static_cast<long long>(dt_ms),
+                    face.has_value() ? 1 : 0, face.has_value() ? face->geometry_confidence : 0.0F,
+                    corner.has_value() ? 1 : 0,
+                    corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0,
+                    corner_gated ? 1 : 0, pose.has_value() && pose->orientation_valid ? 1 : 0);
         if (pose.has_value() && pose->orientation_valid) {
-            std::printf("%.5f,%.5f,%.5f,%.5f,", pose->orientation[0], pose->orientation[1], pose->orientation[2],
-                        pose->orientation[3]);
+            std::printf("%.5f,%.5f,%.5f,%.5f,", pose->orientation[0], pose->orientation[1],
+                        pose->orientation[2], pose->orientation[3]);
         } else {
             std::printf(",,,,");
         }
-        const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
+        const char front =
+            track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
         const bool certain_front =
-            track.front_face && track.identity_certain_face[static_cast<std::size_t>(*track.front_face)];
+            track.front_face &&
+            track.identity_certain_face[static_cast<std::size_t>(*track.front_face)];
         const bool commit_grade = track.state == cube::vision::TrackState::locked && certain_front;
         certain_passes += track.identity_certain ? 1 : 0;
         certain_front_passes += certain_front ? 1 : 0;
@@ -724,8 +768,9 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         if (track.state == cube::vision::TrackState::locked && track.front_face) {
             locked_fronts_by_epoch[track.epoch].insert(front);
         }
-        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d,", state_name(track.state), gate_name(track.gate), front, track.epoch,
-                    pose_src, track.belief_margin, track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
+        std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d,", state_name(track.state), gate_name(track.gate),
+                    front, track.epoch, pose_src, track.belief_margin,
+                    track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
 
         // Independent best/runner-up recomputation over the full lattice.
         // The tracker reports only theta and their DIFFERENCE, but the
@@ -755,21 +800,23 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             }
             if (last_accept_q && l0 >= 0) {
                 accept_deg = cube::vision::quat_angle_deg(
-                    cube::vision::quat_multiply(*track_in.q_obs,
-                                                cube::vision::kLattice24[static_cast<std::size_t>(l0)]),
+                    cube::vision::quat_multiply(
+                        *track_in.q_obs, cube::vision::kLattice24[static_cast<std::size_t>(l0)]),
                     *last_accept_q);
             }
         }
-        const float thresh = std::min(cfg.basin_ceiling_deg, track.sigma_deg + cfg.max_interframe_deg);
-        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n", track.theta_deg, track.margin_deg, r0, r1, l0, l1,
-                    accept_deg, track.sigma_deg, thresh);
+        const float thresh =
+            std::min(cfg.basin_ceiling_deg, track.sigma_deg + cfg.max_interframe_deg);
+        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n", track.theta_deg, track.margin_deg,
+                    r0, r1, l0, l1, accept_deg, track.sigma_deg, thresh);
 
         // Boundary attribution + accept mirror, after the row is emitted.
         if (track.epoch != previous_epoch) {
-            std::printf("# boundary epoch %d->%d at pass %d: run=%d no-obs=%d basin=%d margin=%d omega=%d "
-                        "implausible=%d slip=%d\n",
-                        previous_epoch, track.epoch, row.pass, run.passes, run.no_obs, run.basin, run.margin, run.omega,
-                        run.implausible, run.slip);
+            std::printf(
+                "# boundary epoch %d->%d at pass %d: run=%d no-obs=%d basin=%d margin=%d omega=%d "
+                "implausible=%d slip=%d\n",
+                previous_epoch, track.epoch, row.pass, run.passes, run.no_obs, run.basin,
+                run.margin, run.omega, run.implausible, run.slip);
             previous_epoch = track.epoch;
             run = BoundaryRun{};
         }
@@ -779,27 +826,42 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         } else {
             ++run.passes;
             switch (track.gate) {
-                case cube::vision::TrackGate::no_observation: ++run.no_obs; break;
-                case cube::vision::TrackGate::basin: ++run.basin; break;
-                case cube::vision::TrackGate::margin: ++run.margin; break;
-                case cube::vision::TrackGate::omega_outlier: ++run.omega; break;
-                case cube::vision::TrackGate::implausible: ++run.implausible; break;
-                case cube::vision::TrackGate::slip_evidence: ++run.slip; break;
-                default: break;
+                case cube::vision::TrackGate::no_observation:
+                    ++run.no_obs;
+                    break;
+                case cube::vision::TrackGate::basin:
+                    ++run.basin;
+                    break;
+                case cube::vision::TrackGate::margin:
+                    ++run.margin;
+                    break;
+                case cube::vision::TrackGate::omega_outlier:
+                    ++run.omega;
+                    break;
+                case cube::vision::TrackGate::implausible:
+                    ++run.implausible;
+                    break;
+                case cube::vision::TrackGate::slip_evidence:
+                    ++run.slip;
+                    break;
+                default:
+                    break;
             }
         }
         ++replayed;
     }
 
     std::printf("replayed %zu of %zu passes\n", replayed, rows.size());
-    std::printf("# observations: %d of %zu passes; accepted (incl. anchors): %d\n", observation_passes, replayed,
-                accepted_passes);
-    std::printf("# states: lost=%d acquiring=%d locked=%d coasting=%d\n", state_counts[0], state_counts[1],
-                state_counts[2], state_counts[3]);
-    std::printf("# gates: accepted=%d anchored=%d no-obs=%d basin=%d margin=%d omega-outlier=%d implausible=%d "
-                "slip-evidence=%d\n",
-                gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4], gate_counts[5],
-                gate_counts[6], gate_counts[7]);
+    std::printf("# observations: %d of %zu passes; accepted (incl. anchors): %d\n",
+                observation_passes, replayed, accepted_passes);
+    std::printf("# states: lost=%d acquiring=%d locked=%d coasting=%d\n", state_counts[0],
+                state_counts[1], state_counts[2], state_counts[3]);
+    std::printf(
+        "# gates: accepted=%d anchored=%d no-obs=%d basin=%d margin=%d omega-outlier=%d "
+        "implausible=%d "
+        "slip-evidence=%d\n",
+        gate_counts[0], gate_counts[1], gate_counts[2], gate_counts[3], gate_counts[4],
+        gate_counts[5], gate_counts[6], gate_counts[7]);
     std::printf("# idle-gate: would-skip=%d violations=%d\n", would_skip_passes, idle_violations);
     std::string commit_face_letters;
     for (std::size_t f = 0; f < commit_faces.size(); ++f) {

@@ -46,14 +46,14 @@ namespace {
 // Same palette the [routing] suite uses, plus the aliasing pair that
 // drives the duplicate-centre and verification-conflict branches.
 const std::array<cv::Vec3f, 8> kPalette{{
-    {96.0F, 2.0F, 2.0F},      // white
-    {88.0F, 5.0F, 80.0F},     // yellow
-    {45.0F, 60.0F, 35.0F},    // red
-    {65.0F, 40.0F, 57.0F},    // orange
-    {50.0F, -50.0F, 45.0F},   // green
-    {35.0F, 12.0F, -60.0F},   // blue
-    {50.0F, 55.0F, 40.0F},    // washed orange, aliases red's centre
-    {47.0F, 58.0F, 37.0F},    // near-red, inside the duplicate radius
+    {96.0F, 2.0F, 2.0F},     // white
+    {88.0F, 5.0F, 80.0F},    // yellow
+    {45.0F, 60.0F, 35.0F},   // red
+    {65.0F, 40.0F, 57.0F},   // orange
+    {50.0F, -50.0F, 45.0F},  // green
+    {35.0F, 12.0F, -60.0F},  // blue
+    {50.0F, 55.0F, 40.0F},   // washed orange, aliases red's centre
+    {47.0F, 58.0F, 37.0F},   // near-red, inside the duplicate radius
 }};
 
 [[nodiscard]] CapturedFace solid(const cv::Vec3f& lab) {
@@ -99,7 +99,8 @@ void require_store_consistent(const CaptureRouter& router, const std::string& tr
 
 }  // namespace
 
-TEST_CASE("randomized adversarial routing sequences keep the slot store consistent", "[.crash-hunt]") {
+TEST_CASE("randomized adversarial routing sequences keep the slot store consistent",
+          "[.crash-hunt]") {
     constexpr int kSeeds = 4000;
     constexpr int kOpsPerSeed = 120;
 
@@ -136,10 +137,17 @@ TEST_CASE("randomized adversarial routing sequences keep the slot store consiste
                 // without the router being cleared, so an already-seen
                 // epoch number is reachable live.
                 switch (rng() % 4) {
-                    case 0: ++epoch; break;
-                    case 1: break;                                    // repeat
-                    case 2: epoch = std::max(0, epoch - 1); break;    // backwards
-                    default: epoch = static_cast<int>(rng() % 3); break;
+                    case 0:
+                        ++epoch;
+                        break;
+                    case 1:
+                        break;  // repeat
+                    case 2:
+                        epoch = std::max(0, epoch - 1);
+                        break;  // backwards
+                    default:
+                        epoch = static_cast<int>(rng() % 3);
+                        break;
                 }
                 router.on_epoch(epoch);
             } else if (choice < 92) {
@@ -223,7 +231,8 @@ TEST_CASE("targeted adversarial sequences the audit named", "[.crash-hunt]") {
         require_store_consistent(router, "post-duplicate");
         (void)router.commit(Face::U, speckled(kPalette[4], kPalette[0], 9), 3000);  // conflict
         require_store_consistent(router, "post-conflict");
-        (void)router.commit(Face::R, speckled(kPalette[1], kPalette[0], 9), 4000);  // second face conflict
+        (void)router.commit(Face::R, speckled(kPalette[1], kPalette[0], 9),
+                            4000);  // second face conflict
         require_store_consistent(router, "post-layer-turn");
     }
 

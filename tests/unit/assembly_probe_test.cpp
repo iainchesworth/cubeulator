@@ -75,21 +75,28 @@ using cube::model::FacetColor;
 
 char color_letter(FacetColor color) {
     switch (color) {
-        case FacetColor::white: return 'W';
-        case FacetColor::yellow: return 'Y';
-        case FacetColor::red: return 'R';
-        case FacetColor::orange: return 'O';
-        case FacetColor::green: return 'G';
-        case FacetColor::blue: return 'B';
-        case FacetColor::unknown: return '?';
+        case FacetColor::white:
+            return 'W';
+        case FacetColor::yellow:
+            return 'Y';
+        case FacetColor::red:
+            return 'R';
+        case FacetColor::orange:
+            return 'O';
+        case FacetColor::green:
+            return 'G';
+        case FacetColor::blue:
+            return 'B';
+        case FacetColor::unknown:
+            return '?';
     }
     return '?';
 }
 
 // The six real sticker colours, in the order this probe iterates alternatives.
-constexpr std::array<FacetColor, 6> kColors{FacetColor::white,  FacetColor::yellow,
-                                            FacetColor::red,    FacetColor::orange,
-                                            FacetColor::green,  FacetColor::blue};
+constexpr std::array<FacetColor, 6> kColors{FacetColor::white, FacetColor::yellow,
+                                            FacetColor::red,   FacetColor::orange,
+                                            FacetColor::green, FacetColor::blue};
 
 using ResolvedFaces = std::array<std::array<Facelet, 9>, 6>;
 
@@ -99,8 +106,8 @@ using ResolvedFaces = std::array<std::array<Facelet, 9>, 6>;
 
 // A single-sticker relabelling that made the cube assemble.
 struct SingleRelabel {
-    std::size_t face = 0;   // input slot index 0..5
-    std::size_t cell = 0;   // 0..8, row-major
+    std::size_t face = 0;  // input slot index 0..5
+    std::size_t cell = 0;  // 0..8, row-major
     FacetColor from = FacetColor::unknown;
     FacetColor to = FacetColor::unknown;
 };
@@ -335,7 +342,8 @@ TEST_CASE("assembly probe control: solved assembles at distance 0, one-corruptio
     ResolvedFaces corrupted = solved;
     corrupted[0][0].color = FacetColor::red;
     const bool corrupted_ok = assembles(corrupted);
-    std::printf("# probe-control: one-corruption assembles=%s (expect NO)\n", corrupted_ok ? "YES" : "NO");
+    std::printf("# probe-control: one-corruption assembles=%s (expect NO)\n",
+                corrupted_ok ? "YES" : "NO");
     CHECK_FALSE(corrupted_ok);
 
     // Distance 1: the brute-force must find the restoring relabel (cell 0
@@ -347,8 +355,9 @@ TEST_CASE("assembly probe control: solved assembles at distance 0, one-corruptio
             restore_found = true;
         }
     }
-    std::printf("# probe-control: distance-1 relabels that assemble=%zu, restore(W@face0cell0)-found=%s\n",
-                hits.size(), restore_found ? "YES" : "NO");
+    std::printf(
+        "# probe-control: distance-1 relabels that assemble=%zu, restore(W@face0cell0)-found=%s\n",
+        hits.size(), restore_found ? "YES" : "NO");
     CHECK(restore_found);
 }
 
@@ -409,10 +418,17 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
     for (std::size_t f = 0; f < 6; ++f) {
         const cv::Vec3f raw_centre = captured[f].lab[cube::model::center_facelet_index];
         switch (resolved[f][cube::model::center_facelet_index].color) {
-            case FacetColor::red: centre_R = raw_centre; break;
-            case FacetColor::orange: centre_O = raw_centre; break;
-            case FacetColor::yellow: centre_Y = raw_centre; break;
-            default: break;
+            case FacetColor::red:
+                centre_R = raw_centre;
+                break;
+            case FacetColor::orange:
+                centre_O = raw_centre;
+                break;
+            case FacetColor::yellow:
+                centre_Y = raw_centre;
+                break;
+            default:
+                break;
         }
     }
     const auto centre_line = [](const char* name, const std::optional<cv::Vec3f>& c) {
@@ -437,7 +453,8 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
             return c ? lab_dist(raw, *c) : -1.0F;
         };
         std::printf(
-            "#   relabel slot=%zu(face=%c) cell=%zu  %c->%c  raw Lab=(%.2f,%.2f,%.2f) chroma=%.2f hue=%.2f"
+            "#   relabel slot=%zu(face=%c) cell=%zu  %c->%c  raw Lab=(%.2f,%.2f,%.2f) chroma=%.2f "
+            "hue=%.2f"
             "  d(R)=%.2f d(O)=%.2f d(Y)=%.2f\n",
             hit.face, slot_face[hit.face], hit.cell, color_letter(hit.from), color_letter(hit.to),
             raw[0], raw[1], raw[2], p.chroma, p.hue, dist_to(centre_R), dist_to(centre_O),
@@ -449,9 +466,10 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
     // full-census base admits no single relabel that even builds a cube.
     const auto singles = single_relabels_that_assemble(resolved);
     const auto singles_valid = single_relabels_physically_valid(resolved);
-    std::printf("# probe-live: single-sticker relabels: assemble=%zu physically-buildable=%zu of 270"
-                " (0 buildable is structural: one relabel makes the census 8/10)\n",
-                singles.size(), singles_valid);
+    std::printf(
+        "# probe-live: single-sticker relabels: assemble=%zu physically-buildable=%zu of 270"
+        " (0 buildable is structural: one relabel makes the census 8/10)\n",
+        singles.size(), singles_valid);
     for (const auto& hit : singles) {
         report_cross_reference(hit);
     }
@@ -473,7 +491,8 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
     if (swaps.empty()) {
         std::printf("# probe-live: no 2-swap assembles; running 3-cycle search (cap 32)\n");
         const auto cycles = cycles_that_assemble(resolved, 32);
-        std::printf("# probe-live: census-preserving 3-cycles that assemble = %zu\n", cycles.size());
+        std::printf("# probe-live: census-preserving 3-cycles that assemble = %zu\n",
+                    cycles.size());
         for (const auto& cyc : cycles) {
             std::printf("#   3-cycle:\n");
             for (const std::size_t pos : cyc.pos) {
@@ -482,8 +501,9 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
             }
         }
         if (cycles.empty()) {
-            std::printf("# probe-live: no 3-cycle assembles either - the resolved colouring is at least "
-                        "TWO independent swaps (>=4 mislabels) from any solvable cube\n");
+            std::printf(
+                "# probe-live: no 3-cycle assembles either - the resolved colouring is at least "
+                "TWO independent swaps (>=4 mislabels) from any solvable cube\n");
         }
     }
 

@@ -40,15 +40,16 @@
 namespace cube::vision::pipeline {
 
 struct DetectTrackResult {
-    CornerDetectionResult detection;         // stage-B verdict (found=false when nothing)
-    std::optional<CornerPnpResult> pnp;      // single-frame pose when >=4 ids solved
-    bool track_live = false;                 // tracker holds a healthy pose
-    bool step_valid = false;                 // tracker produced a pose this frame
-    cv::Vec3d rvec{};                        // tracked pose (valid when track_live)
+    CornerDetectionResult detection;     // stage-B verdict (found=false when nothing)
+    std::optional<CornerPnpResult> pnp;  // single-frame pose when >=4 ids solved
+    bool track_live = false;             // tracker holds a healthy pose
+    bool step_valid = false;             // tracker produced a pose this frame
+    cv::Vec3d rvec{};                    // tracked pose (valid when track_live)
     cv::Vec3d tvec{};
-    std::array<cv::Point2f, 8> projected{};  // Singmaster-ordered model corners under the tracked pose
-    double health_frac = -1.0;               // -1 = not measurable this frame
-    int reinits = 0;                         // cumulative anchors this loop lifetime
+    std::array<cv::Point2f, 8>
+        projected{};            // Singmaster-ordered model corners under the tracked pose
+    double health_frac = -1.0;  // -1 = not measurable this frame
+    int reinits = 0;            // cumulative anchors this loop lifetime
     // P3.3 gauge/identity facts. The track's model frame is the anchor
     // frame's view-canonical orientation; epoch-local face identity is
     // exactly that gauge held by continuity. gauge_epoch increments on

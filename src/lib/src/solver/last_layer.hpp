@@ -54,9 +54,9 @@ inline const std::vector<Move> kAdjustUPrime = {Move{Face::U, 3}};
 
 // F R U R' U' F' - the standard 2-look OLL edge-orientation algorithm.
 // Applied from the right AUF it advances dot -> L-shape -> line -> cross.
-inline const std::vector<Move> kEdgeOrientFlip = {
-    Move{Face::F, 1}, Move{Face::R, 1}, Move{Face::U, 1},
-    Move{Face::R, 3}, Move{Face::U, 3}, Move{Face::F, 3}};
+inline const std::vector<Move> kEdgeOrientFlip = {Move{Face::F, 1}, Move{Face::R, 1},
+                                                  Move{Face::U, 1}, Move{Face::R, 3},
+                                                  Move{Face::U, 3}, Move{Face::F, 3}};
 
 // R U R' U R U2 R' (Sune) and R U2 R' U' R U' R' (Anti-Sune) - the
 // standard 2-look OLL corner-orientation pair. Together with U turns they
@@ -65,12 +65,12 @@ inline const std::vector<Move> kEdgeOrientFlip = {
 // algorithm_search's output: the search minimises word count, where an
 // AUF costs the same as a Sune, so it sometimes emits a third application
 // in place of interleaved U turns.
-inline const std::vector<Move> kSune = {
-    Move{Face::R, 1}, Move{Face::U, 1}, Move{Face::R, 3}, Move{Face::U, 1},
-    Move{Face::R, 1}, Move{Face::U, 2}, Move{Face::R, 3}};
-inline const std::vector<Move> kAntiSune = {
-    Move{Face::R, 1}, Move{Face::U, 2}, Move{Face::R, 3}, Move{Face::U, 3},
-    Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 3}};
+inline const std::vector<Move> kSune = {Move{Face::R, 1}, Move{Face::U, 1}, Move{Face::R, 3},
+                                        Move{Face::U, 1}, Move{Face::R, 1}, Move{Face::U, 2},
+                                        Move{Face::R, 3}};
+inline const std::vector<Move> kAntiSune = {Move{Face::R, 1}, Move{Face::U, 2}, Move{Face::R, 3},
+                                            Move{Face::U, 3}, Move{Face::R, 1}, Move{Face::U, 3},
+                                            Move{Face::R, 3}};
 
 // R' F R' B2 R F' R' B2 R2 (A-perm) - cycles three U-layer corners without
 // touching orientation. With U turns it reaches every last-layer corner
@@ -87,9 +87,10 @@ inline const std::vector<Move> kCornerCycle = {
 // remaining edge permutation is always even (a legal cube's corner and
 // edge permutation parities match), so 3-cycles plus U alignment always
 // finish the solve.
-inline const std::vector<Move> kEdgeCycle = {
-    Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 1}, Move{Face::U, 1}, Move{Face::R, 1}, Move{Face::U, 1},
-    Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 3}, Move{Face::U, 3}, Move{Face::R, 2}};
+inline const std::vector<Move> kEdgeCycle = {Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 1},
+                                             Move{Face::U, 1}, Move{Face::R, 1}, Move{Face::U, 1},
+                                             Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 3},
+                                             Move{Face::U, 3}, Move{Face::R, 2}};
 
 // ---------------------------------------------------------------------------
 // Search
@@ -134,8 +135,9 @@ inline constexpr std::size_t kMaxLastLayerStates = 100'000;
 // (not moves); the visited-set bound above is what actually guarantees
 // termination, so the cap can be generous.
 template <typename Postcondition>
-Result<std::vector<Move>> algorithm_search(const Cube& start, const std::vector<std::vector<Move>>& alphabet,
-                                            Postcondition postcondition, int max_words) {
+Result<std::vector<Move>> algorithm_search(const Cube& start,
+                                           const std::vector<std::vector<Move>>& alphabet,
+                                           Postcondition postcondition, int max_words) {
     if (postcondition(start)) {
         return std::vector<Move>{};
     }
@@ -154,7 +156,8 @@ Result<std::vector<Move>> algorithm_search(const Cube& start, const std::vector<
 
     auto reconstruct = [&](std::size_t leaf, std::size_t last_word) {
         std::vector<std::int32_t> words;
-        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0; i = nodes[static_cast<std::size_t>(i)].parent) {
+        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0;
+             i = nodes[static_cast<std::size_t>(i)].parent) {
             words.push_back(nodes[static_cast<std::size_t>(i)].word);
         }
         std::reverse(words.begin(), words.end());
@@ -190,7 +193,7 @@ Result<std::vector<Move>> algorithm_search(const Cube& start, const std::vector<
             }
             if (visited.insert(last_layer_key(next)).second) {
                 nodes.push_back(Node{std::move(next), static_cast<std::int32_t>(head),
-                                      static_cast<std::int32_t>(word), depth + 1});
+                                     static_cast<std::int32_t>(word), depth + 1});
             }
         }
     }

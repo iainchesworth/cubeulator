@@ -38,7 +38,8 @@ std::filesystem::path ensure_cube_obj() {
             out << "v " << (((i & 1) != 0) ? h : -h) << ' ' << (((i & 2) != 0) ? h : -h) << ' '
                 << (((i & 4) != 0) ? h : -h) << '\n';
         }
-        out << "f 5 6 7\nf 5 7 8\nf 2 1 4\nf 2 4 3\nf 6 2 3\nf 6 3 7\nf 1 5 8\nf 1 8 4\nf 8 7 3\nf 8 3 4\n"
+        out << "f 5 6 7\nf 5 7 8\nf 2 1 4\nf 2 4 3\nf 6 2 3\nf 6 3 7\nf 1 5 8\nf 1 8 4\nf 8 7 3\nf "
+               "8 3 4\n"
             << "f 1 2 6\nf 1 6 5\n";
     }
     return path;
@@ -76,8 +77,9 @@ m3t::Transform3fA to_m3t_pose(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
     }
     m3t::Transform3fA pose = m3t::Transform3fA::Identity();
     pose.linear() = r;
-    pose.translation() = Eigen::Vector3f(static_cast<float>(tvec[0] * kScale), static_cast<float>(tvec[1] * kScale),
-                                         static_cast<float>(tvec[2] * kScale));
+    pose.translation() =
+        Eigen::Vector3f(static_cast<float>(tvec[0] * kScale), static_cast<float>(tvec[1] * kScale),
+                        static_cast<float>(tvec[2] * kScale));
     return pose;
 }
 
@@ -107,22 +109,27 @@ struct M3tPoseTracker::Impl {
     bool reinit_pending = false;
 
     bool build(cv::Size size, const cv::Matx33d& camera_matrix) {
-        const std::filesystem::path scratch = std::filesystem::temp_directory_path() / "cube_m3t_runtime";
+        const std::filesystem::path scratch =
+            std::filesystem::temp_directory_path() / "cube_m3t_runtime";
         std::filesystem::create_directories(scratch);
         const auto obj_path = ensure_cube_obj();
 
-        body = std::make_shared<m3t::Body>("cube", obj_path, 1.0F, true, true, m3t::Transform3fA::Identity());
+        body = std::make_shared<m3t::Body>("cube", obj_path, 1.0F, true, true,
+                                           m3t::Transform3fA::Identity());
         const m3t::Intrinsics intrinsics{static_cast<float>(camera_matrix(0, 0)),
                                          static_cast<float>(camera_matrix(1, 1)),
                                          static_cast<float>(camera_matrix(0, 2)),
-                                         static_cast<float>(camera_matrix(1, 2)), size.width, size.height};
+                                         static_cast<float>(camera_matrix(1, 2)),
+                                         size.width,
+                                         size.height};
         camera = std::make_shared<InMemColorCamera>(intrinsics);
         // Spike-reduced region-model generation (cached; use_random_seed
         // false - the determinism contract).
-        auto region_model = std::make_shared<m3t::RegionModel>("region_model", body,
-                                                               scratch / "cube_region_model.bin", 0.8F, 3, 200,
-                                                               0.05F, 0.002F, false, 1000);
-        auto region_modality = std::make_shared<m3t::RegionModality>("region_modality", body, camera, region_model);
+        auto region_model = std::make_shared<m3t::RegionModel>(
+            "region_model", body, scratch / "cube_region_model.bin", 0.8F, 3, 200, 0.05F, 0.002F,
+            false, 1000);
+        auto region_modality =
+            std::make_shared<m3t::RegionModality>("region_modality", body, camera, region_model);
         auto link = std::make_shared<m3t::Link>("link", body);
         link->AddModality(region_modality);
         auto optimizer = std::make_shared<m3t::Optimizer>("optimizer", link);

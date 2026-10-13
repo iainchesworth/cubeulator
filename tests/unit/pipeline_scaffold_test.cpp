@@ -50,7 +50,8 @@ cv::Mat synthetic_face_frame() {
         for (int col = 0; col < 3; ++col, ++index) {
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), layout[static_cast<std::size_t>(index)], cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell),
+                          layout[static_cast<std::size_t>(index)], cv::FILLED);
         }
     }
     return frame;

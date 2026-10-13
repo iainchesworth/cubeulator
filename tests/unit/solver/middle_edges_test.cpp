@@ -47,7 +47,8 @@ TEST_CASE("a solved cube's F2L is already solved", "[middle_edges]") {
     REQUIRE(solution->empty());
 }
 
-TEST_CASE("solve_middle_edges completes F2L for a corpus of random scrambles", "[middle_edges][slow]") {
+TEST_CASE("solve_middle_edges completes F2L for a corpus of random scrambles",
+          "[middle_edges][slow]") {
     for (unsigned seed = 0; seed < 40; ++seed) {
         CAPTURE(seed);
         Cube cube = scramble(seed, 25);

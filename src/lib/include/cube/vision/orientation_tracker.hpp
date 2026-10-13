@@ -379,10 +379,10 @@ struct TrackerPassOutput {
     // lost/anchor paths, where there is no prediction to speak of.
     Quat q_pred{1.0F, 0.0F, 0.0F, 0.0F};
     float sigma_deg = 0.0F;
-    int lattice_index = -1;    // (resolved) element S
-    float theta_deg = 0.0F;    // (resolved) residual to prediction
-    float margin_deg = 0.0F;   // (resolved) runner-up separation
-    int quarter_turn_k = -1;   // (resolved) S's in-plane quarter turn
+    int lattice_index = -1;   // (resolved) element S
+    float theta_deg = 0.0F;   // (resolved) residual to prediction
+    float margin_deg = 0.0F;  // (resolved) runner-up separation
+    int quarter_turn_k = -1;  // (resolved) S's in-plane quarter turn
     // The camera-facing body face - reported ONLY while locked or
     // coasting. Lost and acquiring claim no identity, ever: acquiring has
     // an orientation but its identity has not survived the streak yet.
@@ -468,8 +468,10 @@ public:
 
 private:
     void anchor(const Quat& q_obs, const TrackerPassInput& input, TrackerPassOutput& out);
-    void accept(const Quat& q_meas, int lattice_index, const TrackerPassInput& input, TrackerPassOutput& out);
-    void miss(const Quat& q_pred, const TrackerPassInput& input, TrackerPassOutput& out, TrackGate gate);
+    void accept(const Quat& q_meas, int lattice_index, const TrackerPassInput& input,
+                TrackerPassOutput& out);
+    void miss(const Quat& q_pred, const TrackerPassInput& input, TrackerPassOutput& out,
+              TrackGate gate);
     void to_lost() noexcept;
     // Returns false when the accumulated belief flipped against the track
     // (slip detected) - the caller must force-lose instead of promoting.

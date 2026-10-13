@@ -4,8 +4,8 @@
 
 #include <cube/solver/cross.hpp>
 
-using cube::solver::Cube;
 using cube::solver::cross_solved;
+using cube::solver::Cube;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
 using cube::solver::solve_cross;

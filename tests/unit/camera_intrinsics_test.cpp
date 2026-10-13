@@ -22,7 +22,8 @@ namespace {
 // Render a chessboard view under a known camera: project the OUTER
 // square grid and fill alternating quads. 10x7 squares -> 9x6 inner
 // corners.
-cv::Mat render_board(const cv::Matx33d& camera, const cv::Vec3d& rvec, const cv::Vec3d& tvec, cv::Size frame) {
+cv::Mat render_board(const cv::Matx33d& camera, const cv::Vec3d& rvec, const cv::Vec3d& tvec,
+                     cv::Size frame) {
     constexpr int kCols = 10;
     constexpr int kRows = 7;
     constexpr float kSquare = 1.0F;
@@ -30,12 +31,15 @@ cv::Mat render_board(const cv::Matx33d& camera, const cv::Vec3d& rvec, const cv:
     std::vector<cv::Point3f> grid;
     for (int row = 0; row <= kRows; ++row) {
         for (int col = 0; col <= kCols; ++col) {
-            grid.emplace_back(static_cast<float>(col) * kSquare, static_cast<float>(row) * kSquare, 0.0F);
+            grid.emplace_back(static_cast<float>(col) * kSquare, static_cast<float>(row) * kSquare,
+                              0.0F);
         }
     }
     std::vector<cv::Point2f> projected;
     cv::projectPoints(grid, rvec, tvec, camera, cv::noArray(), projected);
-    const auto at = [&](int row, int col) { return projected[static_cast<std::size_t>(row * (kCols + 1) + col)]; };
+    const auto at = [&](int row, int col) {
+        return projected[static_cast<std::size_t>(row * (kCols + 1) + col)];
+    };
     for (int row = 0; row < kRows; ++row) {
         for (int col = 0; col < kCols; ++col) {
             if ((row + col) % 2 == 0) {
@@ -58,10 +62,10 @@ TEST_CASE("chessboard calibration recovers a known camera", "[intrinsics]") {
     // Ten varied views: translated and tilted, board fully in frame.
     std::vector<cv::Mat> views;
     const std::vector<std::pair<cv::Vec3d, cv::Vec3d>> poses{
-        {{0.0, 0.0, 0.0}, {-5.0, -3.5, 18.0}},   {{0.3, 0.0, 0.0}, {-5.0, -3.0, 17.0}},
-        {{-0.3, 0.1, 0.0}, {-4.5, -4.0, 19.0}},  {{0.0, 0.35, 0.1}, {-6.0, -3.5, 18.5}},
-        {{0.1, -0.35, 0.0}, {-4.0, -3.0, 17.5}}, {{0.25, 0.2, 0.2}, {-5.5, -3.8, 20.0}},
-        {{-0.2, -0.2, 0.1}, {-4.8, -2.8, 16.5}}, {{0.15, 0.3, -0.15}, {-5.2, -4.2, 21.0}},
+        {{0.0, 0.0, 0.0}, {-5.0, -3.5, 18.0}},    {{0.3, 0.0, 0.0}, {-5.0, -3.0, 17.0}},
+        {{-0.3, 0.1, 0.0}, {-4.5, -4.0, 19.0}},   {{0.0, 0.35, 0.1}, {-6.0, -3.5, 18.5}},
+        {{0.1, -0.35, 0.0}, {-4.0, -3.0, 17.5}},  {{0.25, 0.2, 0.2}, {-5.5, -3.8, 20.0}},
+        {{-0.2, -0.2, 0.1}, {-4.8, -2.8, 16.5}},  {{0.15, 0.3, -0.15}, {-5.2, -4.2, 21.0}},
         {{-0.3, -0.1, -0.2}, {-4.2, -3.2, 18.0}}, {{0.05, 0.15, 0.3}, {-5.8, -3.0, 19.5}},
     };
     for (const auto& [rvec, tvec] : poses) {
@@ -80,7 +84,8 @@ TEST_CASE("chessboard calibration recovers a known camera", "[intrinsics]") {
 
     SECTION("round-trips through the file format") {
         const auto path =
-            (std::filesystem::temp_directory_path() / "cubeulator-tests" / "intrinsics.txt").string();
+            (std::filesystem::temp_directory_path() / "cubeulator-tests" / "intrinsics.txt")
+                .string();
         std::filesystem::create_directories(std::filesystem::path(path).parent_path());
         REQUIRE(!write_intrinsics(path, *result).has_value());
         const auto read_back = read_intrinsics(path);
@@ -97,8 +102,9 @@ TEST_CASE("chessboard calibration recovers a known camera", "[intrinsics]") {
     }
 }
 
-TEST_CASE("scaled_to keeps fx/fy isotropic across an aspect change (16:9 stream from a 4:3 calibration)",
-          "[intrinsics]") {
+TEST_CASE(
+    "scaled_to keeps fx/fy isotropic across an aspect change (16:9 stream from a 4:3 calibration)",
+    "[intrinsics]") {
     // The measured live-demo case (P6.12): a 640x480 chessboard
     // calibration driving a 640x360 stream. The old per-axis scaling
     // produced fx 616.4 / fy 461.6 (ratio 1.335) - an anamorphic camera
@@ -146,7 +152,8 @@ TEST_CASE("calibration refuses too few usable views", "[intrinsics]") {
 
 TEST_CASE("unreadable or malformed intrinsics files are refused", "[intrinsics]") {
     CHECK_FALSE(read_intrinsics("Z:/does/not/exist.txt").has_value());
-    const auto path = (std::filesystem::temp_directory_path() / "cubeulator-tests" / "bad.txt").string();
+    const auto path =
+        (std::filesystem::temp_directory_path() / "cubeulator-tests" / "bad.txt").string();
     std::filesystem::create_directories(std::filesystem::path(path).parent_path());
     std::ofstream(path) << "fx -1\n";
     CHECK_FALSE(read_intrinsics(path).has_value());

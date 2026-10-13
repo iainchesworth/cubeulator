@@ -32,27 +32,31 @@ float estimate_face_pitch(const std::vector<cv::Point2f>& centers) {
         }
         nearest_distances.push_back(best);
     }
-    const auto mid = nearest_distances.begin() + static_cast<std::ptrdiff_t>(nearest_distances.size() / 2);
+    const auto mid =
+        nearest_distances.begin() + static_cast<std::ptrdiff_t>(nearest_distances.size() / 2);
     std::ranges::nth_element(nearest_distances, mid);
     return *mid;
 }
 
-SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Point2f anchor, cv::Point2f col_step,
-                                 cv::Point2f row_step) {
+SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Point2f anchor,
+                                 cv::Point2f col_step, cv::Point2f row_step) {
     SlotAssignment assignment;
     assignment.slots.fill(-1);
     std::array<float, 9> residuals{};
     residuals.fill(std::numeric_limits<float>::max());
 
-    const double det = static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    const double det =
+        static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
     if (std::abs(det) < 1e-6) {
         return assignment;
     }
 
     for (std::size_t idx = 0; idx < centers.size(); ++idx) {
         const cv::Point2f d = centers[idx] - anchor;
-        const double u = (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v = (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u =
+            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
+        const double v =
+            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         if (ru < -1.0 || ru > 1.0 || rv < -1.0 || rv > 1.0) {
@@ -62,7 +66,8 @@ SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Po
         if (residual > kMaxLatticeResidualRatio) {
             continue;
         }
-        const auto slot = static_cast<std::size_t>((static_cast<int>(rv) + 1) * 3 + (static_cast<int>(ru) + 1));
+        const auto slot =
+            static_cast<std::size_t>((static_cast<int>(rv) + 1) * 3 + (static_cast<int>(ru) + 1));
         if (residual < residuals[slot]) {
             residuals[slot] = residual;
             assignment.slots[slot] = static_cast<int>(idx);
@@ -76,7 +81,8 @@ SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Po
     return assignment;
 }
 
-std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers, const std::array<int, 9>& slots) {
+std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers,
+                                    const std::array<int, 9>& slots) {
     double n = 0;
     double su = 0;
     double sv = 0;
@@ -130,8 +136,9 @@ std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers, con
     };
 }
 
-std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv::Point2f col_dir, cv::Point2f row_dir,
-                                     std::size_t min_candidates, int min_inliers) {
+std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv::Point2f col_dir,
+                                     cv::Point2f row_dir, std::size_t min_candidates,
+                                     int min_inliers) {
     if (centers.size() < min_candidates) {
         return std::nullopt;
     }
@@ -157,7 +164,8 @@ std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv
     if (auto refined = refit_affine(centers, provisional.slots)) {
         fit = *refined;
     }
-    const auto final_assignment = classify_to_slots(centers, fit.anchor, fit.col_step, fit.row_step);
+    const auto final_assignment =
+        classify_to_slots(centers, fit.anchor, fit.col_step, fit.row_step);
     if (final_assignment.inlier_count < min_inliers) {
         return std::nullopt;
     }

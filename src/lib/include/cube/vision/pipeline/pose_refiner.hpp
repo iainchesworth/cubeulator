@@ -32,40 +32,41 @@
 namespace cube::vision::pipeline {
 
 struct PoseRefineParams {
-    double sample_spacing_px = 8.0;      // target spacing between samples along a projected edge
+    double sample_spacing_px = 8.0;  // target spacing between samples along a projected edge
     int max_samples_per_edge = 12;
     double search_cap_px = 12.0;         // hard cap on the 1-D normal search half-window
     double search_cell_fraction = 0.35;  // sub-cell window: fraction of the projected cell pitch
     double min_gradient = 12.0;          // grey-level central-difference step to accept a match
     double frontality_min = 0.25;        // face |cos| below which its lattice lines are skipped
     int min_matches = 12;
-    double outlier_mad_factor = 2.5;     // trim matches beyond this many MADs of displacement
+    double outlier_mad_factor = 2.5;  // trim matches beyond this many MADs of displacement
     // Measure->solve->re-measure rounds: matches made from a wrong pose
     // carry tangential correspondence error, so one solve recovers only
     // part of an offset; re-matching from the solved pose takes out the
     // rest. Caps below bound the TOTAL movement across all rounds.
     int iterations = 3;
-    double max_update_deg = 6.0;         // caps: refine, never anchor
+    double max_update_deg = 6.0;           // caps: refine, never anchor
     double max_update_translation = 0.15;  // model units (half-edge = 1)
 };
 
 struct PoseRefineResult {
-    bool applied = false;   // refined pose accepted (rvec/tvec valid)
+    bool applied = false;  // refined pose accepted (rvec/tvec valid)
     cv::Vec3d rvec{};
     cv::Vec3d tvec{};
-    int samples = 0;        // candidate points probed along visible edges
-    int matches = 0;        // correspondences fed to the solve (post-trim)
+    int samples = 0;                        // candidate points probed along visible edges
+    int matches = 0;                        // correspondences fed to the solve (post-trim)
     double mean_residual_before_px = -1.0;  // mean |1-D displacement| of the matches
     double mean_residual_after_px = -1.0;   // mean reprojection error vs the matches, refined pose
     double update_deg = 0.0;
-    double update_translation = 0.0;        // model units
-    const char* reject_reason = nullptr;    // set when !applied ("insufficient", "degenerate", ...)
+    double update_translation = 0.0;      // model units
+    const char* reject_reason = nullptr;  // set when !applied ("insufficient", "degenerate", ...)
 };
 
 // One refinement pass. `image` is the frame the pose was tracked on
 // (BGR or already-grey; converted internally). Never throws; failures
 // come back as applied=false with a reason.
-[[nodiscard]] PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec, const cv::Vec3d& tvec,
-                                           const cv::Matx33d& camera_matrix, const PoseRefineParams& params = {});
+[[nodiscard]] PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec,
+                                           const cv::Vec3d& tvec, const cv::Matx33d& camera_matrix,
+                                           const PoseRefineParams& params = {});
 
 }  // namespace cube::vision::pipeline
