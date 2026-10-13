@@ -85,6 +85,17 @@ gh variable delete CONTROL_RUNNER_JSON                                          
   runners in July, against the fleet's 12 GB of RAM and AWS's 90-minute
   limit), and everything macOS, iOS and Android, which the fleet cannot
   build. Moving one is a measured, separate change.
+- **Local actions are referenced as `$/.github/actions/...`, not
+  `./.github/actions/...`** (the vcpkg cache restore/save steps; zizmor's
+  `self-repository` audit asks for it). `$/` resolves to this repository at
+  the workflow's own commit, so the action does not depend on the workspace.
+  It needs runner **2.336.0 or newer** and is github.com-only. Every job that
+  uses it today runs on a hosted image; the fleet reported 2.337.0 on
+  2026-10-13. Check the fleet's runner version before routing such a job
+  there: GitHub's changelog makes 2.336.0 the minimum.
+  actionlint does not parse `$/` yet (as of 1.7.12,
+  [rhysd/actionlint#711](https://github.com/rhysd/actionlint/issues/711));
+  nothing in this repository runs it.
 
 ## Dependencies
 
