@@ -23,10 +23,11 @@
 # ---------------------------------------------------------------------------
 cmake_minimum_required(VERSION 3.28)
 
-set(_failures "")
-macro(check_fail msg)
-    list(APPEND _failures "${msg}")
-endmacro()
+# A global property, not a variable: report_unresolved() and friends are
+# functions, and a failure recorded in a function's scope would be lost.
+function(check_fail msg)
+    set_property(GLOBAL APPEND PROPERTY CHECK_FAILURES "${msg}")
+endfunction()
 
 foreach(_v OUT_DIR GENERATOR SOURCE_DIR BINARY_DIR TARGET PLATFORM)
     if(NOT DEFINED CUBE_NOTICES_${_v})
@@ -157,6 +158,7 @@ else()
 endif()
 
 # --- verdict --------------------------------------------------------------------------
+get_property(_failures GLOBAL PROPERTY CHECK_FAILURES)
 list(LENGTH _failures _nf)
 if(_nf GREATER 0)
     message("NOTICES TEST FAILED: ${_nf} problem(s):")

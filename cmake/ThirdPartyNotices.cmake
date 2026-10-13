@@ -128,18 +128,19 @@ function(cube_add_third_party_notices app_target)
         FILES "${json}" "${txt}")
     add_dependencies(${app_target} cube_third_party_notices)
 
-    # Desktop packages: the notices and the licence ride in every one.
+    # Desktop packages: the notices and the licence ride in every one. The
+    # check comes first so a refused install leaves nothing behind.
     if(NOT ANDROID AND NOT IOS)
-        install(FILES "${txt}" DESTINATION .)
-        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION . RENAME LICENSE.txt)
         install(CODE "
             file(READ \"${json}\" _notices)
             string(JSON _n LENGTH \"\${_notices}\" unresolved)
             if(_n GREATER 0)
                 string(JSON _first GET \"\${_notices}\" unresolved 0)
-                message(FATAL_ERROR \"Refusing to package: \${_n} third-party component(s) have no notice. First: \${_first}\\nSee ${out_dir}/third-party-notices.json and docs/licensing.md.\")
+                message(FATAL_ERROR \"Refusing to package: \${_n} third-party component(s) have no notice. First: \${_first}\nSee ${out_dir}/third-party-notices.json and docs/licensing.md.\")
             endif()
         ")
+        install(FILES "${txt}" DESTINATION .)
+        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION . RENAME LICENSE.txt)
     endif()
 endfunction()
 

@@ -88,7 +88,8 @@ documentation says the same for Quick 3D and Shader Tools (see section 3).
 | Qt Shader Tools (runtime library) | pulled in by Quick 3D (`Quick3DRuntimeRender` DEPENDS_ON `ShaderTools`) [V: SBOM]; the custom materials bake `*.frag` at run time | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W M L A I |
 | `qsb` (the shader baker), `moc`, `rcc`, `uic`, `windeployqt`, `androiddeployqt` | build tools | Commercial OR GPL-3.0 **with the Qt GPL exception 1.0** | no - build time only; the exception covers their output |
 | Qt EntryPoint (`Qt6EntryPoint.lib`, Windows `WinMain` shim) | `WIN32_EXECUTABLE` | Commercial OR BSD-3-Clause | W |
-| Qt Svg (+ `qsvg`, `qsvgicon` plugins) | deployed by `windeployqt`, not linked | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W (to be confirmed on the build's deploy directory) |
+| Qt Svg (+ `qsvg`, `qsvgicon` plugins) | deployed by `windeployqt`, not linked or imported [V: found by the notices test on the real deploy directory] | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W (and wherever `windeployqt`/`androiddeployqt` add it) |
+| Quick Controls 2 styles (Basic, Fusion, Imagine, Material, Universal, FluentWinUI3, Windows) and the Qt platform, image-format, TLS and network-information plugins | deployed by `windeployqt` because `QtQuick.Controls` is imported | same LGPL set; the Material style carries an MIT attribution (Angular Material shadows); the Windows platform plugin carries wintab's `LicenseRef-Lcs-Telegraphics` | W |
 
 The Qt Company's bundled third-party code (zlib, libpng, harfbuzz, freetype,
 PCRE2, double-conversion, md4c, tinycbor, Unicode CLDR, glslang, SPIRV-Cross,
@@ -166,7 +167,7 @@ include on Linux; I could not run a Linux build here.
 
 | platform | what differs |
 |---|---|
-| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`, vcpkg applocal). Deployed Qt plugins (platform, style, image formats, TLS) add their own bundled-code notices (wintab). `d3dcompiler_47.dll` and `opengl32sw.dll` can be copied by `windeployqt`; the notices test flags any deployed DLL it cannot attribute. |
+| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`, vcpkg applocal). On the 2026-10-13 build the deployment directory held 41 Qt modules and 45 Qt plugins and QML plugins, all attributed, **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which I could not source locally. The `windeployqt` call is not in my lane to change. |
 | macOS | Not built or verified here. M3T links (desktop). Mac App Store adds Apple's terms (section 4). |
 | Linux | GTK3 chain via OpenCV (above). Qt is installed from `jurplel/install-qt-action` in CI; the DEB/RPM packages set `SHLIBDEPS`/`AUTOREQPROV`, so Qt may be a dependency of the package rather than part of it - then Qt's source/notice duty moves to the distribution that provides it [I][L]. |
 | Android | No M3T, GLEW, GLFW. Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
@@ -492,13 +493,31 @@ Known gaps, so nobody mistakes them for done:
    they were downloaded from the SPDX licence-list repository with Iain's
    approval on 2026-10-13. `IJG` is the "LEGAL ISSUES" section of
    libjpeg-turbo's `README.ijg`, from the source vcpkg unpacked locally.
-2. **Only the Windows link line was exercised against a real build here.**
-   Linux, macOS and Android configurations are written to the same
-   mechanism; CI is where they get checked.
+2. **Only Windows was exercised against a real build here.** The Windows
+   result (2026-10-13, Qt 6.8.3, `windows-msvc-fastdebug-d`): 102 components -
+   34 vcpkg ports, 6 Qt entries (4 repositories + Qt SVG + EntryPoint),
+   55 Qt-bundled third-party components, M3T and its three bundled headers,
+   the palm model, and the two icon sets - with 25 licence texts, nothing
+   unresolved, one generator warning (the four files above). The notices
+   file is 343 KB and the JSON 356 KB. Linux, macOS and Android use the same
+   mechanism, but `qt.deployedRoots` has no list for them yet (the generator
+   says so in a warning) and their Qt components are over-included until
+   `qt-modules.json` is verified there; CI is where they get checked.
+   The Windows build used a copy of an existing vcpkg installed tree, merged
+   with five ports built in this session, configured with
+   `VCPKG_MANIFEST_INSTALL=OFF`: another session held the shared
+   `D:cpkg-buildtrees` lock while building onnxruntime. The libraries are
+   the ones the manifest resolves to at the pinned baseline, but a clean
+   vcpkg install was not run end to end here.
 3. **The deployment scan covers shared-library files** (`.dll`, `.so`,
    `.dylib`). It does not look inside an Android APK/AAB or a macOS bundle's
    `Frameworks/`; E4a/E4b extend it when they define those layouts.
-4. **QML-only dependencies are by import name.** A QML module that is only
+4. **Assets drawn in code are covered only by their manifest entry.** The
+   Lucide and Feather icon shapes live in `Icon.qml`; nothing stops someone
+   deleting the `lucide-icons` entry. Files under `assets/` and directories
+   under `third_party/` are enforced; shapes copied into QML are not. A rule
+   of review: any new vector or glyph data in QML gets a manifest entry.
+5. **QML-only dependencies are by import name.** A QML module that is only
    loaded by string at run time would be missed; there are none today.
 
 ## 7. About and Licences screens: the requirement
