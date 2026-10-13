@@ -283,6 +283,45 @@ bool same_contents(const A& a, const B& b) {
 
 }  // namespace
 
+TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[two-phase]") {
+    // The first-use tables take each permutation in turn by its rank (they do
+    // not step one with std::next_permutation, which GCC 15 at -O3 misreads
+    // into a stringop-overflow). Every one of the 4! and 8! must be a real
+    // permutation, numbered by rank_permutation() as the rank it was asked
+    // for, and later ranks must come later in lexicographic order.
+    using cube::solver::detail::permutation_of_rank;
+    using cube::solver::detail::rank_permutation;
+
+    for (std::size_t rank = 0; rank < 24; ++rank) {
+        const auto p = permutation_of_rank<4>(rank);
+        unsigned seen = 0;
+        for (const std::uint8_t v : p) {
+            seen |= 1u << v;
+        }
+        REQUIRE(seen == 0xFu);
+        CHECK(rank_permutation(p.data(), 4) == static_cast<int>(rank));
+    }
+
+    std::array<std::uint8_t, 8> previous{};
+    for (std::size_t rank = 0; rank < 40320; ++rank) {
+        const auto p = permutation_of_rank<8>(rank);
+        unsigned seen = 0;
+        for (const std::uint8_t v : p) {
+            seen |= 1u << v;
+        }
+        REQUIRE(seen == 0xFFu);
+        REQUIRE(rank_permutation(p.data(), 8) == static_cast<int>(rank));
+        if (rank > 0) {
+            REQUIRE(
+                std::lexicographical_compare(previous.begin(), previous.end(), p.begin(), p.end()));
+        }
+        previous = p;
+    }
+    // The first is the identity and the last is the reverse.
+    CHECK(permutation_of_rank<8>(0) == std::array<std::uint8_t, 8>{0, 1, 2, 3, 4, 5, 6, 7});
+    CHECK(permutation_of_rank<8>(40319) == std::array<std::uint8_t, 8>{7, 6, 5, 4, 3, 2, 1, 0});
+}
+
 TEST_CASE("the compile-time tables equal a direct construction, entry for entry", "[two-phase]") {
     using namespace reference;
     const cube::solver::detail::Phase1MoveTables& built =
