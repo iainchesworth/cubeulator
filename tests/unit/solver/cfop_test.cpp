@@ -406,8 +406,9 @@ TEST_CASE("cfop gives the same solution every time and from several threads", "[
 
     std::array<bool, 4> same{};
     std::vector<std::thread> threads;
+    threads.reserve(same.size());
     for (bool& i : same) {
-        threads.emplace_back([&same, &cube, &reference, &i] {
+        threads.emplace_back([&cube, &reference, &i] {
             const auto again = solve_cfop(cube);
             i = again.has_value() && flatten(*again) == flatten(*reference);
         });
