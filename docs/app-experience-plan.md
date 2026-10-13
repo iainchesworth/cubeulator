@@ -211,7 +211,7 @@ Added 2026-10-13. Five branches hold finished or running work. None of the
 | `feature/ax-system-tests` | E0a | 11 | pushed; reconciling start-up, below |
 | `feature/ax-licences` | E0b | 6 | local |
 | `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
-| `feature/ax-kit` | E2a | running | local |
+| `feature/ax-kit` | E2a | 7, running | local; has not yet merged this branch |
 
 `feature/app-experience` is on `origin` from 2026-10-13, so an `ax` pull
 request can target it.
@@ -270,6 +270,38 @@ E4a as they finish, each merging `feature/app-experience` before it lands.
   every picture in one process. In CI it runs on Linux under software GL,
   where this has not been seen. On Windows it is the first thing to check
   after the merge, on the solve screen first.
+
+**To settle where the kit meets the others.** From the kit's report of
+2026-10-13 (`docs/kit.md` on `feature/ax-kit`), checked against the
+branches.
+
+- **Fonts have no notice until two branches agree.** The kit bundles six
+  font files under `src/app/qt/fonts/`: Archivo in three weights, IBM Plex
+  Mono Medium, Noto Sans Hebrew and Noto Sans Arabic. The licences manifest
+  (`third_party/notices/manifest.json` on `feature/ax-licences`) has entries
+  for Archivo and IBM Plex Mono only, pointing at `assets/fonts/`, and emits
+  an entry only when files exist at its path. Left alone, the fonts ship
+  with no notice and nothing fails. The manifest follows the files: its
+  paths change, the two Noto faces gain entries, and a bundled font with no
+  entry becomes a failure.
+- **The `AppState.qml` split is proposed, not agreed.** The proposal is at
+  the foot of `docs/kit.md` and was written before the solve lane added
+  `solveCamera` and `rescan()`. It is re-read against the merged file, then
+  put to the solve and scan lanes, before anything moves.
+
+**Two findings for the design, also from the kit.**
+
+- `outline` measures under 3:1 on the hover and press washes (2.96 and 2.74
+  light, 3.13 and 2.87 dark). `tokens.json` has no such pairing, so
+  `check_tokens.py` cannot see it. The kit already avoids the case: the one
+  boundary that sits inside a washed row, the switch's track edge, turns
+  `ink` while hovered or pressed. Either that becomes the written rule, or
+  `outline` darkens (about `#7E7B7A` in light) and the pairs join the table.
+- On Windows, Qt reports an `AlertMessage` as a window and does not put
+  `Accessible.description` where a screen reader speaks it. So anything a
+  person must hear is in the control's name or in text in the reading
+  order, never in a description alone. `design/accessibility.md` should say
+  so wherever it relies on a description.
 
 ## Phases
 
