@@ -2,7 +2,7 @@
 # GL-free pipeline seam (pose_tracker.hpp). Desktop-only for the same
 # reason third_party/m3t is: GLEW/GLFW have no mobile story, and the
 # phone port swaps this implementation, not the seam.
-if(NOT ANDROID AND NOT IOS)
+if(CUBEULATOR_PLATFORM_DESKTOP)
     add_library(cube_track_m3t STATIC
         src/m3t_pose_tracker.cpp)
     add_library(cube::track_m3t ALIAS cube_track_m3t)

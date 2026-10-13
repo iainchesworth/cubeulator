@@ -16,7 +16,7 @@ QtObject {
     // camera access via their own OS-level dialog the first time the device
     // is opened (see docs/architecture.md - Spec 00 skeleton), so "Start
     // scan" goes straight to the scan screen there.
-    readonly property bool isMobile: Qt.platform.os === "android" || Qt.platform.os === "ios"
+    readonly property bool isMobile: PlatformFacts.isMobile
 
     // Qt::PermissionStatus::Granted - see CameraPermission.hpp.
     readonly property bool cameraGranted: CameraPermission.status === 2

@@ -62,6 +62,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# The one place the target OS is decided (cmake/Platform.cmake); every other
+# CMake file reads what the platform's fragment declared.
+include(Platform)
 include(CompilerWarnings)
 include(Sanitizers)
 include(Coverage)

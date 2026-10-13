@@ -1,6 +1,7 @@
 #include "controllers/scan_session.hpp"
 
 #include "controllers/bundled_models.hpp"
+#include "controllers/live_track.hpp"
 #include "interfaces/camera.hpp"
 #include "interfaces/inference_env.hpp"
 
@@ -11,18 +12,9 @@
 #include <cube/vision/capture_gates.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/frame_recording.hpp>
-#include <cube/vision/recording_v2.hpp>
-#ifdef CUBE_HAVE_M3T
-#include <cube/track_m3t/m3t_pose_tracker.hpp>
-#include <cube/vision/corner_detector.hpp>
-#include <cube/vision/pipeline/detect_track_loop.hpp>
-
-#include <opencv2/calib3d.hpp>
-
-#include <memory>
-#endif
 #include <cube/vision/grid_detection.hpp>
 #include <cube/vision/pose_estimation.hpp>
+#include <cube/vision/recording_v2.hpp>
 
 #include <QVariantMap>
 #include <QtConcurrent/QtConcurrentRun>
@@ -251,7 +243,7 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
         manifest.cube = qEnvironmentVariable("CUBE_VISION_RECORD_CUBE").toStdString();
         QDir().mkpath(dir);
         // P6.12: stamp the ACTIVE intrinsics into the clip. The tracking
-        // loop runs under CUBE_VISION_INTRINSICS (see live_m3t_lock); a
+        // loop runs under CUBE_VISION_INTRINSICS (see live_track::step); a
         // clip recorded without them replays under the f=width
         // approximation and scores a DIFFERENT pipeline than the one the
         // session actually ran - the manifest.intrinsics field existed for
@@ -284,162 +276,6 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
     }
     recorder.push(full_frame, frame_t_ms);
 }
-
-#ifdef CUBE_HAVE_M3T
-// Which vision pipeline the live app runs (P2.10, docs/pipeline-plan.md):
-// the NEW detect->track pipeline is the DEFAULT; the legacy cascade is
-// quarantined behind CUBE_VISION_PIPELINE=legacy (it remains the only
-// scan-to-solve path until Phases 3-5 replace colour capture, and the
-// offline runner's baselines still replay it). track_mode_degraded flips
-// permanently to legacy if the corner model cannot load.
-bool track_mode_degraded = false;  // worker-side, single-in-flight
-
-[[nodiscard]] bool vision_track_mode() {
-    static const bool legacy_requested =
-        qEnvironmentVariable("CUBE_VISION_PIPELINE") == QStringLiteral("legacy");
-    return !legacy_requested && !track_mode_degraded;
-}
-
-// Everything a tracking pass hands back to analyze(): the pose while
-// live, plus the raw translation and HUD facts either way - and, since
-// P6.12, the capture surface: this pass's capture-grade tracked faces
-// sampled to per-cell Lab (the runner's stage D-F composition, run live)
-// with the identity facts the GUI-side fusion feed keys on.
-struct LiveTrackSample {
-    std::optional<cube::vision::CubePoseProjection> pose;
-    cv::Vec3d tvec{};
-    double health_frac = -1.0;
-    int reinits = 0;
-    bool locked = false;   // M3T live and stepped this pass
-    int gauge_epoch = -1;  // the loop's content-identity epoch
-    std::vector<cube::vision::fusion::TrackedFaceRead> faces;
-};
-
-// The live continuous-lock pass (see the call site in analyze() for the
-// contract). Worker-side statics: single-in-flight analysis means no
-// concurrent passes, the same story as the recorder above. The detector
-// model comes from the embedded resource (bundled_models), the tracker
-// from cube::track_m3t; a load failure warns once and degrades the app
-// to the legacy pipeline.
-LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
-    static cube::vision::pipeline::DetectTrackLoop loop;
-    static std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
-    static std::unique_ptr<cube::track_m3t::M3tPoseTracker> tracker;
-    static bool init_attempted = false;
-    if (!init_attempted) {
-        init_attempted = true;
-        const QByteArray bytes = cube::app::cube_corner_pose_model_bytes();
-        if (!bytes.isEmpty()) {
-            if (auto created = cube::vision::OnnxCornerDetector::create_from_memory(
-                    bytes.constData(), static_cast<std::size_t>(bytes.size()));
-                created.has_value()) {
-                detector = std::move(*created);
-                tracker = std::make_unique<cube::track_m3t::M3tPoseTracker>();
-                loop.attach(detector.get(), tracker.get());
-                // Detector every 3rd pass while locked: the M3T step is
-                // ~1-2 ms, the ONNX detector tens of ms - this is what
-                // buys live tracking cadence (the offline runner keeps
-                // every-frame detection for its metrics).
-                loop.set_live_detect_interval(3);
-                // Measured camera intrinsics (P2.9): point at the file
-                // the calibration tool wrote and every camera-matrix
-                // consumer in the loop leaves the f=width approximation.
-                if (const QString intrinsics_path = qEnvironmentVariable("CUBE_VISION_INTRINSICS");
-                    !intrinsics_path.isEmpty()) {
-                    if (auto intrinsics =
-                            cube::vision::read_intrinsics(intrinsics_path.toStdString());
-                        intrinsics.has_value()) {
-                        loop.set_camera_intrinsics(*intrinsics);
-                        qInfo("ScanSession: calibrated intrinsics loaded (fx %.1f fy %.1f from %s)",
-                              intrinsics->fx, intrinsics->fy, qUtf8Printable(intrinsics_path));
-                    } else {
-                        qWarning("ScanSession: CUBE_VISION_INTRINSICS set but unreadable: %s",
-                                 qUtf8Printable(intrinsics_path));
-                    }
-                }
-            }
-        }
-        if (!loop.attached()) {
-            qWarning(
-                "ScanSession: corner model could not be loaded - degrading to the legacy pipeline "
-                "(CUBE_VISION_PIPELINE=legacy behaviour)");
-            track_mode_degraded = true;
-        }
-    }
-    if (!loop.attached()) {
-        return {};
-    }
-
-    const auto dt = loop.process(analysis_frame);
-    LiveTrackSample sample;
-    sample.health_frac = dt.health_frac;
-    sample.reinits = dt.reinits;
-    if (!dt.track_live || !dt.step_valid) {
-        return sample;
-    }
-    sample.locked = true;
-    sample.gauge_epoch = dt.gauge_epoch;
-    sample.tvec = dt.tvec;
-    cube::vision::CubePoseProjection pose;
-    for (std::size_t i = 0; i < 8; ++i) {
-        pose.vertices[i] = dt.projected[i] * scale_back;  // analysis -> full-frame px
-    }
-    cv::Matx33d rotation;
-    cv::Rodrigues(dt.rvec, rotation);
-    pose.orientation = cube::vision::display_quaternion(rotation);
-    pose.orientation_valid = true;
-    // Seed-compatible-ish extrinsics: the tracked pose is over the
-    // Singmaster half-edge-1 model; kCubeModel's scale differs, so a
-    // downstream seeded solve degrades gracefully (documented behaviour)
-    // rather than being biased by a silently-wrong scale.
-    pose.rvec = dt.rvec;
-    pose.tvec = dt.tvec * 0.5;
-    pose.max_reproj_fraction = dt.health_frac >= 0.0 ? dt.health_frac : 0.0;
-    pose.from_seed = false;
-    sample.pose = pose;
-
-    // P6.12: the runner's stage D-F track-geometry composition, run live -
-    // this is the wiring the live-demo diagnosis measured as absent (track
-    // mode returned here with pose only, and no observation ever reached
-    // any capture surface). Per capture-grade derived face (geometric
-    // frontality AND the loop's tracker-quality read grade, the P6.2
-    // gate): rectify at analysis scale, re-fit the internal cell grid
-    // where the rectification holds (P4 sub-pixel polish, clamped
-    // never-re-seat), then sample each sticker quad with the exonerated
-    // quad-masked Lab-median estimator. Purity rides along; 0 stays "not
-    // measured" and fails closed at the feed's centre bar. Mirrors
-    // legacy_pipeline.cpp's track_geometry branch, which the offline
-    // runner replays - the two must produce the same reads or the corpus
-    // stops being evidence about the app.
-    for (const auto& derived : dt.faces) {
-        if (!(derived.frontality >= cube::vision::fusion::kTrackCaptureFrontality &&
-              dt.read_grade)) {
-            continue;
-        }
-        cv::Mat homography;
-        const cv::Mat rectified =
-            cube::vision::pipeline::rectify_face(analysis_frame, derived, 96, &homography);
-        std::array<std::array<cv::Point2f, 4>, 9> cells = derived.cells;
-        if (!rectified.empty() && !homography.empty()) {
-            const auto grid = cube::vision::pipeline::refine_cell_grid(rectified);
-            if (grid.valid) {
-                cells = cube::vision::pipeline::cells_from_grid(grid, homography);
-            }
-        }
-        cube::vision::fusion::TrackedFaceRead read;
-        read.face = derived.face;
-        for (std::size_t cell = 0; cell < read.lab.size(); ++cell) {
-            const auto stats = cube::vision::sample_cell_patch(analysis_frame, cells[cell]);
-            if (stats.quad_px > 0) {
-                read.lab[cell] = stats.lab_median;
-                read.purity[cell] = stats.purity;
-            }
-        }
-        sample.faces.push_back(std::move(read));
-    }
-    return sample;
-}
-#endif
 
 // Set CUBE_VISION_REPLAY_DIR to a directory previously written by
 // CUBE_VISION_RECORD_DIR and poll() draws its frames from that clip instead
@@ -2048,7 +1884,6 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         return result;
     }
 
-#ifdef CUBE_HAVE_M3T
     // The DEFAULT pipeline (P2.10): a pass is a tracking pass - detector
     // (decimated while locked) + M3T step + health, nothing else. The
     // legacy cascade below never runs in track mode, locked or lost; it
@@ -2056,9 +1891,9 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // scan-to-solve route until Phases 3-5 replace colour capture). The
     // wireframe and 3D model follow the track; lost passes return with
     // no pose and the detector keeps hunting for the next anchor.
-    if (vision_track_mode()) {
-        auto sample = live_m3t_lock(analysis_frame, scale_back);
-        if (!vision_track_mode()) {
+    if (live_track::track_mode()) {
+        auto sample = live_track::step(analysis_frame, scale_back);
+        if (!live_track::track_mode()) {
             // Model load failed on this very pass: fall through to the
             // legacy cascade from the next pass on (this one returns
             // empty rather than running half of each).
@@ -2087,7 +1922,6 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         dump_vision_debug(analysis_frame, track_stats);
         return result;
     }
-#endif
 
     // A cell projected outside the frame samples fabricated colour (a
     // clamped border strip, or corner sampling's all-zero fallback) that is

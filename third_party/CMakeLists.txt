@@ -8,7 +8,7 @@
 # Desktop-only, mirroring the tools/ gate: the tracker's GLEW/GLFW offscreen
 # renderer is a desktop dependency stack, and mobile integration is a later
 # phase's problem (vcpkg would also need the GL ports for the mobile triplets).
-if(NOT ANDROID AND NOT IOS)
+if(CUBEULATOR_PLATFORM_DESKTOP)
     # The vendored CMakeLists declares its options under `cmake_minimum_required
     # (VERSION 3.5)` policies, where option() would clobber a plain variable set
     # here (CMP0077 OLD). Seed the cache instead: an existing cache entry always

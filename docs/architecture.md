@@ -7,8 +7,10 @@ src/
   lib/            cube:: — GUI-free core (solver, vision, render, i18n)
   app/
     qt/            Qt 6 Quick/QML desktop shell
-    platform/       one implementation per OS behind each interfaces/ header
-    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp
+    platform/       one directory per OS: its implementations of each
+                    interfaces/ header, and the platform.cmake that selects them
+    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp,
+                    platform_info.hpp, crash_handler.hpp
   render/          bgfx setup and the technical-drawing render pipeline
 tests/
   unit/
@@ -16,10 +18,12 @@ tests/
 ```
 
 `src/lib/` is Qt-free and platform-free by design: independently unit-testable,
-reusable behind any shell. Platform differences are isolated to one file per
-OS under `src/app/platform/`, selected by CMake at configure time
-(`if(ANDROID) / elseif(IOS) / elseif(WIN32) / elseif(APPLE) / elseif(UNIX)`)
-— never `#ifdef` in shared code.
+reusable behind any shell. Platform differences are isolated to one directory
+per OS under `src/app/platform/`; `cmake/Platform.cmake` picks the directory
+once, and its `platform.cmake` names the files compiled and the libraries
+linked. No source file, QML file or other CMake file branches on the
+platform — see [Platform isolation](platform-isolation.md) for the rule, how a
+platform is added, and the CI check that holds it.
 
 ## C++23 patterns in use
 

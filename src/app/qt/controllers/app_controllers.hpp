@@ -3,6 +3,7 @@
 #include "controllers/camera_controller.hpp"
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
+#include "controllers/platform_facts.hpp"
 #include "controllers/scan_session.hpp"
 #include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
@@ -35,6 +36,9 @@ struct AppControllers {
     // The scan screen's controller.
     DirectScan directScan;
     SettingsModel settings;
+    // What the platform says about itself; QML binds to it instead of
+    // testing Qt.platform.os.
+    PlatformFacts platform;
     SolveController solve{scanSession};
     // How the cube is held while it is solved: the solve screen turns its
     // cube to match and words each move from it. It watches the camera's

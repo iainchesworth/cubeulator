@@ -4,6 +4,38 @@
 find_package(Catch2 3 REQUIRED)
 include(Catch)
 
+# --- What every test binary takes from the platform -------------------------
+# Decided by the platform's fragment (cmake/Platform.cmake), so no test file
+# branches on the OS; every test target below links it. It carries:
+#   - the defines first-party code needs from the platform's C runtime
+#     (std::getenv is flagged "unsafe" by the MSVC CRT, and this build
+#     treats warnings as errors);
+#   - cube_test_platform_facts.hpp, generated from platform_facts.hpp.in: the
+#     Qt platform plugin the Qt test binaries fall back to, and how a
+#     platform's desktop session reaches a program (see test_platform.hpp);
+#   - tests/ and that header's directory on the include path.
+# A fragment may write its variables as a CMake list; the header wants them
+# space-separated.
+string(REPLACE ";" " " CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES
+    "${CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES}")
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/platform_facts.hpp.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/cube_test_platform_facts.hpp" @ONLY)
+
+add_library(cube_test_platform INTERFACE)
+target_compile_definitions(cube_test_platform INTERFACE ${CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS})
+target_include_directories(cube_test_platform INTERFACE
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+# --- Every platform fragment satisfies the platform contract -----------------
+# Includes each src/app/platform/*/platform.cmake in turn and holds it to
+# cmake/PlatformContract.cmake, on whichever host this runs: the platforms a
+# leg does not build are checked here too (see the script's own header).
+add_test(NAME platform_fragments_satisfy_contract
+    COMMAND "${CMAKE_COMMAND}" "-DREPO_ROOT=${PROJECT_SOURCE_DIR}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/platform/check_fragments.cmake")
+
 # --- Unit tests: fast, isolated, one behaviour each -----------------------
 add_executable(cube_unit_tests
     unit/error_test.cpp
@@ -71,6 +103,7 @@ target_link_libraries(cube_unit_tests
     PRIVATE
         cube::lib
         cube::gpu_render
+        cube_test_platform
         cube::warnings
         cube::sanitizers
         cube::coverage
@@ -124,19 +157,18 @@ target_link_libraries(cube_integration_tests
     PRIVATE
         cube::lib
         cube::platform
+        cube_test_platform
         cube::warnings
         cube::sanitizers
         cube::coverage
         Catch2::Catch2WithMain)
 
-# The two hardware tests read their opt-in env var with std::getenv, which
-# the MSVC CRT flags "unsafe" - and this build treats warnings as errors.
-# Same targeted silencing cube_platform already applies for the same call
-# (see src/app/CMakeLists.txt); the usage is correct and portable, and the
-# suggested _dupenv_s alternative is Windows-only. Also covers clang-cl,
-# which uses the same MSVC CRT headers.
-target_compile_definitions(cube_integration_tests PRIVATE
-    "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
+# Test cases only one platform can run (its own paths, its own environment
+# conventions) live in tests/platform/<name>/, keyed by the platform's name
+# like src/app/platform is. A platform with none simply has no directory.
+file(GLOB CUBE_PLATFORM_TEST_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/platform/${CUBEULATOR_PLATFORM}/*.cpp")
+target_sources(cube_integration_tests PRIVATE ${CUBE_PLATFORM_TEST_SOURCES})
 
 # Capture frames (tests/data, local only - see .gitignore) are inputs, not
 # deployables - the refine-cadence test reads one from the source tree when
@@ -170,14 +202,11 @@ if(TARGET cube::m3t)
     target_link_libraries(cube_m3t_tests
         PRIVATE
             cube::m3t
+            cube_test_platform
             cube::warnings
             cube::sanitizers
             cube::coverage
             Catch2::Catch2WithMain)
-
-    # std::getenv gate, same targeted silencing as cube_integration_tests.
-    target_compile_definitions(cube_m3t_tests PRIVATE
-        "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
 
     cube_deploy_sanitizer_runtime(cube_m3t_tests)
 
@@ -210,6 +239,7 @@ if(CUBEULATOR_BUILD_APP)
     target_link_libraries(cube_qt_controller_tests
         PRIVATE
             cube_app_controllers
+            cube_test_platform
             cube::warnings
             cube::sanitizers
             cube::coverage
@@ -243,6 +273,7 @@ if(CUBEULATOR_BUILD_APP)
         PRIVATE
             $<LINK_LIBRARY:WHOLE_ARCHIVE,cube_app_qml>
             cube_app_controllers
+            cube_test_platform
             cube::lib
             cube::warnings
             cube::sanitizers
@@ -292,6 +323,7 @@ if(CUBEULATOR_BUILD_APP)
     target_link_libraries(cube_i18n_tests
         PRIVATE
             cube_app_i18n
+            cube_test_platform
             cube::warnings
             cube::sanitizers
             cube::coverage
@@ -331,6 +363,7 @@ if(CUBEULATOR_BUILD_APP)
             $<LINK_LIBRARY:WHOLE_ARCHIVE,cube_app_qml>
             cube_app_controllers
             cube_app_i18n
+            cube_test_platform
             cube::lib
             cube::warnings
             cube::sanitizers

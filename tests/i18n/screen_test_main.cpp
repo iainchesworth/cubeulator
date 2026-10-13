@@ -5,6 +5,7 @@
 // back (the way the solve lane's cube_qml_tests read the 3D cube), so the
 // offscreen platform is enough and the run is the same headless on CI.
 #include "screen_app.hpp"
+#include "test_platform.hpp"
 
 #include <catch2/catch_session.hpp>
 
@@ -33,13 +34,9 @@ cube::i18n::LanguageManager& language() {
 }  // namespace cube::i18n_test
 
 int main(int argc, char* argv[]) {
-#ifndef Q_OS_WIN
-    // Windows keeps its own platform plugin, the only one deployed beside the
-    // binaries there; it needs no display for items that are never shown.
-    if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM")) {
-        qputenv("QT_QPA_PLATFORM", "offscreen");
-    }
-#endif
+    // Items that are never shown need no display; which plugin stands in is
+    // the platform's to say.
+    cube::test::apply_default_qpa_platform();
     QCoreApplication::setOrganizationName("Cubeulator");
     QCoreApplication::setApplicationName("Cubeulator-i18n-screen-tests");
     // The settings singleton reads its store when it is made, and the manager

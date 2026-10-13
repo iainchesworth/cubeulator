@@ -9,6 +9,9 @@
 #
 # Required variables:
 #   CUBEULATOR_VERSION - the semver string, e.g. "0.1.0"
+#   CUBEULATOR_BUILD_TARGET
+#                      - what the build targets, e.g. "Windows x86_64 (MSVC 1951)"
+#                        (cube_describe_build_target() in cmake/Platform.cmake)
 #   SRC                - path to version.hpp.in
 #   DST                - path to the generated version.hpp
 #   WORKDIR            - repository root (for running git)

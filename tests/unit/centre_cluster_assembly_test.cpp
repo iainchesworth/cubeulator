@@ -58,9 +58,6 @@
 // tables, so aligning over grid rotations here is aligning over production
 // rolls. Only RELATIVE alignment within a cluster is needed - the absolute
 // roll is exactly what the assembler's own 4^6 search then determines.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

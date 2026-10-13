@@ -4,11 +4,7 @@
 // cube_corner_pose_PROVENANCE.md) cannot drift silently, and the
 // slot->Singmaster mapping is locked. Real-model inference is a hidden
 // env-gated smoke ([.detector-smoke], CUBE_CORNER_MODEL=<onnx>).
-// std::getenv is fine here (single-threaded gated harness, read-only);
-// silenced the same way the other env-gated test files do.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
+// std::getenv is fine here (single-threaded gated harness, read-only).
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/matchers/catch_matchers_floating_point.hpp>

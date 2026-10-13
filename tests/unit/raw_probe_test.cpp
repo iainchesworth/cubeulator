@@ -6,9 +6,6 @@
 // onto the wrong cell. Here we classify the raw per-cell Lab directly and
 // search the minimal ARBITRARY relabels (distance 1..3) that make the real
 // oracle assemble, using the shipping assembler verbatim.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 
