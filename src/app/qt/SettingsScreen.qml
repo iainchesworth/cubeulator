@@ -36,6 +36,10 @@ Rectangle {
             model: chipRoot.options
             delegate: AppButton {
                 objectName: chipRoot.objectName !== "" ? chipRoot.objectName + "." + index : ""
+                // No wider than the row: "Same as this device (Deutsch)" is
+                // longer than a phone's, and a longer language's is longer
+                // still; it wraps rather than running off the window.
+                maxWidth: chipRoot.width
                 text: modelData
                 variant: index === chipRoot.currentIndex ? "primary" : "secondary"
                 onClicked: chipRoot.selected(index)
