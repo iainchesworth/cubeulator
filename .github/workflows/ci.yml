@@ -4,9 +4,7 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    # feature/app-experience is the integration branch the ax branches land
-    # on; it comes out of this list when that branch lands on develop.
-    branches: [main, develop, feature/app-experience]
+    branches: [main, develop]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
