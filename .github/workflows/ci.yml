@@ -235,8 +235,27 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
+      # The system tests (tests/system, label "system") draw the real app
+      # and need a display; they have their own legs below.
       - name: Test
-        run: ctest --preset ${{ matrix.preset }}
+        run: ctest --preset ${{ matrix.preset }} -LE system
+
+      # The same system suite on the Windows and macOS runners, which have a
+      # desktop session. Not a gate yet: whether Qt Quick 3D renders on these
+      # runners' graphics is what this step finds out, and it is reported
+      # rather than forced green (docs/testing.md, "System tests").
+      - name: System tests (experimental off Linux)
+        if: runner.os != 'Linux'
+        continue-on-error: true
+        run: ctest --preset ${{ matrix.preset }} -L system --output-on-failure
+
+      - name: Upload system-test pictures
+        if: always() && runner.os != 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output-${{ matrix.triplet }}
+          path: build/${{ matrix.preset }}/system-test-output
+          if-no-files-found: ignore
 
   android-build:
     name: Android (arm64-v8a)
@@ -437,6 +456,126 @@ jobs:
 
       - name: Build
         run: cmake --build --preset ios-clang-release
+
+  # The system tests: the real app, started from its main() wiring, driven by
+  # mouse, touch and key events, rendered for real. Qt Quick 3D has no
+  # software fallback, so the display is Xvfb and the GL is Mesa's llvmpipe.
+  # Built with coverage instrumentation, so the same run measures the C++
+  # under src/app/qt - reported here, not gated (docs/testing.md).
+  system-tests:
+    name: System tests (Linux, Xvfb + software GL)
+    runs-on: ubuntu-26.04
+    # See the equivalent comment on build-and-test.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+      QT_QPA_PLATFORM: xcb
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      # fetch-depth: 0 is required - see the comment on build-and-test.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Configure vcpkg binary cache
+        shell: bash
+        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+      # The x64-linux triplet cache, shared with build-and-test's Linux leg.
+      - name: Cache vcpkg binaries
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/vcpkg-cache
+          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-binary-cache-x64-linux-
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        with:
+          cmakeVersion: "latest"
+
+      # The vcpkg build dependencies (see build-and-test), then what a Qt
+      # window needs to open on Xvfb and render in software: the xcb platform
+      # plugin's libraries, Mesa's software rasteriser, and xauth for
+      # xvfb-run.
+      - name: Install build and display dependencies
+        run: >
+          sudo apt-get install -y
+          libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+          autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+          xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libfontconfig1 libxkbcommon-x11-0
+          libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+          libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
+
+      - name: Install gcovr
+        run: pip install --quiet gcovr
+
+      - name: Install Qt (prebuilt)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: "6.8.3"
+          modules: "qtquick3d qtshadertools"
+          cache: true
+
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-coverage
+          -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-coverage
+
+      # What the display and GL stack actually are, in the log: the first
+      # thing to read when the render checks fail.
+      - name: Show the display stack
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" bash -c 'glxinfo -B 2>/dev/null | head -20 || true'
+
+      - name: System tests
+        run: >
+          xvfb-run -a -s "-screen 0 1280x1024x24"
+          ctest --preset linux-gcc-coverage -L system --output-on-failure
+
+      # The controller tests drive the same classes without a window; their
+      # lines count toward the same report.
+      - name: Controller tests
+        working-directory: build/linux-gcc-coverage/bin
+        run: ./cube_qt_controller_tests
+
+      - name: Upload system-test pictures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output
+          path: build/linux-gcc-coverage/system-test-output
+          if-no-files-found: warn
+
+      # C++ under src/app/qt, measured but not gated: nothing here joins the
+      # 80% gate of the Coverage job below until the numbers have been looked
+      # at. QML is not in this report - gcov cannot see it; the reach report
+      # in the artifact above is the QML measure.
+      - name: App coverage report
+        if: always()
+        run: >
+          gcovr --root . --filter 'src/app/qt/.*'
+          --gcov-executable gcov-15
+          --exclude-throw-branches --exclude-unreachable-branches
+          --gcov-ignore-errors=no_working_dir_found
+          --object-directory build/linux-gcc-coverage
+          --print-summary --html-details build/coverage-app.html
+          --json-summary build/coverage-app.json
+
+      - name: Upload app coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-app
+          path: |
+            build/coverage-app*.html
+            build/coverage-app.json
 
   coverage:
     name: Coverage (Linux, GCC)
