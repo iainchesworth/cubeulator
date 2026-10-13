@@ -18,7 +18,21 @@ on:
   pull_request:
     types: [closed]
   # Each merge stores a new vcpkg generation; the previous one goes with it.
+  # A push prunes BEFORE the run it started has saved that generation, which
+  # leaves two behind until the next push; the workflow_run trigger below
+  # prunes after it.
   push:
+    branches: [main, develop]
+  # After a CI or CodeQL run on develop or main finished saving its caches.
+  # `workflow_run` is read from the default branch, so this only takes effect
+  # once a release has put this file on main; until then the push trigger
+  # above is the sweep. It checks out the default branch and runs only that
+  # code, and takes nothing from the triggering run, so a pull request's
+  # branch name and code never reach it.
+  # zizmor: ignore[dangerous-triggers] main's own script, nothing taken from the event
+  workflow_run:
+    workflows: [CI, "CodeQL (C++)"]
+    types: [completed]
     branches: [main, develop]
   workflow_dispatch:
     inputs:
@@ -48,7 +62,11 @@ jobs:
     name: Prune Actions caches
     # A fork PR's token cannot delete anything, and a fork's caches are not in
     # this repository's quota in the first place.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+    if: >-
+      ${{
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled')
+      }}
     # Hosted, not the self-hosted fleet: it needs gh and jq, which the hosted
     # image carries, and a missed run only means the next one catches up.
     runs-on: ubuntu-26.04
