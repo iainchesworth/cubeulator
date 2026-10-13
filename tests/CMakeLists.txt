@@ -236,9 +236,12 @@ if(CUBEULATOR_BUILD_APP)
         kit/kit_fixture.hpp
         kit/kit_fixture.cpp
         kit/theme_tokens_test.cpp
+        kit/text_test.cpp
         kit/system_helpers_test.cpp
         kit/navigator_test.cpp
-        kit/button_test.cpp)
+        kit/button_test.cpp
+        kit/components_test.cpp
+        kit/gallery_test.cpp)
 
     target_link_libraries(cube_kit_tests
         PRIVATE

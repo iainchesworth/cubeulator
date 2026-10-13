@@ -6,6 +6,7 @@
 #include <QElapsedTimer>
 #include <QMetaMethod>
 #include <QQmlComponent>
+#include <QQmlProperty>
 #include <QTest>
 #include <QThread>
 
@@ -43,6 +44,9 @@ void resetKitState() {
     invoke(singleton("SystemInsets"), "clearOverride");
     set("Theme", "windowWidth", 900);
     set("Theme", "windowHeight", 640);
+    set("Navigator", "overlays", QVariantList());
+    set("Navigator", "guards", QVariantList());
+    invoke(singleton("Navigator"), "reset", {"home"});
     QCoreApplication::processEvents();
 }
 
@@ -50,6 +54,10 @@ namespace {
 std::unique_ptr<QObject>& callerStorage() {
     static std::unique_ptr<QObject> caller;
     return caller;
+}
+std::unique_ptr<QObject>& probeStorage() {
+    static std::unique_ptr<QObject> probe;
+    return probe;
 }
 }  // namespace
 
@@ -79,6 +87,7 @@ QVariant invoke(QObject* object, const char* method, const QVariantList& argumen
 
 void releaseFixtures() {
     callerStorage().reset();
+    probeStorage().reset();
 }
 
 std::unique_ptr<QQuickItem> create(const QString& type, const QVariantMap& properties) {
@@ -142,6 +151,12 @@ QQuickItem* Hosted::adopt(std::unique_ptr<QQuickItem> item) {
     return others_.back().get();
 }
 
+void Hosted::settle() {
+    window_.update();
+    QTest::qWait(60);
+    QCoreApplication::processEvents();
+}
+
 void Hosted::key(Qt::Key key, Qt::KeyboardModifiers modifiers) {
     QTest::keyClick(&window_, key, modifiers);
     QCoreApplication::processEvents();
@@ -175,11 +190,70 @@ Accessibility accessibilityOf(QObject* item) {
     return result;
 }
 
+bool layoutMirrored(QQuickItem* item) {
+    auto& probe = probeStorage();
+    if (probe == nullptr) {
+        QQmlComponent component(&engine());
+        component.setData(
+            "import QtQuick\n"
+            "QtObject { property var target: null\n"
+            "  property bool mirrored: target ? target.LayoutMirroring.enabled : false }",
+            QUrl(QStringLiteral("kit-test-probe.qml")));
+        probe.reset(component.create());
+        if (probe == nullptr) {
+            FAIL(component.errorString().toStdString());
+        }
+    }
+    probe->setProperty("target", QVariant());
+    probe->setProperty("target", QVariant::fromValue<QObject*>(item));
+    return probe->property("mirrored").toBool();
+}
+
+namespace {
+QColor asColour(const QVariant& v) {
+    if (v.metaType() == QMetaType::fromType<QColor>()) {
+        return v.value<QColor>();
+    }
+    return QColor(v.toString());
+}
+}  // namespace
+
+QList<ContrastPair> contrastPairsOf(QObject* component) {
+    QList<ContrastPair> pairs;
+    QQmlProperty property(component, QStringLiteral("contrastPairs"), &engine());
+    if (!property.isValid()) {
+        return pairs;
+    }
+    const QVariantList list = property.read().toList();
+    for (const QVariant& entry : list) {
+        const QVariantMap map = entry.toMap();
+        pairs.push_back(ContrastPair{map.value("name").toString(), asColour(map.value("fg")),
+                                     asColour(map.value("bg")), map.value("target").toDouble()});
+    }
+    return pairs;
+}
+
 QQuickItem* find(QQuickItem* root, const QString& objectName) {
     if (root->objectName() == objectName) {
         return root;
     }
-    return root->findChild<QQuickItem*>(objectName);
+    // The visual tree, not QObject children: items a Repeater makes have no
+    // QObject parent to find them by.
+    for (QQuickItem* childItem : root->childItems()) {
+        if (QQuickItem* found = find(childItem, objectName); found != nullptr) {
+            return found;
+        }
+    }
+    return nullptr;
+}
+
+QList<QQuickItem*> allItems(QQuickItem* root) {
+    QList<QQuickItem*> items;
+    items.push_back(root);
+    for (QQuickItem* childItem : root->childItems()) {
+        items.append(allItems(childItem));
+    }
+    return items;
 }
 
 bool waitFor(const std::function<bool()>& done, int timeoutMs) {

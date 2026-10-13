@@ -351,6 +351,28 @@ if(CUBEULATOR_BUILD_APP)
             qt/kit/KitFocusRing.qml
             qt/kit/KitKeyName.qml
             qt/kit/KitButton.qml
+            qt/kit/KitIconButton.qml
+            qt/kit/KitSwitch.qml
+            qt/kit/KitChoice.qml
+            qt/kit/KitListRow.qml
+            qt/kit/KitTopBar.qml
+            qt/kit/KitDialog.qml
+            qt/kit/KitSheet.qml
+            qt/kit/KitNotice.qml
+            qt/kit/KitCard.qml
+            qt/kit/KitSolveProgress.qml
+            qt/kit/KitWorking.qml
+            qt/kit/KitCountdown.qml
+            qt/kit/KitCaptureBar.qml
+            qt/kit/KitSticker.qml
+            qt/kit/KitSwatch.qml
+            qt/kit/KitSideChip.qml
+            qt/kit/KitColourPicker.qml
+            qt/kit/KitStatusPanel.qml
+            qt/kit/KitInstruction.qml
+            qt/kit/KitStageRow.qml
+            qt/kit/KitEmptyState.qml
+            qt/kit/KitPage.qml
             qt/kit/KitWindowBindings.qml
             qt/kit/KitGallery.qml)
 

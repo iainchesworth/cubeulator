@@ -25,7 +25,11 @@ bool back() {
     return invoke(nav(), "back").toBool();
 }
 
+// Starts a navigation test from nothing: no stale overlays or guards from a
+// test that ended with a dialog still open.
 void reset(const QString& id) {
+    set("Navigator", "overlays", QVariantList());
+    set("Navigator", "guards", QVariantList());
     invoke(nav(), "reset", {id});
 }
 
@@ -44,6 +48,7 @@ QString journey() {
 }  // namespace
 
 TEST_CASE("Back goes where the person came from", "[kit][navigation]") {
+    resetKitState();
     reset("home");
     push("settings");
     push("about");

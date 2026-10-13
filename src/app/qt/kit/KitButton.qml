@@ -74,11 +74,32 @@ AbstractButton {
         return Theme.colour("accentText", dark);
     }
 
+    // What sits behind the button: the page, or over the camera the worst
+    // picture a panel can be on. And every pairing the button draws, which the
+    // tests hold to tokens.json's targets in both themes without having to
+    // know what a button is.
+    readonly property color pageColor: onOverlay ? Theme.overlay.worstCase : Theme.paper
+    readonly property color behindLabel: fillColor.a > 0 ? Theme.blend(fillColor, pageColor) : pageColor
+    readonly property var contrastPairs: {
+        const pairs = [{ name: "label", fg: labelColor, bg: behindLabel, target: enabled ? 4.5 : 3.0 }];
+        // The fill of a primary button is itself the boundary against the page.
+        if (variant === "primary")
+            pairs.push({ name: "fill", fg: behindLabel, bg: pageColor, target: enabled ? 3.0 : 1.0 });
+        if (variant === "secondary" && enabled)
+            pairs.push({ name: "edge", fg: edgeColor, bg: pageColor, target: 3.0 });
+        return pairs;
+    }
+
     objectName: "kitButton"
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
 
-    implicitWidth: Math.max(minHeight, content.implicitWidth + 2 * Theme.space4)
+    // As wide as its words want, but never wider than the screen's content
+    // column: a label longer than that wraps (the label's own width follows).
+    implicitWidth: Math.min(Math.max(minHeight, content.implicitWidth + 2 * Theme.space4),
+                            Math.max(minHeight, Theme.windowWidth - 2 * Theme.pageMargin))
+    // A block button fills its parent unless it is given a width of its own.
+    width: block && parent ? parent.width : implicitWidth
     implicitHeight: Math.max(minHeight, content.implicitHeight + 2 * Theme.space3)
 
     background: Rectangle {

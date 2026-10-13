@@ -70,6 +70,10 @@ public:
     // alive; it is released with the window.
     QQuickItem* adopt(std::unique_ptr<QQuickItem> item);
 
+    // Lets the window lay out and polish what changed since: positioners
+    // settle on the frame after a property changes, as they do in the app.
+    void settle();
+
     void key(Qt::Key key, Qt::KeyboardModifiers modifiers = Qt::NoModifier);
     void click(QQuickItem* target);
     // Moves focus the way Tab does; returns the item that now has it.
@@ -92,7 +96,26 @@ struct Accessibility {
 };
 [[nodiscard]] Accessibility accessibilityOf(QObject* item);
 
+// The first item under `root` (or `root` itself) with this objectName,
+// looking through the visual tree.
 [[nodiscard]] QQuickItem* find(QQuickItem* root, const QString& objectName);
+// `root` and every item beneath it, in the visual tree.
+[[nodiscard]] QList<QQuickItem*> allItems(QQuickItem* root);
+
+// Whether QML's LayoutMirroring is in effect for this item (an attached
+// property, so it cannot be read with QObject::property).
+[[nodiscard]] bool layoutMirrored(QQuickItem* item);
+
+// One contrast pairing a component says it draws: what it is, the two
+// colours, and the ratio the design's gate asks of it.
+struct ContrastPair {
+    QString name;
+    QColor foreground;
+    QColor background;
+    double target = 0;
+};
+// A kit component's `contrastPairs`, empty if it declares none.
+[[nodiscard]] QList<ContrastPair> contrastPairsOf(QObject* component);
 
 // Waits, processing events, until `done` is true or the time is up.
 bool waitFor(const std::function<bool()>& done, int timeoutMs = 2000);

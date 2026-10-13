@@ -103,6 +103,10 @@ QtObject {
         readonly property color scrimColor:   "#141312"
         readonly property real  scrimAlpha:   0.6
         readonly property color scrim:        Qt.rgba(0x14 / 255, 0x13 / 255, 0x12 / 255, 0.6)
+        // What the panel reads as against a pure white picture, the worst
+        // case, and what every contrast over the camera is measured on.
+        readonly property color worstCase:    Qt.rgba(0.86 * 0x14 / 255 + 0.14, 0.86 * 0x13 / 255 + 0.14,
+                                                      0.86 * 0x12 / 255 + 0.14, 1)
     }
     // The dialog and sheet scrim is the same on every screen.
     readonly property color scrim: overlay.scrim
@@ -302,6 +306,13 @@ QtObject {
         return size * rem;
     }
     function inkMuted(opacity) { return Qt.rgba(ink.r, ink.g, ink.b, opacity); }
+    // `top` laid over `bottom` at top's own alpha; the result is opaque. For
+    // working out what a control's label really sits on.
+    function blend(top, bottom) {
+        return Qt.rgba(top.a * top.r + (1 - top.a) * bottom.r,
+                       top.a * top.g + (1 - top.a) * bottom.g,
+                       top.a * top.b + (1 - top.a) * bottom.b, 1);
+    }
 
     // ---- Legacy names ------------------------------------------------------------------------------
     // From before the design system. Still used by the scan and solve screens
