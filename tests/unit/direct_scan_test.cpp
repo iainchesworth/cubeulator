@@ -172,13 +172,17 @@ TEST_CASE("a side counts once it has been held still", "[direct-scan]") {
     }
     CHECK(scan.sides().empty());
 
+    CHECK(scan.reads_in_view() == SideScan::kMinReads - 1);
+
     scan.add(read_side(frame));
     REQUIRE(scan.sides().size() == 1);
     CHECK(scan.sides().front().reads == SideScan::kMinReads);
     CHECK(scan.sides().front().in_view);
+    CHECK(scan.reads_in_view() == SideScan::kMinReads);
 
     scan.add(std::nullopt);
     CHECK_FALSE(scan.reading());
+    CHECK(scan.reads_in_view() == 0);
     CHECK_FALSE(scan.sides().front().in_view);
     CHECK(scan.cube().error() == CubeError::face_capture_incomplete);
 }

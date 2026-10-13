@@ -74,6 +74,10 @@ public:
     // True when the frame just added counted as a read of some side, whether
     // or not that side has enough reads to be captured yet.
     [[nodiscard]] bool reading() const noexcept { return in_view_.has_value(); }
+    // How many reads the side in the frame just added has, captured or not;
+    // zero when that frame was not a read. Against kMinReads this is how far
+    // a side being held is towards counting.
+    [[nodiscard]] std::size_t reads_in_view() const noexcept;
 
     // The captured sides, in the order they were first seen. At most six: if
     // more groups have been captured (a stray lattice, a side re-captured

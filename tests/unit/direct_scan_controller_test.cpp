@@ -116,6 +116,57 @@ TEST_CASE("DirectScan finishes with the cube it was shown, once",
     CHECK_FALSE(scan.cube().has_value());
 }
 
+TEST_CASE("a side being held fills towards counting", "[qt][controllers][direct-scan]") {
+    DirectScan scan;
+    const cv::Mat frame = draw_side(kMixed, Pose{});
+
+    scan.processFrame(frame);
+    CHECK(scan.captureProgress() == 0.0);
+
+    qreal last = 0.0;
+    for (int i = 1; i < kFramesToCapture - 1; ++i) {
+        scan.processFrame(frame);
+        CHECK(scan.captureProgress() > last);
+        CHECK(scan.captureProgress() < 1.0);
+        last = scan.captureProgress();
+    }
+
+    // Captured: its chip shows it now, so there is nothing left to fill.
+    scan.processFrame(frame);
+    REQUIRE(scan.sidesRead() == 1);
+    CHECK(scan.captureProgress() == 0.0);
+}
+
+TEST_CASE("the sixth side is on show before the scan is announced complete",
+          "[qt][controllers][direct-scan]") {
+    // A listener that left the scan screen the instant the scan completed
+    // used to do so before the last side had ever been reported.
+    DirectScan scan;
+    int sides_when_completed = -1;
+    bool complete_when_completed = false;
+    QObject::connect(&scan, &DirectScan::scanCompleted, [&]() {
+        sides_when_completed = scan.sidesRead();
+        complete_when_completed = scan.complete();
+    });
+    int sides_changed_while_complete = 0;
+    QObject::connect(&scan, &DirectScan::sidesChanged, [&]() {
+        sides_changed_while_complete += scan.complete() && scan.sidesRead() == 6 ? 1 : 0;
+    });
+
+    CHECK_FALSE(scan.complete());
+    show_cube(scan, cube::solver::random_scramble(9));
+
+    CHECK(sides_when_completed == 6);
+    CHECK(complete_when_completed);
+    CHECK(sides_changed_while_complete == 1);
+    // Nothing is being read any more, so nothing is marked on the picture.
+    CHECK(scan.stickerPoints().isEmpty());
+    CHECK_FALSE(scan.reading());
+
+    scan.restart();
+    CHECK_FALSE(scan.complete());
+}
+
 TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
           "[qt][controllers][direct-scan]") {
     const Cube cube = cube::solver::random_scramble(5);
@@ -129,7 +180,11 @@ TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
 
     show_cube(scan, cube);
 
-    REQUIRE(ready == 1);
+    // Solving has started, and nothing has asked for the solve screen: the
+    // finished scan stays on show while the solution is worked out.
+    REQUIRE(solver.isSolving());
+    CHECK(ready == 0);
+
     // The solve runs on a worker; its result lands through the event loop.
     QElapsedTimer waited;
     waited.start();
@@ -139,4 +194,5 @@ TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
     REQUIRE_FALSE(solver.isSolving());
     CHECK(solver.totalMoves() > 0);
     CHECK(solver.atStart());
+    CHECK(ready == 0);
 }

@@ -542,6 +542,10 @@ void SideScan::add(const std::optional<SideRead>& read) {
     }
 }
 
+std::size_t SideScan::reads_in_view() const noexcept {
+    return in_view_.has_value() ? groups_[*in_view_].reads.size() : 0;
+}
+
 std::vector<SideScan::Side> SideScan::sides() const {
     // The same six the cube is built from, so the display never shows a
     // stray capture in place of a side that is actually being used.

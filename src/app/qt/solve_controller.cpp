@@ -120,7 +120,6 @@ void SolveController::onScanCompleted() {
 
 void SolveController::solveCube(const Cube& cube) {
     beginSolve(cube);
-    emit solveReady();
 }
 
 void SolveController::beginSolve(const Cube& scrambled) {

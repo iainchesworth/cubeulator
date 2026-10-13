@@ -86,8 +86,10 @@ public:
 
     [[nodiscard]] bool isSolving() const;
 
-    // Solves a cube handed over already validated - the direct-scan path -
-    // and emits solveReady.
+    // Starts solving a cube handed over already validated - the direct-scan
+    // path. isSolving is true until the solution lands. solveReady is not
+    // emitted: the caller decides when to show the solution, so a finished
+    // scan can stay on screen while this runs.
     void solveCube(const cube::solver::Cube& cube);
 
 public slots:

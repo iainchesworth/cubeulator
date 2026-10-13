@@ -13,6 +13,12 @@ Item {
     readonly property var sides: DirectScan.sides
     readonly property var points: DirectScan.stickerPoints
     readonly property bool cubeInView: points.length === 9
+    // The cube is read. This screen stays up for a beat so the last side is
+    // seen arriving and all six are seen confirmed; AppState moves on once
+    // the solution is ready.
+    readonly property bool complete: DirectScan.complete
+
+    readonly property color good: "#3FE05A"
 
     // The preview fills the screen and crops what does not fit; sticker
     // points arrive in frame pixels and are mapped through the same crop.
@@ -24,6 +30,8 @@ Item {
     readonly property string headline: {
         if (DirectScan.cameraError !== "")
             return "Camera unavailable";
+        if (complete)
+            return "Cube read";
         if (!DirectScan.running)
             return "Starting the camera…";
         return DirectScan.sidesRead + " of 6 sides read";
@@ -31,6 +39,8 @@ Item {
     readonly property string guidance: {
         if (DirectScan.cameraError !== "")
             return DirectScan.cameraError;
+        if (complete)
+            return "All six sides make a valid cube. Working out the solution…";
         if (!DirectScan.running)
             return "";
         if (DirectScan.settingUp)
@@ -65,7 +75,7 @@ Item {
             width: 14; height: 14; radius: 7
             x: root.frameLeft + point.x * root.frameScale - width / 2
             y: root.frameTop + point.y * root.frameScale - height / 2
-            color: DirectScan.reading ? "#3FE05A" : "#FFD21F"
+            color: DirectScan.reading ? root.good : "#FFD21F"
             border.color: "#141312"; border.width: 2
         }
     }
@@ -77,6 +87,7 @@ Item {
         height: statusColumn.height + 2 * Theme.space3
         radius: 8
         color: Qt.rgba(0.08, 0.075, 0.07, 0.78)
+        Behavior on height { NumberAnimation { duration: 160; easing.type: Easing.OutCubic } }
 
         Column {
             id: statusColumn
@@ -86,8 +97,9 @@ Item {
 
             Text {
                 text: root.headline
-                color: DirectScan.sidesRead === 6 && !DirectScan.conflicted ? "#3FE05A" : "#F3F2F2"
+                color: root.complete ? root.good : "#F3F2F2"
                 font.family: Theme.fontHeading; font.pixelSize: 24; font.weight: Font.DemiBold
+                Behavior on color { ColorAnimation { duration: 220 } }
             }
             Text {
                 width: parent.width
@@ -115,26 +127,65 @@ Item {
             model: 6
             delegate: Rectangle {
                 id: chipFrame
-                readonly property var side: index < root.sides.length ? root.sides[index] : null
+                readonly property int slot: index
+                readonly property var side: slot < root.sides.length ? root.sides[slot] : null
+                readonly property bool filled: side !== null
+                // The first empty chip is where the side being held will land.
+                readonly property bool next: !filled && slot === root.sides.length
+                readonly property bool inView: filled && side.inView && !root.complete
+
                 width: chips.chip; height: chips.chip
                 radius: 6
                 color: Qt.rgba(0.08, 0.075, 0.07, 0.85)
-                border.width: side !== null && side.inView ? 3 : 1
-                border.color: side !== null && side.inView ? "#F3F2F2" : Qt.rgba(1, 1, 1, 0.25)
+                border.width: root.complete || inView ? 3 : 1
+                border.color: root.complete ? root.good : inView ? "#F3F2F2" : Qt.rgba(1, 1, 1, 0.25)
+                Behavior on border.color { ColorAnimation { duration: 220 } }
+
+                // A side arriving.
+                onFilledChanged: if (filled) arrive.restart()
+                SequentialAnimation {
+                    id: arrive
+                    NumberAnimation { target: chipFrame; property: "scale"; from: 0.8; to: 1.08; duration: 130; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: chipFrame; property: "scale"; to: 1.0; duration: 110; easing.type: Easing.InOutQuad }
+                }
+
+                // All six confirmed: a ripple along the row.
+                Connections {
+                    target: root
+                    function onCompleteChanged() {
+                        if (root.complete)
+                            confirm.restart();
+                    }
+                }
+                SequentialAnimation {
+                    id: confirm
+                    PauseAnimation { duration: 260 + chipFrame.slot * 70 }
+                    NumberAnimation { target: chipFrame; property: "scale"; to: 1.1; duration: 120; easing.type: Easing.OutQuad }
+                    NumberAnimation { target: chipFrame; property: "scale"; to: 1.0; duration: 160; easing.type: Easing.InOutQuad }
+                }
 
                 Grid {
                     anchors.centerIn: parent
                     columns: 3
                     spacing: 2
-                    visible: chipFrame.side !== null
+                    visible: chipFrame.filled
                     Repeater {
                         model: 9
                         delegate: Rectangle {
                             width: (chips.chip - 16) / 3; height: width
                             radius: 2
-                            color: chipFrame.side !== null ? chipFrame.side.colors[index] : "transparent"
+                            color: chipFrame.filled ? chipFrame.side.colors[index] : "transparent"
                         }
                     }
+                }
+
+                // The side being held, filling towards counting.
+                Rectangle {
+                    visible: chipFrame.next && DirectScan.captureProgress > 0
+                    x: 6; y: parent.height - 6 - height
+                    height: 5; radius: 2.5
+                    width: (parent.width - 12) * DirectScan.captureProgress
+                    color: root.good
                 }
             }
         }
@@ -154,6 +205,7 @@ Item {
         }
         AppButton {
             height: 42
+            visible: !root.complete
             variant: "secondary"; text: "Start over"
             enabled: DirectScan.sidesRead > 0
             onClicked: DirectScan.restart()

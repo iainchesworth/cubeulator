@@ -34,8 +34,37 @@ QtObject {
     onScreenChanged: {
         if (screen === "scan") {
             DirectScan.start(CameraController.selectedDeviceId);
-        } else if (DirectScan.running || DirectScan.starting) {
-            DirectScan.stop();
+        } else {
+            scanComplete = false;
+            completeBeat.stop();
+            if (DirectScan.running || DirectScan.starting)
+                DirectScan.stop();
+        }
+    }
+
+    // A finished scan stays on screen for a beat: long enough to see the
+    // sixth side arrive and all six confirmed. The solve starts the moment
+    // the scan completes and runs behind that, so the wait is spent looking
+    // at the result rather than at a spinner. The solve screen follows when
+    // the beat has passed AND the solution is ready, whichever comes later.
+    property bool scanComplete: false
+    property var directScanConnections: Connections {
+        target: DirectScan
+        function onScanCompleted() {
+            state.scanComplete = true;
+            completeBeat.restart();
+        }
+    }
+    property var completeBeat: Timer {
+        interval: 1400
+        onTriggered: state.showSolutionWhenReady()
+    }
+    function showSolutionWhenReady() {
+        if (scanComplete && !completeBeat.running && !SolveController.isSolving && screen === "scan") {
+            scanComplete = false;
+            scanError = "";
+            scanRetryMessage = "";
+            screen = "solve";
         }
     }
 
@@ -53,6 +82,9 @@ QtObject {
         }
         function onScanRejected(reason) {
             scanError = reason;
+        }
+        function onStateChanged() {
+            state.showSolutionWhenReady();
         }
     }
 

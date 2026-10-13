@@ -161,6 +161,7 @@ void DirectScan::restart() {
     scan_.reset();
     read_.reset();
     reading_ = false;
+    capture_progress_ = 0.0;
     sides_.clear();
     conflicted_ = false;
     cube_.reset();
@@ -207,6 +208,11 @@ void DirectScan::processFrame(const cv::Mat& bgr) {
 
     std::vector<cube::vision::SideScan::Side> sides = scan_.sides();
     reading_ = scan_.reading();
+    const std::size_t held = scan_.reads_in_view();
+    capture_progress_ =
+        held < cube::vision::SideScan::kMinReads
+            ? static_cast<qreal>(held) / static_cast<qreal>(cube::vision::SideScan::kMinReads)
+            : 0.0;
     emit frameUpdated();
 
     if (same_sides(sides, sides_)) {
@@ -216,9 +222,19 @@ void DirectScan::processFrame(const cv::Mat& bgr) {
 
     auto cube = scan_.cube();
     conflicted_ = !cube.has_value() && cube.error() != cube::CubeError::face_capture_incomplete;
-    emit sidesChanged();
     if (cube.has_value()) {
+        // Nothing more is read, so nothing is marked on the picture.
         cube_ = *cube;
+        read_.reset();
+        reading_ = false;
+        capture_progress_ = 0.0;
+        emit frameUpdated();
+    }
+    // The sixth side is announced with the rest before the scan is: a
+    // listener that leaves the scan screen on scanCompleted would otherwise
+    // never show it.
+    emit sidesChanged();
+    if (cube_.has_value()) {
         emit scanCompleted();
     }
 }

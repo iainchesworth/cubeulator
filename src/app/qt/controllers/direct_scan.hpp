@@ -47,6 +47,9 @@ class DirectScan : public QObject {
     Q_PROPERTY(QVariantList stickerPoints READ stickerPoints NOTIFY frameUpdated)
     // True when the side in view is being held still enough to count.
     Q_PROPERTY(bool reading READ reading NOTIFY frameUpdated)
+    // 0..1 while a side that has not been captured yet is being held still:
+    // how far it is towards counting. 0 otherwise.
+    Q_PROPERTY(qreal captureProgress READ captureProgress NOTIFY frameUpdated)
     // True from camera start until its exposure and white balance are held.
     // Nothing is read meanwhile: a colour sampled while the balance is still
     // moving would not match the same sticker a second later.
@@ -61,6 +64,9 @@ class DirectScan : public QObject {
     // Six sides are in but do not make a valid cube yet: one was misread, or
     // one side was captured twice under different light.
     Q_PROPERTY(bool conflicted READ conflicted NOTIFY sidesChanged)
+    // The cube has been read. The six sides stay on show - the last one
+    // included - until whoever listens for scanCompleted moves on.
+    Q_PROPERTY(bool complete READ complete NOTIFY sidesChanged)
 
 public:
     explicit DirectScan(QObject* parent = nullptr);
@@ -74,10 +80,12 @@ public:
     [[nodiscard]] int frameHeight() const noexcept { return frame_height_; }
     [[nodiscard]] QVariantList stickerPoints() const;
     [[nodiscard]] bool reading() const noexcept { return reading_; }
+    [[nodiscard]] qreal captureProgress() const noexcept { return capture_progress_; }
     [[nodiscard]] bool settingUp() const noexcept { return awaiting_lock_; }
     [[nodiscard]] QVariantList sides() const;
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
+    [[nodiscard]] bool complete() const noexcept { return cube_.has_value(); }
 
     // The cube, once scanCompleted has fired for the current scan.
     [[nodiscard]] std::optional<cube::solver::Cube> cube() const { return cube_; }
@@ -127,6 +135,7 @@ private:
     cube::vision::SideScan scan_;
     std::optional<cube::vision::SideRead> read_;
     bool reading_ = false;
+    qreal capture_progress_ = 0.0;
     std::vector<cube::vision::SideScan::Side> sides_;
     bool conflicted_ = false;
     std::optional<cube::solver::Cube> cube_;

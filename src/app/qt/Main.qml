@@ -11,7 +11,10 @@ ApplicationWindow {
     color: Theme.paper
 
     Loader {
+        id: screens
         anchors.fill: parent
+        // Each screen fades in rather than replacing the last in one frame.
+        onLoaded: screenFade.restart()
         sourceComponent: {
             switch (AppState.screen) {
             case "permission": return permissionScreen;
@@ -22,6 +25,12 @@ ApplicationWindow {
             default: return launchScreen;
             }
         }
+    }
+
+    NumberAnimation {
+        id: screenFade
+        target: screens; property: "opacity"
+        from: 0; to: 1; duration: 280; easing.type: Easing.OutCubic
     }
 
     Component { id: launchScreen; LaunchScreen {} }
