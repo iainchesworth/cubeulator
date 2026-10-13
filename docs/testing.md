@@ -233,12 +233,19 @@ fire.
 ### Known today
 
 `known_today_test.cpp` asserts, as they are, the behaviours the
-[experience plan](app-experience-plan.md) lists as defects: the solve screen
-has no exit, nothing leads to the complete screen, three buttons do nothing,
-there is no back or keyboard focus, and two settings drive a controller no
-screen uses. Each is tagged `[known-today]`, cites its plan line and owner,
-and is written to **fail the day it is fixed** - that is the prompt to turn
-it into a journey step. Nothing in the suite fixes them.
+[experience plan](app-experience-plan.md) lists as defects: three buttons do
+nothing, there is no back or keyboard focus on the settings screen, and two
+settings drive a controller no screen uses. Each is tagged `[known-today]`,
+cites its plan line and owner, and is written to **fail the day it is
+fixed** - that is the prompt to turn it into a journey step. Nothing in the
+suite fixes them.
+
+Two used to be here and are journey steps now, because the solve lane fixed
+them: the last step of the solution is **Finish** and leads to the complete
+screen, and **Rescan** is the way out of the solve screen
+(`journey_test.cpp`). The solve screen keeps the camera running to watch how
+the cube is held; the fake camera serves it too, so the journey asserts the
+camera is still on there and let go of when the screen is left.
 
 ### Carrying this into the new experience
 
