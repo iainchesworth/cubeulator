@@ -100,7 +100,7 @@ jobs:
       # why per-preset keys were wasteful/over quota.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
@@ -165,7 +165,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -275,7 +275,7 @@ jobs:
       # across 15 entries, over the limit).
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: ${{ matrix.triplet }}
 
@@ -370,7 +370,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: ${{ matrix.triplet }}
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -430,7 +430,7 @@ jobs:
       # same mistake later.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: arm64-android
 
@@ -518,7 +518,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-android
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -558,7 +558,7 @@ jobs:
       # see the equivalent comment on android-build above.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: arm64-ios
 
@@ -586,7 +586,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-ios
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -617,7 +617,7 @@ jobs:
       # The x64-linux triplet cache, shared with build-and-test's Linux leg.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
@@ -710,7 +710,7 @@ jobs:
       # Saved even when a later step fails - see build-and-test.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
@@ -744,7 +744,7 @@ jobs:
       # above on why per-preset keys were wasteful/over the 10GB cap.
       - name: Restore vcpkg binaries
         id: vcpkg-cache
-        uses: ./.github/actions/vcpkg-cache/restore
+        uses: $/.github/actions/vcpkg-cache/restore
         with:
           triplet: x64-linux
 
@@ -808,7 +808,7 @@ jobs:
       # added since the restore - see .github/actions/vcpkg-cache.
       - name: Save vcpkg binaries
         if: ${{ always() }}
-        uses: ./.github/actions/vcpkg-cache/save
+        uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
