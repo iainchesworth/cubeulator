@@ -7,7 +7,7 @@ from the code.
 ## Before you start
 
 For anything more than a typo fix, it's worth
-[opening an issue](https://github.com/iainchesworth/cubeulator/issues) first
+[opening an issue](https://github.com/iainchesworthlabs/cubeulator/issues) first
 to say what you're thinking — it avoids duplicated effort and lets us agree
 on the approach before you sink time into it.
 
@@ -43,10 +43,10 @@ the required check.
 ## Code style
 
 - Formatting follows the repo's
-  [`.clang-format`](https://github.com/iainchesworth/cubeulator/blob/develop/.clang-format) —
+  [`.clang-format`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-format) —
   run `clang-format` before committing, or configure your editor to do it
   on save.
-- [`.clang-tidy`](https://github.com/iainchesworth/cubeulator/blob/develop/.clang-tidy)
+- [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
   runs as part of the build; compiler warnings are treated as errors, so fix
   them rather than silencing them where you reasonably can.
 - Modern C++23 is encouraged over older idioms — see
