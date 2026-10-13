@@ -235,6 +235,7 @@ if(CUBEULATOR_BUILD_APP)
         qml_test_main.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
+        unit/solve_camera_inset_test.cpp
         unit/solve_screen_gallery_test.cpp
         unit/solve_screen_test.cpp)
 

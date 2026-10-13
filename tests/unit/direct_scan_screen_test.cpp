@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include "camera_preview_support.hpp"
 #include "cube_view_reading.hpp"
 #include "drawn_cube.hpp"
 #include "qml_test_app.hpp"
@@ -49,40 +50,8 @@ namespace {
 constexpr int kWidth = 900;
 constexpr int kHeight = 640;
 
-// A side held square to the camera and off to the left of the frame, so that
-// a flip moves every sticker a long way.
-[[nodiscard]] cv::Mat frame_of_side() {
-    const Cube scrambled = cube::solver::random_scramble(7);
-    return cube::test::draw_side(cube::test::outside_view(scrambled, Face::F),
-                                 cube::test::Pose{.centre = {190.0F, 170.0F}, .pitch = 46.0F});
-}
-
-// The camera in the state these tests want it - reading the side in view and
-// leaving any scan alone - and put back as it was found.
-class WatchingCamera {
-public:
-    WatchingCamera() : camera_(cube::test::app_controllers().directScan) { camera_.setWatching(true); }
-    ~WatchingCamera() {
-        camera_.setWatching(false);
-        camera_.restart();
-    }
-    WatchingCamera(const WatchingCamera&) = delete;
-    WatchingCamera& operator=(const WatchingCamera&) = delete;
-
-    [[nodiscard]] cube::app::DirectScan& scan() const { return camera_; }
-
-private:
-    cube::app::DirectScan& camera_;
-};
-
-void collect(QQuickItem* item, const QString& name, std::vector<QQuickItem*>& found) {
-    if (item->objectName() == name) {
-        found.push_back(item);
-    }
-    for (QQuickItem* child : item->childItems()) {
-        collect(child, name, found);
-    }
-}
+using cube::test::frame_of_side;
+using cube::test::WatchingCamera;
 
 class Screen {
 public:
@@ -101,9 +70,7 @@ public:
     }
 
     [[nodiscard]] std::vector<QQuickItem*> all(const char* name) const {
-        std::vector<QQuickItem*> found;
-        collect(item_.get(), QString::fromLatin1(name), found);
-        return found;
+        return cube::test::items_named(item_.get(), name);
     }
     [[nodiscard]] QQuickItem* one(const char* name) const {
         const std::vector<QQuickItem*> found = all(name);
