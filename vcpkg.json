@@ -29,7 +29,6 @@
         { "name": "win32ui", "platform": "windows & !uwp" }
       ]
     },
-    "onnxruntime",
     "bgfx"
   ],
   "default-features": [],

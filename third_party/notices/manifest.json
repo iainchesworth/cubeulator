@@ -196,22 +196,6 @@
   },
   "components": [
     {
-      "id": "mediapipe-palm-detection",
-      "name": "MediaPipe palm detection model (int8 ONNX, via the OpenCV Zoo)",
-      "version": "2023feb",
-      "license": "Apache-2.0",
-      "copyright": "The MediaPipe authors (Google LLC); ONNX conversion and int8 quantisation by the OpenCV Zoo contributors. The repository does not record the copyright holder; assets/models/palm_detection_mediapipe_LICENSE.txt is the unfilled Apache-2.0 template.",
-      "homepage": "https://github.com/opencv/opencv_zoo/tree/main/models/palm_detection_mediapipe",
-      "kind": "model",
-      "always": true,
-      "files": [
-        "assets/models/palm_detection_mediapipe_2023feb_int8.onnx",
-        "assets/models/palm_detection_mediapipe_LICENSE.txt"
-      ],
-      "licenseFile": "assets/models/palm_detection_mediapipe_LICENSE.txt",
-      "notes": "Embedded as a Qt resource (:/models/). Removed with onnxruntime by recovery plan R6, unless hand detection survives it."
-    },
-    {
       "id": "lucide-icons",
       "name": "Lucide icon shapes (redrawn in Icon.qml)",
       "version": "",
@@ -310,9 +294,7 @@
     "_comment": "vcpkg ports whose own manifest says license:null (or omits it). Each was read against the port's installed share/<port>/copyright.",
     "opencv4": "Apache-2.0",
     "quirc": "ISC",
-    "liblzma": "0BSD",
-    "optional-lite": "BSL-1.0",
-    "safeint": "MIT"
+    "liblzma": "0BSD"
   },
   "deployedFiles": {
     "_comment": [

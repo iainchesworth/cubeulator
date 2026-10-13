@@ -18,18 +18,7 @@
 | `SettingsState.qml` | 44 | System | none: needs a string |
 | `SettingsState.qml` | 45 | Light | `settings.theme.light` |
 | `SettingsState.qml` | 46 | Dark | `settings.theme.dark` |
-| `SettingsState.qml` | 63 | Auto | none: needs a string |
-| `SettingsState.qml` | 66 | D3D11 | none: needs a string |
-| `SettingsState.qml` | 67 | D3D12 | none: needs a string |
-| `SettingsState.qml` | 68 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 69 | GL | none: needs a string |
-| `SettingsState.qml` | 72 | Metal | none: needs a string |
-| `SettingsState.qml` | 73 | GL | none: needs a string |
-| `SettingsState.qml` | 76 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 77 | GL | none: needs a string |
-| `SettingsState.qml` | 80 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 81 | GLES | none: needs a string |
-| `SettingsState.qml` | 84 | Metal | none: needs a string |
+| `SettingsState.qml` | 62 | Auto | none: needs a string |
 | `SettingsState.qml` | 16 | Physically-Based Realism | none: needs a string |
 | `SettingsState.qml` | 16 | Instructional Glow | none: needs a string |
 | `SettingsState.qml` | 16 | Borderlands Cel-Shading | none: needs a string |
@@ -52,8 +41,6 @@
 | `DirectScanScreen.qml` | 163 | Recording this scan to  | none: needs a string |
 | `DirectScanScreen.qml` | 260 | Cancel | `common.cancel` |
 | `DirectScanScreen.qml` | 266 | Start over | `scan.startOver` |
-| `controllers/settings_model.cpp` | 20 | Hand-detection model not found on this device. | none: needs a string |
-| `controllers/settings_model.cpp` | 22 | No AI inference hardware detected. | none: needs a string |
 
 ### solve lane (feature/solve-guidance)
 

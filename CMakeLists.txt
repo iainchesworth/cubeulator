@@ -69,7 +69,6 @@ include(CompilerWarnings)
 include(Sanitizers)
 include(Coverage)
 include(MobileDependencies)
-include(VisionAssets)
 
 cube_configure_mobile_dependencies()
 

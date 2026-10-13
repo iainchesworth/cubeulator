@@ -134,15 +134,6 @@
         " | after the move %1 (%2 off)",
         " | turned instead: %1"
       ]
-    },
-    {
-      "file": "src/app/qt/controllers/settings_model.cpp",
-      "owner": "scan lane (feature/direct-scan)",
-      "reason": "handDetectionUnavailableReason: the setting dies with ScanSession. Until then, expose a code (model-missing, no-provider) and word it in QML.",
-      "literals": [
-        "Hand-detection model not found on this device.",
-        "No AI inference hardware detected."
-      ]
     }
   ]
 }

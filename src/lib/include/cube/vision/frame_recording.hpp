@@ -1,14 +1,12 @@
 #pragma once
 
-// On-disk format of a CUBE_VISION_RECORD_DIR analysis-pass recording: the
-// exact (already downscaled) frames the vision detectors ran on, one JPEG
-// per pass, plus an append-only index.csv of per-pass metadata. The
-// recorder lives on the app's analysis worker (scan_session.cpp) and the
-// replay consumer is the hidden [.track-replay] harness in
-// tests/unit/frame_debug_test.cpp - they compile into different binaries,
-// so the naming and CSV schema live here, in one place, where neither side
-// can drift from the other (the [.frame-debug] harness's hand-replicated
-// mask constants show how fragile "keep in sync by comment" is).
+// On-disk format of a scan recording (docs/recording-format.md): the exact
+// (already downscaled) frames the reader ran on, one JPEG per pass, plus
+// an append-only index.csv of per-pass metadata. The recorder lives in the
+// app (DirectScan, under CUBE_SCAN_RECORD_DIR) and the replay consumer is
+// `cube_scan` - they compile into different binaries, so the naming and
+// CSV schema live here, in one place, where neither side can drift from
+// the other.
 //
 // Header-only and Qt/OpenCV-free on purpose: it is pure naming/parsing, so
 // the Qt-free cube::lib test binary and the Qt app can both use it without
@@ -41,9 +39,8 @@ inline constexpr std::string_view kIndexCsvName = "index.csv";
 inline constexpr std::string_view kIndexCsvHeader = "pass,t_ms,w,h,full_w,full_h";
 
 // One index.csv row. w/h are the recorded (analysis-scale) frame size;
-// full_w/full_h are the original camera frame size, kept because analysis
-// geometry is scaled back to full-frame pixels in the live pipeline and a
-// replay needs the same scale factor to reproduce it. t_ms is the
+// full_w/full_h are the original camera frame size, kept so a replay can
+// recover the scale factor the live path used. t_ms is the
 // TimedFrame mailbox timestamp (steady_clock ms - only differences are
 // meaningful, see interfaces/camera.hpp).
 struct RecordedFrameInfo {

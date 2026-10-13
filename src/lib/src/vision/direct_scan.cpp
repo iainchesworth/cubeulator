@@ -3,7 +3,6 @@
 #include <cube/model/facelet.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
-#include <cube/vision/temporal_fusion.hpp>
 
 #include <opencv2/imgproc.hpp>
 

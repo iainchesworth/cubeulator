@@ -1,7 +1,7 @@
 // The recording format (cube/vision/frame_recording.hpp) is the contract
 // between two things that never run in the same process: the app's
-// CUBE_VISION_RECORD_DIR recorder (scan_session.cpp) and the offline
-// [.track-replay] harness (frame_debug_test.cpp). These tests pin the
+// CUBE_SCAN_RECORD_DIR recorder (DirectScan) and the offline `cube_scan`
+// replay. These tests pin the
 // format itself - filename ring behavior and index.csv parsing, including
 // the malformed inputs a recording interrupted mid-write produces - plus
 // one end-to-end round trip through a synthetic on-disk recording, so a
