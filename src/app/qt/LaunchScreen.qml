@@ -41,13 +41,13 @@ Rectangle {
             AppButton {
                 width: parent.width; height: 46
                 variant: "primary"; block: true
-                text: "Start scan"; trailingIcon: "chevron-right"
+                objectName: "launch.startScan"; text: "Start scan"; trailingIcon: "chevron-right"
                 onClicked: AppState.beginScan()
             }
             AppButton {
                 width: parent.width; height: 44
                 variant: "secondary"; block: true
-                text: "Solve history"; trailingIcon: "chevron-right"
+                objectName: "launch.solveHistory"; text: "Solve history"; trailingIcon: "chevron-right"
             }
             Rectangle { width: parent.width; height: 1; color: Theme.divider }
             Item {
@@ -56,13 +56,13 @@ Rectangle {
                 AppButton {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    variant: "ghost"; text: "English"; leadingIcon: "globe"
+                    objectName: "launch.language"; variant: "ghost"; text: "English"; leadingIcon: "globe"
                     onClicked: AppState.openSettings()
                 }
                 AppButton {
                     anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    variant: "ghost"; text: "Settings"; leadingIcon: "menu"
+                    objectName: "launch.settings"; variant: "ghost"; text: "Settings"; leadingIcon: "menu"
                     onClicked: AppState.openSettings()
                 }
             }
@@ -127,10 +127,10 @@ Rectangle {
                     topPadding: Theme.space3
                     AppButton {
                         height: 46; variant: "primary"
-                        text: "Start scan"; trailingIcon: "chevron-right"
+                        objectName: "launch.startScan"; text: "Start scan"; trailingIcon: "chevron-right"
                         onClicked: AppState.beginScan()
                     }
-                    AppButton { height: 46; variant: "secondary"; text: "Solve history" }
+                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: "Solve history" }
                 }
             }
 
@@ -139,8 +139,8 @@ Rectangle {
                 anchors.bottom: parent.bottom
                 anchors.margins: leftPane.pad
                 spacing: Theme.space6
-                AppButton { variant: "ghost"; text: "English"; leadingIcon: "globe"; onClicked: AppState.openSettings() }
-                AppButton { variant: "ghost"; text: "Settings"; leadingIcon: "menu"; onClicked: AppState.openSettings() }
+                AppButton { objectName: "launch.language"; variant: "ghost"; text: "English"; leadingIcon: "globe"; onClicked: AppState.openSettings() }
+                AppButton { objectName: "launch.settings"; variant: "ghost"; text: "Settings"; leadingIcon: "menu"; onClicked: AppState.openSettings() }
             }
         }
 

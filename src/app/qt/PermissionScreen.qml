@@ -72,18 +72,19 @@ Rectangle {
             spacing: Theme.space2
             AppButton {
                 width: parent.width; height: 46; variant: "primary"; block: true
+                objectName: "permission.enable"
                 text: root.denied ? "Try again" : "Enable camera"
                 onClicked: CameraPermission.request()
             }
             AppButton {
                 visible: root.denied
                 width: parent.width; height: 40; variant: "ghost"
-                text: "Open Settings"
+                objectName: "permission.openSettings"; text: "Open Settings"
                 onClicked: CameraPermission.openSettings()
             }
             AppButton {
                 width: parent.width; height: 40; variant: "ghost"
-                text: "Not now"
+                objectName: "permission.notNow"; text: "Not now"
                 onClicked: AppState.goLaunch()
             }
         }
@@ -116,11 +117,12 @@ Rectangle {
                 topPadding: Theme.space3
                 AppButton {
                     height: 46; variant: "primary"
-                    text: root.denied ? "Try again" : "Enable camera"
+                    objectName: "permission.enable"
+                text: root.denied ? "Try again" : "Enable camera"
                     onClicked: CameraPermission.request()
                 }
-                AppButton { visible: root.denied; height: 46; variant: "ghost"; text: "Open Settings"; onClicked: CameraPermission.openSettings() }
-                AppButton { height: 46; variant: "secondary"; text: "Not now"; onClicked: AppState.goLaunch() }
+                AppButton { visible: root.denied; height: 46; variant: "ghost"; objectName: "permission.openSettings"; text: "Open Settings"; onClicked: CameraPermission.openSettings() }
+                AppButton { height: 46; variant: "secondary"; objectName: "permission.notNow"; text: "Not now"; onClicked: AppState.goLaunch() }
             }
         }
 

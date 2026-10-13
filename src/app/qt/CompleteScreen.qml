@@ -84,8 +84,8 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; text: "Review solution" }
-            AppButton { width: parent.width; height: 44; variant: "secondary"; block: true; text: "Scan another"; onClicked: AppState.scanAnother() }
+            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; objectName: "complete.review"; text: "Review solution" }
+            AppButton { width: parent.width; height: 44; variant: "secondary"; block: true; objectName: "complete.scanAnother"; text: "Scan another"; onClicked: AppState.scanAnother() }
         }
     }
 
@@ -153,8 +153,8 @@ Rectangle {
 
             Row {
                 spacing: Theme.space3
-                AppButton { height: 48; variant: "primary"; text: "Review solution" }
-                AppButton { height: 48; variant: "secondary"; text: "Scan another"; onClicked: AppState.scanAnother() }
+                AppButton { height: 48; variant: "primary"; objectName: "complete.review"; text: "Review solution" }
+                AppButton { height: 48; variant: "secondary"; objectName: "complete.scanAnother"; text: "Scan another"; onClicked: AppState.scanAnother() }
             }
         }
     }

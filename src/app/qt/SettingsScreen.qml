@@ -24,6 +24,7 @@ Rectangle {
         Repeater {
             model: chipRoot.options
             delegate: AppButton {
+                objectName: chipRoot.objectName !== "" ? chipRoot.objectName + "." + index : ""
                 text: modelData
                 variant: index === chipRoot.currentIndex ? "primary" : "secondary"
                 onClicked: chipRoot.selected(index)
@@ -81,12 +82,13 @@ Rectangle {
                 }
                 ChipRow {
                     visible: CameraController.devices.length > 0
+                    objectName: "settings.camera"
                     options: CameraController.devices.map(function (d) { return d.label; })
                     currentIndex: CameraController.devices.findIndex(function (d) { return d.id === CameraController.selectedDeviceId; })
                     onSelected: (index) => CameraController.selectDevice(CameraController.devices[index].id)
                 }
                 AppButton {
-                    variant: "ghost"; leadingIcon: "refresh"; text: "Refresh"
+                    variant: "ghost"; objectName: "settings.refreshCameras"; leadingIcon: "refresh"; text: "Refresh"
                     onClicked: CameraController.refreshDevices()
                 }
             }
@@ -112,7 +114,7 @@ Rectangle {
                 }
                 AppButton {
                     visible: !AppState.cameraGranted
-                    variant: "secondary"; text: "Grant camera access"
+                    objectName: "settings.grantCamera"; variant: "secondary"; text: "Grant camera access"
                     onClicked: AppState.requestPermission()
                 }
             }
@@ -124,6 +126,7 @@ Rectangle {
             SectionLabel { text: "SCANNING" }
             Toggle {
                 width: parent.width
+                objectName: "settings.handDetection"
                 checked: ScanSession.handDetectionEnabled
                 label: "Detect hands with AI"
                 enabled: SettingsModel.handDetectionAvailable
@@ -139,6 +142,7 @@ Rectangle {
             }
             Toggle {
                 width: parent.width
+                objectName: "settings.autoAdvance"
                 checked: ScanSession.autoAdvance
                 label: "Auto-advance between faces"
                 onToggled: ScanSession.autoAdvance = !ScanSession.autoAdvance
@@ -150,6 +154,7 @@ Rectangle {
             spacing: Theme.space2
             SectionLabel { text: "APPEARANCE" }
             ChipRow {
+                objectName: "settings.theme"
                 options: SettingsState.themeModes.map(function (m) { return m.label; })
                 currentIndex: SettingsState.themeModes.findIndex(function (m) { return m.key === SettingsState.themeMode; })
                 onSelected: (index) => SettingsState.themeMode = SettingsState.themeModes[index].key
@@ -161,6 +166,7 @@ Rectangle {
             spacing: Theme.space2
             SectionLabel { text: "LANGUAGE" }
             ChipRow {
+                objectName: "settings.language"
                 options: SettingsState.languages
                 currentIndex: SettingsState.languageIndex
                 onSelected: (index) => SettingsState.languageIndex = index
@@ -178,6 +184,7 @@ Rectangle {
                 width: parent.width; wrapMode: Text.WordWrap
             }
             ChipRow {
+                objectName: "settings.cubeStyle"
                 options: SettingsState.shaderStyles
                 currentIndex: SettingsState.shaderStyleIndex
                 onSelected: (index) => SettingsState.shaderStyleIndex = index
@@ -189,11 +196,13 @@ Rectangle {
             spacing: Theme.space3
             SectionLabel { text: "CUBE MOTION" }
             Toggle {
+                objectName: "settings.cubeAutoRotate"
                 checked: SettingsState.cubeAutoRotate
                 label: "Auto-rotate when idle"
                 onToggled: SettingsState.cubeAutoRotate = !SettingsState.cubeAutoRotate
             }
             ChipRow {
+                objectName: "settings.rotateSpeed"
                 options: SettingsState.rotateSpeeds
                 currentIndex: SettingsState.rotateSpeedIndex
                 onSelected: (index) => SettingsState.rotateSpeedIndex = index
@@ -216,6 +225,7 @@ Rectangle {
                 width: parent.width; wrapMode: Text.WordWrap
             }
             ChipRow {
+                objectName: "settings.graphicsBackend"
                 options: SettingsState.availableGraphicsBackends.map(function (b) { return b.label; })
                 currentIndex: SettingsState.availableGraphicsBackends.findIndex(function (b) { return b.key === SettingsState.graphicsBackend; })
                 onSelected: (index) => SettingsState.graphicsBackend = SettingsState.availableGraphicsBackends[index].key
@@ -234,6 +244,7 @@ Rectangle {
             spacing: Theme.space3
             SectionLabel { text: "DEVELOPER" }
             Toggle {
+                objectName: "settings.statsForNerds"
                 checked: SettingsState.statsForNerds
                 label: "Stats for nerds (FPS, render backend)"
                 onToggled: SettingsState.statsForNerds = !SettingsState.statsForNerds
@@ -251,7 +262,7 @@ Rectangle {
         Row {
             width: parent.width
             spacing: Theme.space2
-            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
+            AppButton { variant: "ghost"; objectName: "settings.back"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
         }
         Text { text: "Settings"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 28; color: Theme.ink }
 
@@ -275,7 +286,7 @@ Rectangle {
             padding: Theme.space8 + Theme.space2
             spacing: Theme.space4
 
-            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
+            AppButton { variant: "ghost"; objectName: "settings.back"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
             Text { text: "Settings"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 36; color: Theme.ink }
 
             Flickable {
@@ -310,6 +321,7 @@ Rectangle {
                 AppButton {
                     anchors.horizontalCenter: parent.horizontalCenter
                     variant: "secondary"
+                    objectName: "settings.testTurn"
                     text: "Test turn"
                     onClicked: {
                         var axes = ["x", "y", "z"];
