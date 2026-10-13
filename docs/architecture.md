@@ -4,14 +4,13 @@
 
 ```
 src/
-  lib/            cube:: — GUI-free core (solver, vision, render, i18n)
+  lib/            cube:: — GUI-free core (solver, vision, i18n)
   app/
     qt/            Qt 6 Quick/QML desktop shell
     platform/       one directory per OS: its implementations of each
                     interfaces/ header, and the platform.cmake that selects them
-    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp,
+    interfaces/     camera.hpp, inference_env.hpp, paths.hpp,
                     platform_info.hpp, crash_handler.hpp
-  render/          bgfx setup and the technical-drawing render pipeline
 tests/
   unit/
   integration/
@@ -53,7 +52,10 @@ which keeps every solve bounded to seconds for interactive mobile use (see
 `src/lib/src/solver/`). The stages' moves are then tidied in one linear pass,
 so no two neighbouring moves turn the same side - including across a stage
 boundary, where a stage can end up with no moves at all
-(`merge_adjacent_moves`). `cube::vision` runs a full OpenCV capture-to-state
+(`merge_adjacent_moves`). That is `SolveMethod::Beginner`, the default; two
+shorter methods sit beside it behind the same entry point - `Intermediate`
+(CFOP, about 52 moves) and `Advanced` (Kociemba's two-phase search, about 20) -
+described, with their measurements, in [Solve methods](solver-methods.md). `cube::vision` runs a full OpenCV capture-to-state
 pipeline - a RANSAC-style lattice fit for grid detection (tolerant of
 uneven lighting, background clutter, and a minority of missed/occluded
 cells, not just a clean dead-on shot), colour classification,
@@ -67,11 +69,17 @@ The scan controller (`src/app/qt/controllers/direct_scan.hpp`) reads the
 cube's sides with `cube::vision::read_side`, and once six sides make exactly
 one valid cube hands a `cube::solver::Cube` to
 `src/app/qt/solve_controller.hpp` (`solveCube`), which solves it on a worker
-thread. A scan that does not yet make a valid cube is never solved: the scan
+thread. Which of the three methods it uses is `SolveController.method`,
+chosen on the solve screen and in settings (`SolveMethodPicker.qml`) and
+kept by `SettingsState.solveMethod`; changing it mid-solve solves on from
+the cube as it stands, off the UI thread, and keeps the hold the camera has
+seen (`solutionContinuesCube`). The screens word each stage by its
+`cube::solver::Stage` value, since the methods have different stages. A scan
+that does not yet make a valid cube is never solved: the scan
 screen keeps asking for the sides again. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
 the solver's actual output, with a hidden-face badge for moves on faces
-this fixed 3-face iso view doesn't show. `render` (bgfx) and `i18n` remain
-stub targets that compile and link but contain no real logic.
+this fixed 3-face iso view doesn't show. `i18n` remains a stub target that
+compiles and links but contains no real logic.
 
 Planned, in order:
 
@@ -81,16 +89,26 @@ Planned, in order:
 2. Real (not snap/no-op) `CubeView.qml` move animation, now that the
    separate fully-rendered 3D cube work has landed - it already has a
    single seam (`animateMove()`) for this to plug into.
-3. bgfx technical-drawing render pipeline, if the QML Canvas approach turns
-   out not to be sufficient on its own.
-4. i18n locale resource loading.
+3. i18n locale resource loading.
 
-The app shell's own 3D cube (`src/app/qt/Cube3DView.qml`, shown on the launch
-screen and in Settings) and its three render styles — Physically-Based
-Realism, Instructional Glow, Borderlands Cel-Shading — are implemented
-entirely in Qt Quick3D, not `src/render/`'s bgfx pipeline. Quick3D's own
-`CustomMaterial`/`Effect`/`ExtendedSceneEnvironment` extensibility covered all
-three (hard-banded cel shading, inverted-hull ink outlines via a front-face-
-culled duplicate mesh, and a halftone/vignette post-processing pass), so
-the bgfx scope above is untouched and still available for its own
-progress-overlay/step-animation work.
+## GPU rendering
+
+There is one renderer, and it is Qt's. The app shell's own 3D cube
+(`src/app/qt/Cube3DView.qml`, shown on the launch screen and in Settings) and
+its three render styles — Physically-Based Realism, Instructional Glow,
+Borderlands Cel-Shading — are implemented entirely in Qt Quick3D. Quick3D's
+own `CustomMaterial`/`Effect`/`ExtendedSceneEnvironment` extensibility covered
+all three (hard-banded cel shading, inverted-hull ink outlines via a front-face-
+culled duplicate mesh, and a halftone/vignette post-processing pass); the flat
+technical-drawing cube is the QML Canvas in `CubeView.qml`. Which graphics
+API runs underneath (Direct3D 11/12, Vulkan, OpenGL, Metal) is Qt's RHI
+choice, surfaced through `platform_info`.
+
+The progress overlay and step animation that were once pencilled in for a
+separate bgfx pipeline are UI animation, which belongs in QML (the seam for
+move animation is `animateMove()`). bgfx itself was a declared vcpkg dependency that nothing
+linked, behind a stub target with no rendering code; it was removed so that
+every CI leg, including the mobile ones, stops building seven ports for it.
+If custom GPU drawing is ever needed inside the Qt Quick scene, the supported
+route is `QQuickRhiItem` (Qt Quick, in the Qt 6.12 install), which draws with
+Qt's own RHI instead of bringing a second graphics abstraction and swap chain.

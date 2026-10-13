@@ -25,7 +25,6 @@ set(CUBEULATOR_PLATFORM_NOTICES_DIR "share/doc/cubeulator")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/linux/camera_linux.cpp
-    platform/linux/gpu_surface_linux.cpp
     platform/linux/inference_env_linux.cpp
     platform/linux/paths_linux.cpp
     platform/linux/platform_info_linux.cpp

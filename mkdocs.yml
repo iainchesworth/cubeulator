@@ -54,6 +54,7 @@ nav:
   - Profiling: profiling.md
   - Translations: i18n.md
   - Architecture: architecture.md
+  - Solve methods: solver-methods.md
   - Platform isolation: platform-isolation.md
   - Vision pipeline: vision-pipeline.md
   - Dependency strategy: dependency-strategy.md

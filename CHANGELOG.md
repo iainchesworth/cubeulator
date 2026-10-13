@@ -28,6 +28,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
   reached from its fragment (`packaging/<name>/`), so no shared file tests the
   OS ([docs/platform-isolation.md](docs/platform-isolation.md)).
 
+### Removed
+
+- bgfx, and everything that existed only for it. It was declared in
+  `vcpkg.json` but nothing linked it: the `cube::gpu_render` target
+  (`src/render`) was one empty function, and the cube is drawn by Qt Quick 3D
+  and the QML Canvas. Gone with it: the lib-side `cube::render` stub, the
+  `gpu_surface` platform interface and its five per-OS implementations, and the
+  `gpu_surface_unavailable` / `shader_compile_failed` error codes. vcpkg no
+  longer builds seven ports (bgfx, libsquish, lodepng, mgnlibs, miniz, stb,
+  tinyexr) on any leg, and `find_package(bgfx)` is no longer a configure-time
+  requirement. See [docs/architecture.md](docs/architecture.md#gpu-rendering).
+
 ### Added
 
 - Desktop packages for Windows (NSIS installer), macOS (`.dmg`) and Linux

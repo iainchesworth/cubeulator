@@ -1,6 +1,6 @@
 # ---------------------------------------------------------------------------
-# cube_platform - the platform-abstraction interfaces (camera, gpu_surface,
-# inference_env, paths, platform_info, crash_handler), each with exactly one
+# cube_platform - the platform-abstraction interfaces (camera, inference_env,
+# paths, platform_info, crash_handler), each with exactly one
 # compiled implementation per OS. Built unconditionally (not gated behind
 # CUBEULATOR_BUILD_APP) so the per-OS selection is exercised on every preset,
 # including headless CUBEULATOR_BUILD_APP=OFF builds. No Qt dependency: the
@@ -14,7 +14,6 @@
 add_library(cube_platform
     interfaces/camera.hpp
     interfaces/crash_handler.hpp
-    interfaces/gpu_surface.hpp
     interfaces/inference_env.hpp
     interfaces/paths.hpp
     interfaces/platform_info.hpp
@@ -154,6 +153,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/PermissionScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml
+            qt/SolveMethodPicker.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml
         SOURCES

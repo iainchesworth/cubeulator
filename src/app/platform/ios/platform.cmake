@@ -20,7 +20,6 @@ set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/ios/camera_ios.cpp
-    platform/ios/gpu_surface_ios.cpp
     platform/ios/inference_env_ios.cpp
     platform/ios/paths_ios.cpp
     platform/ios/platform_info_ios.cpp

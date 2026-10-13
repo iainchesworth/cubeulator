@@ -198,6 +198,12 @@ struct Outcome {
             return "yellow face";
         case cube::solver::Stage::Pll:
             return "last layer";
+        case cube::solver::Stage::F2l:
+            return "first two layers";
+        case cube::solver::Stage::Reduce:
+            return "reduce";
+        case cube::solver::Stage::Finish:
+            return "finish";
     }
     return "";
 }

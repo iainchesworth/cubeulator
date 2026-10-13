@@ -2,12 +2,12 @@
 
 Cubeulator vendors [vcpkg](https://github.com/microsoft/vcpkg) as a pinned git
 submodule (manifest mode, `vcpkg.json`) for its C++ dependencies: Catch2,
-fmt, OpenCV, ONNX Runtime, and bgfx. Qt is a separate prebuilt install
+fmt, OpenCV, and ONNX Runtime. Qt is a separate prebuilt install
 (aqtinstall / `jurplel/install-qt-action`), not a vcpkg dependency, for the
 same reasons CountdownSolver keeps it out of vcpkg (build size, Windows
 `MAX_PATH`).
 
-All five vcpkg dependencies - including OpenCV, ONNX Runtime, and bgfx - are
+All four vcpkg dependencies - including OpenCV and ONNX Runtime - are
 unscoped entries in `vcpkg.json`: they resolve the same way on every triplet
 vcpkg supports, `arm64-android`/`arm64-ios` included (`opencv4` pins an
 explicit feature list rather than taking the port's defaults, and `onnx`
@@ -33,6 +33,27 @@ The feature asks for `tracy[on-demand]` for the target and
 `tracy[cli-tools]` as a `host` dependency, so a cross-build for a phone
 builds the capture/export tools for the machine that will run them. See
 [Profiling](profiling.md).
+
+## bgfx: removed
+
+`bgfx` was declared in `vcpkg.json` from the bootstrap spec on, for a
+"technical-drawing render pipeline" that was never written: `src/render` held
+one function returning an empty `Result`, and nothing in the build linked
+bgfx. The cube is drawn by Qt Quick 3D (`Cube3DView.qml`) and the QML Canvas
+(`CubeView.qml`), and the graphics API underneath is Qt's RHI, so the
+dependency bought nothing and cost seven vcpkg ports (bgfx, libsquish,
+lodepng, mgnlibs, miniz, stb, tinyexr) on every CI leg, mobile included, plus
+a `find_package(bgfx REQUIRED)` that made every configure depend on it.
+
+It was removed together with its scaffolding: the `cube::gpu_render` and
+lib-side `cube::render` stubs, the `gpu_surface` platform interface (a native
+handle "resolved to a bgfx-compatible surface", with five per-OS
+implementations nothing called) and its two error codes. See
+[Architecture](architecture.md#gpu-rendering) for what draws what, and for
+`QQuickRhiItem`, the route to take if custom GPU drawing inside the Qt Quick
+scene is ever needed. If bgfx itself is wanted again it is one manifest line
+and a `find_package`; the evidence trail below for its mobile support is kept
+for that day.
 
 ## Earlier plan and why it changed
 
@@ -68,17 +89,17 @@ blocked by vcpkg on mobile triplets:
 
 So the original exclusion was a defensive call based on adjacent evidence,
 not something vcpkg itself enforces. The strategy is now to let vcpkg build
-all three uniformly across every platform and see what actually happens,
-rather than pre-committing to a heavier, platform-specific fallback before
-testing the simpler path.
+opencv4 and onnxruntime (bgfx was dropped, above) uniformly across every
+platform and see what actually happens, rather than pre-committing to a
+heavier, platform-specific fallback before testing the simpler path.
 
 ## What this means for CI
 
 `ci.yml`'s `android-build` and `ios-build` jobs are marked
 `continue-on-error: true`, matching CountdownSolver's own treatment of
 experimental matrix legs. They now attempt real vcpkg builds of
-opencv4/onnxruntime/bgfx for `arm64-android`/`arm64-ios`, which was
-previously untested territory for two of the three libraries on both
+opencv4/onnxruntime for `arm64-android`/`arm64-ios`, which was
+previously untested territory for both libraries on both
 platforms. Both jobs cap `VCPKG_MAX_CONCURRENCY` at 2, mirroring the desktop
 jobs' existing mitigation - onnxruntime alone already OOM'd runners at
 default parallelism once its build reached compilation.
@@ -141,11 +162,11 @@ versions where this is already fixed upstream.
 
 ## Fallback: native SDKs per platform
 
-If vcpkg's mobile build of any one of these three libraries turns out not to
+If vcpkg's mobile build of either of these libraries turns out not to
 actually work, the fallback is to consume that library's own official mobile
 distribution instead, wrapped as a CMake `IMPORTED` target behind the same
-interface name (`cube::opencv`, `cube::onnxruntime`, `cube::bgfx`) so
-vision/render code still never branches on how the dependency was acquired:
+interface name (`cube::opencv`, `cube::onnxruntime`) so
+vision code still never branches on how the dependency was acquired:
 
 - **OpenCV**: `opencv2.framework` (iOS, via `platforms/ios/build_framework.py`)
   / `OpenCV-android-sdk` (Android, `OpenCV_DIR=.../sdk/native/jni` +
@@ -155,10 +176,8 @@ vision/render code still never branches on how the dependency was acquired:
   `com.microsoft.onnxruntime:onnxruntime-android` `.aar`, or `build.sh
   --android` (Android) — both unpacked and `IMPORTED`-wrapped rather than
   pulled in via CocoaPods/Gradle directly.
-- **bgfx**: built via its own GENie build (`make ios-arm64`, `make
-  android-arm64`), not vcpkg or `bgfx.cmake`, then `IMPORTED`-wrapped.
 
-This fallback is not currently pursued for any of the three libraries -
-`cmake/MobileDependencies.cmake` sources all three via vcpkg on every
+This fallback is not currently pursued for either library -
+`cmake/MobileDependencies.cmake` sources both via vcpkg on every
 platform. It stays documented here so it isn't lost if CI shows one of them
 genuinely doesn't work out.

@@ -77,9 +77,18 @@ HeldCube::HeldCube(DirectScan& scan, SolveController& solve, QObject* parent)
     });
     connect(&solve_, &SolveController::stateChanged, this, &HeldCube::onSolveChanged);
     connect(&solve_, &SolveController::solutionChanged, this, [this]() {
-        // A new cube to solve starts from the hold the screen asks for.
         forget();
         matched_this_move_ = false;
+        if (solve_.solutionContinuesCube()) {
+            // The same cube, still in the same hands: the method changed and
+            // the way to solve it with it. How it is held has not, so the
+            // hold stands. What was counted towards was about the move the
+            // old solution expected, which is not this one.
+            move_announced_ = false;
+            setSight(Sight::None);
+            return;
+        }
+        // A new cube to solve starts from the hold the screen asks for.
         seen_ = false;
         hold_ = cube::solver::kStatedHold;
         emit holdChanged();

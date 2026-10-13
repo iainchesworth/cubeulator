@@ -43,9 +43,9 @@ How to read the evidence marks:
 3. **Qt is the only copyleft dependency that matters for the stores.** Every
    other shipped third-party component is permissive (MIT, BSD, Apache-2.0,
    Zlib, ISC, libpng, IJG), file-level weak copyleft (MPL-2.0: Eigen), or
-   notice-only [V: inventory below]. On Linux an OpenCV feature pulls in
-   vcpkg's GTK3 chain, which is LGPL (see
-   [section 2.4](#24-vcpkg-ports)); that is avoidable.
+   notice-only [V: inventory below]. Until the `highgui` and `gtk` OpenCV
+   features were dropped, vcpkg's LGPL GTK3 chain reached Linux through
+   them (see [section 2.4](#24-vcpkg-ports)); it no longer does.
 4. **Routes for the App Store**, in the order this paper recommends them (full
    analysis in [section 5](#5-options)): (a) do not put iOS on the first
    release, and take the decision with a quote in hand; (b) a Qt commercial
@@ -172,7 +172,7 @@ tools/tests only.
 
 | port | version | SPDX | ships | why / obligation |
 |---|---|---|---|---|
-| opencv4 | 4.12.0#5 | Apache-2.0 (port says `null`; the copyright file is Apache-2.0 plus SoftFloat and a CHI-table notice) | W M L A | Apache: licence copy; keep the bundled notices in its copyright file. Features: calib3d, core, fs, highgui, intrinsics, jpeg, png, quirc, thread, tiff, webp, + dshow/msmf/win32ui (W), v4l/gtk (L) |
+| opencv4 | 4.12.0#5 | Apache-2.0 (port says `null`; the copyright file is Apache-2.0 plus SoftFloat and a CHI-table notice) | W M L A | Apache: licence copy; keep the bundled notices in its copyright file. Features: calib3d, core, fs, intrinsics, jpeg, png, quirc, thread, tiff, webp, + dshow/msmf (W), v4l (L). `highgui`, `gtk` and `win32ui` are not requested (see the Linux-specific finding below) |
 | libjpeg-turbo | 3.2.0 | BSD-3-Clause (port); the file also carries the IJG licence | all | notice in docs |
 | libpng | 1.6.58 | libpng-2.0 | all | notice; no misrepresentation |
 | tiff | 4.7.2 | libtiff | all | notice |
@@ -189,20 +189,27 @@ tools/tests only.
 | boost-config, boost-mp11, boost-headers | 1.91.0 | BSL-1.0 | with onnxruntime | none for machine-executable object code (BSL-1.0 text) |
 | date, cxxopts, nlohmann-json, ms-gsl, safeint, optional-lite, wil (W only) | various | MIT / MIT / MIT / MIT / MIT / BSL-1.0 / MIT | with onnxruntime | notice |
 | fmt | 12.2.0 | MIT | all (`cube_lib`) | notice |
-| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **no - nothing links it** [V: the file API's link line of `cube_app` has no bgfx; `src/render` is a stub] | none until the render pipeline links it; the generator will start emitting it the day it does |
+| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **removed from the manifest** - it was declared but nothing linked it [V: the file API's link line of `cube_app` had no bgfx; `src/render` was a stub] | none |
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
 | vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
 
-**Linux-specific finding [V: port manifests].** `vcpkg.json` asks for
-`opencv4[highgui]` and, on Linux, `opencv4[gtk]`; the `gtk` feature makes vcpkg
-build `gtk3` and a chain of about 45 ports: GTK3, GLib, Pango, ATK, gdk-pixbuf,
+**Linux-specific finding [V: port manifests; vcpkg install plan] - resolved.**
+`vcpkg.json` used to ask for `opencv4[highgui]` and, on Linux,
+`opencv4[gtk]`; the `gtk` feature made vcpkg build `gtk3` and a chain of 55
+more ports (`vcpkg install --dry-run --triplet=x64-linux`: 98 ports planned,
+42 after the change, none added): GTK3, GLib, Pango, ATK, gdk-pixbuf,
 fribidi, gettext (all LGPL-2.0/2.1+), Cairo (LGPL-2.1 or MPL-1.1), D-Bus
-(AFL-2.1 or GPL-2.0+), plus the X11 libraries. The only code in the repository
-that included `highgui` was the vendored M3T, which R6 has removed; the app and
-`cube::lib` do not use it. **Recommendation: drop the `highgui` and `gtk` features
-from `vcpkg.json` now that M3T has gone** (not done yet). That deletes an LGPL
-toolkit and ~45 ports from every Linux package. The generator will list
-whatever the build does include on Linux; I could not run a Linux build here.
+(AFL-2.1 or GPL-2.0+), plus the X11 libraries. The only code that included
+`opencv2/highgui.hpp` was the vendored M3T, which R6 removed; the app,
+`cube::lib` and the tools include only `core`, `imgproc`, `imgcodecs`,
+`calib3d` and `videoio`. The `highgui`, `gtk` and `win32ui` features were
+therefore dropped from `vcpkg.json`. `win32ui` is only a `highgui` window
+backend, and the camera backends the app opens (DirectShow and Media
+Foundation on Windows, V4L on Linux) belong to `videoio`, which depends on
+`imgproc` and `imgcodecs` and not on `highgui` [V: OpenCV 4.12.0
+`modules/videoio/CMakeLists.txt` and `modules/highgui/CMakeLists.txt`]. The
+Linux plan is now the table above less the Windows-only `wil`: no GTK, GLib,
+Pango or X11 ports.
 
 ### 2.5 Per-platform differences that change obligations
 
@@ -210,7 +217,7 @@ whatever the build does include on Linux; I could not run a Linux build here.
 |---|---|
 | Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`, vcpkg applocal). On the 2026-10-13 build the deployment directory held 41 Qt modules and 45 Qt plugins and QML plugins, all attributed, **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which I could not source locally. The `windeployqt` call is not in my lane to change. |
 | macOS | Not built or verified here. Mac App Store adds Apple's terms (section 4). |
-| Linux | GTK3 chain via OpenCV (above). Qt is installed from `jurplel/install-qt-action` in CI; the DEB/RPM packages set `SHLIBDEPS`/`AUTOREQPROV`, so Qt may be a dependency of the package rather than part of it - then Qt's source/notice duty moves to the distribution that provides it [I][L]. |
+| Linux | No GTK3 chain: `opencv4[gtk]` is not requested (above). Qt is installed from `jurplel/install-qt-action` in CI; the DEB/RPM packages set `SHLIBDEPS`/`AUTOREQPROV`, so Qt may be a dependency of the package rather than part of it - then Qt's source/notice duty moves to the distribution that provides it [I][L]. |
 | Android | Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
 | iOS | The app does not build today. Qt for iOS is normally linked statically [I - **not stated** in the Qt iOS documentation pages I read; Qt's own tracker has an open request to allow dynamic builds, QTBUG-85974]. |
 
@@ -395,9 +402,11 @@ the plan needs is desktop and, later, Google Play.
 
 ### Option C - draw the cube without Quick 3D
 
-`src/render` is a bgfx stub; the cube is drawn today by `Cube3DView.qml`
-(Quick 3D) and `CubeView.qml` (Canvas 2D). Without Quick 3D the app would link
-only modules that have an LGPL option [V: section 2.2].
+The cube is drawn today by `Cube3DView.qml` (Quick 3D) and `CubeView.qml`
+(Canvas 2D). When this paper was written a bgfx stub under `src/render` was
+listed here as a third route; it held no rendering code and was removed (see
+the change log), so there is no second renderer to switch to. Without Quick 3D
+the app would link only modules that have an LGPL option [V: section 2.2].
 
 - **What it does for the licence:** the Qt set becomes available under
   LGPL-3.0 (or still GPL). Cubeulator's own GPL does not need to change.
@@ -417,9 +426,13 @@ only modules that have an LGPL option [V: section 2.2].
   Cubeulator's source being public makes the object-file duty easy to meet;
   the signing-key question does not go away.
 - **Rendering alternatives, none verified here:** keep `CubeView.qml` (2D
-  Canvas, already exists); a custom scene-graph item; the stub's bgfx via
-  `QQuickRenderControl` (bgfx is BSD-2-Clause [V]); or Qt 3D, which is not on
-  Qt's GPL-only list but whose maintenance status I did not check [I].
+  Canvas, already exists); a custom scene-graph item, of which
+  `QQuickRhiItem` is the public, supported one (in Qt Quick, which has an LGPL
+  option [V: section 2.2]; its header is in the Qt 6.12 install [V], and it
+  arrived in Qt 6.7 [I]); bgfx via `QQuickRenderControl` (bgfx is BSD-2-Clause
+  [V]; it would be added back from vcpkg, and needs its own device and swap
+  chain beside Qt's RHI [I]); or Qt 3D, which is not on Qt's GPL-only list but
+  whose maintenance status I did not check [I].
 - **Cost:** engineering. The solve lane owns `Cube3DView.qml` and the cel
   shaders, so this is theirs to size; it throws away the shader work.
 - **Consequence:** unblocks nothing on iOS by itself, and costs more than
@@ -490,9 +503,9 @@ conclusion.
   real command line, per platform and configuration), its QML imports, and the
   closure of each over vcpkg's `Depends` and Qt's SBOM edges. A vcpkg port
   that installs nothing outside `share/` is a build helper and is skipped.
-  Nothing is added by hand for a vcpkg port: the day `bgfx` is linked, it
-  appears; the day R6 removes onnxruntime, it and its dependency chain
-  disappear (M3T, GLEW and GLFW already have).
+  Nothing is added by hand for a vcpkg port: the day R6 removes onnxruntime,
+  it and its dependency chain disappear (M3T, GLEW, GLFW and bgfx already
+  have).
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists vendored code, models, icons and fonts, the licence
   elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
@@ -700,12 +713,14 @@ licence reference. This list exists so a reviewer knows what to look for.
    neither the holder nor the download URL for the model. Apache-2.0 asks
    for the licence and any NOTICE; supplying the real holder is a one-line
    fix once someone checks the OpenCV Zoo.
-6. **GTK3 and about 45 LGPL/X11 ports reach Linux** through
-   `opencv4[gtk]`, which exists to back `highgui`, which only the vendored M3T
-   used (section 2.4). M3T is gone; the two features are still asked for.
-7. **bgfx is a declared dependency nothing links**; it would otherwise have
+6. **GTK3 and 55 LGPL/X11 ports used to reach Linux** through
+   `opencv4[gtk]`, which existed to back `highgui`, which only the vendored
+   M3T used. Resolved by dropping the features once M3T was removed
+   (section 2.4).
+7. **bgfx was a declared dependency nothing linked**; it would otherwise have
    looked like a shipped component. The inventory distinguishes declared from
-   linked because the generator reads the link line.
+   linked because the generator reads the link line. The declaration has since
+   been removed from `vcpkg.json`.
 8. **The plan's "Qt Quick 3D reading" is a known unknown**, listed under "What
    is not known" - this paper resolves it for Quick 3D (holds) and Shader
    Tools (does not).
