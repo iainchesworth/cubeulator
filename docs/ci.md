@@ -44,6 +44,47 @@ names of the required checks: a run that skips legs would otherwise report
 "skipped" (which counts as a pass) under a required check's name on the
 branch's head commit.
 
+### Self-hosted runners
+
+The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
+load even a seconds-long required check queues for half an hour. Four jobs can
+therefore run on the organisation's self-hosted fleet instead (the
+`iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
+not this repo, decide who may use it):
+
+| Job | Workflow |
+| --- | --- |
+| `Validate gitflow branch name` | `branch-name-check.yml` |
+| `Scan dependency diff` | `dependency-review.yml` |
+| `clang-format` | `ci.yml` |
+| `Plan build legs` | `ci.yml` |
+
+They are routed by the `CONTROL_RUNNER_JSON` repository variable, a JSON array
+of runner labels. Unset, each job runs on the hosted image it names, exactly as
+before.
+
+```sh
+gh variable set CONTROL_RUNNER_JSON --body '["self-hosted","Linux","X64","shared"]'   # on
+gh variable delete CONTROL_RUNNER_JSON                                                # off
+```
+
+- **Deleting the variable is the kill switch.** It is read fresh on every run,
+  so a dead fleet can never lock it shut. Required checks queued on a dead
+  fleet do not fail on their own; delete the variable and re-run them.
+- **Fork pull requests never leave the hosted pool.** The `runs-on:`
+  expression pins them to the hosted image whatever the variable says, because
+  fork code must not run on a runner inside the owner's network. Any job added
+  to this routing must carry the whole expression, pin included.
+- **Keep `shared` in the label set.** It selects the general pool (on-prem VMs,
+  and AWS spot instances that start only when the on-prem pool is busy) and
+  excludes the `big` runners, which another repository's heavy builds depend
+  on.
+- **Not routed:** the build, coverage, clang-tidy and system-test legs (cold
+  vcpkg builds of ONNX Runtime and OpenCV took 87-131 minutes on hosted
+  runners in July, against the fleet's 12 GB of RAM and AWS's 90-minute
+  limit), and everything macOS, iOS and Android, which the fleet cannot
+  build. Moving one is a measured, separate change.
+
 ## Dependencies
 
 vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX

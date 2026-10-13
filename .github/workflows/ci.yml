@@ -33,7 +33,12 @@ jobs:
   clang-format:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-format' || 'clang-format' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
-    runs-on: ubuntu-26.04
+    # Routed by the CONTROL_RUNNER_JSON repository variable (a runner-label
+    # JSON array; unset means GitHub-hosted, deleting it switches back). A
+    # fork PR is pinned to the hosted image whatever the variable says: fork
+    # code must never reach a self-hosted runner. See docs/ci.md. Only the
+    # seconds-long jobs are routed; the build legs stay on hosted images.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -168,7 +173,10 @@ jobs:
   # is the one place the legs are defined.
   plan:
     name: Plan build legs
-    runs-on: ubuntu-26.04
+    # Routed like clang-format above. It is a few seconds of jq, but every
+    # build leg waits on it, so queueing it behind the hosted pool stalls the
+    # whole run.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
@@ -767,12 +775,19 @@ jobs:
       - name: Test
         run: ctest --preset linux-gcc-coverage
 
+      # --gcov-suspicious-hits-threshold: gcovr 8 stops with "SuspiciousHits ...
+      # cube.cpp:283 Got suspicious hit value" (gcc bug 68080's signature)
+      # for any line hit more than its default threshold. The solver's slow
+      # corpus tests run an -O0, -fno-inline build of Cube::at() ~5.8e10 times;
+      # those counters are correct (checked: 64-bit, none negative). 1e12
+      # keeps the detector for a counter that really has gone wrong.
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
           --gcov-executable gcov-15
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
+          --gcov-suspicious-hits-threshold 1000000000000
           --object-directory build/linux-gcc-coverage
           --print-summary --html-details build/coverage.html
           --fail-under-line 80 --fail-under-branch 80

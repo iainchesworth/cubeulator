@@ -67,6 +67,11 @@ add_dependencies(cube_system_tests cube_app)
 # never needs it: QtTest, which sends the input events. Where that matters
 # (Windows: without it the binary dies at start-up with
 # STATUS_DLL_NOT_FOUND) the platform's fragment copies it.
+#
+# The directory is also the one the third_party_notices_complete test scans for
+# what the app deploys. Qt6Test is not the app's, so the manifest lists it
+# under qt.testOnlyModules (third_party/notices/manifest.json); a further Qt
+# module copied here for a test needs a line there too.
 cube_platform_deploy_qt_library(cube_system_tests Qt6::Test)
 
 cube_deploy_sanitizer_runtime(cube_system_tests)
