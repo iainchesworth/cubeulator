@@ -64,6 +64,16 @@ target_link_libraries(cube_system_tests
 # same directory and runs off the same copy.
 add_dependencies(cube_system_tests cube_app)
 
+# What windeployqt does not copy for cube_app because the app never needs it:
+# QtTest, which sends the input events. Without it the binary dies at
+# start-up with STATUS_DLL_NOT_FOUND.
+if(WIN32)
+    add_custom_command(TARGET cube_system_tests POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+            "$<TARGET_FILE:Qt6::Test>" "$<TARGET_FILE_DIR:cube_system_tests>"
+        COMMENT "copying Qt6Test next to cube_system_tests")
+endif()
+
 cube_deploy_sanitizer_runtime(cube_system_tests)
 cube_deploy_vision_assets(cube_system_tests)
 
