@@ -51,6 +51,7 @@ nav:
   - Getting started: getting-started.md
   - Building & packaging: building.md
   - Testing & coverage: testing.md
+  - Profiling: profiling.md
   - Translations: i18n.md
   - Architecture: architecture.md
   - Platform isolation: platform-isolation.md

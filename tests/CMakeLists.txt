@@ -40,6 +40,7 @@ add_test(NAME platform_fragments_satisfy_contract
 add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
+    unit/profiling_test.cpp
     unit/model_test.cpp
     unit/grid_detection_test.cpp
     unit/session_palette_test.cpp
@@ -100,6 +101,12 @@ target_link_libraries(cube_unit_tests
         cube::sanitizers
         cube::coverage
         Catch2::Catch2WithMain)
+
+# profiling_test.cpp asks which cube/profiling.hpp variant CMake selected
+# (src/lib/CMakeLists.txt) and checks it against the option that drove the
+# choice, so a wrong directory on the include path cannot go unnoticed.
+set_source_files_properties(unit/profiling_test.cpp PROPERTIES
+    COMPILE_DEFINITIONS "CUBE_EXPECT_TRACY=$<BOOL:${CUBEULATOR_ENABLE_TRACY}>")
 
 # White-box include path for last_layer_test.cpp only: it includes
 # cube::lib's private last_layer.hpp directly, because the F2L-preservation

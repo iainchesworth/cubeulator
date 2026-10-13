@@ -9,6 +9,7 @@ Naming convention: `<os>-<compiler>-<config>`.
 | `windows-msvc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-coverage` | Debug + gcov instrumentation, 80% line/branch gate |
+| `{windows-msvc,linux-gcc,macos-clang}-profiling` | RelWithDebInfo + [Tracy](profiling.md) (`CUBEULATOR_ENABLE_TRACY=ON`, sanitizers off); not built by CI |
 | `macos-clang-{debug,release}` | CI builds+tests `release` only |
 | `android-clang-{debug,release}` | CI builds `release` only; builds the Qt/QML app via Qt for Android |
 | `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
@@ -70,6 +71,11 @@ were confirmed necessary against a real local Android build, not just CI.
   or ASan (real MSVC Debug); disabled automatically under clang-cl.
 - `CUBEULATOR_ENABLE_COVERAGE` (default `OFF`) — gcov instrumentation; only
   the `linux-gcc-coverage` preset turns this on.
+- `CUBEULATOR_ENABLE_TRACY` (default `OFF`) — Tracy profiler instrumentation
+  (`cmake/Tracy.cmake`). Adds the `profiling` vcpkg manifest feature, which
+  supplies the Tracy client and its command-line tools; off is a no-op that
+  needs none of it. The `*-profiling` presets turn it on. See
+  [Profiling](profiling.md).
 
 ## Packaging
 

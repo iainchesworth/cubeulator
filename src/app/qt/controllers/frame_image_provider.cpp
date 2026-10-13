@@ -1,5 +1,7 @@
 #include "controllers/frame_image_provider.hpp"
 
+#include <cube/profiling.hpp>
+
 #include <utility>
 
 namespace cube::app {
@@ -9,6 +11,7 @@ FrameImageProvider::FrameImageProvider(std::function<cv::Mat()> latest_frame)
 
 QImage FrameImageProvider::requestImage(const QString& /*id*/, QSize* size,
                                         const QSize& /*requestedSize*/) {
+    CUBE_ZONE_SCOPED_N("app.frame_image.request");
     const cv::Mat frame = latest_frame_();
     if (frame.empty()) {
         if (size) {
