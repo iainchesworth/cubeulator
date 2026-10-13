@@ -45,9 +45,9 @@ function(cube_import_onnxruntime)
     find_package(onnxruntime CONFIG REQUIRED)
 
     if(TARGET onnxruntime::onnxruntime)
-        add_library(cube::onnxruntime ALIAS onnxruntime::onnxruntime)
+        set(_cube_onnxruntime_target onnxruntime::onnxruntime)
     elseif(TARGET onnxruntime)
-        add_library(cube::onnxruntime ALIAS onnxruntime)
+        set(_cube_onnxruntime_target onnxruntime)
     else()
         message(FATAL_ERROR
             "find_package(onnxruntime) succeeded but neither "
@@ -55,6 +55,24 @@ function(cube_import_onnxruntime)
             "vcpkg port's exported target name has changed; update "
             "cube_import_onnxruntime() in cmake/MobileDependencies.cmake.")
     endif()
+
+    # The port installs its headers under include/onnxruntime/ and the code
+    # includes <onnxruntime_cxx_api.h> directly. On Windows the exported
+    # target carries that directory as an interface include dir; on Linux
+    # (and anywhere the static layout is used) it carries none, so the
+    # include is not found ("onnxruntime_cxx_api.h: No such file or
+    # directory" in corner_detector.cpp / hand_presence.cpp). Do not depend
+    # on the target to say where its own headers are.
+    find_path(CUBE_ONNXRUNTIME_INCLUDE_DIR
+        NAMES onnxruntime_cxx_api.h
+        PATH_SUFFIXES onnxruntime
+        REQUIRED)
+
+    add_library(cube_onnxruntime_interface INTERFACE)
+    target_link_libraries(cube_onnxruntime_interface INTERFACE ${_cube_onnxruntime_target})
+    target_include_directories(cube_onnxruntime_interface SYSTEM INTERFACE
+        "${CUBE_ONNXRUNTIME_INCLUDE_DIR}")
+    add_library(cube::onnxruntime ALIAS cube_onnxruntime_interface)
 endfunction()
 
 function(cube_import_bgfx)
