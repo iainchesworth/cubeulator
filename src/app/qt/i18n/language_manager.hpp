@@ -74,6 +74,8 @@ class LanguageManager : public QObject {
     Q_PROPERTY(QString selectedLanguage READ selectedLanguage NOTIFY currentLanguageChanged)
     // The language in force is written right to left (Hebrew, Arabic, Yiddish).
     Q_PROPERTY(bool rtl READ rtl NOTIFY currentLanguageChanged)
+    // The language in force, written in itself: "Deutsch". Data, never translated.
+    Q_PROPERTY(QString currentLanguageName READ currentLanguageName NOTIFY currentLanguageChanged)
 
 public:
     // `app` and `engine` must outlive this object. `translationBasename` names
@@ -91,6 +93,7 @@ public:
     [[nodiscard]] QString currentLanguage() const { return current_.code; }
     [[nodiscard]] QString selectedLanguage() const { return selected_; }
     [[nodiscard]] bool rtl() const { return current_.rtl; }
+    [[nodiscard]] QString currentLanguageName() const { return current_.name; }
 
     // One { code, name } per language of the set, English first, each name in
     // its own language and never translated. The pseudo-locale is never in it.
@@ -101,6 +104,11 @@ public:
     // Saves `code`, and switches. False, and nothing changed, if `code` is not
     // one of availableLanguages(). The pseudo-locale is refused.
     Q_INVOKABLE bool setLanguage(const QString& code);
+    // Switches to `code` without saving it, and accepts the pseudo-locale
+    // ("xx"), which no choice can. For the tests, the developer gallery and
+    // the screenshot tour; the person's choice, and what a restart reads, is
+    // left as it was. False for a code the app does not have.
+    Q_INVOKABLE bool preview(const QString& code);
     // Forgets the saved choice and follows the device again.
     Q_INVOKABLE void useSystemLanguage();
     // Whether a choice is saved (false: following the device).

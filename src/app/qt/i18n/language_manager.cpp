@@ -214,6 +214,23 @@ bool LanguageManager::setLanguage(const QString& code) {
     return true;
 }
 
+bool LanguageManager::preview(const QString& code) {
+    for (const LanguageInfo& l : languages_) {
+        if (l.pseudo && (l.code == code || l.file == code)) {
+            apply(l);
+            return true;
+        }
+    }
+    const QString canonical = canonicalCode(code, languages_);
+    const LanguageInfo* language = canonical.isEmpty() ? nullptr : find(languages_, canonical);
+    if (language == nullptr) {
+        qWarning("LanguageManager::preview: %s is not a language of this app", qUtf8Printable(code));
+        return false;
+    }
+    apply(*language);
+    return true;
+}
+
 void LanguageManager::useSystemLanguage() {
     {
         QSettings settings;

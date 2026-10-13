@@ -21,9 +21,9 @@ Rectangle {
     }
 
     readonly property var reassurances: [
-        "Frames are processed on-device, in real time.",
-        "Nothing is stored, uploaded, or shared.",
-        "You can revoke access any time in Settings."
+        qsTrId("permission.point1"),
+        qsTrId("permission.point2"),
+        qsTrId("permission.point3")
     ]
 
     Component {
@@ -48,9 +48,13 @@ Rectangle {
             color: "transparent"; border.width: 2; border.color: Theme.ink
             Icon { anchors.centerIn: parent; name: "camera"; width: 30; height: 30 }
         }
-        Text { text: "Camera access"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 25; color: Theme.ink }
         Text {
-            text: "Cubeulator reads your cube's colours through the camera to build the solve."
+            text: root.denied ? qsTrId("permission.refused.title") : qsTrId("permission.title")
+            font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 25; color: Theme.ink
+            width: parent.width; wrapMode: Text.WordWrap
+        }
+        Text {
+            text: root.denied ? qsTrId("permission.refused.body") : qsTrId("permission.body")
             font.family: Theme.fontHeading; font.pixelSize: 14; color: Theme.ink
             width: parent.width; wrapMode: Text.WordWrap
         }
@@ -72,18 +76,18 @@ Rectangle {
             spacing: Theme.space2
             AppButton {
                 width: parent.width; height: 46; variant: "primary"; block: true
-                text: root.denied ? "Try again" : "Enable camera"
+                text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
                 onClicked: CameraPermission.request()
             }
             AppButton {
                 visible: root.denied
                 width: parent.width; height: 40; variant: "ghost"
-                text: "Open Settings"
+                text: qsTrId("common.openDeviceSettings")
                 onClicked: CameraPermission.openSettings()
             }
             AppButton {
                 width: parent.width; height: 40; variant: "ghost"
-                text: "Not now"
+                text: qsTrId("permission.notNow")
                 onClicked: AppState.goLaunch()
             }
         }
@@ -105,9 +109,13 @@ Rectangle {
                 color: "transparent"; border.width: 2; border.color: Theme.ink
                 Icon { anchors.centerIn: parent; name: "camera"; width: 30; height: 30 }
             }
-            Text { text: "Camera access"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 32; color: Theme.ink }
             Text {
-                text: "Cubeulator reads your cube's colours through the camera to build the solve. Grant access to begin scanning."
+                text: root.denied ? qsTrId("permission.refused.title") : qsTrId("permission.title")
+                font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 32; color: Theme.ink
+                width: parent.width - parent.padding * 2; wrapMode: Text.WordWrap
+            }
+            Text {
+                text: root.denied ? qsTrId("permission.refused.body") : qsTrId("permission.body")
                 font.family: Theme.fontHeading; font.pixelSize: 15; color: Theme.ink
                 width: 380; wrapMode: Text.WordWrap
             }
@@ -116,11 +124,11 @@ Rectangle {
                 topPadding: Theme.space3
                 AppButton {
                     height: 46; variant: "primary"
-                    text: root.denied ? "Try again" : "Enable camera"
+                    text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
                     onClicked: CameraPermission.request()
                 }
-                AppButton { visible: root.denied; height: 46; variant: "ghost"; text: "Open Settings"; onClicked: CameraPermission.openSettings() }
-                AppButton { height: 46; variant: "secondary"; text: "Not now"; onClicked: AppState.goLaunch() }
+                AppButton { visible: root.denied; height: 46; variant: "ghost"; text: qsTrId("common.openDeviceSettings"); onClicked: CameraPermission.openSettings() }
+                AppButton { height: 46; variant: "secondary"; text: qsTrId("permission.notNow"); onClicked: AppState.goLaunch() }
             }
         }
 
@@ -129,7 +137,7 @@ Rectangle {
             height: parent.height
             color: Theme.surface
 
-            Rectangle { width: 2; height: parent.height; color: Theme.divider }
+            Rectangle { anchors.left: parent.left; width: 2; height: parent.height; color: Theme.divider }
 
             Column {
                 anchors.centerIn: parent

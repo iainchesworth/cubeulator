@@ -72,13 +72,15 @@ SOURCE_LANGUAGE_TAG = "en_GB"
 #   3. the whole wrapped in [ ], so that a string cut short loses its closing
 #      bracket and a string that never went through an id lookup stands out
 #      because it has neither.
-# Placeholders (%1, %L1, %n, %Ln) and markup are left alone: damaging one
-# would break the very string the fixture exists to test.
+# Placeholders (%1, %L1, %n, %Ln), markup and the product name are left alone:
+# damaging one would break the very string the fixture exists to test, and the
+# product name is never altered in a real translation either.
 
 _VOWELS = str.maketrans("aeiouAEIOU", "àéîõûÀÉÎÕÛ")
-_PROTECTED = re.compile(r"%L?\d+|%L?n|<[^>]*>")
+_PROTECTED = re.compile(r"%L?\d+|%L?n|<[^>]*>|Cubeulator")
 PAD_RATIO = 0.4
 PAD_CHAR = "~"
+PAD_WORD = 5
 
 
 def pseudo_localize(text: str) -> str:
@@ -89,12 +91,18 @@ def pseudo_localize(text: str) -> str:
     out = pieces[0].translate(_VOWELS)
     for hole, piece in zip(holes, pieces[1:], strict=True):
         out += hole + piece.translate(_VOWELS)
-    # Padding counts the visible length, not the placeholders or the markup.
-    visible = len("".join(pieces))
-    pad = max(2, round(visible * PAD_RATIO))
-    # A string of paragraphs is padded at the end of the last one: the line
-    # breaks it carries are the author's and are kept where they are.
-    return f"[{out} {PAD_CHAR * pad}]"
+    # 40% of the whole string. A string of paragraphs is padded at the end of
+    # the last one: the line breaks it carries are the author's and stay where
+    # they are.
+    pad = max(2, round(len(text) * PAD_RATIO))
+    # In words, so that the padding wraps as a translation would: one
+    # unbreakable run would overflow a box that real text fits.
+    words, left = [], pad
+    while left > 0:
+        n = min(PAD_WORD, left)
+        words.append(PAD_CHAR * n)
+        left -= n
+    return f"[{out} {' '.join(words)}]"
 
 
 # --- strings.json ------------------------------------------------------------

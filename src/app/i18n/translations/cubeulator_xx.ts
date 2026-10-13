@@ -6,14 +6,14 @@
     <message id="app.name">
         <source>Cubeulator</source>
         <extracomment>The product name. Never translated, never transliterated.</extracomment>
-        <translation>[Cûbéûlàtõr ~~~~]</translation>
+        <translation>[Cubeulator ~~~~]</translation>
     </message>
     <message id="app.tagline">
         <source>Scan. Solve.
 In your hands.</source>
         <extracomment>The headline on the home screen. Two lines. Short, confident. 'In your hands' means both 'you do the turning' and 'the cube is in your hands'; keep whichever sense reads naturally.</extracomment>
         <translation>[Scàn. Sõlvé.
-În yõûr hànds. ~~~~~~~~~~~]</translation>
+În yõûr hànds. ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="common.back">
         <source>Back</source>
@@ -73,12 +73,12 @@ In your hands.</source>
     <message id="common.openDeviceSettings">
         <source>Open device settings</source>
         <extracomment>Button. Opens the operating system's settings, outside the app.</extracomment>
-        <translation>[Õpén dévîcé séttîngs ~~~~~~~~]</translation>
+        <translation>[Õpén dévîcé séttîngs ~~~~~ ~~~]</translation>
     </message>
     <message id="common.enterByHand">
         <source>Enter colours by hand</source>
         <extracomment>Button. Opens the screen where the cube's colours are typed in instead of scanned.</extracomment>
-        <translation>[Éntér cõlõûrs by hànd ~~~~~~~~]</translation>
+        <translation>[Éntér cõlõûrs by hànd ~~~~~ ~~~]</translation>
     </message>
     <message id="common.scanAgain">
         <source>Scan again</source>
@@ -263,7 +263,7 @@ In your hands.</source>
     <message id="dir.seenFromFront">
         <source>as seen from the front</source>
         <extracomment>Added under a turn of the back side, because the person cannot see it.</extracomment>
-        <translation>[às séén frõm thé frõnt ~~~~~~~~~]</translation>
+        <translation>[às séén frõm thé frõnt ~~~~~ ~~~~]</translation>
     </message>
     <message id="amount.quarter">
         <source>Quarter turn</source>
@@ -278,92 +278,92 @@ In your hands.</source>
     <message id="turn.U1">
         <source>Turn the top a quarter turn to the left.</source>
         <extracomment>A whole instruction as one sentence. Read by screen readers and listed in Review the solution. 18 of these: six sides, three turns each.</extracomment>
-        <translation>[Tûrn thé tõp à qûàrtér tûrn tõ thé léft. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé tõp à qûàrtér tûrn tõ thé léft. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="turn.U3">
         <source>Turn the top a quarter turn to the right.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé tõp à qûàrtér tûrn tõ thé rîght. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé tõp à qûàrtér tûrn tõ thé rîght. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="turn.U2">
         <source>Turn the top a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé tõp à hàlf tûrn. ~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé tõp à hàlf tûrn. ~~~~~ ~~~~~]</translation>
     </message>
     <message id="turn.D1">
         <source>Turn the bottom a quarter turn to the right.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bõttõm à qûàrtér tûrn tõ thé rîght. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bõttõm à qûàrtér tûrn tõ thé rîght. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="turn.D3">
         <source>Turn the bottom a quarter turn to the left.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bõttõm à qûàrtér tûrn tõ thé léft. ~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bõttõm à qûàrtér tûrn tõ thé léft. ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="turn.D2">
         <source>Turn the bottom a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bõttõm à hàlf tûrn. ~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bõttõm à hàlf tûrn. ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="turn.R1">
         <source>Turn the right side a quarter turn upwards.</source>
         <extracomment>See turn.U1. Avoid any phrase that reads as the idiom 'right side up'.</extracomment>
-        <translation>[Tûrn thé rîght sîdé à qûàrtér tûrn ûpwàrds. ~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé rîght sîdé à qûàrtér tûrn ûpwàrds. ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="turn.R3">
         <source>Turn the right side a quarter turn downwards.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé rîght sîdé à qûàrtér tûrn dõwnwàrds. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé rîght sîdé à qûàrtér tûrn dõwnwàrds. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="turn.R2">
         <source>Turn the right side a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé rîght sîdé à hàlf tûrn. ~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé rîght sîdé à hàlf tûrn. ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="turn.L1">
         <source>Turn the left side a quarter turn downwards.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé léft sîdé à qûàrtér tûrn dõwnwàrds. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé léft sîdé à qûàrtér tûrn dõwnwàrds. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="turn.L3">
         <source>Turn the left side a quarter turn upwards.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé léft sîdé à qûàrtér tûrn ûpwàrds. ~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé léft sîdé à qûàrtér tûrn ûpwàrds. ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="turn.L2">
         <source>Turn the left side a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé léft sîdé à hàlf tûrn. ~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé léft sîdé à hàlf tûrn. ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="turn.F1">
         <source>Turn the front a quarter turn clockwise.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé frõnt à qûàrtér tûrn clõckwîsé. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé frõnt à qûàrtér tûrn clõckwîsé. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="turn.F3">
         <source>Turn the front a quarter turn anticlockwise.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé frõnt à qûàrtér tûrn àntîclõckwîsé. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé frõnt à qûàrtér tûrn àntîclõckwîsé. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="turn.F2">
         <source>Turn the front a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé frõnt à hàlf tûrn. ~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé frõnt à hàlf tûrn. ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="turn.B1">
         <source>Turn the back a quarter turn anticlockwise, as seen from the front.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bàck à qûàrtér tûrn àntîclõckwîsé, às séén frõm thé frõnt. ~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bàck à qûàrtér tûrn àntîclõckwîsé, às séén frõm thé frõnt. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="turn.B3">
         <source>Turn the back a quarter turn clockwise, as seen from the front.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bàck à qûàrtér tûrn clõckwîsé, às séén frõm thé frõnt. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bàck à qûàrtér tûrn clõckwîsé, às séén frõm thé frõnt. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="turn.B2">
         <source>Turn the back a half turn.</source>
         <extracomment>See turn.U1.</extracomment>
-        <translation>[Tûrn thé bàck à hàlf tûrn. ~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé bàck à hàlf tûrn. ~~~~~ ~~~~~]</translation>
     </message>
     <message id="stage.1.title">
         <source>White cross</source>
@@ -373,12 +373,12 @@ In your hands.</source>
     <message id="stage.1.what">
         <source>Put the four white edge pieces on the bottom, each lined up with the colour of its side.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation>[Pût thé fõûr whîté édgé pîécés õn thé bõttõm, éàch lînéd ûp wîth thé cõlõûr õf îts sîdé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Pût thé fõûr whîté édgé pîécés õn thé bõttõm, éàch lînéd ûp wîth thé cõlõûr õf îts sîdé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="stage.1.why">
         <source>Everything else is built on this cross.</source>
         <extracomment>Why this stage is done, for someone learning the method.</extracomment>
-        <translation>[Évérythîng élsé îs bûîlt õn thîs crõss. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Évérythîng élsé îs bûîlt õn thîs crõss. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="stage.2.title">
         <source>White corners</source>
@@ -388,12 +388,12 @@ In your hands.</source>
     <message id="stage.2.what">
         <source>Put the four white corners in place to finish the bottom layer.</source>
         <extracomment>What this stage does.</extracomment>
-        <translation>[Pût thé fõûr whîté cõrnérs în plàcé tõ fînîsh thé bõttõm làyér. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Pût thé fõûr whîté cõrnérs în plàcé tõ fînîsh thé bõttõm làyér. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="stage.2.why">
         <source>That is one whole layer solved, and it stays solved from here on.</source>
         <extracomment>Why.</extracomment>
-        <translation>[Thàt îs õné whõlé làyér sõlvéd, ànd ît stàys sõlvéd frõm héré õn. ~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thàt îs õné whõlé làyér sõlvéd, ànd ît stàys sõlvéd frõm héré õn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="stage.3.title">
         <source>Middle layer</source>
@@ -403,12 +403,12 @@ In your hands.</source>
     <message id="stage.3.what">
         <source>Put the four edge pieces of the middle layer in place.</source>
         <extracomment>What this stage does.</extracomment>
-        <translation>[Pût thé fõûr édgé pîécés õf thé mîddlé làyér în plàcé. ~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Pût thé fõûr édgé pîécés õf thé mîddlé làyér în plàcé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="stage.3.why">
         <source>Two layers are then solved. Only the top is left.</source>
         <extracomment>Why.</extracomment>
-        <translation>[Twõ làyérs àré thén sõlvéd. Õnly thé tõp îs léft. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Twõ làyérs àré thén sõlvéd. Õnly thé tõp îs léft. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="stage.4.title">
         <source>Yellow top</source>
@@ -418,32 +418,32 @@ In your hands.</source>
     <message id="stage.4.what">
         <source>Turn the top layer's pieces over until the whole top is yellow.</source>
         <extracomment>What this stage does.</extracomment>
-        <translation>[Tûrn thé tõp làyér's pîécés õvér ûntîl thé whõlé tõp îs yéllõw. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn thé tõp làyér's pîécés õvér ûntîl thé whõlé tõp îs yéllõw. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="stage.4.why">
         <source>The pieces are already in the top layer. This only turns them the right way up.</source>
         <extracomment>Why.</extracomment>
-        <translation>[Thé pîécés àré àlréàdy în thé tõp làyér. Thîs õnly tûrns thém thé rîght wày ûp. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thé pîécés àré àlréàdy în thé tõp làyér. Thîs õnly tûrns thém thé rîght wày ûp. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="stage.5.title">
         <source>Top layer in order</source>
         <extracomment>Name of the fifth stage. Cubers call it 'permuting the last layer'; do not use that phrase.</extracomment>
-        <translation>[Tõp làyér în õrdér ~~~~~~~]</translation>
+        <translation>[Tõp làyér în õrdér ~~~~~ ~~]</translation>
     </message>
     <message id="stage.5.what">
         <source>Move the top layer's pieces round to their own places.</source>
         <extracomment>What this stage does.</extracomment>
-        <translation>[Mõvé thé tõp làyér's pîécés rõûnd tõ théîr õwn plàcés. ~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Mõvé thé tõp làyér's pîécés rõûnd tõ théîr õwn plàcés. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="stage.5.why">
         <source>They are the right way up but in the wrong order. Put them in order and the cube is solved.</source>
         <extracomment>Why.</extracomment>
-        <translation>[Théy àré thé rîght wày ûp bût în thé wrõng õrdér. Pût thém în õrdér ànd thé cûbé îs sõlvéd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Théy àré thé rîght wày ûp bût în thé wrõng õrdér. Pût thém în õrdér ànd thé cûbé îs sõlvéd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
         <extracomment>One sentence under the headline on the home screen.</extracomment>
-        <translation>[Shõw yõûr cûbé tõ thé càmérà, thén fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Shõw yõûr cûbé tõ thé càmérà, thén fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="home.scan">
         <source>Scan a cube</source>
@@ -458,37 +458,37 @@ In your hands.</source>
     <message id="home.findingCamera">
         <source>Looking for a camera…</source>
         <extracomment>Shown briefly at start-up on a computer.</extracomment>
-        <translation>[Lõõkîng fõr à càmérà… ~~~~~~~~]</translation>
+        <translation>[Lõõkîng fõr à càmérà… ~~~~~ ~~~]</translation>
     </message>
     <message id="home.noCamera.title">
         <source>No camera found</source>
         <extracomment>Heading of a notice.</extracomment>
-        <translation>[Nõ càmérà fõûnd ~~~~~~]</translation>
+        <translation>[Nõ càmérà fõûnd ~~~~~ ~]</translation>
     </message>
     <message id="home.noCamera.body">
         <source>Plug one in and look again, or enter the colours by hand.</source>
         <extracomment>Body of the notice.</extracomment>
-        <translation>[Plûg õné în ànd lõõk àgàîn, õr éntér thé cõlõûrs by hànd. ~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Plûg õné în ànd lõõk àgàîn, õr éntér thé cõlõûrs by hànd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="home.unsupported.title">
         <source>Scanning is not ready on this device yet</source>
         <extracomment>Heading of a notice on a device whose camera this version cannot use.</extracomment>
-        <translation>[Scànnîng îs nõt réàdy õn thîs dévîcé yét ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Scànnîng îs nõt réàdy õn thîs dévîcé yét ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="home.unsupported.body">
         <source>This version cannot use this device's camera. You can enter the colours by hand instead.</source>
         <extracomment>Body of the notice.</extracomment>
-        <translation>[Thîs vérsîõn cànnõt ûsé thîs dévîcé's càmérà. Yõû càn éntér thé cõlõûrs by hànd înstéàd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thîs vérsîõn cànnõt ûsé thîs dévîcé's càmérà. Yõû càn éntér thé cõlõûrs by hànd înstéàd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="home.resume.title">
         <source>Unfinished solve</source>
         <extracomment>Heading of a card offering to continue a solve that was left part-way.</extracomment>
-        <translation>[Ûnfînîshéd sõlvé ~~~~~~]</translation>
+        <translation>[Ûnfînîshéd sõlvé ~~~~~ ~]</translation>
     </message>
     <message id="home.resume.body">
         <source>Turn %1 of %2</source>
         <extracomment>%1 is the turn reached, %2 the total. Both are numbers in the reader's own digits.</extracomment>
-        <translation>[Tûrn %1 õf %2 ~~~~]</translation>
+        <translation>[Tûrn %1 õf %2 ~~~~~]</translation>
     </message>
     <message id="home.resume.discard">
         <source>Discard</source>
@@ -498,12 +498,12 @@ In your hands.</source>
     <message id="home.discard.title">
         <source>Discard this solve?</source>
         <extracomment>Dialog title.</extracomment>
-        <translation>[Dîscàrd thîs sõlvé? ~~~~~~~~]</translation>
+        <translation>[Dîscàrd thîs sõlvé? ~~~~~ ~~~]</translation>
     </message>
     <message id="home.discard.body">
         <source>You would need to scan the cube again to solve it.</source>
         <extracomment>Dialog body.</extracomment>
-        <translation>[Yõû wõûld nééd tõ scàn thé cûbé àgàîn tõ sõlvé ît. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Yõû wõûld nééd tõ scàn thé cûbé àgàîn tõ sõlvé ît. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="home.discard.keep">
         <source>Keep it</source>
@@ -513,7 +513,7 @@ In your hands.</source>
     <message id="firstRun.title">
         <source>Solve your cube, one turn at a time</source>
         <extracomment>Headline of the welcome screen shown once, on first launch.</extracomment>
-        <translation>[Sõlvé yõûr cûbé, õné tûrn àt à tîmé ~~~~~~~~~~~~~~]</translation>
+        <translation>[Sõlvé yõûr cûbé, õné tûrn àt à tîmé ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="firstRun.step1.title">
         <source>Scan</source>
@@ -523,7 +523,7 @@ In your hands.</source>
     <message id="firstRun.step1.body">
         <source>Show each of the cube's six sides to the camera.</source>
         <extracomment>Step body.</extracomment>
-        <translation>[Shõw éàch õf thé cûbé's sîx sîdés tõ thé càmérà. ~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Shõw éàch õf thé cûbé's sîx sîdés tõ thé càmérà. ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="firstRun.step2.title">
         <source>Hold</source>
@@ -533,7 +533,7 @@ In your hands.</source>
     <message id="firstRun.step2.body">
         <source>Prop this device up and hold the cube the way the picture shows.</source>
         <extracomment>Step body. 'This device' is a phone, tablet or computer.</extracomment>
-        <translation>[Prõp thîs dévîcé ûp ànd hõld thé cûbé thé wày thé pîctûré shõws. ~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Prõp thîs dévîcé ûp ànd hõld thé cûbé thé wày thé pîctûré shõws. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="firstRun.step3.title">
         <source>Turn</source>
@@ -543,7 +543,7 @@ In your hands.</source>
     <message id="firstRun.step3.body">
         <source>Follow one turn at a time until it is solved.</source>
         <extracomment>Step body.</extracomment>
-        <translation>[Fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="firstRun.need.title">
         <source>You will need</source>
@@ -553,12 +553,12 @@ In your hands.</source>
     <message id="firstRun.need.cube">
         <source>An ordinary 3x3 cube with coloured stickers and dark plastic between them.</source>
         <extracomment>List item. 3x3 means three squares along each edge.</extracomment>
-        <translation>[Àn õrdînàry 3x3 cûbé wîth cõlõûréd stîckérs ànd dàrk plàstîc bétwéén thém. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Àn õrdînàry 3x3 cûbé wîth cõlõûréd stîckérs ànd dàrk plàstîc bétwéén thém. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="firstRun.need.light">
         <source>Bright, even light with no glare on the stickers.</source>
         <extracomment>List item.</extracomment>
-        <translation>[Brîght, évén lîght wîth nõ glàré õn thé stîckérs. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Brîght, évén lîght wîth nõ glàré õn thé stîckérs. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="firstRun.start">
         <source>Get started</source>
@@ -578,22 +578,22 @@ In your hands.</source>
     <message id="permission.body">
         <source>Cubeulator reads your cube's colours through the camera.</source>
         <extracomment>First paragraph.</extracomment>
-        <translation>[Cûbéûlàtõr réàds yõûr cûbé's cõlõûrs thrõûgh thé càmérà. ~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator réàds yõûr cûbé's cõlõûrs thrõûgh thé càmérà. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="permission.point1">
         <source>The camera picture is used on this device only.</source>
         <extracomment>Reassurance, one of three.</extracomment>
-        <translation>[Thé càmérà pîctûré îs ûséd õn thîs dévîcé õnly. ~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thé càmérà pîctûré îs ûséd õn thîs dévîcé õnly. ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="permission.point2">
         <source>No picture is saved, uploaded or shared.</source>
         <extracomment>Reassurance. Must stay true: see docs/design/screens/privacy.md.</extracomment>
-        <translation>[Nõ pîctûré îs sàvéd, ûplõàdéd õr shàréd. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Nõ pîctûré îs sàvéd, ûplõàdéd õr shàréd. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="permission.point3">
         <source>You can take access away again at any time in your device's settings.</source>
         <extracomment>Reassurance.</extracomment>
-        <translation>[Yõû càn tàké àccéss àwày àgàîn àt àny tîmé în yõûr dévîcé's séttîngs. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Yõû càn tàké àccéss àwày àgàîn àt àny tîmé în yõûr dévîcé's séttîngs. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="permission.allow">
         <source>Allow camera</source>
@@ -608,12 +608,12 @@ In your hands.</source>
     <message id="permission.refused.title">
         <source>Camera access is off</source>
         <extracomment>Screen title after the person refused, or when the device forbids it.</extracomment>
-        <translation>[Càmérà àccéss îs õff ~~~~~~~~]</translation>
+        <translation>[Càmérà àccéss îs õff ~~~~~ ~~~]</translation>
     </message>
     <message id="permission.refused.body">
         <source>Cubeulator cannot scan without the camera. You can allow it in your device's settings, or enter the colours by hand.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Cûbéûlàtõr cànnõt scàn wîthõût thé càmérà. Yõû càn àllõw ît în yõûr dévîcé's séttîngs, õr éntér thé cõlõûrs by hànd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator cànnõt scàn wîthõût thé càmérà. Yõû càn àllõw ît în yõûr dévîcé's séttîngs, õr éntér thé cõlõûrs by hànd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="permission.askAgain">
         <source>Ask again</source>
@@ -623,17 +623,17 @@ In your hands.</source>
     <message id="permission.system.camera">
         <source>Cubeulator uses the camera to read the colours on your cube. Pictures stay on this device.</source>
         <extracomment>The reason shown by iOS and macOS inside their own permission prompt (NSCameraUsageDescription). One or two sentences.</extracomment>
-        <translation>[Cûbéûlàtõr ûsés thé càmérà tõ réàd thé cõlõûrs õn yõûr cûbé. Pîctûrés stày õn thîs dévîcé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator ûsés thé càmérà tõ réàd thé cõlõûrs õn yõûr cûbé. Pîctûrés stày õn thîs dévîcé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="scan.title.starting">
         <source>Starting the camera…</source>
         <extracomment>Headline on the scan screen.</extracomment>
-        <translation>[Stàrtîng thé càmérà… ~~~~~~~~]</translation>
+        <translation>[Stàrtîng thé càmérà… ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.title.progress">
         <source>%1 of 6 sides read</source>
         <extracomment>Headline. %1 is 0 to 5.</extracomment>
-        <translation>[%1 õf 6 sîdés réàd ~~~~~~]</translation>
+        <translation>[%1 õf 6 sîdés réàd ~~~~~ ~~]</translation>
     </message>
     <message id="scan.title.complete">
         <source>Cube read</source>
@@ -643,12 +643,12 @@ In your hands.</source>
     <message id="scan.guide.settling">
         <source>Setting the camera's exposure and colour balance…</source>
         <extracomment>Guidance under the headline. Nothing is read while this shows.</extracomment>
-        <translation>[Séttîng thé càmérà's éxpõsûré ànd cõlõûr bàlàncé… ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Séttîng thé càmérà's éxpõsûré ànd cõlõûr bàlàncé… ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="scan.guide.first">
         <source>Hold one side of the cube square to the camera</source>
         <extracomment>Guidance before any side is read. 'Square to' means facing it flat, not at an angle.</extracomment>
-        <translation>[Hõld õné sîdé õf thé cûbé sqûàré tõ thé càmérà ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Hõld õné sîdé õf thé cûbé sqûàré tõ thé càmérà ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.guide.inView">
         <source>Hold it still</source>
@@ -658,32 +658,32 @@ In your hands.</source>
     <message id="scan.guide.reading">
         <source>Reading this side. Hold it there</source>
         <extracomment>Guidance while a side is being read.</extracomment>
-        <translation>[Réàdîng thîs sîdé. Hõld ît théré ~~~~~~~~~~~~~]</translation>
+        <translation>[Réàdîng thîs sîdé. Hõld ît théré ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.guide.next">
         <source>Turn to a side that is not filled in below, square to the camera</source>
         <extracomment>Guidance between sides. 'Below' refers to the row of six small squares at the bottom of the screen.</extracomment>
-        <translation>[Tûrn tõ à sîdé thàt îs nõt fîlléd în bélõw, sqûàré tõ thé càmérà ~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Tûrn tõ à sîdé thàt îs nõt fîlléd în bélõw, sqûàré tõ thé càmérà ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="scan.guide.seenBefore">
         <source>This side is already read. Turn to another one</source>
         <extracomment>Guidance when the side shown has been read before.</extracomment>
-        <translation>[Thîs sîdé îs àlréàdy réàd. Tûrn tõ ànõthér õné ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thîs sîdé îs àlréàdy réàd. Tûrn tõ ànõthér õné ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.guide.conflict">
         <source>These six sides do not make a valid cube yet. Show each side again, square to the camera.</source>
         <extracomment>Guidance when six sides are read but something is wrong.</extracomment>
-        <translation>[Thésé sîx sîdés dõ nõt màké à vàlîd cûbé yét. Shõw éàch sîdé àgàîn, sqûàré tõ thé càmérà. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thésé sîx sîdés dõ nõt màké à vàlîd cûbé yét. Shõw éàch sîdé àgàîn, sqûàré tõ thé càmérà. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>
-        <translation>[Àll sîx sîdés màké à vàlîd cûbé. Wõrkîng õût thé sõlûtîõn… ~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Àll sîx sîdés màké à vàlîd cûbé. Wõrkîng õût thé sõlûtîõn… ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.guide.resuming">
         <source>Starting the camera again. The sides already read are kept.</source>
         <extracomment>Guidance when the app comes back after being in the background.</extracomment>
-        <translation>[Stàrtîng thé càmérà àgàîn. Thé sîdés àlréàdy réàd àré képt. ~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Stàrtîng thé càmérà àgàîn. Thé sîdés àlréàdy réàd àré képt. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="scan.stuck.title">
         <source>Not reading?</source>
@@ -693,7 +693,7 @@ In your hands.</source>
     <message id="scan.stuck.body">
         <source>Use bright, even light. Tilt the cube until there is no glare on the stickers. Fill about half the picture with one side.</source>
         <extracomment>Hint body. Three short instructions.</extracomment>
-        <translation>[Ûsé brîght, évén lîght. Tîlt thé cûbé ûntîl théré îs nõ glàré õn thé stîckérs. Fîll àbõût hàlf thé pîctûré wîth õné sîdé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Ûsé brîght, évén lîght. Tîlt thé cûbé ûntîl théré îs nõ glàré õn thé stîckérs. Fîll àbõût hàlf thé pîctûré wîth õné sîdé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.startOver">
         <source>Start over</source>
@@ -703,17 +703,17 @@ In your hands.</source>
     <message id="scan.checkColours">
         <source>Check the colours</source>
         <extracomment>Button. Opens the screen where each sticker can be corrected.</extracomment>
-        <translation>[Chéck thé cõlõûrs ~~~~~~~]</translation>
+        <translation>[Chéck thé cõlõûrs ~~~~~ ~~]</translation>
     </message>
     <message id="scan.more.enter">
         <source>Enter the rest by hand</source>
         <extracomment>Item in the More sheet.</extracomment>
-        <translation>[Éntér thé rést by hànd ~~~~~~~~~]</translation>
+        <translation>[Éntér thé rést by hànd ~~~~~ ~~~~]</translation>
     </message>
     <message id="scan.more.chooseCamera">
         <source>Choose a camera</source>
         <extracomment>Item in the More sheet, on a computer with more than one camera.</extracomment>
-        <translation>[Chõõsé à càmérà ~~~~~~]</translation>
+        <translation>[Chõõsé à càmérà ~~~~~ ~]</translation>
     </message>
     <message id="scan.more.switchCamera">
         <source>Switch camera</source>
@@ -723,84 +723,84 @@ In your hands.</source>
     <message id="scan.more.help">
         <source>Help with scanning</source>
         <extracomment>Item in the More sheet.</extracomment>
-        <translation>[Hélp wîth scànnîng ~~~~~~~]</translation>
+        <translation>[Hélp wîth scànnîng ~~~~~ ~~]</translation>
     </message>
     <message id="scan.picker.title">
         <source>Choose a camera</source>
         <extracomment>Title of the list of cameras.</extracomment>
-        <translation>[Chõõsé à càmérà ~~~~~~]</translation>
+        <translation>[Chõõsé à càmérà ~~~~~ ~]</translation>
     </message>
     <message id="scan.camera.none.title">
         <source>No camera found</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Nõ càmérà fõûnd ~~~~~~]</translation>
+        <translation>[Nõ càmérà fõûnd ~~~~~ ~]</translation>
     </message>
     <message id="scan.camera.none.body">
         <source>Plug in a camera and look again, or enter the colours by hand.</source>
         <extracomment>Guidance.</extracomment>
-        <translation>[Plûg în à càmérà ànd lõõk àgàîn, õr éntér thé cõlõûrs by hànd. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Plûg în à càmérà ànd lõõk àgàîn, õr éntér thé cõlõûrs by hànd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="scan.camera.busy.title">
         <source>The camera is in use</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Thé càmérà îs în ûsé ~~~~~~~~]</translation>
+        <translation>[Thé càmérà îs în ûsé ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.camera.busy.body">
         <source>Another program is using it. Close that program, then try again.</source>
         <extracomment>Guidance.</extracomment>
-        <translation>[Ànõthér prõgràm îs ûsîng ît. Clõsé thàt prõgràm, thén try àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Ànõthér prõgràm îs ûsîng ît. Clõsé thàt prõgràm, thén try àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="scan.camera.blocked.title">
         <source>Camera access is blocked</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Càmérà àccéss îs blõckéd ~~~~~~~~~~]</translation>
+        <translation>[Càmérà àccéss îs blõckéd ~~~~~ ~~~~~]</translation>
     </message>
     <message id="scan.camera.blocked.body">
         <source>This device's settings do not let Cubeulator use the camera. Allow it there, then try again.</source>
         <extracomment>Guidance.</extracomment>
-        <translation>[Thîs dévîcé's séttîngs dõ nõt lét Cûbéûlàtõr ûsé thé càmérà. Àllõw ît théré, thén try àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thîs dévîcé's séttîngs dõ nõt lét Cubeulator ûsé thé càmérà. Àllõw ît théré, thén try àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="scan.camera.lost.title">
         <source>The camera stopped</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Thé càmérà stõppéd ~~~~~~~]</translation>
+        <translation>[Thé càmérà stõppéd ~~~~~ ~~]</translation>
     </message>
     <message id="scan.camera.lost.body">
         <source>It may have been unplugged. The sides already read are kept.</source>
         <extracomment>Guidance.</extracomment>
-        <translation>[Ît mày hàvé béén ûnplûggéd. Thé sîdés àlréàdy réàd àré képt. ~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Ît mày hàvé béén ûnplûggéd. Thé sîdés àlréàdy réàd àré képt. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="scan.camera.failed.title">
         <source>The camera could not start</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Thé càmérà cõûld nõt stàrt ~~~~~~~~~~]</translation>
+        <translation>[Thé càmérà cõûld nõt stàrt ~~~~~ ~~~~~]</translation>
     </message>
     <message id="scan.camera.failed.body">
         <source>Try again. If it keeps happening, report it with this code: %1</source>
         <extracomment>Guidance. %1 is a short error code such as E-CAM-12.</extracomment>
-        <translation>[Try àgàîn. Îf ît kééps hàppénîng, répõrt ît wîth thîs cõdé: %1 ~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Try àgàîn. Îf ît kééps hàppénîng, répõrt ît wîth thîs cõdé: %1 ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="scan.solveFailed.title">
         <source>No solution found</source>
         <extracomment>Headline. Rare.</extracomment>
-        <translation>[Nõ sõlûtîõn fõûnd ~~~~~~~]</translation>
+        <translation>[Nõ sõlûtîõn fõûnd ~~~~~ ~~]</translation>
     </message>
     <message id="scan.solveFailed.body">
         <source>The cube was read, but Cubeulator could not work out how to solve it. Check the colours, or scan again.</source>
         <extracomment>Guidance.</extracomment>
-        <translation>[Thé cûbé wàs réàd, bût Cûbéûlàtõr cõûld nõt wõrk õût hõw tõ sõlvé ît. Chéck thé cõlõûrs, õr scàn àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thé cûbé wàs réàd, bût Cubeulator cõûld nõt wõrk õût hõw tõ sõlvé ît. Chéck thé cõlõûrs, õr scàn àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="scan.leave.title">
         <source>Stop scanning?</source>
         <extracomment>Dialog title.</extracomment>
-        <translation>[Stõp scànnîng? ~~~~~~]</translation>
+        <translation>[Stõp scànnîng? ~~~~~ ~]</translation>
     </message>
     <message id="scan.leave.body" numerus="yes">
         <source>The %Ln sides read so far will be lost.</source>
         <extracomment>Dialog body. %n is 1 to 6.</extracomment>
         <translation>
-            <numerusform>[Thé sîdé réàd sõ fàr wîll bé lõst. ~~~~~~~~~~~~~~]</numerusform>
-            <numerusform>[Thé %Ln sîdés réàd sõ fàr wîll bé lõst. ~~~~~~~~~~~~~~]</numerusform>
+            <numerusform>[Thé sîdé réàd sõ fàr wîll bé lõst. ~~~~~ ~~~~~ ~~~~]</numerusform>
+            <numerusform>[Thé %Ln sîdés réàd sõ fàr wîll bé lõst. ~~~~~ ~~~~~ ~~~~~ ~]</numerusform>
         </translation>
     </message>
     <message id="scan.leave.keep">
@@ -826,62 +826,62 @@ In your hands.</source>
     <message id="scan.a11y.preview">
         <source>Camera picture</source>
         <extracomment>Screen-reader name of the live camera view.</extracomment>
-        <translation>[Càmérà pîctûré ~~~~~~]</translation>
+        <translation>[Càmérà pîctûré ~~~~~ ~]</translation>
     </message>
     <message id="scan.a11y.sideRead">
         <source>Side %1 of 6 read.</source>
         <extracomment>Announced by a screen reader each time a side is read.</extracomment>
-        <translation>[Sîdé %1 õf 6 réàd. ~~~~~~]</translation>
+        <translation>[Sîdé %1 õf 6 réàd. ~~~~~ ~~]</translation>
     </message>
     <message id="scan.a11y.chipEmpty">
         <source>Side %1: not read yet</source>
         <extracomment>Screen-reader name of an empty chip.</extracomment>
-        <translation>[Sîdé %1: nõt réàd yét ~~~~~~~~]</translation>
+        <translation>[Sîdé %1: nõt réàd yét ~~~~~ ~~~]</translation>
     </message>
     <message id="scan.a11y.chipRead">
         <source>Side %1: read. %2</source>
         <extracomment>Screen-reader name of a filled chip. %2 is a colourSide string such as 'Red side'.</extracomment>
-        <translation>[Sîdé %1: réàd. %2 ~~~~~]</translation>
+        <translation>[Sîdé %1: réàd. %2 ~~~~~ ~~]</translation>
     </message>
     <message id="scan.a11y.chipInView">
         <source>Side %1: read, and in view now. %2</source>
         <extracomment>Screen-reader name of the chip for the side currently shown to the camera.</extracomment>
-        <translation>[Sîdé %1: réàd, ànd în vîéw nõw. %2 ~~~~~~~~~~~~]</translation>
+        <translation>[Sîdé %1: réàd, ànd în vîéw nõw. %2 ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="scan.a11y.cubeSeen">
         <source>A side is in view.</source>
         <extracomment>Announced once when the camera first sees a side.</extracomment>
-        <translation>[À sîdé îs în vîéw. ~~~~~~~]</translation>
+        <translation>[À sîdé îs în vîéw. ~~~~~ ~~]</translation>
     </message>
     <message id="review.title.check">
         <source>Check the colours</source>
         <extracomment>Screen title when checking a scan.</extracomment>
-        <translation>[Chéck thé cõlõûrs ~~~~~~~]</translation>
+        <translation>[Chéck thé cõlõûrs ~~~~~ ~~]</translation>
     </message>
     <message id="review.title.enter">
         <source>Enter the colours</source>
         <extracomment>Screen title when entering a cube by hand.</extracomment>
-        <translation>[Éntér thé cõlõûrs ~~~~~~~]</translation>
+        <translation>[Éntér thé cõlõûrs ~~~~~ ~~]</translation>
     </message>
     <message id="review.intro.enter">
         <source>Pick a colour, then tap each sticker of that colour. Do one side at a time. It does not matter which way up you hold each side.</source>
         <extracomment>Instruction at the top of hand entry.</extracomment>
-        <translation>[Pîck à cõlõûr, thén tàp éàch stîckér õf thàt cõlõûr. Dõ õné sîdé àt à tîmé. Ît dõés nõt màttér whîch wày ûp yõû hõld éàch sîdé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Pîck à cõlõûr, thén tàp éàch stîckér õf thàt cõlõûr. Dõ õné sîdé àt à tîmé. Ît dõés nõt màttér whîch wày ûp yõû hõld éàch sîdé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="review.intro.check">
         <source>Compare each side with your cube. Tap a colour, then tap any sticker that is wrong.</source>
         <extracomment>Instruction at the top when checking a scan.</extracomment>
-        <translation>[Cõmpàré éàch sîdé wîth yõûr cûbé. Tàp à cõlõûr, thén tàp àny stîckér thàt îs wrõng. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cõmpàré éàch sîdé wîth yõûr cûbé. Tàp à cõlõûr, thén tàp àny stîckér thàt îs wrõng. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="review.centre">
         <source>The centre never changes. It names the side.</source>
         <extracomment>Shown when the person taps a centre sticker, which cannot be edited.</extracomment>
-        <translation>[Thé céntré névér chàngés. Ît nàmés thé sîdé. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thé céntré névér chàngés. Ît nàmés thé sîdé. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="review.palette">
         <source>Colour to paint with</source>
         <extracomment>Screen-reader name of the row of six colour buttons.</extracomment>
-        <translation>[Cõlõûr tõ pàînt wîth ~~~~~~~~]</translation>
+        <translation>[Cõlõûr tõ pàînt wîth ~~~~~ ~~~]</translation>
     </message>
     <message id="review.sidePicker">
         <source>Side to edit</source>
@@ -891,25 +891,25 @@ In your hands.</source>
     <message id="review.status.empty">
         <source>48 stickers to fill in</source>
         <extracomment>Status line before anything is entered. A cube has 54 stickers; the six centres are already set.</extracomment>
-        <translation>[48 stîckérs tõ fîll în ~~~~~~~~~]</translation>
+        <translation>[48 stîckérs tõ fîll în ~~~~~ ~~~~]</translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>
         <extracomment>Status line during hand entry.</extracomment>
         <translation>
-            <numerusform>[%Ln stîckér tõ gõ ~~~~~~]</numerusform>
-            <numerusform>[%Ln stîckérs tõ gõ ~~~~~~]</numerusform>
+            <numerusform>[%Ln stîckér tõ gõ ~~~~~ ~~]</numerusform>
+            <numerusform>[%Ln stîckérs tõ gõ ~~~~~ ~~]</numerusform>
         </translation>
     </message>
     <message id="review.status.miscount">
         <source>The colours do not add up</source>
         <extracomment>Status headline when some colour is used more or fewer than nine times.</extracomment>
-        <translation>[Thé cõlõûrs dõ nõt àdd ûp ~~~~~~~~~~]</translation>
+        <translation>[Thé cõlõûrs dõ nõt àdd ûp ~~~~~ ~~~~~]</translation>
     </message>
     <message id="review.status.miscountOver">
         <source>Too many: %1</source>
         <extracomment>%1 is a list such as 'Red (10), Blue (11)'.</extracomment>
-        <translation>[Tõõ màny: %1 ~~~~]</translation>
+        <translation>[Tõõ màny: %1 ~~~~~]</translation>
     </message>
     <message id="review.status.miscountUnder">
         <source>Too few: %1</source>
@@ -919,22 +919,22 @@ In your hands.</source>
     <message id="review.status.countItem">
         <source>%1 (%2)</source>
         <extracomment>One item in those lists. %1 is a colour name exactly as in colour.*, %2 how many stickers have it.</extracomment>
-        <translation>[%1 (%2) ~~]</translation>
+        <translation>[%1 (%2) ~~~]</translation>
     </message>
     <message id="review.status.impossible">
         <source>This cannot be a real cube</source>
         <extracomment>Status headline when every colour appears nine times but the pieces do not fit together.</extracomment>
-        <translation>[Thîs cànnõt bé à réàl cûbé ~~~~~~~~~~]</translation>
+        <translation>[Thîs cànnõt bé à réàl cûbé ~~~~~ ~~~~~]</translation>
     </message>
     <message id="review.status.impossibleBody">
         <source>One sticker is probably on the wrong piece. Check each side against your cube again.</source>
         <extracomment>Status body.</extracomment>
-        <translation>[Õné stîckér îs prõbàbly õn thé wrõng pîécé. Chéck éàch sîdé àgàînst yõûr cûbé àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Õné stîckér îs prõbàbly õn thé wrõng pîécé. Chéck éàch sîdé àgàînst yõûr cûbé àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="review.status.valid">
         <source>This is a valid cube</source>
         <extracomment>Status headline when the colours make a cube that can be solved.</extracomment>
-        <translation>[Thîs îs à vàlîd cûbé ~~~~~~~~]</translation>
+        <translation>[Thîs îs à vàlîd cûbé ~~~~~ ~~~]</translation>
     </message>
     <message id="review.solve">
         <source>Solve</source>
@@ -944,32 +944,32 @@ In your hands.</source>
     <message id="review.clearSide">
         <source>Clear this side</source>
         <extracomment>Button. Unsets the eight stickers round the centre of the side being edited.</extracomment>
-        <translation>[Cléàr thîs sîdé ~~~~~~]</translation>
+        <translation>[Cléàr thîs sîdé ~~~~~ ~]</translation>
     </message>
     <message id="review.working">
         <source>Working out the solution…</source>
         <extracomment>Shown after Solve is pressed.</extracomment>
-        <translation>[Wõrkîng õût thé sõlûtîõn… ~~~~~~~~~~]</translation>
+        <translation>[Wõrkîng õût thé sõlûtîõn… ~~~~~ ~~~~~]</translation>
     </message>
     <message id="review.failed.title">
         <source>No solution found</source>
         <extracomment>Headline. Rare.</extracomment>
-        <translation>[Nõ sõlûtîõn fõûnd ~~~~~~~]</translation>
+        <translation>[Nõ sõlûtîõn fõûnd ~~~~~ ~~]</translation>
     </message>
     <message id="review.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Try again, or scan it instead.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Cûbéûlàtõr cõûld nõt wõrk õût hõw tõ sõlvé thîs cûbé. Try àgàîn, õr scàn ît înstéàd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator cõûld nõt wõrk õût hõw tõ sõlvé thîs cûbé. Try àgàîn, õr scàn ît înstéàd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="review.discard.title">
         <source>Discard these colours?</source>
         <extracomment>Dialog title.</extracomment>
-        <translation>[Dîscàrd thésé cõlõûrs? ~~~~~~~~~]</translation>
+        <translation>[Dîscàrd thésé cõlõûrs? ~~~~~ ~~~~]</translation>
     </message>
     <message id="review.discard.body">
         <source>What you have entered will be lost.</source>
         <extracomment>Dialog body.</extracomment>
-        <translation>[Whàt yõû hàvé éntéréd wîll bé lõst. ~~~~~~~~~~~~~~]</translation>
+        <translation>[Whàt yõû hàvé éntéréd wîll bé lõst. ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="review.discard.keep">
         <source>Keep editing</source>
@@ -984,80 +984,80 @@ In your hands.</source>
     <message id="review.a11y.sticker">
         <source>%1, row %2, column %3: %4</source>
         <extracomment>Screen-reader name of one sticker. %1 is a colourSide string, %2 and %3 are 1 to 3, %4 a colour name or colour.unset.</extracomment>
-        <translation>[%1, rõw %2, cõlûmn %3: %4 ~~~~~~~]</translation>
+        <translation>[%1, rõw %2, cõlûmn %3: %4 ~~~~~ ~~~~~]</translation>
     </message>
     <message id="review.a11y.sideDone">
         <source>%1: complete</source>
         <extracomment>Screen-reader name of a side button when all nine stickers are set. %1 is a colourSide string.</extracomment>
-        <translation>[%1: cõmplété ~~~~]</translation>
+        <translation>[%1: cõmplété ~~~~~]</translation>
     </message>
     <message id="review.a11y.sideLeft" numerus="yes">
         <source>%1: %Ln stickers to go</source>
         <extracomment>Screen-reader name of a side button. %1 is a colourSide string.</extracomment>
         <translation>
-            <numerusform>[%1: %Ln stîckér tõ gõ ~~~~~~]</numerusform>
-            <numerusform>[%1: %Ln stîckérs tõ gõ ~~~~~~~]</numerusform>
+            <numerusform>[%1: %Ln stîckér tõ gõ ~~~~~ ~~~]</numerusform>
+            <numerusform>[%1: %Ln stîckérs tõ gõ ~~~~~ ~~~~]</numerusform>
         </translation>
     </message>
     <message id="solve.working">
         <source>Working out the solution…</source>
         <extracomment>Shown while the solution is computed.</extracomment>
-        <translation>[Wõrkîng õût thé sõlûtîõn… ~~~~~~~~~~]</translation>
+        <translation>[Wõrkîng õût thé sõlûtîõn… ~~~~~ ~~~~~]</translation>
     </message>
     <message id="solve.failed.title">
         <source>No solution found</source>
         <extracomment>Headline. Rare.</extracomment>
-        <translation>[Nõ sõlûtîõn fõûnd ~~~~~~~]</translation>
+        <translation>[Nõ sõlûtîõn fõûnd ~~~~~ ~~]</translation>
     </message>
     <message id="solve.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Check the colours, or scan it again.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Cûbéûlàtõr cõûld nõt wõrk õût hõw tõ sõlvé thîs cûbé. Chéck thé cõlõûrs, õr scàn ît àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator cõûld nõt wõrk õût hõw tõ sõlvé thîs cûbé. Chéck thé cõlõûrs, õr scàn ît àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.alreadySolved.title">
         <source>This cube is already solved</source>
         <extracomment>Headline when a solved cube is scanned.</extracomment>
-        <translation>[Thîs cûbé îs àlréàdy sõlvéd ~~~~~~~~~~~]</translation>
+        <translation>[Thîs cûbé îs àlréàdy sõlvéd ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.alreadySolved.body">
         <source>There is nothing to do. Mix it up and scan it again.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Théré îs nõthîng tõ dõ. Mîx ît ûp ànd scàn ît àgàîn. ~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Théré îs nõthîng tõ dõ. Mîx ît ûp ànd scàn ît àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.hold.title">
         <source>Hold the cube like this</source>
         <extracomment>Headline of the step before the first turn.</extracomment>
-        <translation>[Hõld thé cûbé lîké thîs ~~~~~~~~~]</translation>
+        <translation>[Hõld thé cûbé lîké thîs ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.hold.body">
         <source>Yellow centre on top. Green centre facing you. Keep it this way round for the whole solve.</source>
         <extracomment>Body. Three short sentences.</extracomment>
-        <translation>[Yéllõw céntré õn tõp. Gréén céntré fàcîng yõû. Kéép ît thîs wày rõûnd fõr thé whõlé sõlvé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Yéllõw céntré õn tõp. Gréén céntré fàcîng yõû. Kéép ît thîs wày rõûnd fõr thé whõlé sõlvé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.hold.match">
         <source>Your cube should match the picture.</source>
         <extracomment>Line under the picture of the cube.</extracomment>
-        <translation>[Yõûr cûbé shõûld màtch thé pîctûré. ~~~~~~~~~~~~~~]</translation>
+        <translation>[Yõûr cûbé shõûld màtch thé pîctûré. ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.hold.ready">
         <source>I am holding it like this</source>
         <extracomment>The main button. Starts the first turn.</extracomment>
-        <translation>[Î àm hõldîng ît lîké thîs ~~~~~~~~~~]</translation>
+        <translation>[Î àm hõldîng ît lîké thîs ~~~~~ ~~~~~]</translation>
     </message>
     <message id="solve.hold.check">
         <source>Something looks wrong? Check the colours</source>
         <extracomment>Secondary button.</extracomment>
-        <translation>[Sõméthîng lõõks wrõng? Chéck thé cõlõûrs ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Sõméthîng lõõks wrõng? Chéck thé cõlõûrs ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.holdResume.title">
         <source>Carry on from turn %1</source>
         <extracomment>Headline when returning to an unfinished solve.</extracomment>
-        <translation>[Càrry õn frõm tûrn %1 ~~~~~~~~]</translation>
+        <translation>[Càrry õn frõm tûrn %1 ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.holdResume.body">
         <source>Hold the cube with the yellow centre on top and the green centre facing you. It should match the picture.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Hõld thé cûbé wîth thé yéllõw céntré õn tõp ànd thé gréén céntré fàcîng yõû. Ît shõûld màtch thé pîctûré. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Hõld thé cûbé wîth thé yéllõw céntré õn tõp ànd thé gréén céntré fàcîng yõû. Ît shõûld màtch thé pîctûré. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="solve.matches">
         <source>It matches</source>
@@ -1067,22 +1067,22 @@ In your hands.</source>
     <message id="solve.differs">
         <source>It does not match</source>
         <extracomment>Button. Opens advice for when the cube and the picture disagree.</extracomment>
-        <translation>[Ît dõés nõt màtch ~~~~~~~]</translation>
+        <translation>[Ît dõés nõt màtch ~~~~~ ~~]</translation>
     </message>
     <message id="solve.holdLine">
         <source>Yellow on top · green facing you</source>
         <extracomment>A reminder that stays on the solve screen the whole time. Keep it short. The dot is a separator.</extracomment>
-        <translation>[Yéllõw õn tõp · gréén fàcîng yõû ~~~~~~~~~~~~~]</translation>
+        <translation>[Yéllõw õn tõp · gréén fàcîng yõû ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.progress">
         <source>Turn %1 of %2</source>
         <extracomment>Progress through the solve. Numbers in the reader's own digits.</extracomment>
-        <translation>[Tûrn %1 õf %2 ~~~~]</translation>
+        <translation>[Tûrn %1 õf %2 ~~~~~]</translation>
     </message>
     <message id="solve.stageOf">
         <source>Stage %1 of %2</source>
         <extracomment>Which of the five stages. Shown in small capitals.</extracomment>
-        <translation>[Stàgé %1 õf %2 ~~~~]</translation>
+        <translation>[Stàgé %1 õf %2 ~~~~~ ~]</translation>
     </message>
     <message id="solve.next">
         <source>Next turn</source>
@@ -1102,37 +1102,37 @@ In your hands.</source>
     <message id="solve.hint.touch">
         <source>Make the turn, then tap the cube.</source>
         <extracomment>Shown once, on the first turn of a first solve, on touch devices.</extracomment>
-        <translation>[Màké thé tûrn, thén tàp thé cûbé. ~~~~~~~~~~~~~]</translation>
+        <translation>[Màké thé tûrn, thén tàp thé cûbé. ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.hint.keys">
         <source>Make the turn, then press Space.</source>
         <extracomment>The same, on a computer. 'Space' is the space bar.</extracomment>
-        <translation>[Màké thé tûrn, thén préss Spàcé. ~~~~~~~~~~~~~]</translation>
+        <translation>[Màké thé tûrn, thén préss Spàcé. ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.stageDone.title">
         <source>%1 done</source>
         <extracomment>Headline between stages. %1 is a stage title such as 'White cross'.</extracomment>
-        <translation>[%1 dõné ~~]</translation>
+        <translation>[%1 dõné ~~~]</translation>
     </message>
     <message id="solve.stageDone.check">
         <source>Check your cube matches the picture.</source>
         <extracomment>Line asking the person to compare.</extracomment>
-        <translation>[Chéck yõûr cûbé màtchés thé pîctûré. ~~~~~~~~~~~~~~]</translation>
+        <translation>[Chéck yõûr cûbé màtchés thé pîctûré. ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.stageDone.next">
         <source>Next: %1</source>
         <extracomment>%1 is the next stage's title.</extracomment>
-        <translation>[Néxt: %1 ~~]</translation>
+        <translation>[Néxt: %1 ~~~]</translation>
     </message>
     <message id="solve.auto.tapToPause">
         <source>Tap anywhere to pause</source>
         <extracomment>Shown in timer mode.</extracomment>
-        <translation>[Tàp ànywhéré tõ pàûsé ~~~~~~~~]</translation>
+        <translation>[Tàp ànywhéré tõ pàûsé ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.auto.keysToPause">
         <source>Press Space to pause</source>
         <extracomment>The same, on a computer.</extracomment>
-        <translation>[Préss Spàcé tõ pàûsé ~~~~~~~~]</translation>
+        <translation>[Préss Spàcé tõ pàûsé ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.paused">
         <source>Paused</source>
@@ -1142,87 +1142,87 @@ In your hands.</source>
     <message id="solve.menu.hold">
         <source>How to hold the cube</source>
         <extracomment>Menu item.</extracomment>
-        <translation>[Hõw tõ hõld thé cûbé ~~~~~~~~]</translation>
+        <translation>[Hõw tõ hõld thé cûbé ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.menu.lost">
         <source>My cube does not match</source>
         <extracomment>Menu item.</extracomment>
-        <translation>[My cûbé dõés nõt màtch ~~~~~~~~~]</translation>
+        <translation>[My cûbé dõés nõt màtch ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.menu.leave">
         <source>Leave this solve</source>
         <extracomment>Menu item.</extracomment>
-        <translation>[Léàvé thîs sõlvé ~~~~~~]</translation>
+        <translation>[Léàvé thîs sõlvé ~~~~~ ~]</translation>
     </message>
     <message id="solve.menu.leaveNote">
         <source>Your place is kept. Carry on from Home.</source>
         <extracomment>Small text under 'Leave this solve'.</extracomment>
-        <translation>[Yõûr plàcé îs képt. Càrry õn frõm Hõmé. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Yõûr plàcé îs képt. Càrry õn frõm Hõmé. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solve.lost.title">
         <source>Cube and picture do not match</source>
         <extracomment>Headline.</extracomment>
-        <translation>[Cûbé ànd pîctûré dõ nõt màtch ~~~~~~~~~~~~]</translation>
+        <translation>[Cûbé ànd pîctûré dõ nõt màtch ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="solve.lost.body">
         <source>One turn probably went the wrong way. Try these in order.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Õné tûrn prõbàbly wént thé wrõng wày. Try thésé în õrdér. ~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Õné tûrn prõbàbly wént thé wrõng wày. Try thésé în õrdér. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.lost.step1">
         <source>Check how you are holding it: yellow centre on top, green centre facing you.</source>
         <extracomment>First thing to try.</extracomment>
-        <translation>[Chéck hõw yõû àré hõldîng ît: yéllõw céntré õn tõp, gréén céntré fàcîng yõû. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Chéck hõw yõû àré hõldîng ît: yéllõw céntré õn tõp, gréén céntré fàcîng yõû. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="solve.lost.step2">
         <source>Go back one turn and compare again.</source>
         <extracomment>Second thing to try.</extracomment>
-        <translation>[Gõ bàck õné tûrn ànd cõmpàré àgàîn. ~~~~~~~~~~~~~~]</translation>
+        <translation>[Gõ bàck õné tûrn ànd cõmpàré àgàîn. ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.lost.step3">
         <source>Scan the cube again. Cubeulator solves it from where it is now.</source>
         <extracomment>Third thing to try.</extracomment>
-        <translation>[Scàn thé cûbé àgàîn. Cûbéûlàtõr sõlvés ît frõm whéré ît îs nõw. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Scàn thé cûbé àgàîn. Cubeulator sõlvés ît frõm whéré ît îs nõw. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="solve.lost.goBack">
         <source>Go back one turn</source>
         <extracomment>Button.</extracomment>
-        <translation>[Gõ bàck õné tûrn ~~~~~~]</translation>
+        <translation>[Gõ bàck õné tûrn ~~~~~ ~]</translation>
     </message>
     <message id="solve.lost.rescan">
         <source>Scan the cube again</source>
         <extracomment>Button.</extracomment>
-        <translation>[Scàn thé cûbé àgàîn ~~~~~~~~]</translation>
+        <translation>[Scàn thé cûbé àgàîn ~~~~~ ~~~]</translation>
     </message>
     <message id="solve.lost.carryOn">
         <source>Carry on anyway</source>
         <extracomment>Button.</extracomment>
-        <translation>[Càrry õn ànywày ~~~~~~]</translation>
+        <translation>[Càrry õn ànywày ~~~~~ ~]</translation>
     </message>
     <message id="solve.a11y.menu">
         <source>Pause and options</source>
         <extracomment>Screen-reader name of the menu button on the solve screen.</extracomment>
-        <translation>[Pàûsé ànd õptîõns ~~~~~~~]</translation>
+        <translation>[Pàûsé ànd õptîõns ~~~~~ ~~]</translation>
     </message>
     <message id="solve.a11y.cube">
         <source>The cube as it should look now. %1</source>
         <extracomment>Screen-reader description of the picture of the cube. %1 is the current turn sentence.</extracomment>
-        <translation>[Thé cûbé às ît shõûld lõõk nõw. %1 ~~~~~~~~~~~~~]</translation>
+        <translation>[Thé cûbé às ît shõûld lõõk nõw. %1 ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.a11y.progress">
         <source>Turn %1 of %2. %3, stage %4 of %5.</source>
         <extracomment>Read when the turn changes. %3 is a stage title.</extracomment>
-        <translation>[Tûrn %1 õf %2. %3, stàgé %4 õf %5. ~~~~~~~~~~]</translation>
+        <translation>[Tûrn %1 õf %2. %3, stàgé %4 õf %5. ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="solve.a11y.notation">
         <source>In notation: %1</source>
         <extracomment>Read after the turn sentence when notation is switched on. %1 is letters such as R' or U2; do not translate it.</extracomment>
-        <translation>[În nõtàtîõn: %1 ~~~~~]</translation>
+        <translation>[În nõtàtîõn: %1 ~~~~~ ~]</translation>
     </message>
     <message id="complete.eyebrow">
         <source>Solve complete</source>
         <extracomment>Small heading above 'Solved'.</extracomment>
-        <translation>[Sõlvé cõmplété ~~~~~~]</translation>
+        <translation>[Sõlvé cõmplété ~~~~~ ~]</translation>
     </message>
     <message id="complete.title">
         <source>Solved</source>
@@ -1242,17 +1242,17 @@ In your hands.</source>
     <message id="complete.scanAnother">
         <source>Scan another cube</source>
         <extracomment>The main button.</extracomment>
-        <translation>[Scàn ànõthér cûbé ~~~~~~~]</translation>
+        <translation>[Scàn ànõthér cûbé ~~~~~ ~~]</translation>
     </message>
     <message id="complete.review">
         <source>Review the solution</source>
         <extracomment>Button. Opens the list of every turn.</extracomment>
-        <translation>[Révîéw thé sõlûtîõn ~~~~~~~~]</translation>
+        <translation>[Révîéw thé sõlûtîõn ~~~~~ ~~~]</translation>
     </message>
     <message id="complete.notSolved">
         <source>My cube is not solved</source>
         <extracomment>Button for when the real cube did not end up solved.</extracomment>
-        <translation>[My cûbé îs nõt sõlvéd ~~~~~~~~]</translation>
+        <translation>[My cûbé îs nõt sõlvéd ~~~~~ ~~~]</translation>
     </message>
     <message id="complete.notSolved.title">
         <source>Not solved?</source>
@@ -1262,7 +1262,7 @@ In your hands.</source>
     <message id="complete.notSolved.body">
         <source>One turn somewhere probably went the wrong way. Scan the cube again and Cubeulator solves it from where it is now.</source>
         <extracomment>Sheet body.</extracomment>
-        <translation>[Õné tûrn sõméwhéré prõbàbly wént thé wrõng wày. Scàn thé cûbé àgàîn ànd Cûbéûlàtõr sõlvés ît frõm whéré ît îs nõw. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Õné tûrn sõméwhéré prõbàbly wént thé wrõng wày. Scàn thé cûbé àgàîn ànd Cubeulator sõlvés ît frõm whéré ît îs nõw. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="solution.title">
         <source>The solution</source>
@@ -1273,14 +1273,14 @@ In your hands.</source>
         <source>%Ln turns in 5 stages</source>
         <extracomment>Line under the title.</extracomment>
         <translation>
-            <numerusform>[%Ln tûrn în 5 stàgés ~~~~~~~]</numerusform>
-            <numerusform>[%Ln tûrns în 5 stàgés ~~~~~~~]</numerusform>
+            <numerusform>[%Ln tûrn în 5 stàgés ~~~~~ ~~~]</numerusform>
+            <numerusform>[%Ln tûrns în 5 stàgés ~~~~~ ~~~]</numerusform>
         </translation>
     </message>
     <message id="solution.method">
         <source>Method: layer by layer, the one most people learn first.</source>
         <extracomment>One line for learners.</extracomment>
-        <translation>[Méthõd: làyér by làyér, thé õné mõst péõplé léàrn fîrst. ~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Méthõd: làyér by làyér, thé õné mõst péõplé léàrn fîrst. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="solution.play">
         <source>Play</source>
@@ -1310,7 +1310,7 @@ In your hands.</source>
     <message id="solution.atStart">
         <source>The cube as it was scanned</source>
         <extracomment>Caption under the cube before the first turn.</extracomment>
-        <translation>[Thé cûbé às ît wàs scànnéd ~~~~~~~~~~]</translation>
+        <translation>[Thé cûbé às ît wàs scànnéd ~~~~~ ~~~~~]</translation>
     </message>
     <message id="solution.atEnd">
         <source>Solved</source>
@@ -1321,14 +1321,14 @@ In your hands.</source>
         <source>%Ln turns</source>
         <extracomment>How many turns a stage has.</extracomment>
         <translation>
-            <numerusform>[%Ln tûrn ~~]</numerusform>
-            <numerusform>[%Ln tûrns ~~]</numerusform>
+            <numerusform>[%Ln tûrn ~~~]</numerusform>
+            <numerusform>[%Ln tûrns ~~~~]</numerusform>
         </translation>
     </message>
     <message id="solution.a11y.turn">
         <source>Turn %1. %2</source>
         <extracomment>Screen-reader name of one row in the list. %2 is a turn sentence.</extracomment>
-        <translation>[Tûrn %1. %2 ~~~]</translation>
+        <translation>[Tûrn %1. %2 ~~~~]</translation>
     </message>
     <message id="history.title">
         <source>History</source>
@@ -1343,20 +1343,20 @@ In your hands.</source>
     <message id="history.empty.body">
         <source>Cubes you solve are listed here, on this device only.</source>
         <extracomment>Body of the empty list.</extracomment>
-        <translation>[Cûbés yõû sõlvé àré lîstéd héré, õn thîs dévîcé õnly. ~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cûbés yõû sõlvé àré lîstéd héré, õn thîs dévîcé õnly. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="history.item.done" numerus="yes">
         <source>%Ln turns · %1</source>
         <extracomment>One row. %1 is a duration such as 12:40. The dot is a separator.</extracomment>
         <translation>
-            <numerusform>[%Ln tûrn · %1 ~~~]</numerusform>
-            <numerusform>[%Ln tûrns · %1 ~~~~]</numerusform>
+            <numerusform>[%Ln tûrn · %1 ~~~~~]</numerusform>
+            <numerusform>[%Ln tûrns · %1 ~~~~~ ~]</numerusform>
         </translation>
     </message>
     <message id="history.item.unfinished">
         <source>Unfinished · turn %1 of %2</source>
         <extracomment>One row, for a solve left part-way.</extracomment>
-        <translation>[Ûnfînîshéd · tûrn %1 õf %2 ~~~~~~~~~]</translation>
+        <translation>[Ûnfînîshéd · tûrn %1 õf %2 ~~~~~ ~~~~~]</translation>
     </message>
     <message id="history.delete">
         <source>Delete</source>
@@ -1371,12 +1371,12 @@ In your hands.</source>
     <message id="history.off.title">
         <source>History is off</source>
         <extracomment>Heading shown when the setting is off.</extracomment>
-        <translation>[Hîstõry îs õff ~~~~~~]</translation>
+        <translation>[Hîstõry îs õff ~~~~~ ~]</translation>
     </message>
     <message id="history.off.body">
         <source>Solves are not being kept. You can turn history on in Settings.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Sõlvés àré nõt béîng képt. Yõû càn tûrn hîstõry õn în Séttîngs. ~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Sõlvés àré nõt béîng képt. Yõû càn tûrn hîstõry õn în Séttîngs. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="history.off.open">
         <source>Open Settings</source>
@@ -1386,7 +1386,7 @@ In your hands.</source>
     <message id="history.delete.title">
         <source>Delete this solve?</source>
         <extracomment>Dialog title.</extracomment>
-        <translation>[Délété thîs sõlvé? ~~~~~~~]</translation>
+        <translation>[Délété thîs sõlvé? ~~~~~ ~~]</translation>
     </message>
     <message id="history.delete.keep">
         <source>Keep it</source>
@@ -1396,14 +1396,14 @@ In your hands.</source>
     <message id="history.clear.title">
         <source>Clear all history?</source>
         <extracomment>Dialog title.</extracomment>
-        <translation>[Cléàr àll hîstõry? ~~~~~~~]</translation>
+        <translation>[Cléàr àll hîstõry? ~~~~~ ~~]</translation>
     </message>
     <message id="history.clear.body" numerus="yes">
         <source>%Ln solves will be deleted from this device.</source>
         <extracomment>Dialog body.</extracomment>
         <translation>
-            <numerusform>[%Ln sõlvé wîll bé délétéd frõm thîs dévîcé. ~~~~~~~~~~~~~~~~]</numerusform>
-            <numerusform>[%Ln sõlvés wîll bé délétéd frõm thîs dévîcé. ~~~~~~~~~~~~~~~~]</numerusform>
+            <numerusform>[%Ln sõlvé wîll bé délétéd frõm thîs dévîcé. ~~~~~ ~~~~~ ~~~~~ ~~]</numerusform>
+            <numerusform>[%Ln sõlvés wîll bé délétéd frõm thîs dévîcé. ~~~~~ ~~~~~ ~~~~~ ~~~]</numerusform>
         </translation>
     </message>
     <message id="history.clear.keep">
@@ -1424,7 +1424,7 @@ In your hands.</source>
     <message id="settings.language.system">
         <source>Same as this device (%1)</source>
         <extracomment>First choice in the language list. %1 is the language's own name, such as Deutsch.</extracomment>
-        <translation>[Sàmé às thîs dévîcé (%1) ~~~~~~~~~]</translation>
+        <translation>[Sàmé às thîs dévîcé (%1) ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.section.appearance">
         <source>Appearance</source>
@@ -1439,7 +1439,7 @@ In your hands.</source>
     <message id="settings.theme.system">
         <source>Same as this device</source>
         <extracomment>Choice.</extracomment>
-        <translation>[Sàmé às thîs dévîcé ~~~~~~~~]</translation>
+        <translation>[Sàmé às thîs dévîcé ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.theme.light">
         <source>Light</source>
@@ -1454,12 +1454,12 @@ In your hands.</source>
     <message id="settings.marks">
         <source>Marks on cube colours</source>
         <extracomment>Switch. Draws a small shape on each colour.</extracomment>
-        <translation>[Màrks õn cûbé cõlõûrs ~~~~~~~~]</translation>
+        <translation>[Màrks õn cûbé cõlõûrs ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.marks.note">
         <source>A shape on each colour, so they can be told apart without relying on colour.</source>
         <extracomment>Explanation under the switch.</extracomment>
-        <translation>[À shàpé õn éàch cõlõûr, sõ théy càn bé tõld àpàrt wîthõût rélyîng õn cõlõûr. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[À shàpé õn éàch cõlõûr, sõ théy càn bé tõld àpàrt wîthõût rélyîng õn cõlõûr. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.textSize">
         <source>Text size</source>
@@ -1469,7 +1469,7 @@ In your hands.</source>
     <message id="settings.textSize.system">
         <source>Same as this device</source>
         <extracomment>Choice.</extracomment>
-        <translation>[Sàmé às thîs dévîcé ~~~~~~~~]</translation>
+        <translation>[Sàmé às thîs dévîcé ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.textSize.large">
         <source>Large</source>
@@ -1489,7 +1489,7 @@ In your hands.</source>
     <message id="settings.motion.system">
         <source>Same as this device</source>
         <extracomment>Choice.</extracomment>
-        <translation>[Sàmé às thîs dévîcé ~~~~~~~~]</translation>
+        <translation>[Sàmé às thîs dévîcé ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.motion.reduced">
         <source>Reduced</source>
@@ -1509,7 +1509,7 @@ In your hands.</source>
     <message id="settings.advance">
         <source>Move to the next turn</source>
         <extracomment>Row label: how the solve screen advances.</extracomment>
-        <translation>[Mõvé tõ thé néxt tûrn ~~~~~~~~]</translation>
+        <translation>[Mõvé tõ thé néxt tûrn ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.advance.tap">
         <source>When I tap</source>
@@ -1544,22 +1544,22 @@ In your hands.</source>
     <message id="settings.explain">
         <source>Explain each stage</source>
         <extracomment>Switch.</extracomment>
-        <translation>[Éxplàîn éàch stàgé ~~~~~~~]</translation>
+        <translation>[Éxplàîn éàch stàgé ~~~~~ ~~]</translation>
     </message>
     <message id="settings.explain.note">
         <source>Says what each stage does and why, as you reach it.</source>
         <extracomment>Explanation under the switch.</extracomment>
-        <translation>[Sàys whàt éàch stàgé dõés ànd why, às yõû réàch ît. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Sàys whàt éàch stàgé dõés ànd why, às yõû réàch ît. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.notation">
         <source>Show cube notation</source>
         <extracomment>Switch.</extracomment>
-        <translation>[Shõw cûbé nõtàtîõn ~~~~~~~]</translation>
+        <translation>[Shõw cûbé nõtàtîõn ~~~~~ ~~]</translation>
     </message>
     <message id="settings.notation.note">
         <source>Adds the letters cubers use, such as R U R'.</source>
         <extracomment>Explanation under the switch. The letters are not translated.</extracomment>
-        <translation>[Àdds thé léttérs cûbérs ûsé, sûch às R Û R'. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Àdds thé léttérs cûbérs ûsé, sûch às R Û R'. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.sound">
         <source>Sound</source>
@@ -1579,32 +1579,32 @@ In your hands.</source>
     <message id="settings.camera.finding">
         <source>Looking for cameras…</source>
         <extracomment>Status.</extracomment>
-        <translation>[Lõõkîng fõr càméràs… ~~~~~~~~]</translation>
+        <translation>[Lõõkîng fõr càméràs… ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.camera.choose">
         <source>Cubeulator reads the cube with this camera.</source>
         <extracomment>Text above the list of cameras.</extracomment>
-        <translation>[Cûbéûlàtõr réàds thé cûbé wîth thîs càmérà. ~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator réàds thé cûbé wîth thîs càmérà. ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="settings.camera.none">
         <source>No camera was found. Plug one in, then look again.</source>
         <extracomment>Status.</extracomment>
-        <translation>[Nõ càmérà wàs fõûnd. Plûg õné în, thén lõõk àgàîn. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Nõ càmérà wàs fõûnd. Plûg õné în, thén lõõk àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.camera.allowed">
         <source>Camera access is allowed.</source>
         <extracomment>Status on phones and macOS.</extracomment>
-        <translation>[Càmérà àccéss îs àllõwéd. ~~~~~~~~~~]</translation>
+        <translation>[Càmérà àccéss îs àllõwéd. ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.camera.refused">
         <source>Camera access is not allowed.</source>
         <extracomment>Status on phones and macOS.</extracomment>
-        <translation>[Càmérà àccéss îs nõt àllõwéd. ~~~~~~~~~~~~]</translation>
+        <translation>[Càmérà àccéss îs nõt àllõwéd. ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="settings.camera.unsupported">
         <source>This version cannot use this device's camera yet.</source>
         <extracomment>Status.</extracomment>
-        <translation>[Thîs vérsîõn cànnõt ûsé thîs dévîcé's càmérà yét. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thîs vérsîõn cànnõt ûsé thîs dévîcé's càmérà yét. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.section.history">
         <source>History</source>
@@ -1614,12 +1614,12 @@ In your hands.</source>
     <message id="settings.history.keep">
         <source>Keep a history of solves</source>
         <extracomment>Switch.</extracomment>
-        <translation>[Kéép à hîstõry õf sõlvés ~~~~~~~~~~]</translation>
+        <translation>[Kéép à hîstõry õf sõlvés ~~~~~ ~~~~~]</translation>
     </message>
     <message id="settings.history.note">
         <source>Kept on this device only. No pictures are kept.</source>
         <extracomment>Explanation under the switch.</extracomment>
-        <translation>[Képt õn thîs dévîcé õnly. Nõ pîctûrés àré képt. ~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Képt õn thîs dévîcé õnly. Nõ pîctûrés àré képt. ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="settings.section.about">
         <source>About</source>
@@ -1629,7 +1629,7 @@ In your hands.</source>
     <message id="settings.about">
         <source>About Cubeulator</source>
         <extracomment>Row. Opens the About screen.</extracomment>
-        <translation>[Àbõût Cûbéûlàtõr ~~~~~~]</translation>
+        <translation>[Àbõût Cubeulator ~~~~~ ~]</translation>
     </message>
     <message id="settings.section.developer">
         <source>Developer</source>
@@ -1639,12 +1639,12 @@ In your hands.</source>
     <message id="settings.dev.backend">
         <source>Graphics backend. Running %1.</source>
         <extracomment>Developer builds only.</extracomment>
-        <translation>[Gràphîcs bàckénd. Rûnnîng %1. ~~~~~~~~~~~]</translation>
+        <translation>[Gràphîcs bàckénd. Rûnnîng %1. ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="settings.dev.restart">
         <source>Restart Cubeulator to switch to this backend.</source>
         <extracomment>Developer builds only.</extracomment>
-        <translation>[Réstàrt Cûbéûlàtõr tõ swîtch tõ thîs bàckénd. ~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Réstàrt Cubeulator tõ swîtch tõ thîs bàckénd. ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="settings.dev.cubeStyle">
         <source>Cube style</source>
@@ -1654,27 +1654,27 @@ In your hands.</source>
     <message id="settings.dev.stats">
         <source>Show frame rate</source>
         <extracomment>Developer builds only.</extracomment>
-        <translation>[Shõw fràmé ràté ~~~~~~]</translation>
+        <translation>[Shõw fràmé ràté ~~~~~ ~]</translation>
     </message>
     <message id="settings.dev.recording">
         <source>This developer build records failed scans on this device.</source>
         <extracomment>Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so.</extracomment>
-        <translation>[Thîs dévélõpér bûîld récõrds fàîléd scàns õn thîs dévîcé. ~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thîs dévélõpér bûîld récõrds fàîléd scàns õn thîs dévîcé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="about.title">
         <source>About Cubeulator</source>
         <extracomment>Screen title, and the macOS menu item.</extracomment>
-        <translation>[Àbõût Cûbéûlàtõr ~~~~~~]</translation>
+        <translation>[Àbõût Cubeulator ~~~~~ ~]</translation>
     </message>
     <message id="about.version">
         <source>Version %1</source>
         <extracomment>%1 is a version number such as 1.0.0.</extracomment>
-        <translation>[Vérsîõn %1 ~~~]</translation>
+        <translation>[Vérsîõn %1 ~~~~]</translation>
     </message>
     <message id="about.what">
         <source>A camera-driven solver for the 3x3 cube.</source>
         <extracomment>One-line description.</extracomment>
-        <translation>[À càmérà-drîvén sõlvér fõr thé 3x3 cûbé. ~~~~~~~~~~~~~~~~]</translation>
+        <translation>[À càmérà-drîvén sõlvér fõr thé 3x3 cûbé. ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="about.author">
         <source>Made by %1.</source>
@@ -1684,7 +1684,7 @@ In your hands.</source>
     <message id="about.licence">
         <source>Free software under the GNU General Public License, version 3 or later.</source>
         <extracomment>Do not translate the licence's name.</extracomment>
-        <translation>[Fréé sõftwàré ûndér thé GNÛ Généràl Pûblîc Lîcénsé, vérsîõn 3 õr làtér. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Fréé sõftwàré ûndér thé GNÛ Généràl Pûblîc Lîcénsé, vérsîõn 3 õr làtér. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="about.source">
         <source>Source code</source>
@@ -1704,12 +1704,12 @@ In your hands.</source>
     <message id="about.trademark">
         <source>Cubeulator is not affiliated with the makers of any cube.</source>
         <extracomment>Small print.</extracomment>
-        <translation>[Cûbéûlàtõr îs nõt àffîlîàtéd wîth thé màkérs õf àny cûbé. ~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator îs nõt àffîlîàtéd wîth thé màkérs õf àny cûbé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="about.build">
         <source>%1 · built from %2</source>
         <extracomment>Monospace line under the version. %1 is the platform and architecture, such as windows-x64; %2 is the first eight characters of the source revision. Keep the dot between the parts. Only 'built from' is translated.</extracomment>
-        <translation>[%1 · bûîlt frõm %2 ~~~~~~]</translation>
+        <translation>[%1 · bûîlt frõm %2 ~~~~~ ~~]</translation>
     </message>
     <message id="about.copyBuild">
         <source>Copy</source>
@@ -1719,12 +1719,12 @@ In your hands.</source>
     <message id="about.copyDetails">
         <source>Copy details for a bug report</source>
         <extracomment>Row in About. Puts a block of text on the clipboard.</extracomment>
-        <translation>[Cõpy détàîls fõr à bûg répõrt ~~~~~~~~~~~~]</translation>
+        <translation>[Cõpy détàîls fõr à bûg répõrt ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="about.copyDetails.note">
         <source>Text only: the version, this device and the app's settings. No picture, and nothing about your cube.</source>
         <extracomment>Note under the row. Must stay true of every build.</extracomment>
-        <translation>[Téxt õnly: thé vérsîõn, thîs dévîcé ànd thé àpp's séttîngs. Nõ pîctûré, ànd nõthîng àbõût yõûr cûbé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Téxt õnly: thé vérsîõn, thîs dévîcé ànd thé àpp's séttîngs. Nõ pîctûré, ànd nõthîng àbõût yõûr cûbé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="about.copied">
         <source>Copied</source>
@@ -1739,22 +1739,22 @@ In your hands.</source>
     <message id="licences.intro">
         <source>Cubeulator is built with these components. Each is used under its own licence.</source>
         <extracomment>Text above the list.</extracomment>
-        <translation>[Cûbéûlàtõr îs bûîlt wîth thésé cõmpõnénts. Éàch îs ûséd ûndér îts õwn lîcéncé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator îs bûîlt wîth thésé cõmpõnénts. Éàch îs ûséd ûndér îts õwn lîcéncé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="licences.own">
         <source>Cubeulator</source>
         <extracomment>First row: the app's own licence.</extracomment>
-        <translation>[Cûbéûlàtõr ~~~~]</translation>
+        <translation>[Cubeulator ~~~~]</translation>
     </message>
     <message id="licences.unavailable.title">
         <source>The notices could not be loaded</source>
         <extracomment>Heading.</extracomment>
-        <translation>[Thé nõtîcés cõûld nõt bé lõàdéd ~~~~~~~~~~~~]</translation>
+        <translation>[Thé nõtîcés cõûld nõt bé lõàdéd ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="licences.unavailable.body">
         <source>They are also published with the source code at %1.</source>
         <extracomment>Body. %1 is a web address.</extracomment>
-        <translation>[Théy àré àlsõ pûblîshéd wîth thé sõûrcé cõdé àt %1. ~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Théy àré àlsõ pûblîshéd wîth thé sõûrcé cõdé àt %1. ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="privacy.title">
         <source>Privacy</source>
@@ -1769,7 +1769,7 @@ In your hands.</source>
     <message id="privacy.camera.body">
         <source>The camera picture is used on this device to read your cube's colours. No picture is saved, and nothing is sent anywhere.</source>
         <extracomment>Body. Must stay true of every released build.</extracomment>
-        <translation>[Thé càmérà pîctûré îs ûséd õn thîs dévîcé tõ réàd yõûr cûbé's cõlõûrs. Nõ pîctûré îs sàvéd, ànd nõthîng îs sént ànywhéré. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Thé càmérà pîctûré îs ûséd õn thîs dévîcé tõ réàd yõûr cûbé's cõlõûrs. Nõ pîctûré îs sàvéd, ànd nõthîng îs sént ànywhéré. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="privacy.history.title">
         <source>Solve history</source>
@@ -1779,7 +1779,7 @@ In your hands.</source>
     <message id="privacy.history.body">
         <source>Cubeulator keeps a list of the cubes you have solved: the colours, the turns, the date and how long it took. It stays on this device. You can clear it, or turn it off, in Settings.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Cûbéûlàtõr kééps à lîst õf thé cûbés yõû hàvé sõlvéd: thé cõlõûrs, thé tûrns, thé dàté ànd hõw lõng ît tõõk. Ît stàys õn thîs dévîcé. Yõû càn cléàr ît, õr tûrn ît õff, în Séttîngs. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator kééps à lîst õf thé cûbés yõû hàvé sõlvéd: thé cõlõûrs, thé tûrns, thé dàté ànd hõw lõng ît tõõk. Ît stàys õn thîs dévîcé. Yõû càn cléàr ît, õr tûrn ît õff, în Séttîngs. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="privacy.network.title">
         <source>The internet</source>
@@ -1789,7 +1789,7 @@ In your hands.</source>
     <message id="privacy.network.body">
         <source>Cubeulator does not use the internet. It has no accounts, no adverts and no tracking.</source>
         <extracomment>Body.</extracomment>
-        <translation>[Cûbéûlàtõr dõés nõt ûsé thé întérnét. Ît hàs nõ àccõûnts, nõ àdvérts ànd nõ tràckîng. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Cubeulator dõés nõt ûsé thé întérnét. Ît hàs nõ àccõûnts, nõ àdvérts ànd nõ tràckîng. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="help.title">
         <source>Help</source>
@@ -1804,32 +1804,32 @@ In your hands.</source>
     <message id="help.scanning">
         <source>Scanning the cube</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Scànnîng thé cûbé ~~~~~~~]</translation>
+        <translation>[Scànnîng thé cûbé ~~~~~ ~~]</translation>
     </message>
     <message id="help.entering">
         <source>Entering colours by hand</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Éntérîng cõlõûrs by hànd ~~~~~~~~~~]</translation>
+        <translation>[Éntérîng cõlõûrs by hànd ~~~~~ ~~~~~]</translation>
     </message>
     <message id="help.holding">
         <source>Holding the cube</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Hõldîng thé cûbé ~~~~~~]</translation>
+        <translation>[Hõldîng thé cûbé ~~~~~ ~]</translation>
     </message>
     <message id="help.turns">
         <source>What the words mean</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Whàt thé wõrds méàn ~~~~~~~~]</translation>
+        <translation>[Whàt thé wõrds méàn ~~~~~ ~~~]</translation>
     </message>
     <message id="help.lost">
         <source>If the cube does not match</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Îf thé cûbé dõés nõt màtch ~~~~~~~~~~]</translation>
+        <translation>[Îf thé cûbé dõés nõt màtch ~~~~~ ~~~~~]</translation>
     </message>
     <message id="help.cubes">
         <source>Which cubes work</source>
         <extracomment>Topic.</extracomment>
-        <translation>[Whîch cûbés wõrk ~~~~~~]</translation>
+        <translation>[Whîch cûbés wõrk ~~~~~ ~]</translation>
     </message>
     <message id="help.notation">
         <source>Cube notation</source>
@@ -1856,7 +1856,7 @@ Kéép ît stîll ûntîl thàt sîdé àppéàrs în thé rõw àt thé bõttõ
 
 Ûsé brîght, évén lîght. Îf à stîckér shînés, tîlt thé cûbé à lîttlé ûntîl thé shîné gõés. À wîndõw béhînd yõû îs béttér thàn à wîndõw béhînd thé cûbé.
 
-Îf à sîdé wîll nõt réàd, yõû càn éntér thé cõlõûrs by hànd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Îf à sîdé wîll nõt réàd, yõû càn éntér thé cõlõûrs by hànd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="help.entering.body">
         <source>Choose a colour, then tap every sticker of that colour on the side you are looking at. Then choose the next colour.
@@ -1871,9 +1871,9 @@ When every sticker is filled in, Cubeulator checks that the colours make a real 
 
 Dõ õné sîdé àt à tîmé. Thé céntré õf éàch sîdé îs fîlléd în àlréàdy: ît névér chàngés, ànd ît télls yõû whîch sîdé yõû àré õn.
 
-Ît dõés nõt màttér whîch wày ûp yõû hõld éàch sîdé. Cûbéûlàtõr wõrks thàt õût.
+Ît dõés nõt màttér whîch wày ûp yõû hõld éàch sîdé. Cubeulator wõrks thàt õût.
 
-Whén évéry stîckér îs fîlléd în, Cûbéûlàtõr chécks thàt thé cõlõûrs màké à réàl cûbé. Îf théy dõ nõt, cõmpàré éàch sîdé wîth yõûr cûbé àgàîn. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Whén évéry stîckér îs fîlléd în, Cubeulator chécks thàt thé cõlõûrs màké à réàl cûbé. Îf théy dõ nõt, cõmpàré éàch sîdé wîth yõûr cûbé àgàîn. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="help.holding.body">
         <source>For the whole solve, hold the cube the same way round: the side with the yellow centre on top, the side with the green centre facing you.
@@ -1890,7 +1890,7 @@ Lõõk àt thé céntrés õnly. Thé õthér stîckérs mõvé; thé céntrés 
 
 Àftér à tûrn, dõ nõt tûrn thé whõlé cûbé rõûnd tõ lõõk àt ît. Îf yõû dõ, pût ît bàck: yéllõw céntré õn tõp, gréén céntré fàcîng yõû.
 
-Prõp thîs dévîcé ûp whéré yõû càn séé ît wîth bõth hànds õn thé cûbé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Prõp thîs dévîcé ûp whéré yõû càn séé ît wîth bõth hànds õn thé cûbé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="help.turns.body">
         <source>A side is one of the six sides of the cube. Each is named by where it is as you hold it: top, bottom, left, right, front and back.
@@ -1907,7 +1907,7 @@ The picture shows every turn. If the words and the picture ever seem to disagree
 
 Thé tõp ànd bõttõm tûrn tõ thé léft õr tõ thé rîght. Thé léft ànd rîght sîdés tûrn ûpwàrds õr dõwnwàrds: thàt îs thé wày thé pàrt fàcîng yõû mõvés. Thé frõnt ànd bàck tûrn clõckwîsé õr àntîclõckwîsé, àlwàys às yõû séé ît frõm thé frõnt.
 
-Thé pîctûré shõws évéry tûrn. Îf thé wõrds ànd thé pîctûré évér séém tõ dîsàgréé, fõllõw thé pîctûré. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Thé pîctûré shõws évéry tûrn. Îf thé wõrds ànd thé pîctûré évér séém tõ dîsàgréé, fõllõw thé pîctûré. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~]</translation>
     </message>
     <message id="help.lost.body">
         <source>If your cube stops matching the picture, one turn has probably gone the wrong way.
@@ -1924,7 +1924,7 @@ Fîrst chéck hõw yõû àré hõldîng ît: yéllõw céntré õn tõp, gréé
 
 Thén gõ bàck õné tûrn ànd cõmpàré àgàîn.
 
-Îf ît stîll dõés nõt màtch, scàn thé cûbé àgàîn. Cûbéûlàtõr sõlvés ît frõm whéré ît îs nõw, sõ nõthîng îs lõst bût à lîttlé tîmé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Îf ît stîll dõés nõt màtch, scàn thé cûbé àgàîn. Cubeulator sõlvés ît frõm whéré ît îs nõw, sõ nõthîng îs lõst bût à lîttlé tîmé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="help.cubes.body">
         <source>Cubeulator works with an ordinary 3x3 cube: nine coloured stickers on each side, with dark plastic between them, in white, yellow, red, orange, green and blue.
@@ -1933,11 +1933,11 @@ It does not yet read cubes without stickers, cubes made of white or light plasti
 
 It does not work with other sizes of cube.</source>
         <extracomment>Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences.</extracomment>
-        <translation>[Cûbéûlàtõr wõrks wîth àn õrdînàry 3x3 cûbé: nîné cõlõûréd stîckérs õn éàch sîdé, wîth dàrk plàstîc bétwéén thém, în whîté, yéllõw, réd, õràngé, gréén ànd blûé.
+        <translation>[Cubeulator wõrks wîth àn õrdînàry 3x3 cûbé: nîné cõlõûréd stîckérs õn éàch sîdé, wîth dàrk plàstîc bétwéén thém, în whîté, yéllõw, réd, õràngé, gréén ànd blûé.
 
 Ît dõés nõt yét réàd cûbés wîthõût stîckérs, cûbés màdé õf whîté õr lîght plàstîc, cûbés wîth pîctûrés, õr cûbés în õthér cõlõûrs. Yõû càn stîll éntér õné õf thõsé by hànd îf îts sîx cõlõûrs càn bé màtchéd tõ thé sîx héré.
 
-Ît dõés nõt wõrk wîth õthér sîzés õf cûbé. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Ît dõés nõt wõrk wîth õthér sîzés õf cûbé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="help.notation.body">
         <source>Cubers write turns as letters. Cubeulator can show them beside its own words: turn on Show cube notation in Settings.
@@ -1948,13 +1948,13 @@ A letter alone is a quarter turn clockwise, as you would see it looking straight
 
 That is why the bottom and the back can seem to go the wrong way: in notation, clockwise is judged from underneath and from behind. Cubeulator's own words are always from where you are.</source>
         <extracomment>Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. Do not translate the letters U, D, L, R, F, B.</extracomment>
-        <translation>[Cûbérs wrîté tûrns às léttérs. Cûbéûlàtõr càn shõw thém bésîdé îts õwn wõrds: tûrn õn Shõw cûbé nõtàtîõn în Séttîngs.
+        <translation>[Cûbérs wrîté tûrns às léttérs. Cubeulator càn shõw thém bésîdé îts õwn wõrds: tûrn õn Shõw cûbé nõtàtîõn în Séttîngs.
 
 Û îs thé tõp, D thé bõttõm, L thé léft, R thé rîght, F thé frõnt ànd B thé bàck.
 
 À léttér àlõné îs à qûàrtér tûrn clõckwîsé, às yõû wõûld séé ît lõõkîng stràîght àt thàt sîdé. Àn àpõstrõphé àftér ît méàns àntîclõckwîsé. À 2 méàns à hàlf tûrn.
 
-Thàt îs why thé bõttõm ànd thé bàck càn séém tõ gõ thé wrõng wày: în nõtàtîõn, clõckwîsé îs jûdgéd frõm ûndérnéàth ànd frõm béhînd. Cûbéûlàtõr's õwn wõrds àré àlwàys frõm whéré yõû àré. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+Thàt îs why thé bõttõm ànd thé bàck càn séém tõ gõ thé wrõng wày: în nõtàtîõn, clõckwîsé îs jûdgéd frõm ûndérnéàth ànd frõm béhînd. Cubeulator's õwn wõrds àré àlwàys frõm whéré yõû àré. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
     <message id="help.keys.body">
         <source>On the solve screen, Space, Enter or Page Down moves to the next turn. Page Up goes back one. P pauses. Esc leaves and keeps your place.
@@ -1967,7 +1967,7 @@ F1 opens Help.</source>
 
 Évérywhéré, Tàb mõvés tõ thé néxt cõntrõl, Spàcé õr Éntér préssés ît, ànd Ésc gõés bàck.
 
-F1 õpéns Hélp. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+F1 õpéns Hélp. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
     </message>
     <message id="menu.file">
         <source>File</source>
@@ -1997,47 +1997,47 @@ F1 õpéns Hélp. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     <message id="menu.quit">
         <source>Quit Cubeulator</source>
         <extracomment>Menu item, macOS.</extracomment>
-        <translation>[Qûît Cûbéûlàtõr ~~~~~~]</translation>
+        <translation>[Qûît Cubeulator ~~~~~ ~]</translation>
     </message>
     <message id="menu.helpItem">
         <source>Cubeulator Help</source>
         <extracomment>Menu item, macOS Help menu.</extracomment>
-        <translation>[Cûbéûlàtõr Hélp ~~~~~~]</translation>
+        <translation>[Cubeulator Hélp ~~~~~ ~]</translation>
     </message>
     <message id="menu.enterByHand">
         <source>Enter Colours by Hand</source>
         <extracomment>Menu item, macOS File menu. Title case as macOS menus are.</extracomment>
-        <translation>[Éntér Cõlõûrs by Hànd ~~~~~~~~]</translation>
+        <translation>[Éntér Cõlõûrs by Hànd ~~~~~ ~~~]</translation>
     </message>
     <message id="store.summary">
         <source>Scan your cube with the camera, then follow one turn at a time until it is solved.</source>
         <extracomment>The one-line description in app stores and software centres. 80 characters at most in every language.</extracomment>
-        <translation>[Scàn yõûr cûbé wîth thé càmérà, thén fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~]</translation>
+        <translation>[Scàn yõûr cûbé wîth thé càmérà, thén fõllõw õné tûrn àt à tîmé ûntîl ît îs sõlvéd. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="store.caption.1">
         <source>Scan. Solve. In your hands.</source>
         <extracomment>Caption on the first store screenshot. The same line as app.tagline, on one line.</extracomment>
-        <translation>[Scàn. Sõlvé. În yõûr hànds. ~~~~~~~~~~~]</translation>
+        <translation>[Scàn. Sõlvé. În yõûr hànds. ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="store.caption.2">
         <source>Show each side to the camera</source>
         <extracomment>Caption on the screenshot of the scan screen.</extracomment>
-        <translation>[Shõw éàch sîdé tõ thé càmérà ~~~~~~~~~~~]</translation>
+        <translation>[Shõw éàch sîdé tõ thé càmérà ~~~~~ ~~~~~ ~]</translation>
     </message>
     <message id="store.caption.3">
         <source>Follow one turn at a time</source>
         <extracomment>Caption on the screenshot of the solve screen.</extracomment>
-        <translation>[Fõllõw õné tûrn àt à tîmé ~~~~~~~~~~]</translation>
+        <translation>[Fõllõw õné tûrn àt à tîmé ~~~~~ ~~~~~]</translation>
     </message>
     <message id="store.caption.4">
         <source>See what each stage is for</source>
         <extracomment>Caption on the screenshot of a stage change.</extracomment>
-        <translation>[Séé whàt éàch stàgé îs fõr ~~~~~~~~~~]</translation>
+        <translation>[Séé whàt éàch stàgé îs fõr ~~~~~ ~~~~~]</translation>
     </message>
     <message id="store.caption.5">
         <source>Colours you can tell apart</source>
         <extracomment>Caption on the screenshot showing the marks on cube colours, in the dark theme.</extracomment>
-        <translation>[Cõlõûrs yõû càn téll àpàrt ~~~~~~~~~~]</translation>
+        <translation>[Cõlõûrs yõû càn téll àpàrt ~~~~~ ~~~~~]</translation>
     </message>
     <message id="store.caption.6">
         <source>Solved</source>

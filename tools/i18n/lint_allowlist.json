@@ -1,0 +1,202 @@
+{
+  "$comment": [
+    "Literals the translation lint (tools/i18n/lint_strings.py) lets through, by file and literal, each with the lane that owns the file.",
+    "A new literal in these files fails the lint like any other; an entry whose literal is gone fails it too, so the list can only get shorter.",
+    "Whoever converts a literal removes its entry. docs/i18n.md lists, per lane, what has to change; `lint_strings.py --report` prints it.",
+    "Experience-lane files are converted now where the design has a string for the text (docs/design/strings.json). What remains here from that lane is text that has no id because nothing in the design says it."
+  ],
+  "entries": [
+    {
+      "file": "src/app/qt/AppState.qml",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "The scan flow's messages. E2a splits navigation (experience) from the scan flow (scan); these travel with the scan flow. Expose a code, word it in QML.",
+      "literals": [
+        "Cube changed mid-scan — starting the capture over",
+        "One face looked misread — keep scanning, show faces again"
+      ]
+    },
+    {
+      "file": "src/app/qt/CompleteScreen.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "The Method statistic, which the design drops. E3d rebuilds Complete on the kit.",
+      "literals": [
+        "Beginner",
+        "METHOD"
+      ]
+    },
+    {
+      "file": "src/app/qt/DirectScanScreen.qml",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "The scan screen's headline and guidance. R4 and E3c rebuild its chrome with the scan lane; ids exist for most of these (scan.title.*, scan.guide.*).",
+      "literals": [
+        " of 6 sides read",
+        "All six sides make a valid cube. Working out the solution…",
+        "Camera unavailable",
+        "Cancel",
+        "Cube read",
+        "Hold it still",
+        "Hold one side of the cube square to the camera",
+        "Reading this side — hold it there",
+        "Setting the camera's exposure and colour balance…",
+        "Start over",
+        "Starting the camera…",
+        "These six sides do not make a valid cube yet. Show each side again, square to the camera.",
+        "Turn to a side that is not filled in below, square to the camera"
+      ]
+    },
+    {
+      "file": "src/app/qt/ScanScreen.qml",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "The previous scan pipeline's screen, removed in R6. Not converted: it is going.",
+      "literals": [
+        "  [RAW]",
+        " ms",
+        " of 6 faces captured",
+        "CONF",
+        "CONFIDENCE",
+        "Confirm",
+        "Connecting to camera…",
+        "Face captured",
+        "Hand in view",
+        "Hold steadier",
+        "Hold steadier for a cleaner read",
+        "Hold steady — reading three faces…",
+        "Looking for the cube…",
+        "PROGRESS",
+        "Re-acquiring…",
+        "Re-orienting — hold the cube in view",
+        "Reading confirmed — advancing…",
+        "Reading three faces at once…",
+        "Retake",
+        "Scan didn't look right — keep scanning, show faces again",
+        "Show me any face — ",
+        "Show the whole cube",
+        "Tracking lost — show the cube again",
+        "\\nhealth ",
+        "\\npass   ",
+        "\\nreinit ",
+        "hand in frame",
+        "lost",
+        "or show a corner — three faces at once",
+        "shaky",
+        "track  "
+      ]
+    },
+    {
+      "file": "src/app/qt/SettingsScreen.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "Settings the design removes (the two ScanSession settings, cube motion, shader style) or moves behind a developer build. E3a rebuilds this screen on the kit and these go with it; none has an id because none survives.",
+      "literals": [
+        "Auto-advance between faces",
+        "Auto-rotate when idle",
+        "CUBE MOTION",
+        "Detect hands with AI",
+        "RENDERING",
+        "SCANNING",
+        "Shader style for the 3D cube shown around the app.",
+        "Test turn"
+      ]
+    },
+    {
+      "file": "src/app/qt/SettingsState.qml",
+      "owner": "kit session (feature/ax-kit)",
+      "reason": "Labels held in the settings object (themes, shader styles, speeds, graphics backends). SettingsScreen no longer reads the theme labels: it maps the key to settings.theme.*. Backend names are product names and stay literal; the rest go with the kit's rebuild of SettingsState.",
+      "literals": [
+        "Auto",
+        "Borderlands Cel-Shading",
+        "D3D11",
+        "D3D12",
+        "Dark",
+        "GL",
+        "GLES",
+        "Instructional Glow",
+        "Light",
+        "Metal",
+        "Physically-Based Realism",
+        "System",
+        "Vulkan"
+      ]
+    },
+    {
+      "file": "src/app/qt/SolveScreen.qml",
+      "owner": "solve lane (feature/solve-guidance)",
+      "reason": "The solve screen's stage names, hints and captions. E3d restyles the chrome with the solve lane; ids exist for most of these (stage.*, solve.*).",
+      "literals": [
+        " OF ",
+        " facing you",
+        " on top, ",
+        " was turned, but not the way shown. Turn it back and try again.",
+        ") was turned instead. Turn it back, then make the move shown.",
+        "Bring the four white edges home, matching each side centre.",
+        "Camera unavailable",
+        "Drag the cube to look round it",
+        "Finish",
+        "Hold any side square to the camera and the cube here turns to match",
+        "Insert the four white corners to complete the first layer.",
+        "Left side",
+        "Matched to your cube",
+        "Matched. Make the move and it steps on by itself.",
+        "Matched. The camera cannot see the side facing you: press Next after this move.",
+        "Middle layer",
+        "Next move",
+        "Not the move that was asked for",
+        "Not the side that was expected",
+        "Only the view has turned. Keep your cube as it is.",
+        "Orient last layer",
+        "Orient the last layer's edges and corners so the top side reads solid.",
+        "Out of step? Rescan",
+        "Permute last layer",
+        "Permute the last layer's pieces into their solved positions.",
+        "Previous",
+        "Rescan the cube and carry on from there",
+        "Right side",
+        "STAGE ",
+        "STAGES",
+        "Seen from behind",
+        "Send the middle-layer edges home.",
+        "Show a side again if you turn the cube over",
+        "Solved",
+        "Solving…",
+        "Starting the camera…",
+        "That side is not expected",
+        "That side looks the same turned. Show another to tell which way up.",
+        "That was not the move",
+        "The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan.",
+        "White corners",
+        "White cross",
+        "half turn",
+        "quarter turn",
+        "unknown",
+        "wrong"
+      ]
+    },
+    {
+      "file": "src/app/qt/StatsOverlay.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "Developer-build overlay; developer strings may stay in English (screens/settings.md).",
+      "literals": [
+        "FPS "
+      ]
+    },
+    {
+      "file": "src/app/qt/controllers/scan_session.cpp",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "ScanSession is removed in R6. Wording built in C++; nothing shows it once ScanScreen goes.",
+      "literals": [
+        " - keep showing faces",
+        "cube changed mid-scan",
+        "the %1-centred face",
+        "the least confident face"
+      ]
+    },
+    {
+      "file": "src/app/qt/controllers/settings_model.cpp",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "handDetectionUnavailableReason: the setting dies with ScanSession. Until then, expose a code (model-missing, no-provider) and word it in QML.",
+      "literals": [
+        "Hand-detection model not found on this device.",
+        "No AI inference hardware detected."
+      ]
+    }
+  ]
+}
