@@ -61,11 +61,7 @@
 // Skips (never fails) when no recording is present: the corpus is recorded
 // on demand from live hardware and does not ship with the repo.
 //
-// std::getenv is fine here (single-threaded harness, read-only); silence
-// MSVC's CRT deprecation the way the other offline harnesses do.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
+// std::getenv is fine here (single-threaded harness, read-only).
 
 #include <catch2/catch_test_macros.hpp>
 

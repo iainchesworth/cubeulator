@@ -44,9 +44,6 @@
 // they are transcribed from a byte-identical local reproduction of the
 // prototype's own run, and the CSV is recorded from live hardware and does
 // not ship with the repo.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

@@ -24,9 +24,6 @@
 //
 // The corpus is recorded on demand from live hardware and does not ship
 // with the repo, so the harness SKIPS - never fails - when it is unset.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 
 #include <catch2/catch_test_macros.hpp>
 

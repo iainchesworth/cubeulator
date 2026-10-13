@@ -105,9 +105,6 @@ TEST_CASE("IdleGate reset restarts a fresh scan detecting", "[vision]") {
 // counts (and a few candidate alternative bands) over a recording so the
 // idle gate's floor can be set against measured bimodality instead of
 // guessed. Usage: CUBE_TRACK_REPLAY_DIR=<recording> "[.cool-hue-scan]".
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
 TEST_CASE("scan a recording's cool-hue statistics", "[.cool-hue-scan]") {
     const char* dir = std::getenv("CUBE_TRACK_REPLAY_DIR");
     if (dir == nullptr) {

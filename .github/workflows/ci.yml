@@ -16,8 +16,9 @@ on:
     inputs:
       legs:
         description: >-
-          Comma-separated legs to run: clang-format, clang-tidy, linux, macos,
-          windows, coverage, system, android, ios - or "all".
+          Comma-separated legs to run: clang-format, platform-isolation,
+          clang-tidy, linux, macos, windows, coverage, system, android, ios -
+          or "all".
         type: string
         default: all
 
@@ -55,6 +56,26 @@ jobs:
           clang-format-22 --version
           find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
             | xargs -0 clang-format-22 --dry-run --Werror
+
+  # The no-#ifdef rule (docs/platform-isolation.md): the operating system is a
+  # CMake decision, so no platform code, OS header or runtime OS test may sit
+  # outside src/app/platform. Cheap, fast and deliberately not behind the
+  # build legs, so a violation is reported even while a porting leg is red.
+  platform-isolation:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - platform-isolation' || 'platform-isolation' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',platform-isolation,') }}
+    # Seconds-long, so routed like clang-format: by the CONTROL_RUNNER_JSON
+    # repository variable, with a fork PR pinned to the hosted image (see
+    # docs/ci.md). The fleet image ships pwsh, which the check needs.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check for platform code outside the platform section
+        shell: pwsh
+        run: ./tools/checks/check_platform_isolation.ps1 -Root $PWD
 
   clang-tidy:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-tidy' || 'clang-tidy' }}
@@ -179,8 +200,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
                  exit 1 ;;
             esac
           done
@@ -191,7 +212,8 @@ jobs:
           fi
           count=$(jq 'length' <<<"$selected")
           # Only the desktop legs are chosen here; a dispatch that names just
-          # clang-format, android, ios or coverage legitimately selects none.
+          # clang-format, platform-isolation, android, ios or coverage
+          # legitimately selects none.
           echo "legs: $LEGS -> $count desktop leg(s)"
           echo "matrix=$selected" >> "$GITHUB_OUTPUT"
 

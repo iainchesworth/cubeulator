@@ -16,6 +16,11 @@ find_package(Git QUIET)
 set(CUBEULATOR_VERSION_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/cube/version.hpp.in")
 set(CUBEULATOR_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/cube/version.hpp")
 
+# What this build targets ("Windows x86_64 (MSVC 1951)"), worked out from
+# the platform fragment and the toolchain here rather than by predefined
+# macros inside a source file - this library holds no platform code.
+cube_describe_build_target(CUBEULATOR_BUILD_TARGET)
+
 # Generate once at configure time so the header exists for the first build.
 set(CUBEULATOR_VERSION "${PROJECT_VERSION}")
 set(SRC "${CUBEULATOR_VERSION_TEMPLATE}")
@@ -30,6 +35,7 @@ add_custom_target(cube_version ALL
     BYPRODUCTS "${CUBEULATOR_VERSION_HEADER}"
     COMMAND "${CMAKE_COMMAND}"
         "-DCUBEULATOR_VERSION=${PROJECT_VERSION}"
+        "-DCUBEULATOR_BUILD_TARGET=${CUBEULATOR_BUILD_TARGET}"
         "-DSRC=${CUBEULATOR_VERSION_TEMPLATE}"
         "-DDST=${CUBEULATOR_VERSION_HEADER}"
         "-DGIT_EXECUTABLE=${GIT_EXECUTABLE}"

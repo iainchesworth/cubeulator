@@ -29,9 +29,12 @@ gh workflow run ci.yml --ref <branch> -f legs=macos
 gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
 ```
 
-`legs` is a comma-separated list (no spaces) of `clang-format`, `clang-tidy`,
-`linux`, `macos`, `windows`, `coverage`, `system`, `android`, `ios`, or `all`
-(the default). An unknown name fails the run rather than running nothing.
+`legs` is a comma-separated list (no spaces) of `clang-format`,
+`platform-isolation`, `clang-tidy`, `linux`, `macos`, `windows`, `coverage`,
+`system`, `android`, `ios`, or `all` (the default). An unknown name fails the
+run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
+([platform-isolation.md](platform-isolation.md)): fast, and independent of the
+build legs.
 `system` is the Linux job that runs the system tests under Xvfb (see
 [testing.md](testing.md#system-tests)); on Windows and macOS the same suite
 runs as a non-blocking step of their build legs.
@@ -44,7 +47,7 @@ branch's head commit.
 ### Self-hosted runners
 
 The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
-load even a seconds-long required check queues for half an hour. Four jobs can
+load even a seconds-long required check queues for half an hour. Five jobs can
 therefore run on the organisation's self-hosted fleet instead (the
 `iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
 not this repo, decide who may use it):
@@ -54,6 +57,7 @@ not this repo, decide who may use it):
 | `Validate gitflow branch name` | `branch-name-check.yml` |
 | `Scan dependency diff` | `dependency-review.yml` |
 | `clang-format` | `ci.yml` |
+| `platform-isolation` | `ci.yml` |
 | `Plan build legs` | `ci.yml` |
 
 They are routed by the `CONTROL_RUNNER_JSON` repository variable, a JSON array

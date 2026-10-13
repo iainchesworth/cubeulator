@@ -14,6 +14,14 @@ Three layers, all Catch2:
   mouse, touch and key events in a real window. See
   [System tests](#system-tests).
 
+Tests do not ask which OS they are on (see
+[Platform isolation](platform-isolation.md)): what differs per platform comes
+from the platform's `platform.cmake` (the Qt plugin to default to, how a
+desktop session reaches the process), and a test case only one platform can run
+lives in `tests/platform/<name>/`. The `platform_fragments_satisfy_contract`
+test holds every platform's `platform.cmake` to the contract on whichever host
+it runs, so the platforms a build does not target are still checked.
+
 Run them with `ctest --preset <preset>` after building. Tests are
 independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
 `execution.jobs` in a personal `CMakeUserPresets.json` test preset, where
@@ -288,7 +296,8 @@ owns them:
   finds them by label, which a translation would break.
 - **Permission journeys** - "refused, then granted" cannot be walked on a
   desktop: `AppState.beginScan()` skips the permission screen unless
-  `Qt.platform.os` is mobile, and `CameraPermission` reads Qt's own
+  the platform says it is mobile (`PlatformFacts.isMobile`, from
+  `interfaces/platform_info.hpp`), and `CameraPermission` reads Qt's own
   `QCameraPermission`. A way to set the status for a test (an override read
   at start-up) would let the suite put the screen up through its real route
   and see the denied wording. Experience lane.

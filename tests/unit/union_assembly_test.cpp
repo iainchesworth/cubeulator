@@ -39,11 +39,7 @@
 // face_capture_incomplete, and saying so plainly is more useful than
 // pretending a four-face union was a validation.
 //
-// std::getenv is fine here (single-threaded harness, read-only); silence
-// MSVC's CRT deprecation the way the other offline harnesses do.
-#ifdef _MSC_VER
-#pragma warning(disable : 4996)
-#endif
+// std::getenv is fine here (single-threaded harness, read-only).
 
 #include <catch2/catch_test_macros.hpp>
 

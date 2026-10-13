@@ -52,21 +52,15 @@
     {
       "file": "src/app/qt/SettingsState.qml",
       "owner": "kit session (feature/ax-kit)",
-      "reason": "Labels held in the settings object (themes, shader styles, speeds, graphics backends). SettingsScreen no longer reads the theme labels: it maps the key to settings.theme.*. Backend names are product names and stay literal; the rest go with the kit's rebuild of SettingsState.",
+      "reason": "Labels held in the settings object (themes, shader styles, speeds). SettingsScreen no longer reads the theme labels: it maps the key to settings.theme.*; the rest go with the kit's rebuild of SettingsState. The graphics backends' names (product names, left literal) are not here any more: the platform supplies them, from src/app/platform/<os>/platform_info_<os>.cpp.",
       "literals": [
         "Auto",
         "Borderlands Cel-Shading",
-        "D3D11",
-        "D3D12",
         "Dark",
-        "GL",
-        "GLES",
         "Instructional Glow",
         "Light",
-        "Metal",
         "Physically-Based Realism",
-        "System",
-        "Vulkan"
+        "System"
       ]
     },
     {
