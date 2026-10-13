@@ -49,18 +49,24 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Progress
 
-**2026-10-13.** R0 partly, R1 started, R2 offline core done, R3 started.
+**2026-10-13.** R0 done bar the push; R1 started; R2 done; R3 half done.
 
-- **R0.** Old tip tagged `archive/tracking-first`; full bundle of every
-  branch at `D:\cubeulator-backup`. Not pushed: the unpushed history holds
-  webcam frames showing the user and the GitHub repository is public. Work
-  continues on `feature/direct-scan`.
+- **R0.** Previous tip tagged `archive/tracking-first`. Webcam frames
+  showing the user (`tests/data/captures`, `docs/evidence`) are removed from
+  every unpushed commit; commits already on GitHub are untouched, so
+  `develop` still fast-forwards. Commit hashes quoted in `docs/gates` and
+  `pipeline-plan.md` predate that rewrite. Originals are in the bundles
+  under `D:\cubeulator-backup`, and the removed files are in
+  `D:\cubeulator-corpus\legacy-capture-dumps`. The July recording corpus,
+  recorded as lost, was still in the local LFS store: 6,035 frames in 14
+  clips, now at `D:\cubeulator-corpus\july-corpus`. Not yet pushed.
 - **R1.** Four live sessions recorded in backlit daylight
-  (`D:\cubeulator-corpus\direct-scan\20261013`). No cube was solved by hand
-  to label them; instead three scans of the unchanged cube agree, and a
+  (`D:\cubeulator-corpus\direct-scan\20261013`). No cube was solved by
+  hand to label them; instead three scans of the unchanged cube agree, and a
   fourth taken after one turn differs from them by exactly one quarter turn
   of the middle slice. Each session's cube is in its `truth.txt`. More
-  lighting conditions and a deliberately scrambled cube are still to record.
+  lighting conditions and a deliberately scrambled cube are still to record,
+  and the July corpus has not been scored yet.
 - **R2.** `cube::vision::read_side` and `SideScan`
   (`src/lib/.../vision/direct_scan.*`) port the spike and feed the existing
   `resolve_colors`, `assemble_scanned_faces` and `solve`. `cube_scan board`
@@ -78,16 +84,20 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   - Colour naming alone swaps red and orange by tungsten light (three
     degrees of hue apart). A cube with two colours exchanged is never valid,
     so `SideScan::cube` lets validity pick the naming.
-  - The existing photometry lock turns auto white balance off, which drops
-    this webcam onto a stored 4000 K preset (+12% blue in daylight). The
-    temperature is writable; the lock should hold the value auto had chosen.
-    Not yet fixed in `platform/detail/photometry_lock.cpp`.
+  - The photometry lock cleared auto white balance and left the camera on a
+    stored 4000 K preset, 12% bluer than the automatic's choice in daylight.
+    Fixed: the lock now writes back the temperature the automatic chose and
+    checks the picture did not move (0.2% on the workstation webcam).
+  - The solve screen read its move total and stage list once, before the
+    solve had finished, and never again. Fixed.
   - A cube one turn from solved can be assembled two ways from its six sides
     (the turned layer could be either of two opposite ones). Square-on reads
     cannot tell them apart; it needs two sides in one view, which is R5.
-- **R3.** `DirectScan` controller and `DirectScanScreen.qml` replace the scan
-  screen: sticker dots, one chip per side read in its measured colours, no
-  mirroring, cancel and start-over. Review screen and hand entry still to do.
+- **R3.** `DirectScan` and `DirectScanScreen.qml` are the app's scan screen:
+  sticker dots, one chip per side read in its measured colours, no
+  mirroring, cancel and start-over. A scan run through the app window
+  reached the solve screen. Still to do: the review screen and hand entry,
+  and R4's live gate has not been run.
 
 ## Why it does not work today
 
