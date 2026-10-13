@@ -26,7 +26,7 @@ babysit them on every push.
 Android builds the Qt/QML shell like every other platform (see
 [Architecture](architecture.md)); iOS remains build-only,
 `CUBEULATOR_BUILD_APP=OFF`, until Qt-for-iOS packaging is wired up. vcpkg
-builds opencv4/onnxruntime/bgfx on the mobile triplets too, the same way as
+builds opencv4/bgfx on the mobile triplets too, the same way as
 desktop — see [Dependency strategy](dependency-strategy.md).
 
 `android-clang-{debug,release}` set `CMAKE_CXX_SCAN_FOR_MODULES=OFF`: CMake's

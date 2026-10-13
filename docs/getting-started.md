@@ -6,12 +6,6 @@
 - CMake 4+ and Ninja.
 - Qt 6.8.x (prebuilt, via [aqtinstall](https://github.com/miurahr/aqtinstall))
   — only needed if you're building the desktop GUI shell (the default).
-- On macOS, an OpenMP runtime: AppleClang has none, and the vendored M3T
-  tracker needs one. `brew install libomp`, then add its (keg-only) prefix to
-  the configure line next to Qt's:
-  `-DCMAKE_PREFIX_PATH="<path-to-Qt>/6.8.3/macos;$(brew --prefix libomp)"`.
-  This applies to `-DCUBEULATOR_BUILD_APP=OFF` too: the tracker is configured
-  either way.
 - Git (vcpkg is vendored as a submodule and bootstraps itself automatically —
   nothing else to install for it).
 

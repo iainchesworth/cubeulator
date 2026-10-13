@@ -3,11 +3,11 @@
 Three layers, all Catch2:
 
 - **`tests/unit/`** — fast, isolated, one behaviour each. Currently exercises
-  `cube::error` (`Result<T>`/`CubeError`), `cube::version`, and
-  `ScanSessionConfig`'s fluent builder.
+  `cube::error` (`Result<T>`/`CubeError`), `cube::version`, the solver, the
+  direct-scan reader and its sides, the recorder, and the held-cube fit.
 - **`tests/integration/`** — exercises several components together; the
   current test drives the CMake-selected platform implementations
-  (`cube::platform::paths`, `cube::platform::inference_env`,
+  (`cube::platform::paths`, `cube::platform::platform_info`,
   `cube::platform::camera`) end to end rather than any single interface in
   isolation.
 - **`tests/system/`** — the whole application, from `Main.qml`, driven by

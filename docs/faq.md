@@ -6,8 +6,8 @@ currently the Spec 00 build/CI skeleton; the solver, capture pipeline,
 edge-AI tracking, and render logic each land as separate, later specs.
 
 **Why is iOS still build-only in CI, when Android now builds the app?**
-Both jobs attempt real vcpkg builds of OpenCV/ONNX Runtime/bgfx for their
-mobile triplet, previously untested territory for two of the three
+Both jobs attempt real vcpkg builds of OpenCV/bgfx for their
+mobile triplet, previously untested territory for both
 libraries — see [Dependency strategy](dependency-strategy.md). Android also
 now builds the actual Qt/QML shell (`android-build` installs Qt for Android
 and drops `CUBEULATOR_BUILD_APP=OFF`), confirmed working end-to-end

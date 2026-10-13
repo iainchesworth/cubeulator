@@ -9,7 +9,7 @@ src/
     qt/            Qt 6 Quick/QML desktop shell
     platform/       one directory per OS: its implementations of each
                     interfaces/ header, and the platform.cmake that selects them
-    interfaces/     camera.hpp, gpu_surface.hpp, inference_env.hpp, paths.hpp,
+    interfaces/     camera.hpp, gpu_surface.hpp, paths.hpp,
                     platform_info.hpp, crash_handler.hpp
   render/          bgfx setup and the technical-drawing render pipeline
 tests/
@@ -43,7 +43,7 @@ iOS via Qt's Xcode integration, both loading the same `Main.qml`.
 
 ## What's implemented today vs. planned
 
-`src/lib/`'s solver and vision modules are both real, and now wired
+`src/lib/`'s solver and vision modules are both real, and wired
 together end to end. `cube::solver::solve()` solves a cube via the classic
 beginner (layer-by-layer) method - cross, white corners, middle edges,
 2-look OLL, 2-look PLL - the same staged structure the app teaches. The
@@ -53,16 +53,15 @@ which keeps every solve bounded to seconds for interactive mobile use (see
 `src/lib/src/solver/`). The stages' moves are then tidied in one linear pass,
 so no two neighbouring moves turn the same side - including across a stage
 boundary, where a stage can end up with no moves at all
-(`merge_adjacent_moves`). `cube::vision` runs a full OpenCV capture-to-state
-pipeline - a RANSAC-style lattice fit for grid detection (tolerant of
-uneven lighting, background clutter, and a minority of missed/occluded
-cells, not just a clean dead-on shot), colour classification,
-stability/hand-presence gating, auto-advance - with manual per-face
-confirmation as the fallback (see `src/lib/src/vision/`).
-The image pipeline end to end - capture, the per-pass analysis stages, the
-GUI-thread commit path, and where colour decisions are made - is diagrammed
-in [Vision pipeline](vision-pipeline.md), together with the measured
-weaknesses of each stage.
+(`merge_adjacent_moves`). `cube::vision` reads a cube one side at a time:
+`read_side` finds the sticker lattice of whichever side is held square to
+the camera and samples its nine colours, `SideScan` groups the reads into
+sides by their own content, and `resolve_colors` and
+`assemble_scanned_faces` turn six sides into a cube (see
+`src/lib/src/vision/`). There is no pose tracker and no learned model.
+The image pipeline end to end - capture, the photometry lock, the reader,
+the side grouping, and where colour decisions are made - is described in
+[Vision pipeline](vision-pipeline.md), together with its known limits.
 The scan controller (`src/app/qt/controllers/direct_scan.hpp`) reads the
 cube's sides with `cube::vision::read_side`, and once six sides make exactly
 one valid cube hands a `cube::solver::Cube` to

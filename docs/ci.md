@@ -83,23 +83,24 @@ gh variable delete CONTROL_RUNNER_JSON                                          
 - **Not routed:** the build, coverage, clang-tidy and system-test legs (cold
   vcpkg builds of ONNX Runtime and OpenCV took 87-131 minutes on hosted
   runners in July, against the fleet's 12 GB of RAM and AWS's 90-minute
-  limit), and everything macOS, iOS and Android, which the fleet cannot
+  limit; ONNX Runtime has since been removed, which has not been
+  re-measured), and everything macOS, iOS and Android, which the fleet cannot
   build. Moving one is a measured, separate change.
 
 ## Dependencies
 
-vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
-Runtime, and bgfx on every triplet, desktop and mobile alike, via a
+vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, and
+bgfx on every triplet, desktop and mobile alike, via a
 chainloaded toolchain on `arm64-ios`/`arm64-android` — see below. Qt is a
 separate prebuilt install (`jurplel/install-qt-action` in CI,
 `ci/install-qt.*` locally) — kept out of vcpkg for build size and Windows
 `MAX_PATH` reasons.
 
-Mobile (arm64-ios/arm64-android) vcpkg builds of opencv4/onnxruntime/bgfx are
+Mobile (arm64-ios/arm64-android) vcpkg builds of opencv4/bgfx are
 new and not yet proven out in CI (the `android-build`/`ios-build` jobs stay
 `continue-on-error: true` until they are) — see
 [Dependency strategy](dependency-strategy.md) for the evidence and the
-fallback plan if any of the three doesn't work out.
+fallback plan if either doesn't work out.
 
 ## Dependabot
 
@@ -141,6 +142,6 @@ the latest?":
   Clang packages the `clang-format`/`clang-tidy` jobs install.
 - **Runner images** — every `runs-on:` label, and the `matrix.os` values.
 - **CMake policy range** — the upper bound in `cmake_minimum_required()`.
-- **Libraries built by vcpkg** (OpenCV, ONNX Runtime, bgfx, ...) — these move
+- **Libraries built by vcpkg** (OpenCV, bgfx, ...) — these move
   only with the `builtin-baseline`, and only as far as the vcpkg registry has
   them.

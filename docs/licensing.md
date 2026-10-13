@@ -124,16 +124,17 @@ Libraries) or a written offer, the licence text, and no further restrictions
 
 | component | licence | where the text lives | ships | obligation |
 |---|---|---|---|---|
-| MediaPipe palm detection model (`palm_detection_mediapipe_2023feb_int8.onnx`) | Apache-2.0 [V: OpenCV Zoo README: "All files in this directory are licensed under Apache 2.0 License"] | `assets/models/palm_detection_mediapipe_LICENSE.txt` (an **unfilled** Apache template: `Copyright [yyyy] [name of copyright owner]`) | W M L A I (embedded as `:/models/`) | licence copy; state changes (none); the repo does not record the copyright holder or the download URL - add them |
 | Lucide icon shapes (`Icon.qml`: camera, globe, menu, sun, refresh) | ISC, (c) Lucide Icons and Contributors [V: Lucide `LICENSE`] | `licences/ISC.txt` + the copyright line | all | notice must appear in all copies |
 | Feather-derived shapes (chevron-left, chevron-right, check, alert-triangle, help-circle) | MIT, (c) 2013-present Cole Bemis [V: same file lists these as Feather-derived] | `licences/MIT.txt` + the copyright line | all | notice |
 | Archivo, IBM Plex Mono, Noto Sans Hebrew, Noto Sans Arabic (bundled by the kit under `src/app/qt/fonts/` on `feature/ax-kit`) | OFL-1.1 [V: each family's OFL text, vendored by the kit] | the kit's `OFL-<family>.txt` beside the fonts; the manifest's `licenseFile` points at it | yes, once the kit merges (the entries are dormant until the files exist) | OFL: licence text travels with the fonts, no sale of the fonts alone, reserved font names ("Plex"). Copyright lines are copied from the OFL texts: Archivo (c) 2020 The Archivo Project Authors; IBM Plex Mono (c) 2017 IBM Corp.; Noto Sans Hebrew and Arabic (c) 2022 The Noto Project Authors. **Any font file under `assets/` or `src/app/qt/` that no emitted manifest component claims is an unresolved error**, so a new font cannot ship unnoticed |
 
 The vendored M3T tracker (MIT, with `filesystem.h`, nanoflann and
-tiny_obj_loader inside it) and the corner-detector weights
+tiny_obj_loader inside it), the corner-detector weights
 `cube_corner_pose.onnx` (AGPL-3.0, derived from Ultralytics YOLO11n-pose, never
-distributed) were listed here until recovery plan R6 removed the tracking
-pipeline. Nothing embeds or links either now. The weights stay in `.gitignore`;
+distributed) and the MediaPipe palm detection model (Apache-2.0, via the
+OpenCV Zoo, with its unfilled licence template) were listed here until
+recovery plan R6 removed the tracking pipeline and the hand detector.
+Nothing embeds or links any of them now. The manifest holds no model. The weights stay in `.gitignore`;
 a copy left in an old checkout is a file under `assets/` that no component
 claims, which the generator reports as unresolved.
 
@@ -153,18 +154,16 @@ tools/tests only.
 | liblzma | 5.8.3 | 0BSD (liblzma) | all | none (0BSD); the copyright file notes LGPL getopt only for the CLI tools, which are not built |
 | zlib | 1.3.2#1 | Zlib | all | none for binaries beyond not misrepresenting |
 | quirc | 1.2 | ISC | all | notice |
-| onnxruntime | 1.23.2#1 | MIT | W M L A I (removed by R6) | notice |
-| onnx (overlay port) | 1.19.0#1 | Apache-2.0 | with onnxruntime | licence copy |
-| abseil, flatbuffers, dlpack | 20260107.1#3, 25.12.19, 1.3 | Apache-2.0 | with onnxruntime | licence copy |
-| protobuf, utf8-range | 6.33.4 | BSD-3-Clause, MIT | with onnxruntime | notice |
-| re2, cpuinfo | 2025-11-05, 2026-04-13 | BSD-3-Clause, BSD-2-Clause | with onnxruntime | notice |
-| eigen3 | 5.0.1 | MPL-2.0 (with BSD-3 and others in the file) | with onnxruntime | MPL file-level copyleft: unmodified, so the duty is to say where the source is |
-| boost-config, boost-mp11, boost-headers | 1.91.0 | BSL-1.0 | with onnxruntime | none for machine-executable object code (BSL-1.0 text) |
-| date, cxxopts, nlohmann-json, ms-gsl, safeint, optional-lite, wil (W only) | various | MIT / MIT / MIT / MIT / MIT / BSL-1.0 / MIT | with onnxruntime | notice |
 | fmt | 12.2.0 | MIT | all (`cube_lib`) | notice |
 | bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **no - nothing links it** [V: the file API's link line of `cube_app` has no bgfx; `src/render` is a stub] | none until the render pipeline links it; the generator will start emitting it the day it does |
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
 | vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
+
+ONNX Runtime and the ports only it pulled in (onnx, abseil, flatbuffers,
+dlpack, protobuf, utf8-range, re2, cpuinfo, eigen3, the boost headers, date,
+cxxopts, nlohmann-json, ms-gsl, safeint, optional-lite, wil) were listed here
+until R6 removed the hand detector. The generator lists whatever the link
+line reaches, so none of them appears now.
 
 **Linux-specific finding [V: port manifests].** `vcpkg.json` asks for
 `opencv4[highgui]` and, on Linux, `opencv4[gtk]`; the `gtk` feature makes vcpkg
@@ -464,8 +463,8 @@ conclusion.
   closure of each over vcpkg's `Depends` and Qt's SBOM edges. A vcpkg port
   that installs nothing outside `share/` is a build helper and is skipped.
   Nothing is added by hand for a vcpkg port: the day `bgfx` is linked, it
-  appears; the day R6 removes onnxruntime, it and its dependency chain
-  disappear (M3T, GLEW and GLFW already have).
+  appears; when R6 removed onnxruntime, M3T, GLEW and GLFW, they and their
+  dependency chains disappeared.
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists vendored code, models, icons and fonts, the licence
   elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
@@ -668,11 +667,10 @@ licence reference. This list exists so a reviewer knows what to look for.
 4. **The CPack packages contain nothing today**: no `install()` rule exists
    for `cube_app`. The notices install rule is the only one. E4a owns the
    rest; until then a ZIP/NSIS package is just the notices and the licence.
-5. **The licence file beside the palm model is an unfilled Apache template**
-   (`Copyright [yyyy] [name of copyright owner]`) and the repository records
-   neither the holder nor the download URL for the model. Apache-2.0 asks
-   for the licence and any NOTICE; supplying the real holder is a one-line
-   fix once someone checks the OpenCV Zoo.
+5. **The licence file beside the palm model was an unfilled Apache template**
+   (`Copyright [yyyy] [name of copyright owner]`) and the repository did not
+   record the holder or the download URL for the model. Closed by R6: the
+   model and its licence file are gone.
 6. **GTK3 and about 45 LGPL/X11 ports reach Linux** through
    `opencv4[gtk]`, which exists to back `highgui`, which only the vendored M3T
    used (section 2.4). M3T is gone; the two features are still asked for.
@@ -728,8 +726,6 @@ Primary, read in this work:
   <https://www.fsf.org/blogs/licensing/more-about-the-app-store-gpl-enforcement>
 - VideoLAN, "VLC for iOS returns", <https://images.videolan.org/press/ios2out.html>
 - Lucide `LICENSE`, <https://github.com/lucide-icons/lucide/blob/main/LICENSE>
-- OpenCV Zoo `palm_detection_mediapipe`,
-  <https://github.com/opencv/opencv_zoo/tree/main/models/palm_detection_mediapipe>
 - vcpkg port manifests and installed `share/<port>/copyright` at baseline
   `5b698638c97b4610044a254347d571f823e56557`
 
