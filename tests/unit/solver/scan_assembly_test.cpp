@@ -57,7 +57,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
     std::array<Color, 9> rotated{};
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            rotated[static_cast<std::size_t>(3 * row + col)] = face[static_cast<std::size_t>(3 * (2 - col) + row)];
+            rotated[static_cast<std::size_t>(3 * row + col)] =
+                face[static_cast<std::size_t>(3 * (2 - col) + row)];
         }
     }
     return rotated;
@@ -124,7 +125,8 @@ TEST_CASE("assembly round-trips scrambled cubes through per-face rotation and or
     }
 }
 
-TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations", "[scan_assembly]") {
+TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations",
+          "[scan_assembly]") {
     // Every rotation of a uniform 9-sticker face is that same face, so all
     // 4096 combinations build the identical solved cube - the search must
     // treat that as one (degenerate) survivor, not as ambiguity.
@@ -168,7 +170,8 @@ TEST_CASE("a rotation hint lifts near-solved assembly ambiguity", "[scan_assembl
     REQUIRE(hinted->cube == original);
     // Mapping bookkeeping is hint-independent (centres pin it before the
     // search runs): canonical input order means the identity mapping.
-    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size(); ++face_index) {
+    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size();
+         ++face_index) {
         REQUIRE(hinted->input_index_of_face[face_index] == face_index);
     }
 }
@@ -227,7 +230,8 @@ TEST_CASE("an unusable hint behaves exactly like no hint", "[scan_assembly]") {
     REQUIRE(with_null.error() == cube::CubeError::invalid_cube_state);
 }
 
-TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing", "[scan_assembly]") {
+TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing",
+          "[scan_assembly]") {
     const auto input = ambiguous_near_solved_input();
 
     // Hinting only the uniform U face is worthless evidence: every

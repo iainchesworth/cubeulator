@@ -50,24 +50,36 @@ bool all_cells_in_frame(const Cells& cells, const cv::Mat& frame) {
 
 const char* state_name(::cube::vision::TrackState state) {
     switch (state) {
-        case ::cube::vision::TrackState::lost: return "lost";
-        case ::cube::vision::TrackState::acquiring: return "acquiring";
-        case ::cube::vision::TrackState::locked: return "locked";
-        case ::cube::vision::TrackState::coasting: return "coasting";
+        case ::cube::vision::TrackState::lost:
+            return "lost";
+        case ::cube::vision::TrackState::acquiring:
+            return "acquiring";
+        case ::cube::vision::TrackState::locked:
+            return "locked";
+        case ::cube::vision::TrackState::coasting:
+            return "coasting";
     }
     return "?";
 }
 
 const char* gate_name(TrackGate gate) {
     switch (gate) {
-        case TrackGate::accepted: return "accepted";
-        case TrackGate::anchored: return "anchored";
-        case TrackGate::no_observation: return "no-obs";
-        case TrackGate::basin: return "basin";
-        case TrackGate::margin: return "margin";
-        case TrackGate::omega_outlier: return "omega-outlier";
-        case TrackGate::implausible: return "implausible";
-        case TrackGate::slip_evidence: return "slip-evidence";
+        case TrackGate::accepted:
+            return "accepted";
+        case TrackGate::anchored:
+            return "anchored";
+        case TrackGate::no_observation:
+            return "no-obs";
+        case TrackGate::basin:
+            return "basin";
+        case TrackGate::margin:
+            return "margin";
+        case TrackGate::omega_outlier:
+            return "omega-outlier";
+        case TrackGate::implausible:
+            return "implausible";
+        case TrackGate::slip_evidence:
+            return "slip-evidence";
     }
     return "?";
 }
@@ -152,8 +164,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         detection.legacy_corner = *observed_corner;
     }
 
-    detection.found =
-        detection.legacy_face.has_value() || detection.legacy_corner.has_value() || detection.legacy_pose_only_face.has_value();
+    detection.found = detection.legacy_face.has_value() || detection.legacy_corner.has_value() ||
+                      detection.legacy_pose_only_face.has_value();
     float confidence = 0.0F;
     cv::Rect roi;
     if (detection.legacy_face) {
@@ -190,9 +202,10 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         detection.confidence = dt.detection.confidence;
         confidence = dt.detection.confidence;
         if (dt.detection.found) {
-            detection.roi = cv::Rect(static_cast<int>(dt.detection.box.x), static_cast<int>(dt.detection.box.y),
-                                     static_cast<int>(dt.detection.box.width),
-                                     static_cast<int>(dt.detection.box.height));
+            detection.roi =
+                cv::Rect(static_cast<int>(dt.detection.box.x), static_cast<int>(dt.detection.box.y),
+                         static_cast<int>(dt.detection.box.width),
+                         static_cast<int>(dt.detection.box.height));
             for (int id = 0; id < 8; ++id) {
                 const auto& corner = dt.detection.corners[static_cast<std::size_t>(id)];
                 if (corner.confidence < OnnxCornerDetector::kDefaultKeypointFloor) {
@@ -238,20 +251,23 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     std::optional<EdgeObservation> edge;
     bool edge_ran = false;
     if (detection.legacy_corner.has_value()) {
-        if (const auto projected = project_cube_from_corner(*detection.legacy_corner, frame.bgr.size(), seed);
+        if (const auto projected =
+                project_cube_from_corner(*detection.legacy_corner, frame.bgr.size(), seed);
             projected.has_value()) {
             pose = *projected;
             pose_src = "corner";
         }
     } else if (detection.legacy_face.has_value()) {
-        if (const auto projected = project_cube_from_face(*detection.legacy_face, frame.bgr.size(), seed);
+        if (const auto projected =
+                project_cube_from_face(*detection.legacy_face, frame.bgr.size(), seed);
             projected.has_value()) {
             pose = *projected;
             pose_src = "face";
             face_pose = true;
         }
     } else if (detection.legacy_pose_only_face.has_value()) {
-        if (const auto projected = project_cube_from_face(*detection.legacy_pose_only_face, frame.bgr.size(), seed);
+        if (const auto projected =
+                project_cube_from_face(*detection.legacy_pose_only_face, frame.bgr.size(), seed);
             projected.has_value()) {
             pose = *projected;
             pose_src = "face-pose-only";
@@ -266,7 +282,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         if (const auto observed_edge = observe_edge(frame.bgr, edge_hint ? &*edge_hint : nullptr);
             observed_edge.has_value()) {
             edge = *observed_edge;
-            if (const auto projected = project_cube_from_edge(*observed_edge, frame.bgr.size(), seed);
+            if (const auto projected =
+                    project_cube_from_edge(*observed_edge, frame.bgr.size(), seed);
                 projected.has_value()) {
                 pose = *projected;
                 pose_src = "edge";
@@ -285,17 +302,21 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     if (pose.has_value() && pose->orientation_valid) {
         track_in.q_obs = pose->orientation;
         track_in.corner_view = corner_pose;
-        const auto lab_entry = [](const cv::Vec3f& lab) { return std::array<float, 3>{lab[0], lab[1], lab[2]}; };
+        const auto lab_entry = [](const cv::Vec3f& lab) {
+            return std::array<float, 3>{lab[0], lab[1], lab[2]};
+        };
         if (corner_pose && detection.legacy_corner.has_value()) {
             track_in.centre_lab_count = 3;
-            track_in.centre_lab[0] = lab_entry(detection.legacy_corner->top.lab[cube::model::center_facelet_index]);
-            track_in.centre_lab[1] =
-                lab_entry(detection.legacy_corner->lower_left.lab[cube::model::center_facelet_index]);
-            track_in.centre_lab[2] =
-                lab_entry(detection.legacy_corner->lower_right.lab[cube::model::center_facelet_index]);
+            track_in.centre_lab[0] =
+                lab_entry(detection.legacy_corner->top.lab[cube::model::center_facelet_index]);
+            track_in.centre_lab[1] = lab_entry(
+                detection.legacy_corner->lower_left.lab[cube::model::center_facelet_index]);
+            track_in.centre_lab[2] = lab_entry(
+                detection.legacy_corner->lower_right.lab[cube::model::center_facelet_index]);
         } else if (face_pose && detection.legacy_face.has_value()) {
             track_in.centre_lab_count = 1;
-            track_in.centre_lab[0] = lab_entry(detection.legacy_face->lab[cube::model::center_facelet_index]);
+            track_in.centre_lab[0] =
+                lab_entry(detection.legacy_face->lab[cube::model::center_facelet_index]);
         }
     }
 
@@ -352,7 +373,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     if (detection.corners.size() >= 4) {
         if (dt.pnp.has_value()) {
             track_trace.add("detector_pnp_valid", true);
-            track_trace.add("detector_pnp_corners", static_cast<std::int64_t>(dt.pnp->corners_used));
+            track_trace.add("detector_pnp_corners",
+                            static_cast<std::int64_t>(dt.pnp->corners_used));
             track_trace.add("detector_pnp_mean_reproj_px", dt.pnp->mean_reproj_px);
             track_trace.add("detector_pnp_max_reproj_px", dt.pnp->max_reproj_px);
             if (track.pose_valid) {
@@ -363,8 +385,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
                     dot += static_cast<double>(dt.pnp->orientation[static_cast<std::size_t>(i)]) *
                            static_cast<double>(track.orientation[static_cast<std::size_t>(i)]);
                 }
-                const double angle_deg =
-                    2.0 * std::acos(std::clamp(std::abs(dot), 0.0, 1.0)) * 180.0 / 3.14159265358979323846;
+                const double angle_deg = 2.0 * std::acos(std::clamp(std::abs(dot), 0.0, 1.0)) *
+                                         180.0 / 3.14159265358979323846;
                 track_trace.add("detector_pnp_vs_legacy_deg", angle_deg);
             }
         } else {
@@ -438,11 +460,13 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             const auto& derived = dt.faces[face_index];
             FaceView face_view;
             face_view.quad = derived.quad;
-            face_view.frontal_deg = static_cast<float>(
-                std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 / 3.14159265358979323846);
+            face_view.frontal_deg =
+                static_cast<float>(std::acos(std::clamp(derived.frontality, 0.0, 1.0)) * 180.0 /
+                                   3.14159265358979323846);
             face_view.capture_grade = derived.frontality >= kTrackCaptureFrontality;
             if (face_view.capture_grade) {
-                face_view.rectified = rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
+                face_view.rectified =
+                    rectify_face(frame.bgr, derived, 96, &rectify_homographies[face_index]);
             }
             // body_face stays empty: identity is epoch-local gauge, and
             // the assembly arbiter remains centre-colour keying (plan
@@ -452,7 +476,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         faces_trace.add("source", std::string("track-geometry"));
     } else if (detection.legacy_corner) {
         for (const auto* view :
-             {&detection.legacy_corner->top, &detection.legacy_corner->lower_left, &detection.legacy_corner->lower_right}) {
+             {&detection.legacy_corner->top, &detection.legacy_corner->lower_left,
+              &detection.legacy_corner->lower_right}) {
             FaceView face_view;
             face_view.quad = view->quad;
             face_view.capture_grade = true;
@@ -480,9 +505,9 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         }
     }
     faces_trace.add("count", static_cast<std::int64_t>(result.faces.faces.size()));
-    faces_trace.add("capture_grade",
-                    static_cast<std::int64_t>(std::count_if(result.faces.faces.begin(), result.faces.faces.end(),
-                                                            [](const FaceView& v) { return v.capture_grade; })));
+    faces_trace.add("capture_grade", static_cast<std::int64_t>(std::count_if(
+                                         result.faces.faces.begin(), result.faces.faces.end(),
+                                         [](const FaceView& v) { return v.capture_grade; })));
     faces_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(faces_trace));
 
@@ -514,11 +539,14 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
                 const auto& derived = dt.faces[face_index];
                 std::array<StickerQuad, 9> cells{};
                 bool refined = false;
-                if (face_index < result.faces.faces.size() && !result.faces.faces[face_index].rectified.empty() &&
+                if (face_index < result.faces.faces.size() &&
+                    !result.faces.faces[face_index].rectified.empty() &&
                     !rectify_homographies[face_index].empty()) {
-                    const RefinedGrid grid = refine_cell_grid(result.faces.faces[face_index].rectified);
+                    const RefinedGrid grid =
+                        refine_cell_grid(result.faces.faces[face_index].rectified);
                     if (grid.valid) {
-                        const auto refined_cells = cells_from_grid(grid, rectify_homographies[face_index]);
+                        const auto refined_cells =
+                            cells_from_grid(grid, rectify_homographies[face_index]);
                         for (std::size_t c = 0; c < 9; ++c) {
                             cells[c].corners = refined_cells[c];
                         }
@@ -561,7 +589,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     result.samples.faces.resize(result.faces.faces.size());
     {
         std::size_t index = 0;
-        const auto put_lab = [&](const std::array<cv::Vec3f, 9>& lab, const std::array<float, 9>* purity) {
+        const auto put_lab = [&](const std::array<cv::Vec3f, 9>& lab,
+                                 const std::array<float, 9>* purity) {
             if (result.faces.faces[index].capture_grade) {
                 result.samples.faces[index].lab = lab;
                 if (purity != nullptr) {
@@ -585,8 +614,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
                     continue;
                 }
                 for (std::size_t c = 0; c < 9; ++c) {
-                    const auto stats =
-                        sample_cell_patch(frame.bgr, result.cells.faces[face_index].cells[c].corners);
+                    const auto stats = sample_cell_patch(
+                        frame.bgr, result.cells.faces[face_index].cells[c].corners);
                     if (stats.quad_px > 0) {
                         result.samples.faces[face_index].lab[c] = stats.lab_median;
                         result.samples.faces[face_index].purity[c] = stats.purity;
@@ -601,11 +630,13 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         } else if (detection.legacy_face) {
             put_lab(detection.legacy_face->lab, &detection.legacy_face->cell_purity);
         } else if (detection.legacy_pose_only_face) {
-            put_lab(detection.legacy_pose_only_face->lab, &detection.legacy_pose_only_face->cell_purity);
+            put_lab(detection.legacy_pose_only_face->lab,
+                    &detection.legacy_pose_only_face->cell_purity);
         }
     }
     sample_trace.add("sampled_faces", static_cast<std::int64_t>(sampled_faces));
-    sample_trace.add("sampled_by", std::string(track_geometry ? "track-rectified" : "legacy-detector"));
+    sample_trace.add("sampled_by",
+                     std::string(track_geometry ? "track-rectified" : "legacy-detector"));
     sample_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(sample_trace));
 
@@ -627,7 +658,8 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
             session_palette_epoch_ = dt.gauge_epoch;
         }
         for (std::size_t index = 0; index < result.faces.faces.size(); ++index) {
-            if (result.faces.faces[index].capture_grade && result.samples.faces[index].purity[4] > 0.0F) {
+            if (result.faces.faces[index].capture_grade &&
+                result.samples.faces[index].purity[4] > 0.0F) {
                 session_palette_.observe_centre(result.samples.faces[index].lab[4]);
             }
         }
@@ -643,15 +675,17 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         // capture-grade, so a capture-grade face always has samples).
         ++classified_faces;
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            const auto facelet = track_geometry ? session_palette_.classify(result.samples.faces[index].lab[cell])
-                                                : classify_lab(result.samples.faces[index].lab[cell]);
+            const auto facelet =
+                track_geometry ? session_palette_.classify(result.samples.faces[index].lab[cell])
+                               : classify_lab(result.samples.faces[index].lab[cell]);
             result.reads.faces[index].facelets[cell] = facelet;
             unknown_cells += facelet.color == cube::model::FacetColor::unknown ? 1 : 0;
         }
     }
     classify_trace.add("classified_faces", static_cast<std::int64_t>(classified_faces));
     classify_trace.add("unknown_cells", unknown_cells);
-    classify_trace.add("session_clusters", static_cast<std::int64_t>(session_palette_.cluster_count()));
+    classify_trace.add("session_clusters",
+                       static_cast<std::int64_t>(session_palette_.cluster_count()));
     classify_trace.duration_ms = elapsed_ms(stage_start);
     result.trace.stages.push_back(std::move(classify_trace));
 
@@ -659,14 +693,20 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     StageTrace fuse_trace;
     fuse_trace.stage = "fuse";
     fuse_trace.ran = false;
-    fuse_trace.add("reason", std::string("app-owned commit path (FaceAggregator/CaptureRouter); lib-drivable after P0.6"));
+    fuse_trace.add(
+        "reason",
+        std::string(
+            "app-owned commit path (FaceAggregator/CaptureRouter); lib-drivable after P0.6"));
     result.trace.stages.push_back(std::move(fuse_trace));
 
     // --- I. assemble (scan-completion stage) --------------------------------
     StageTrace assemble_trace;
     assemble_trace.stage = "assemble";
     assemble_trace.ran = false;
-    assemble_trace.add("reason", std::string("runs once per completed scan (resolve_colors + assemble_scanned_faces_with_mapping)"));
+    assemble_trace.add(
+        "reason",
+        std::string(
+            "runs once per completed scan (resolve_colors + assemble_scanned_faces_with_mapping)"));
     result.trace.stages.push_back(std::move(assemble_trace));
 
     return result;

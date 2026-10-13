@@ -25,6 +25,6 @@ struct FaceReading {
 // confirmation in the UI (or the auto-advance gate) is what decides a
 // reading is good enough to confirm - this just writes it in.
 void confirm_face(cube::model::Face face, const FaceReading& reading,
-                   cube::model::ScanProgress& progress);
+                  cube::model::ScanProgress& progress);
 
 }  // namespace cube::vision

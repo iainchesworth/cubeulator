@@ -6,8 +6,8 @@
 namespace cube::app {
 
 CameraController::CameraController(QObject* parent) : QObject(parent) {
-    connect(&watcher_, &QFutureWatcher<Result<std::vector<platform::camera::DeviceInfo>>>::finished, this,
-            &CameraController::handleEnumerationFinished);
+    connect(&watcher_, &QFutureWatcher<Result<std::vector<platform::camera::DeviceInfo>>>::finished,
+            this, &CameraController::handleEnumerationFinished);
 }
 
 QVariantList CameraController::devices() const {

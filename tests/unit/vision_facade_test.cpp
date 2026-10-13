@@ -22,8 +22,8 @@ cv::Mat synthetic_face_frame(const std::array<cv::Vec3b, 9>& cell_colors) {
             const int x = margin + col * (cell + gap);
             const int y = margin + row * (cell + gap);
             const auto& color = cell_colors[static_cast<std::size_t>(row * 3 + col)];
-            cv::rectangle(frame, cv::Rect(x, y, cell, cell), cv::Scalar(color[0], color[1], color[2]),
-                          cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, cell, cell),
+                          cv::Scalar(color[0], color[1], color[2]), cv::FILLED);
         }
     }
     return frame;

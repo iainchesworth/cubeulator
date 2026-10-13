@@ -245,7 +245,8 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
     return AssembledScan{*found, input_index_of_face};
 }
 
-Result<Cube> assemble_scanned_faces(const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
+Result<Cube> assemble_scanned_faces(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
     return assemble_scanned_faces_with_mapping(faces).transform(
         [](const AssembledScan& assembled) { return assembled.cube; });
 }

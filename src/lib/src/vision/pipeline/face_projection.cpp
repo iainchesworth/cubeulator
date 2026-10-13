@@ -15,13 +15,15 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
     cv::Rodrigues(rvec, rotation);
 
     const auto to_camera = [&](const cv::Point3f& p) {
-        const cv::Matx31d c = rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        const cv::Matx31d c =
+            rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         return cv::Vec3d(c(0, 0), c(1, 0), c(2, 0));
     };
     const auto project = [&](const cv::Point3f& p) {
         const cv::Vec3d c = to_camera(p);
-        return cv::Point2f(static_cast<float>(camera_matrix(0, 0) * c[0] / c[2] + camera_matrix(0, 2)),
-                           static_cast<float>(camera_matrix(1, 1) * c[1] / c[2] + camera_matrix(1, 2)));
+        return cv::Point2f(
+            static_cast<float>(camera_matrix(0, 0) * c[0] / c[2] + camera_matrix(0, 2)),
+            static_cast<float>(camera_matrix(1, 1) * c[1] / c[2] + camera_matrix(1, 2)));
     };
 
     for (int face = 0; face < 6; ++face) {
@@ -38,13 +40,15 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
         // Frontality: cosine between the outward normal and the ray from
         // the face centre back to the camera. Positive = front-facing.
         const cv::Matx31d normal_c = rotation * cv::Matx31d(normal.x, normal.y, normal.z);
-        const cv::Vec3d centre_c = to_camera(normal);  // face centre = its unit normal (half-edge 1)
+        const cv::Vec3d centre_c =
+            to_camera(normal);  // face centre = its unit normal (half-edge 1)
         const double distance = cv::norm(centre_c);
         if (distance <= 1e-9 || centre_c[2] <= 0.0) {
             continue;
         }
-        const double frontality =
-            -(normal_c(0, 0) * centre_c[0] + normal_c(1, 0) * centre_c[1] + normal_c(2, 0) * centre_c[2]) / distance;
+        const double frontality = -(normal_c(0, 0) * centre_c[0] + normal_c(1, 0) * centre_c[1] +
+                                    normal_c(2, 0) * centre_c[2]) /
+                                  distance;
         if (frontality < min_frontality) {
             continue;
         }
@@ -73,7 +77,8 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
                 // Cell quads span the STICKER, not the full pitch (see
                 // kStickerFraction in the header): gap and neighbour
                 // pixels stay out of the sample quad by geometry.
-                constexpr float kInset = (1.0F - kStickerFraction) * (1.0F / 3.0F);  // per side, model units
+                constexpr float kInset =
+                    (1.0F - kStickerFraction) * (1.0F / 3.0F);  // per side, model units
                 const float u0 = -1.0F + static_cast<float>(col) * (2.0F / 3.0F) + kInset;
                 const float v0 = -1.0F + static_cast<float>(row) * (2.0F / 3.0F) + kInset;
                 const float span = 2.0F / 3.0F - 2.0F * kInset;
@@ -87,25 +92,28 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
         out.push_back(projected);
     }
 
-    std::sort(out.begin(), out.end(),
-              [](const ProjectedFace& a, const ProjectedFace& b) { return a.frontality > b.frontality; });
+    std::sort(out.begin(), out.end(), [](const ProjectedFace& a, const ProjectedFace& b) {
+        return a.frontality > b.frontality;
+    });
     return out;
 }
 
-cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size, cv::Mat* homography_out) {
+cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size,
+                     cv::Mat* homography_out) {
     if (bgr_frame.empty() || size < 3) {
         return {};
     }
     // Degenerate quad (grazing face, garbage pose): a near-zero area
     // makes the homography explode; refuse rather than return noise.
-    const double area = std::abs(cv::contourArea(std::vector<cv::Point2f>(face.quad.begin(), face.quad.end())));
+    const double area =
+        std::abs(cv::contourArea(std::vector<cv::Point2f>(face.quad.begin(), face.quad.end())));
     if (area < 16.0) {
         return {};
     }
-    const std::array<cv::Point2f, 4> destination{cv::Point2f(0.0F, 0.0F),
-                                                 cv::Point2f(static_cast<float>(size), 0.0F),
-                                                 cv::Point2f(static_cast<float>(size), static_cast<float>(size)),
-                                                 cv::Point2f(0.0F, static_cast<float>(size))};
+    const std::array<cv::Point2f, 4> destination{
+        cv::Point2f(0.0F, 0.0F), cv::Point2f(static_cast<float>(size), 0.0F),
+        cv::Point2f(static_cast<float>(size), static_cast<float>(size)),
+        cv::Point2f(0.0F, static_cast<float>(size))};
     const cv::Mat homography = cv::getPerspectiveTransform(face.quad.data(), destination.data());
     if (homography_out != nullptr) {
         *homography_out = homography;
@@ -121,7 +129,8 @@ cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int si
 
 RefinedGrid refine_cell_grid(const cv::Mat& rectified_bgr) {
     RefinedGrid grid;
-    if (rectified_bgr.empty() || rectified_bgr.rows != rectified_bgr.cols || rectified_bgr.rows < 24) {
+    if (rectified_bgr.empty() || rectified_bgr.rows != rectified_bgr.cols ||
+        rectified_bgr.rows < 24) {
         return grid;
     }
     const int size = rectified_bgr.rows;
@@ -159,8 +168,8 @@ RefinedGrid refine_cell_grid(const cv::Mat& rectified_bgr) {
         // Contrast gate: a gap line is DARK against its surround; a flat
         // profile (uniform sticker, washed-out gap) keeps the nominal
         // grid rather than chasing noise.
-        const double surround =
-            0.5 * (value_at(static_cast<int>(nominal - 0.45 * pitch)) + value_at(static_cast<int>(nominal + 0.45 * pitch)));
+        const double surround = 0.5 * (value_at(static_cast<int>(nominal - 0.45 * pitch)) +
+                                       value_at(static_cast<int>(nominal + 0.45 * pitch)));
         if (surround - best_value < 8.0) {
             return nominal;
         }
@@ -193,15 +202,16 @@ RefinedGrid refine_cell_grid(const cv::Mat& rectified_bgr) {
         return std::clamp(refined, nominal - reach, nominal + reach);
     };
 
-    grid.x = {0.0, refine_internal(column_profile, pitch), refine_internal(column_profile, 2.0 * pitch),
-              static_cast<double>(size)};
+    grid.x = {0.0, refine_internal(column_profile, pitch),
+              refine_internal(column_profile, 2.0 * pitch), static_cast<double>(size)};
     grid.y = {0.0, refine_internal(row_profile, pitch), refine_internal(row_profile, 2.0 * pitch),
               static_cast<double>(size)};
     grid.valid = true;
     return grid;
 }
 
-std::array<std::array<cv::Point2f, 4>, 9> cells_from_grid(const RefinedGrid& grid, const cv::Mat& homography) {
+std::array<std::array<cv::Point2f, 4>, 9> cells_from_grid(const RefinedGrid& grid,
+                                                          const cv::Mat& homography) {
     std::array<std::array<cv::Point2f, 4>, 9> cells{};
     const cv::Mat inverse = homography.inv();
     std::vector<cv::Point2f> rectified_points;
@@ -214,10 +224,14 @@ std::array<std::array<cv::Point2f, 4>, 9> cells_from_grid(const RefinedGrid& gri
             const double y1 = grid.y[static_cast<std::size_t>(row + 1)];
             const double inset_x = (1.0 - kStickerFraction) * 0.5 * (x1 - x0);
             const double inset_y = (1.0 - kStickerFraction) * 0.5 * (y1 - y0);
-            rectified_points.emplace_back(static_cast<float>(x0 + inset_x), static_cast<float>(y0 + inset_y));
-            rectified_points.emplace_back(static_cast<float>(x1 - inset_x), static_cast<float>(y0 + inset_y));
-            rectified_points.emplace_back(static_cast<float>(x1 - inset_x), static_cast<float>(y1 - inset_y));
-            rectified_points.emplace_back(static_cast<float>(x0 + inset_x), static_cast<float>(y1 - inset_y));
+            rectified_points.emplace_back(static_cast<float>(x0 + inset_x),
+                                          static_cast<float>(y0 + inset_y));
+            rectified_points.emplace_back(static_cast<float>(x1 - inset_x),
+                                          static_cast<float>(y0 + inset_y));
+            rectified_points.emplace_back(static_cast<float>(x1 - inset_x),
+                                          static_cast<float>(y1 - inset_y));
+            rectified_points.emplace_back(static_cast<float>(x0 + inset_x),
+                                          static_cast<float>(y1 - inset_y));
         }
     }
     std::vector<cv::Point2f> image_points;

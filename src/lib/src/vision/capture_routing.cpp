@@ -21,8 +21,10 @@ using cube::model::Face;
 // Single-face tight re-association predicate (recovery): all three signals
 // must agree - the same live-tested triple the legacy centre-keyed store
 // used for "this is a re-show of that face".
-[[nodiscard]] bool tight_match(const CapturedFace& a, const CapturedFace& b, const RoutingConfig& config) {
-    return centre_lab_distance(a, b) < config.same_face_centre_lab && centre_class(a) == centre_class(b) &&
+[[nodiscard]] bool tight_match(const CapturedFace& a, const CapturedFace& b,
+                               const RoutingConfig& config) {
+    return centre_lab_distance(a, b) < config.same_face_centre_lab &&
+           centre_class(a) == centre_class(b) &&
            census_l1_distance(color_census(a), color_census(b)) <= config.reassoc_census;
 }
 
@@ -47,7 +49,8 @@ using cube::model::Face;
                                       const RoutingConfig& config) {
     return centre_class(captured) == centre_class(stored) &&
            centre_lab_distance(captured, stored) <= config.same_face_centre_lab &&
-           census_l1_distance(color_census(captured), color_census(stored)) <= config.verify_census_drift;
+           census_l1_distance(color_census(captured), color_census(stored)) <=
+               config.verify_census_drift;
 }
 
 // Best agreement between two faces' eight-sticker rings over the four
@@ -66,8 +69,7 @@ using cube::model::Face;
     for (std::size_t turn = 0; turn < 4; ++turn) {
         float total = 0.0F;
         for (std::size_t i = 0; i < kRing.size(); ++i) {
-            const cv::Vec3f diff =
-                a.lab[kRing[(i + 2 * turn) % kRing.size()]] - b.lab[kRing[i]];
+            const cv::Vec3f diff = a.lab[kRing[(i + 2 * turn) % kRing.size()]] - b.lab[kRing[i]];
             total += std::sqrt(diff.dot(diff));
         }
         best = std::min(best, total / static_cast<float>(kRing.size()));
@@ -108,15 +110,16 @@ float centre_lab_distance(const CapturedFace& a, const CapturedFace& b) {
     return std::sqrt(diff.dot(diff));
 }
 
-float registration_pair_score(const CapturedFace& a, const CapturedFace& b, const RoutingConfig& config) {
+float registration_pair_score(const CapturedFace& a, const CapturedFace& b,
+                              const RoutingConfig& config) {
     return static_cast<float>(census_l1_distance(color_census(a), color_census(b))) +
            2.0F * centre_lab_distance(a, b) / config.content_equiv_lab;
 }
 
 CapturedFace relabel_capture(const CapturedFace& captured, cube::model::Face epoch_body_face,
                              int lattice_index) {
-    const auto& map =
-        kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(epoch_body_face)];
+    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)]
+                                  [static_cast<std::size_t>(epoch_body_face)];
     CapturedFace out;
     for (std::size_t k = 0; k < captured.lab.size(); ++k) {
         out.lab[static_cast<std::size_t>(map.cell[k])] = captured.lab[k];
@@ -126,7 +129,8 @@ CapturedFace relabel_capture(const CapturedFace& captured, cube::model::Face epo
 
 float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedFace& stored,
                                  cube::model::Face epoch_body_face, int lattice_index) {
-    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(epoch_body_face)];
+    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)]
+                                  [static_cast<std::size_t>(epoch_body_face)];
     float total = 0.0F;
     int counted = 0;
     for (std::size_t cell = 0; cell < epoch_face.lab.size(); ++cell) {
@@ -227,8 +231,8 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
     out.candidates = static_cast<int>(candidates.size());
     if (!candidates.empty()) {
         out.best_score = candidates.front().mean_score;
-        out.runner_up_score =
-            candidates.size() > 1 ? candidates[1].mean_score : std::numeric_limits<float>::infinity();
+        out.runner_up_score = candidates.size() > 1 ? candidates[1].mean_score
+                                                    : std::numeric_limits<float>::infinity();
     }
 
     if (candidates.empty() || candidates.front().mean_score > config.epoch_register_max_score) {
@@ -351,8 +355,8 @@ EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch
                     continue;
                 }
                 ++pairs;
-                oriented +=
-                    oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face, candidate->index);
+                oriented += oriented_cell_lab_distance(sample.captured, *slot, sample.epoch_face,
+                                                       candidate->index);
             }
             by_roll.push_back({candidate, pairs > 0 ? oriented / static_cast<float>(pairs) : 0.0F,
                                centres_agree_for(candidate->index)});
@@ -496,7 +500,8 @@ const CapturedFace* CaptureRouter::slot_at(int fill_index) const {
     if (fill_index < 0 || fill_index >= filled_count()) {
         return nullptr;
     }
-    const auto& slot = slots_[static_cast<std::size_t>(fill_order_[static_cast<std::size_t>(fill_index)])];
+    const auto& slot =
+        slots_[static_cast<std::size_t>(fill_order_[static_cast<std::size_t>(fill_index)])];
     return slot ? &slot->captured : nullptr;
 }
 
@@ -511,7 +516,8 @@ int CaptureRouter::strikes_at(int fill_index) const {
     if (fill_index < 0 || fill_index >= filled_count()) {
         return 0;
     }
-    const auto& slot = slots_[static_cast<std::size_t>(fill_order_[static_cast<std::size_t>(fill_index)])];
+    const auto& slot =
+        slots_[static_cast<std::size_t>(fill_order_[static_cast<std::size_t>(fill_index)])];
     return slot ? slot->strikes : 0;
 }
 
@@ -709,8 +715,8 @@ bool CaptureRouter::adopt_gauge_direct(Face epoch_face, const CapturedFace& capt
         int best = -1;
         float best_lab = std::numeric_limits<float>::max();
         for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
-            if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(epoch_face)] !=
-                matched_face) {
+            if (kFacePermutation[static_cast<std::size_t>(g)]
+                                [static_cast<std::size_t>(epoch_face)] != matched_face) {
                 continue;
             }
             const float lab = oriented_cell_lab_distance(captured, stored, epoch_face, g);
@@ -784,9 +790,12 @@ void CaptureRouter::buffer_epoch_face(Face epoch_face, const CapturedFace& captu
     epoch_faces_[static_cast<std::size_t>(epoch_face)] = captured;
 }
 
-CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const CapturedFace& captured,
-                                                         std::int64_t now_ms, CommitResult& result) {
-    const Face store_face = kFacePermutation[static_cast<std::size_t>(gauge_)][static_cast<std::size_t>(epoch_face)];
+CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face,
+                                                         const CapturedFace& captured,
+                                                         std::int64_t now_ms,
+                                                         CommitResult& result) {
+    const Face store_face =
+        kFacePermutation[static_cast<std::size_t>(gauge_)][static_cast<std::size_t>(epoch_face)];
     // Into the STORE's frame before anything is compared or written. The
     // gauge is a whole-cube rotation between two body labellings, so it
     // moves stickers as well as face names; kFacePermutation above gave the
@@ -856,11 +865,13 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
             // re-registers from scratch, and keep every slot. All the terms
             // used here are rotation-invariant, so this asks about the
             // gauge without assuming one.
-            const bool belongs_to_another_slot = std::ranges::any_of(fill_order_, [&](const Face filled) {
-                return filled != store_face &&
-                       verified_same_face(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured,
-                                          config_);
-            });
+            const bool belongs_to_another_slot =
+                std::ranges::any_of(fill_order_, [&](const Face filled) {
+                    return filled != store_face &&
+                           verified_same_face(stored_frame,
+                                              slots_[static_cast<std::size_t>(filled)]->captured,
+                                              config_);
+                });
             if (belongs_to_another_slot) {
                 result.force_lost = true;
                 // The window is evidence about a gauge that is being
@@ -903,12 +914,14 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
     // leaves runA with six filled slots carrying four distinct centre
     // names.
     const bool centre_alias = std::ranges::any_of(fill_order_, [&](const Face filled) {
-        return centre_lab_distance(stored_frame, slots_[static_cast<std::size_t>(filled)]->captured) <
+        return centre_lab_distance(stored_frame,
+                                   slots_[static_cast<std::size_t>(filled)]->captured) <
                config_.duplicate_centre_radius;
     });
     if (centre_alias || reads_as_a_stored_face(stored_frame)) {
         result.duplicate_centre = true;
-        if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >= config_.conflict_strikes) {
+        if (++duplicate_quarantines_[static_cast<std::size_t>(store_face)] >=
+            config_.conflict_strikes) {
             result.force_lost = true;
         }
         return {CommitOutcome::quarantined};
@@ -918,7 +931,8 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face, const 
     return {CommitOutcome::filled, filled_count() - 1};
 }
 
-CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured, std::int64_t now_ms) {
+CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured,
+                                   std::int64_t now_ms) {
     CommitResult result;
 
     if (!gauge_known_) {
@@ -939,12 +953,14 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
                 if (provisional_[static_cast<std::size_t>(face)]) {
                     continue;
                 }
-                store_view[static_cast<std::size_t>(face)] = slots_[static_cast<std::size_t>(face)]->captured;
+                store_view[static_cast<std::size_t>(face)] =
+                    slots_[static_cast<std::size_t>(face)]->captured;
             }
             for (const Face face : epoch_order_) {
                 samples.push_back({face, *epoch_faces_[static_cast<std::size_t>(face)]});
             }
-            const EpochRegistration registration = register_epoch_gauge(samples, store_view, config_);
+            const EpochRegistration registration =
+                register_epoch_gauge(samples, store_view, config_);
             result.registration = registration;
             if (registration.status == EpochRegistration::Status::resolved) {
                 gauge_ = registration.lattice_index;
@@ -1117,8 +1133,8 @@ CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured
             // capture is still there to be re-committed under the resolved
             // gauge like any other buffered face.
             const int gauge_before = gauge_;
-            const Face target =
-                kFacePermutation[static_cast<std::size_t>(gauge_)][static_cast<std::size_t>(epoch_face)];
+            const Face target = kFacePermutation[static_cast<std::size_t>(gauge_)]
+                                                [static_cast<std::size_t>(epoch_face)];
             if (slots_[static_cast<std::size_t>(target)]) {
                 // Unreachable under adopt_gauge_direct's contract, checked
                 // rather than assumed: the never-overwrite invariant must not

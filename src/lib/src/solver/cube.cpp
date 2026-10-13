@@ -17,9 +17,15 @@ struct Vec3 {
     int z = 0;
 };
 
-constexpr Vec3 operator+(Vec3 a, Vec3 b) noexcept { return {a.x + b.x, a.y + b.y, a.z + b.z}; }
-constexpr Vec3 operator*(Vec3 v, int s) noexcept { return {v.x * s, v.y * s, v.z * s}; }
-constexpr int dot(Vec3 a, Vec3 b) noexcept { return a.x * b.x + a.y * b.y + a.z * b.z; }
+constexpr Vec3 operator+(Vec3 a, Vec3 b) noexcept {
+    return {a.x + b.x, a.y + b.y, a.z + b.z};
+}
+constexpr Vec3 operator*(Vec3 v, int s) noexcept {
+    return {v.x * s, v.y * s, v.z * s};
+}
+constexpr int dot(Vec3 a, Vec3 b) noexcept {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 constexpr Vec3 cross(Vec3 a, Vec3 b) noexcept {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
@@ -46,11 +52,16 @@ constexpr Vec3 face_normal(Face face) noexcept {
 }
 
 constexpr Face face_from_normal(Vec3 n) noexcept {
-    if (n.x == 1) return Face::R;
-    if (n.x == -1) return Face::L;
-    if (n.y == 1) return Face::U;
-    if (n.y == -1) return Face::D;
-    if (n.z == 1) return Face::F;
+    if (n.x == 1)
+        return Face::R;
+    if (n.x == -1)
+        return Face::L;
+    if (n.y == 1)
+        return Face::U;
+    if (n.y == -1)
+        return Face::D;
+    if (n.z == 1)
+        return Face::F;
     return Face::B;
 }
 
@@ -61,7 +72,9 @@ constexpr Face face_from_normal(Vec3 n) noexcept {
 // clockwise-viewed-from-+n sense) and cross-checked against three
 // well-known physical turns: F sends U's F-adjacent row to R, R sends the
 // URF corner to URB, U sends the URF corner to ULF.
-constexpr Vec3 rotate_quarter(Vec3 v, Vec3 n) noexcept { return n * dot(v, n) + cross(v, n); }
+constexpr Vec3 rotate_quarter(Vec3 v, Vec3 n) noexcept {
+    return n * dot(v, n) + cross(v, n);
+}
 
 // Position (in [-1,0,1]^3) of the sticker at local (row, col) on `face`, per
 // the layout documented in cube.hpp.
@@ -83,7 +96,9 @@ constexpr Vec3 position_of(Face face, int row, int col) noexcept {
     return {};
 }
 
-constexpr Vec3 position_of(Face face, int index) noexcept { return position_of(face, index / 3, index % 3); }
+constexpr Vec3 position_of(Face face, int index) noexcept {
+    return position_of(face, index / 3, index % 3);
+}
 
 // Inverse of position_of: the (row, col) on `face` for a sticker whose
 // position (restricted to that face's plane) is `pos`.
@@ -151,7 +166,7 @@ constexpr MoveTable make_move_table(Face turned, int turns) {
                 continue;  // the turned face's own centre
             }
             table[count++] = StickerMove{new_face, static_cast<std::uint8_t>(new_index), face,
-                                          static_cast<std::uint8_t>(index)};
+                                         static_cast<std::uint8_t>(index)};
         }
     }
     if (count != table.size()) {
@@ -269,7 +284,9 @@ Color Cube::at(Face face, int index) const noexcept {
     return facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
 }
 
-std::array<Color, 9> Cube::face(Face face) const noexcept { return facelets_[static_cast<std::size_t>(face)]; }
+std::array<Color, 9> Cube::face(Face face) const noexcept {
+    return facelets_[static_cast<std::size_t>(face)];
+}
 
 Cube Cube::apply(Move move) const noexcept {
     Cube result = *this;
@@ -279,11 +296,12 @@ Cube Cube::apply(Move move) const noexcept {
     // the same class of input is_physically_valid guards against) degrades
     // to a no-op copy - as the old geometric implementation did - instead
     // of indexing out of the tables.
-    if (move.turns < 1 || move.turns > 3 || static_cast<std::size_t>(move.face) >= kMoveTables.size()) {
+    if (move.turns < 1 || move.turns > 3 ||
+        static_cast<std::size_t>(move.face) >= kMoveTables.size()) {
         return result;
     }
-    for (const StickerMove& sticker :
-         kMoveTables[static_cast<std::size_t>(move.face)][static_cast<std::size_t>(move.turns - 1)]) {
+    for (const StickerMove& sticker : kMoveTables[static_cast<std::size_t>(move.face)]
+                                                 [static_cast<std::size_t>(move.turns - 1)]) {
         result.set(sticker.dst_face, sticker.dst_index, at(sticker.src_face, sticker.src_index));
     }
     return result;
@@ -647,8 +665,8 @@ Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
 Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexcept {
     for (const CornerPosition& position : kCornerPositions) {
         const std::array<Color, 3> colors = {at(position.faces[0], position.indices[0]),
-                                              at(position.faces[1], position.indices[1]),
-                                              at(position.faces[2], position.indices[2])};
+                                             at(position.faces[1], position.indices[1]),
+                                             at(position.faces[2], position.indices[2])};
         auto slot_of = [&](Color target) -> int {
             for (int i = 0; i < 3; ++i) {
                 if (colors[static_cast<std::size_t>(i)] == target) {
@@ -664,8 +682,8 @@ Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexce
             const auto fa = static_cast<std::size_t>(ia);
             const auto fb = static_cast<std::size_t>(ib);
             const auto fc = static_cast<std::size_t>(ic);
-            return {position.faces[fa], position.indices[fa], position.faces[fb],
-                    position.indices[fb], position.faces[fc], position.indices[fc]};
+            return {position.faces[fa],   position.indices[fa], position.faces[fb],
+                    position.indices[fb], position.faces[fc],   position.indices[fc]};
         }
     }
     return {};  // unreachable for a physically valid cube

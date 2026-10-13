@@ -186,7 +186,8 @@ TEST_CASE("half and prime turns equal composed quarter turns, for every face", "
         for (Face face : kAllFaces) {
             const Cube quarter = start.apply(Move{face, 1});
             REQUIRE(start.apply(Move{face, 2}) == quarter.apply(Move{face, 1}));
-            REQUIRE(start.apply(Move{face, 3}) == quarter.apply(Move{face, 1}).apply(Move{face, 1}));
+            REQUIRE(start.apply(Move{face, 3}) ==
+                    quarter.apply(Move{face, 1}).apply(Move{face, 1}));
         }
     }
 }
@@ -383,7 +384,9 @@ TEST_CASE("centres permuted from canonical are not solvable", "[cube]") {
     // never move under face turns, so no move sequence reaches it from
     // solved(): is_solvable() must reject it.
     std::array<std::array<Color, 9>, 6> facelets{};
-    const auto fill = [&](Face face, Color color) { facelets[static_cast<std::size_t>(face)].fill(color); };
+    const auto fill = [&](Face face, Color color) {
+        facelets[static_cast<std::size_t>(face)].fill(color);
+    };
     fill(Face::U, Color::Green);
     fill(Face::B, Color::Yellow);
     fill(Face::D, Color::Blue);

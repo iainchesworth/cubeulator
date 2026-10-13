@@ -24,7 +24,8 @@ cv::Mat synthetic_grid_frame() {
         for (int col = 0; col < 3; ++col) {
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255), cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255),
+                          cv::FILLED);
         }
     }
     return frame;
@@ -43,7 +44,8 @@ cv::Mat synthetic_grid_frame_missing_cell(int skip_index) {
             }
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255), cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255),
+                          cv::FILLED);
         }
     }
     return frame;
@@ -58,7 +60,8 @@ cv::Mat synthetic_grid_frame_with_distractor() {
         for (int col = 0; col < 3; ++col) {
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255), cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(255, 255, 255),
+                          cv::FILLED);
         }
     }
     cv::rectangle(frame, cv::Rect(250, 130, 40, 40), cv::Scalar(255, 255, 255), cv::FILLED);
@@ -78,11 +81,13 @@ cv::Mat synthetic_grid_frame_with_gradient() {
         for (int col = 0; col < 3; ++col) {
             const int x = kMargin + col * (kCell + kGap);
             const int y = kMargin + row * (kCell + kGap);
-            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(180, 180, 180), cv::FILLED);
+            cv::rectangle(frame, cv::Rect(x, y, kCell, kCell), cv::Scalar(180, 180, 180),
+                          cv::FILLED);
         }
     }
     for (int x = 0; x < frame.cols; ++x) {
-        const double offset = -80.0 + 160.0 * (static_cast<double>(x) / static_cast<double>(frame.cols - 1));
+        const double offset =
+            -80.0 + 160.0 * (static_cast<double>(x) / static_cast<double>(frame.cols - 1));
         cv::add(frame.col(x), cv::Scalar(offset, offset, offset), frame.col(x));
     }
     return frame;
@@ -168,7 +173,8 @@ TEST_CASE("detect_cube_grid extrapolates a missing cell", "[vision]") {
     REQUIRE(cell.bounds.height > 0);
 
     // Analytically known true center: margin + cell + gap + cell/2 = 115.
-    const cv::Point center(cell.bounds.x + cell.bounds.width / 2, cell.bounds.y + cell.bounds.height / 2);
+    const cv::Point center(cell.bounds.x + cell.bounds.width / 2,
+                           cell.bounds.y + cell.bounds.height / 2);
     REQUIRE(std::abs(center.x - 115) < 15);
     REQUIRE(std::abs(center.y - 115) < 15);
 
@@ -192,7 +198,8 @@ TEST_CASE("detect_cube_grid ignores a distractor contour outside the grid", "[vi
     REQUIRE(detection->cells[3].bounds.y < detection->cells[6].bounds.y);
 }
 
-TEST_CASE("detect_cube_grid handles an uneven-lighting gradient a global threshold could not", "[vision]") {
+TEST_CASE("detect_cube_grid handles an uneven-lighting gradient a global threshold could not",
+          "[vision]") {
     const auto detection = detect_cube_grid(synthetic_grid_frame_with_gradient());
     REQUIRE(detection.has_value());
 
@@ -214,10 +221,10 @@ TEST_CASE("detect_cube_grid tolerates a rotated grid", "[vision]") {
         for (int col = 0; col < 3; ++col) {
             const double x = kPasteOffset + kMargin + col * (kCell + kGap) + kCell / 2.0;
             const double y = kPasteOffset + kMargin + row * (kCell + kGap) + kCell / 2.0;
-            const double expected_x = rotation.at<double>(0, 0) * x + rotation.at<double>(0, 1) * y +
-                                       rotation.at<double>(0, 2);
-            const double expected_y = rotation.at<double>(1, 0) * x + rotation.at<double>(1, 1) * y +
-                                       rotation.at<double>(1, 2);
+            const double expected_x = rotation.at<double>(0, 0) * x +
+                                      rotation.at<double>(0, 1) * y + rotation.at<double>(0, 2);
+            const double expected_y = rotation.at<double>(1, 0) * x +
+                                      rotation.at<double>(1, 1) * y + rotation.at<double>(1, 2);
 
             const auto& cell = detection->cells[row * 3 + col];
             const double actual_x = cell.bounds.x + cell.bounds.width / 2.0;
@@ -245,7 +252,8 @@ TEST_CASE("dim-blur rounded cells survive the relaxed candidate poly gate", "[vi
             const int cy = kMargin + row * (kCell + kGap) + kCell / 2;
             std::vector<cv::Point> octagon;
             for (int vertex = 0; vertex < 8; ++vertex) {
-                const double angle = (static_cast<double>(vertex) + 0.5) * 2.0 * 3.14159265358979 / 8.0;
+                const double angle =
+                    (static_cast<double>(vertex) + 0.5) * 2.0 * 3.14159265358979 / 8.0;
                 octagon.emplace_back(cx + static_cast<int>(std::lround(28.0 * std::cos(angle))),
                                      cy + static_cast<int>(std::lround(28.0 * std::sin(angle))));
             }
@@ -256,7 +264,8 @@ TEST_CASE("dim-blur rounded cells survive the relaxed candidate poly gate", "[vi
     REQUIRE(candidates.size() >= 9);
 }
 
-TEST_CASE("a starved low-contrast frame recovers candidates via the permissive-C retry", "[vision]") {
+TEST_CASE("a starved low-contrast frame recovers candidates via the permissive-C retry",
+          "[vision]") {
     // Tiles a whisker brighter than their surroundings: the standard
     // adaptive-threshold C wipes most of them out (warm dim light on a
     // matte cube - live1's frontal-but-failed class), and only the

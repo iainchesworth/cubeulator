@@ -66,25 +66,39 @@ namespace {
 
 std::optional<cube::model::Face> face_from_letter(char c) noexcept {
     switch (c) {
-        case 'U': return cube::model::Face::U;
-        case 'R': return cube::model::Face::R;
-        case 'F': return cube::model::Face::F;
-        case 'D': return cube::model::Face::D;
-        case 'L': return cube::model::Face::L;
-        case 'B': return cube::model::Face::B;
-        default: return std::nullopt;
+        case 'U':
+            return cube::model::Face::U;
+        case 'R':
+            return cube::model::Face::R;
+        case 'F':
+            return cube::model::Face::F;
+        case 'D':
+            return cube::model::Face::D;
+        case 'L':
+            return cube::model::Face::L;
+        case 'B':
+            return cube::model::Face::B;
+        default:
+            return std::nullopt;
     }
 }
 
 std::optional<cube::model::FacetColor> color_from_letter(char c) noexcept {
     switch (c) {
-        case 'W': return cube::model::FacetColor::white;
-        case 'Y': return cube::model::FacetColor::yellow;
-        case 'R': return cube::model::FacetColor::red;
-        case 'O': return cube::model::FacetColor::orange;
-        case 'G': return cube::model::FacetColor::green;
-        case 'B': return cube::model::FacetColor::blue;
-        default: return std::nullopt;  // includes '?' - an unknown cell
+        case 'W':
+            return cube::model::FacetColor::white;
+        case 'Y':
+            return cube::model::FacetColor::yellow;
+        case 'R':
+            return cube::model::FacetColor::red;
+        case 'O':
+            return cube::model::FacetColor::orange;
+        case 'G':
+            return cube::model::FacetColor::green;
+        case 'B':
+            return cube::model::FacetColor::blue;
+        default:
+            return std::nullopt;  // includes '?' - an unknown cell
     }
 }
 
@@ -105,7 +119,8 @@ TEST_CASE("pooled cross-clip faces assemble into a valid cube", "[.union-assembl
     const std::string spec(spec_env);
     for (std::size_t pos = 0; pos < spec.size();) {
         const std::size_t comma = spec.find(',', pos);
-        const std::string item = spec.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
+        const std::string item =
+            spec.substr(pos, comma == std::string::npos ? std::string::npos : comma - pos);
         pos = (comma == std::string::npos) ? spec.size() : comma + 1;
         if (item.size() != 11 || item[1] != '=') {
             std::cout << "union: malformed entry '" << item << "' (want F=WWWWWWWWW)\n";

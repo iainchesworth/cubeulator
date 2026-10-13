@@ -67,12 +67,12 @@ constexpr Mat3 kIdentityMat = {{1, 0, 0, 0, 1, 0, 0, 0, 1}};
 // y: D->U, z: B->F. Ordered by model::Face (U,R,F,D,L,B) so a Face value
 // indexes directly.
 constexpr std::array<Vec3, 6> kFaceNormal = {{
-    {0, 1, 0},    // U
-    {1, 0, 0},    // R
-    {0, 0, 1},    // F
-    {0, -1, 0},   // D
-    {-1, 0, 0},   // L
-    {0, 0, -1},   // B
+    {0, 1, 0},   // U
+    {1, 0, 0},   // R
+    {0, 0, 1},   // F
+    {0, -1, 0},  // D
+    {-1, 0, 0},  // L
+    {0, 0, -1},  // B
 }};
 
 constexpr Face face_from_normal(Vec3 n) noexcept {
@@ -131,12 +131,12 @@ constexpr int index_on_face(Face face, Vec3 pos) noexcept {
 // resulting on-screen appearance). Rows are display axes, columns body
 // axes: entry (r, c) = dot(display_axis_r, image of body_axis_c).
 constexpr std::array<Mat3, 6> kNearFaceBase = {{
-    {{1, 0, 0, 0, 0, -1, 0, 1, 0}},    // U near: +90 about x, U normal -> +z
-    {{0, 0, -1, 0, 1, 0, 1, 0, 0}},    // R near: -90 about y, R normal -> +z
-    {{1, 0, 0, 0, 1, 0, 0, 0, 1}},     // F near: identity
-    {{1, 0, 0, 0, 0, 1, 0, -1, 0}},    // D near: -90 about x, D normal -> +z
-    {{0, 0, 1, 0, 1, 0, -1, 0, 0}},    // L near: +90 about y, L normal -> +z
-    {{-1, 0, 0, 0, 1, 0, 0, 0, -1}},   // B near: 180 about y, U stays up
+    {{1, 0, 0, 0, 0, -1, 0, 1, 0}},   // U near: +90 about x, U normal -> +z
+    {{0, 0, -1, 0, 1, 0, 1, 0, 0}},   // R near: -90 about y, R normal -> +z
+    {{1, 0, 0, 0, 1, 0, 0, 0, 1}},    // F near: identity
+    {{1, 0, 0, 0, 0, 1, 0, -1, 0}},   // D near: -90 about x, D normal -> +z
+    {{0, 0, 1, 0, 1, 0, -1, 0, 0}},   // L near: +90 about y, L normal -> +z
+    {{-1, 0, 0, 0, 1, 0, 0, 0, -1}},  // B near: 180 about y, U stays up
 }};
 
 // One quarter turn of the cube clockwise AS SEEN ON SCREEN (display +y is
@@ -289,11 +289,13 @@ constexpr Vec3 model_to_body(std::size_t lattice_index, Vec3 p_model) noexcept {
 constexpr std::array<FaceCellMap, kLatticeSize> build_face_obs_to_body() noexcept {
     std::array<FaceCellMap, kLatticeSize> out{};
     for (std::size_t i = 0; i < kLatticeSize; ++i) {
-        const Face body_face = face_from_normal(model_to_body(i, kFaceNormal[static_cast<std::size_t>(Face::F)]));
+        const Face body_face =
+            face_from_normal(model_to_body(i, kFaceNormal[static_cast<std::size_t>(Face::F)]));
         out[i].body_face = body_face;
         for (int obs = 0; obs < 9; ++obs) {
             const Vec3 p_model{obs % 3 - 1, 1 - obs / 3, 1};
-            out[i].cell[static_cast<std::size_t>(obs)] = index_on_face(body_face, model_to_body(i, p_model));
+            out[i].cell[static_cast<std::size_t>(obs)] =
+                index_on_face(body_face, model_to_body(i, p_model));
         }
     }
     return out;
@@ -324,8 +326,8 @@ constexpr std::array<std::array<FaceCellMap, 3>, kLatticeSize> build_corner_obs_
     for (std::size_t i = 0; i < kLatticeSize; ++i) {
         for (std::size_t view = 0; view < 3; ++view) {
             const CornerViewModel& model = kCornerViewModel[view];
-            const Face body_face =
-                face_from_normal(model_to_body(i, kFaceNormal[static_cast<std::size_t>(model.model_face)]));
+            const Face body_face = face_from_normal(
+                model_to_body(i, kFaceNormal[static_cast<std::size_t>(model.model_face)]));
             out[i][view].body_face = body_face;
             for (std::size_t k = 0; k < 9; ++k) {
                 const Vec3 p_model = position_of(model.model_face, model.model_cell[k]);
@@ -437,8 +439,7 @@ constexpr bool lattice_group_is_sound() noexcept {
             // fold relies on: store = perm[gauge][perm[g][f]] is only the
             // same as perm[compose[gauge][g]][f] if this holds.
             for (std::size_t f = 0; f < 6; ++f) {
-                const auto via_pair =
-                    permutation[a][static_cast<std::size_t>(permutation[b][f])];
+                const auto via_pair = permutation[a][static_cast<std::size_t>(permutation[b][f])];
                 if (permutation[static_cast<std::size_t>(compose[a][b])][f] != via_pair) {
                     return false;
                 }
@@ -556,9 +557,11 @@ static_assert(body_relabel_is_sound());
 const std::array<Quat, kLatticeSize> kLattice24 = build_lattice_quats();
 const std::array<std::array<Face, 6>, kLatticeSize> kFacePermutation = build_face_permutation();
 const std::array<FaceCellMap, kLatticeSize> kFaceObsToBody = build_face_obs_to_body();
-const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBody = build_corner_obs_to_body();
+const std::array<std::array<FaceCellMap, 3>, kLatticeSize> kCornerObsToBody =
+    build_corner_obs_to_body();
 const std::array<std::array<FaceCellMap, 6>, kLatticeSize> kBodyRelabel = build_body_relabel();
-const std::array<std::array<int, kLatticeSize>, kLatticeSize> kLatticeCompose = build_lattice_compose();
+const std::array<std::array<int, kLatticeSize>, kLatticeSize> kLatticeCompose =
+    build_lattice_compose();
 const std::array<int, kLatticeSize> kLatticeInverse = build_lattice_inverse();
 
 Quat quat_multiply(const Quat& a, const Quat& b) noexcept {
@@ -568,7 +571,9 @@ Quat quat_multiply(const Quat& a, const Quat& b) noexcept {
             a[0] * b[3] + a[1] * b[2] - a[2] * b[1] + a[3] * b[0]};
 }
 
-Quat quat_conjugate(const Quat& q) noexcept { return {q[0], -q[1], -q[2], -q[3]}; }
+Quat quat_conjugate(const Quat& q) noexcept {
+    return {q[0], -q[1], -q[2], -q[3]};
+}
 
 float quat_angle_deg(const Quat& a, const Quat& b) noexcept {
     return angle_deg_from_abs_dot(std::abs(quat_dot(a, b)));

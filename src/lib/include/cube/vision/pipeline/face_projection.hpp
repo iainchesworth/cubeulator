@@ -30,10 +30,10 @@
 namespace cube::vision::pipeline {
 
 struct ProjectedFace {
-    int face = 0;              // model-frame face id, 0..5 = +x,-x,+y,-y,+z,-z
-    double frontality = 0.0;   // facing cosine toward the camera (1 = square-on)
-    std::array<cv::Point2f, 4> quad{};      // tl,tr,br,bl per the face-local frame above
-    std::array<cv::Point2f, 9> centres{};   // row-major sticker centres, same frame
+    int face = 0;                          // model-frame face id, 0..5 = +x,-x,+y,-y,+z,-z
+    double frontality = 0.0;               // facing cosine toward the camera (1 = square-on)
+    std::array<cv::Point2f, 4> quad{};     // tl,tr,br,bl per the face-local frame above
+    std::array<cv::Point2f, 9> centres{};  // row-major sticker centres, same frame
     // Per-cell quads (tl,tr,br,bl each, row-major cells) - stage E's
     // geometry under tracking-first: a cell is a projection too.
     std::array<std::array<cv::Point2f, 4>, 9> cells{};
@@ -60,8 +60,8 @@ inline constexpr float kStickerFraction = 0.89F;
 // frame or a degenerate quad.
 // homography_out, when given, receives the forward quad->square map so
 // refined rectified-space geometry can be carried back to the image.
-[[nodiscard]] cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size = 96,
-                                   cv::Mat* homography_out = nullptr);
+[[nodiscard]] cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face,
+                                   int size = 96, cv::Mat* homography_out = nullptr);
 
 // P4: sub-pixel refinement of the cell boundaries in rectified space,
 // where the sticker gaps are near-axis-aligned dark lines. The two

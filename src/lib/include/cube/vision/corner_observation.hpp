@@ -31,7 +31,7 @@ enum class CornerViewId : std::uint8_t { first_corner, second_corner };
 // drawn face first), NOT yet in the scan convention cube_from_scan()
 // expects - corner_slot_mappings() provides that remapping.
 struct CornerFaceView {
-    std::array<cv::Point2f, 4> quad{};   // tl, tr, br, bl of the parallelogram
+    std::array<cv::Point2f, 4> quad{};  // tl, tr, br, bl of the parallelogram
     std::array<StickerQuad, 9> cells{};
     std::array<cv::Vec3f, 9> lab{};
 };

@@ -105,7 +105,9 @@ public:
 
     // Measured per-camera intrinsics for the loop's camera-matrix
     // consumers (P2.9); unset = the f=width approximation.
-    void set_camera_intrinsics(const CameraIntrinsics& intrinsics) { loop_.set_camera_intrinsics(intrinsics); }
+    void set_camera_intrinsics(const CameraIntrinsics& intrinsics) {
+        loop_.set_camera_intrinsics(intrinsics);
+    }
 
 private:
     StabilityTracker stability_;

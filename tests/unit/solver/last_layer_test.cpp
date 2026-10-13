@@ -46,7 +46,8 @@ std::vector<std::pair<Face, int>> f2l_positions() {
 // through. This is the test that catches a one-move typo in an alphabet
 // constant at the constant itself, rather than as an opaque corpus
 // failure three stages downstream.
-TEST_CASE("every last-layer alphabet word fixes all 33 first-two-layer facelet positions", "[last_layer]") {
+TEST_CASE("every last-layer alphabet word fixes all 33 first-two-layer facelet positions",
+          "[last_layer]") {
     const std::array<std::pair<const char*, const std::vector<Move>*>, 8> alphabet = {{
         {"U", &detail::kAdjustU},
         {"U2", &detail::kAdjustU2},

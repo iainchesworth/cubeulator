@@ -13,8 +13,8 @@
 #include <cube/vision/recording_v2.hpp>
 #ifdef CUBE_HAVE_M3T
 #include <cube/track_m3t/m3t_pose_tracker.hpp>
-#include <cube/vision/corner_detector.hpp>
 #include <cube/vision/camera_intrinsics.hpp>
+#include <cube/vision/corner_detector.hpp>
 #include <cube/vision/pipeline/detect_track_loop.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -172,7 +172,8 @@ struct VisionDebugStats {
     std::size_t bright_candidates = 0;
     std::string face_status;    // "ok conf=..." | "pose-only conf=..." | "gated-offframe" | "none"
     std::string corner_status;  // likewise, or "unarmed"
-    std::string edge_status = "unrun";  // edge fallback: "ok conf=..." | "pose-failed" | "none" | "unrun"
+    std::string edge_status =
+        "unrun";  // edge fallback: "ok conf=..." | "pose-failed" | "none" | "unrun"
     bool is_steady = false;
     bool hand_present = false;
 };
@@ -198,9 +199,10 @@ void dump_vision_debug(const cv::Mat& analysis_frame, const VisionDebugStats& st
     cv::imwrite(dir_path + "/frame_analysis_" + std::to_string(slot) + ".png", analysis_frame);
 
     std::ofstream log(dir_path + "/vision_debug.log", std::ios::app);
-    log << "pass=" << pass << " slot=" << slot << " size=" << analysis_frame.cols << 'x' << analysis_frame.rows
-        << " bright_candidates=" << stats.bright_candidates << " face=" << stats.face_status
-        << " corner=" << stats.corner_status << " edge=" << stats.edge_status << " steady=" << stats.is_steady
+    log << "pass=" << pass << " slot=" << slot << " size=" << analysis_frame.cols << 'x'
+        << analysis_frame.rows << " bright_candidates=" << stats.bright_candidates
+        << " face=" << stats.face_status << " corner=" << stats.corner_status
+        << " edge=" << stats.edge_status << " steady=" << stats.is_steady
         << " hand=" << stats.hand_present << '\n';
     slot = (slot + 1) % 6;
 }
@@ -239,8 +241,9 @@ void record_camera_frame_v2(const cv::Mat& full_frame, std::int64_t frame_t_ms) 
         if (!state.isEmpty()) {
             manifest.state = state.toStdString();
         } else {
-            qWarning("ScanSession: recording without CUBE_VISION_RECORD_STATE - clip will carry no "
-                     "true-state manifest and cannot feed exact-state gates");
+            qWarning(
+                "ScanSession: recording without CUBE_VISION_RECORD_STATE - clip will carry no "
+                "true-state manifest and cannot feed exact-state gates");
         }
         manifest.lighting = qEnvironmentVariable("CUBE_VISION_RECORD_LIGHTING").toStdString();
         manifest.motion_script = qEnvironmentVariable("CUBE_VISION_RECORD_MOTION").toStdString();
@@ -309,7 +312,8 @@ LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
                 // consumer in the loop leaves the f=width approximation.
                 if (const QString intrinsics_path = qEnvironmentVariable("CUBE_VISION_INTRINSICS");
                     !intrinsics_path.isEmpty()) {
-                    if (auto intrinsics = cube::vision::read_intrinsics(intrinsics_path.toStdString());
+                    if (auto intrinsics =
+                            cube::vision::read_intrinsics(intrinsics_path.toStdString());
                         intrinsics.has_value()) {
                         loop.set_camera_intrinsics(*intrinsics);
                         qInfo("ScanSession: calibrated intrinsics loaded (fx %.1f fy %.1f from %s)",
@@ -322,8 +326,9 @@ LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
             }
         }
         if (!loop.attached()) {
-            qWarning("ScanSession: corner model could not be loaded - degrading to the legacy pipeline "
-                     "(CUBE_VISION_PIPELINE=legacy behaviour)");
+            qWarning(
+                "ScanSession: corner model could not be loaded - degrading to the legacy pipeline "
+                "(CUBE_VISION_PIPELINE=legacy behaviour)");
             track_mode_degraded = true;
         }
     }
@@ -409,12 +414,14 @@ struct ReplayClip {
         }
         const QDir dir(replay_dir());
         const std::string index_path =
-            dir.absoluteFilePath(QString::fromUtf8(recording::kIndexCsvName.data(),
-                                                   static_cast<qsizetype>(recording::kIndexCsvName.size())))
+            dir.absoluteFilePath(
+                   QString::fromUtf8(recording::kIndexCsvName.data(),
+                                     static_cast<qsizetype>(recording::kIndexCsvName.size())))
                 .toStdString();
         std::ifstream index(index_path);
         if (!index) {
-            qWarning("ScanSession: CUBE_VISION_REPLAY_DIR set but no readable %s in it", index_path.c_str());
+            qWarning("ScanSession: CUBE_VISION_REPLAY_DIR set but no readable %s in it",
+                     index_path.c_str());
             return loaded;
         }
         auto rows = recording::read_index(index);
@@ -514,24 +521,25 @@ void log_track_pass(const cube::vision::TrackerPassOutput& track) {
         return "?";
     };
     // model::Face order U,R,F,D,L,B.
-    const char front = track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
+    const char front =
+        track.front_face ? "URFDLB"[static_cast<std::size_t>(*track.front_face)] : '-';
     std::ofstream log(QDir(dir).absolutePath().toStdString() + "/vision_debug.log", std::ios::app);
-    log << "TRACK state=" << track_state_name(track.state) << " gate=" << gate_name(track.gate) << " q=("
-        << track.q_track[0]
-        << ',' << track.q_track[1] << ',' << track.q_track[2] << ',' << track.q_track[3]
-        << ") sigma=" << track.sigma_deg << " theta=" << track.theta_deg << " S=" << track.lattice_index
-        << " margin=" << track.margin_deg << " front=" << front << " k=" << track.quarter_turn_k
-        << " belief=" << track.belief_margin << " certain=" << track.identity_certain << " certainF="
-        << [&track] {
-               // Face-scoped certainty as a URFDLB bit string ("010000" =
-               // R commit-grade) - the capture layer's actual bar now, so
-               // a post-mortem can see it without re-running the belief.
-               std::string bits(track.identity_certain_face.size(), '0');
-               for (std::size_t f = 0; f < track.identity_certain_face.size(); ++f) {
-                   bits[f] = track.identity_certain_face[f] ? '1' : '0';
-               }
-               return bits;
-           }()
+    log << "TRACK state=" << track_state_name(track.state) << " gate=" << gate_name(track.gate)
+        << " q=(" << track.q_track[0] << ',' << track.q_track[1] << ',' << track.q_track[2] << ','
+        << track.q_track[3] << ") sigma=" << track.sigma_deg << " theta=" << track.theta_deg
+        << " S=" << track.lattice_index << " margin=" << track.margin_deg << " front=" << front
+        << " k=" << track.quarter_turn_k << " belief=" << track.belief_margin
+        << " certain=" << track.identity_certain << " certainF=" <<
+        [&track] {
+            // Face-scoped certainty as a URFDLB bit string ("010000" =
+            // R commit-grade) - the capture layer's actual bar now, so
+            // a post-mortem can see it without re-running the belief.
+            std::string bits(track.identity_certain_face.size(), '0');
+            for (std::size_t f = 0; f < track.identity_certain_face.size(); ++f) {
+                bits[f] = track.identity_certain_face[f] ? '1' : '0';
+            }
+            return bits;
+        }()
         << " epoch=" << track.epoch << " dt=" << track.dt_ms << '\n';
 }
 
@@ -676,7 +684,8 @@ void smooth_quad(std::array<cv::Point2f, 4>& next, const std::array<cv::Point2f,
 // Damps overlay jitter by blending fresh geometry toward the held frame's.
 // Colour samples are NOT smoothed - only geometry; lab feeds the temporal
 // aggregators, which do their own (windowed median) smoothing.
-void smooth_observation(cube::vision::FaceObservation& next, const cube::vision::FaceObservation& previous) {
+void smooth_observation(cube::vision::FaceObservation& next,
+                        const cube::vision::FaceObservation& previous) {
     smooth_quad(next.face_quad, previous.face_quad);
     for (std::size_t i = 0; i < next.cells.size(); ++i) {
         smooth_quad(next.cells[i].corners, previous.cells[i].corners);
@@ -685,8 +694,8 @@ void smooth_observation(cube::vision::FaceObservation& next, const cube::vision:
 
 // FaceAggregator only consumes the lab samples, but building a full
 // FaceObservation keeps one add() path for both flows.
-[[nodiscard]] cube::vision::FaceObservation slot_observation(const cube::vision::CornerFaceView& view,
-                                                             float geometry_confidence) {
+[[nodiscard]] cube::vision::FaceObservation slot_observation(
+    const cube::vision::CornerFaceView& view, float geometry_confidence) {
     cube::vision::FaceObservation observation;
     observation.cells = view.cells;
     observation.lab = view.lab;
@@ -709,7 +718,8 @@ ScanSession::ScanSession(QObject* parent) : QObject(parent) {
     connect(&poll_timer_, &QTimer::timeout, this, &ScanSession::poll);
     connect(&analysis_watcher_, &QFutureWatcher<AnalysisResult>::finished, this,
             &ScanSession::handleAnalysisFinished);
-    connect(&start_watcher_, &QFutureWatcher<Result<void>>::finished, this, &ScanSession::handleStartFinished);
+    connect(&start_watcher_, &QFutureWatcher<Result<void>>::finished, this,
+            &ScanSession::handleStartFinished);
 
     // Debug-only companion to CUBE_VISION_REPLAY_DIR: without it a replay
     // run sits on the home screen and the analysis path never executes,
@@ -720,8 +730,7 @@ ScanSession::ScanSession(QObject* parent) : QObject(parent) {
     // front of the camera. Queued, not called inline: start() expects a
     // running event loop (it dispatches the camera open to a watcher).
     if (!qEnvironmentVariable("CUBE_VISION_AUTOSTART_SCAN").isEmpty()) {
-        QMetaObject::invokeMethod(
-            this, [this]() { start(QString()); }, Qt::QueuedConnection);
+        QMetaObject::invokeMethod(this, [this]() { start(QString()); }, Qt::QueuedConnection);
     }
 
     // Hand-detection AI is on by default; SettingsScreen's toggle flips
@@ -749,15 +758,17 @@ void ScanSession::finishGateLog() {
     }
     std::sort(gate_latencies_.begin(), gate_latencies_.end());
     const auto latency_at = [this](double q) {
-        return gate_latencies_.empty()
-                   ? -1.0
-                   : gate_latencies_[std::min(gate_latencies_.size() - 1,
-                                              static_cast<std::size_t>(q * static_cast<double>(
-                                                                               gate_latencies_.size())))];
+        return gate_latencies_.empty() ? -1.0
+                                       : gate_latencies_[std::min(
+                                             gate_latencies_.size() - 1,
+                                             static_cast<std::size_t>(
+                                                 q * static_cast<double>(gate_latencies_.size())))];
     };
-    gate_log_ << "# summary passes=" << gate_passes_ << " tracked=" << gate_tracked_ << " tracked_frac="
+    gate_log_ << "# summary passes=" << gate_passes_ << " tracked=" << gate_tracked_
+              << " tracked_frac="
               << (gate_passes_ > 0 ? static_cast<double>(gate_tracked_) / gate_passes_ : 0.0)
-              << " latency_median_ms=" << latency_at(0.5) << " latency_p95_ms=" << latency_at(0.95) << "\n";
+              << " latency_median_ms=" << latency_at(0.5) << " latency_p95_ms=" << latency_at(0.95)
+              << "\n";
     gate_log_.close();
     gate_latencies_.clear();
     gate_passes_ = 0;
@@ -979,14 +990,15 @@ qreal ScanSession::overlayFreshness() const {
     if (elapsed <= 0) {
         return 1.0;
     }
-    return std::clamp(1.0 - static_cast<double>(elapsed) / static_cast<double>(kOverlayHoldMs), 0.0, 1.0);
+    return std::clamp(1.0 - static_cast<double>(elapsed) / static_cast<double>(kOverlayHoldMs), 0.0,
+                      1.0);
 }
 
 QVariantList ScanSession::cornerCellColors() const {
     QVariantList list;
     if (corner_observation_) {
-        for (const auto* view :
-             {&corner_observation_->top, &corner_observation_->lower_left, &corner_observation_->lower_right}) {
+        for (const auto* view : {&corner_observation_->top, &corner_observation_->lower_left,
+                                 &corner_observation_->lower_right}) {
             for (const auto& lab : view->lab) {
                 list.append(facet_color_css(cube::vision::classify_lab(lab).color));
             }
@@ -1076,9 +1088,10 @@ QVariantList ScanSession::slotSummaries() const {
     for (int i = 0; i < router_.filled_count(); ++i) {
         const cube::vision::CapturedFace& slot = *router_.slot_at(i);
         QVariantMap entry;
-        entry.insert(QStringLiteral("face"),
-                     face_letter_for_center(
-                         cube::vision::classify_lab(slot.lab[cube::model::center_facelet_index]).color));
+        entry.insert(
+            QStringLiteral("face"),
+            face_letter_for_center(
+                cube::vision::classify_lab(slot.lab[cube::model::center_facelet_index]).color));
         QVariantList colors;
         for (const auto& lab : slot.lab) {
             colors.append(facet_color_css(cube::vision::classify_lab(lab).color));
@@ -1153,8 +1166,9 @@ void ScanSession::start(const QString& deviceId) {
     }
 
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
-                                                      .display_name = ""};
-    start_watcher_.setFuture(QtConcurrent::run([device]() { return cube::platform::camera::start(device); }));
+                                                    .display_name = ""};
+    start_watcher_.setFuture(
+        QtConcurrent::run([device]() { return cube::platform::camera::start(device); }));
     emit startingChanged();
 }
 
@@ -1300,7 +1314,8 @@ void ScanSession::poll() {
         emit cameraLockChanged();
     }
 
-    auto frame = replay_active() ? try_pop_replay_frame() : cube::platform::camera::try_pop_latest_frame();
+    auto frame =
+        replay_active() ? try_pop_replay_frame() : cube::platform::camera::try_pop_latest_frame();
     if (!frame) {
         return;
     }
@@ -1335,7 +1350,8 @@ void ScanSession::poll() {
         // seconds means a wedged worker (driver stall, debugger break) and
         // deserves a trace, since the only visible symptom is the overlay
         // silently freezing while the video keeps playing.
-        if (analysis_inflight_timer_.isValid() && analysis_inflight_timer_.elapsed() > kAnalysisOverrunWarnMs &&
+        if (analysis_inflight_timer_.isValid() &&
+            analysis_inflight_timer_.elapsed() > kAnalysisOverrunWarnMs &&
             !analysis_overrun_logged_) {
             analysis_overrun_logged_ = true;
             qWarning("ScanSession: analysis pass still unfinished after %lld ms",
@@ -1371,37 +1387,39 @@ void ScanSession::poll() {
     analysis_inflight_ = true;
     analysis_inflight_timer_.restart();
     analysis_overrun_logged_ = false;
-    analysis_watcher_.setFuture(QtConcurrent::run(
-        [this, captured_frame = frame->frame, t_ms = frame->t_ms, corner_armed, pose_prior, run_hand_detector,
-         skip_detectors]() {
-            // The analysis body must NEVER let an exception escape. A
-            // QtConcurrent future STORES a thrown exception and rethrows it
-            // at analysis_watcher_.result() in handleAnalysisFinished - on
-            // the GUI thread, where nothing catches it, so std::terminate
-            // kills the app mid-scan (observed live: an MSVC C++ runtime
-            // error, no Windows Error Reporting entry, process simply
-            // gone). OpenCV is the likeliest thrower - cv::Exception comes
-            // out of any ROI/resize/solve whose preconditions a degenerate
-            // frame or transform violates - but this guard is deliberately
-            // blanket: dropping one frame's analysis always beats losing
-            // the whole scan, and the logged message NAMES the thrower so
-            // the underlying precondition gets fixed rather than guessed.
-            try {
-                return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector, skip_detectors);
-            } catch (const cv::Exception& error) {
-                qWarning("ScanSession: OpenCV threw during analysis (frame dropped): %s", error.what());
-            } catch (const std::exception& error) {
-                qWarning("ScanSession: analysis threw during analysis (frame dropped): %s", error.what());
-            } catch (...) {
-                qWarning("ScanSession: analysis threw a non-std exception (frame dropped)");
-            }
-            // A default-constructed result reads as "this pass saw
-            // nothing": no face, no corner, no pose. The tracker treats it
-            // exactly like a detection miss and coasts, which is the
-            // correct degradation - the cube did not move just because one
-            // frame's maths failed.
-            return AnalysisResult{};
-        }));
+    analysis_watcher_.setFuture(QtConcurrent::run([this, captured_frame = frame->frame,
+                                                   t_ms = frame->t_ms, corner_armed, pose_prior,
+                                                   run_hand_detector, skip_detectors]() {
+        // The analysis body must NEVER let an exception escape. A
+        // QtConcurrent future STORES a thrown exception and rethrows it
+        // at analysis_watcher_.result() in handleAnalysisFinished - on
+        // the GUI thread, where nothing catches it, so std::terminate
+        // kills the app mid-scan (observed live: an MSVC C++ runtime
+        // error, no Windows Error Reporting entry, process simply
+        // gone). OpenCV is the likeliest thrower - cv::Exception comes
+        // out of any ROI/resize/solve whose preconditions a degenerate
+        // frame or transform violates - but this guard is deliberately
+        // blanket: dropping one frame's analysis always beats losing
+        // the whole scan, and the logged message NAMES the thrower so
+        // the underlying precondition gets fixed rather than guessed.
+        try {
+            return analyze(captured_frame, t_ms, corner_armed, pose_prior, run_hand_detector,
+                           skip_detectors);
+        } catch (const cv::Exception& error) {
+            qWarning("ScanSession: OpenCV threw during analysis (frame dropped): %s", error.what());
+        } catch (const std::exception& error) {
+            qWarning("ScanSession: analysis threw during analysis (frame dropped): %s",
+                     error.what());
+        } catch (...) {
+            qWarning("ScanSession: analysis threw a non-std exception (frame dropped)");
+        }
+        // A default-constructed result reads as "this pass saw
+        // nothing": no face, no corner, no pose. The tracker treats it
+        // exactly like a detection miss and coasts, which is the
+        // correct degradation - the cube did not move just because one
+        // frame's maths failed.
+        return AnalysisResult{};
+    }));
 }
 
 void ScanSession::handleAnalysisFinished() {
@@ -1421,7 +1439,8 @@ void ScanSession::handleAnalysisFinished() {
     auto result = analysis_watcher_.result();
     // P2.9 gate latency, captured before any handling work inflates it:
     // elapsed since THIS pass's frame left the camera mailbox.
-    const qint64 gate_latency_ms = analysis_inflight_timer_.isValid() ? analysis_inflight_timer_.elapsed() : -1;
+    const qint64 gate_latency_ms =
+        analysis_inflight_timer_.isValid() ? analysis_inflight_timer_.elapsed() : -1;
 
     // Overlay persistence: per-frame detection blips (~1 in 4 frames drops
     // even on a good view) must not strobe the AR overlay in and out. A
@@ -1452,11 +1471,12 @@ void ScanSession::handleAnalysisFinished() {
         if (cube_pose_) {
             for (std::size_t i = 0; i < result.pose->vertices.size(); ++i) {
                 result.pose->vertices[i] = kOverlaySmoothing * result.pose->vertices[i] +
-                                            (1.0F - kOverlaySmoothing) * cube_pose_->vertices[i];
+                                           (1.0F - kOverlaySmoothing) * cube_pose_->vertices[i];
             }
         }
         cube_pose_ = result.pose;
-    } else if (cube_pose_ && overlay_hold_timer_.isValid() && overlay_hold_timer_.elapsed() > kOverlayHoldMs) {
+    } else if (cube_pose_ && overlay_hold_timer_.isValid() &&
+               overlay_hold_timer_.elapsed() > kOverlayHoldMs) {
         cube_pose_.reset();
     }
     // A fresh pose restarts the hold too: pose-only face fits (and later
@@ -1523,14 +1543,16 @@ void ScanSession::handleAnalysisFinished() {
             };
             if (corner_pose && result.corner) {
                 track_in.centre_lab_count = 3;
-                track_in.centre_lab[0] = lab_entry(result.corner->top.lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[0] =
+                    lab_entry(result.corner->top.lab[cube::model::center_facelet_index]);
                 track_in.centre_lab[1] =
                     lab_entry(result.corner->lower_left.lab[cube::model::center_facelet_index]);
                 track_in.centre_lab[2] =
                     lab_entry(result.corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && result.face) {
                 track_in.centre_lab_count = 1;
-                track_in.centre_lab[0] = lab_entry(result.face->lab[cube::model::center_facelet_index]);
+                track_in.centre_lab[0] =
+                    lab_entry(result.face->lab[cube::model::center_facelet_index]);
             }
             // An edge-sourced pose deliberately attaches nothing: the
             // observation carries no colour by design.
@@ -1552,9 +1574,10 @@ void ScanSession::handleAnalysisFinished() {
                 gate_log_.open(gate_log_path().toStdString(), std::ios::trunc);
                 gate_log_ << "frame_ms,latency_ms,track_pass,tracked,health,reinits,pass_ms\n";
             }
-            gate_log_ << result.frame_ms << ',' << gate_latency_ms << ',' << (result.track_pass ? 1 : 0) << ','
-                      << (result.pose_from_track ? 1 : 0) << ',' << result.track_health << ','
-                      << result.track_reinits << ',' << result.pass_ms << '\n';
+            gate_log_ << result.frame_ms << ',' << gate_latency_ms << ','
+                      << (result.track_pass ? 1 : 0) << ',' << (result.pose_from_track ? 1 : 0)
+                      << ',' << result.track_health << ',' << result.track_reinits << ','
+                      << result.pass_ms << '\n';
             ++gate_passes_;
             gate_tracked_ += result.pose_from_track ? 1 : 0;
             if (gate_latency_ms >= 0) {
@@ -1610,7 +1633,8 @@ void ScanSession::handleAnalysisFinished() {
                 const float sign = dot < 0.0F ? -1.0F : 1.0F;
                 float norm_squared = 0.0F;
                 for (std::size_t i = 0; i < 4; ++i) {
-                    smoothed_orientation_[i] += kOrientationSmoothing * (sign * fresh[i] - smoothed_orientation_[i]);
+                    smoothed_orientation_[i] +=
+                        kOrientationSmoothing * (sign * fresh[i] - smoothed_orientation_[i]);
                     norm_squared += smoothed_orientation_[i] * smoothed_orientation_[i];
                 }
                 const float norm = std::sqrt(norm_squared);
@@ -1618,7 +1642,8 @@ void ScanSession::handleAnalysisFinished() {
                     component /= norm;
                 }
             }
-        } else if (has_smoothed_orientation_ && result.frame_ms - last_orientation_ms_ <= kOrientationHoldMs) {
+        } else if (has_smoothed_orientation_ &&
+                   result.frame_ms - last_orientation_ms_ <= kOrientationHoldMs) {
             // HOLD the last pose rather than dropping it. Dropping on ANY
             // lost/acquiring pass made the 3D cube snap back to its idle
             // presentation and then re-adopt from scratch: ScanScreen binds
@@ -1650,15 +1675,17 @@ void ScanSession::handleAnalysisFinished() {
                                                -kPositionLateralLimit, kPositionLateralLimit);
                 fresh_position[1] = std::clamp(-kPositionLateralGain * (t[1] / t[2]),  //
                                                -kPositionLateralLimit, kPositionLateralLimit);
-                fresh_position[2] = std::clamp(kPositionDepthGain * (1.0 - t[2] / kPositionDepthReference),
-                                               kPositionDepthMin, kPositionDepthMax);
+                fresh_position[2] =
+                    std::clamp(kPositionDepthGain * (1.0 - t[2] / kPositionDepthReference),
+                               kPositionDepthMin, kPositionDepthMax);
             }
             if (!has_position_ || raw_pose_display()) {
                 smoothed_position_ = fresh_position;
                 has_position_ = true;
             } else {
                 for (std::size_t i = 0; i < 3; ++i) {
-                    smoothed_position_[i] += kPositionSmoothing * (fresh_position[i] - smoothed_position_[i]);
+                    smoothed_position_[i] +=
+                        kPositionSmoothing * (fresh_position[i] - smoothed_position_[i]);
                 }
             }
         } else if (has_position_ && result.frame_ms - last_orientation_ms_ <= kOrientationHoldMs) {
@@ -1679,8 +1706,9 @@ void ScanSession::handleAnalysisFinished() {
         // 2058 passes WHILE M3T was locked, costing 21 points of
         // on-screen locked fraction (79% raw vs 97.8% over passes the
         // loop actually ran).
-        idle_gate_.on_pass(result.cool_hue_pixels,
-                           !result.pose_from_track && track.state == cube::vision::TrackState::lost);
+        idle_gate_.on_pass(
+            result.cool_hue_pixels,
+            !result.pose_from_track && track.state == cube::vision::TrackState::lost);
     }
 
     // --- Identity-keyed aggregation & routing ------------------------------
@@ -1730,7 +1758,8 @@ void ScanSession::handleAnalysisFinished() {
         capture_identity_ok_[f] = track.identity_certain_face[f] || identity_waived;
     }
     capture_gate_ok_ = track.state == cube::vision::TrackState::locked &&
-                       consec_accepts_ >= kMinCaptureAccepts && pass_accepted && track.lattice_index >= 0;
+                       consec_accepts_ >= kMinCaptureAccepts && pass_accepted &&
+                       track.lattice_index >= 0;
     capture_q_ = track.q_track;
     capture_motion_score_ = result.motion_score;
     last_frame_ms_ = result.frame_ms;
@@ -1746,8 +1775,8 @@ void ScanSession::handleAnalysisFinished() {
     if (capture_gate_ok_ && router_.filled_count() < static_cast<int>(cube::model::face_count)) {
         const auto lattice = static_cast<std::size_t>(track.lattice_index);
         const auto add_keyed = [&](const cube::vision::FaceCellMap& map,
-                                   const cube::vision::FaceObservation& observation, bool from_corner,
-                                   bool full_quads) {
+                                   const cube::vision::FaceObservation& observation,
+                                   bool from_corner, bool full_quads) {
             // Gate 4 (fully-in-frame quads) is enforced HERE, per
             // observation, by refusing the add: a quad clipped by the
             // frame edge samples clamped border colour, so letting it into
@@ -1823,7 +1852,8 @@ void ScanSession::handleAnalysisFinished() {
     }
 }
 
-ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms, bool corner_armed,
+ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int64_t frame_t_ms,
+                                                 bool corner_armed,
                                                  std::optional<cube::vision::PoseSeed> pose_prior,
                                                  bool run_hand_detector, bool skip_detectors) {
     QElapsedTimer pass_timer;
@@ -1876,7 +1906,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // detectors and pose are elided, so the pass still ticks the tracker's
     // clock as an honest no-observation pass.
     if (skip_detectors) {
-        VisionDebugStats idle_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+        VisionDebugStats idle_stats{.is_steady = result.is_steady,
+                                    .hand_present = result.hand_present};
         idle_stats.face_status = "idle-skipped";
         idle_stats.corner_status = "idle-skipped";
         dump_vision_debug(analysis_frame, idle_stats);
@@ -1908,7 +1939,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         result.track_health = sample.health_frac;
         result.track_reinits = sample.reinits;
         result.pass_ms = static_cast<double>(pass_timer.nsecsElapsed()) / 1.0e6;
-        VisionDebugStats track_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+        VisionDebugStats track_stats{.is_steady = result.is_steady,
+                                     .hand_present = result.hand_present};
         track_stats.face_status = sample.pose.has_value() ? "track-locked" : "track-lost";
         track_stats.corner_status = track_stats.face_status;
         dump_vision_debug(analysis_frame, track_stats);
@@ -1931,7 +1963,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
                center.y < static_cast<float>(frame.rows);
     };
 
-    VisionDebugStats debug_stats{.is_steady = result.is_steady, .hand_present = result.hand_present};
+    VisionDebugStats debug_stats{.is_steady = result.is_steady,
+                                 .hand_present = result.hand_present};
 
     // Pose-only face observations (translation-ambiguous lattice fits, see
     // FaceObservation::pose_only) are held OUT of result.face on purpose:
@@ -1972,7 +2005,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         if (pose_prior) {
             corner_hint = cube::vision::compute_corner_hint(*pose_prior);
         }
-        auto corner = cube::vision::observe_corner(analysis_frame, corner_hint ? &*corner_hint : nullptr);
+        auto corner =
+            cube::vision::observe_corner(analysis_frame, corner_hint ? &*corner_hint : nullptr);
         if (corner.has_value()) {
             scale_corner_view(corner->top, scale_back);
             scale_corner_view(corner->lower_left, scale_back);
@@ -1981,7 +2015,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
                                      std::ranges::all_of(corner->lower_left.cells, cell_in_frame) &&
                                      std::ranges::all_of(corner->lower_right.cells, cell_in_frame);
             if (all_visible) {
-                debug_stats.corner_status = "ok conf=" + std::to_string(corner->geometry_confidence);
+                debug_stats.corner_status =
+                    "ok conf=" + std::to_string(corner->geometry_confidence);
                 result.corner = std::move(*corner);
             } else {
                 debug_stats.corner_status = "gated-offframe";
@@ -2001,7 +2036,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // veto observations it had nothing to do with.
     const auto quad_fully_in_frame = [&frame](const cube::vision::StickerQuad& cell) {
         return std::ranges::all_of(cell.corners, [&frame](const cv::Point2f& corner) {
-            return corner.x >= 0.0F && corner.y >= 0.0F && corner.x < static_cast<float>(frame.cols) &&
+            return corner.x >= 0.0F && corner.y >= 0.0F &&
+                   corner.x < static_cast<float>(frame.cols) &&
                    corner.y < static_cast<float>(frame.rows);
         });
     };
@@ -2009,9 +2045,10 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         result.face_full_quads = std::ranges::all_of(result.face->cells, quad_fully_in_frame);
     }
     if (result.corner) {
-        result.corner_full_quads = std::ranges::all_of(result.corner->top.cells, quad_fully_in_frame) &&
-                                   std::ranges::all_of(result.corner->lower_left.cells, quad_fully_in_frame) &&
-                                   std::ranges::all_of(result.corner->lower_right.cells, quad_fully_in_frame);
+        result.corner_full_quads =
+            std::ranges::all_of(result.corner->top.cells, quad_fully_in_frame) &&
+            std::ranges::all_of(result.corner->lower_left.cells, quad_fully_in_frame) &&
+            std::ranges::all_of(result.corner->lower_right.cells, quad_fully_in_frame);
     }
 
     // 3D pose for the wireframe overlay, from whichever observation
@@ -2089,7 +2126,8 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         }
     }
 
-    debug_stats.bright_candidates = cube::vision::detail::find_square_candidates(analysis_frame).size();
+    debug_stats.bright_candidates =
+        cube::vision::detail::find_square_candidates(analysis_frame).size();
     dump_vision_debug(analysis_frame, debug_stats);
 
     return result;
@@ -2199,9 +2237,10 @@ void log_slot_decision(const std::string& decision) {
         return "?";
     }();
     std::ostringstream detail;
-    detail << " reg=" << status << " cand=" << registration.candidates << " tied=" << registration.tied
-           << std::fixed << std::setprecision(2) << " score=" << registration.best_score << '/'
-           << registration.runner_up_score << " roll=" << registration.best_oriented_lab << '/'
+    detail << " reg=" << status << " cand=" << registration.candidates
+           << " tied=" << registration.tied << std::fixed << std::setprecision(2)
+           << " score=" << registration.best_score << '/' << registration.runner_up_score
+           << " roll=" << registration.best_oriented_lab << '/'
            << registration.runner_up_oriented_lab;
     if (registration.status == cube::vision::EpochRegistration::Status::resolved) {
         detail << " by=" << basis << " gauge=" << registration.lattice_index;
@@ -2240,7 +2279,8 @@ void ScanSession::tryCommitConverged() {
         if (frontal > (meta.corner_fed ? kMaxCornerFlankDeg : kMaxFaceCaptureDeg)) {
             continue;
         }
-        if (pass_rotation_deg_ > kMaxCaptureRotDeg || capture_motion_score_ >= kMaxCaptureMotionScore) {
+        if (pass_rotation_deg_ > kMaxCaptureRotDeg ||
+            capture_motion_score_ >= kMaxCaptureMotionScore) {
             continue;
         }
         // Gate 4 (fully-in-frame quads) needs no check here: clipped
@@ -2269,8 +2309,8 @@ void ScanSession::tryCommitConverged() {
         // reading is not a face with a blemish, it is a view of something
         // else - which is the stationary-finger case this gate exists to
         // defeat, and which it still defeats.
-        const auto unknown_cells = static_cast<std::size_t>(
-            std::ranges::count_if(captured.lab, [](const cv::Vec3f& lab) {
+        const auto unknown_cells =
+            static_cast<std::size_t>(std::ranges::count_if(captured.lab, [](const cv::Vec3f& lab) {
                 return cube::vision::classify_lab(lab).color == cube::model::FacetColor::unknown;
             }));
         if (unknown_cells > cube::vision::FaceAggregator::kMaxUnstableCells) {
@@ -2278,13 +2318,13 @@ void ScanSession::tryCommitConverged() {
         }
 
         const auto commit = router_.commit(body_face, captured, last_frame_ms_);
-        log_slot_decision("commit face=" + std::string(1, "URFDLB"[f]) +
-                          " outcome=" + commit_outcome_name(commit.outcome) +
-                          " confirmed=" + std::to_string(commit.confirmed_slots.size()) +
-                          (commit.registration ? registration_detail(*commit.registration) : std::string{}) +
-                          (commit.duplicate_centre ? " DUP-CENTRE" : "") +
-                          (commit.layer_turn ? " LAYER-TURN" : "") +
-                          (commit.force_lost ? " FORCE-LOST" : ""));
+        log_slot_decision(
+            "commit face=" + std::string(1, "URFDLB"[f]) +
+            " outcome=" + commit_outcome_name(commit.outcome) +
+            " confirmed=" + std::to_string(commit.confirmed_slots.size()) +
+            (commit.registration ? registration_detail(*commit.registration) : std::string{}) +
+            (commit.duplicate_centre ? " DUP-CENTRE" : "") +
+            (commit.layer_turn ? " LAYER-TURN" : "") + (commit.force_lost ? " FORCE-LOST" : ""));
 
         if (commit.outcome == cube::vision::CommitOutcome::holdoff) {
             // The refractory is the one refusal that keeps the window: the
@@ -2331,14 +2371,16 @@ void ScanSession::tryCommitConverged() {
     }
 }
 
-QString ScanSession::dropMostSuspectSlot(const std::array<float, cube::model::face_count>& mean_confidence) {
+QString ScanSession::dropMostSuspectSlot(
+    const std::array<float, cube::model::face_count>& mean_confidence) {
     const int filled = router_.filled_count();
     if (filled == 0) {
         return {};
     }
     int worst = 0;
     for (int i = 1; i < filled; ++i) {
-        if (mean_confidence[static_cast<std::size_t>(i)] < mean_confidence[static_cast<std::size_t>(worst)]) {
+        if (mean_confidence[static_cast<std::size_t>(i)] <
+            mean_confidence[static_cast<std::size_t>(worst)]) {
             worst = i;
         }
     }

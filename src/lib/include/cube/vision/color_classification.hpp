@@ -32,6 +32,7 @@ struct ColorPalette {
 // space, so the extra perceptual-uniformity correction CIEDE2000 adds
 // doesn't change nearest-neighbor classification here, and CIE76 is far
 // simpler to implement correctly.
-[[nodiscard]] cube::model::Facelet classify_color(const cv::Vec3b& bgr_sample, const ColorPalette& palette);
+[[nodiscard]] cube::model::Facelet classify_color(const cv::Vec3b& bgr_sample,
+                                                  const ColorPalette& palette);
 
 }  // namespace cube::vision

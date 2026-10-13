@@ -137,7 +137,8 @@ struct RollFit {
     float runner_up = 0.0F;
 };
 
-RollFit best_roll(const std::array<cv::Vec3f, 9>& sample, const std::array<cv::Vec3f, 9>& reference) {
+RollFit best_roll(const std::array<cv::Vec3f, 9>& sample,
+                  const std::array<cv::Vec3f, 9>& reference) {
     RollFit fit;
     fit.best = std::numeric_limits<float>::max();
     fit.runner_up = std::numeric_limits<float>::max();
@@ -166,7 +167,8 @@ std::array<cv::Vec3f, 9> consensus(const std::vector<std::array<cv::Vec3f, 9>>& 
             for (const auto& face : aligned) {
                 values.push_back(face[k][component]);
             }
-            std::nth_element(values.begin(), values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2),
+            std::nth_element(values.begin(),
+                             values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2),
                              values.end());
             out[k][component] = values[values.size() / 2];
         }
@@ -237,7 +239,8 @@ AlignedCluster align(const std::vector<Reading>& cluster) {
         }
     }
     out.mean_roll_margin = margin_total / static_cast<float>(cluster.size());
-    std::nth_element(spreads.begin(), spreads.begin() + static_cast<std::ptrdiff_t>(spreads.size() / 2),
+    std::nth_element(spreads.begin(),
+                     spreads.begin() + static_cast<std::ptrdiff_t>(spreads.size() / 2),
                      spreads.end());
     out.median_spread = spreads[spreads.size() / 2];
     return out;
@@ -324,12 +327,18 @@ struct Breakdown {
 Breakdown breakdown(const std::array<std::array<cube::model::Facelet, 9>, 6>& facelets) {
     const auto solver_color = [](cube::model::FacetColor color) {
         switch (color) {
-            case cube::model::FacetColor::white: return cube::solver::Color::White;
-            case cube::model::FacetColor::yellow: return cube::solver::Color::Yellow;
-            case cube::model::FacetColor::green: return cube::solver::Color::Green;
-            case cube::model::FacetColor::blue: return cube::solver::Color::Blue;
-            case cube::model::FacetColor::orange: return cube::solver::Color::Orange;
-            default: return cube::solver::Color::Red;
+            case cube::model::FacetColor::white:
+                return cube::solver::Color::White;
+            case cube::model::FacetColor::yellow:
+                return cube::solver::Color::Yellow;
+            case cube::model::FacetColor::green:
+                return cube::solver::Color::Green;
+            case cube::model::FacetColor::blue:
+                return cube::solver::Color::Blue;
+            case cube::model::FacetColor::orange:
+                return cube::solver::Color::Orange;
+            default:
+                return cube::solver::Color::Red;
         }
     };
     // Order the six faces the way from_facelets indexes them: by the cube
@@ -341,7 +350,8 @@ Breakdown breakdown(const std::array<std::array<cube::model::Facelet, 9>, 6>& fa
             converted[k] = solver_color(face[k].color);
         }
         for (std::size_t position = 0; position < 6; ++position) {
-            if (cube::solver::canonical_color(static_cast<cube::solver::Face>(position)) == converted[4]) {
+            if (cube::solver::canonical_color(static_cast<cube::solver::Face>(position)) ==
+                converted[4]) {
                 base[position] = converted;
             }
         }
@@ -351,7 +361,8 @@ Breakdown breakdown(const std::array<std::array<cube::model::Facelet, 9>, 6>& fa
         rotations[f][0] = base[f];
         for (std::size_t quarter = 1; quarter < 4; ++quarter) {
             for (std::size_t k = 0; k < 9; ++k) {
-                rotations[f][quarter][static_cast<std::size_t>(kRot90[k])] = rotations[f][quarter - 1][k];
+                rotations[f][quarter][static_cast<std::size_t>(kRot90[k])] =
+                    rotations[f][quarter - 1][k];
             }
         }
     }
@@ -391,12 +402,18 @@ Breakdown breakdown(const std::array<std::array<cube::model::Facelet, 9>, 6>& fa
 TEST_CASE("CentreClusterBreakdownPlumbing", "[vision][capture-routing]") {
     const auto facet_color = [](cube::solver::Color color) {
         switch (color) {
-            case cube::solver::Color::White: return cube::model::FacetColor::white;
-            case cube::solver::Color::Yellow: return cube::model::FacetColor::yellow;
-            case cube::solver::Color::Green: return cube::model::FacetColor::green;
-            case cube::solver::Color::Blue: return cube::model::FacetColor::blue;
-            case cube::solver::Color::Orange: return cube::model::FacetColor::orange;
-            default: return cube::model::FacetColor::red;
+            case cube::solver::Color::White:
+                return cube::model::FacetColor::white;
+            case cube::solver::Color::Yellow:
+                return cube::model::FacetColor::yellow;
+            case cube::solver::Color::Green:
+                return cube::model::FacetColor::green;
+            case cube::solver::Color::Blue:
+                return cube::model::FacetColor::blue;
+            case cube::solver::Color::Orange:
+                return cube::model::FacetColor::orange;
+            default:
+                return cube::model::FacetColor::red;
         }
     };
     for (unsigned seed = 1; seed <= 5; ++seed) {
@@ -467,10 +484,12 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
             const AlignedCluster aligned = align(cluster);
             const VoteMargin margin = vote_margins(aligned.faces);
             std::printf(
-                "  centre=%d n=%3d roll_margin=%6.2f undecided=%3d spread=%5.1f far=%3d vote_mean=%.2f "
+                "  centre=%d n=%3d roll_margin=%6.2f undecided=%3d spread=%5.1f far=%3d "
+                "vote_mean=%.2f "
                 "vote_worst=%.2f(cell %d)\n",
-                centre_class, static_cast<int>(cluster.size()), static_cast<double>(aligned.mean_roll_margin),
-                aligned.undecided, static_cast<double>(aligned.median_spread), aligned.far,
+                centre_class, static_cast<int>(cluster.size()),
+                static_cast<double>(aligned.mean_roll_margin), aligned.undecided,
+                static_cast<double>(aligned.median_spread), aligned.far,
                 static_cast<double>(margin.mean_share), static_cast<double>(margin.worst_share),
                 margin.worst_cell);
 
@@ -481,9 +500,8 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
             const auto full = consensus(aligned.faces);
             int stable_at = static_cast<int>(aligned.faces.size());
             for (std::size_t n = aligned.faces.size(); n >= 1; --n) {
-                const std::vector<std::array<cv::Vec3f, 9>> prefix(aligned.faces.begin(),
-                                                                   aligned.faces.begin() +
-                                                                       static_cast<std::ptrdiff_t>(n));
+                const std::vector<std::array<cv::Vec3f, 9>> prefix(
+                    aligned.faces.begin(), aligned.faces.begin() + static_cast<std::ptrdiff_t>(n));
                 const auto partial = consensus(prefix);
                 bool same = true;
                 for (std::size_t k = 0; k < 9; ++k) {
@@ -527,7 +545,8 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
         }
 
         if (!six) {
-            std::printf("  ROUTING NOT ATTEMPTED: %d clusters, need 6\n", static_cast<int>(clusters.size()));
+            std::printf("  ROUTING NOT ATTEMPTED: %d clusters, need 6\n",
+                        static_cast<int>(clusters.size()));
             continue;
         }
 
@@ -604,7 +623,8 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
                             cube::solver::assemble_scanned_faces_with_mapping(gated_facelets)) {
                         std::printf("  GATED ASSEMBLY SUCCEEDED, physically_valid=%d\n",
                                     gated_assembled->cube.is_physically_valid() ? 1 : 0);
-                        if (const auto gated_solution = cube::solver::solve(gated_assembled->cube)) {
+                        if (const auto gated_solution =
+                                cube::solver::solve(gated_assembled->cube)) {
                             int gated_moves = 0;
                             for (const auto& step : gated_solution->steps) {
                                 gated_moves += static_cast<int>(step.moves.size());
@@ -637,8 +657,9 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
                     medoid_facelets[f] = (*medoid_resolved)[f];
                 }
                 std::printf("  medoid-only assembly: %s\n",
-                            cube::solver::assemble_scanned_faces_with_mapping(medoid_facelets) ? "SUCCEEDED"
-                                                                                               : "failed");
+                            cube::solver::assemble_scanned_faces_with_mapping(medoid_facelets)
+                                ? "SUCCEEDED"
+                                : "failed");
             } else {
                 std::printf("  medoid-only resolve_colors failed\n");
             }
@@ -662,9 +683,10 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
             // never reaches a parity question at all - a very different
             // diagnosis from surviving to parity and failing there.
             const Breakdown chain = breakdown(facelets);
-            std::printf("  constraint breakdown over 4096 rotations: from_facelets=%d physically_valid=%d "
-                        "solvable=%d\n",
-                        chain.built, chain.valid, chain.solvable);
+            std::printf(
+                "  constraint breakdown over 4096 rotations: from_facelets=%d physically_valid=%d "
+                "solvable=%d\n",
+                chain.built, chain.valid, chain.solvable);
 
             std::printf("  searching sticker-swap repairs\n");
             struct Cell {
@@ -674,13 +696,14 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
             std::vector<Cell> cells;
             for (std::size_t f = 0; f < 6; ++f) {
                 for (std::size_t k = 0; k < 9; ++k) {
-                    if (k != 4) {  // centres are fixed points: a centre swap is a different face, not a repair
+                    if (k != 4) {  // centres are fixed points: a centre swap is a different face,
+                                   // not a repair
                         cells.push_back(Cell{f, k});
                     }
                 }
             }
-            const auto swap_cells = [&](std::array<std::array<cube::model::Facelet, 9>, 6>& grid, const Cell& a,
-                                        const Cell& b) {
+            const auto swap_cells = [&](std::array<std::array<cube::model::Facelet, 9>, 6>& grid,
+                                        const Cell& a, const Cell& b) {
                 std::swap(grid[a.face][a.index], grid[b.face][b.index]);
             };
             bool repaired = false;
@@ -689,9 +712,10 @@ TEST_CASE("CentreClusterAssembly", "[.centre-cluster]") {
                     auto trial = facelets;
                     swap_cells(trial, cells[i], cells[j]);
                     if (cube::solver::assemble_scanned_faces_with_mapping(trial)) {
-                        std::printf("    ONE-SWAP repair: face %d cell %d <-> face %d cell %d\n",
-                                    static_cast<int>(cells[i].face), static_cast<int>(cells[i].index),
-                                    static_cast<int>(cells[j].face), static_cast<int>(cells[j].index));
+                        std::printf(
+                            "    ONE-SWAP repair: face %d cell %d <-> face %d cell %d\n",
+                            static_cast<int>(cells[i].face), static_cast<int>(cells[i].index),
+                            static_cast<int>(cells[j].face), static_cast<int>(cells[j].index));
                         repaired = true;
                     }
                 }

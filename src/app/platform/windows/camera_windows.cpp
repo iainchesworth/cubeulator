@@ -104,8 +104,8 @@ Result<std::vector<DeviceInfo>> enumerate_devices() {
     const ScopedCom scoped_com;
 
     ICreateDevEnum* dev_enum = nullptr;
-    HRESULT hr = CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER, IID_ICreateDevEnum,
-                                   reinterpret_cast<void**>(&dev_enum));
+    HRESULT hr = CoCreateInstance(CLSID_SystemDeviceEnum, nullptr, CLSCTX_INPROC_SERVER,
+                                  IID_ICreateDevEnum, reinterpret_cast<void**>(&dev_enum));
     if (FAILED(hr)) {
         return std::unexpected(CubeError::camera_not_found);
     }
@@ -129,10 +129,11 @@ Result<std::vector<DeviceInfo>> enumerate_devices() {
 
         IPropertyBag* property_bag = nullptr;
         if (SUCCEEDED(moniker->BindToStorage(nullptr, nullptr, IID_IPropertyBag,
-                                              reinterpret_cast<void**>(&property_bag)))) {
+                                             reinterpret_cast<void**>(&property_bag)))) {
             VARIANT name;
             VariantInit(&name);
-            if (SUCCEEDED(property_bag->Read(L"FriendlyName", &name, nullptr)) && name.vt == VT_BSTR) {
+            if (SUCCEEDED(property_bag->Read(L"FriendlyName", &name, nullptr)) &&
+                name.vt == VT_BSTR) {
                 display_name = bstr_to_utf8(name.bstrVal);
             }
             VariantClear(&name);
@@ -142,7 +143,8 @@ Result<std::vector<DeviceInfo>> enumerate_devices() {
         // facing stays at its unknown default: desktop webcams face the
         // user, and unknown already gets the selfie-mirror treatment (see
         // Facing in interfaces/camera.hpp).
-        devices.push_back(DeviceInfo{.identifier = std::to_string(index), .display_name = display_name});
+        devices.push_back(
+            DeviceInfo{.identifier = std::to_string(index), .display_name = display_name});
 
         moniker->Release();
         ++index;

@@ -8,7 +8,7 @@ FrameImageProvider::FrameImageProvider(ScanSession& session)
     : QQuickImageProvider(QQuickImageProvider::Image), session_(session) {}
 
 QImage FrameImageProvider::requestImage(const QString& /*id*/, QSize* size,
-                                         const QSize& /*requestedSize*/) {
+                                        const QSize& /*requestedSize*/) {
     const cv::Mat frame = session_.latestFrame();
     if (frame.empty()) {
         if (size) {

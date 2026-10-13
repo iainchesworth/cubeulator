@@ -40,7 +40,8 @@ const std::array<cv::Point3d, 8> kCube = {{
 
 // Rotation about the camera x-axis (tilting the face's bottom edge away
 // from the camera for positive angles), translation, then pinhole project.
-cv::Point2f render_point(const cv::Point3d& point, double tilt_radians, const cv::Vec3d& translation) {
+cv::Point2f render_point(const cv::Point3d& point, double tilt_radians,
+                         const cv::Vec3d& translation) {
     const double cos_t = std::cos(tilt_radians);
     const double sin_t = std::sin(tilt_radians);
     const double x = point.x + translation[0];
@@ -95,7 +96,8 @@ float distance(cv::Point2f a, cv::Point2f b) {
 // v' = v + 2u x (u x v + w v), the standard quaternion sandwich for a unit
 // quaternion {w, u}.
 cv::Vec3d rotate_by_quaternion(const std::array<float, 4>& q, const cv::Vec3d& v) {
-    const cv::Vec3d u(static_cast<double>(q[1]), static_cast<double>(q[2]), static_cast<double>(q[3]));
+    const cv::Vec3d u(static_cast<double>(q[1]), static_cast<double>(q[2]),
+                      static_cast<double>(q[3]));
     const double w = static_cast<double>(q[0]);
     return v + 2.0 * u.cross(u.cross(v) + w * v);
 }
@@ -158,7 +160,8 @@ TEST_CASE("project_cube_from_face recovers a tilted face and a plausible rear", 
     REQUIRE(quad_area(projection->vertices.data() + 4) < quad_area(projection->vertices.data()));
 }
 
-TEST_CASE("project_cube_from_face projects a frontal cube's rear inside the near face", "[vision]") {
+TEST_CASE("project_cube_from_face projects a frontal cube's rear inside the near face",
+          "[vision]") {
     const FaceObservation observation = rendered_face(0.0, cv::Vec3d(0.0, 0.0, 2.5));
 
     const auto projection = project_cube_from_face(observation, kFrame);
@@ -234,8 +237,9 @@ TEST_CASE("project_cube_from_corner pins seven corners and completes the eighth"
     // documented either/or is: a valid orientation is a unit quaternion,
     // an invalid one is exactly identity (the UI's idle-rotation fallback).
     const auto& q = projection->orientation;
-    const double norm = std::sqrt(static_cast<double>(q[0]) * q[0] + static_cast<double>(q[1]) * q[1] +
-                                  static_cast<double>(q[2]) * q[2] + static_cast<double>(q[3]) * q[3]);
+    const double norm =
+        std::sqrt(static_cast<double>(q[0]) * q[0] + static_cast<double>(q[1]) * q[1] +
+                  static_cast<double>(q[2]) * q[2] + static_cast<double>(q[3]) * q[3]);
     if (projection->orientation_valid) {
         REQUIRE(std::abs(norm - 1.0) < 1e-3);
     } else {
@@ -246,8 +250,10 @@ TEST_CASE("project_cube_from_corner pins seven corners and completes the eighth"
     }
 }
 
-TEST_CASE("project_cube_from_face reports a near-identity orientation for a frontal face", "[vision]") {
-    const auto projection = project_cube_from_face(rendered_face(0.0, cv::Vec3d(0.0, 0.0, 2.5)), kFrame);
+TEST_CASE("project_cube_from_face reports a near-identity orientation for a frontal face",
+          "[vision]") {
+    const auto projection =
+        project_cube_from_face(rendered_face(0.0, cv::Vec3d(0.0, 0.0, 2.5)), kFrame);
     REQUIRE(projection.has_value());
     REQUIRE(projection->orientation_valid);
 
@@ -268,7 +274,8 @@ TEST_CASE("project_cube_from_face recovers a rotation about the vertical axis", 
 
     // A rotation about the vertical axis leaves the display-frame y basis
     // vector fixed...
-    REQUIRE(angle_between(rotate_by_quaternion(q, {0.0, 1.0, 0.0}), {0.0, 1.0, 0.0}) < 3.0 * kDegree);
+    REQUIRE(angle_between(rotate_by_quaternion(q, {0.0, 1.0, 0.0}), {0.0, 1.0, 0.0}) <
+            3.0 * kDegree);
     // ...and swings the x basis vector by exactly the yaw angle. Both
     // checks are agnostic to the yaw's sign convention and to which way
     // the y axis points, per the helper comment.
@@ -279,7 +286,8 @@ TEST_CASE("project_cube_from_face recovers a rotation about the vertical axis", 
     REQUIRE(std::abs(rotation_angle(q) - yaw) < 3.0 * kDegree);
 }
 
-TEST_CASE("project_cube_from_corner recovers orientation from a true perspective corner view", "[vision]") {
+TEST_CASE("project_cube_from_corner recovers orientation from a true perspective corner view",
+          "[vision]") {
     // A cube genuinely rotated and pinhole-projected (same camera model as
     // the implementation: f = width, principal point centred), so an exact
     // pose exists and the PnP re-derivation must find it. Display-frame
@@ -289,8 +297,8 @@ TEST_CASE("project_cube_from_corner recovers orientation from a true perspective
     const double pitch = 35.0 * kDegree;
     const cv::Matx33d rot_y(std::cos(yaw), 0.0, std::sin(yaw), 0.0, 1.0, 0.0, -std::sin(yaw), 0.0,
                             std::cos(yaw));
-    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0, std::sin(pitch),
-                            std::cos(pitch));
+    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0,
+                            std::sin(pitch), std::cos(pitch));
     const cv::Matx33d display_rotation = rot_x * rot_y;
 
     // Display frame (y up, z toward viewer) to OpenCV camera frame (y
@@ -316,11 +324,13 @@ TEST_CASE("project_cube_from_corner recovers orientation from a true perspective
     }};
     const cv::Vec3d translation(0.0, 0.0, 4.0);
     for (auto& corner : corners) {
-        const cv::Vec3d model_cv = flip * cv::Vec3d(corner.display.x, corner.display.y, corner.display.z);
+        const cv::Vec3d model_cv =
+            flip * cv::Vec3d(corner.display.x, corner.display.y, corner.display.z);
         const cv::Vec3d in_camera = camera_rotation * model_cv + translation;
         const double focal = static_cast<double>(kFrame.width);
-        corner.projected = {static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * kFrame.width),
-                            static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * kFrame.height)};
+        corner.projected = {
+            static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * kFrame.width),
+            static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * kFrame.height)};
     }
     const cv::Point2f ubl = corners[0].projected;
     const cv::Point2f ubr = corners[1].projected;
@@ -346,7 +356,8 @@ TEST_CASE("project_cube_from_corner recovers orientation from a true perspective
     const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
     for (const auto& axis : basis) {
         const cv::Vec3d expected = display_rotation * axis;
-        REQUIRE(angle_between(rotate_by_quaternion(projection->orientation, axis), expected) < 3.0 * kDegree);
+        REQUIRE(angle_between(rotate_by_quaternion(projection->orientation, axis), expected) <
+                3.0 * kDegree);
     }
 }
 
@@ -374,15 +385,15 @@ TEST_CASE("display_quaternion and opencv_rotation_from_display are mutual invers
     const double pitch = 35.0 * kDegree;
     const cv::Matx33d rot_y(std::cos(yaw), 0.0, std::sin(yaw), 0.0, 1.0, 0.0, -std::sin(yaw), 0.0,
                             std::cos(yaw));
-    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0, std::sin(pitch),
-                            std::cos(pitch));
+    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0,
+                            std::sin(pitch), std::cos(pitch));
     const cv::Matx33d display_rotation = rot_x * rot_y;
 
     // Display -> OpenCV -> display must reproduce the rotation's ACTION
     // (basis-vector comparison per the helper comment, never raw
     // components).
-    const std::array<float, 4> via_opencv = display_quaternion(
-        opencv_rotation_from_display(display_quaternion(
+    const std::array<float, 4> via_opencv =
+        display_quaternion(opencv_rotation_from_display(display_quaternion(
             cv::Matx33d(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0) * display_rotation *
             cv::Matx33d(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0))));
     const std::array<cv::Vec3d, 3> basis = {{{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}}};
@@ -393,12 +404,13 @@ TEST_CASE("display_quaternion and opencv_rotation_from_display are mutual invers
 
     // And the inverse composed the other way is the identity map on any
     // pose the face path actually produces.
-    const auto projection = project_cube_from_face(rendered_face_yawed(25.0 * kDegree, {0.0, 0.0, 3.0}), kFrame);
+    const auto projection =
+        project_cube_from_face(rendered_face_yawed(25.0 * kDegree, {0.0, 0.0, 3.0}), kFrame);
     REQUIRE(projection.has_value());
     cv::Matx33d recovered;
     cv::Rodrigues(projection->rvec, recovered);
-    const std::array<float, 4> round_tripped = display_quaternion(
-        opencv_rotation_from_display(projection->orientation));
+    const std::array<float, 4> round_tripped =
+        display_quaternion(opencv_rotation_from_display(projection->orientation));
     for (const auto& axis : basis) {
         REQUIRE(angle_between(rotate_by_quaternion(round_tripped, axis),
                               rotate_by_quaternion(projection->orientation, axis)) < 0.1 * kDegree);
@@ -440,7 +452,8 @@ TEST_CASE("project_cube_from_face exports reusable extrinsics and a clean residu
 TEST_CASE("project_cube_from_face seeded with its own pose keeps the unseeded answer", "[vision]") {
     // A consistent seed must be a no-op: IPPE agrees with history, so
     // arbitration never fires and the exported pose is the primary one.
-    const FaceObservation observation = rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    const FaceObservation observation =
+        rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
     const auto unseeded = project_cube_from_face(observation, kFrame);
     REQUIRE(unseeded.has_value());
 
@@ -458,7 +471,8 @@ TEST_CASE("project_cube_from_face seeded with its own pose keeps the unseeded an
     }
 }
 
-TEST_CASE("project_cube_from_face mirror arbitration prefers the seed-consistent twin", "[vision]") {
+TEST_CASE("project_cube_from_face mirror arbitration prefers the seed-consistent twin",
+          "[vision]") {
     // The planar two-fold ambiguity in its near-affine regime: a face
     // tilted +50 degrees at z = 9 subtends little perspective, so the
     // mirror pose (-50 degrees) reprojects the same quad almost exactly -
@@ -502,7 +516,8 @@ TEST_CASE("project_cube_from_face survives a wild seed unharmed", "[vision]") {
     // A garbage seed (cube behind the camera, upside down) must never
     // corrupt a confident estimate: whichever solve wins the arbitration,
     // the exported ORIENTATION must match the unseeded answer.
-    const FaceObservation observation = rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
+    const FaceObservation observation =
+        rendered_face_yawed(25.0 * kDegree, cv::Vec3d(0.0, 0.0, 3.0));
     const auto unseeded = project_cube_from_face(observation, kFrame);
     REQUIRE(unseeded.has_value());
 
@@ -517,15 +532,16 @@ TEST_CASE("project_cube_from_face survives a wild seed unharmed", "[vision]") {
     }
 }
 
-TEST_CASE("project_cube_from_corner seeded with its own pose reproduces the unseeded answer", "[vision]") {
+TEST_CASE("project_cube_from_corner seeded with its own pose reproduces the unseeded answer",
+          "[vision]") {
     // Same true-perspective corner construction as the orientation test
     // above, reduced to its essentials.
     const double yaw = -40.0 * kDegree;
     const double pitch = 35.0 * kDegree;
     const cv::Matx33d rot_y(std::cos(yaw), 0.0, std::sin(yaw), 0.0, 1.0, 0.0, -std::sin(yaw), 0.0,
                             std::cos(yaw));
-    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0, std::sin(pitch),
-                            std::cos(pitch));
+    const cv::Matx33d rot_x(1.0, 0.0, 0.0, 0.0, std::cos(pitch), -std::sin(pitch), 0.0,
+                            std::sin(pitch), std::cos(pitch));
     const cv::Matx33d flip(1.0, 0.0, 0.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0);
     const cv::Matx33d camera_rotation = flip * (rot_x * rot_y) * flip;
     const std::array<cv::Point3d, 7> display_corners = {{
@@ -544,8 +560,9 @@ TEST_CASE("project_cube_from_corner seeded with its own pose reproduces the unse
         const cv::Vec3d model_cv = flip * cv::Vec3d(corner.x, corner.y, corner.z);
         const cv::Vec3d in_camera = camera_rotation * model_cv + translation;
         const double focal = static_cast<double>(kFrame.width);
-        projected[i] = {static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * kFrame.width),
-                        static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * kFrame.height)};
+        projected[i] = {
+            static_cast<float>(focal * in_camera[0] / in_camera[2] + 0.5 * kFrame.width),
+            static_cast<float>(focal * in_camera[1] / in_camera[2] + 0.5 * kFrame.height)};
     }
     CornerObservation observation;
     observation.top.quad = {projected[0], projected[1], projected[2], projected[3]};
@@ -586,7 +603,8 @@ TEST_CASE("project_cube_from_corner seeded with its own pose reproduces the unse
 TEST_CASE("project_cube_from_face rejects degenerate quads", "[vision]") {
     // Collinear corners: zero area, no homography exists.
     const auto collinear = project_cube_from_face(
-        observation_with_quad({{{100.0F, 200.0F}, {200.0F, 200.0F}, {300.0F, 200.0F}, {400.0F, 200.0F}}}),
+        observation_with_quad(
+            {{{100.0F, 200.0F}, {200.0F, 200.0F}, {300.0F, 200.0F}, {400.0F, 200.0F}}}),
         kFrame);
     REQUIRE_FALSE(collinear.has_value());
     REQUIRE(collinear.error() == cube::CubeError::no_valid_cube_detected);

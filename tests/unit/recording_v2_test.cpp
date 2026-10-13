@@ -85,17 +85,17 @@ TEST_CASE("state oracle accepts a solved cube and real scrambles", "[recording]"
 }
 
 TEST_CASE("state oracle refuses malformed and impossible states", "[recording]") {
-    CHECK(state_string_problem("UUU").has_value());                       // length
+    CHECK(state_string_problem("UUU").has_value());  // length
     std::string bad_char = kSolved;
     bad_char[0] = 'X';
-    CHECK(state_string_problem(bad_char).has_value());                    // alphabet
+    CHECK(state_string_problem(bad_char).has_value());  // alphabet
     std::string bad_centre = kSolved;
     bad_centre[4] = 'R';
-    CHECK(state_string_problem(bad_centre).has_value());                  // centre convention
+    CHECK(state_string_problem(bad_centre).has_value());  // centre convention
     std::string two_sticker_swap = kSolved;
-    two_sticker_swap[0] = 'R';                                            // U corner shows R...
+    two_sticker_swap[0] = 'R';  // U corner shows R...
     // ...without the matching change anywhere else: 10 R stickers, 8 U.
-    CHECK(state_string_problem(two_sticker_swap).has_value());            // oracle (census/validity)
+    CHECK(state_string_problem(two_sticker_swap).has_value());  // oracle (census/validity)
 }
 
 TEST_CASE("manifest round-trips and refuses an invalid state", "[recording]") {
@@ -126,7 +126,8 @@ TEST_CASE("analysis downscale matches the live contract", "[recording]") {
     const cv::Mat wide(720, 1280, CV_8UC3, cv::Scalar(1, 2, 3));
     const auto scaled = analysis_downscale(wide);
     CHECK(scaled.frame.cols == kAnalysisWidth);
-    CHECK(scaled.scale_back == static_cast<float>(wide.cols) / static_cast<float>(scaled.frame.cols));
+    CHECK(scaled.scale_back ==
+          static_cast<float>(wide.cols) / static_cast<float>(scaled.frame.cols));
 
     // At or below the analysis width the downscale is a no-op sharing data.
     const cv::Mat narrow(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
@@ -159,7 +160,8 @@ TEST_CASE("async recorder writes a sound dual-stream recording", "[recording]") 
     const cv::Mat analysis = cv::imread((dir / frame_filename(0)).string());
     REQUIRE(!analysis.empty());
     CHECK(analysis.cols == kAnalysisWidth);
-    const cv::Mat full = cv::imread((dir / std::string(kFullResSubdir) / frame_filename(0)).string());
+    const cv::Mat full =
+        cv::imread((dir / std::string(kFullResSubdir) / frame_filename(0)).string());
     REQUIRE(!full.empty());
     CHECK(full.cols == 1280);
 }
@@ -185,7 +187,8 @@ TEST_CASE("check_recording names gaps, missing frames and drops", "[recording]")
     SECTION("an index pass gap is named") {
         // Rewrite the index with pass 2 missing.
         std::ofstream index(dir / std::string(kIndexCsvName), std::ios::trunc);
-        index << kIndexCsvHeader << "\n0,0,320,240,320,240\n1,100,320,240,320,240\n3,300,320,240,320,240\n";
+        index << kIndexCsvHeader
+              << "\n0,0,320,240,320,240\n1,100,320,240,320,240\n3,300,320,240,320,240\n";
         index.close();
         const auto problem = check_recording(dir.string());
         REQUIRE(problem.has_value());

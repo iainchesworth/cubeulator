@@ -45,7 +45,8 @@ std::uint64_t first_layer_corners_key(const Cube& cube) noexcept {
     std::uint64_t key = 0;
     for (const auto& [side_a, side_b] : kCornerSides) {
         key = detail::push_code(
-            key, detail::piece_code_corner(cube, Color::White, canonical_color(side_a), canonical_color(side_b)));
+            key, detail::piece_code_corner(cube, Color::White, canonical_color(side_a),
+                                           canonical_color(side_b)));
     }
     return key;
 }
@@ -99,8 +100,9 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 std::uint64_t rest = first_layer_corners_key(c);
                 for (std::size_t j = 0; j < i; ++j) {
                     const EdgeSlot& s = kEdgeSlots[j];
-                    rest = detail::push_code(
-                        rest, detail::piece_code_edge(c, canonical_color(s.side_a), canonical_color(s.side_b)));
+                    rest = detail::push_code(rest,
+                                             detail::piece_code_edge(c, canonical_color(s.side_a),
+                                                                     canonical_color(s.side_b)));
                 }
                 if (track_target) {
                     rest = detail::push_code(rest, detail::piece_code_edge(c, color_a, color_b));
@@ -136,18 +138,20 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 const Cube::EdgeLocation l = c.locate_edge(color_a, color_b);
                 return l.face_a == Face::U || l.face_b == Face::U;
             };
-            Result<std::vector<Move>> eject_step =
-                detail::bfs_search(cube, eject_allowed, eject_postcondition, make_signature(true), 8);
+            Result<std::vector<Move>> eject_step = detail::bfs_search(
+                cube, eject_allowed, eject_postcondition, make_signature(true), 8);
             if (!eject_step.has_value()) {
                 return std::unexpected(eject_step.error());
             }
             apply_step(*eject_step);
         }
 
-        auto insert_postcondition = [&](const Cube& c) { return placed_so_far(c) && slot_solved(c, target); };
+        auto insert_postcondition = [&](const Cube& c) {
+            return placed_so_far(c) && slot_solved(c, target);
+        };
         const std::vector<Face> insert_allowed = {Face::U, target.side_a, target.side_b};
-        Result<std::vector<Move>> insert_step =
-            detail::bfs_search(cube, insert_allowed, insert_postcondition, make_signature(true), 10);
+        Result<std::vector<Move>> insert_step = detail::bfs_search(
+            cube, insert_allowed, insert_postcondition, make_signature(true), 10);
         if (insert_step.has_value()) {
             apply_step(*insert_step);
             continue;
@@ -159,8 +163,8 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
         // always runs first (see above), but a defensive net is cheap and
         // this is off the hot path.
         const std::vector<Face> wide_allowed(kAllFaces.begin(), kAllFaces.end());
-        Result<std::vector<Move>> wide_step =
-            detail::bfs_search(cube, wide_allowed, insert_postcondition, make_signature(true), 10, 4'000'000);
+        Result<std::vector<Move>> wide_step = detail::bfs_search(
+            cube, wide_allowed, insert_postcondition, make_signature(true), 10, 4'000'000);
         if (!wide_step.has_value()) {
             return std::unexpected(wide_step.error());
         }

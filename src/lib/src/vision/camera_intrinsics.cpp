@@ -25,7 +25,8 @@ CameraIntrinsics CameraIntrinsics::scaled_to(cv::Size size) const {
     return out;
 }
 
-std::optional<std::string> write_intrinsics(const std::string& path, const CameraIntrinsics& value) {
+std::optional<std::string> write_intrinsics(const std::string& path,
+                                            const CameraIntrinsics& value) {
     std::ofstream out(path, std::ios::trunc);
     if (!out) {
         return "cannot write " + path;
@@ -33,7 +34,8 @@ std::optional<std::string> write_intrinsics(const std::string& path, const Camer
     // max_digits10: doubles must survive the text round-trip exactly - a
     // calibration file that quietly loses precision defeats its purpose.
     out << std::setprecision(std::numeric_limits<double>::max_digits10);
-    out << "fx " << value.fx << "\nfy " << value.fy << "\ncx " << value.cx << "\ncy " << value.cy << "\n";
+    out << "fx " << value.fx << "\nfy " << value.fy << "\ncx " << value.cx << "\ncy " << value.cy
+        << "\n";
     out << "distortion";
     for (const double d : value.distortion) {
         out << ' ' << d;
@@ -78,14 +80,16 @@ Result<CameraIntrinsics> read_intrinsics(const std::string& path) {
     return value;
 }
 
-Result<CameraIntrinsics> calibrate_from_views(const std::vector<cv::Mat>& bgr_views, cv::Size inner_corners,
-                                              float square_size, int* views_used) {
+Result<CameraIntrinsics> calibrate_from_views(const std::vector<cv::Mat>& bgr_views,
+                                              cv::Size inner_corners, float square_size,
+                                              int* views_used) {
     std::vector<std::vector<cv::Point3f>> object_points;
     std::vector<std::vector<cv::Point2f>> image_points;
     std::vector<cv::Point3f> board;
     for (int row = 0; row < inner_corners.height; ++row) {
         for (int col = 0; col < inner_corners.width; ++col) {
-            board.emplace_back(static_cast<float>(col) * square_size, static_cast<float>(row) * square_size, 0.0F);
+            board.emplace_back(static_cast<float>(col) * square_size,
+                               static_cast<float>(row) * square_size, 0.0F);
         }
     }
 
@@ -98,12 +102,14 @@ Result<CameraIntrinsics> calibrate_from_views(const std::vector<cv::Mat>& bgr_vi
         cv::Mat gray;
         cv::cvtColor(view, gray, cv::COLOR_BGR2GRAY);
         std::vector<cv::Point2f> corners;
-        if (!cv::findChessboardCorners(gray, inner_corners, corners,
-                                       cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE)) {
+        if (!cv::findChessboardCorners(
+                gray, inner_corners, corners,
+                cv::CALIB_CB_ADAPTIVE_THRESH | cv::CALIB_CB_NORMALIZE_IMAGE)) {
             continue;
         }
-        cv::cornerSubPix(gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
-                         cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.001));
+        cv::cornerSubPix(
+            gray, corners, cv::Size(11, 11), cv::Size(-1, -1),
+            cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 30, 0.001));
         object_points.push_back(board);
         image_points.push_back(std::move(corners));
     }
@@ -120,8 +126,8 @@ Result<CameraIntrinsics> calibrate_from_views(const std::vector<cv::Mat>& bgr_vi
     std::vector<cv::Mat> rvecs;
     std::vector<cv::Mat> tvecs;
     try {
-        result.rms_reprojection =
-            cv::calibrateCamera(object_points, image_points, frame_size, camera, distortion, rvecs, tvecs);
+        result.rms_reprojection = cv::calibrateCamera(object_points, image_points, frame_size,
+                                                      camera, distortion, rvecs, tvecs);
     } catch (const cv::Exception&) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }

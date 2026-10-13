@@ -23,12 +23,14 @@ namespace {
 CornerDetectionResult detection_for(const cv::Vec3d& rvec, const cv::Vec3d& tvec, cv::Size frame) {
     std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(), kSingmasterCornerModel.end());
     std::vector<cv::Point2f> projected;
-    cv::projectPoints(model, rvec, tvec, approximate_camera_matrix(frame), cv::noArray(), projected);
+    cv::projectPoints(model, rvec, tvec, approximate_camera_matrix(frame), cv::noArray(),
+                      projected);
     CornerDetectionResult detection;
     detection.found = true;
     detection.confidence = 1.0F;
     for (int id = 0; id < 8; ++id) {
-        detection.corners[static_cast<std::size_t>(id)] = {projected[static_cast<std::size_t>(id)], 1.0F};
+        detection.corners[static_cast<std::size_t>(id)] = {projected[static_cast<std::size_t>(id)],
+                                                           1.0F};
     }
     return detection;
 }

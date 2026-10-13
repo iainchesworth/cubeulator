@@ -89,8 +89,10 @@ SolveController::SolveController(cube::app::ScanSession& scanSession, QObject* p
     // Safe placeholder so topColors()/etc. never read an empty stepped_
     // before the first real scan completes.
     stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
-    connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this, &SolveController::applySolveResult);
-    connect(&scanSession_, &cube::app::ScanSession::scanCompleted, this, &SolveController::onScanCompleted);
+    connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this,
+            &SolveController::applySolveResult);
+    connect(&scanSession_, &cube::app::ScanSession::scanCompleted, this,
+            &SolveController::onScanCompleted);
 }
 
 void SolveController::onScanCompleted() {
@@ -134,9 +136,15 @@ void SolveController::applySolveResult() {
     emit stateChanged();
 }
 
-QVariantList SolveController::topColors() const { return face_colors(stepped_.current_cube(), Face::U); }
-QVariantList SolveController::rightColors() const { return face_colors(stepped_.current_cube(), Face::R); }
-QVariantList SolveController::leftColors() const { return face_colors(stepped_.current_cube(), Face::F); }
+QVariantList SolveController::topColors() const {
+    return face_colors(stepped_.current_cube(), Face::U);
+}
+QVariantList SolveController::rightColors() const {
+    return face_colors(stepped_.current_cube(), Face::R);
+}
+QVariantList SolveController::leftColors() const {
+    return face_colors(stepped_.current_cube(), Face::F);
+}
 
 QString SolveController::currentMoveNotation() const {
     if (stepped_.at_end()) {
@@ -152,12 +160,22 @@ QString SolveController::currentMoveFace() const {
     return face_letter(stepped_.current_move().face);
 }
 
-int SolveController::currentMoveTurns() const { return stepped_.at_end() ? 0 : stepped_.current_move().turns; }
+int SolveController::currentMoveTurns() const {
+    return stepped_.at_end() ? 0 : stepped_.current_move().turns;
+}
 
-int SolveController::moveIndex() const { return stepped_.current_index(); }
-int SolveController::totalMoves() const { return stepped_.move_count(); }
-bool SolveController::atStart() const { return stepped_.at_start(); }
-bool SolveController::atEnd() const { return stepped_.at_end(); }
+int SolveController::moveIndex() const {
+    return stepped_.current_index();
+}
+int SolveController::totalMoves() const {
+    return stepped_.move_count();
+}
+bool SolveController::atStart() const {
+    return stepped_.at_start();
+}
+bool SolveController::atEnd() const {
+    return stepped_.at_end();
+}
 
 QVariantList SolveController::stageRanges() const {
     QVariantList ranges;
@@ -173,12 +191,16 @@ QVariantList SolveController::stageRanges() const {
 
 int SolveController::currentStageIndex() const {
     if (stepped_.at_end()) {
-        return stepped_.stage_ranges().empty() ? 0 : static_cast<int>(stepped_.stage_ranges().back().stage);
+        return stepped_.stage_ranges().empty()
+                   ? 0
+                   : static_cast<int>(stepped_.stage_ranges().back().stage);
     }
     return static_cast<int>(stepped_.current_stage());
 }
 
-bool SolveController::isSolving() const { return isSolving_; }
+bool SolveController::isSolving() const {
+    return isSolving_;
+}
 
 void SolveController::nextMove() {
     stepped_.next();

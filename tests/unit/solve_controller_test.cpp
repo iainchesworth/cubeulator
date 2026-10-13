@@ -15,7 +15,8 @@ using cube::app::ScanSession;
 // reason. That path is covered by manual verification instead (see the
 // implementation plan).
 
-TEST_CASE("SolveController starts with a solved placeholder and no solve in flight", "[qt][controllers]") {
+TEST_CASE("SolveController starts with a solved placeholder and no solve in flight",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
@@ -27,7 +28,8 @@ TEST_CASE("SolveController starts with a solved placeholder and no solve in flig
     REQUIRE(controller.atEnd());
 }
 
-TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step", "[qt][controllers]") {
+TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
@@ -38,11 +40,13 @@ TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to ste
     REQUIRE(controller.totalMoves() == 0);
 }
 
-TEST_CASE("SolveController's placeholder cube is solved on all three visible faces", "[qt][controllers]") {
+TEST_CASE("SolveController's placeholder cube is solved on all three visible faces",
+          "[qt][controllers]") {
     ScanSession session;
     SolveController controller(session);
 
-    for (const auto& colors : {controller.topColors(), controller.rightColors(), controller.leftColors()}) {
+    for (const auto& colors :
+         {controller.topColors(), controller.rightColors(), controller.leftColors()}) {
         REQUIRE(colors.size() == 9);
         const auto center = colors.at(4);
         for (const auto& color : colors) {

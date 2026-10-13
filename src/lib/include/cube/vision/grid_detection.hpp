@@ -103,8 +103,8 @@ inline constexpr double kDefaultMaxCandidateAspect = 1.6;
 // reconstructed center must stay strictly inside the frame - downstream
 // samplers index it unchecked). Returns nullopt when no hypothesis matches
 // at least 6 of the 9 slots.
-[[nodiscard]] std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates,
-                                                                 cv::Size frame_size);
+[[nodiscard]] std::optional<GridFitDetail> fit_lattice_detailed(
+    std::vector<StickerCandidate> candidates, cv::Size frame_size);
 
 // One possible placement of a PARTIAL lattice (2+ mutually-consistent
 // candidates) within the 3x3 grid. Unlike GridFitDetail this carries no
@@ -134,8 +134,8 @@ struct PartialPlacement {
 // frame. Vertical seed pairs are allowed (2-anchor frames often segment a
 // single column); results are ordered best-fit-first but carry NO
 // photometric validation - callers must gate them against the frame.
-[[nodiscard]] std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCandidate> candidates,
-                                                                        cv::Size frame_size);
+[[nodiscard]] std::vector<PartialPlacement> partial_lattice_placements(
+    std::vector<StickerCandidate> candidates, cv::Size frame_size);
 
 }  // namespace detail
 

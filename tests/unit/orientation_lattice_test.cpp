@@ -37,12 +37,17 @@ struct Vec3 {
 constexpr Vec3 cross(Vec3 a, Vec3 b) {
     return {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
 }
-constexpr int dot(Vec3 a, Vec3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+constexpr int dot(Vec3 a, Vec3 b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+}
 
 // cube.cpp's face_normal(): x: L->R, y: D->U, z: B->F; model::Face order.
-constexpr std::array<Vec3, 6> kNormal = {{{0, 1, 0}, {1, 0, 0}, {0, 0, 1}, {0, -1, 0}, {-1, 0, 0}, {0, 0, -1}}};
+constexpr std::array<Vec3, 6> kNormal = {
+    {{0, 1, 0}, {1, 0, 0}, {0, 0, 1}, {0, -1, 0}, {-1, 0, 0}, {0, 0, -1}}};
 
-Vec3 normal_of(Face face) { return kNormal[static_cast<std::size_t>(face)]; }
+Vec3 normal_of(Face face) {
+    return kNormal[static_cast<std::size_t>(face)];
+}
 
 Face face_of_normal(Vec3 n) {
     for (std::size_t i = 0; i < kNormal.size(); ++i) {
@@ -83,7 +88,9 @@ struct Mat3 {
         return {m[0] * v.x + m[1] * v.y + m[2] * v.z, m[3] * v.x + m[4] * v.y + m[5] * v.z,
                 m[6] * v.x + m[7] * v.y + m[8] * v.z};
     }
-    [[nodiscard]] Mat3 transposed() const { return {{m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]}}; }
+    [[nodiscard]] Mat3 transposed() const {
+        return {{m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]}};
+    }
 
     friend Mat3 operator*(const Mat3& a, const Mat3& b) {
         Mat3 out;
@@ -91,7 +98,8 @@ struct Mat3 {
             for (int c = 0; c < 3; ++c) {
                 int sum = 0;
                 for (int k = 0; k < 3; ++k) {
-                    sum += a.m[static_cast<std::size_t>(3 * r + k)] * b.m[static_cast<std::size_t>(3 * k + c)];
+                    sum += a.m[static_cast<std::size_t>(3 * r + k)] *
+                           b.m[static_cast<std::size_t>(3 * k + c)];
                 }
                 out.m[static_cast<std::size_t>(3 * r + c)] = sum;
             }
@@ -104,7 +112,8 @@ struct Mat3 {
 constexpr Mat3 kIdentityMat = {{1, 0, 0, 0, 1, 0, 0, 0, 1}};
 
 int det(const Mat3& a) {
-    return a.m[0] * (a.m[4] * a.m[8] - a.m[5] * a.m[7]) - a.m[1] * (a.m[3] * a.m[8] - a.m[5] * a.m[6]) +
+    return a.m[0] * (a.m[4] * a.m[8] - a.m[5] * a.m[7]) -
+           a.m[1] * (a.m[3] * a.m[8] - a.m[5] * a.m[6]) +
            a.m[2] * (a.m[3] * a.m[7] - a.m[4] * a.m[6]);
 }
 
@@ -113,7 +122,8 @@ int det(const Mat3& a) {
 // the check that each quaternion really is one of the 24 axis-aligned
 // rotations (anything else leaves a component far from an integer).
 std::array<double, 3> rotate(const Quat& q, std::array<double, 3> v) {
-    const Quat p = {0.0F, static_cast<float>(v[0]), static_cast<float>(v[1]), static_cast<float>(v[2])};
+    const Quat p = {0.0F, static_cast<float>(v[0]), static_cast<float>(v[1]),
+                    static_cast<float>(v[2])};
     const Quat r = quat_multiply(quat_multiply(q, p), quat_conjugate(q));
     return {r[1], r[2], r[3]};
 }
@@ -297,7 +307,8 @@ TEST_CASE("quantize24 snaps every orientation within 40 degrees of an element ba
             const Quat perturb = axis_angle({gauss(rng), gauss(rng), gauss(rng)}, angle);
             // Perturb on both sides (the angular metric is bi-invariant,
             // so both must snap identically) and through the double cover.
-            for (Quat q : {quat_multiply(kLattice24[i], perturb), quat_multiply(perturb, kLattice24[i])}) {
+            for (Quat q :
+                 {quat_multiply(kLattice24[i], perturb), quat_multiply(perturb, kLattice24[i])}) {
                 for (int negate = 0; negate < 2; ++negate) {
                     const auto snapped = quantize24(q);
                     REQUIRE(snapped.index == static_cast<int>(i));
@@ -309,7 +320,8 @@ TEST_CASE("quantize24 snaps every orientation within 40 degrees of an element ba
     }
 }
 
-TEST_CASE("resolve_alignment recovers an injected gauge under noise with a wide margin", "[lattice]") {
+TEST_CASE("resolve_alignment recovers an injected gauge under noise with a wide margin",
+          "[lattice]") {
     const auto mats = lattice_matrices();
 
     // A canonical-presentation observation (q_obs = identity) of a cube at
@@ -331,8 +343,8 @@ TEST_CASE("resolve_alignment recovers an injected gauge under noise with a wide 
         // Random true orientation, nowhere near lattice-aligned in general.
         Quat q_true = {static_cast<float>(gauss(rng)), static_cast<float>(gauss(rng)),
                        static_cast<float>(gauss(rng)), static_cast<float>(gauss(rng))};
-        const float n = std::sqrt(q_true[0] * q_true[0] + q_true[1] * q_true[1] + q_true[2] * q_true[2] +
-                                  q_true[3] * q_true[3]);
+        const float n = std::sqrt(q_true[0] * q_true[0] + q_true[1] * q_true[1] +
+                                  q_true[2] * q_true[2] + q_true[3] * q_true[3]);
         q_true = {q_true[0] / n, q_true[1] / n, q_true[2] / n, q_true[3] / n};
 
         for (std::size_t j = 0; j < kLatticeSize; ++j) {
@@ -403,7 +415,8 @@ TEST_CASE("kFaceObsToBody routes screen cells to the physical stickers for every
     }
 }
 
-TEST_CASE("face routing is invariant across in-plane re-keying (kClockwiseSource lock)", "[lattice]") {
+TEST_CASE("face routing is invariant across in-plane re-keying (kClockwiseSource lock)",
+          "[lattice]") {
     const auto k_cw = clockwise_source();
     for (std::size_t near = 0; near < 6; ++near) {
         // Sticker "colours" chosen as their own solver indices, so a
@@ -425,13 +438,15 @@ TEST_CASE("face routing is invariant across in-plane re-keying (kClockwiseSource
         for (std::size_t k = 0; k < 4; ++k) {
             CAPTURE(near, k);
             for (std::size_t cell = 0; cell < 9; ++cell) {
-                REQUIRE(screen[(k + 1) % 4][cell] == screen[k][static_cast<std::size_t>(k_cw[cell])]);
+                REQUIRE(screen[(k + 1) % 4][cell] ==
+                        screen[k][static_cast<std::size_t>(k_cw[cell])]);
             }
         }
     }
 }
 
-TEST_CASE("kCornerObsToBody reproduces corner_slot_mappings for both documented poses", "[lattice]") {
+TEST_CASE("kCornerObsToBody reproduces corner_slot_mappings for both documented poses",
+          "[lattice]") {
     const auto mats = lattice_matrices();
     for (const auto view_id : {CornerViewId::first_corner, CornerViewId::second_corner}) {
         CAPTURE(view_id == CornerViewId::first_corner ? "first" : "second");
@@ -442,8 +457,8 @@ TEST_CASE("kCornerObsToBody reproduces corner_slot_mappings for both documented 
         // faces those are, which pins the model->body gauge G columnwise
         // (columns are the images of the model x/y/z axes = model R/U/F).
         Mat3 gauge;
-        const std::array<Vec3, 3> images = {normal_of(mappings[2].face), normal_of(mappings[0].face),
-                                            normal_of(mappings[1].face)};
+        const std::array<Vec3, 3> images = {
+            normal_of(mappings[2].face), normal_of(mappings[0].face), normal_of(mappings[1].face)};
         for (int col = 0; col < 3; ++col) {
             gauge.m[static_cast<std::size_t>(col)] = images[static_cast<std::size_t>(col)].x;
             gauge.m[static_cast<std::size_t>(3 + col)] = images[static_cast<std::size_t>(col)].y;
@@ -644,10 +659,12 @@ TEST_CASE("kBodyRelabel maps stickers between two body labellings", "[lattice]")
             REQUIRE(inverse.has_value());
             for (std::size_t f = 0; f < 6; ++f) {
                 const auto& forward = kBodyRelabel[g][f];
-                const auto& back = kBodyRelabel[*inverse][static_cast<std::size_t>(forward.body_face)];
+                const auto& back =
+                    kBodyRelabel[*inverse][static_cast<std::size_t>(forward.body_face)];
                 REQUIRE(back.body_face == static_cast<Face>(f));
                 for (std::size_t k = 0; k < 9; ++k) {
-                    REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] == static_cast<int>(k));
+                    REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] ==
+                            static_cast<int>(k));
                 }
             }
         }
@@ -704,7 +721,8 @@ TEST_CASE("kLatticeInverse is the relabelling that undoes an element", "[lattice
             const auto& back = kBodyRelabel[inv][static_cast<std::size_t>(forward.body_face)];
             REQUIRE(back.body_face == static_cast<Face>(f));
             for (std::size_t k = 0; k < 9; ++k) {
-                REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] == static_cast<int>(k));
+                REQUIRE(back.cell[static_cast<std::size_t>(forward.cell[k])] ==
+                        static_cast<int>(k));
             }
         }
     }

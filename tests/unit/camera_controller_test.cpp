@@ -52,7 +52,8 @@ TEST_CASE("CameraController::selectDevice updates the id and skips duplicate sig
           "[qt][controllers]") {
     CameraController controller;
     int change_count = 0;
-    QObject::connect(&controller, &CameraController::selectedDeviceIdChanged, [&]() { ++change_count; });
+    QObject::connect(&controller, &CameraController::selectedDeviceIdChanged,
+                     [&]() { ++change_count; });
 
     controller.selectDevice("cam-1");
     controller.selectDevice("cam-1");
