@@ -51,6 +51,10 @@ struct StateDef {
 // .qml files in the Cubeulator module that no route instantiates, with why.
 // A screen file that is in neither list fails the reach check.
 [[nodiscard]] const std::map<QString, QString>& dead_screen_files();
+// Controls that are on screen and cannot be pressed, as "<control>@<layout>"
+// with why. Not hidden: they are reported, and they stop being waived the day
+// they can be pressed (the report says so).
+[[nodiscard]] const std::map<QString, QString>& unpressable_controls();
 
 class Reach {
 public:

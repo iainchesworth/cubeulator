@@ -76,6 +76,13 @@ inline QStringList press_every_control(App& app, const QString& screen,
         if (control == nullptr || !detail::is_enabled(control)) {
             return false;
         }
+        // A control below the bottom of the window has nowhere for a press to
+        // land. layout_test.cpp lists those; the sweep leaves them alone.
+        const QPointF centre =
+            control->mapToScene(QPointF(control->width() / 2, control->height() / 2));
+        if (!QRectF(QPointF(0, 0), QSizeF(app.window().size())).contains(centre)) {
+            return false;
+        }
         INFO("pressing " << key.toStdString() << " on " << screen.toStdString());
         app.click(control);
         if (app.screen() != screen) {

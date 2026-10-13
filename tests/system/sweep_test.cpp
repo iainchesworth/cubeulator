@@ -61,6 +61,12 @@ TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]")
         app.go("solve");
         app.settle();
 
+        // One step in, so Previous has something to undo: a step lands when
+        // its turn has played, which a sweep that moves straight on from
+        // Next would leave behind (Rescan takes the screen away).
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return solve.moveIndex() >= 1; }, 15'000));
+
         const QStringList pressed = press_every_control(app, "solve");
         INFO("pressed " << pressed.join(", ").toStdString());
         // Next, Previous (enabled by Next), Rescan and the cube.

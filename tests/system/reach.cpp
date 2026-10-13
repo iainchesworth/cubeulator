@@ -39,6 +39,15 @@ const std::map<QString, QString>& dead_screen_files() {
     return dead;
 }
 
+const std::map<QString, QString>& unpressable_controls() {
+    static const std::map<QString, QString> controls = {
+        {"permission.notNow@narrow",
+         "below the bottom of a phone-sized window (layout_test.cpp lists it); the press has "
+         "nowhere to land"},
+    };
+    return controls;
+}
+
 const std::vector<StateDef>& state_inventory() {
     static const std::vector<StateDef> states = {
         {"launch", "idle", [](App& a) { return a.screen() == "launch"; }, ""},
@@ -224,7 +233,8 @@ std::vector<QString> Reach::gaps() const {
     }
 
     for (const std::string& control : discovered_) {
-        if (activated_.count(control) == 0) {
+        if (activated_.count(control) == 0 &&
+            unpressable_controls().count(QString::fromStdString(control)) == 0) {
             gaps.push_back("control " + QString::fromStdString(control) +
                            " was on screen but never pressed");
         }
@@ -250,6 +260,13 @@ std::vector<QString> Reach::known_gaps() const {
                           (seen ? " (seen anyway) - " : " not reachable here - ") +
                           state.cannot_reach_because);
         }
+    }
+    for (const auto& [control, why] : unpressable_controls()) {
+        const bool pressed = activated_.count(control.toStdString()) != 0;
+        out.push_back("control " + control +
+                      (pressed ? " (pressed after all: remove it from the list) - "
+                               : " cannot be pressed - ") +
+                      why);
     }
     for (const std::string& control : disabled_) {
         out.push_back("control " + QString::fromStdString(control) + " only ever seen disabled");
