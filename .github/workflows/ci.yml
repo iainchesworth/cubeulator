@@ -17,7 +17,7 @@ on:
       legs:
         description: >-
           Comma-separated legs to run: clang-format, clang-tidy, linux, macos,
-          windows, coverage, android, ios - or "all".
+          windows, coverage, system, android, ios - or "all".
         type: string
         default: all
 
@@ -155,8 +155,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|clang-tidy|linux|macos|windows|coverage|android|ios) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, android, ios, all)"
+              all|clang-format|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
                  exit 1 ;;
             esac
           done
@@ -536,7 +536,8 @@ jobs:
   # Built with coverage instrumentation, so the same run measures the C++
   # under src/app/qt - reported here, not gated (docs/testing.md).
   system-tests:
-    name: System tests (Linux, Xvfb + software GL)
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - System tests (Linux, Xvfb + software GL)' || 'System tests (Linux, Xvfb + software GL)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',system,') }}
     runs-on: ubuntu-26.04
     # See the equivalent comment on build-and-test.
     env:

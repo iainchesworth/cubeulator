@@ -29,8 +29,11 @@ gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
 ```
 
 `legs` is a comma-separated list (no spaces) of `clang-format`, `clang-tidy`,
-`linux`, `macos`, `windows`, `coverage`, `android`, `ios`, or `all` (the
-default). An unknown name fails the run rather than running nothing.
+`linux`, `macos`, `windows`, `coverage`, `system`, `android`, `ios`, or `all`
+(the default). An unknown name fails the run rather than running nothing.
+`system` is the Linux job that runs the system tests under Xvfb (see
+[testing.md](testing.md#system-tests)); on Windows and macOS the same suite
+runs as a non-blocking step of their build legs.
 
 Jobs of a dispatched run are named `dispatch - <leg>`, deliberately not the
 names of the required checks: a run that skips legs would otherwise report
