@@ -97,7 +97,7 @@ TEST_CASE("DirectScan shows where the stickers are and which sides are read",
 
 TEST_CASE("DirectScan finishes with the cube it was shown, once",
           "[qt][controllers][direct-scan]") {
-    const Cube cube = cube::solver::random_scramble(3);
+    const Cube cube = cube::test::scramble(3);
     DirectScan scan;
     int completed = 0;
     QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
@@ -157,7 +157,7 @@ TEST_CASE("the sixth side is on show before the scan is announced complete",
     });
 
     CHECK_FALSE(scan.complete());
-    show_cube(scan, cube::solver::random_scramble(9));
+    show_cube(scan, cube::test::scramble(9));
 
     CHECK(sides_when_completed == 6);
     CHECK(complete_when_completed);
@@ -180,13 +180,13 @@ TEST_CASE("a scan stores nothing unless a developer turns recording on",
 
     QTemporaryDir folder;
     REQUIRE(folder.isValid());
-    show_cube(scan, cube::solver::random_scramble(13));
+    show_cube(scan, cube::test::scramble(13));
     REQUIRE(scan.complete());
     CHECK(QDir(folder.path()).isEmpty());
 }
 
 TEST_CASE("a recorded scan replays to the cube it read", "[qt][controllers][direct-scan]") {
-    const Cube cube = cube::solver::random_scramble(14);
+    const Cube cube = cube::test::scramble(14);
     QTemporaryDir folder;
     REQUIRE(folder.isValid());
 
@@ -272,7 +272,7 @@ TEST_CASE("each scan is recorded to its own folder", "[qt][controllers][direct-s
 
 TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
           "[qt][controllers][direct-scan]") {
-    const Cube cube = cube::solver::random_scramble(5);
+    const Cube cube = cube::test::scramble(5);
     DirectScan scan;
     SolveController solver;
     QObject::connect(&scan, &DirectScan::scanCompleted, &solver,

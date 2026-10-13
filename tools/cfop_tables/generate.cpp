@@ -274,13 +274,22 @@ int main() {
     // PLL: a fully oriented arrangement S is finished by exactly the
     // algorithm equal to S's inverse.
     std::vector<const Candidate*> pll(cube::solver::detail::kPllSlotCount, nullptr);
+    // All 24 orders of 0..3, as plain loops (see cfop_test.cpp for why not
+    // std::next_permutation).
     std::array<std::array<std::uint8_t, 4>, 24> perms{};
     {
-        std::array<std::uint8_t, 4> p = {0, 1, 2, 3};
         std::size_t n = 0;
-        do {
-            perms[n++] = p;
-        } while (std::ranges::next_permutation(p).found);
+        for (std::uint8_t a = 0; a < 4; ++a) {
+            for (std::uint8_t b = 0; b < 4; ++b) {
+                for (std::uint8_t c = 0; c < 4; ++c) {
+                    for (std::uint8_t d = 0; d < 4; ++d) {
+                        if (a != b && a != c && a != d && b != c && b != d && c != d) {
+                            perms[n++] = {a, b, c, d};
+                        }
+                    }
+                }
+            }
+        }
     }
     std::size_t pll_cases = 0;
     for (const auto& corners : perms) {
