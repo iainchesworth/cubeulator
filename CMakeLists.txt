@@ -1,5 +1,5 @@
-# CMake 4 is required; the version range keeps policy behaviour current up to 4.3.
-cmake_minimum_required(VERSION 3.28...4.3)
+# CMake 4 is required; the version range keeps policy behaviour current up to 4.4.
+cmake_minimum_required(VERSION 3.28...4.4)
 
 # ---------------------------------------------------------------------------
 # Vendored vcpkg (git submodule at deps/vcpkg).

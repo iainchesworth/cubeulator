@@ -12,11 +12,14 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cube/solver/cube.hpp>
+#include <cube/solver/outside_view.hpp>
 
 #include <QColor>
 #include <QCoreApplication>
 #include <QElapsedTimer>
 #include <QEventLoop>
+#include <QJSEngine>
+#include <QJSValue>
 #include <QMetaObject>
 #include <QObject>
 #include <QString>
@@ -178,6 +181,30 @@ struct Placement {
         for (const int count : side) {
             REQUIRE(count == 1);
         }
+    }
+    return sides;
+}
+
+// The painting a screen hands to Cube3DView.faceletColors for `cube`: each side
+// as seen from outside, each colour drawn as `paint` gives it.
+//
+// It is a fresh JavaScript object on every call, because that is what the
+// screens really assign (SolveScreen.painted(), ScanScreen.scanFaceletColors),
+// and because the view's contract needs it: a new painting - even of the cube as
+// it already stands - puts every layer back. A QVariantMap would be compared by
+// value, and since Qt 6.12 an assignment from C++ that equals the current value
+// emits no change signal (Qt 6.8 did), so repainting an unchanged cube would
+// leave a turned layer where it was. Assign it as QVariant::fromValue(...).
+[[nodiscard]] inline QJSValue painting(QJSEngine& engine, const solver::Cube& cube,
+                                       const std::function<QColor(solver::Color)>& paint) {
+    QJSValue sides = engine.newObject();
+    for (const solver::Face face : solver::kAllFaces) {
+        QJSValue colours = engine.newArray();
+        quint32 index = 0;
+        for (const solver::Color colour : solver::outside_view(cube, face)) {
+            colours.setProperty(index++, paint(colour).name());
+        }
+        sides.setProperty(letter(face), colours);
     }
     return sides;
 }

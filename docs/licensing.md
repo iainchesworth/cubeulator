@@ -85,6 +85,33 @@ Platform key: **W** Windows, **M** macOS, **L** Linux, **A** Android,
 
 ### 2.2 Qt 6.8.3
 
+> **Qt 6.12.0 update.** The build now uses Qt 6.12.0, and
+> `third_party/notices/qt-modules.json` was regenerated from its SBOMs, for
+> Windows and Android as the 6.8.3 snapshot was (`tools/licences/
+> qt_sbom_manifest.py`; `--check` agrees with the live SBOMs on both). What
+> was re-read, and what was not:
+>
+> - **Licences did not move.** No existing component's licence expression
+>   changed. The module and plugin expressions are the same three as before,
+>   and Quick 3D is still `Commercial OR GPL-3.0-only`, so the GPL-3.0-only
+>   election in section 3 stands. [V: 6.12.0 SBOMs]
+> - **The component set changed**: 317 components (39 added, 9 removed).
+>   `QuickEffectsPrivate`, `QuickShapesPrivate` and `QuickParticlesPrivate` lost
+>   their `Private` suffix (same DLL names), so `deployedRoots` in `manifest.json`
+>   names `QuickEffects` and `QuickShapes` now. New attributions include
+>   `tlexpected`, `emoji-segmenter`, `xsvg` and `yoga`.
+> - **One licence id is new to the snapshot**: `Apache-2.0 WITH LLVM-exception`,
+>   on qdoc's attribution for LLVM's clang headers. qdoc is a documentation
+>   tool, the component is tagged Windows-only and nothing depends on it, so it
+>   is not part of what ships.
+> - **Not re-read**: the source-header and Qt-documentation citations in
+>   sections 2.2 and 3 are still the 6.8.3 ones. The SBOM is the evidence for
+>   6.12.0; the headers were not re-audited.
+> - **Unchanged and still open**: `dxcompiler.dll`, `dxil.dll`,
+>   `d3dcompiler_47.dll` and `opengl32sw.dll` are copied beside the executable
+>   by the deployment tool and have no `deployedFiles` entry (section 2.5). They
+>   were deployed under 6.8.3 too.
+
 Per-module SPDX expressions below are from the SBOMs Qt ships in its own
 install (`C:/Qt/6.8.3/msvc2022_64/sbom/*.spdx.json`) and agree with the
 `SPDX-License-Identifier` lines in the installed headers [V]. The Qt Company's
