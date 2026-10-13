@@ -28,7 +28,8 @@ add_executable(cube_system_tests
     sweep_test.cpp
     render_test.cpp
     tour_test.cpp
-    known_today_test.cpp)
+    known_today_test.cpp
+    progress_listener.cpp)
 
 target_include_directories(cube_system_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -77,22 +78,33 @@ cube_platform_deploy_qt_library(cube_system_tests Qt6::Test)
 cube_deploy_sanitizer_runtime(cube_system_tests)
 cube_deploy_vision_assets(cube_system_tests)
 
-# One ctest entry for the whole suite, deliberately not catch_discover_tests:
-# the suite is one session of the app (one engine, one window, state carried
-# from case to case on purpose) and the reach gate at the end needs every
-# earlier case to have run in the same process.
+# Deliberately not catch_discover_tests: the walk is one session of the app
+# (one engine, one window, state carried from case to case on purpose), and
+# the reach gate needs every case of it to have run in the same process. The
+# screenshot tour is its own entry (below): it is the slowest part by far,
+# and a picture that cannot be taken should not hide what the walk found.
 set(CUBE_SYSTEM_OUT "${CMAKE_BINARY_DIR}/system-test-output")
 
 # Declaration order: the gate is deterministic. Catch2's default is a random
 # order, which is how a case that leaves state behind is found - run the
 # executable with --order rand (and --rng-seed) for that.
 add_test(NAME system.walk
-    COMMAND cube_system_tests "~[.restart]" --order decl
+    COMMAND cube_system_tests "~[.restart]~[tour]" --order decl
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
 set_tests_properties(system.walk PROPERTIES
     LABELS "system"
     TIMEOUT 900
     ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
+
+# The screenshot tour: a picture of every screen and state, narrow and wide,
+# light and dark. Writes <build>/system-test-output/tour/screens/*.png.
+add_test(NAME system.tour
+    COMMAND cube_system_tests "[tour]"
+    WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
+set_tests_properties(system.tour PROPERTIES
+    LABELS "system"
+    TIMEOUT 900
+    ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour")
 
 # The reach gate: whether the walk visited every screen, state and control in
 # the inventory. Reads the report the walk wrote; needs no display. Catch2 runs

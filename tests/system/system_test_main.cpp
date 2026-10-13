@@ -68,22 +68,29 @@ int main(int argc, char* argv[]) {
         return 2;
     }
 
+    // The words the tests look for are English, whatever language the machine
+    // is in: the app takes its language from this before the device
+    // (docs/i18n.md). A run that wants another sets it.
+    if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
+        qputenv("CUBEULATOR_LOCALE", "en");
+    }
+    // Vsync off. With it on, the scene graph's threaded render loop paces
+    // animations and QML Timers by the swap of each frame; in this harness
+    // (one window, driven from QTest's event loop) on Qt 6.12 that clock did
+    // not tick - a Timer reported running and never fired, so the scan screen
+    // never handed over to the solution and the journey waited out its
+    // timeout, a case at a time. With vsync off the loop paces them from its
+    // own timer, so they advance whatever the display does. Seen on Windows
+    // (D3D11); the same run on Qt 6.8 did not do it. The [timers] case in
+    // journey_test.cpp checks it holds, so a regression is named, not a timeout.
+    if (!qEnvironmentVariableIsSet("QSG_NO_VSYNC")) {
+        qputenv("QSG_NO_VSYNC", "1");
+    }
+
     // The app's settings are a QSettings store keyed by organisation and
     // application name. Point it at a directory that goes away with the
     // process, so a run neither reads the developer's real settings nor
     // leaves its own behind.
-    // The words the tests look for are English, whatever language the machine
-    // is in: the app takes its language from this before the device
-    // (docs/i18n.md). A run that wants another sets it.
-    if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
-        qputenv("CUBEULATOR_LOCALE", "en");
-    }
-    // The words the tests look for are English, whatever language the machine
-    // is in: the app takes its language from this before the device
-    // (docs/i18n.md). A run that wants another sets it.
-    if (!qEnvironmentVariableIsSet("CUBEULATOR_LOCALE")) {
-        qputenv("CUBEULATOR_LOCALE", "en");
-    }
     QCoreApplication::setOrganizationName("Cubeulator");
     QCoreApplication::setApplicationName("Cubeulator-system-tests");
     QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -106,11 +113,12 @@ int main(int argc, char* argv[]) {
     if (const int error = session.applyCommandLine(argc, argv); error != 0) {
         return error;
     }
-    // The walk is the whole suite bar the relaunch case; anything narrower
-    // says so in its report, so a developer's single case cannot be mistaken
-    // for a gate.
+    // The walk is the whole suite bar the relaunch case and the tour; anything
+    // narrower says so in its report, so a developer's single case cannot be
+    // mistaken for a gate.
     const auto& specs = session.configData().testsOrTags;
-    const bool filtered = !(specs.empty() || (specs.size() == 1 && specs.front() == "~[.restart]"));
+    const bool filtered =
+        !(specs.empty() || (specs.size() == 1 && specs.front() == "~[.restart]~[tour]"));
     const int result = session.run();
 
     if (auto* booted = cube::systest::App::booted(); booted != nullptr) {

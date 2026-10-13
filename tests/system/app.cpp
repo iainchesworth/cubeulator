@@ -136,7 +136,10 @@ void App::reset() {
     reset_language();
     settings_state_->setProperty("themeMode", "light");
     settings_state_->setProperty("shaderStyleIndex", 0);
-    settings_state_->setProperty("cubeAutoRotate", true);
+    // Still, not spinning: a spinning cube is a scene that changes every
+    // frame, and a software renderer spends the whole walk drawing it. The
+    // cases that need it turning (render_test.cpp) switch it on themselves.
+    settings_state_->setProperty("cubeAutoRotate", false);
     settings_state_->setProperty("rotateSpeedIndex", 1);
     settings_state_->setProperty("statsForNerds", false);
     settings_state_->setProperty("graphicsBackend", "auto");

@@ -65,7 +65,7 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
     // holds still. (Its turning is checked in render_test.cpp.)
     app.settings_state().setProperty("cubeAutoRotate", false);
 
-    const cube::solver::Cube cube = cube::solver::random_scramble(3);
+    const cube::solver::Cube cube = cube::systest::scramble(3);
     std::vector<QString> all;
 
     for (const Variant& variant : kVariants) {

@@ -144,10 +144,11 @@ cmake --build --preset <preset> --target cube_system_tests
 ctest --preset <preset> -L system --output-on-failure
 ```
 
-That is three ctest entries: `system.walk` (the suite, one session of the
-app), `system.reach` (the reach gate, below; reads the walk's report, needs
-no display) and `system.relaunch` (a second launch with a setting already in
-the store).
+That is four ctest entries: `system.walk` (the suite bar the tour, one
+session of the app), `system.tour` (the screenshot tour, below, a session of
+its own), `system.reach` (the reach gate, below; reads the walk's report,
+needs no display) and `system.relaunch` (a second launch with a setting
+already in the store).
 
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
@@ -159,8 +160,16 @@ QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 \
 ```
 
 It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
-`screens/*.png` (the screenshot tour), `reach.json` and `reach.txt` (what the
-run visited). CI uploads that directory as the `system-test-output` artifact.
+`tour/screens/*.png` (the screenshot tour), `reach.json` and `reach.txt` (what
+the walk visited). CI uploads that directory as the `system-test-output`
+artifact.
+
+While it runs it prints a line to stderr as each case and section starts and
+ends, with the seconds since the process began (`[system +  12.3s] case: ...`,
+from `progress_listener.cpp`). Catch2's own reporter says nothing about a case
+until it ends, so a run that hits ctest's timeout would otherwise leave a log
+with nothing in it; these are flushed as they are written and show which case
+the time went on.
 
 The `system` label keeps it out of the plain `ctest` runs of the build legs
 (`-LE system`): it needs somewhere to draw.
@@ -195,6 +204,33 @@ The `system` label keeps it out of the plain `ctest` runs of the build legs
 - **QML warnings are failures.** `diagnostics.cpp` collects what the app's own
   QML printed; the journey cases assert it is nothing.
 
+### Time budget
+
+Both entries are bounded by a ctest `TIMEOUT` of 900 s, and under Xvfb with
+Mesa's llvmpipe the cube is drawn on the CPU, so what costs time there is
+frames, not logic. Four choices keep the walk inside it, and each is worth
+keeping when a case is added:
+
+- **Short scrambles.** The cases that need a solved cube to come back from a
+  scan use `cube::systest::scramble(seed)` (`app.hpp`, `kScrambleMoves`),
+  ten moves, not the 25 of a full random scramble: what they check is that the
+  scan reads the cube and the solution is shown and stepped through, not how
+  hard the cube is, and the solver's own tests cover its time on a hard one.
+- **A still cube by default.** `App::fresh()` turns the cube's auto-rotate
+  off. A spinning `View3D` is a scene that is re-rendered every frame whether
+  or not anything has changed, which on a software renderer is the CPU the
+  next click is waiting for. `render_test.cpp` and the settings sweep turn it
+  on where the spin is the thing under test.
+- **Pump, do not settle, where position is all that matters.**
+  `App::settle()` waits out Main.qml's 280 ms fade-in and two frames. The
+  sweep's way back from a screen and the layout cases, which only need to
+  know where things are, pump 80 ms instead; every press in a sweep is
+  followed by one of these, so it adds up on a slow renderer.
+- **A sampler that is not the busiest thing in the room.** The reach sampler
+  looks every 50 ms, not every 25.
+
+If a run still times out, the progress lines above say which case it was in.
+
 ### Decisions
 
 **Catch2 with QTest input, not Qt Quick Test (`TestCase`).** Qt Quick Test
@@ -228,6 +264,12 @@ solve screens - narrow (390x844) and wide (900x640), light and dark:
 `<screen>-<layout>-<theme>.png`. Frames are drawn; the launch cube's idle
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
+
+It is its own ctest entry (`system.tour`, writing to
+`<build>/system-test-output/tour`) because it is the slowest part by far -
+48 grabs of a window that is being rendered in software on Linux CI - and a
+picture that cannot be taken should not hide what the walk found, nor spend
+the walk's time budget.
 
 ### Reach: the stand-in for QML coverage
 
