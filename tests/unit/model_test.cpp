@@ -95,8 +95,9 @@ TEST_CASE("detect_color_scheme reports confirmed once every axis has an observat
     REQUIRE(result.face_colors[static_cast<std::size_t>(Face::B)] == FacetColor::blue);
 }
 
-TEST_CASE("detect_color_scheme reports contradictory when opposite faces violate the standard pairing",
-          "[model]") {
+TEST_CASE(
+    "detect_color_scheme reports contradictory when opposite faces violate the standard pairing",
+    "[model]") {
     std::array<std::optional<FacetColor>, face_count> centers{};
     centers[static_cast<std::size_t>(Face::U)] = FacetColor::white;
     centers[static_cast<std::size_t>(Face::D)] = FacetColor::red;

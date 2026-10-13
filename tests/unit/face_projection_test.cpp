@@ -52,7 +52,8 @@ TEST_CASE("face-on view shows one face, square-on", "[face_projection]") {
     std::vector<cv::Point3f> model(cube::vision::kSingmasterCornerModel.begin(),
                                    cube::vision::kSingmasterCornerModel.end());
     std::vector<cv::Point2f> projected;
-    cv::projectPoints(model, cv::Vec3d{0, 0, 0}, cv::Vec3d{0, 0, 9.0}, camera(), cv::noArray(), projected);
+    cv::projectPoints(model, cv::Vec3d{0, 0, 0}, cv::Vec3d{0, 0, 9.0}, camera(), cv::noArray(),
+                      projected);
     for (const auto& corner : faces[0].quad) {
         double nearest = 1e9;
         for (const auto& p : projected) {
@@ -94,7 +95,8 @@ TEST_CASE("rectification lands each sticker in its canonical cell", "[face_proje
         p[static_cast<std::size_t>(face_axis)] = sign;
         p[static_cast<std::size_t>(axis_u)] = u;
         p[static_cast<std::size_t>(axis_v)] = v;
-        const cv::Matx31d c = rotation * cv::Matx31d(p[0], p[1], p[2]) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        const cv::Matx31d c =
+            rotation * cv::Matx31d(p[0], p[1], p[2]) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         const cv::Matx33d k = camera();
         return cv::Point(static_cast<int>(std::lround(k(0, 0) * c(0, 0) / c(2, 0) + k(0, 2))),
                          static_cast<int>(std::lround(k(1, 1) * c(1, 0) / c(2, 0) + k(1, 2))));
@@ -126,7 +128,8 @@ TEST_CASE("rectification lands each sticker in its canonical cell", "[face_proje
 TEST_CASE("rectification refuses empty frames and degenerate quads", "[face_projection]") {
     using cube::vision::pipeline::rectify_face;
     cube::vision::pipeline::ProjectedFace collapsed;
-    collapsed.quad = {cv::Point2f(10, 10), cv::Point2f(10.1F, 10), cv::Point2f(10.1F, 10.1F), cv::Point2f(10, 10.1F)};
+    collapsed.quad = {cv::Point2f(10, 10), cv::Point2f(10.1F, 10), cv::Point2f(10.1F, 10.1F),
+                      cv::Point2f(10, 10.1F)};
     const cv::Mat frame(480, 640, CV_8UC3, cv::Scalar(0, 0, 0));
     REQUIRE(rectify_face(cv::Mat(), collapsed, 96).empty());
     REQUIRE(rectify_face(frame, collapsed, 96).empty());
@@ -143,7 +146,8 @@ TEST_CASE("gap refinement finds shifted lines and respects its clamp", "[face_pr
     const auto face_with_gaps = [](double x1, double x2) {
         cv::Mat face(96, 96, CV_8UC3, cv::Scalar(180, 180, 180));
         for (const double x : {x1, x2}) {
-            cv::line(face, cv::Point2d(x, 0), cv::Point2d(x, 95), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);
+            cv::line(face, cv::Point2d(x, 0), cv::Point2d(x, 95), cv::Scalar(30, 30, 30), 3,
+                     cv::LINE_AA);
         }
         cv::line(face, cv::Point(0, 32), cv::Point(95, 32), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);
         cv::line(face, cv::Point(0, 64), cv::Point(95, 64), cv::Scalar(30, 30, 30), 3, cv::LINE_AA);

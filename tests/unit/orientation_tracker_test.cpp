@@ -67,7 +67,8 @@ struct Sim {
     explicit Sim(const TrackerConfig& config = {}) : tracker(config) {}
 
     void advance(const std::array<float, 3>& omega_deg_s, float dt_s = kDtS) {
-        const std::array<float, 3> step{omega_deg_s[0] * dt_s, omega_deg_s[1] * dt_s, omega_deg_s[2] * dt_s};
+        const std::array<float, 3> step{omega_deg_s[0] * dt_s, omega_deg_s[1] * dt_s,
+                                        omega_deg_s[2] * dt_s};
         q_true = quat_multiply(quat_from_rotvec_deg(step), q_true);
     }
 
@@ -75,7 +76,8 @@ struct Sim {
     // gauge (re-keys at 45-degree boundaries) plus orientation noise.
     [[nodiscard]] Quat observation() {
         const int s = quantize24(q_true).index;
-        const Quat relabelled = quat_multiply(q_true, quat_conjugate(kLattice24[static_cast<std::size_t>(s)]));
+        const Quat relabelled =
+            quat_multiply(q_true, quat_conjugate(kLattice24[static_cast<std::size_t>(s)]));
         std::normal_distribution<float> angle_dist(0.0F, noise_deg);
         std::uniform_real_distribution<float> unit(-1.0F, 1.0F);
         std::array<float, 3> axis{unit(rng), unit(rng), unit(rng)};
@@ -360,7 +362,7 @@ TEST_CASE("wall-clock coast timeout kills a stale prediction", "[tracker]") {
     }
     SECTION("the acquire timeout covers acquiring - a stalled streak re-anchors, never chains") {
         Sim sim;
-        const auto anchored = sim.step_obs();  // anchor: epoch 1, streak 1
+        const auto anchored = sim.step_obs();            // anchor: epoch 1, streak 1
         CHECK(anchored.state == TrackState::acquiring);  // one accept short of locked
         // One stalled interval longer than the ACQUIRING timeout (1200 ms,
         // deliberately wider than locked's 700 ms - acquiring has no
@@ -432,7 +434,8 @@ TEST_CASE("acquiring bridges detection gaps: sparse burst accepts still lock", "
     REQUIRE(third.front_face.has_value());
 }
 
-TEST_CASE("an out-of-basin observation while acquiring misses without killing the streak", "[tracker]") {
+TEST_CASE("an out-of-basin observation while acquiring misses without killing the streak",
+          "[tracker]") {
     Sim sim;
     sim.step_obs();  // anchor: streak 1
     // 35 degrees from the anchor over a stretched ~200 ms pass: past the
@@ -477,7 +480,7 @@ TEST_CASE("sustained misses while acquiring force lost through the sigma cap", "
 TEST_CASE("a gap exceeding the acquire timeout re-anchors a new epoch", "[tracker]") {
     SECTION("inside the window the streak chains") {
         Sim sim;
-        sim.step_obs();  // anchor: streak 1
+        sim.step_obs();    // anchor: streak 1
         sim.t_ms += 1000;  // long, but inside acquire_coast_timeout_ms
         const auto out = sim.step_obs();
         // Same epoch, streak completed: the cube did not move, so the
@@ -489,7 +492,7 @@ TEST_CASE("a gap exceeding the acquire timeout re-anchors a new epoch", "[tracke
     }
     SECTION("beyond the window the anchor is discarded") {
         Sim sim;
-        sim.step_obs();  // anchor: epoch 1
+        sim.step_obs();    // anchor: epoch 1
         sim.t_ms += 1300;  // past acquire_coast_timeout_ms
         const auto out = sim.step_obs();
         CHECK(out.gate == TrackGate::anchored);
@@ -535,8 +538,9 @@ TEST_CASE("isolated flip glitches are discarded by the implied-omega gate", "[tr
     for (int pass = 0; pass < 40; ++pass) {
         sim.advance(omega);
         const bool inject = pass % 7 == 3 && quantize24(sim.q_true).theta_deg > 20.0F;
-        const Quat obs = inject ? quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 180.0F), sim.observation())
-                                : sim.observation();
+        const Quat obs =
+            inject ? quat_multiply(axis_angle({0.0F, 1.0F, 0.0F}, 180.0F), sim.observation())
+                   : sim.observation();
         const auto out = sim.step_obs(obs);
         if (inject) {
             CHECK(out.gate == TrackGate::implausible);
@@ -594,7 +598,8 @@ TEST_CASE("the opened basin re-locks a per-gap step the old ceiling refused", "[
     CHECK(track_matches_truth(sim));
 }
 
-TEST_CASE("the implied-rate gate judges the span since the last accept, not one frame", "[tracker]") {
+TEST_CASE("the implied-rate gate judges the span since the last accept, not one frame",
+          "[tracker]") {
     SECTION("a displaced re-detection after coasting is refused by geometry, not rate") {
         Sim sim;
         sim.noise_deg = 0.0F;
@@ -854,7 +859,8 @@ TEST_CASE("a noise-suppressed margin does not wedge later reference learning", "
     CHECK(out.identity_certain_face[static_cast<std::size_t>(Face::R)]);
 }
 
-TEST_CASE("face-scoped certainty is reachable on single-centre evidence; the full bar is not", "[tracker]") {
+TEST_CASE("face-scoped certainty is reachable on single-centre evidence; the full bar is not",
+          "[tracker]") {
     // The live3 deadlock in miniature: a frontal hold observing one face's
     // centre. The observed face's in-plane stabilizers map it onto itself,
     // so they receive bit-identical likelihood to identity on every

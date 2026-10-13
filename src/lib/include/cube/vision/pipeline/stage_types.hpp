@@ -77,8 +77,8 @@ struct CornerCandidate {
 // adapted (which stage C still needs to solve a pose the legacy way).
 struct CubeDetection {
     bool found = false;
-    float confidence = 0.0F;         // best contributing observation's confidence
-    cv::Rect roi{};                  // bounding box of everything detected
+    float confidence = 0.0F;               // best contributing observation's confidence
+    cv::Rect roi{};                        // bounding box of everything detected
     std::vector<cv::Point2f> silhouette;   // convex outline; empty until Phase 1
     std::vector<CornerCandidate> corners;  // empty until Phase 1
 
@@ -164,8 +164,8 @@ struct CellGrid {
 // --- F. Sample -------------------------------------------------------------
 
 struct FaceSamples {
-    std::array<cv::Vec3f, 9> lab{};     // float Lab, L in [0,100]
-    std::array<float, 9> purity{};      // 0 = not measured (see FaceObservation)
+    std::array<cv::Vec3f, 9> lab{};  // float Lab, L in [0,100]
+    std::array<float, 9> purity{};   // 0 = not measured (see FaceObservation)
 };
 
 struct CellSamples {

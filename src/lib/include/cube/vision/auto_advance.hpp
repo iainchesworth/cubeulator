@@ -17,6 +17,6 @@ struct AutoAdvanceThresholds {
 // meaningfully into one number, whereas this stays exhaustively testable
 // and easy to explain to a user.
 [[nodiscard]] bool should_auto_advance(const FaceConfirmSignal& signal,
-                                        const AutoAdvanceThresholds& thresholds = {});
+                                       const AutoAdvanceThresholds& thresholds = {});
 
 }  // namespace cube::vision

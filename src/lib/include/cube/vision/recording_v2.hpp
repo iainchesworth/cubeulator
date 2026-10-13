@@ -78,7 +78,8 @@ struct Manifest {
 // consumers must) and returns nullopt only for unreadable/unparseable
 // files. write_manifest REFUSES (returns the problem) a present state the
 // oracle rejects - validation at record time is the whole point.
-[[nodiscard]] std::optional<std::string> write_manifest(const std::string& dir, const Manifest& manifest);
+[[nodiscard]] std::optional<std::string> write_manifest(const std::string& dir,
+                                                        const Manifest& manifest);
 [[nodiscard]] std::optional<Manifest> read_manifest(const std::string& dir);
 
 // Post-hoc recording integrity: index parses, passes are contiguous from

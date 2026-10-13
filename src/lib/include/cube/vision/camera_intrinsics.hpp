@@ -39,7 +39,8 @@ struct CameraIntrinsics {
 };
 
 // Text round-trip (a flat "key value" file - diffable, no dependency).
-[[nodiscard]] std::optional<std::string> write_intrinsics(const std::string& path, const CameraIntrinsics& value);
+[[nodiscard]] std::optional<std::string> write_intrinsics(const std::string& path,
+                                                          const CameraIntrinsics& value);
 [[nodiscard]] Result<CameraIntrinsics> read_intrinsics(const std::string& path);
 
 // Chessboard calibration over a set of BGR views. inner_corners is the
@@ -48,7 +49,8 @@ struct CameraIntrinsics {
 // Views where the full board is not found are skipped and reported via
 // views_used; fails when fewer than 4 views survive.
 [[nodiscard]] Result<CameraIntrinsics> calibrate_from_views(const std::vector<cv::Mat>& bgr_views,
-                                                            cv::Size inner_corners, float square_size,
+                                                            cv::Size inner_corners,
+                                                            float square_size,
                                                             int* views_used = nullptr);
 
 }  // namespace cube::vision

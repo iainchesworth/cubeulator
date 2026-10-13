@@ -67,7 +67,9 @@ constexpr FacetColor model_color(Color color) {
 // Colours ride through CapturedFace as synthetic Lab: distinct L per
 // Color, decoded by nearest index. Content is a carrier here - the
 // geometry (cell permutations) is what the test is about.
-cv::Vec3f lab_of(Color color) { return {static_cast<float>(color) * 15.0F + 10.0F, 0.0F, 0.0F}; }
+cv::Vec3f lab_of(Color color) {
+    return {static_cast<float>(color) * 15.0F + 10.0F, 0.0F, 0.0F};
+}
 
 Color color_of(const cv::Vec3f& lab) {
     return static_cast<Color>(static_cast<int>(std::lround((lab[0] - 10.0F) / 15.0F)));
@@ -85,14 +87,16 @@ std::array<cube::vision::CapturedFace, 6> store_under_gauge(const Cube& cube, in
         for (std::size_t k = 0; k < identity_slot.lab.size(); ++k) {
             identity_slot.lab[k] = lab_of(colors[k]);
         }
-        const auto& map = cube::vision::kBodyRelabel[static_cast<std::size_t>(gauge)][static_cast<std::size_t>(p)];
+        const auto& map = cube::vision::kBodyRelabel[static_cast<std::size_t>(gauge)]
+                                                    [static_cast<std::size_t>(p)];
         slots[static_cast<std::size_t>(map.body_face)] =
             cube::vision::relabel_capture(identity_slot, body, gauge);
     }
     return slots;
 }
 
-std::array<std::array<Facelet, 9>, 6> decode(const std::array<cube::vision::CapturedFace, 6>& slots) {
+std::array<std::array<Facelet, 9>, 6> decode(
+    const std::array<cube::vision::CapturedFace, 6>& slots) {
     std::array<std::array<Facelet, 9>, 6> inputs{};
     for (std::size_t b = 0; b < slots.size(); ++b) {
         for (std::size_t k = 0; k < 9; ++k) {
@@ -105,9 +109,9 @@ std::array<std::array<Facelet, 9>, 6> decode(const std::array<cube::vision::Capt
 Cube scrambled() {
     Cube c = Cube::solved();
     using F = cube::solver::Face;
-    for (const Move move : {Move{F::R, 1}, Move{F::U, 2}, Move{F::F, 3}, Move{F::L, 1}, Move{F::D, 1},
-                            Move{F::B, 2}, Move{F::U, 1}, Move{F::R, 3}, Move{F::F, 1}, Move{F::D, 2},
-                            Move{F::L, 3}, Move{F::B, 1}}) {
+    for (const Move move : {Move{F::R, 1}, Move{F::U, 2}, Move{F::F, 3}, Move{F::L, 1},
+                            Move{F::D, 1}, Move{F::B, 2}, Move{F::U, 1}, Move{F::R, 3},
+                            Move{F::F, 1}, Move{F::D, 2}, Move{F::L, 3}, Move{F::B, 1}}) {
         c = c.apply(move);
     }
     return c;
@@ -115,7 +119,8 @@ Cube scrambled() {
 
 }  // namespace
 
-TEST_CASE("a stored scan assembles to the exact cube under every gauge", "[capture-routing][scan_assembly]") {
+TEST_CASE("a stored scan assembles to the exact cube under every gauge",
+          "[capture-routing][scan_assembly]") {
     const Cube cube = scrambled();
     for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
         CAPTURE(gauge);
@@ -188,7 +193,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
 // as the column swap it is documented to be.
 std::array<Color, 9> flipped_columns(std::array<Color, 9> face) {
     for (int row = 0; row < 3; ++row) {
-        std::swap(face[static_cast<std::size_t>(row * 3)], face[static_cast<std::size_t>(row * 3 + 2)]);
+        std::swap(face[static_cast<std::size_t>(row * 3)],
+                  face[static_cast<std::size_t>(row * 3 + 2)]);
     }
     return face;
 }
@@ -235,7 +241,8 @@ TEST_CASE("the store hint producer derives digits that re-orient every slot",
             // is restated from documentation, none of it from the
             // producer's geometry.
             std::array<Color, 9> reoriented = slot_colors(slots[i]);
-            const cube::solver::Face pinned = pinned_face(reoriented[cube::model::center_facelet_index]);
+            const cube::solver::Face pinned =
+                pinned_face(reoriented[cube::model::center_facelet_index]);
             if (pinned == cube::solver::Face::D || pinned == cube::solver::Face::R ||
                 pinned == cube::solver::Face::B) {
                 reoriented = flipped_columns(reoriented);

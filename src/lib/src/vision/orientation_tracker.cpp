@@ -18,7 +18,8 @@ constexpr float kDegPerRad = 57.29577951308232F;
     return {q[0] / norm, q[1] / norm, q[2] / norm, q[3] / norm};
 }
 
-[[nodiscard]] float lab_distance(const std::array<float, 3>& a, const std::array<float, 3>& b) noexcept {
+[[nodiscard]] float lab_distance(const std::array<float, 3>& a,
+                                 const std::array<float, 3>& b) noexcept {
     const float dl = a[0] - b[0];
     const float da = a[1] - b[1];
     const float db = a[2] - b[2];
@@ -29,13 +30,15 @@ constexpr float kDegPerRad = 57.29577951308232F;
 
 Quat quat_from_rotvec_deg(const std::array<float, 3>& rotvec_deg) noexcept {
     const float angle_deg =
-        std::sqrt(rotvec_deg[0] * rotvec_deg[0] + rotvec_deg[1] * rotvec_deg[1] + rotvec_deg[2] * rotvec_deg[2]);
+        std::sqrt(rotvec_deg[0] * rotvec_deg[0] + rotvec_deg[1] * rotvec_deg[1] +
+                  rotvec_deg[2] * rotvec_deg[2]);
     if (angle_deg < 1e-6F) {
         return {1.0F, 0.0F, 0.0F, 0.0F};
     }
     const float half_rad = 0.5F * angle_deg / kDegPerRad;
     const float scale = std::sin(half_rad) / angle_deg;
-    return {std::cos(half_rad), rotvec_deg[0] * scale, rotvec_deg[1] * scale, rotvec_deg[2] * scale};
+    return {std::cos(half_rad), rotvec_deg[0] * scale, rotvec_deg[1] * scale,
+            rotvec_deg[2] * scale};
 }
 
 std::array<float, 3> quat_to_rotvec_deg(const Quat& q) noexcept {
@@ -100,7 +103,9 @@ void OrientationTracker::reset() noexcept {
     sigma_deg_ = 0.0F;
 }
 
-void OrientationTracker::force_lost() noexcept { to_lost(); }
+void OrientationTracker::force_lost() noexcept {
+    to_lost();
+}
 
 void OrientationTracker::to_lost() noexcept {
     // Belief and colour references are epoch-scoped (the body frame they
@@ -138,8 +143,9 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // the bridge was added to fix. Falling through to the lost branch lets
     // the same pass's observation re-anchor immediately (loss is cheap by
     // design).
-    const std::int64_t stale_timeout_ms =
-        state_ == TrackState::acquiring ? config_.acquire_coast_timeout_ms : config_.coast_timeout_ms;
+    const std::int64_t stale_timeout_ms = state_ == TrackState::acquiring
+                                              ? config_.acquire_coast_timeout_ms
+                                              : config_.coast_timeout_ms;
     if (state_ != TrackState::lost && input.t_ms - last_accept_t_ms_ > stale_timeout_ms) {
         to_lost();
     }
@@ -165,8 +171,10 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // Constant-angular-velocity prediction in the display frame. dt is
     // clamped for the rate math only - the timeout above already handled
     // "too stale to predict".
-    const float dt_s = std::clamp(static_cast<float>(out.dt_ms) / 1000.0F, config_.min_dt_s, config_.max_dt_s);
-    const std::array<float, 3> step{omega_deg_s_[0] * dt_s, omega_deg_s_[1] * dt_s, omega_deg_s_[2] * dt_s};
+    const float dt_s =
+        std::clamp(static_cast<float>(out.dt_ms) / 1000.0F, config_.min_dt_s, config_.max_dt_s);
+    const std::array<float, 3> step{omega_deg_s_[0] * dt_s, omega_deg_s_[1] * dt_s,
+                                    omega_deg_s_[2] * dt_s};
     const Quat q_pred = normalized(quat_multiply(quat_from_rotvec_deg(step), q_track_));
     out.q_pred = q_pred;
 
@@ -190,8 +198,8 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     out.lattice_index = res.lattice_index;
     out.theta_deg = res.theta_deg;
     out.margin_deg = res.margin_deg;
-    const Quat q_meas =
-        normalized(quat_multiply(*input.q_obs, kLattice24[static_cast<std::size_t>(res.lattice_index)]));
+    const Quat q_meas = normalized(
+        quat_multiply(*input.q_obs, kLattice24[static_cast<std::size_t>(res.lattice_index)]));
 
     // Implied-rate gate against the COMMITTED track (not the prediction -
     // the prediction already contains the rate being questioned). A flip
@@ -205,8 +213,9 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // already implies ~420 deg/s over one 33 ms interval) trips the gate
     // and drops lock (see obs_pose_ceiling_deg's config comment for the
     // division of labour with the plausibility gate).
-    const float omega_mag_deg_s = std::sqrt(omega_deg_s_[0] * omega_deg_s_[0] + omega_deg_s_[1] * omega_deg_s_[1] +
-                                            omega_deg_s_[2] * omega_deg_s_[2]);
+    const float omega_mag_deg_s =
+        std::sqrt(omega_deg_s_[0] * omega_deg_s_[0] + omega_deg_s_[1] * omega_deg_s_[1] +
+                  omega_deg_s_[2] * omega_deg_s_[2]);
     // The rate is judged over the span the jump actually ACCUMULATED - the
     // wall time since the last accepted measurement - not this pass's
     // frame interval. The residual to q_track_ is everything the coasted
@@ -225,8 +234,9 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // 30-degree residual on a 90-degree slip - a silently wrong identity)
     // into an acceptable rate on the very pass that should have completed
     // the chain and re-anchored.
-    const float accept_span_s = std::clamp(static_cast<float>(input.t_ms - last_accept_t_ms_) / 1000.0F,
-                                           config_.min_dt_s, config_.max_dt_s);
+    const float accept_span_s =
+        std::clamp(static_cast<float>(input.t_ms - last_accept_t_ms_) / 1000.0F, config_.min_dt_s,
+                   config_.max_dt_s);
     const float rate_span_s = outlier_count_ > 0 ? dt_s : accept_span_s;
     const float implied_deg_s = quat_angle_deg(q_meas, q_track_) / rate_span_s;
     if (implied_deg_s > config_.outlier_omega_deg_s + omega_mag_deg_s) {
@@ -234,8 +244,8 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
         if (outlier_count_ > 0) {
             const AlignmentResolution chain = resolve_alignment(*input.q_obs, outlier_q_);
             if (chain.theta_deg < config_.outlier_consistency_deg) {
-                outlier_q_ =
-                    normalized(quat_multiply(*input.q_obs, kLattice24[static_cast<std::size_t>(chain.lattice_index)]));
+                outlier_q_ = normalized(quat_multiply(
+                    *input.q_obs, kLattice24[static_cast<std::size_t>(chain.lattice_index)]));
                 ++outlier_count_;
                 chained = true;
             }
@@ -267,7 +277,8 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     // lost. Margin gate: a best element the runner-up nearly ties is a
     // resolution the prediction cannot actually disambiguate; coast
     // instead of guessing (the plan's identity policy in one line).
-    const float threshold_deg = std::min(config_.basin_ceiling_deg, sigma_deg_ + config_.max_interframe_deg);
+    const float threshold_deg =
+        std::min(config_.basin_ceiling_deg, sigma_deg_ + config_.max_interframe_deg);
     if (res.theta_deg >= threshold_deg) {
         miss(q_pred, input, out, TrackGate::basin);
     } else if (res.margin_deg <= config_.gauge_margin_deg) {
@@ -279,7 +290,8 @@ TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
     return out;
 }
 
-void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input, TrackerPassOutput& out) {
+void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input,
+                                TrackerPassOutput& out) {
     // The anchoring detection's model frame becomes the body frame, so the
     // gauge is the identity element BY DEFINITION - nothing to resolve.
     // Everything epoch-scoped restarts here: a new epoch means new body
@@ -303,15 +315,16 @@ void OrientationTracker::anchor(const Quat& q_obs, const TrackerPassInput& input
     out.quarter_turn_k = 0;
 }
 
-void OrientationTracker::accept(const Quat& q_meas, int lattice_index, const TrackerPassInput& input,
-                                TrackerPassOutput& out) {
+void OrientationTracker::accept(const Quat& q_meas, int lattice_index,
+                                const TrackerPassInput& input, TrackerPassOutput& out) {
     // Rate from the last ACCEPTED orientation over the wall time between
     // them - measuring across a coasted gap yields the average rate the
     // cube actually turned at, which is exactly what the next coast should
     // extrapolate.
-    const float span_s = std::clamp(static_cast<float>(input.t_ms - last_accept_t_ms_) / 1000.0F, config_.min_dt_s,
-                                    config_.max_dt_s);
-    const std::array<float, 3> delta = quat_to_rotvec_deg(quat_multiply(q_meas, quat_conjugate(q_last_accept_)));
+    const float span_s = std::clamp(static_cast<float>(input.t_ms - last_accept_t_ms_) / 1000.0F,
+                                    config_.min_dt_s, config_.max_dt_s);
+    const std::array<float, 3> delta =
+        quat_to_rotvec_deg(quat_multiply(q_meas, quat_conjugate(q_last_accept_)));
     for (std::size_t i = 0; i < 3; ++i) {
         omega_deg_s_[i] += config_.omega_blend * (delta[i] / span_s - omega_deg_s_[i]);
     }
@@ -346,8 +359,8 @@ void OrientationTracker::accept(const Quat& q_meas, int lattice_index, const Tra
     out.quarter_turn_k = lattice_index % 4;
 }
 
-void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input, TrackerPassOutput& out,
-                              TrackGate gate) {
+void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input,
+                              TrackerPassOutput& out, TrackGate gate) {
     out.gate = gate;
     // A miss coasts in EVERY tracking state now - acquiring included. The
     // original design dropped acquiring straight to lost ("the streak's
@@ -376,9 +389,10 @@ void OrientationTracker::miss(const Quat& q_pred, const TrackerPassInput& input,
     for (auto& component : omega_deg_s_) {
         component *= config_.omega_decay;
     }
-    const float sigma_rate_deg =
-        state_ == TrackState::acquiring ? config_.acquire_sigma_rate_deg : config_.coast_sigma_rate_deg;
-    sigma_deg_ += sigma_rate_deg + config_.motion_sigma_gain_deg * std::max(0.0F, input.motion_score);
+    const float sigma_rate_deg = state_ == TrackState::acquiring ? config_.acquire_sigma_rate_deg
+                                                                 : config_.coast_sigma_rate_deg;
+    sigma_deg_ +=
+        sigma_rate_deg + config_.motion_sigma_gain_deg * std::max(0.0F, input.motion_score);
     if (sigma_deg_ > config_.max_coast_sigma_deg) {
         to_lost();
     }
@@ -403,11 +417,12 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
     const bool may_learn = best_advantage <= 0.0F;
     if (input.centre_lab_count > 0) {
         const auto observed_faces = [&](std::size_t obs) {
-            return input.corner_view ? kCornerObsToBody[static_cast<std::size_t>(lattice_index)][obs].body_face
-                                     : kFaceObsToBody[static_cast<std::size_t>(lattice_index)].body_face;
+            return input.corner_view
+                       ? kCornerObsToBody[static_cast<std::size_t>(lattice_index)][obs].body_face
+                       : kFaceObsToBody[static_cast<std::size_t>(lattice_index)].body_face;
         };
-        const std::size_t count =
-            std::min<std::size_t>(static_cast<std::size_t>(input.centre_lab_count), input.corner_view ? 3 : 1);
+        const std::size_t count = std::min<std::size_t>(
+            static_cast<std::size_t>(input.centre_lab_count), input.corner_view ? 3 : 1);
         for (std::size_t obs = 0; obs < count; ++obs) {
             const cube::model::Face f0 = observed_faces(obs);
             const std::array<float, 3>& lab = input.centre_lab[obs];
@@ -420,23 +435,26 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
             const auto score = [&](std::size_t face_index) {
                 float log_lik = config_.unknown_face_log_likelihood;
                 if (face_ref_known_[face_index]) {
-                    const float d = lab_distance(lab, face_ref_[face_index]) / config_.centre_sigma_lab;
+                    const float d =
+                        lab_distance(lab, face_ref_[face_index]) / config_.centre_sigma_lab;
                     log_lik = std::max(-config_.max_obs_log_penalty, -0.5F * d * d);
                 }
                 return log_lik;
             };
             const float id_log_lik = score(static_cast<std::size_t>(f0));
             for (std::size_t j = 0; j < kLatticeSize; ++j) {
-                const auto hyp_face = static_cast<std::size_t>(kFacePermutation[j][static_cast<std::size_t>(f0)]);
+                const auto hyp_face =
+                    static_cast<std::size_t>(kFacePermutation[j][static_cast<std::size_t>(f0)]);
                 const float log_lik = score(hyp_face);
                 log_belief_[j] += log_lik;
                 // Evidence-based advantage: only a sample the hypothesis
                 // was actually REF-SCORED on may move its veto credit -
                 // floor observations contribute exactly nothing, in
                 // either direction (see the member comment).
-                if (j != static_cast<std::size_t>(kIdentityLatticeIndex) && face_ref_known_[hyp_face]) {
-                    slip_evidence_[j] = std::clamp(slip_evidence_[j] + log_lik - id_log_lik, -config_.belief_clamp,
-                                                   config_.belief_clamp);
+                if (j != static_cast<std::size_t>(kIdentityLatticeIndex) &&
+                    face_ref_known_[hyp_face]) {
+                    slip_evidence_[j] = std::clamp(slip_evidence_[j] + log_lik - id_log_lik,
+                                                   -config_.belief_clamp, config_.belief_clamp);
                 }
             }
             // Learn/refresh the no-slip reference only while no ref-backed
@@ -452,7 +470,8 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
                     if (lab_distance(lab, face_ref_[ref_face]) <=
                         config_.ref_consistency_sigma * config_.centre_sigma_lab) {
                         for (std::size_t i = 0; i < 3; ++i) {
-                            face_ref_[ref_face][i] += config_.ref_blend * (lab[i] - face_ref_[ref_face][i]);
+                            face_ref_[ref_face][i] +=
+                                config_.ref_blend * (lab[i] - face_ref_[ref_face][i]);
                         }
                     }
                 } else {
@@ -486,7 +505,8 @@ bool OrientationTracker::update_belief_and_refs(int lattice_index, const Tracker
 void OrientationTracker::finish_output(TrackerPassOutput& out) const noexcept {
     out.state = state_;
     out.q_track = q_track_;
-    if (out.q_pred[0] == 1.0F && out.q_pred[1] == 0.0F && out.q_pred[2] == 0.0F && out.q_pred[3] == 0.0F) {
+    if (out.q_pred[0] == 1.0F && out.q_pred[1] == 0.0F && out.q_pred[2] == 0.0F &&
+        out.q_pred[3] == 0.0F) {
         // Never predicted this pass (lost branch, or anchored): report the
         // adopted orientation so a consumer never mistakes the default for
         // a real prediction of the frontal pose.

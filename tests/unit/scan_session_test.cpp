@@ -143,10 +143,9 @@ TEST_CASE("track-mode replay feeds the fusion store and finalizes on six converg
         CHECK(session.assembledCube().has_value());
         CHECK(session.facesScanned() == 6);
     }
-    WARN("track-fusion replay: frames=" << session.frameSeq()
-                                        << " observations=" << session.trackFusionObservations()
-                                        << " converged=" << session.facesScanned()
-                                        << " completed=" << (completed ? "yes" : "no"));
+    WARN("track-fusion replay: frames="
+         << session.frameSeq() << " observations=" << session.trackFusionObservations()
+         << " converged=" << session.facesScanned() << " completed=" << (completed ? "yes" : "no"));
 }
 
 TEST_CASE("ScanSession::previewMirrored defaults off and round-trips", "[qt][controllers]") {

@@ -54,9 +54,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <cube/model/face.hpp>
+#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/corner_observation.hpp>
 #include <cube/vision/face_observation.hpp>
-#include <cube/vision/capture_gates.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/idle_gate.hpp>
 #include <cube/vision/orientation_tracker.hpp>
@@ -125,46 +125,66 @@ struct SweepAxis {
 // a local optimum with the same one-row-one-knob attribution.
 std::vector<SweepAxis> sweep_axes() {
     return {
-        {"basin_ceiling_deg", {40.0F, 33.0F, 36.0F, 43.0F},
+        {"basin_ceiling_deg",
+         {40.0F, 33.0F, 36.0F, 43.0F},
          [](SweepSettings& s, float v) { s.tracker.basin_ceiling_deg = v; }},
-        {"max_interframe_deg", {30.0F, 15.0F, 25.0F, 33.0F},
+        {"max_interframe_deg",
+         {30.0F, 15.0F, 25.0F, 33.0F},
          [](SweepSettings& s, float v) { s.tracker.max_interframe_deg = v; }},
-        {"gauge_margin_deg", {15.0F, 10.0F, 20.0F, 25.0F},
+        {"gauge_margin_deg",
+         {15.0F, 10.0F, 20.0F, 25.0F},
          [](SweepSettings& s, float v) { s.tracker.gauge_margin_deg = v; }},
-        {"coast_sigma_rate_deg", {4.0F, 2.0F, 6.0F, 8.0F},
+        {"coast_sigma_rate_deg",
+         {4.0F, 2.0F, 6.0F, 8.0F},
          [](SweepSettings& s, float v) { s.tracker.coast_sigma_rate_deg = v; }},
-        {"acquire_sigma_rate_deg", {2.5F, 1.5F, 4.0F},
+        {"acquire_sigma_rate_deg",
+         {2.5F, 1.5F, 4.0F},
          [](SweepSettings& s, float v) { s.tracker.acquire_sigma_rate_deg = v; }},
-        {"acquire_coast_timeout_ms", {1200.0F, 900.0F, 1600.0F, 2000.0F},
-         [](SweepSettings& s, float v) { s.tracker.acquire_coast_timeout_ms = static_cast<std::int64_t>(v); }},
-        {"acquire_frames", {2.0F, 3.0F, 4.0F},
+        {"acquire_coast_timeout_ms",
+         {1200.0F, 900.0F, 1600.0F, 2000.0F},
+         [](SweepSettings& s, float v) {
+             s.tracker.acquire_coast_timeout_ms = static_cast<std::int64_t>(v);
+         }},
+        {"acquire_frames",
+         {2.0F, 3.0F, 4.0F},
          [](SweepSettings& s, float v) { s.tracker.acquire_frames = static_cast<int>(v); }},
-        {"motion_sigma_gain_deg", {40.0F, 20.0F, 80.0F},
+        {"motion_sigma_gain_deg",
+         {40.0F, 20.0F, 80.0F},
          [](SweepSettings& s, float v) { s.tracker.motion_sigma_gain_deg = v; }},
-        {"coast_timeout_ms", {700.0F, 500.0F, 1000.0F, 1400.0F},
-         [](SweepSettings& s, float v) { s.tracker.coast_timeout_ms = static_cast<std::int64_t>(v); }},
-        {"outlier_omega_deg_s", {400.0F, 250.0F, 300.0F, 600.0F},
+        {"coast_timeout_ms",
+         {700.0F, 500.0F, 1000.0F, 1400.0F},
+         [](SweepSettings& s, float v) {
+             s.tracker.coast_timeout_ms = static_cast<std::int64_t>(v);
+         }},
+        {"outlier_omega_deg_s",
+         {400.0F, 250.0F, 300.0F, 600.0F},
          [](SweepSettings& s, float v) { s.tracker.outlier_omega_deg_s = v; }},
         // First value is the shipped default (see the axis-anchor test):
         // omega_blend 0.2 is the round-2 wrong-identity lever.
-        {"omega_blend", {0.2F, 0.1F, 0.15F, 0.3F, 0.5F},
+        {"omega_blend",
+         {0.2F, 0.1F, 0.15F, 0.3F, 0.5F},
          [](SweepSettings& s, float v) { s.tracker.omega_blend = v; }},
-        {"omega_decay", {0.8F, 0.7F, 0.9F, 0.95F},
+        {"omega_decay",
+         {0.8F, 0.7F, 0.9F, 0.95F},
          [](SweepSettings& s, float v) { s.tracker.omega_decay = v; }},
-        {"posterior_lock_ratio", {100.0F, 30.0F, 300.0F},
+        {"posterior_lock_ratio",
+         {100.0F, 30.0F, 300.0F},
          [](SweepSettings& s, float v) { s.tracker.posterior_lock_ratio = v; }},
-        {"centre_sigma_lab", {16.0F, 8.0F, 12.0F, 20.0F},
+        {"centre_sigma_lab",
+         {16.0F, 8.0F, 12.0F, 20.0F},
          [](SweepSettings& s, float v) { s.tracker.centre_sigma_lab = v; }},
-        {"obs_pose_ceiling_deg", {100.0F, 85.0F, 115.0F},
+        {"obs_pose_ceiling_deg",
+         {100.0F, 85.0F, 115.0F},
          [](SweepSettings& s, float v) { s.tracker.obs_pose_ceiling_deg = v; }},
-        {"idle_escape_every", {4.0F, 2.0F, 3.0F, 6.0F, 8.0F},
+        {"idle_escape_every",
+         {4.0F, 2.0F, 3.0F, 6.0F, 8.0F},
          [](SweepSettings& s, float v) { s.idle_escape_every = static_cast<int>(v); }},
     };
 }
 
 struct SweepVariant {
-    std::string axis;   // "baseline" for the untouched config
-    float value = 0.0F; // the moved knob's value (baseline: 0, unused)
+    std::string axis;    // "baseline" for the untouched config
+    float value = 0.0F;  // the moved knob's value (baseline: 0, unused)
     SweepSettings settings;
 };
 
@@ -270,7 +290,8 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
         if (recording::frame_overwritten(row.pass, max_pass)) {
             continue;
         }
-        const cv::Mat frame = cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             continue;
         }
@@ -300,7 +321,8 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
         // yes, colour evidence and capture-grade detection no.
         std::optional<FaceObservation> face;
         std::optional<FaceObservation> pose_only_face;
-        if (auto observed = observe_face(frame); observed.has_value() && all_cells_in_frame(observed->cells)) {
+        if (auto observed = observe_face(frame);
+            observed.has_value() && all_cells_in_frame(observed->cells)) {
             if (observed->pose_only) {
                 pose_only_face = std::move(*observed);
             } else {
@@ -323,7 +345,8 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
         std::optional<CornerObservation> corner;
         if (auto observed = observe_corner(frame, corner_hint ? &*corner_hint : nullptr);
             observed.has_value() && all_cells_in_frame(observed->top.cells) &&
-            all_cells_in_frame(observed->lower_left.cells) && all_cells_in_frame(observed->lower_right.cells)) {
+            all_cells_in_frame(observed->lower_left.cells) &&
+            all_cells_in_frame(observed->lower_right.cells)) {
             corner = std::move(*observed);
         }
 
@@ -331,17 +354,20 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
         bool corner_pose = false;
         bool face_pose = false;
         if (corner.has_value()) {
-            if (auto projected = project_cube_from_corner(*corner, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_corner(*corner, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 corner_pose = true;
             }
         } else if (face.has_value()) {
-            if (auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
                 face_pose = true;
             }
         } else if (pose_only_face.has_value()) {
-            if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_face(*pose_only_face, frame.size(), seed);
+                projected.has_value()) {
                 pose = *projected;
             }
         }
@@ -352,8 +378,10 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
             if (seed_prior) {
                 edge_hint = compute_edge_hint(*seed_prior);
             }
-            if (auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr); edge.has_value()) {
-                if (auto projected = project_cube_from_edge(*edge, frame.size(), seed); projected.has_value()) {
+            if (auto edge = observe_edge(frame, edge_hint ? &*edge_hint : nullptr);
+                edge.has_value()) {
+                if (auto projected = project_cube_from_edge(*edge, frame.size(), seed);
+                    projected.has_value()) {
                     pose = *projected;
                 }
             }
@@ -367,8 +395,10 @@ std::vector<CachedPass> load_clip_passes(const std::filesystem::path& dir) {
             if (corner_pose && corner) {
                 input.centre_lab_count = 3;
                 input.centre_lab[0] = lab_entry(corner->top.lab[cube::model::center_facelet_index]);
-                input.centre_lab[1] = lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
-                input.centre_lab[2] = lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
+                input.centre_lab[1] =
+                    lab_entry(corner->lower_left.lab[cube::model::center_facelet_index]);
+                input.centre_lab[2] =
+                    lab_entry(corner->lower_right.lab[cube::model::center_facelet_index]);
             } else if (face_pose && face) {
                 // Positive face-family provenance, as live: neither an
                 // edge pose nor a pose-only pass may borrow a coexisting
@@ -443,13 +473,14 @@ struct SweepMetrics {
 // default can't be verified).
 auto settings_fields(const SweepSettings& s) {
     const TrackerConfig& c = s.tracker;
-    return std::make_tuple(c.basin_ceiling_deg, c.max_interframe_deg, c.gauge_margin_deg, c.coast_sigma_rate_deg,
-                           c.motion_sigma_gain_deg, c.acquire_sigma_rate_deg, c.max_coast_sigma_deg, c.coast_timeout_ms,
-                           c.acquire_coast_timeout_ms, c.outlier_omega_deg_s, c.outlier_reanchor_count,
-                           c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend, c.omega_decay,
-                           c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab, c.unknown_face_log_likelihood,
-                           c.max_obs_log_penalty, c.belief_clamp, c.ref_blend, c.ref_consistency_sigma, c.min_dt_s,
-                           c.max_dt_s, s.idle_escape_every);
+    return std::make_tuple(
+        c.basin_ceiling_deg, c.max_interframe_deg, c.gauge_margin_deg, c.coast_sigma_rate_deg,
+        c.motion_sigma_gain_deg, c.acquire_sigma_rate_deg, c.max_coast_sigma_deg,
+        c.coast_timeout_ms, c.acquire_coast_timeout_ms, c.outlier_omega_deg_s,
+        c.outlier_reanchor_count, c.outlier_consistency_deg, c.obs_pose_ceiling_deg, c.omega_blend,
+        c.omega_decay, c.acquire_frames, c.posterior_lock_ratio, c.centre_sigma_lab,
+        c.unknown_face_log_likelihood, c.max_obs_log_penalty, c.belief_clamp, c.ref_blend,
+        c.ref_consistency_sigma, c.min_dt_s, c.max_dt_s, s.idle_escape_every);
 }
 
 SweepMetrics run_variant(const SweepSettings& settings, const std::vector<CachedPass>& inputs) {
@@ -492,8 +523,9 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
         }
         // Commit grade = the capture layer's actual bar: locked, with the
         // FRONT face's face-scoped certainty (see identity_certain_for).
-        const bool commit_grade = out.state == TrackState::locked && out.front_face &&
-                                  out.identity_certain_face[static_cast<std::size_t>(*out.front_face)];
+        const bool commit_grade =
+            out.state == TrackState::locked && out.front_face &&
+            out.identity_certain_face[static_cast<std::size_t>(*out.front_face)];
         if (out.gate == TrackGate::slip_evidence && last_front >= 0 &&
             epoch_certified[static_cast<std::size_t>(last_front)]) {
             ++m.certain_slip;
@@ -617,7 +649,8 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
     const std::filesystem::path root(root_env);
     const auto clips = collect_clip_dirs(root);
     if (clips.empty()) {
-        SKIP("no recording directories (index.csv) under " << root.string() << " - corpus not recorded yet");
+        SKIP("no recording directories (index.csv) under " << root.string()
+                                                           << " - corpus not recorded yet");
     }
 
     Shard shard;
@@ -645,7 +678,8 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
 
     std::printf(
         "variant,axis,value,clip,passes,obs,accepted,anchored,basin,margin,omega,implausible,slip,"
-        "locked,coasting,lost,certain,commit,certain_slip,skipped,epochs,lock_rate,mean_theta,max_theta,"
+        "locked,coasting,lost,certain,commit,certain_slip,skipped,epochs,lock_rate,mean_theta,max_"
+        "theta,"
         "mean_margin\n");
     const auto variants = build_sweep_variants();
     std::size_t rows = 0;
@@ -659,15 +693,18 @@ TEST_CASE("sweep TrackerConfig variants over the recorded corpus", "[.track-swee
             const double lock_rate = m.passes > 0 ? static_cast<double>(m.locked) / m.passes : 0.0;
             const double mean_theta = m.accepted > 0 ? m.theta_sum / m.accepted : 0.0;
             const double mean_margin = m.accepted > 0 ? m.margin_sum / m.accepted : 0.0;
-            std::printf("%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.4f,%.2f,%.2f,%.2f\n", v,
-                        variant.axis.c_str(), static_cast<double>(variant.value), clip_name.c_str(), m.passes,
-                        m.observations, m.accepted, m.anchored, m.basin, m.margin, m.omega_outlier, m.implausible,
-                        m.slip, m.locked, m.coasting, m.lost, m.certain, m.commit, m.certain_slip, m.skipped, m.epochs,
-                        lock_rate, mean_theta, static_cast<double>(m.theta_max), mean_margin);
+            std::printf(
+                "%zu,%s,%g,%s,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.4f,%.2f,%.2f,%."
+                "2f\n",
+                v, variant.axis.c_str(), static_cast<double>(variant.value), clip_name.c_str(),
+                m.passes, m.observations, m.accepted, m.anchored, m.basin, m.margin,
+                m.omega_outlier, m.implausible, m.slip, m.locked, m.coasting, m.lost, m.certain,
+                m.commit, m.certain_slip, m.skipped, m.epochs, lock_rate, mean_theta,
+                static_cast<double>(m.theta_max), mean_margin);
             ++rows;
         }
     }
-    std::printf("# %zu sweep rows (shard %d/%d, %zu variants, %zu clips)\n", rows, shard.index, shard.count,
-                variants.size(), clip_passes.size());
+    std::printf("# %zu sweep rows (shard %d/%d, %zu variants, %zu clips)\n", rows, shard.index,
+                shard.count, variants.size(), clip_passes.size());
     CHECK(rows > 0);
 }

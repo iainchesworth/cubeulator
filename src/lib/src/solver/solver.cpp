@@ -26,7 +26,7 @@ Cube random_scramble(unsigned seed, int move_count) noexcept {
 namespace {
 
 Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
-                        Result<std::vector<Move>> (*solve_fn)(const Cube&)) {
+                       Result<std::vector<Move>> (*solve_fn)(const Cube&)) {
     Result<std::vector<Move>> moves = solve_fn(cube);
     if (!moves.has_value()) {
         return std::unexpected(moves.error());
@@ -51,10 +51,12 @@ Result<Solution> solve(const Cube& scrambled) {
     if (Result<void> r = run_stage(solution, cube, Stage::Cross, solve_cross); !r.has_value()) {
         return std::unexpected(r.error());
     }
-    if (Result<void> r = run_stage(solution, cube, Stage::WhiteCorners, solve_corners); !r.has_value()) {
+    if (Result<void> r = run_stage(solution, cube, Stage::WhiteCorners, solve_corners);
+        !r.has_value()) {
         return std::unexpected(r.error());
     }
-    if (Result<void> r = run_stage(solution, cube, Stage::MiddleEdges, solve_middle_edges); !r.has_value()) {
+    if (Result<void> r = run_stage(solution, cube, Stage::MiddleEdges, solve_middle_edges);
+        !r.has_value()) {
         return std::unexpected(r.error());
     }
     if (Result<void> r = run_stage(solution, cube, Stage::Oll, solve_oll); !r.has_value()) {

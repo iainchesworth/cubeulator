@@ -122,7 +122,8 @@ TEST_CASE("rows a full ring lap behind the newest are flagged overwritten", "[re
     CHECK_FALSE(frame_overwritten(6, kRecordRingFrames + 5));
 }
 
-TEST_CASE("a same-resolution recording longer than the ring drops its overwritten head", "[replay]") {
+TEST_CASE("a same-resolution recording longer than the ring drops its overwritten head",
+          "[replay]") {
     // Within one app run the analysis resolution never changes, so every
     // row here records the same (w, h) - the case where the replay
     // harness's size cross-check is blind and the index-derived
@@ -190,7 +191,8 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
     }();
     REQUIRE(rows.size() == 2);
     for (const auto& row : rows) {
-        const cv::Mat frame = cv::imread((dir / frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread((dir / frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
         REQUIRE_FALSE(frame.empty());
         // The size cross-check is the replay harness's secondary guard
         // against cross-run leftovers (frame_overwritten covers same-run

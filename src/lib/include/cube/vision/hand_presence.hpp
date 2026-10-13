@@ -25,7 +25,8 @@ struct HandDetectionCapability {
 // Pure/I/O-free: the caller resolves model_file_present via
 // std::filesystem::exists() so this stays trivially unit-testable.
 [[nodiscard]] HandDetectionCapability check_hand_detection_capability(
-    bool model_file_present, const std::vector<std::string>& execution_providers, bool user_enabled);
+    bool model_file_present, const std::vector<std::string>& execution_providers,
+    bool user_enabled);
 
 // Whether a hand is present/occluding the frame - used to gate auto-advance
 // (a hand in frame means the reading isn't trustworthy yet).
@@ -57,7 +58,8 @@ public:
     OnnxHandPresenceDetector& operator=(OnnxHandPresenceDetector&&) noexcept;
 
     [[nodiscard]] static Result<std::unique_ptr<OnnxHandPresenceDetector>> create(
-        const std::filesystem::path& model_path, const std::vector<std::string>& execution_providers);
+        const std::filesystem::path& model_path,
+        const std::vector<std::string>& execution_providers);
 
     // For a model embedded as an application resource (e.g. a Qt .qrc)
     // rather than deployed as a loose file next to the executable - avoids
@@ -95,6 +97,7 @@ private:
 // directory (where a future installer/updater could place a newer one)
 // over the copy bundled next to the executable.
 [[nodiscard]] std::filesystem::path resolve_hand_model_path(
-    const std::filesystem::path& user_model_search_path, const std::filesystem::path& bundled_model_path);
+    const std::filesystem::path& user_model_search_path,
+    const std::filesystem::path& bundled_model_path);
 
 }  // namespace cube::vision

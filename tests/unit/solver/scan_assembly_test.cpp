@@ -19,8 +19,8 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
-using cube::solver::RotationHint;
 using cube::solver::rotation_hint_for_tracked_scan;
+using cube::solver::RotationHint;
 
 namespace {
 
@@ -59,7 +59,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
     std::array<Color, 9> rotated{};
     for (int row = 0; row < 3; ++row) {
         for (int col = 0; col < 3; ++col) {
-            rotated[static_cast<std::size_t>(3 * row + col)] = face[static_cast<std::size_t>(3 * (2 - col) + row)];
+            rotated[static_cast<std::size_t>(3 * row + col)] =
+                face[static_cast<std::size_t>(3 * (2 - col) + row)];
         }
     }
     return rotated;
@@ -73,7 +74,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
 std::array<Color, 9> outside_view(Face face, std::array<Color, 9> stickers) {
     if (face == Face::D || face == Face::R || face == Face::B) {
         for (int row = 0; row < 3; ++row) {
-            std::swap(stickers[static_cast<std::size_t>(row * 3)], stickers[static_cast<std::size_t>(row * 3 + 2)]);
+            std::swap(stickers[static_cast<std::size_t>(row * 3)],
+                      stickers[static_cast<std::size_t>(row * 3 + 2)]);
         }
     }
     return stickers;
@@ -141,7 +143,8 @@ TEST_CASE("assembly round-trips scrambled cubes through per-face rotation and or
     }
 }
 
-TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations", "[scan_assembly]") {
+TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations",
+          "[scan_assembly]") {
     // Every rotation of a uniform 9-sticker face is that same face, so all
     // 4096 combinations build the identical solved cube - the search must
     // treat that as one (degenerate) survivor, not as ambiguity.
@@ -185,7 +188,8 @@ TEST_CASE("a rotation hint lifts near-solved assembly ambiguity", "[scan_assembl
     REQUIRE(hinted->cube == original);
     // Mapping bookkeeping is hint-independent (centres pin it before the
     // search runs): canonical input order means the identity mapping.
-    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size(); ++face_index) {
+    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size();
+         ++face_index) {
         REQUIRE(hinted->input_index_of_face[face_index] == face_index);
     }
 }
@@ -244,7 +248,8 @@ TEST_CASE("an unusable hint behaves exactly like no hint", "[scan_assembly]") {
     REQUIRE(with_null.error() == cube::CubeError::invalid_cube_state);
 }
 
-TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing", "[scan_assembly]") {
+TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing",
+          "[scan_assembly]") {
     const auto input = ambiguous_near_solved_input();
 
     // Hinting only the uniform U face is worthless evidence: every
@@ -320,13 +325,15 @@ std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
         for (int signs = 0; signs < 8; ++signs) {
             std::array<std::array<int, 3>, 3> column{};
             for (int a = 0; a < 3; ++a) {
-                column[static_cast<std::size_t>(a)][static_cast<std::size_t>(perm[static_cast<std::size_t>(a)])] =
-                    ((signs >> a) & 1) != 0 ? -1 : 1;
+                column[static_cast<std::size_t>(a)]
+                      [static_cast<std::size_t>(perm[static_cast<std::size_t>(a)])] =
+                          ((signs >> a) & 1) != 0 ? -1 : 1;
             }
             const auto& cx = column[0];
             const auto& cy = column[1];
             const auto& cz = column[2];
-            const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+            const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) -
+                            cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
                             cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
             if (det == 1) {
                 orientations.push_back(column);
@@ -337,10 +344,14 @@ std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
 }
 
 Face face_of_direction(const std::array<int, 3>& d) {
-    if (d[0] == 1) return Face::R;
-    if (d[0] == -1) return Face::L;
-    if (d[1] == 1) return Face::U;
-    if (d[1] == -1) return Face::D;
+    if (d[0] == 1)
+        return Face::R;
+    if (d[0] == -1)
+        return Face::L;
+    if (d[1] == 1)
+        return Face::U;
+    if (d[1] == -1)
+        return Face::D;
     return d[2] == 1 ? Face::F : Face::B;
 }
 
@@ -364,7 +375,8 @@ int solver_index_of(Face face, const std::array<int, 3>& q) {
 
 }  // namespace
 
-TEST_CASE("the tracked-scan hint producer derives digits that re-orient every capture", "[scan_assembly]") {
+TEST_CASE("the tracked-scan hint producer derives digits that re-orient every capture",
+          "[scan_assembly]") {
     // For each of the 24 ways the tracked body can sit in the solver frame,
     // sample a scrambled cube through the body-frame cell convention
     // (face_projection.cpp's: col along +axis(a+1), row along +axis(a+2)),
@@ -399,9 +411,10 @@ TEST_CASE("the tracked-scan hint producer derives digits that re-orient every ca
                     p[static_cast<std::size_t>(axis_v)] = row - 1;
                     std::array<int, 3> q{};
                     for (int k = 0; k < 3; ++k) {
-                        q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
-                                                         column[1][static_cast<std::size_t>(k)] * p[1] +
-                                                         column[2][static_cast<std::size_t>(k)] * p[2];
+                        q[static_cast<std::size_t>(k)] =
+                            column[0][static_cast<std::size_t>(k)] * p[0] +
+                            column[1][static_cast<std::size_t>(k)] * p[1] +
+                            column[2][static_cast<std::size_t>(k)] * p[2];
                     }
                     colors[static_cast<std::size_t>(row * 3 + col)] =
                         cube.face(face)[static_cast<std::size_t>(solver_index_of(face, q))];
@@ -432,7 +445,8 @@ TEST_CASE("the tracked-scan hint producer derives digits that re-orient every ca
     }
 }
 
-TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a rotation", "[scan_assembly]") {
+TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a rotation",
+          "[scan_assembly]") {
     std::mt19937 rng{20260804};
     const Cube cube = scrambled_cube(rng, 30);
     const auto faces = model_faces_of(cube);  // input order = Face enum: U,D,L,R,F,B

@@ -45,7 +45,8 @@ StabilityReading StabilityTracker::update(const cv::Mat& bgr_frame) {
     const bool all_below_threshold =
         std::ranges::all_of(recent_scores_, [](float s) { return s < kSteadyMotionThreshold; });
 
-    return StabilityReading{.motion_score = motion_score, .is_steady = window_full && all_below_threshold};
+    return StabilityReading{.motion_score = motion_score,
+                            .is_steady = window_full && all_below_threshold};
 }
 
 }  // namespace cube::vision

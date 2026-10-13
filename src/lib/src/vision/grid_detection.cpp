@@ -167,7 +167,8 @@ struct LatticeHypothesis {
         }
         nearest_distances.push_back(best);
     }
-    const auto mid = nearest_distances.begin() + static_cast<std::ptrdiff_t>(nearest_distances.size() / 2);
+    const auto mid =
+        nearest_distances.begin() + static_cast<std::ptrdiff_t>(nearest_distances.size() / 2);
     std::ranges::nth_element(nearest_distances, mid);
     return *mid;
 }
@@ -177,9 +178,9 @@ struct LatticeHypothesis {
 // that round to the same slot. Returns the per-slot candidate index (-1 if
 // unmatched) and per-slot residual (lattice-unit distance to the exact
 // integer point, meaningless where unmatched).
-[[nodiscard]] std::pair<std::array<int, cells_per_grid>, std::array<float, cells_per_grid>> classify_candidates(
-    const std::vector<StickerCandidate>& candidates, cv::Point2f anchor, cv::Point2f col_step, cv::Point2f row_step,
-    double det) {
+[[nodiscard]] std::pair<std::array<int, cells_per_grid>, std::array<float, cells_per_grid>>
+classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f anchor,
+                    cv::Point2f col_step, cv::Point2f row_step, double det) {
     std::array<int, cells_per_grid> slots{};
     slots.fill(-1);
     std::array<float, cells_per_grid> residuals{};
@@ -190,8 +191,10 @@ struct LatticeHypothesis {
         // Solve d = u*col_step + v*row_step via Cramer's rule; u/v are
         // already in lattice-unit space (u=1 means "one col_step away")
         // since col_step/row_step carry the real measured pitch.
-        const double u = (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v = (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u =
+            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
+        const double v =
+            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         if (ru < -1.0 || ru > 1.0 || rv < -1.0 || rv > 1.0) {
@@ -223,13 +226,14 @@ struct LatticeHypothesis {
 // the matched set is then normalized to slot coordinates so long as it
 // spans at most one face (3x3), dropping the smallest-area matches when
 // it does not.
-[[nodiscard]] LatticeHypothesis fit_partial_hypothesis(const std::vector<StickerCandidate>& candidates,
-                                                        cv::Point2f seed_center, cv::Point2f col_step,
-                                                        cv::Point2f row_step) {
+[[nodiscard]] LatticeHypothesis fit_partial_hypothesis(
+    const std::vector<StickerCandidate>& candidates, cv::Point2f seed_center, cv::Point2f col_step,
+    cv::Point2f row_step) {
     LatticeHypothesis hyp{.anchor = {}, .col_step = col_step, .row_step = row_step};
     hyp.slot_candidate.fill(-1);
 
-    const double det = static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    const double det =
+        static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
     if (std::abs(det) < 1e-6) {
         return hyp;
     }
@@ -243,8 +247,10 @@ struct LatticeHypothesis {
     std::vector<RelativeMatch> matches;
     for (std::size_t idx = 0; idx < candidates.size(); ++idx) {
         const cv::Point2f d = candidates[idx].center - seed_center;
-        const double u = (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v = (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u =
+            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
+        const double v =
+            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         // One face is 3x3: anything further than 2 cells from the seed can
@@ -256,7 +262,9 @@ struct LatticeHypothesis {
         if (residual > kMaxLatticeResidualRatio) {
             continue;
         }
-        RelativeMatch match{.du = static_cast<int>(ru), .dv = static_cast<int>(rv), .candidate = idx,
+        RelativeMatch match{.du = static_cast<int>(ru),
+                            .dv = static_cast<int>(rv),
+                            .candidate = idx,
                             .residual = residual};
         // Two candidates rounding to the same relative cell: keep the closer.
         const auto existing = std::ranges::find_if(
@@ -328,8 +336,8 @@ struct LatticeHypothesis {
 // against a provisional anchor (median candidate center), re-centers the
 // anchor via least-squares over the resulting inliers, then reclassifies
 // once more against the refined anchor.
-[[nodiscard]] LatticeHypothesis fit_lattice_hypothesis(const std::vector<StickerCandidate>& candidates,
-                                                        cv::Point2f col_step, cv::Point2f row_step) {
+[[nodiscard]] LatticeHypothesis fit_lattice_hypothesis(
+    const std::vector<StickerCandidate>& candidates, cv::Point2f col_step, cv::Point2f row_step) {
     LatticeHypothesis hyp{.anchor = {}, .col_step = col_step, .row_step = row_step};
     hyp.slot_candidate.fill(-1);
 
@@ -353,7 +361,8 @@ struct LatticeHypothesis {
     std::ranges::nth_element(ys, mid_y);
     cv::Point2f anchor(*mid_x, *mid_y);
 
-    auto [provisional_slots, provisional_residuals] = classify_candidates(candidates, anchor, col_step, row_step, det);
+    auto [provisional_slots, provisional_residuals] =
+        classify_candidates(candidates, anchor, col_step, row_step, det);
 
     cv::Point2f offset_sum(0.0F, 0.0F);
     int matched = 0;
@@ -365,12 +374,14 @@ struct LatticeHypothesis {
             }
             const cv::Point2f expected_offset =
                 static_cast<float>(col - 1) * col_step + static_cast<float>(row - 1) * row_step;
-            offset_sum += candidates[static_cast<std::size_t>(provisional_slots[slot])].center - expected_offset;
+            offset_sum += candidates[static_cast<std::size_t>(provisional_slots[slot])].center -
+                          expected_offset;
             ++matched;
         }
     }
     if (matched > 0) {
-        anchor = cv::Point2f(offset_sum.x / static_cast<float>(matched), offset_sum.y / static_cast<float>(matched));
+        anchor = cv::Point2f(offset_sum.x / static_cast<float>(matched),
+                             offset_sum.y / static_cast<float>(matched));
     }
 
     auto [slots, residuals] = classify_candidates(candidates, anchor, col_step, row_step, det);
@@ -394,7 +405,8 @@ struct LatticeHypothesis {
 // perpendicular is then always the more-vertical row axis) and bounds
 // rotation tolerance to under ~45 degrees - comfortably past what a
 // hand-held cube facing the camera needs.
-[[nodiscard]] std::optional<LatticeHypothesis> find_best_lattice(const std::vector<StickerCandidate>& candidates) {
+[[nodiscard]] std::optional<LatticeHypothesis> find_best_lattice(
+    const std::vector<StickerCandidate>& candidates) {
     const float pitch = estimate_pitch(candidates);
     if (pitch <= 0.0F) {
         return std::nullopt;
@@ -420,11 +432,11 @@ struct LatticeHypothesis {
             auto hypothesis = fit_lattice_hypothesis(candidates, d, row_step);
             // Ordering: most inliers, then greatest matched area (see
             // LatticeHypothesis::matched_area), then tightest residual.
-            const bool better =
-                !best || hypothesis.inlier_count > best->inlier_count ||
-                (hypothesis.inlier_count == best->inlier_count &&
-                 (hypothesis.matched_area > best->matched_area ||
-                  (hypothesis.matched_area == best->matched_area && hypothesis.residual_sum < best->residual_sum)));
+            const bool better = !best || hypothesis.inlier_count > best->inlier_count ||
+                                (hypothesis.inlier_count == best->inlier_count &&
+                                 (hypothesis.matched_area > best->matched_area ||
+                                  (hypothesis.matched_area == best->matched_area &&
+                                   hypothesis.residual_sum < best->residual_sum)));
             if (better) {
                 best = std::move(hypothesis);
             }
@@ -443,7 +455,8 @@ struct LatticeHypothesis {
 // survives. Radius from median blob side (~half a cell) separates
 // same-sticker twins from genuinely adjacent cells; larger area wins a
 // collapse.
-[[nodiscard]] std::vector<StickerCandidate> collapse_duplicate_candidates(std::vector<StickerCandidate> candidates) {
+[[nodiscard]] std::vector<StickerCandidate> collapse_duplicate_candidates(
+    std::vector<StickerCandidate> candidates) {
     if (candidates.size() < 2) {
         return candidates;
     }
@@ -456,7 +469,8 @@ struct LatticeHypothesis {
     std::ranges::nth_element(sides, mid);
     const auto dedupe_radius = static_cast<float>(*mid * 0.5);
 
-    std::ranges::sort(candidates, {}, [](const StickerCandidate& candidate) { return -candidate.area; });
+    std::ranges::sort(candidates, {},
+                      [](const StickerCandidate& candidate) { return -candidate.area; });
     std::vector<StickerCandidate> unique;
     unique.reserve(candidates.size());
     for (const auto& candidate : candidates) {
@@ -474,7 +488,7 @@ struct LatticeHypothesis {
 // Median matched-cell width/height, used to size slots that had no matched
 // candidate (see make_extrapolated_bounds()).
 [[nodiscard]] cv::Size2f median_matched_size(const std::vector<StickerCandidate>& candidates,
-                                              const LatticeHypothesis& hypothesis) {
+                                             const LatticeHypothesis& hypothesis) {
     std::vector<float> widths;
     std::vector<float> heights;
     for (int slot = 0; slot < cells_per_grid; ++slot) {
@@ -482,8 +496,10 @@ struct LatticeHypothesis {
         if (idx < 0) {
             continue;
         }
-        widths.push_back(static_cast<float>(candidates[static_cast<std::size_t>(idx)].bounds.width));
-        heights.push_back(static_cast<float>(candidates[static_cast<std::size_t>(idx)].bounds.height));
+        widths.push_back(
+            static_cast<float>(candidates[static_cast<std::size_t>(idx)].bounds.width));
+        heights.push_back(
+            static_cast<float>(candidates[static_cast<std::size_t>(idx)].bounds.height));
     }
     const auto mid_w = widths.begin() + static_cast<std::ptrdiff_t>(widths.size() / 2);
     const auto mid_h = heights.begin() + static_cast<std::ptrdiff_t>(heights.size() / 2);
@@ -498,11 +514,14 @@ struct LatticeHypothesis {
 // frame - vision.cpp's sample_cell_color() does an unchecked pixel access
 // at exactly this region's reconstructed center, so an out-of-frame
 // extrapolation would crash it.
-[[nodiscard]] cv::Rect make_extrapolated_bounds(cv::Point2f center, cv::Size2f size, cv::Size frame_size) {
+[[nodiscard]] cv::Rect make_extrapolated_bounds(cv::Point2f center, cv::Size2f size,
+                                                cv::Size frame_size) {
     const int width = std::max(1, static_cast<int>(size.width));
     const int height = std::max(1, static_cast<int>(size.height));
-    const int safe_x = std::clamp(static_cast<int>(std::lround(center.x)), 0, std::max(0, frame_size.width - 1));
-    const int safe_y = std::clamp(static_cast<int>(std::lround(center.y)), 0, std::max(0, frame_size.height - 1));
+    const int safe_x =
+        std::clamp(static_cast<int>(std::lround(center.x)), 0, std::max(0, frame_size.width - 1));
+    const int safe_y =
+        std::clamp(static_cast<int>(std::lround(center.y)), 0, std::max(0, frame_size.height - 1));
     return cv::Rect(safe_x - width / 2, safe_y - height / 2, width, height);
 }
 
@@ -510,7 +529,8 @@ struct LatticeHypothesis {
 
 namespace detail {
 
-std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_mask, double max_aspect) {
+std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_mask,
+                                                          double max_aspect) {
     std::vector<std::vector<cv::Point>> contours;
     // RETR_LIST, not RETR_EXTERNAL: if a lighting gradient makes the
     // background register as foreground and swallows a sticker (the
@@ -520,7 +540,8 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
     // filtered out by the area cap below.
     cv::findContours(binary_mask, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
 
-    const double frame_area = static_cast<double>(binary_mask.cols) * static_cast<double>(binary_mask.rows);
+    const double frame_area =
+        static_cast<double>(binary_mask.cols) * static_cast<double>(binary_mask.rows);
     const double min_area = frame_area * kMinCellAreaFraction;
     const double max_area = frame_area * kMaxCellAreaFraction;
 
@@ -549,7 +570,7 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
             continue;
         }
         const float squareness = std::max(min_rect.size.width, min_rect.size.height) /
-                                  std::min(min_rect.size.width, min_rect.size.height);
+                                 std::min(min_rect.size.width, min_rect.size.height);
         if (squareness > max_aspect) {
             continue;
         }
@@ -568,8 +589,9 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         const cv::Rect bounds = cv::boundingRect(approx);
         candidates.push_back(StickerCandidate{
             .bounds = bounds,
-            .center = cv::Point2f(static_cast<float>(bounds.x) + static_cast<float>(bounds.width) / 2.0F,
-                                   static_cast<float>(bounds.y) + static_cast<float>(bounds.height) / 2.0F),
+            .center = cv::Point2f(
+                static_cast<float>(bounds.x) + static_cast<float>(bounds.width) / 2.0F,
+                static_cast<float>(bounds.y) + static_cast<float>(bounds.height) / 2.0F),
             .area = area,
         });
     }
@@ -595,9 +617,8 @@ namespace {
 // from a lit sticker), inverted so a truly black pocket (an undetected
 // sticker's gap, deep shadow) keeps reading as "missing" for lattice
 // extrapolation while a real-but-dark coloured tile still passes.
-[[nodiscard]] std::vector<StickerCandidate> find_brightness_candidates(const cv::Mat& bgr_frame,
-                                                                        cv::ThresholdTypes threshold_type,
-                                                                        double max_aspect) {
+[[nodiscard]] std::vector<StickerCandidate> find_brightness_candidates(
+    const cv::Mat& bgr_frame, cv::ThresholdTypes threshold_type, double max_aspect) {
     cv::Mat blurred;
     cv::GaussianBlur(bgr_frame, blurred, cv::Size(5, 5), 0);
 
@@ -607,7 +628,8 @@ namespace {
     cv::split(hsv, hsv_channels);
 
     cv::Mat v_eq;
-    cv::createCLAHE(kClaheClipLimit, cv::Size(kClaheTileGrid, kClaheTileGrid))->apply(hsv_channels[2], v_eq);
+    cv::createCLAHE(kClaheClipLimit, cv::Size(kClaheTileGrid, kClaheTileGrid))
+        ->apply(hsv_channels[2], v_eq);
 
     cv::Mat value_floor;
     cv::threshold(hsv_channels[2], value_floor, kMinBrightPathValue - 1, 255, cv::THRESH_BINARY);
@@ -623,8 +645,8 @@ namespace {
             block_size = std::max(block_size, kAdaptiveBlockMin);
 
             cv::Mat binary;
-            cv::adaptiveThreshold(v_eq, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, threshold_type, block_size,
-                                   threshold_c);
+            cv::adaptiveThreshold(v_eq, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C, threshold_type,
+                                  block_size, threshold_c);
             cv::bitwise_and(binary, value_floor, binary);
 
             // Close first to bridge small internal gaps (glare/seam noise
@@ -656,7 +678,8 @@ std::vector<StickerCandidate> find_square_candidates(const cv::Mat& bgr_frame, d
     return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY, max_aspect);
 }
 
-std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame, double max_aspect) {
+std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame,
+                                                          double max_aspect) {
     // The mirror image of find_square_candidates(), for light-bodied cubes:
     // a white/light plastic lattice between tiles makes every coloured cell
     // a local brightness MINIMUM, invisible to the brighter-than-local-mean
@@ -668,12 +691,14 @@ std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_fra
 // Fits the best 3x3 lattice explaining `candidates` (relaxed from the old
 // "exactly 9 candidates in exactly 3 even rows" requirement), extrapolating
 // bounds for any slot without a matched candidate.
-std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates, cv::Size frame_size) {
+std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates,
+                                                  cv::Size frame_size) {
     candidates = collapse_duplicate_candidates(std::move(candidates));
 
     if (candidates.size() > kMaxCandidatesForLatticeSearch) {
         std::ranges::partial_sort(
-            candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesForLatticeSearch), {},
+            candidates,
+            candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesForLatticeSearch), {},
             [](const StickerCandidate& candidate) { return -candidate.area; });
         candidates.resize(kMaxCandidatesForLatticeSearch);
     }
@@ -684,7 +709,8 @@ std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> 
     }
 
     const cv::Size2f fallback_size = median_matched_size(candidates, *hypothesis);
-    GridFitDetail fit{.anchor = hypothesis->anchor, .col_step = hypothesis->col_step,
+    GridFitDetail fit{.anchor = hypothesis->anchor,
+                      .col_step = hypothesis->col_step,
                       .row_step = hypothesis->row_step};
     fit.inlier_count = hypothesis->inlier_count;
     for (int row = 0; row < grid_dimension; ++row) {
@@ -697,8 +723,8 @@ std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> 
                 fit.cell_bounds[slot] = candidate.bounds;
             } else {
                 const cv::Point2f center = hypothesis->anchor +
-                                            static_cast<float>(col - 1) * hypothesis->col_step +
-                                            static_cast<float>(row - 1) * hypothesis->row_step;
+                                           static_cast<float>(col - 1) * hypothesis->col_step +
+                                           static_cast<float>(row - 1) * hypothesis->row_step;
                 fit.cell_bounds[slot] = make_extrapolated_bounds(center, fallback_size, frame_size);
             }
         }
@@ -714,7 +740,8 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
     }
     if (candidates.size() > kMaxCandidatesForLatticeSearch) {
         std::ranges::partial_sort(
-            candidates, candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesForLatticeSearch), {},
+            candidates,
+            candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidatesForLatticeSearch), {},
             [](const StickerCandidate& candidate) { return -candidate.area; });
         candidates.resize(kMaxCandidatesForLatticeSearch);
     }
@@ -752,7 +779,8 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
                 row_step = d.y < 0.0F ? -d : d;
                 col_step = cv::Point2f(row_step.y, -row_step.x);
             }
-            auto hypothesis = fit_partial_hypothesis(candidates, candidates[i].center, col_step, row_step);
+            auto hypothesis =
+                fit_partial_hypothesis(candidates, candidates[i].center, col_step, row_step);
             if (hypothesis.inlier_count < kMinPartialInliers) {
                 continue;
             }
@@ -783,8 +811,8 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
             const cv::Point2f da = existing.anchor - hypothesis.anchor;
             const cv::Point2f dc = existing.col_step - hypothesis.col_step;
             const cv::Point2f dr = existing.row_step - hypothesis.row_step;
-            return std::hypot(da.x, da.y) < pitch * 0.35F && std::hypot(dc.x, dc.y) < pitch * 0.25F &&
-                   std::hypot(dr.x, dr.y) < pitch * 0.25F;
+            return std::hypot(da.x, da.y) < pitch * 0.35F &&
+                   std::hypot(dc.x, dc.y) < pitch * 0.25F && std::hypot(dr.x, dr.y) < pitch * 0.25F;
         });
         if (!duplicate) {
             kept.push_back(std::move(hypothesis));
@@ -799,7 +827,8 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
         int max_col = -1;
         for (int row = 0; row < grid_dimension; ++row) {
             for (int col = 0; col < grid_dimension; ++col) {
-                if (hypothesis.slot_candidate[static_cast<std::size_t>(row * grid_dimension + col)] < 0) {
+                if (hypothesis
+                        .slot_candidate[static_cast<std::size_t>(row * grid_dimension + col)] < 0) {
                     continue;
                 }
                 min_row = std::min(min_row, row);
@@ -821,30 +850,36 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
                 bool in_frame = true;
                 for (int row = 0; row < grid_dimension && in_frame; ++row) {
                     for (int col = 0; col < grid_dimension && in_frame; ++col) {
-                        const cv::Point2f center = anchor + static_cast<float>(col - 1) * hypothesis.col_step +
-                                                   static_cast<float>(row - 1) * hypothesis.row_step;
+                        const cv::Point2f center =
+                            anchor + static_cast<float>(col - 1) * hypothesis.col_step +
+                            static_cast<float>(row - 1) * hypothesis.row_step;
                         in_frame = center.x >= kPlacementFrameMargin &&
-                                   center.x <= static_cast<float>(frame_size.width - 1) - kPlacementFrameMargin &&
+                                   center.x <= static_cast<float>(frame_size.width - 1) -
+                                                   kPlacementFrameMargin &&
                                    center.y >= kPlacementFrameMargin &&
-                                   center.y <= static_cast<float>(frame_size.height - 1) - kPlacementFrameMargin;
+                                   center.y <= static_cast<float>(frame_size.height - 1) -
+                                                   kPlacementFrameMargin;
                     }
                 }
                 if (!in_frame) {
                     continue;
                 }
 
-                PartialPlacement placement{.anchor = anchor, .col_step = hypothesis.col_step,
+                PartialPlacement placement{.anchor = anchor,
+                                           .col_step = hypothesis.col_step,
                                            .row_step = hypothesis.row_step};
                 placement.inlier_count = hypothesis.inlier_count;
                 for (int row = 0; row < grid_dimension; ++row) {
                     for (int col = 0; col < grid_dimension; ++col) {
-                        const int idx = hypothesis.slot_candidate[static_cast<std::size_t>(row * grid_dimension + col)];
+                        const int idx = hypothesis.slot_candidate[static_cast<std::size_t>(
+                            row * grid_dimension + col)];
                         if (idx < 0) {
                             continue;
                         }
-                        const auto shifted_slot = static_cast<std::size_t>((row + row_shift) * grid_dimension +
-                                                                           (col + col_shift));
-                        placement.matched_centers[shifted_slot] = candidates[static_cast<std::size_t>(idx)].center;
+                        const auto shifted_slot = static_cast<std::size_t>(
+                            (row + row_shift) * grid_dimension + (col + col_shift));
+                        placement.matched_centers[shifted_slot] =
+                            candidates[static_cast<std::size_t>(idx)].center;
                     }
                 }
                 placements.push_back(std::move(placement));
@@ -863,7 +898,8 @@ std::optional<GridFitDetail> detect_cube_grid_detailed(const cv::Mat& bgr_frame)
     if (bgr_frame.empty()) {
         return std::nullopt;
     }
-    return detail::fit_lattice_detailed(detail::find_square_candidates(bgr_frame), bgr_frame.size());
+    return detail::fit_lattice_detailed(detail::find_square_candidates(bgr_frame),
+                                        bgr_frame.size());
 }
 
 std::optional<GridDetection> detect_cube_grid(const cv::Mat& bgr_frame) {
@@ -874,14 +910,16 @@ std::optional<GridDetection> detect_cube_grid(const cv::Mat& bgr_frame) {
 
     std::array<CellRegion, cells_per_grid> cells;
     for (int slot = 0; slot < cells_per_grid; ++slot) {
-        cells[static_cast<std::size_t>(slot)] = CellRegion{.bounds = fit->cell_bounds[static_cast<std::size_t>(slot)]};
+        cells[static_cast<std::size_t>(slot)] =
+            CellRegion{.bounds = fit->cell_bounds[static_cast<std::size_t>(slot)]};
     }
 
     cv::Rect union_bounds = cells[0].bounds;
     for (const auto& cell : cells) {
         union_bounds |= cell.bounds;
     }
-    const double frame_area = static_cast<double>(bgr_frame.cols) * static_cast<double>(bgr_frame.rows);
+    const double frame_area =
+        static_cast<double>(bgr_frame.cols) * static_cast<double>(bgr_frame.rows);
     const double coverage = static_cast<double>(union_bounds.area()) / frame_area;
 
     return GridDetection{.cells = cells, .coverage_ratio = static_cast<float>(coverage)};

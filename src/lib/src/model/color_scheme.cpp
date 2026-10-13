@@ -70,7 +70,8 @@ ColorSchemeResult detect_color_scheme(
 
     const bool all_known =
         std::ranges::all_of(result.face_colors, [](const auto& c) { return c.has_value(); });
-    result.confidence = all_known ? ColorSchemeConfidence::confirmed : ColorSchemeConfidence::partial;
+    result.confidence =
+        all_known ? ColorSchemeConfidence::confirmed : ColorSchemeConfidence::partial;
     return result;
 }
 

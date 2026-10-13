@@ -109,8 +109,10 @@ TEST_CASE("exclusivity rules reject contradictory annotations", "[groundtruth]")
         {"start":0,"end":10,"tags":["occluded"]}]})")
                     .has_value());
     // Unknown tag, reversed range.
-    CHECK_FALSE(parse_segments(R"({"segments":[{"start":0,"end":10,"tags":["wobbly"]}]})").has_value());
-    CHECK_FALSE(parse_segments(R"({"segments":[{"start":10,"end":0,"tags":["absent"]}]})").has_value());
+    CHECK_FALSE(
+        parse_segments(R"({"segments":[{"start":0,"end":10,"tags":["wobbly"]}]})").has_value());
+    CHECK_FALSE(
+        parse_segments(R"({"segments":[{"start":10,"end":0,"tags":["absent"]}]})").has_value());
 }
 
 TEST_CASE("keyframe validation names the defect", "[groundtruth]") {
@@ -131,7 +133,8 @@ TEST_CASE("keyframe validation names the defect", "[groundtruth]") {
     CHECK(duplicate.error().find("duplicate") != std::string::npos);
 
     // Out-of-range id, bad face letter, missing quad corner.
-    CHECK_FALSE(parse_keyframe(R"({"pass":1,"corners":[{"model_id":8,"x":0,"y":0}],"faces":[]})").has_value());
+    CHECK_FALSE(parse_keyframe(R"({"pass":1,"corners":[{"model_id":8,"x":0,"y":0}],"faces":[]})")
+                    .has_value());
     CHECK_FALSE(parse_keyframe(R"({"pass":1,"corners":[],
       "faces":[{"face":"X","quad":{},"centres":[]}]})")
                     .has_value());

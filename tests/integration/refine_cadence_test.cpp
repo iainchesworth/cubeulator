@@ -63,12 +63,13 @@ private:
 const std::filesystem::path kModelPath = "models/cube_corner_pose.onnx";
 // A real-webcam frame the detector anchors on (score 0.93). Local only:
 // webcam frames show the person holding the cube and are not committed.
-const std::filesystem::path kFramePath =
-    std::filesystem::path(CUBE_TEST_DATA_DIR) / "captures" / "daylight" / "debug" / "frame_analysis_0.png";
+const std::filesystem::path kFramePath = std::filesystem::path(CUBE_TEST_DATA_DIR) / "captures" /
+                                         "daylight" / "debug" / "frame_analysis_0.png";
 
 }  // namespace
 
-TEST_CASE("pose refinement runs on every live frame, not only detector frames", "[pipeline][refine]") {
+TEST_CASE("pose refinement runs on every live frame, not only detector frames",
+          "[pipeline][refine]") {
     if (!std::filesystem::exists(kModelPath)) {
         SKIP("corner model not deployed beside the test binary");
     }
