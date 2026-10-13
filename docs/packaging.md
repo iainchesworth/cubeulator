@@ -38,6 +38,11 @@ cmake --build --preset windows-msvc-release
 cpack --config build/windows-msvc-release/CPackConfig.cmake -G NSIS
 ```
 
+CPack writes the package, and its staging tree, to the directory it is run
+from (CI runs it from the repository root and looks for the package there).
+Qt's QML tree is deep: if the staging path passes 260 characters NSIS cannot
+read it, so on Windows run from a short directory or pass `-B C:\cpk`.
+
 Needs, besides the build's own tools:
 
 | | needs |

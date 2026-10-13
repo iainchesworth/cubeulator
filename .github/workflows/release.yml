@@ -233,25 +233,25 @@ jobs:
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
           PACKAGE_GENERATORS: ${{ matrix.generators }}
+        # CPack writes the package to the directory it is run from, the
+        # workspace root.
         run: cpack --config "build/${CMAKE_PRESET}/CPackConfig.cmake" -G "${PACKAGE_GENERATORS}"
 
       # The same assertions CI makes on every push: Qt, the icon, the
       # identifier, the notices. A release that fails them is not published.
       - name: Check the package contents
         shell: bash
-        env:
-          CMAKE_PRESET: ${{ matrix.preset }}
-        run: packaging/check-package.sh "build/${CMAKE_PRESET}"
+        run: packaging/check-package.sh .
 
       - name: Upload the package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: package-${{ matrix.artifact }}
           path: |
-            build/${{ matrix.preset }}/Cubeulator-*.exe
-            build/${{ matrix.preset }}/Cubeulator-*.dmg
-            build/${{ matrix.preset }}/Cubeulator-*.deb
-            build/${{ matrix.preset }}/Cubeulator-*.rpm
+            Cubeulator-*.exe
+            Cubeulator-*.dmg
+            Cubeulator-*.deb
+            Cubeulator-*.rpm
           if-no-files-found: error
 
   publish:

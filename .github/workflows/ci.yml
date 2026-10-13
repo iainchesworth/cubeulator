@@ -442,6 +442,9 @@ jobs:
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
           PACKAGE_GENERATORS: ${{ matrix.package_generators }}
+        # CPack writes the package to the directory it is run from, the
+        # workspace root; its staging tree is there too, kept short because
+        # NSIS stops at 260 characters.
         run: cpack --config "build/${CMAKE_PRESET}/CPackConfig.cmake" -G "${PACKAGE_GENERATORS}"
 
       - name: Upload package
@@ -449,10 +452,10 @@ jobs:
         with:
           name: ${{ matrix.package_artifact }}
           path: |
-            build/${{ matrix.preset }}/Cubeulator-*.exe
-            build/${{ matrix.preset }}/Cubeulator-*.dmg
-            build/${{ matrix.preset }}/Cubeulator-*.deb
-            build/${{ matrix.preset }}/Cubeulator-*.rpm
+            Cubeulator-*.exe
+            Cubeulator-*.dmg
+            Cubeulator-*.deb
+            Cubeulator-*.rpm
           if-no-files-found: error
 
       # A package that built but is missing its Qt (a deploy script that
@@ -461,9 +464,7 @@ jobs:
       # workflow runs the same script on the same packages.
       - name: Check the package contents
         shell: bash
-        env:
-          CMAKE_PRESET: ${{ matrix.preset }}
-        run: packaging/check-package.sh "build/${CMAKE_PRESET}"
+        run: packaging/check-package.sh .
 
       # After the upload, so that a metadata complaint cannot lose the package.
       - name: Validate desktop entry and AppStream metadata (Linux)
