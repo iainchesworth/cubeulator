@@ -4,6 +4,7 @@
 #include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
+#include <cube/vision/corner_fit.hpp>
 
 #include <opencv2/imgproc.hpp>
 
@@ -432,6 +433,28 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     return colours;
 }
 
+// The cube among several that the six sides make, if the corner reads say
+// which: the one that most of them fit, and more than any other. A read
+// that fits every candidate (it showed sides whose edges the candidates
+// agree on) says nothing, and a read that fits none is a blurred frame.
+[[nodiscard]] std::optional<solver::Cube> choose_by_corners(
+    const std::vector<solver::Cube>& candidates, const std::vector<CornerRead>& corners,
+    const SessionColours& colours) {
+    std::vector<std::size_t> fits(candidates.size(), 0);
+    for (const CornerRead& read : corners) {
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            if (fit_corner(read, candidates[i], colours).fits) {
+                ++fits[i];
+            }
+        }
+    }
+    const auto best = std::max_element(fits.begin(), fits.end());
+    if (best == fits.end() || *best == 0 || std::count(fits.begin(), fits.end(), *best) != 1) {
+        return std::nullopt;
+    }
+    return candidates[static_cast<std::size_t>(best - fits.begin())];
+}
+
 // Assembles the cube, letting physical validity settle which colour is which
 // where colour alone cannot.
 //
@@ -448,7 +471,24 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 // valid cube wrongly. The pair that really was confused is the pair that
 // looks alike, so the exchange between the closest two colours wins.
 [[nodiscard]] Result<ScannedCube> assemble(const NamedSides& named,
-                                           const std::array<CapturedFace, 6>& faces) {
+                                           const std::array<CapturedFace, 6>& faces,
+                                           const std::vector<CornerRead>& corners) {
+    // A naming that makes one cube is done. One that makes several is a
+    // valid naming, so exchanging names would only invent a different cube:
+    // the sides themselves are ambiguous, and only more than six flat
+    // views can say which.
+    const std::vector<solver::Cube> candidates = solver::assemble_all_scanned_faces(named);
+    if (candidates.size() == 1) {
+        return ScannedCube{candidates.front(), colours_of(named, faces)};
+    }
+    if (candidates.size() > 1) {
+        const SessionColours colours = colours_of(named, faces);
+        if (const auto chosen = choose_by_corners(candidates, corners, colours);
+            chosen.has_value()) {
+            return ScannedCube{*chosen, colours};
+        }
+        return std::unexpected(CubeError::ambiguous_scan);
+    }
     const Result<solver::Cube> direct = solver::assemble_scanned_faces(named);
     if (direct.has_value()) {
         return ScannedCube{*direct, colours_of(named, faces)};
@@ -561,6 +601,7 @@ cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
 
 void SideScan::reset() {
     groups_.clear();
+    corners_.clear();
     previous_centre_.reset();
     in_view_.reset();
 }
@@ -599,6 +640,19 @@ void SideScan::add(const std::optional<SideRead>& read) {
         groups_.push_back(Group{.fused = read->lab, .reads = {read->lab}, .roll = 0});
         in_view_ = groups_.size() - 1;
     }
+}
+
+void SideScan::add_corner(const std::optional<CornerRead>& read) {
+    if (!read.has_value()) {
+        return;
+    }
+    // Bounded: the newest are the ones worth having, and each is a few
+    // hundred bytes.
+    constexpr std::size_t kKeptCornerReads = 48;
+    if (corners_.size() >= kKeptCornerReads) {
+        corners_.erase(corners_.begin());
+    }
+    corners_.push_back(*read);
 }
 
 std::size_t SideScan::reads_in_view() const noexcept {
@@ -666,7 +720,7 @@ Result<ScannedCube> SideScan::scanned() const {
     if (!named) {
         return std::unexpected(named.error());
     }
-    return assemble(*named, faces);
+    return assemble(*named, faces, corners_);
 }
 
 }  // namespace cube::vision

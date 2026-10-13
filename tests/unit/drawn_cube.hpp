@@ -141,6 +141,11 @@ inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
 // camera-handed on U, F, L and mirror-handed on D, R, B (see
 // scan_assembly.hpp), so the outside view of those three is the
 // column-flipped solver array.
+//
+// For D that is a half-turn away from cube::solver::outside_view, whose D is
+// the top-bottom mirror. A read of one side cannot tell (its roll is not
+// known), so square-on drawings do not care; where a side's neighbours
+// matter, as in a corner view, draw from cube::solver::outside_view.
 [[nodiscard]] inline std::array<solver::Color, 9> outside_view(const solver::Cube& cube,
                                                                solver::Face face) {
     std::array<solver::Color, 9> stickers = cube.face(face);
@@ -202,6 +207,65 @@ inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
             return cube;
         }
     }
+}
+
+// Two sides of a cube turned corner-on: `left` and `right` meet at a vertical
+// edge `edge_x` pixels from the left, `edge_y` high, each foreshortened by its
+// own column step and tilted towards the horizon by `tilt` per column, so the
+// pair reads as the near corner of a cube seen a little from above. Rows are
+// vertical, `pitch` apart. Each side is row-major from its top-left as the
+// camera sees it, so `left`'s right column is against `right`'s left column.
+struct CornerPose {
+    float edge_x = 320.0F;
+    float edge_y = 180.0F;
+    float pitch = 40.0F;
+    float left_width = 30.0F;   // column step of the left side, pixels
+    float right_width = 24.0F;  // and of the right
+    float tilt = 4.0F;          // rise per column away from the shared edge
+};
+
+[[nodiscard]] inline cv::Mat draw_corner(const std::array<solver::Color, 9>& left,
+                                         const std::array<solver::Color, 9>& right,
+                                         const CornerPose& pose = {}, const Drawing& drawing = {}) {
+    cv::Mat frame = room(drawing.size);
+    const float top = pose.edge_y - 1.5F * pose.pitch;
+
+    // A cell (column, row) of a side whose column step is (dx, dy) and whose
+    // cell (0,0) has its top-left corner at `origin`.
+    const auto corner = [&](const cv::Point2f& origin, float dx, float dy, float column,
+                            float row) {
+        return cv::Point(
+            cv::Point2f(origin.x + column * dx, origin.y + column * dy + row * pose.pitch));
+    };
+    const auto fill_side = [&](const cv::Point2f& origin, float dx, float dy,
+                               const std::array<solver::Color, 9>& stickers) {
+        const std::array<cv::Point, 4> backing = {
+            corner(origin, dx, dy, -0.08F, -0.08F), corner(origin, dx, dy, 3.08F, -0.08F),
+            corner(origin, dx, dy, 3.08F, 3.08F), corner(origin, dx, dy, -0.08F, 3.08F)};
+        cv::fillConvexPoly(frame, backing.data(), 4, cv::Scalar(16, 16, 16), cv::LINE_AA);
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                const float c = static_cast<float>(column);
+                const float r = static_cast<float>(row);
+                const std::array<cv::Point, 4> quad = {corner(origin, dx, dy, c + 0.1F, r + 0.1F),
+                                                       corner(origin, dx, dy, c + 0.9F, r + 0.1F),
+                                                       corner(origin, dx, dy, c + 0.9F, r + 0.9F),
+                                                       corner(origin, dx, dy, c + 0.1F, r + 0.9F)};
+                cv::fillConvexPoly(
+                    frame, quad.data(), 4,
+                    drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]),
+                    cv::LINE_AA);
+            }
+        }
+    };
+
+    // Left side: its right edge is the shared one; columns step right and down
+    // towards it, so its far (left) edge is higher.
+    fill_side({pose.edge_x - 3.0F * pose.left_width, top - 3.0F * pose.tilt}, pose.left_width,
+              pose.tilt, left);
+    // Right side: its left edge is the shared one; columns step right and up.
+    fill_side({pose.edge_x, top}, pose.right_width, -pose.tilt, right);
+    return frame;
 }
 
 }  // namespace cube::test

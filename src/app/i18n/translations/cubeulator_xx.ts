@@ -705,6 +705,11 @@ In your hands.</source>
         <extracomment>Guidance when six sides are read but something is wrong.</extracomment>
         <translation>[Thésé sîx sîdés dõ nõt màké à vàlîd cûbé yét. Shõw éàch sîdé àgàîn, sqûàré tõ thé càmérà. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
+    <message id="scan.guide.ambiguous">
+        <source>These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.</source>
+        <extracomment>Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which.</extracomment>
+        <translation>[Thésé sîx sîdés fît tõgéthér în mõré thàn õné wày. Tûrn thé cûbé slõwly sõ thàt twõ sîdés shõw àt õncé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
+    </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>
