@@ -14,9 +14,6 @@ on:
     - cron: "50 3 * * 1"
   workflow_dispatch:
 
-env:
-  ZIZMOR_VERSION: "1.27.0"
-
 permissions: {}
 
 concurrency:
@@ -39,9 +36,11 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
 
+      # The version is pinned in ci/requirements-zizmor.txt, which
+      # Dependabot's pip ecosystem for /ci keeps current.
       - name: Run zizmor
         continue-on-error: true
-        run: uvx "zizmor@${ZIZMOR_VERSION}" --format=sarif . > results.sarif
+        run: uv run --no-project --with-requirements ci/requirements-zizmor.txt -- zizmor --format=sarif . > results.sarif
 
       - name: Upload SARIF
         uses: github/codeql-action/upload-sarif@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
