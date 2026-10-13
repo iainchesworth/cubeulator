@@ -22,24 +22,8 @@
     "elected": "GPL-3.0-only",
     "expectedQtVersion": "6.12",
     "fileAliases": {
-      "qt6entrypoint": "qtbase/EntryPointPrivate",
-      "qwindows": "qtbase/QWindowsIntegrationPlugin",
-      "qwindowsd": "qtbase/QWindowsIntegrationPlugin",
-      "qminimal": "qtbase/QMinimalIntegrationPlugin",
-      "qoffscreen": "qtbase/QOffscreenIntegrationPlugin",
-      "qmodernwindowsstyle": "qtbase/QModernWindowsStylePlugin",
-      "qgif": "qtbase/QGifPlugin",
-      "qico": "qtbase/QICOPlugin",
-      "qjpeg": "qtbase/QJpegPlugin",
-      "qsvg": "qtsvg/QSvgPlugin",
-      "qsvgicon": "qtsvg/QSvgIconPlugin",
-      "qtuiotouchplugin": "qtbase/QTuioTouchPlugin",
-      "qnetworklistmanager": "qtbase/QNLMNIPlugin",
-      "qschannelbackend": "qtbase/QSchannelBackendPlugin",
-      "qcertonlybackend": "qtbase/QTlsBackendCertOnlyPlugin",
-      "qopensslbackend": "qtbase/QTlsBackendOpenSSLPlugin",
-      "qmldbg_quick3dprofiler": "qtquick3d/QQuick3DProfilerAdapterFactoryPlugin",
-      "quickwindowplugin": "qtdeclarative/quickwindow"
+      "_comment": "Only for libraries the Qt SBOMs do not list as packaged binaries; qt-modules.json 'files' is generated and covers every plugin and module library the SBOMs name.",
+      "qt6entrypoint": "qtbase/EntryPointPrivate"
     },
     "qmlImports": {
       "QtQuick": [
@@ -80,10 +64,6 @@
       "qtshadertools": "Qt Shader Tools",
       "qtsvg": "Qt SVG",
       "qttranslations": "Qt translations"
-    },
-    "filePrefixes": {
-      "_comment": "A deployed plugin whose file name has no entry of its own is attributed to the module that provides the family.",
-      "qmldbg_": "qtdeclarative/Qml"
     },
     "deployedRoots": {
       "_comment": [
@@ -186,13 +166,15 @@
     "FTL OR GPL-2.0-only": "FTL",
     "CC0-1.0 OR Apache-2.0": "Apache-2.0",
     "Apache-2.0 OR MIT": "MIT",
-    "LicenseRef-Qt-Commercial OR BSD-3-Clause": "BSD-3-Clause"
+    "LicenseRef-Qt-Commercial OR BSD-3-Clause": "BSD-3-Clause",
+    "AFL-2.1 OR GPL-2.0-or-later": "GPL-3.0-only"
   },
   "textExemptions": {
     "_comment": "SPDX ids whose terms impose no notice or text-reproduction duty, so no text is bundled for them.",
     "CC0-1.0": "public-domain dedication",
     "LicenseRef-SHA1-Public-Domain": "public domain",
-    "LicenseRef-Qt-Commercial": "not a licence this build uses; the commercial option is not elected"
+    "LicenseRef-Qt-Commercial": "not a licence this build uses; the commercial option is not elected",
+    "blessing": "SQLite's public-domain dedication (a blessing, not a licence with conditions); no text has to be reproduced"
   },
   "components": [
     {
