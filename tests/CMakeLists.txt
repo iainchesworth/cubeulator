@@ -354,6 +354,23 @@ if(CUBEULATOR_BUILD_APP)
     catch_discover_tests(cube_i18n_screen_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_i18n_screen_tests>")
 
+    # The system tests (tests/system, E0a) gain the language cases when they
+    # are in the tree: the language switched live in the real window, English
+    # to the pseudo-locale to Hebrew and back, the layout mirrored and the cube
+    # not, nothing cut off. Deferred, so that it does not matter whether this
+    # block comes before or after tests/system in this file. The cases need
+    # cube::i18n::install() in AppRuntime's constructor (docs/i18n.md).
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/system/CMakeLists.txt")
+        function(cube_i18n_extend_system_tests)
+            if(TARGET cube_system_tests)
+                target_sources(cube_system_tests PRIVATE
+                    "${CMAKE_CURRENT_SOURCE_DIR}/i18n/system/language_test.cpp")
+                target_link_libraries(cube_system_tests PRIVATE cube_app_i18n)
+            endif()
+        endfunction()
+        cmake_language(DEFER CALL cube_i18n_extend_system_tests)
+    endif()
+
     # The two gates that are scripts: the catalogues against strings.json (the
     # family's "rerun the update and fail on a diff") and the literal lint.
     find_package(Python3 COMPONENTS Interpreter)

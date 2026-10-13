@@ -19,7 +19,11 @@ delete the allowlist entry, run `ctest -R i18n`.
 
 Besides the literals:
 
-- **Solve lane.** Nothing in `Cube3DView.qml` or `HeldCube` has to change for
+- **Solve lane.** `solve.rescan` is placed off the left edge of the window in a
+  right-to-left language (found by `tests/i18n/system/language_test.cpp`, at
+  every window width from 720 up): `SolveScreen.qml` positions it with an x
+  that does not follow the layout; use `anchors.left`/`anchors.right`, which
+  mirror. Nothing in `Cube3DView.qml` or `HeldCube` has to change for
   right to left: the 3D cube is not affected by layout mirroring, and a test
   (`cube_i18n_screen_tests`) holds the cube and all 18 turns to the solver's
   in a mirrored root. The turn wording is built in QML from fragments

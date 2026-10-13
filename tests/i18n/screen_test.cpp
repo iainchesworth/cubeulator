@@ -151,6 +151,28 @@ public:
         return item->mapToItem(screen_.get(), QPointF(0, 0)).x();
     }
 
+    // The buttons pushed below the bottom of the screen, which cannot be
+    // pressed. Inside a scrolling area below the fold is where they belong.
+    [[nodiscard]] QStringList buttons_below_screen() const {
+        QStringList bad;
+        visit(screen_.get(), [&](QQuickItem* item) {
+            if (!item->isVisible() ||
+                !QString::fromLatin1(item->metaObject()->className()).startsWith(QLatin1String("AppButton"))) {
+                return;
+            }
+            for (const QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
+                if (up->inherits("QQuickFlickable")) {
+                    return;
+                }
+            }
+            const QPointF bottom = item->mapToItem(screen_.get(), QPointF(0, item->height()));
+            if (bottom.y() > screen_->height() + 0.5) {
+                bad.append(item->property("text").toString());
+            }
+        });
+        return bad;
+    }
+
     // The labels that do not fit inside the button they are in.
     [[nodiscard]] QStringList labels_outside_buttons() const {
         QStringList bad;
@@ -321,6 +343,11 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
             // than a fixed-width button runs out of it.
             for (const QString& overflow : screen.labels_outside_buttons()) {
                 FAIL_CHECK("label outside its button: " << str(overflow));
+            }
+            // And a button the longer text has pushed off the bottom of the
+            // window is a button nobody can press.
+            for (const QString& pushed : screen.buttons_below_screen()) {
+                FAIL_CHECK("button below the window: " << str(pushed));
             }
         }
     }

@@ -38,6 +38,7 @@ Rectangle {
 
     // ---- narrow ----
     Column {
+        id: narrowColumn
         visible: !root.wide
         anchors.fill: parent
         anchors.margins: Theme.space6
@@ -49,16 +50,19 @@ Rectangle {
             Icon { anchors.centerIn: parent; name: "camera"; width: 30; height: 30 }
         }
         Text {
+            id: narrowTitle
             text: root.denied ? qsTrId("permission.refused.title") : qsTrId("permission.title")
             font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 25; color: Theme.ink
             width: parent.width; wrapMode: Text.WordWrap
         }
         Text {
+            id: narrowBody
             text: root.denied ? qsTrId("permission.refused.body") : qsTrId("permission.body")
             font.family: Theme.fontHeading; font.pixelSize: 14; color: Theme.ink
             width: parent.width; wrapMode: Text.WordWrap
         }
         Column {
+            id: narrowPoints
             width: parent.width
             spacing: Theme.space3
             topPadding: Theme.space2
@@ -70,8 +74,16 @@ Rectangle {
                 }
             }
         }
-        Item { width: 1; height: root.height - 430 }
+        // What is left over, not a number worked out for the English: a longer
+        // title or body pushes the buttons down only as far as it must, and
+        // they stay in the window.
+        Item {
+            width: 1
+            height: Math.max(0, narrowColumn.height - (56 + narrowTitle.height + narrowBody.height
+                + narrowPoints.height + narrowActions.height + narrowColumn.spacing * 5))
+        }
         Column {
+            id: narrowActions
             width: parent.width
             spacing: Theme.space2
             AppButton {
@@ -119,7 +131,12 @@ Rectangle {
                 font.family: Theme.fontHeading; font.pixelSize: 15; color: Theme.ink
                 width: 380; wrapMode: Text.WordWrap
             }
-            Row {
+            // A Flow, not a Row: three buttons whose labels run to 40% more in
+            // another language are wider than this pane, and in a right-to-left
+            // language the pane is on the right, so what does not fit would go
+            // off the edge of the window.
+            Flow {
+                width: parent.width - parent.padding * 2
                 spacing: Theme.space3
                 topPadding: Theme.space3
                 AppButton {
