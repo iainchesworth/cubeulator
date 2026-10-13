@@ -91,9 +91,10 @@ change is a reviewed diff:
 | | pinned to | kept current by |
 |---|---|---|
 | Every GitHub Action, and the composite actions in `.github/actions` | A full commit SHA, with the version in a trailing comment | Dependabot, weekly, grouped, with a **7-day cooldown**: a release is not proposed until it has been out a week |
-| CMake and Ninja (`lukka/get-cmake`) | `cmakeVersion` / `ninjaVersion`, exact | By hand, with the actions |
+| CMake and Ninja (`lukka/get-cmake`) | `cmakeVersion` / `ninjaVersion`, exact, and one the pinned action's catalog lists: a CMake newer than the action (4.4.4 against `get-cmake` 4.4.2, in October 2026) fails with "Cannot match ... in the catalog" until the action is bumped | By hand, with the actions |
 | NSIS (`choco install nsis`) | `--version`, exact | By hand |
-| `gcovr`, zizmor (`uvx zizmor@...`) | `==` / `ZIZMOR_VERSION`, exact | By hand |
+| `gcovr` | `==`, exact | By hand |
+| zizmor | `ci/requirements-zizmor.txt`, exact | Dependabot (`pip`, `/ci`), weekly |
 | mkdocs and its theme | `docs/requirements.txt`, exact (their own dependencies still float) | By hand |
 | Qt (`install-qt-action`) | `6.8.3`, the LTS line | By hand, deliberately: moving Qt moves the app's platform |
 | vcpkg and the ports | The submodule commit and `builtin-baseline` | By hand |

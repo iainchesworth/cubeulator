@@ -58,7 +58,7 @@ jobs:
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "4.4.4"
+          cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
