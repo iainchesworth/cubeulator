@@ -162,8 +162,17 @@ jobs:
       # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
       # It must match the compiler; it pins libomp5 to 23, which supersedes
       # the libomp-21-dev this job used with Clang 21.
+      #
+      # libclang-rt-23-dev: the sanitizer runtimes. The debug preset this job
+      # builds links with -fsanitize=address, and clang-23 only Recommends its
+      # runtime, which ci/install-llvm.sh (--no-install-recommends) does not
+      # install: the link of bin/cube_scan failed with "cannot find
+      # .../lib/clang/23/lib/x86_64-pc-linux-gnu/libclang_rt.asan.a" after the
+      # whole library had compiled. The package ships the runtimes under
+      # lib/clang/23/lib/linux/libclang_rt.<name>-x86_64.a, which clang falls
+      # back to when the per-target directory has none.
       - name: Install Clang 23
-        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev libclang-rt-23-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
