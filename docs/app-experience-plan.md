@@ -135,9 +135,12 @@ default above, the answer stands.
   Publisher and identifier follow the account, and Iain confirmed both
   after the move: the publisher is written "Iain Chesworth Labs" in About
   and the packages, the copyright line stays "Copyright © 2026 Iain
-  Chesworth", and the identifier is `org.iainchesworthlabs.cubeulator`
+  Chesworth", and the identifier is `com.iainchesworthlabs.cubeulator`,
+  the form ICL Forge's macOS apps use under the same account
   (`design/family.md` D1 and D9, `brief.md` D12). Before the move the
-  answers were "Iain Chesworth" and `org.iainchesworth.cubeulator`.
+  answers were "Iain Chesworth" and `org.iainchesworth.cubeulator`. For
+  about an hour on 2026-10-13 this plan said `org.iainchesworthlabs.`; that
+  came from a question that did not offer the `com.` form, and is withdrawn.
 
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
@@ -446,7 +449,7 @@ Countdown Solver and Automate. The full account, with sources, is
 - D1: the publisher follows the account. The repository moved to
   `iainchesworthlabs` the same day, so it is **Iain Chesworth Labs**, with
   the copyright line in Iain's own name. D9 follows: the identifier is
-  `org.iainchesworthlabs.cubeulator`.
+  `com.iainchesworthlabs.cubeulator`.
 - D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
   Forge; no other app is reskinned.
 - D3: Hebrew and Arabic are Noto Sans, the family's faces.
@@ -460,7 +463,7 @@ session that is already planned; none is a new session.
 
 | item | rides with | what changes |
 |---|---|---|
-| F1 publisher line and identifier | E4a, E3b | one string, "Iain Chesworth Labs", in the version resource, `Info.plist`, AppStream and About; `org.iainchesworthlabs.cubeulator` as the bundle id, Linux app id and Android package. E4a's branch still carries the earlier answers |
+| F1 publisher line and identifier | E4a, E3b | one string, "Iain Chesworth Labs", in the version resource, `Info.plist`, AppStream and About; `com.iainchesworthlabs.cubeulator` as the bundle id, Linux app id and Android package. E4a's branch still carries the earlier answers |
 | F2 setting keys | E2a, E3a | the keys are named in `design/screens/settings.md`, in the family's `group/name` style |
 | F3 language manager and ids | E2b | its brief says **port** the family `LanguageManager` and its CI gates, key by id (`qsTrId`), and add locale-aware numbers, plurals and the unwrapped-string lint |
 | F4 Noto faces | E2a, before it bundles fonts | two `case` lines in `Theme.qml`, the 700 ceiling goes, and E2a checks that Qt draws weight 800 from the variable axis |

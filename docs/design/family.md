@@ -138,7 +138,7 @@ in its window today.
 | Pseudo-locale | planned, real | `xx`, environment only | none | `⟦…⟧` scan in a test |
 | Translation gates | planned lint | `update_translations`, no unfinished, `test_translations.cpp` | two grep jobs | key and placeholder parity |
 | Window size | remembered (E4a) | not remembered | fixed, min = max | n/a |
-| Identifier | `org.iainchesworthlabs.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
+| Identifier | `com.iainchesworthlabs.cubeulator` | `com.iainchesworthlabs.*` (macOS), `com.iclforge.hearth` (Android) | `org.iainchesworth.countdownsolver` | PWA "Aqualink Automate" |
 | GitHub account | `iainchesworthlabs` (moved 2026-10-13) | `iainchesworthlabs` | `iainchesworth` | `iainchesworthlabs` |
 | Docs pictures | system-test tour (E0a) | manifest of 84, `take_pictures.py`, `check_doc_pictures.py` | by hand | `scripts/capture-doc-screenshots.js` |
 
@@ -158,7 +158,7 @@ today, and the proposal. Lane and timing are in section 6.
   ICL Forge has three schemes: `com.iainchesworthlabs.hearth` and
   `.forge-gui` on macOS, `com.iclforge.hearth` on Android
   (`apps/hearth/android/app/build.gradle.kts`). Cubeulator is decided
-  (`brief.md` D12) and follows Countdown Solver's pattern.
+  (`brief.md` D12) and takes the form of ICL Forge's macOS apps.
 - **Decided (D1, D9).** One publisher string, used in the same five
   places: the Windows version resource, `Info.plist`, the AppStream
   `<developer>`, the store listing, and the About small print. The account
@@ -166,8 +166,9 @@ today, and the proposal. Lane and timing are in section 6.
   is **Iain Chesworth Labs**; `cmake/Packaging.cmake` on `develop` already
   says so. The copyright line stays in the person's name: "Copyright ©
   2026 Iain Chesworth". The identifier follows the account too:
-  **`org.iainchesworthlabs.cubeulator`**. Both were put to Iain again after
-  the move. The outlier in the suite is still ICL Forge's Android id.
+  **`com.iainchesworthlabs.cubeulator`**, the form ICL Forge's macOS apps
+  already use. Both were put to Iain again after the move. The outlier in
+  the suite is still ICL Forge's Android id.
 
 ### F2. Settings store and keys
 
@@ -426,7 +427,7 @@ All taken by Iain on 2026-10-13.
 | D6 | Copy details | **In V1.0**, not V1.1 | E3b gains the build line, its **Copy** and the **Copy details** row; `screens/about.md` says exactly what is copied; `strings.json` gains five strings |
 | D7 | Accent palettes for Cubeulator | **No** | - |
 | D8 | A shared component kit across repositories | **Not before V1.0 ships.** Align by spec; revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |
-| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `org.iainchesworthlabs.cubeulator` *(Iain, 2026-10-13, after the move; D12 amended)*. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | E4a: bundle id, Linux app id and desktop file name, Android package |
+| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `com.iainchesworthlabs.cubeulator`, matching ICL Forge's macOS `com.iainchesworthlabs.*` *(Iain, 2026-10-13, after the move, chosen over `org.iainchesworthlabs.` and over keeping the old id; D12 amended)*. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | E4a: bundle id, Linux app id and desktop file name, Android package |
 
 ## 6. Where this lands
 

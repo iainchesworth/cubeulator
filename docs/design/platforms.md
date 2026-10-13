@@ -196,7 +196,7 @@ value.
 | | value | status |
 |---|---|---|
 | Display name | Cubeulator | Fixed |
-| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `org.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13; amended the same day when the repository moved to `iainchesworthlabs`.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
+| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `com.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`.)* The GitHub account and the repository name in lower case, with `com.` as on ICL Forge's macOS apps. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
 | Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Proposed; follows the publisher. Groups the taskbar button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | Wired for CPack; not yet in the Windows resource or the Android manifest |
 | Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1) |
