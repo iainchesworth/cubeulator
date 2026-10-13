@@ -37,6 +37,13 @@ class DirectScan;
 // The same read can show that the move asked for has been made: the side in
 // view is not on the cube as it stood, and is on the cube as it stands after
 // that move. moveSeen says so, once, and the solve screen steps on.
+//
+// One move looks like something else: the side facing the camera, turned,
+// shows exactly what the whole cube rolled over the same way would show. If
+// the cube has been seen as it stands, held as shown, since this move was
+// asked for, the turn is taken to be the move - that is what was asked, and
+// nobody was asked to roll the cube. Without that sighting it decides nothing.
+// The move on the side facing the holder is the one the camera never sees.
 class HeldCube : public QObject {
     Q_OBJECT
 
@@ -60,8 +67,15 @@ class HeldCube : public QObject {
     //              the way the screen shows it
     //   "unsure"   the side in view is on the cube, but it could be held
     //              more than one way to show it
-    //   "unknown"  the side in view is not on the cube as it should stand
+    //   "wrong"    the side in view is the cube after a turn other than the
+    //              one asked for: wrongSide is the side that was turned
+    //   "unknown"  the side in view is not on the cube as it should stand,
+    //              and no single turn explains it
     Q_PROPERTY(QString sight READ sight NOTIFY sightChanged)
+    // While sight is "wrong": the side that looks to have been turned, as a
+    // side letter. It can be the side the move was on - turned the other way,
+    // or too far. Empty otherwise.
+    Q_PROPERTY(QString wrongSide READ wrongSide NOTIFY sightChanged)
 
 public:
     // A side has to be seen the same way in this many frames running before
@@ -86,6 +100,7 @@ public:
     [[nodiscard]] QQuaternion rotation() const;
     [[nodiscard]] bool seen() const noexcept { return seen_; }
     [[nodiscard]] QString sight() const;
+    [[nodiscard]] QString wrongSide() const;
 
 signals:
     void holdChanged();
@@ -95,14 +110,20 @@ signals:
     void moveSeen();
 
 private:
-    enum class Sight { None, Matched, Unsure, Unknown };
+    enum class Sight { None, Matched, Unsure, Wrong, Unknown };
     // What one frame says, before it has been said often enough to act on.
     struct Verdict {
-        enum class Kind { Nothing, Held, Moved, Unsure, Unknown } kind = Kind::Nothing;
+        enum class Kind { Nothing, Held, Moved, Unsure, Wrong, Unknown } kind = Kind::Nothing;
         cube::solver::Hold hold{};
+        // For Wrong: the side that was turned.
+        cube::solver::Face side = cube::solver::Face::U;
 
         friend bool operator==(const Verdict&, const Verdict&) = default;
     };
+    [[nodiscard]] static Verdict say(Verdict::Kind kind, cube::solver::Hold hold = {},
+                                     cube::solver::Face side = cube::solver::Face::U) {
+        return Verdict{kind, hold, side};
+    }
 
     void onFrameWatched();
     void onSolveChanged();
@@ -113,7 +134,12 @@ private:
     // keeps the same side on top, else none.
     [[nodiscard]] std::optional<cube::solver::Hold> choose(
         const std::vector<cube::solver::Hold>& holds) const;
-    void setSight(Sight sight);
+    // The one side whose turning - by any amount but the one asked for -
+    // would show the camera this read with the cube held as it is.
+    [[nodiscard]] std::optional<cube::solver::Face> side_turned_instead(
+        const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
+        float unmoved_distance) const;
+    void setSight(Sight sight, cube::solver::Face wrong_side = cube::solver::Face::U);
     void forget();
 
     DirectScan& scan_;
@@ -122,6 +148,7 @@ private:
     cube::solver::Hold hold_ = cube::solver::kStatedHold;
     bool seen_ = false;
     Sight sight_ = Sight::None;
+    cube::solver::Face wrong_side_ = cube::solver::Face::U;
 
     Verdict last_;
     int streak_ = 0;
@@ -130,6 +157,9 @@ private:
     // been announced.
     cube::solver::Cube judged_cube_ = cube::solver::Cube::solved();
     bool move_announced_ = false;
+    // That cube has been seen, held the way the screen shows it, while its
+    // move was the one being asked for.
+    bool matched_this_move_ = false;
 };
 
 }  // namespace cube::app

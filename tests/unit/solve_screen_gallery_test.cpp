@@ -144,6 +144,21 @@ TEST_CASE("solve screen gallery", "[.gallery]") {
     show(frame_of(strayed, Hold{Face::U, Face::L}), doubt);
     snap("4-not-the-expected-side");
 
+    // A turn of the wrong side, seen from the hold just matched.
+    show(frame_of(scrambled, other), trust);
+    for (const Face face : cube::solver::kAllFaces) {
+        const Cube wrong = scrambled.apply(Move{face, 1});
+        if (face != cube::solver::side_at(other, cube::solver::Place::Back) &&
+            solver.currentMoveFace() != cube::test::letter(face) &&
+            cube::solver::camera_view(wrong, other) !=
+                cube::solver::camera_view(scrambled, other)) {
+            camera.processFrame(cube::test::room({640, 360}));
+            show(frame_of(wrong, other), trust);
+            break;
+        }
+    }
+    snap("7-wrong-turn");
+
     // Back to how the screen asks, and on to a move on the back.
     show(frame_of(scrambled, cube::solver::kStatedHold), trust);
     while (!solver.atEnd() && solver.currentMoveFace() != "B") {

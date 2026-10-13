@@ -64,6 +64,7 @@ HeldCube::HeldCube(DirectScan& scan, SolveController& solve, QObject* parent)
             // Nobody is looking any more. The hold stands; what the camera
             // made of the last frame does not.
             forget();
+            matched_this_move_ = false;
             setSight(Sight::None);
         }
     });
@@ -71,6 +72,7 @@ HeldCube::HeldCube(DirectScan& scan, SolveController& solve, QObject* parent)
     connect(&solve_, &SolveController::solutionChanged, this, [this]() {
         // A new cube to solve starts from the hold the screen asks for.
         forget();
+        matched_this_move_ = false;
         seen_ = false;
         hold_ = cube::solver::kStatedHold;
         emit holdChanged();
@@ -118,18 +120,56 @@ QString HeldCube::sight() const {
             return QStringLiteral("matched");
         case Sight::Unsure:
             return QStringLiteral("unsure");
+        case Sight::Wrong:
+            return QStringLiteral("wrong");
         case Sight::Unknown:
             return QStringLiteral("unknown");
     }
     return QStringLiteral("none");
 }
 
-void HeldCube::setSight(Sight sight) {
-    if (sight == sight_) {
+QString HeldCube::wrongSide() const {
+    return sight_ == Sight::Wrong ? side_letter(wrong_side_) : QString();
+}
+
+void HeldCube::setSight(Sight sight, Face wrong_side) {
+    if (sight == sight_ && (sight != Sight::Wrong || wrong_side == wrong_side_)) {
         return;
     }
     sight_ = sight;
+    wrong_side_ = wrong_side;
     emit sightChanged();
+}
+
+std::optional<Face> HeldCube::side_turned_instead(const cube::vision::SideRead& read,
+                                                  const cube::vision::SessionColours& colours,
+                                                  float unmoved_distance) const {
+    // Only with a hold that has been seen: if the cube might be held some
+    // other way than shown, a turn and a different hold cannot be told apart.
+    if (!seen_) {
+        return std::nullopt;
+    }
+    const Cube& now = solve_.currentCube();
+    const auto asked = solve_.currentMove();
+    std::optional<Face> turned;
+    for (const Face face : cube::solver::kAllFaces) {
+        for (int turns = 1; turns <= 3; ++turns) {
+            const cube::solver::Move move{face, turns};
+            if (asked.has_value() && move == *asked) {
+                continue;
+            }
+            const HoldReading after = cube::vision::read_hold(read.lab, now.apply(move), colours);
+            if (!after.shows(hold_) ||
+                unmoved_distance < after.distance + cube::vision::kHoldClearDistance) {
+                continue;
+            }
+            if (turned.has_value() && *turned != face) {
+                return std::nullopt;  // turns of two different sides would both explain it
+            }
+            turned = face;
+        }
+    }
+    return turned;
 }
 
 void HeldCube::forget() {
@@ -146,6 +186,7 @@ void HeldCube::onSolveChanged() {
     // was about the one before.
     judged_cube_ = solve_.currentCube();
     move_announced_ = false;
+    matched_this_move_ = false;
     last_ = Verdict{};
     streak_ = 0;
 }
@@ -187,31 +228,45 @@ HeldCube::Verdict HeldCube::judge(const cube::vision::SideRead& read,
         if (!there->holds.empty() &&
             here.distance >= there->distance + cube::vision::kHoldClearDistance) {
             if (const auto hold = choose(there->holds); hold.has_value()) {
-                return {Kind::Moved, *hold};
+                return say(Kind::Moved, *hold);
             }
-            return {Kind::Unsure, {}};
+            return say(Kind::Unsure);
         }
     }
 
     if (here.shows(hold_)) {
-        return {Kind::Held, hold_};
+        return say(Kind::Held, hold_);
     }
     if (there.has_value() && there->shows(hold_)) {
         // It fits both ways about as well: the cube as it stood, held
         // differently, and the cube after the move, held as it was. That is
         // the side that was turned, facing the camera - a turned side and a
-        // turned cube look the same from straight on. Neither is assumed;
-        // another side will settle it.
-        return {Kind::Unsure, {}};
+        // turned cube look the same from straight on.
+        //
+        // If this cube was seen held as shown while this very move was being
+        // asked for, it is the move: that side was just there the other way
+        // round, and turning it is what the screen asked for. Without that
+        // sighting neither is assumed, and another side will settle it.
+        if (matched_this_move_) {
+            return say(Kind::Moved, hold_);
+        }
+        return say(Kind::Unsure);
     }
 
     if (!here.holds.empty()) {
         if (const auto hold = choose(here.holds); hold.has_value()) {
-            return {Kind::Held, *hold};
+            return say(Kind::Held, *hold);
         }
-        return {Kind::Unsure, {}};
+        return say(Kind::Unsure);
     }
-    return {Kind::Unknown, {}};
+    // Not the cube as it stood, nor as the move asked for leaves it. A turn
+    // of some other side - or of the right side the wrong way - is the
+    // likeliest thing to have happened, and worth naming if it is the only
+    // one that fits.
+    if (const auto side = side_turned_instead(read, colours, here.distance); side.has_value()) {
+        return say(Kind::Wrong, hold_, *side);
+    }
+    return say(Kind::Unknown);
 }
 
 void HeldCube::onFrameWatched() {
@@ -251,6 +306,7 @@ void HeldCube::onFrameWatched() {
                 } else if (first_sight) {
                     emit holdChanged();
                 }
+                matched_this_move_ = true;
                 setSight(Sight::Matched);
             }
             break;
@@ -271,6 +327,11 @@ void HeldCube::onFrameWatched() {
         case Kind::Unsure:
             if (streak_ >= kFramesToTrust) {
                 setSight(Sight::Unsure);
+            }
+            break;
+        case Kind::Wrong:
+            if (streak_ >= kFramesToTrust) {
+                setSight(Sight::Wrong, verdict.side);
             }
             break;
         case Kind::Unknown:

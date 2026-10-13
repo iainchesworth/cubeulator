@@ -76,6 +76,7 @@ Rectangle {
         switch (HeldCube.sight) {
         case "matched": return good;
         case "unsure": return "#FFB347";
+        case "wrong":
         case "unknown": return Theme.accent;
         }
         return Theme.divider;
@@ -88,20 +89,51 @@ Rectangle {
         if (!DirectScan.complete)
             return ""; // no scan, so nothing to match a side against
         switch (HeldCube.sight) {
-        case "matched": return "Matched to your cube";
+        case "matched":
+            if (!guiding)
+                return "Matched to your cube";
+            // The side facing the holder is the one side the camera never
+            // sees change; say so rather than leave them waiting.
+            return movePlace === "front"
+                ? "Matched. The camera cannot see the side facing you: press Next after this move."
+                : "Matched. Make the move and it steps on by itself.";
         case "unsure": return "That side looks the same turned. Show another to tell which way up.";
-        case "unknown": return "That side is not what the solution expects. Check the last move.";
+        case "wrong": return "Not the move that was asked for";
+        case "unknown": return "Not the side that was expected";
         }
         return HeldCube.seen ? "Show a side again if you turn the cube over"
                              : "Hold any side square to the camera and the cube here turns to match";
     }
 
+    // What the camera makes of a cube that is not as the solution has it.
+    // When one turn explains what it sees, the side that was turned is
+    // named; otherwise all it can say is that something is off. Either way
+    // the buttons still step, and the solution does not move by itself.
+    readonly property string mistakeTitle: HeldCube.sight === "wrong" ? "That was not the move"
+        : HeldCube.sight === "unknown" ? "That side is not expected" : ""
+    readonly property string mistakeWords: {
+        if (HeldCube.sight === "wrong") {
+            var side = HeldCube.wrongSide;
+            var name = "The " + centreColor(side).toLowerCase() + " side";
+            if (side === moveSide)
+                return name + " was turned, but not the way shown. Turn it back and try again.";
+            return name + " (" + placeWords[HeldCube.places[side]].toLowerCase()
+                + ") was turned instead. Turn it back, then make the move shown.";
+        }
+        if (HeldCube.sight === "unknown")
+            return "The side facing the camera is not what the solution has there. Check the last move, or step back with Previous.";
+        return "";
+    }
+
     // The camera has seen the move made: take the step without being asked.
+    // If a press got there first and the layer is already turning, that
+    // turn is this move - a second step would be one too many.
     Connections {
         target: HeldCube
         function onMoveSeen() {
             moveSeenNote.restart();
-            root.next();
+            if (root.pendingStep === 0)
+                root.next();
         }
     }
 
@@ -357,10 +389,42 @@ Rectangle {
         // The view has turned to show a side that faces away. Said plainly,
         // because a cube turning on screen looks like an instruction to turn
         // the one in the hand.
+        Column {
+            id: notes
+            anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
+            width: parent.width - 2 * Theme.space4
+            spacing: Theme.space2
+
+        // The cube is not as the solution has it.
+        Rectangle {
+            id: mistakeNote
+            visible: root.mistakeTitle !== ""
+            width: Math.min(360, parent.width)
+            height: mistakeNoteText.implicitHeight + 2 * Theme.space2
+            color: Theme.accent
+            Column {
+                id: mistakeNoteText
+                x: Theme.space3; y: Theme.space2
+                width: parent.width - 2 * Theme.space3
+                spacing: 2
+                Text {
+                    text: root.mistakeTitle
+                    font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.ExtraBold
+                    color: "#FFFFFF"
+                }
+                Text {
+                    width: parent.width
+                    text: root.mistakeWords
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: "#FFFFFF"
+                }
+            }
+        }
+
         Rectangle {
             id: viewNote
-            anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
-            width: Math.min(viewNoteText.implicitWidth + 2 * Theme.space3, parent.width - 2 * Theme.space4)
+            width: Math.min(viewNoteText.implicitWidth + 2 * Theme.space3, parent.width)
             height: viewNoteText.implicitHeight + 2 * Theme.space2
             color: Theme.accent100
             border.width: 1; border.color: Theme.accent
@@ -383,6 +447,7 @@ Rectangle {
                     color: Theme.inkMuted(0.75)
                 }
             }
+        }
         }
 
         Rectangle {

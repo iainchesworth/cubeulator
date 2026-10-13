@@ -98,6 +98,11 @@ struct Session {
     void look_away() { scan.processFrame(room({640, 360})); }
 };
 
+// The letter HeldCube names a side by. Face's values run U, D, L, R, F, B.
+[[nodiscard]] QString side_letter(Face face) {
+    return QString(QChar::fromLatin1("UDLRFB"[static_cast<int>(face)]));
+}
+
 // A hold from which the camera can see `move` having been made: the side
 // facing it is changed by the move, and is not the side that was turned
 // (which only turns on the spot).
@@ -222,35 +227,123 @@ TEST_CASE("a move is seen even if the cube is shown a different way round afterw
     CHECK(session.held.seen());
 }
 
-TEST_CASE("the side that was turned, facing the camera, decides nothing",
+// A hold with the side `move` turns facing the camera, where turning it shows.
+[[nodiscard]] std::optional<Hold> hold_facing(const Cube& cube, Move move) {
+    for (const Hold& hold : all_holds()) {
+        if (side_at(hold, Place::Back) == move.face &&
+            camera_view(cube.apply(move), hold) != camera_view(cube, hold)) {
+            return hold;
+        }
+    }
+    return std::nullopt;
+}
+
+TEST_CASE("the side facing the camera, turned as asked after the cube was seen, is the move",
           "[qt][controllers][held-cube]") {
     // Straight on, a side that has been turned looks exactly like the same
-    // side on a cube that has been turned over instead. The camera cannot
-    // know which happened, so it neither steps the solution nor turns the
+    // side on a cube rolled over instead. But this cube was seen a moment
+    // ago, held this way, with this move being asked for - so it is the move.
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    const Move move = *session.solve.currentMove();
+    const Cube moved = cube.apply(move);
+    const std::optional<Hold> facing = hold_facing(cube, move);
+    REQUIRE(facing.has_value());
+
+    session.show(cube, *facing, kFramesToTrust);
+    REQUIRE(session.held.hold() == *facing);
+    REQUIRE(session.held.sight() == "matched");
+    session.look_away();
+
+    session.show(moved, *facing, kFramesToTrust);
+    CHECK(session.moves_seen == 1);
+    CHECK(session.held.hold() == *facing);
+
+    session.solve.nextMove();
+    session.show(moved, *facing, kFramesToTrust);
+    CHECK(session.moves_seen == 1);
+    CHECK(session.held.sight() == "matched");
+}
+
+TEST_CASE("the same sight decides nothing if the cube had not been seen held that way",
+          "[qt][controllers][held-cube]") {
+    // With nothing to say the cube was not simply being held the other way
+    // round all along, the camera neither steps the solution nor turns the
     // cube on screen.
     const Cube cube = cube::solver::random_scramble(3);
     Session session(cube);
     const Move move = *session.solve.currentMove();
     const Cube moved = cube.apply(move);
-
-    std::optional<Hold> facing;
-    for (const Hold& hold : all_holds()) {
-        if (side_at(hold, Place::Back) == move.face) {
-            facing = hold;
-            break;
-        }
-    }
+    const std::optional<Hold> facing = hold_facing(cube, move);
     REQUIRE(facing.has_value());
-    REQUIRE(camera_view(moved, *facing) != camera_view(cube, *facing));
 
-    session.show(cube, *facing, kFramesToTrust);
-    REQUIRE(session.held.hold() == *facing);
-    session.look_away();
-
+    session.held.setHold(*facing);  // assumed, never seen
     session.show(moved, *facing, kFramesToDoubt);
     CHECK(session.moves_seen == 0);
     CHECK(session.held.hold() == *facing);
     CHECK(session.held.sight() == "unsure");
+}
+
+TEST_CASE("a turn of some other side, made in view of the camera, is named",
+          "[qt][controllers][held-cube]") {
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    const Move asked = *session.solve.currentMove();
+
+    // Some other side, turned where the camera can see the difference.
+    std::optional<Move> wrong;
+    std::optional<Hold> hold;
+    for (const Face face : kAllFaces) {
+        if (face == asked.face) {
+            continue;
+        }
+        if (const auto witness = hold_that_sees(cube, Move{face, 1}); witness.has_value()) {
+            wrong = Move{face, 1};
+            hold = witness;
+            break;
+        }
+    }
+    REQUIRE(wrong.has_value());
+    const Cube strayed = cube.apply(*wrong);
+
+    session.show(cube, *hold, kFramesToTrust);
+    REQUIRE(session.held.sight() == "matched");
+    CHECK(session.held.wrongSide().isEmpty());
+    session.look_away();
+
+    session.show(strayed, *hold, kFramesToTrust);
+    CHECK(session.held.sight() == "wrong");
+    CHECK(session.held.wrongSide() == side_letter(wrong->face));
+    // Named, and nothing else: the solution does not move and the cube on
+    // screen does not turn.
+    CHECK(session.moves_seen == 0);
+    CHECK(session.solve.moveIndex() == 0);
+    CHECK(session.held.hold() == *hold);
+
+    // Turned back, it is the cube as expected again.
+    session.look_away();
+    session.show(cube, *hold, kFramesToTrust);
+    CHECK(session.held.sight() == "matched");
+    CHECK(session.held.wrongSide().isEmpty());
+}
+
+TEST_CASE("the right side turned the wrong way is named as that side",
+          "[qt][controllers][held-cube]") {
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    const Move asked = *session.solve.currentMove();
+    // The other way, or - for a half turn - only half as far.
+    const Move wrong{asked.face, asked.turns == 1 ? 3 : 1};
+    const std::optional<Hold> hold = hold_that_sees(cube, wrong);
+    REQUIRE(hold.has_value());
+    REQUIRE(camera_view(cube.apply(wrong), *hold) != camera_view(cube.apply(asked), *hold));
+
+    session.show(cube, *hold, kFramesToTrust);
+    session.look_away();
+    session.show(cube.apply(wrong), *hold, kFramesToTrust);
+    CHECK(session.held.sight() == "wrong");
+    CHECK(session.moves_seen == 0);
+    CHECK(session.held.wrongSide() == side_letter(asked.face));
 }
 
 TEST_CASE("a side that is not on the cube is doubted and not followed",

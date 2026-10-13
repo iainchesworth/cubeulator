@@ -123,8 +123,14 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   should stand, which gives the hold - one of 24 - and the 3D cube turns to
   it; until a side has been seen, the stated hold stands (yellow up, green
   towards you). This is `read_side` again, not tracking: nothing is
-  estimated between reads and nothing is read at an angle (that is R5). The
-  same read steps the solution on when it shows the move has been made.
+  estimated between reads and nothing is read at an angle (that is R5).
+- **The camera follows the solve.** The same read steps the solution on,
+  with no button pressed, when the side in view fits the cube after the
+  move asked for and clearly not the cube before it. When it fits the cube
+  after a turn of some other side instead - or of the right side the wrong
+  way - the screen names the side that was turned. The move on the side
+  facing the holder is the one the camera never sees, and the buttons and
+  keys still step whenever it does not.
 - **Measured.** `cube_scan holds` replays a recorded scan against its own
   cube. On the five sessions that read, a steady read sits a median of 1.3
   to 1.7 from the hold it shows and nine in ten within 3.5; the nearest
