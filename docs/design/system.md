@@ -102,6 +102,9 @@ picture behind the panel.
 - **The camera picture never carries marks.** It shows the real cube. The
   chips beneath it do.
 - Wherever one colour is *meant* ("yellow on top"), the word is there too.
+- Each mark has a name (`mark.*`: ring, slash, plus, dot, bar, no mark).
+  The names appear in one place, the legend under the switch in Settings,
+  where they tell a screen-reader user which shape goes with which colour.
 - These are tidy swatches for drawn cubes. The scan chips show the colours
   the camera measured; the mark on each chip sticker says what the reader
   took it for.
@@ -203,7 +206,7 @@ OKLab distance x 100 between two swatches as seen with each kind of colour visio
 |---|---|---|
 | **Archivo** (OFL) | Everything in Latin script | Regular 400, Bold 700, ExtraBold 800 |
 | **IBM Plex Mono** (OFL) | Numbers that change (turn count, time), notation, key names | Medium 500 |
-| **IBM Plex Sans Hebrew**, **IBM Plex Sans Arabic** (OFL) | Hebrew and Arabic | Regular 400, Bold 700. There is no 800; headings use 700 |
+| **Noto Sans Hebrew**, **Noto Sans Arabic** (OFL) | Hebrew, Yiddish and Arabic | One variable file each, weight 100 to 900, so headings keep 800. The same files ICL Forge, Countdown Solver and Automate ship (`family.md` D3) |
 | The system's own | Japanese, Simplified Chinese | Not bundled; see `platforms.md` |
 
 The fonts are loaded from the app's resources at start-up. A machine
@@ -233,8 +236,8 @@ Rules:
 - **Nothing is smaller than 13 px at scale 1.0.** Body text is 16 px.
 - Eyebrows are the only capitals. They are set by a font capitalisation
   property, never typed in capitals, so that translators see normal text.
-  Scripts without capitals (Hebrew, Arabic, Japanese, Chinese) drop the
-  tracking and use weight 700.
+  Scripts without capitals (Hebrew, Yiddish, Arabic, Japanese, Chinese)
+  drop the tracking and use weight 700.
 - Running text is capped at 34 rem wide (about 65 characters).
 - Numbers that change in place use tabular figures (the mono face).
 - Text wraps. It is never elided on a control. Truncation in the
@@ -386,7 +389,8 @@ the switch at the trailing side. The whole row is the target, 56 high.
 | pressed | row fill `pressWash` | - |
 | disabled | 2 px `divider` | `divider`; label `inkDisabled`; the reason in the note |
 
-On and off differ by position and by the check, not by colour.
+On and off differ by position and by the check, not by colour. A screen
+reader reads the state as `common.on` or `common.off`.
 
 ### Choice
 

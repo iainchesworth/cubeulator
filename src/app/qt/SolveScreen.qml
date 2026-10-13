@@ -4,7 +4,7 @@ import Cubeulator
 // The solve screen: the cube as it stands, in 3D, with the layer the next
 // move turns nudging the way it has to go.
 //
-// The cube on screen is the cube in the hand: never mirrored, and turned the
+// The 3D cube on screen is the cube in the hand: never mirrored, and turned the
 // way the hold line at the top says it is held. Every move is shown on it by
 // moving the layer itself, so nobody has to read notation to follow along.
 Rectangle {
@@ -344,8 +344,12 @@ Rectangle {
         }
 
         // What the camera sees of the cube, with a dot on each sticker of the
-        // side it has found. Not mirrored: it is the far side of the cube,
-        // seen from where the camera is.
+        // side it has found. The picture is shown the way a mirror shows it
+        // (CameraController.previewMirrored), as on the scan screen, so the
+        // cube moves on it the way the hand moves it. That is only how it is
+        // painted: the frame that is read, and so what the camera makes of
+        // the cube, is the camera's own, because a mirror image of a side
+        // never matches the side.
         //
         // The preview is small, so it does not show the whole picture. It
         // closes in on the cube and follows it about the frame, so that what
@@ -384,6 +388,11 @@ Rectangle {
             // How long without a side in view before the view lets go of
             // where the cube was and opens out to the whole picture.
             property int lostAfter: 2500
+            // Whether the picture is shown the way a mirror shows it: the
+            // camera faces the user, so it is, unless it is a rear one. A
+            // property, not just a read of the controller, so the inset can
+            // be seen both ways without a camera of each kind.
+            property bool mirrored: CameraController.previewMirrored
 
             function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
             function follow() {
@@ -442,6 +451,7 @@ Rectangle {
                 readonly property real pictureScale: inset.shownScale
                 readonly property real wholeScale: inset.wholeScale
                 property alias lostAfter: inset.lostAfter
+                property alias mirrored: inset.mirrored
 
                 anchors.right: parent.right
                 width: parent.width
@@ -451,33 +461,51 @@ Rectangle {
                 color: "#141312"
                 clip: true
 
-                Image {
-                    id: previewImage
-                    x: 2 + inset.viewW / 2 - inset.shownX * inset.shownScale
-                    y: 2 + inset.viewH / 2 - inset.shownY * inset.shownScale
-                    width: inset.frameW * inset.shownScale
-                    height: inset.frameH * inset.shownScale
-                    fillMode: Image.Stretch
-                    cache: false
-                    // Nothing to show until the camera has delivered a frame.
-                    source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
-                }
-                Repeater {
-                    model: 9
-                    delegate: Rectangle {
-                        readonly property bool there: inset.points.length === 9
-                        readonly property var point: there ? inset.points[index] : Qt.point(0, 0)
-                        visible: there && DirectScan.frameWidth > 0
-                        width: 7; height: 7; radius: 3.5
-                        x: previewImage.x + point.x * inset.shownScale - width / 2
-                        y: previewImage.y + point.y * inset.shownScale - height / 2
-                        color: HeldCube.sight === "matched" ? root.good : "#FFD21F"
-                        border.width: 1; border.color: "#141312"
+                // The picture and the dots on it are one picture and flip
+                // together, about the middle of the window, so a dot stays on
+                // its sticker. Everything above works in the camera's own
+                // frame pixels and is flipped as a whole afterwards; the flash,
+                // the frame and the words are not part of it.
+                Item {
+                    id: picture
+                    objectName: "solve.picture"
+                    anchors.fill: parent
+                    transform: Scale {
+                        origin.x: picture.width / 2
+                        xScale: inset.mirrored ? -1 : 1
+                    }
+
+                    Image {
+                        id: previewImage
+                        objectName: "solve.image"
+                        x: 2 + inset.viewW / 2 - inset.shownX * inset.shownScale
+                        y: 2 + inset.viewH / 2 - inset.shownY * inset.shownScale
+                        width: inset.frameW * inset.shownScale
+                        height: inset.frameH * inset.shownScale
+                        fillMode: Image.Stretch
+                        cache: false
+                        // Nothing to show until the camera has delivered a frame.
+                        source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
+                    }
+                    Repeater {
+                        model: 9
+                        delegate: Rectangle {
+                            objectName: "solve.dot"
+                            readonly property bool there: inset.points.length === 9
+                            readonly property var point: there ? inset.points[index] : Qt.point(0, 0)
+                            visible: there && DirectScan.frameWidth > 0
+                            width: 7; height: 7; radius: 3.5
+                            x: previewImage.x + point.x * inset.shownScale - width / 2
+                            y: previewImage.y + point.y * inset.shownScale - height / 2
+                            color: HeldCube.sight === "matched" ? root.good : "#FFD21F"
+                            border.width: 1; border.color: "#141312"
+                        }
                     }
                 }
                 // The camera saw the move made.
                 Rectangle {
                     id: moveSeenFlash
+                    objectName: "solve.flash"
                     anchors.fill: parent
                     color: root.good
                     opacity: 0
@@ -490,6 +518,7 @@ Rectangle {
                 // The frame, drawn over the picture, in the colour of what
                 // the camera makes of the cube.
                 Rectangle {
+                    objectName: "solve.frame"
                     anchors.fill: parent
                     color: "transparent"
                     border.width: 2
@@ -500,6 +529,7 @@ Rectangle {
             // Beside the preview where there is room, so it does not run
             // down into the cube; under it on a narrow screen.
             Text {
+                objectName: "solve.words"
                 x: root.wide ? -width - Theme.space2 : 0
                 y: root.wide ? 0 : preview.height + Theme.space1
                 width: root.wide ? 150 : parent.width

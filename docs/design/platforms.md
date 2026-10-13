@@ -90,6 +90,12 @@ are the system's.
 | **Window** | Minimise (Cmd+M) · Zoom · Bring All to Front |
 | **Help** | Cubeulator Help (Cmd+?) |
 
+The wording is in `strings.json`: the menu titles and items are `menu.*`
+(File, New Scan, Enter Colours by Hand, View, Window, Settings..., Quit
+Cubeulator, Cubeulator Help), and About is `about.title`. The items macOS
+supplies itself (Services, Hide, Minimise, Zoom, full screen) take the
+system's own translations.
+
 No Edit menu: there is no text to edit. An item that cannot act where the
 person is (New Scan during a solve asks nothing; it is simply available
 from `home`, `complete` and `history` only) is disabled, not hidden, as
@@ -174,8 +180,9 @@ value.
 | script | font | shipped |
 |---|---|---|
 | Latin | Archivo; IBM Plex Mono | In the app. About 400 KB |
-| Hebrew | IBM Plex Sans Hebrew | In the app. About 100 KB |
-| Arabic | IBM Plex Sans Arabic | In the app. About 300 KB |
+| Hebrew | Noto Sans Hebrew (variable, weights 100-900) | In the app. About 110 KB |
+| Yiddish | Noto Sans Hebrew, the same file | In the app |
+| Arabic | Noto Sans Arabic (variable, weights 100-900) | In the app. About 825 KB |
 | Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No |
 | Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No |
 
@@ -187,18 +194,21 @@ value.
   text is not drawn with Chinese forms.
 - All bundled fonts are under the SIL Open Font Licence and are listed in
   the generated notices (E0b).
+- The two Noto files are the ones ICL Forge, Countdown Solver and Automate
+  already bundle (`family.md` F4). A variable font gives weight 800 for
+  headings; E2a checks that Qt draws it on every desktop OS.
 
 ## Identity each platform needs
 
 | | value | status |
 |---|---|---|
 | Display name | Cubeulator | Fixed |
-| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `org.iainchesworth.cubeulator` | *(Iain, 2026-10-13.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
-| Windows AppUserModelID | `IainChesworth.Cubeulator` | Set by the app at start-up and stamped on the installer's Start menu shortcut (E4a). Groups the taskbar button with its shortcut |
+| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `com.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`.)* The GitHub account and the repository name in lower case, with `com.` as on ICL Forge's macOS apps. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
+| Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Follows the publisher. Set by the app at start-up and stamped on the installer's Start menu shortcut (E4a), so that the taskbar groups the button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | In the Windows resource, `Info.plist`, the AppStream release and every desktop package's name (E4a). Not yet in the Android manifest (E4b) |
-| Publisher | Iain Chesworth Labs | One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, used by the version resource, the AppStream developer and CPack; the copyright line stays "Iain Chesworth". It follows the repository's account, which moved to `iainchesworthlabs` on 2026-10-13 (`family.md` D1, develop PR #6) |
+| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1). One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, read by the version resource, the AppStream developer and CPack |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |
-| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all eight languages | Written |
+| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |
 
 ## Per platform, the things that are easy to miss

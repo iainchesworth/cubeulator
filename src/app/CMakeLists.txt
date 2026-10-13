@@ -316,6 +316,64 @@ if(CUBEULATOR_BUILD_APP)
     endif()
 endif()
 
+# ---------------------------------------------------------------------------
+# cube_app_i18n - the translations plumbing (E2b, docs/i18n.md). Own block,
+# appended: nothing above is touched.
+#
+#   docs/design/strings.json -> tools/i18n/strings_to_ts.py -> i18n/translations/*.ts
+#   -> lrelease -idbased -nounfinished (here) -> :/i18n/cubeulator_<code>.qm
+#
+# The catalogues are generated and committed (a test and a CI step fail if
+# they drift from strings.json), not made at build time: a translator edits
+# them, and E5 reviews the diff. -idbased because every string in the app is
+# a qsTrId(); -nounfinished so that an entry still marked unfinished is left
+# out of the .qm and the English underneath answers (cube_app_i18n installs
+# the English catalogue under every language).
+# ---------------------------------------------------------------------------
+if(CUBEULATOR_BUILD_APP)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS LinguistTools)
+
+    set(CUBE_I18N_DIR "${CMAKE_CURRENT_SOURCE_DIR}/i18n")
+    set(CUBE_I18N_TS_DIR "${CUBE_I18N_DIR}/translations")
+    file(GLOB CUBE_I18N_TS_FILES CONFIGURE_DEPENDS "${CUBE_I18N_TS_DIR}/cubeulator_*.ts")
+
+    add_library(cube_app_i18n STATIC
+        qt/i18n/language_manager.hpp
+        qt/i18n/language_manager.cpp)
+
+    target_include_directories(cube_app_i18n PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
+
+    target_link_libraries(cube_app_i18n
+        PUBLIC
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
+
+    qt_add_lrelease(
+        TS_FILES ${CUBE_I18N_TS_FILES}
+        LRELEASE_TARGET cube_app_i18n_lrelease
+        QM_FILES_OUTPUT_VARIABLE CUBE_I18N_QM_FILES
+        OPTIONS -idbased -nounfinished -silent)
+
+    qt_add_resources(cube_app_i18n "cube_app_i18n_catalogues"
+        PREFIX "/i18n"
+        BASE "${CMAKE_CURRENT_BINARY_DIR}"
+        FILES ${CUBE_I18N_QM_FILES})
+    qt_add_resources(cube_app_i18n "cube_app_i18n_languages"
+        PREFIX "/i18n"
+        BASE "${CUBE_I18N_DIR}"
+        FILES "${CUBE_I18N_DIR}/languages.json")
+
+    # The shell links the manager; main.cpp (and, once E0a lands, AppRuntime)
+    # calls cube::i18n::install(). A separate statement so that the block
+    # above stays untouched.
+    target_link_libraries(cube_app PRIVATE cube_app_i18n)
+endif()
+
 # ===========================================================================
 # E4a - desktop packaging and manners (experience lane; this block only).
 #

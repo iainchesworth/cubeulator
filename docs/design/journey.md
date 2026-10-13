@@ -277,7 +277,7 @@ Lane: experience. Specs: `screens/about.md`, `screens/licences.md`,
 
 | id | when | leaves to |
 |---|---|---|
-| `about.default` | Opened from Settings, or the macOS application menu | **Licences** > `licences.list`. **Privacy** > `privacy.default`. **Source code** opens the browser. Back |
+| `about.default` | Opened from Settings, or the macOS application menu | **Licences** > `licences.list`. **Privacy** > `privacy.default`. **Source code** opens the browser. **Copy** and **Copy details** put text on the clipboard and stay here. Back |
 | `licences.list` | Cubeulator's own licence and one row per third-party component | A row > `licences.detail`. Back |
 | `licences.detail` | One component's notice in full | Back > `licences.list` |
 | `licences.unavailable` | The generated notices could not be loaded | Says where the notices are published. Back |

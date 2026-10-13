@@ -306,6 +306,7 @@ canvas{display:block;width:100%;height:100%}
   .done-copy{gap:8px;justify-content:center}.stats .mono{font-size:calc(var(--rem)*1.25)}
 }
 .still *,.still *::before{animation-duration:1ms!important;animation-iteration-count:1!important}
+/*__CSS_MORE__*/
 </style>
 
 <svg class="cvd" aria-hidden="true">
@@ -328,7 +329,7 @@ canvas{display:block;width:100%;height:100%}
       <div class="pf size"><label for="p-size">Size</label><select id="p-size"><option value="desktop">Desktop</option><option value="phone">Phone</option><option value="side">Phone, sideways</option></select></div>
       <div class="pf"><label for="p-theme">Theme</label><select id="p-theme"><option value="auto">As this device</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
       <div class="pf"><label for="p-dir">Direction</label><select id="p-dir"><option value="ltr">Left to right</option><option value="rtl">Right to left</option></select></div>
-      <div class="pf"><label for="p-text">Text size</label><select id="p-text"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
+      <div class="pf"><label for="p-text">Text size</label><select id="p-text"><option value="1">100%</option><option value="1.25">125%</option><option value="1.5">150%</option><option value="2">200%</option></select></div>
       <div class="pf"><label for="p-strings">Strings</label><select id="p-strings"><option value="en">English</option><option value="pseudo">40% longer</option></select></div>
       <div class="pf"><label for="p-marks">Colour marks</label><select id="p-marks"><option value="on">On</option><option value="off">Off</option></select></div>
       <div class="pf"><label for="p-cvd">See as</label><select id="p-cvd"><option value="none">Full colour</option><option value="protan">Protanopia</option><option value="deutan">Deuteranopia</option><option value="tritan">Tritanopia</option><option value="grey">No colour</option></select></div>
@@ -350,7 +351,7 @@ const $ = (s, r = document) => r.querySelector(s);
 const app = $('#app'), device = $('#device');
 
 const P = {
-  screen: 'home', state: 'default', stack: [], entered: true,
+  screen: 'home', state: 'default', stack: [], entered: false,
   opts: {size: 'desktop', theme: 'auto', dir: 'ltr', ts: 1, pseudo: false, marks: true, cvd: 'none', motion: 'auto', advance: 'tap', notation: false, explain: true},
   d: {resume: null, hinted: false, t0: 0, elapsed: 0}
 };
@@ -386,6 +387,8 @@ const ICONS = {
   settings: '<path d="M4 7h9M19 7h1M4 17h1M11 17h9"/><circle cx="16" cy="7" r="2.500"/><circle cx="8" cy="17" r="2.500"/>',
   history: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   grid: '<path d="M4 4h16v16H4zM4 9.330h16M4 14.670h16M9.330 4v16M14.670 4v16"/>',
+  camera: '<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.200"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8v.01"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-9-9c2.520 0 4.930 1 6.740 2.740L21 8"/><path d="M21 3v5h-5"/>',
   'a-left': '<path d="M20 12H4M10 6l-6 6 6 6"/>', 'a-right': '<path d="M4 12h16M14 6l6 6-6 6"/>',
   'a-up': '<path d="M12 20V4M6 10l6-6 6 6"/>', 'a-down': '<path d="M12 4v16M6 14l6 6 6-6"/>',
@@ -649,10 +652,10 @@ function prevTurn() {
   clearTimeout(S.autoT);
   play(inv, () => { applyMove(S.cube, inv); S.turn--; S.skipStage = true; P.state = P.opts.advance === 'timer' ? 'auto-paused' : (S.turn === N - 1 ? 'last-move' : 'move'); render(); });
 }
-const PACE = 4000;
+const pace = () => ({slow: 6000, steady: 4000, quick: 2500})[P.opts.pace] || 4000;
 function armTimer() {
   clearTimeout(S.autoT);
-  if (P.screen === 'solve' && P.state === 'auto') S.autoT = setTimeout(nextTurn, PACE);
+  if (P.screen === 'solve' && P.state === 'auto') S.autoT = setTimeout(nextTurn, pace());
 }
 
 // ---- screens --------------------------------------------------------------------
@@ -664,7 +667,7 @@ screens.home = {
     const resume = (st === 'resume' || st === 'confirm-discard') ? (P.d.resume || {turn: 23, total: N}) : null;
     const foot = [['history', 'home.history', 'history'], ['help', 'common.help', 'help'], ['settings', 'common.settings', 'settings']]
       .map(([i, k, to]) => btn(t(k), 'go', {v: 'ghost', icon: i, arg: to})).join('');
-    let notice = '', scan = btn(t('home.scan'), 'scan', {v: 'primary', cls: 'block thumb', trail: 'chev-r'}), enterV = 'secondary';
+    let notice = '', scan = btn(t('home.scan'), 'scan', {v: resume ? 'secondary' : 'primary', cls: 'block thumb', trail: 'chev-r'}), enterV = 'secondary';
     if (st === 'finding-camera') notice = `<div class="status-line" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${t('home.findingCamera')}</div>`;
     if (st === 'no-camera') {
       notice = `<div class="notice" role="status">${ico('alert')}<div><strong>${t('home.noCamera.title')}</strong><span>${t('home.noCamera.body')}</span><div class="acts">${btn(t('common.lookAgain'), 'pick', {icon: 'refresh', arg: 'home.finding-camera'})}</div></div></div>`;
@@ -727,11 +730,11 @@ screens.scan = {
     if (ph.startsWith('camera-')) ctx = btn(t(ph === 'camera-none' ? 'common.lookAgain' : 'common.tryAgain'), 'scanRetry', {v: 'primary', cls: 'thumb', icon: 'refresh'})
       + (ph === 'camera-blocked' ? btn(t('common.openDeviceSettings'), 'noop', {cls: 'thumb'}) : '') + btn(t('common.enterByHand'), 'go', {cls: 'thumb', arg: 'review'});
     const hint = ph === 'stuck' ? `<div class="panel"><strong>${t('scan.stuck.title')}</strong><p>${t('scan.stuck.body')}</p></div>` : '';
-    if (ph === 'stuck') ctx = btn(t('scan.more.enter'), 'go', {cls: 'thumb', arg: 'review'}) + btn(t('scan.more.help'), 'go', {cls: 'thumb', arg: 'help'});
+    if (ph === 'stuck') ctx = btn(t('scan.more.enter'), 'go', {cls: 'thumb', arg: 'review'}) + btn(t('scan.more.help'), 'go', {cls: 'thumb', arg: 'help.scanning'});
     let layer = '';
     if (st === 'more') layer = sheet(t('common.more'), btn(t('scan.more.enter'), 'go', {cls: 'block', arg: 'review', icon: 'grid'})
       + btn(t(touch() ? 'scan.more.switchCamera' : 'scan.more.chooseCamera'), touch() ? 'closeSheet' : 'pick', {cls: 'block', arg: 'scan.camera-picker', icon: 'refresh'})
-      + btn(t('scan.more.help'), 'go', {cls: 'block', arg: 'help', icon: 'help'}) + btn(t('common.settings'), 'go', {cls: 'block', arg: 'settings', icon: 'settings'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'}));
+      + btn(t('scan.more.help'), 'go', {cls: 'block', arg: 'help.scanning', icon: 'help'}) + btn(t('common.settings'), 'go', {cls: 'block', arg: 'settings', icon: 'settings'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'}));
     if (st === 'camera-picker') layer = sheet(t('scan.picker.title'), btn('Integrated Camera', 'closeSheet', {cls: 'block', icon: 'check'}) + btn('USB Camera', 'closeSheet', {cls: 'block'}) + btn(t('common.close'), 'closeSheet', {v: 'ghost'}));
     if (st === 'confirm-leave') layer = dialog(t('scan.leave.title'), t('scan.leave.body', Math.max(1, n)), btn(t('scan.leave.keep'), 'closeSheet'), btn(t('scan.leave.confirm'), 'home', {v: 'ghost'}));
     if (st === 'confirm-restart') layer = dialog(t('scan.restart.title'), t('scan.leave.body', Math.max(1, n)), btn(t('scan.restart.keep'), 'closeSheet'), btn(t('scan.startOver'), 'scanRestart', {v: 'ghost'}));
@@ -809,7 +812,7 @@ screens.solve = {
         <p><strong>${t('solve.stageDone.check')}</strong></p><p><strong>${t('solve.stageDone.next', t('stage.' + (sg + 1) + '.title'))}</strong>${P.opts.explain ? ' ' + t('stage.' + (sg + 1) + '.what') + ' ' + t('stage.' + (sg + 1) + '.why') : ''}</p></div>
         <div class="solve-btns" style="grid-template-columns:1fr 1fr">${btn(t('solve.differs'), 'pick', {cls: 'giant', arg: 'solve.lost'})}${btn(t('common.carryOn'), 'stageGo', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
     } else if (st === 'auto') {
-      lower = insBlock(m) + `<div class="autobar" style="--dur:${PACE}ms"><i></i></div><div class="solve-btns" style="grid-template-columns:1fr">${btn(t(touch() ? 'solve.auto.tapToPause' : 'solve.auto.keysToPause'), 'autoPause', {cls: 'giant', icon: 'pause'})}</div>`;
+      lower = insBlock(m) + `<div class="autobar" style="--dur:${pace()}ms"><i></i></div><div class="solve-btns" style="grid-template-columns:1fr">${btn(t(touch() ? 'solve.auto.tapToPause' : 'solve.auto.keysToPause'), 'autoPause', {cls: 'giant', icon: 'pause'})}</div>`;
     } else if (st === 'auto-paused') {
       lower = insBlock(m) + `<div class="solve-btns">${btn(t('solve.previous'), 'prev', {cls: 'giant', dis: S.turn === 0})}${btn(t('common.carryOn'), 'autoGo', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
     } else {
@@ -817,7 +820,7 @@ screens.solve = {
       lower = hint + insBlock(m) + `<div class="solve-btns">${btn(t('solve.previous'), 'prev', {cls: 'giant', dis: S.turn === 0})}${btn(t(S.turn === N - 1 ? 'solve.finish' : 'solve.next'), 'next', {v: 'primary', cls: 'giant', kbd: fwdKey})}</div>`;
     }
     let layer = '';
-    if (st === 'menu') layer = sheet(t('solve.paused'), btn(t('common.carryOn'), 'closeSheet', {v: 'primary', cls: 'block'}) + btn(t('solve.menu.hold'), 'go', {cls: 'block', arg: 'help'})
+    if (st === 'menu') layer = sheet(t('solve.paused'), btn(t('common.carryOn'), 'closeSheet', {v: 'primary', cls: 'block'}) + btn(t('solve.menu.hold'), 'go', {cls: 'block', arg: 'help.holding'})
       + btn(t('solve.menu.lost'), 'pick', {cls: 'block', arg: 'solve.lost'}) + btn(t('common.settings'), 'go', {cls: 'block', arg: 'settings', icon: 'settings'})
       + btn(t('solve.menu.leave'), 'leaveSolve', {v: 'ghost', cls: 'block'}) + `<p class="note">${t('solve.menu.leaveNote')}</p>`);
     if (st === 'lost') layer = sheet(t('solve.lost.title'), `<p>${t('solve.lost.body')}</p><ol><li>${t('solve.lost.step1')}</li><li>${t('solve.lost.step2')}</li><li>${t('solve.lost.step3')}</li></ol>`
@@ -865,38 +868,50 @@ function go(screen, state, o = {}) {
     S.skipStage = state !== 'stage-done';
   }
   if (screen === 'complete') solveReset(N);
+  const sc = screens[screen];
+  if (sc && sc.enter) { const r = sc.enter(P.state, o); if (r) P.state = r; }
   render();
   if (screen === 'scan') scanArm();
   armTimer();
 }
+const OVER = {scan: ['more', 'camera-picker', 'confirm-leave', 'confirm-restart'], solve: ['menu', 'lost'], complete: ['not-solved'], home: ['confirm-discard'],
+  settings: ['language', 'confirm-clear'], history: ['confirm-delete', 'confirm-clear'], review: ['confirm-discard'], permission: ['system']};
+const BASE = {scan: () => sim.phase, solve: () => restState(), home: () => homeState(), settings: () => 'main', history: () => histState(), review: () => reviewState(),
+  permission: () => P.d.permRefused ? 'refused' : 'ask'};
+function popBack() {
+  const prev = P.stack.pop();
+  if (!prev) return go('home', homeState(), {push: false});
+  go(prev.screen, prev.state, {push: false, resume: true});
+}
 function back() {
-  const overlay = {scan: ['more', 'camera-picker', 'confirm-leave', 'confirm-restart'], solve: ['menu', 'lost'], complete: ['not-solved'], home: ['confirm-discard']}[P.screen] || [];
-  if (overlay.includes(P.state)) return actions.closeSheet();
+  if ((OVER[P.screen] || []).includes(P.state)) return actions.closeSheet();
   if (P.screen === 'scan') return actions.scanCancel();
   if (P.screen === 'solve') return actions.leaveSolve();
   if (P.screen === 'complete') return actions.home();
-  const prev = P.stack.pop();
-  if (!prev || P.screen === 'home') return;
-  if (prev.screen === 'scan' || prev.screen === 'solve') return go(prev.screen, prev.state, {push: false, resume: true});
-  go(prev.screen, prev.state, {push: false});
+  if (P.screen === 'home') return;
+  if (P.screen === 'review') { if (RV.dirty) { RV.then = null; P.state = 'confirm-discard'; return render(); } RV.f = null; }
+  if (P.screen === 'solution') solStop();
+  popBack();
 }
 const homeState = () => P.d.resume ? 'resume' : 'default';
 const restState = () => landState() === 'stage-done' ? 'stage-done' : P.opts.advance === 'timer' ? 'auto-paused' : S.turn === N - 1 ? 'last-move' : 'move';
 const actions = {
-  go(el) { go(el.dataset.arg, 'default'); },
+  go(el) { const [sc, st] = el.dataset.arg.split('.'); go(sc, st || 'default'); },
   pick(el) { const [s, st] = el.dataset.arg.split('.'); if (s === P.screen) { P.state = st; if (s === 'scan') { clearTimeout(sim.timer); } render(); armTimer(); } else go(s, st, {picked: true}); },
   back,
   home() { P.stack = []; go('home', homeState(), {push: false}); },
-  scan() { P.d.resume = null; go('scan', 'starting'); },
+  scan() { P.d.resume = null; if (touch() && !P.d.camAllowed) return go('permission', 'default'); go('scan', 'starting'); },
   noop() {},
   resume() { solveReset((P.d.resume || {turn: 23}).turn); go('solve', 'hold-resume'); },
   discardSolve() { P.d.resume = null; go('home', 'default', {push: false}); },
   closeSheet(el, ev) {
-    if (ev && el.classList.contains('scrim') && ev.target !== el) return;
-    if (P.screen === 'scan') { P.state = sim.phase; render(); scanArm(); }
-    else if (P.screen === 'solve') { P.state = restState(); render(); }
-    else if (P.screen === 'home') { P.state = homeState(); render(); }
-    else { P.state = 'default'; render(); }
+    if (ev && el && el.classList.contains('scrim') && ev.target !== el) return;
+    const prev = P.stack[P.stack.length - 1];
+    if (P.screen === 'settings' && P.state === 'language' && prev && prev.screen === 'first-run') return popBack();
+    P.state = (BASE[P.screen] || (() => 'default'))();
+    render();
+    if (P.screen === 'scan') scanArm();
+    armTimer();
   },
   scanCancel() { if (sim.sides.length && !sim.phase.startsWith('camera-')) { P.state = 'confirm-leave'; clearTimeout(sim.timer); render(); } else actions.home(); },
   scanStartOver() { P.state = 'confirm-restart'; clearTimeout(sim.timer); render(); },
@@ -911,10 +926,16 @@ const actions = {
   leaveSolve() { P.d.resume = S.turn < N ? {turn: S.turn, total: N} : null; actions.home(); }
 };
 
+/*__JS_MORE__*/
+
 function render() {
   const keep = document.activeElement && app.contains(document.activeElement) ? document.activeElement.dataset : null;
-  const sc = screens[P.screen];
+  const sc = screens[P.screen], scrolls = {};
+  app.querySelectorAll('[data-scroll]').forEach(e => { scrolls[e.dataset.scroll] = e.scrollTop; });
   app.innerHTML = sc ? sc.render(P.state) : placeholder(P.screen);
+  app.querySelectorAll('[data-scroll]').forEach(e => { if (scrolls[e.dataset.scroll]) e.scrollTop = scrolls[e.dataset.scroll]; });
+  const cur = app.querySelector('.turnrow.cur');
+  if (cur && cur.scrollIntoView) cur.scrollIntoView({block: 'nearest'});
   const root = app.firstElementChild;
   if (P.entered) root.classList.add('enter');
   P.entered = false;
@@ -938,8 +959,14 @@ function syncBar() {
   if ([...pState.options].some(o => o.value === P.state)) pState.value = P.state;
   $('#p-run').hidden = !(P.screen === 'scan' && !sim.auto);
 }
+function syncSelects() {
+  const o = P.opts;
+  for (const [id, v] of [['#p-size', o.size], ['#p-theme', o.theme], ['#p-dir', o.dir], ['#p-text', String(o.ts)], ['#p-strings', o.pseudo ? 'pseudo' : 'en'],
+    ['#p-marks', o.marks ? 'on' : 'off'], ['#p-cvd', o.cvd], ['#p-motion', o.motion], ['#p-advance', o.advance], ['#p-notation', o.notation ? 'on' : 'off']]) $(id).value = v;
+}
 function applyOpts() {
   const o = P.opts;
+  syncSelects();
   device.dataset.size = o.size;
   if (o.theme === 'auto') delete device.dataset.appTheme; else device.dataset.appTheme = o.theme;
   device.dir = o.dir;
@@ -995,10 +1022,12 @@ app.addEventListener('click', e => {
   if (fn) fn(el, e);
 });
 document.addEventListener('keydown', e => {
-  if (!$('#map').hidden || e.target.closest('.pbar')) return;
+  const tgt = e.target instanceof Element ? e.target : document.body;
+  if (!$('#map').hidden || tgt.closest('.pbar')) return;
   if (e.key === 'Escape') { e.preventDefault(); return back(); }
+  if (P.screen === 'review' && /^[1-6]$/.test(e.key) && !app.querySelector('.scrim')) { RV.colour = Object.keys(MARKS)[+e.key - 1]; RV.centre = false; return render(); }
   if (P.screen !== 'solve' || app.querySelector('.scrim')) return;
-  const onControl = e.target.closest('button,select,a');
+  const onControl = tgt.closest('button,select,a');
   const fwd = P.opts.dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight', bwd = P.opts.dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
   const advance = () => { const st = P.state; if (['hold', 'hold-resume'].includes(st)) actions.holdReady(); else if (st === 'stage-done') actions.stageGo(); else if (st === 'auto') actions.autoPause(); else if (st === 'auto-paused') actions.autoGo(); else nextTurn(); };
   if ((e.key === ' ' || e.key === 'Enter') && !onControl) { e.preventDefault(); advance(); }
@@ -1012,7 +1041,8 @@ new MutationObserver(() => { palette(); redraw(); }).observe(document.documentEl
 try { Object.assign(P.opts, JSON.parse(localStorage.getItem('cubeulator-proto') || '{}')); } catch (e) {}
 const SAVED_SIZE = P.opts.size;
 if (narrow()) P.opts.size = 'phone';
-for (const [id, v] of [['#p-size', P.opts.size], ['#p-theme', P.opts.theme], ['#p-dir', P.opts.dir], ['#p-text', String(P.opts.ts)], ['#p-strings', P.opts.pseudo ? 'pseudo' : 'en'],
-  ['#p-marks', P.opts.marks ? 'on' : 'off'], ['#p-cvd', P.opts.cvd], ['#p-motion', P.opts.motion], ['#p-advance', P.opts.advance], ['#p-notation', P.opts.notation ? 'on' : 'off']]) $(id).value = v;
+let seen = false;
+try { seen = !!localStorage.getItem('cubeulator-proto-seen'); } catch (e) {}
+if (!seen) { P.screen = 'first-run'; P.state = 'welcome'; }
 applyOpts();
 </script>

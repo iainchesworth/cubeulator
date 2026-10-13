@@ -10,8 +10,19 @@ Rectangle {
         font.family: Theme.fontHeading
         font.pixelSize: 11
         font.letterSpacing: 1.4
+        // Small-capital labels are written in sentence case in the catalogue
+        // and capitalised here, which is locale-aware (content.md).
+        font.capitalization: Font.AllUppercase
         color: Theme.accent
     }
+
+    // The theme choices by their key, so that each is a plain qsTrId() call
+    // the extractor can see; SettingsState owns the keys, not the words.
+    readonly property var themeLabels: ({
+        system: qsTrId("settings.theme.system"),
+        light: qsTrId("settings.theme.light"),
+        dark: qsTrId("settings.theme.dark")
+    })
 
     component ChipRow: Flow {
         id: chipRoot
@@ -56,7 +67,7 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            SectionLabel { text: "CAMERA" }
+            SectionLabel { text: qsTrId("settings.section.camera") }
 
             // Desktop: pick from whatever's actually plugged in.
             // CameraController (not CameraDeviceModel) is the source of
@@ -71,10 +82,10 @@ Rectangle {
                 spacing: Theme.space2
                 Text {
                     text: CameraController.busy
-                        ? "Looking for cameras…"
+                        ? qsTrId("settings.camera.finding")
                         : CameraController.devices.length > 0
-                            ? "Choose which device Cubeulator reads the cube's faces from."
-                            : "No camera was detected. Plug one in, then refresh."
+                            ? qsTrId("settings.camera.choose")
+                            : qsTrId("settings.camera.none")
                     font.family: Theme.fontHeading; font.pixelSize: 12
                     color: Theme.inkMuted(0.6)
                     width: parent.width; wrapMode: Text.WordWrap
@@ -86,7 +97,7 @@ Rectangle {
                     onSelected: (index) => CameraController.selectDevice(CameraController.devices[index].id)
                 }
                 AppButton {
-                    variant: "ghost"; leadingIcon: "refresh"; text: "Refresh"
+                    variant: "ghost"; leadingIcon: "refresh"; text: qsTrId("common.lookAgain")
                     onClicked: CameraController.refreshDevices()
                 }
             }
@@ -106,13 +117,13 @@ Rectangle {
                     }
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
-                        text: AppState.cameraGranted ? "Camera access granted" : "Camera access not granted"
+                        text: AppState.cameraGranted ? qsTrId("settings.camera.allowed") : qsTrId("settings.camera.refused")
                         font.family: Theme.fontHeading; font.pixelSize: 13; color: Theme.ink
                     }
                 }
                 AppButton {
                     visible: !AppState.cameraGranted
-                    variant: "secondary"; text: "Grant camera access"
+                    variant: "secondary"; text: qsTrId("permission.allow")
                     onClicked: AppState.requestPermission()
                 }
             }
@@ -148,9 +159,9 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            SectionLabel { text: "APPEARANCE" }
+            SectionLabel { text: qsTrId("settings.section.appearance") }
             ChipRow {
-                options: SettingsState.themeModes.map(function (m) { return m.label; })
+                options: SettingsState.themeModes.map(function (m) { return root.themeLabels[m.key]; })
                 currentIndex: SettingsState.themeModes.findIndex(function (m) { return m.key === SettingsState.themeMode; })
                 onSelected: (index) => SettingsState.themeMode = SettingsState.themeModes[index].key
             }
@@ -159,18 +170,37 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            SectionLabel { text: "LANGUAGE" }
+            SectionLabel { text: qsTrId("settings.section.language") }
+            // The first choice follows the device; the rest are the nine
+            // languages, each written in itself and never translated. Choosing
+            // one applies at once - strings, direction, numbers - and is kept
+            // under language/code (LanguageManager).
             ChipRow {
-                options: SettingsState.languages
-                currentIndex: SettingsState.languageIndex
-                onSelected: (index) => SettingsState.languageIndex = index
+                readonly property var languages: LanguageManager.availableLanguages()
+                options: [qsTrId("settings.language.system").arg(LanguageManager.deviceLanguage().name)]
+                    .concat(languages.map(function (l) { return l.name; }))
+                currentIndex: {
+                    if (LanguageManager.selectedLanguage === "")
+                        return 0;
+                    for (var i = 0; i < languages.length; ++i) {
+                        if (languages[i].code === LanguageManager.selectedLanguage)
+                            return i + 1;
+                    }
+                    return 0;
+                }
+                onSelected: (index) => {
+                    if (index === 0)
+                        LanguageManager.useSystemLanguage();
+                    else
+                        LanguageManager.setLanguage(languages[index - 1].code);
+                }
             }
         }
 
         Column {
             width: parent.width
             spacing: Theme.space2
-            SectionLabel { text: "CUBE STYLE" }
+            SectionLabel { text: qsTrId("settings.dev.cubeStyle") }
             Text {
                 text: "Shader style for the 3D cube shown around the app."
                 font.family: Theme.fontHeading; font.pixelSize: 12
@@ -210,7 +240,7 @@ Rectangle {
             readonly property bool pendingRestart: SettingsState.graphicsBackend !== "auto"
                 && SettingsState.graphicsBackendKeyNames[SettingsState.graphicsBackend] !== currentBackendName
             Text {
-                text: "Graphics backend. Currently running " + parent.currentBackendName + "."
+                text: qsTrId("settings.dev.backend").arg(parent.currentBackendName)
                 font.family: Theme.fontHeading; font.pixelSize: 12
                 color: Theme.inkMuted(0.6)
                 width: parent.width; wrapMode: Text.WordWrap
@@ -222,7 +252,7 @@ Rectangle {
             }
             Text {
                 visible: parent.pendingRestart
-                text: "Restart Cubeulator to switch to this backend."
+                text: qsTrId("settings.dev.restart")
                 font.family: Theme.fontHeading; font.pixelSize: 12
                 color: Theme.warning
                 width: parent.width; wrapMode: Text.WordWrap
@@ -237,7 +267,7 @@ Rectangle {
             AppButton {
                 objectName: "aboutRow"
                 variant: "ghost"
-                text: qsTr("About Cubeulator")
+                text: qsTrId("settings.about")
                 onClicked: AppInfo.showAbout()
             }
         }
@@ -245,10 +275,10 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space3
-            SectionLabel { text: "DEVELOPER" }
+            SectionLabel { text: qsTrId("settings.section.developer") }
             Toggle {
                 checked: SettingsState.statsForNerds
-                label: "Stats for nerds (FPS, render backend)"
+                label: qsTrId("settings.dev.stats")
                 onToggled: SettingsState.statsForNerds = !SettingsState.statsForNerds
             }
         }
@@ -264,9 +294,9 @@ Rectangle {
         Row {
             width: parent.width
             spacing: Theme.space2
-            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
+            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: qsTrId("common.back"); onClicked: AppState.closeSettings() }
         }
-        Text { text: "Settings"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 28; color: Theme.ink }
+        Text { text: qsTrId("common.settings"); font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 28; color: Theme.ink }
 
         Flickable {
             width: parent.width
@@ -288,8 +318,8 @@ Rectangle {
             padding: Theme.space8 + Theme.space2
             spacing: Theme.space4
 
-            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: "Back"; onClicked: AppState.closeSettings() }
-            Text { text: "Settings"; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 36; color: Theme.ink }
+            AppButton { variant: "ghost"; leadingIcon: "chevron-left"; text: qsTrId("common.back"); onClicked: AppState.closeSettings() }
+            Text { text: qsTrId("common.settings"); font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 36; color: Theme.ink }
 
             Flickable {
                 width: parent.width - (Theme.space8 + Theme.space2) * 2
@@ -305,7 +335,7 @@ Rectangle {
             height: parent.height
             color: Theme.surface
 
-            Rectangle { width: 2; height: parent.height; color: Theme.divider }
+            Rectangle { anchors.left: parent.left; width: 2; height: parent.height; color: Theme.divider }
 
             Column {
                 anchors.centerIn: parent
@@ -318,6 +348,8 @@ Rectangle {
                     autoRotate: SettingsState.cubeAutoRotate
                     autoRotateSpeed: SettingsState.rotateSpeedValue
                     showStats: SettingsState.statsForNerds
+                    LayoutMirroring.enabled: false
+                    LayoutMirroring.childrenInherit: true
                 }
 
                 AppButton {

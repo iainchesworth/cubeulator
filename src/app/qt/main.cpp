@@ -1,5 +1,6 @@
 #include "controllers/app_controllers.hpp"
 #include "desktop/desktop_integration.hpp"
+#include "i18n/language_manager.hpp"
 
 #include <cube/solver/solver.hpp>
 
@@ -133,6 +134,8 @@ int main(int argc, char* argv[]) {
     QQmlApplicationEngine engine;
     controllers.addImageProviders(engine);
     desktop.prepare(engine);  // E4a: singletons and the window's initial geometry
+    // The language - translators, direction, locale - before the first frame.
+    cube::i18n::install(app, engine);
     engine.loadFromModule("Cubeulator", "Main");
 
     if (engine.rootObjects().isEmpty()) {

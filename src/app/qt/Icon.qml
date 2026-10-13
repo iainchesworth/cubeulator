@@ -10,6 +10,18 @@ Canvas {
     property color color: Theme.ink
     property real strokeWidth: 2
 
+    // A chevron points the way the layout goes, so it turns round when the
+    // layout is mirrored. Nothing else here is a direction: the icons that
+    // describe a turn of the cube are not in this set and never mirror.
+    readonly property bool mirrorsInRtl: name === "chevron-left" || name === "chevron-right"
+    // The attached property belongs to an Item, so it is read here and not in
+    // the Scale below.
+    readonly property bool layoutMirrored: LayoutMirroring.enabled
+    transform: Scale {
+        origin.x: root.width / 2
+        xScale: root.mirrorsInRtl && root.layoutMirrored ? -1 : 1
+    }
+
     onNameChanged: requestPaint()
     onColorChanged: requestPaint()
     onWidthChanged: requestPaint()

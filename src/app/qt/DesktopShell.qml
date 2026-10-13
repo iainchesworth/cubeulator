@@ -50,7 +50,7 @@ Item {
 
     Action {
         id: settingsAction
-        text: qsTr("Settings…")
+        text: qsTrId("menu.settings")
         shortcut: "Ctrl+,"
         enabled: AppState.screen !== "settings"
         onTriggered: AppState.openSettings()
@@ -58,7 +58,7 @@ Item {
 
     Action {
         id: newScanAction
-        text: qsTr("New Scan")
+        text: qsTrId("menu.newScan")
         shortcut: StandardKey.New
         enabled: shell.onHome
         onTriggered: AppState.beginScan()
@@ -66,7 +66,7 @@ Item {
 
     Action {
         id: enterByHandAction
-        text: qsTr("Enter Colours by Hand")
+        text: qsTrId("menu.enterByHand")
         shortcut: "Shift+Ctrl+N"
         enabled: shell.handEntryAvailable && shell.onHome
         onTriggered: shell.handEntryRequested()
@@ -74,7 +74,7 @@ Item {
 
     Action {
         id: helpAction
-        text: qsTr("Cubeulator Help")
+        text: qsTrId("menu.helpItem")
         // F1 on Windows and Linux, Cmd+? on macOS.
         shortcut: StandardKey.HelpContents
         enabled: shell.helpAvailable
@@ -83,13 +83,13 @@ Item {
 
     Action {
         id: aboutAction
-        text: qsTr("About Cubeulator")
+        text: qsTrId("about.title")
         onTriggered: shell.showAbout()
     }
 
     Action {
         id: fullScreenAction
-        text: shell.window.visibility === Window.FullScreen ? qsTr("Exit Full Screen") : qsTr("Enter Full Screen")
+        text: shell.window.visibility === Window.FullScreen ? qsTrId("menu.exitFullScreen") : qsTrId("menu.enterFullScreen")
         // Ctrl+Cmd+F on macOS (Qt's Ctrl is Cmd there, Meta is Control).
         shortcut: shell.isMac ? "Ctrl+Meta+F" : "F11"
         onTriggered: shell.toggleFullScreen()
@@ -97,7 +97,7 @@ Item {
 
     Action {
         id: quitAction
-        text: qsTr("Quit Cubeulator")
+        text: qsTrId("menu.quit")
         shortcut: "Ctrl+Q"
         onTriggered: Qt.quit()
     }
@@ -106,7 +106,7 @@ Item {
 
     Action {
         id: closeWindowAction
-        text: qsTr("Close Window")
+        text: qsTrId("menu.closeWindow")
         shortcut: "Ctrl+W"
         enabled: shell.isMac
         onTriggered: shell.window.close()
@@ -114,7 +114,7 @@ Item {
 
     Action {
         id: minimiseAction
-        text: qsTr("Minimise")
+        text: qsTrId("menu.minimise")
         shortcut: "Ctrl+M"
         enabled: shell.isMac
         onTriggered: shell.window.showMinimized()
@@ -122,7 +122,7 @@ Item {
 
     Action {
         id: zoomAction
-        text: qsTr("Zoom")
+        text: qsTrId("menu.zoom")
         enabled: shell.isMac
         onTriggered: shell.window.visibility = shell.window.visibility === Window.Maximized
                                               ? Window.Windowed : Window.Maximized
@@ -130,7 +130,7 @@ Item {
 
     Action {
         id: bringAllToFrontAction
-        text: qsTr("Bring All to Front")
+        text: qsTrId("menu.bringAllToFront")
         enabled: shell.isMac
         onTriggered: {
             shell.window.raise();
@@ -150,7 +150,7 @@ Item {
 
         MenuBar {
             Menu {
-                title: qsTr("File")
+                title: qsTrId("menu.file")
                 popupType: Popup.Native
                 MenuItem { action: newScanAction }
                 MenuItem { action: enterByHandAction }
@@ -161,12 +161,12 @@ Item {
                 MenuItem { action: quitAction }
             }
             Menu {
-                title: qsTr("View")
+                title: qsTrId("menu.view")
                 popupType: Popup.Native
                 MenuItem { action: fullScreenAction }
             }
             Menu {
-                title: qsTr("Window")
+                title: qsTrId("menu.window")
                 popupType: Popup.Native
                 MenuItem { action: minimiseAction }
                 MenuItem { action: zoomAction }
@@ -174,7 +174,7 @@ Item {
                 MenuItem { action: bringAllToFrontAction }
             }
             Menu {
-                title: qsTr("Help")
+                title: qsTrId("menu.help")
                 popupType: Popup.Native
                 MenuItem { action: helpAction }
                 MenuItem { action: aboutAction }
@@ -213,7 +213,7 @@ Item {
         contentItem: Column {
             spacing: 8
             Accessible.role: Accessible.Dialog
-            Accessible.name: qsTr("About Cubeulator")
+            Accessible.name: qsTrId("about.title")
             Text {
                 text: AppInfo.name
                 font.pixelSize: 28
@@ -222,14 +222,14 @@ Item {
             }
             Text {
                 objectName: "aboutVersion"
-                text: qsTr("Version %1").arg(AppInfo.version)
+                text: qsTrId("about.version").arg(AppInfo.version)
                 font.pixelSize: 16
                 color: Theme.ink
             }
             Item { width: 1; height: 8 }
             AppButton {
                 objectName: "aboutClose"
-                text: qsTr("Close")
+                text: qsTrId("common.close")
                 variant: "secondary"
                 onClicked: aboutPlaceholder.close()
             }
