@@ -11,6 +11,9 @@ stage of the solver.
 It is **off by default and free when off**. A normal build compiles the
 instrumentation to nothing and does not need Tracy installed at all.
 
+What a capture of the application found, and what was done about it, is in
+[Performance](performance.md).
+
 ## Building a profiling binary
 
 ```sh
