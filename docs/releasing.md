@@ -175,7 +175,11 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
    any other.
 4. **Open the release PR**: `develop` → `main`, merge commit. The `Release
    readiness` check puts the rendered notes in its summary: read them there.
-   `main`'s ruleset is in [Branch protection](branch-protection.md).
+   `main`'s ruleset is in [Branch protection](branch-protection.md). It asks
+   for "up to date", so anything that reaches `main` after the release PR's
+   last green run (a hotfix, a back-merge) starts every check again, and the
+   full matrix is hours on hosted runners: keep the release PR the last thing
+   that touches `main`, and do the back-merge (step 9) after the tag.
 5. **Tag the merge commit on `main`:**
 
    ```sh
