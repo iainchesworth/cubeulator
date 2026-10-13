@@ -180,13 +180,15 @@ jobs:
         env:
           LEGS: ${{ github.event_name == 'workflow_dispatch' && inputs.legs || 'all' }}
         run: |
-          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
-          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
-          # links unconditionally on macOS ("ld: framework 'AGL' not
-          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
+          # macOS builds on macos-26 (Xcode 26). It was pinned to macos-15
+          # because that SDK dropped AGL.framework, which Qt 6.8.3 linked
+          # unconditionally ("ld: framework 'AGL' not found"). Qt 6.12 lists
+          # macOS 26 as supported, so that no longer applies; if this leg
+          # regresses on the SDK, macos-15 is the known-good fallback. The iOS
+          # job stays on macos-15 for an unrelated vcpkg reason (see ios-build).
           all='[
             {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux"},
-            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-15",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
+            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
             {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows"}
           ]'
           for leg in ${LEGS//,/ }; do
