@@ -44,10 +44,10 @@ void require_well_formed(SteppedSolution stepped) {
     int expected_start = 0;
     for (std::size_t i = 0; i < ranges.size(); ++i) {
         CAPTURE(i);
-        REQUIRE(ranges[i].stage == stages[i]);
-        REQUIRE(ranges[i].start_index == expected_start);
-        REQUIRE(ranges[i].end_index >= ranges[i].start_index);
-        expected_start = ranges[i].end_index;
+        REQUIRE(ranges.at(i).stage == stages.at(i));
+        REQUIRE(ranges.at(i).start_index == expected_start);
+        REQUIRE(ranges.at(i).end_index >= ranges.at(i).start_index);
+        expected_start = ranges.at(i).end_index;
     }
     REQUIRE(expected_start == stepped.move_count());
 
@@ -55,7 +55,7 @@ void require_well_formed(SteppedSolution stepped) {
     REQUIRE(static_cast<int>(moves.size()) == stepped.move_count());
     for (std::size_t i = 1; i < moves.size(); ++i) {
         CAPTURE(i);
-        REQUIRE(moves[i].face != moves[i - 1].face);
+        REQUIRE(moves.at(i).face != moves.at(i - 1).face);
     }
 
     for (const StageRange& range : ranges) {
@@ -154,9 +154,9 @@ TEST_CASE("stage_ranges still tile the move list when a merge empties stages",
                                        Stage::Oll, Stage::Pll};
     Solution solution;
     for (std::size_t i = 0; i < algorithms.size(); ++i) {
-        const auto moves = parse_algorithm(algorithms[i]);
+        const auto moves = parse_algorithm(algorithms.at(i));
         REQUIRE(moves.has_value());
-        solution.steps.push_back(SolveStep{.stage = stages[i], .moves = *moves});
+        solution.steps.push_back(SolveStep{.stage = stages.at(i), .moves = *moves});
     }
 
     const Cube start = random_scramble(3, 10);
@@ -168,11 +168,11 @@ TEST_CASE("stage_ranges still tile the move list when a merge empties stages",
 
     const auto& ranges = stepped.stage_ranges();
     REQUIRE(ranges.size() == 5);
-    REQUIRE((ranges[0].start_index == 0 && ranges[0].end_index == 0));
-    REQUIRE((ranges[1].start_index == 0 && ranges[1].end_index == 0));
-    REQUIRE((ranges[2].start_index == 0 && ranges[2].end_index == 1));
-    REQUIRE((ranges[3].start_index == 1 && ranges[3].end_index == 1));
-    REQUIRE((ranges[4].start_index == 1 && ranges[4].end_index == 2));
+    REQUIRE((ranges.at(0).start_index == 0 && ranges.at(0).end_index == 0));
+    REQUIRE((ranges.at(1).start_index == 0 && ranges.at(1).end_index == 0));
+    REQUIRE((ranges.at(2).start_index == 0 && ranges.at(2).end_index == 1));
+    REQUIRE((ranges.at(3).start_index == 1 && ranges.at(3).end_index == 1));
+    REQUIRE((ranges.at(4).start_index == 1 && ranges.at(4).end_index == 2));
     require_well_formed(stepped);
 
     // The empty stages are never "current": the first move belongs to

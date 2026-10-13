@@ -19,6 +19,10 @@ set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/lib/qt6" "/usr/lib/x86_64-linux-gnu/qt6")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS gcc_64)
 
+# A package installs under /usr, so the licence and the notices go where the
+# distribution keeps documentation rather than into /usr itself.
+set(CUBEULATOR_PLATFORM_NOTICES_DIR "share/doc/cubeulator")
+
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/linux/camera_linux.cpp
     platform/linux/paths_linux.cpp
@@ -45,20 +49,25 @@ endfunction()
 function(cube_platform_deploy_qt_library target qt_target)
 endfunction()
 
+# A .tar.gz, and a .deb and an .rpm where their tools are installed.
+# packaging/linux/Packaging.cmake.
 macro(cube_platform_configure_packaging)
-    list(APPEND CPACK_GENERATOR "TGZ")
-    find_program(CUBEULATOR_DPKG_DEB_EXECUTABLE dpkg-deb)
-    if(CUBEULATOR_DPKG_DEB_EXECUTABLE)
-        list(APPEND CPACK_GENERATOR "DEB")
-        set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
-        set(CPACK_DEBIAN_PACKAGE_SECTION "graphics")
-        set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-    endif()
-    find_program(CUBEULATOR_RPMBUILD_EXECUTABLE rpmbuild)
-    if(CUBEULATOR_RPMBUILD_EXECUTABLE)
-        list(APPEND CPACK_GENERATOR "RPM")
-        set(CPACK_RPM_PACKAGE_LICENSE "GPL-3.0-or-later")
-        set(CPACK_RPM_PACKAGE_GROUP "Amusements/Graphics")
-        set(CPACK_RPM_PACKAGE_AUTOREQPROV ON)
-    endif()
+    include("${PROJECT_SOURCE_DIR}/packaging/linux/Packaging.cmake")
 endmacro()
+
+# The shell's Linux implementation: the session's inhibit interface over
+# D-Bus (the desktop portal, then org.freedesktop.ScreenSaver). It needs
+# QtDBus, which the library does not otherwise link.
+function(cube_platform_configure_desktop_shell target)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS DBus)
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/app/platform/linux/desktop_shell_linux.cpp")
+    target_link_libraries(${target} PRIVATE Qt6::DBus)
+endfunction()
+
+# The app in its own directory under /usr/lib with the Qt it carries, a
+# launcher in /usr/bin, and the desktop entry, AppStream metadata and icons.
+# packaging/linux/ConfigureApp.cmake.
+function(cube_platform_configure_desktop_app target)
+    include("${PROJECT_SOURCE_DIR}/packaging/linux/ConfigureApp.cmake")
+endfunction()

@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """Condense the SPDX SBOMs that ship inside a Qt install into qt-modules.json.
 
-Qt 6.8 installs carry <prefix>/sbom/<repo>-<version>.spdx.json: one package per
+Qt 6.8+ installs carry <prefix>/sbom/<repo>-<version>.spdx.json: one package per
 module, plugin, bundled third-party library and third-party attribution, with
-SPDX licence expressions, copyright lines, download locations and DEPENDS_ON
-edges between them. The files are several megabytes each, so the build does not
-read them; it reads the snapshot this script writes, third_party/notices/
-qt-modules.json, and the build's notices test checks the snapshot's licences
-against a live SBOM again whenever one is present (--check).
+SPDX licence expressions, copyright lines, download locations, DEPENDS_ON edges
+between them, and the binary files each package contains. The files are several
+megabytes each, so the build does not read them; it reads the snapshot this
+script writes, third_party/notices/qt-modules.json, and the build's notices test
+checks the snapshot's licences against a live SBOM again whenever one is present
+(--check).
 
     python -I tools/licences/qt_sbom_manifest.py \\
-        --sbom windows=C:/Qt/6.8.3/msvc2022_64/sbom \\
-        --sbom android=C:/Qt/6.8.3/android_arm64_v8a/sbom \\
+        --sbom windows=<qt>/msvc2022_64/sbom \\
+        --sbom android=<qt>/android_arm64_v8a/sbom \\
+        --sbom macos=<qt>/macos/sbom \\
         --out third_party/notices/qt-modules.json
 
     python -I tools/licences/qt_sbom_manifest.py --check \\
@@ -20,6 +22,12 @@ against a live SBOM again whenever one is present (--check).
 Platforms named here are the ones whose SBOM was read ("verified"). A component
 seen on every verified platform is platform-neutral; one seen on only some is
 tagged with them.
+
+The "files" map in the output turns the name of a library the build links or
+deploys (qt6core, qwindows, qdarwincamerapermission ...) into the component that
+contains it. It is read from the SBOMs' own list of packaged binaries, not
+guessed from package names: a plugin's package is called
+QDarwinCameraPermissionPlugin, its library libqdarwincamerapermission.a.
 """
 from __future__ import annotations
 
@@ -40,28 +48,44 @@ KIND = {
     "qt-bundled-3rdparty-module": "bundled",
     "qt-3rdparty-sources": "attribution",
 }
+# when two components claim the same library file name, the more specific wins
+KIND_RANK = {"module": 0, "plugin": 1, "bundled": 2, "attribution": 3}
 
 
 def _clean(value):
     return "" if value in (None, "NOASSERTION", "NONE") else value
 
 
-def read_sbom_dir(sbom_dir: Path) -> dict[str, dict]:
-    """Return {component id: record} for every SBOM in the directory."""
-    components: dict[str, dict] = {}
+def file_key(path: str) -> str:
+    """The key the build uses for a library: cmake/ThirdPartyNoticesGenerate.cmake
+    cn_qt_file_key() applies exactly this normalisation to a link input."""
+    name = path.replace("\\", "/").rsplit("/", 1)[-1].lower()
+    name = re.sub(r"\.(lib|a|dylib|dll|framework|so(\.[0-9]+)*)$", "", name)
+    name = re.sub(r"^lib", "", name)
+    name = re.sub(r"_(arm64-v8a|armeabi-v7a|x86_64|x86)$", "", name)
+    return name
+
+
+def read_sbom_dir(sbom_dir: Path) -> tuple[dict[str, dict], dict[str, str]]:
+    """Return ({component id: record}, {library key: component id})."""
     docs = sorted(sbom_dir.glob("*.spdx.json"))
     if not docs:
         raise SystemExit(f"no *.spdx.json under {sbom_dir}")
-    for doc in docs:
-        data = json.loads(doc.read_text(encoding="utf-8"))
-        local_ids: dict[str, str] = {}
+    loaded = [json.loads(doc.read_text(encoding="utf-8")) for doc in docs]
+
+    # Pass 1: every package of every document, so a cross-document edge can be
+    # resolved from the SPDXID alone (the "DocumentRef-<repo>-<hash>:" prefix
+    # and the "-<hash>" suffix on the id change from build to build).
+    components: dict[str, dict] = {}
+    by_spdxid: dict[str, str] = {}
+    for data in loaded:
         for pkg in data.get("packages", []):
             m = ID_RE.match(pkg.get("SPDXID", ""))
             if not m:
                 continue
             repo, kind, name = m["repo"], KIND[m["kind"]], pkg["name"]
             cid = f"{repo}/{name}"
-            local_ids[pkg["SPDXID"]] = cid
+            by_spdxid[pkg["SPDXID"]] = cid
             components[cid] = {
                 "kind": kind,
                 "repo": repo,
@@ -72,55 +96,81 @@ def read_sbom_dir(sbom_dir: Path) -> dict[str, dict]:
                 "download": _clean(pkg.get("downloadLocation")),
                 "depends": [],
             }
-        # Cross-document edges look like "DocumentRef-qtbase:SPDXRef-Package-...".
+
+    # Pass 2: edges and packaged binaries.
+    binaries: dict[str, str] = {}
+    for data in loaded:
+        binary_files = {
+            f["SPDXID"]: f["fileName"]
+            for f in data.get("files", [])
+            if "BINARY" in f.get("fileTypes", []) and f.get("fileName")
+        }
         for rel in data.get("relationships", []):
-            if rel.get("relationshipType") != "DEPENDS_ON":
+            kind = rel.get("relationshipType")
+            src = by_spdxid.get(rel["spdxElementId"])
+            if src is None:
                 continue
-            src = local_ids.get(rel["spdxElementId"])
             dst_raw = rel["relatedSpdxElement"]
-            dst = local_ids.get(dst_raw)
-            if dst is None and dst_raw.startswith("DocumentRef-"):
-                ref, _, spdxid = dst_raw.partition(":")
-                m = ID_RE.match(spdxid)
-                if m:
-                    dst = f"{m['repo']}/{_pkg_name_from_id(spdxid, m)}"
-            if src and dst and dst not in components[src]["depends"]:
-                components[src]["depends"].append(dst)
+            if kind == "DEPENDS_ON":
+                dst = by_spdxid.get(dst_raw.partition(":")[2] or dst_raw)
+                if dst and dst not in components[src]["depends"]:
+                    components[src]["depends"].append(dst)
+            elif kind == "CONTAINS" and dst_raw in binary_files:
+                key = file_key(binary_files[dst_raw])
+                if not key:
+                    continue
+                current = binaries.get(key)
+                if current is None or KIND_RANK[components[src]["kind"]] < KIND_RANK[components[current]["kind"]]:
+                    binaries[key] = src
     for rec in components.values():
         rec["depends"].sort()
-    return components
+    return components, binaries
 
 
-def _pkg_name_from_id(spdxid: str, m: re.Match) -> str:
-    # The package name equals the tail of the SPDXID for every kind we keep.
-    return m["name"]
-
-
-def merge(per_platform: dict[str, dict[str, dict]]) -> dict:
+def merge(per_platform: dict[str, tuple[dict[str, dict], dict[str, str]]]) -> dict:
     platforms = sorted(per_platform)
     merged: dict[str, dict] = {}
+    files: dict[str, str] = {}
+    edges: dict[str, dict[str, set[str]]] = {}   # cid -> platform -> its DEPENDS_ON targets
     for platform in platforms:
-        for cid, rec in per_platform[platform].items():
+        components, binaries = per_platform[platform]
+        for cid, rec in components.items():
             slot = merged.setdefault(cid, {**rec, "platforms": []})
             slot["platforms"].append(platform)
             if not slot["copyright"]:
                 slot["copyright"] = rec["copyright"]
-            slot["depends"] = sorted(set(slot["depends"]) | set(rec["depends"]))
+            edges.setdefault(cid, {})[platform] = set(rec["depends"])
+        for key, cid in binaries.items():
+            previous = files.setdefault(key, cid)
+            if previous != cid:
+                print(f"note: library '{key}' maps to {previous} and (on {platform}) {cid}; keeping the first",
+                      file=sys.stderr)
     for rec in merged.values():
         if rec["platforms"] == platforms:
             rec["platforms"] = ["*"]
-    # Keep depends edges only where the target is a known component.
-    for rec in merged.values():
-        rec["depends"] = [d for d in rec["depends"] if d in merged]
-    files: dict[str, str] = {}
+    # An edge present on every platform the component exists on is "depends";
+    # one present on only some is listed under "platformDepends" for those. The
+    # union would drag a macOS-only dependency (Gui -> DBus) onto Windows.
+    for cid, rec in merged.items():
+        per = edges[cid]
+        common = set.intersection(*per.values()) if per else set()
+        rec["depends"] = sorted(d for d in common if d in merged)
+        extras = {}
+        for platform, targets in sorted(per.items()):
+            only = sorted(d for d in targets - common if d in merged)
+            if only:
+                extras[platform] = only
+        if extras:
+            rec["platformDepends"] = extras
+    # Fallbacks for a library the packaged-binary lists did not name: the
+    # package's own name, which is right for modules (Qt6<Name>) on every
+    # platform and for some plugins.
     for cid, rec in merged.items():
         if rec["kind"] == "module":
-            files[f"qt6{rec['name'].lower()}"] = cid
-            # the shared library of QuickShapesPrivate is Qt6QuickShapes.dll
-            if rec["name"].endswith("Private"):
-                files.setdefault(f"qt6{rec['name'][:-len('Private')].lower()}", cid)
+            files.setdefault(f"qt6{rec['name'].lower()}", cid)
         elif rec["kind"] == "plugin":
-            files[rec["name"].lower()] = cid
+            files.setdefault(rec["name"].lower(), cid)
+    files = {k: v for k, v in files.items() if v in merged}
     versions = sorted({r["version"] for r in merged.values() if r["kind"] == "module"})
     return {
         "generator": "tools/licences/qt_sbom_manifest.py",
@@ -178,7 +228,7 @@ def main() -> int:
     ap.add_argument("--check", action="store_true", help="compare, do not write")
     args = ap.parse_args()
 
-    per_platform: dict[str, dict[str, dict]] = {}
+    per_platform: dict[str, tuple[dict[str, dict], dict[str, str]]] = {}
     for spec in args.sbom:
         platform, _, directory = spec.partition("=")
         if not directory:
@@ -188,7 +238,7 @@ def main() -> int:
     if args.check:
         snapshot = json.loads(args.out.read_text(encoding="utf-8"))
         bad = 0
-        for platform, live in per_platform.items():
+        for platform, (live, _binaries) in per_platform.items():
             print(f"checking snapshot against live SBOM for '{platform}' ...")
             bad += check(snapshot, live)
         print("snapshot matches" if bad == 0 else f"{bad} difference(s)")
@@ -197,7 +247,7 @@ def main() -> int:
     out = merge(per_platform)
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(render(out), encoding="utf-8", newline="\n")
-    print(f"wrote {args.out}: {len(out['components'])} components, "
+    print(f"wrote {args.out}: {len(out['components'])} components, {len(out['files'])} library keys, "
           f"platforms {out['verifiedPlatforms']}, Qt {out['qtVersions']}")
     return 0
 

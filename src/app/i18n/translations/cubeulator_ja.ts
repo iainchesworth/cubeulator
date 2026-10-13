@@ -2022,6 +2022,41 @@ F1 opens Help.</source>
         <extracomment>Menu item, macOS File menu. Title case as macOS menus are.</extracomment>
         <translation type="unfinished"></translation>
     </message>
+    <message id="menu.closeWindow">
+        <source>Close Window</source>
+        <extracomment>Menu item, macOS File menu. Title case as macOS menus are. Closing the only window quits the app.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.help">
+        <source>Help</source>
+        <extracomment>Menu bar, macOS. Use the word macOS itself uses for its Help menu in this language, so that the system adds its search field to it.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.enterFullScreen">
+        <source>Enter Full Screen</source>
+        <extracomment>Menu item, macOS View menu. Use macOS's own wording for this command in this language.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.exitFullScreen">
+        <source>Exit Full Screen</source>
+        <extracomment>Menu item, macOS View menu, shown while the window is full screen. Use macOS's own wording.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.minimise">
+        <source>Minimise</source>
+        <extracomment>Menu item, macOS Window menu. Use macOS's own wording for this command in this language.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.zoom">
+        <source>Zoom</source>
+        <extracomment>Menu item, macOS Window menu. Makes the window as large as the screen allows. Use macOS's own wording.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.bringAllToFront">
+        <source>Bring All to Front</source>
+        <extracomment>Menu item, macOS Window menu. Use macOS's own wording for this command in this language.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="store.summary">
         <source>Scan your cube with the camera, then follow one turn at a time until it is solved.</source>
         <extracomment>The one-line description in app stores and software centres. 80 characters at most in every language.</extracomment>

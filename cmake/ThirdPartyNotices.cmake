@@ -128,8 +128,12 @@ function(cube_add_third_party_notices app_target)
                 message(FATAL_ERROR \"Refusing to package: \${_n} third-party component(s) have no notice. First: \${_first}\nSee ${out_dir}/third-party-notices.json and docs/licensing.md.\")
             endif()
         ")
-        install(FILES "${txt}" DESTINATION .)
-        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION . RENAME LICENSE.txt)
+        # Where the platform keeps them (CUBEULATOR_PLATFORM_NOTICES_DIR): the
+        # root of an installer or disk image (beside the program, or beside the
+        # .app in the .dmg), or share/doc where a package installs under /usr.
+        set(notices_dir "${CUBEULATOR_PLATFORM_NOTICES_DIR}")
+        install(FILES "${txt}" DESTINATION "${notices_dir}")
+        install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" DESTINATION "${notices_dir}" RENAME LICENSE.txt)
     endif()
 endfunction()
 

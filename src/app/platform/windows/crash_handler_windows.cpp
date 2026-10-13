@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdio>
 #include <cstring>
+#include <print>
 
 namespace cube::platform::crash_handler {
 
@@ -51,7 +52,7 @@ LONG WINAPI writeCrashDump(EXCEPTION_POINTERS* exception) {
     }
 
     if (exception != nullptr && exception->ExceptionRecord != nullptr) {
-        std::fprintf(stderr, "CUBE CRASH: code=0x%08lX address=%p dump=%s\n",
+        std::println(stderr, "CUBE CRASH: code=0x{:08X} address={} dump={}",
                      exception->ExceptionRecord->ExceptionCode,
                      exception->ExceptionRecord->ExceptionAddress, dump_path);
         std::fflush(stderr);

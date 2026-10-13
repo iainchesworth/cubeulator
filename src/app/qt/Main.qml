@@ -39,6 +39,14 @@ ApplicationWindow {
         from: 0; to: 1; duration: 280; easing.type: Easing.OutCubic
     }
 
+    // E4a: desktop shortcuts, the macOS menu bar and the placeholder About.
+    // Not on a phone: it needs the desktop shell's singletons (KeepAwake,
+    // AppInfo), which AppRuntime registers only where that shell is built.
+    Loader {
+        active: !AppState.isMobile
+        sourceComponent: DesktopShell { window: root }
+    }
+
     Component { id: launchScreen; LaunchScreen {} }
     Component { id: permissionScreen; PermissionScreen {} }
     Component { id: scanScreen; DirectScanScreen {} }

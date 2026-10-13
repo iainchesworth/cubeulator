@@ -18,7 +18,10 @@ Result<std::vector<Move>> solve_cross(const Cube& start) {
     CUBE_ZONE_SCOPED_N("solver.cross");
     return detail::bfs_search(
         start, std::vector<Face>(kAllFaces.begin(), kAllFaces.end()), cross_solved,
-        [](const Cube& c) { return detail::SignatureKey{detail::cross_key(c), 0}; }, 8);
+        [](const Cube& c) {
+            return detail::SignatureKey{.cross = detail::cross_key(c), .rest = 0};
+        },
+        8);
 }
 
 }  // namespace cube::solver

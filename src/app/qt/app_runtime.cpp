@@ -12,6 +12,7 @@ namespace cube::app {
 
 AppRuntime::AppRuntime() {
     controllers_.registerWithQml();
+    desktop_.registerWithQml();
     controllers_.addImageProviders(engine_);
     // The language - translators, direction, locale - before the first frame.
     // A GUI application exists by now: the controllers' timers and the engine

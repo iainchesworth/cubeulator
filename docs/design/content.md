@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-398 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+405 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -692,6 +692,13 @@ Review the solution.
 | `menu.quit` | Quit Cubeulator | Menu item, macOS. |
 | `menu.helpItem` | Cubeulator Help | Menu item, macOS Help menu. |
 | `menu.enterByHand` | Enter Colours by Hand | Menu item, macOS File menu. Title case as macOS menus are. |
+| `menu.closeWindow` | Close Window | Menu item, macOS File menu. Title case as macOS menus are. Closing the only window quits the app. |
+| `menu.help` | Help | Menu bar, macOS. Use the word macOS itself uses for its Help menu in this language, so that the system adds its search field to it. |
+| `menu.enterFullScreen` | Enter Full Screen | Menu item, macOS View menu. Use macOS's own wording for this command in this language. |
+| `menu.exitFullScreen` | Exit Full Screen | Menu item, macOS View menu, shown while the window is full screen. Use macOS's own wording. |
+| `menu.minimise` | Minimise | Menu item, macOS Window menu. Use macOS's own wording for this command in this language. |
+| `menu.zoom` | Zoom | Menu item, macOS Window menu. Makes the window as large as the screen allows. Use macOS's own wording. |
+| `menu.bringAllToFront` | Bring All to Front | Menu item, macOS Window menu. Use macOS's own wording for this command in this language. |
 
 #### `store`
 

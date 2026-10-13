@@ -154,13 +154,13 @@ Photometry measure(const cv::Mat& bgr) {
     cv::Mat a_signed;
     cv::Mat b_signed;
     // OpenCV's 8-bit Lab stores a/b biased by 128 and L scaled by 255/100.
-    planes[1].convertTo(a_signed, CV_32F, 1.0, -128.0);
-    planes[2].convertTo(b_signed, CV_32F, 1.0, -128.0);
+    planes.at(1).convertTo(a_signed, CV_32F, 1.0, -128.0);
+    planes.at(2).convertTo(b_signed, CV_32F, 1.0, -128.0);
     cv::Mat chroma;
     cv::magnitude(a_signed, b_signed, chroma);
 
     Photometry out;
-    out.mean_l = cv::mean(planes[0])[0] * 100.0 / 255.0;
+    out.mean_l = cv::mean(planes.at(0))[0] * 100.0 / 255.0;
     out.mean_chroma = cv::mean(chroma)[0];
     out.mean_b = bgr_mean[0];
     out.mean_g = bgr_mean[1];

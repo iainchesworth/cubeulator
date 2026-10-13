@@ -45,6 +45,12 @@
 #                                      Where cmake/FindQt6.cmake looks for an
 #                                      aqtinstall-style Qt when none is on
 #                                      CMAKE_PREFIX_PATH.
+#   CUBEULATOR_PLATFORM_NOTICES_DIR    Where the licence and the third-party
+#                                      notices are installed, relative to the
+#                                      install prefix: "." where the prefix is
+#                                      the root of an installer or a disk image,
+#                                      a share/doc directory where it is /usr.
+#                                      Unused on phones.
 #
 # Build inputs (paths are relative to src/app):
 #   CUBEULATOR_PLATFORM_SOURCES        Compiled into cube_platform: one
@@ -72,6 +78,21 @@
 #   cube_platform_configure_packaging()
 #                                      A macro: adds this platform's CPack
 #                                      generators to CPACK_GENERATOR.
+#   cube_platform_configure_desktop_shell(<target>)
+#                                      Adds the platform's implementation of
+#                                      interfaces/desktop_shell.hpp (keep
+#                                      awake, process identity, window traits)
+#                                      and what it links to <target>, the
+#                                      cube_app_desktop library. Unlike
+#                                      CUBEULATOR_PLATFORM_SOURCES it may use
+#                                      Qt: the library has it.
+#   cube_platform_configure_desktop_app(<target>)
+#                                      What makes <target>, the app, an
+#                                      installable program on this desktop:
+#                                      its file name, icon, version resource or
+#                                      bundle, install rules and Qt deployment
+#                                      (packaging/<name>/ConfigureApp.cmake). A
+#                                      no-op on phones.
 # ---------------------------------------------------------------------------
 include_guard(GLOBAL)
 

@@ -54,6 +54,24 @@ project(Cubeulator
     HOMEPAGE_URL "https://github.com/iainchesworthlabs/cubeulator"
     LANGUAGES CXX)
 
+# The pre-release label of this version: "beta.1" for 0.1.0-beta.1, "" for a
+# final release. project(VERSION) cannot hold a label, so it sits beside it.
+# tools/release/prepare_release.py sets the pair together, and the Release
+# workflow checks the tag against it (docs/releasing.md). Everything that is
+# named for the version - the packages, the version resource, version.hpp's
+# version_string - uses CUBEULATOR_VERSION_FULL, so a beta is never a package
+# called by the final's name.
+set(CUBEULATOR_VERSION_PRERELEASE "")
+set(CUBEULATOR_VERSION_FULL "${PROJECT_VERSION}")
+if(NOT CUBEULATOR_VERSION_PRERELEASE STREQUAL "")
+    if(NOT CUBEULATOR_VERSION_PRERELEASE MATCHES "^(alpha|beta|rc)\\.[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "CUBEULATOR_VERSION_PRERELEASE is '${CUBEULATOR_VERSION_PRERELEASE}'; "
+            "expected alpha.N, beta.N or rc.N, or empty for a final release.")
+    endif()
+    string(APPEND CUBEULATOR_VERSION_FULL "-${CUBEULATOR_VERSION_PRERELEASE}")
+endif()
+
 # ---------------------------------------------------------------------------
 # Global language settings: C++23 only, no compiler extensions.
 # ---------------------------------------------------------------------------
@@ -110,7 +128,7 @@ endif()
 
 include(Packaging)
 
-message(STATUS "Cubeulator ${PROJECT_VERSION}")
+message(STATUS "Cubeulator ${CUBEULATOR_VERSION_FULL}")
 message(STATUS "  Build app   : ${CUBEULATOR_BUILD_APP}")
 message(STATUS "  Build tests : ${CUBEULATOR_BUILD_TESTS}")
 message(STATUS "  Tracy       : ${CUBEULATOR_ENABLE_TRACY}")

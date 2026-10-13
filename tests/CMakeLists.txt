@@ -350,6 +350,20 @@ if(CUBEULATOR_BUILD_APP)
     endif()
 endif()
 
+# --- Release tooling (tools/release, docs/releasing.md) --------------------
+# The changelog's shape, the cut, the release notes' layout and the version
+# edit are held by the tools' own tests; the same file also checks that this
+# repository's CHANGELOG.md and CMakeLists.txt are in a state the tools can
+# work with, so that the first thing to find out is not a tag.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME release_tools_selftest
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tools/release/test_release_tools.py")
+    set_tests_properties(release_tools_selftest
+        PROPERTIES LABELS "release" ENVIRONMENT "PYTHONUTF8=1")
+endif()
+
 # --- Third-party notices (E0b, docs/licensing.md) --------------------------
 # Fails when a component that ships has no notice: a linked library, a Qt
 # module or QML import, a deployed DLL, a file under assets/, a directory
@@ -364,4 +378,49 @@ endif()
 # can exclude it. See docs/testing.md.
 if(CUBEULATOR_BUILD_APP)
     add_subdirectory(system)
+endif()
+
+# --- E4a: desktop manners (window geometry, KeepAwake) ---------------------
+# Its own binary rather than more cases in cube_qt_controller_tests: it links
+# cube_app_desktop (and with it Qt Gui) and nothing from the controllers.
+# Plain QCoreApplication from qt_test_main.cpp is enough: no window is shown.
+if(CUBEULATOR_BUILD_APP AND TARGET cube_app_desktop)
+    add_executable(cube_desktop_tests
+        qt_test_main.cpp
+        unit/keep_awake_test.cpp
+        unit/window_geometry_test.cpp)
+
+    target_link_libraries(cube_desktop_tests
+        PRIVATE
+            cube_app_desktop
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Qt6::Core
+            Catch2::Catch2)
+
+    # What only this platform's desktop shell can show (tests/platform/<name>/
+    # desktop/), keyed by the platform's name like src/app/platform is.
+    file(GLOB CUBE_DESKTOP_PLATFORM_TEST_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/${CUBEULATOR_PLATFORM}/desktop/*.cpp")
+    target_sources(cube_desktop_tests PRIVATE ${CUBE_DESKTOP_PLATFORM_TEST_SOURCES})
+
+    cube_deploy_sanitizer_runtime(cube_desktop_tests)
+
+    catch_discover_tests(cube_desktop_tests DISCOVERY_MODE PRE_TEST
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_desktop_tests>")
+endif()
+
+# The placeholder About, driven through the real window by the system tests
+# (tests/system, E0a). Added to that binary from here, deferred, as the
+# translation block above does, so that it does not matter whether tests/system
+# comes before or after this block in this file.
+if(CUBEULATOR_BUILD_APP AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/system/CMakeLists.txt")
+    function(cube_desktop_extend_system_tests)
+        if(TARGET cube_system_tests AND TARGET cube_app_desktop)
+            target_sources(cube_system_tests PRIVATE
+                "${CMAKE_CURRENT_SOURCE_DIR}/system/desktop_shell_test.cpp")
+        endif()
+    endfunction()
+    cmake_language(DEFER CALL cube_desktop_extend_system_tests)
 endif()
