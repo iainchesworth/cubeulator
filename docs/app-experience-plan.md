@@ -127,13 +127,17 @@ default above, the answer stands.
 - A release build never saves a picture from the camera; recording failed
   scans is for developer builds (`brief.md` D7).
 - Source strings are British English (`brief.md` D10).
-- The app's identifier is `org.iainchesworth.cubeulator` (`brief.md` D12).
 - Hebrew and Arabic are set in Noto Sans Hebrew and Noto Sans Arabic, the
   files the other apps ship (`design/family.md` D3).
 - Translations are keyed by id, as `strings.json` already is, not by the
   English text (`design/family.md` D5).
-- The publisher is written "Iain Chesworth" in About, the packages and the
-  copyright line (`design/family.md` D1).
+- The repository moved to `iainchesworthlabs/cubeulator` on 2026-10-13.
+  Publisher and identifier follow the account, and Iain confirmed both
+  after the move: the publisher is written "Iain Chesworth Labs" in About
+  and the packages, the copyright line stays "Copyright © 2026 Iain
+  Chesworth", and the identifier is `org.iainchesworthlabs.cubeulator`
+  (`design/family.md` D1 and D9, `brief.md` D12). Before the move the
+  answers were "Iain Chesworth" and `org.iainchesworth.cubeulator`.
 
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
@@ -213,8 +217,15 @@ Added 2026-10-13. Five branches hold finished or running work. None of the
 | `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
 | `feature/ax-kit` | E2a | 7, running | local; has not yet merged this branch |
 
-`feature/app-experience` is on `origin` from 2026-10-13, so an `ax` pull
-request can target it.
+`feature/app-experience` is on `origin` from 2026-10-13.
+
+**How work lands, from 2026-10-13.** `develop` takes no direct pushes.
+Every topic branch opens a pull request against `develop` and goes through
+a merge queue, which merges it onto the current tip, re-runs the required
+checks and deletes the branch (`docs/branch-protection.md` on `develop`).
+So the `ax` branches land on `develop`, not on this branch. This branch is
+where they pick up the solve work and the plan until those are on
+`develop`, and it lands there by pull request like any other.
 
 **Start-up is contested.** Four of them changed `main.cpp` independently:
 
@@ -237,13 +248,12 @@ One shape, applied by whichever lands second:
   later shell concern are single lines around it, as E4a and E2a already
   wrote them.
 
-**Where the lines meet.** The `ax` branches land on
-`feature/app-experience`, which now holds the solve work: it merged
-`feature/solve-guidance` directly, because `feature/direct-scan` is the scan
-lane's to move and has not moved. The merge was clean, since this branch
-had only documents of its own. Start-up on `feature/app-experience` is
-therefore the solve lane's `AppControllers`, and every `ax` branch meets it
-on its next merge.
+**Where the lines meet.** `feature/app-experience` holds the solve work: it
+merged `feature/solve-guidance` directly, because `feature/direct-scan` is
+the scan lane's to move and has not moved. The merge was clean, since this
+branch had only documents of its own. Start-up here is therefore the solve
+lane's `AppControllers`, and every `ax` branch meets it on its next merge,
+from this branch or from `develop` once the solve work is there.
 
 The system-test session reconciles the shape, on its own branch, because
 its tests are what prove the result. In the same change:
@@ -251,13 +261,22 @@ its tests are what prove the result. In the same change:
 - `known_today_test` stops asserting that Complete is unreachable and that
   the solve screen has no exit.
 - The journey test walks Finish to Complete and the rescan way out.
-- The temporary CI trigger for the branch (`e554bcd`) is taken out.
-  CI runs on pull requests into `main` and `develop` only, which is why E4a's
-  draft is against `develop`; `feature/app-experience` joins that list
-  instead, until this branch itself lands on `develop`.
+- The temporary CI trigger for the branch (`e554bcd`) is taken out. Nothing
+  replaces it: pull requests into `develop` already run CI.
 
-Order otherwise: E0a first, since it is the safety net; E0b; then E2a and
-E4a as they finish, each merging `feature/app-experience` before it lands.
+**Order into `develop`.** Each pull request shows everything its branch has
+that `develop` lacks, and `develop` lacks the scan work, the solve work and
+this plan. So:
+
+1. The solve work, pull request 4, which carries the scan work with it.
+2. This branch: after 1 it is the plan and the design documents alone.
+3. E0a, the safety net, with start-up reconciled.
+4. E0b, then E2a and E4a as they finish. Each merges `develop` first and
+   re-applies its line or two of `main.cpp` around `AppRuntime`.
+
+`develop`'s own CI is red at the time of writing, for reasons that predate
+this work; a separate session owns making it green. Two checks are required
+today: the gitflow branch name and the dependency diff.
 
 **Two hazards, reported by the solve lane and not yet reproduced here.**
 
@@ -424,9 +443,10 @@ Countdown Solver and Automate. The full account, with sources, is
 
 **Decided on 2026-10-13** (`family.md` section 5), all by Iain:
 
-- D1: the publisher is **Iain Chesworth**, because the repository is under
-  `iainchesworth`, not `iainchesworthlabs`. D9 follows: the account and
-  `org.iainchesworth.cubeulator` stand.
+- D1: the publisher follows the account. The repository moved to
+  `iainchesworthlabs` the same day, so it is **Iain Chesworth Labs**, with
+  the copyright line in Iain's own name. D9 follows: the identifier is
+  `org.iainchesworthlabs.cubeulator`.
 - D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
   Forge; no other app is reskinned.
 - D3: Hebrew and Arabic are Noto Sans, the family's faces.
@@ -440,7 +460,7 @@ session that is already planned; none is a new session.
 
 | item | rides with | what changes |
 |---|---|---|
-| F1 publisher line | E4a, E3b | one string, "Iain Chesworth", in the version resource, `Info.plist`, AppStream, About. It is what they already say |
+| F1 publisher line and identifier | E4a, E3b | one string, "Iain Chesworth Labs", in the version resource, `Info.plist`, AppStream and About; `org.iainchesworthlabs.cubeulator` as the bundle id, Linux app id and Android package. E4a's branch still carries the earlier answers |
 | F2 setting keys | E2a, E3a | the keys are named in `design/screens/settings.md`, in the family's `group/name` style |
 | F3 language manager and ids | E2b | its brief says **port** the family `LanguageManager` and its CI gates, key by id (`qsTrId`), and add locale-aware numbers, plurals and the unwrapped-string lint |
 | F4 Noto faces | E2a, before it bundles fonts | two `case` lines in `Theme.qml`, the 700 ceiling goes, and E2a checks that Qt draws weight 800 from the variable axis |
