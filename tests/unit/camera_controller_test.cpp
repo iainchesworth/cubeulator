@@ -61,3 +61,22 @@ TEST_CASE("CameraController::selectDevice updates the id and skips duplicate sig
     REQUIRE(controller.selectedDeviceId() == QString("cam-2"));
     REQUIRE(change_count == 2);
 }
+
+TEST_CASE("The preview is mirrored for every camera but a rear one", "[qt][controllers]") {
+    using cube::platform::camera::Facing;
+
+    // A front camera looks at the user, and a desktop webcam reports unknown
+    // while doing the same: both are shown as a mirror shows them. A rear
+    // camera shows the scene, and mirroring it would flip the cube's layout.
+    REQUIRE(CameraController::previewMirroredFor(Facing::front));
+    REQUIRE(CameraController::previewMirroredFor(Facing::unknown));
+    REQUIRE_FALSE(CameraController::previewMirroredFor(Facing::rear));
+}
+
+TEST_CASE("CameraController mirrors the preview until a camera says otherwise", "[qt][controllers]") {
+    // Nothing selected yet, which is how the scan screen first appears on a
+    // desktop with a webcam: the default is the mirror.
+    CameraController controller;
+
+    REQUIRE(controller.previewMirrored());
+}

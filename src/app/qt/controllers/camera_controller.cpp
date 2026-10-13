@@ -26,19 +26,24 @@ QString CameraController::lastError() const {
     return lastError_;
 }
 
-bool CameraController::previewMirrored() const {
+bool CameraController::previewMirroredFor(platform::camera::Facing facing) noexcept {
     // Selfie-mirror for front and unknown facings; rear previews show the
     // scene rather than the user and must stay un-mirrored (see Facing in
-    // interfaces/camera.hpp). A selection with no matching entry (nothing
-    // selected yet, or a stale id after re-enumeration) is treated as
-    // unknown, which keeps the desktop-webcam default of mirroring.
+    // interfaces/camera.hpp).
+    return facing != platform::camera::Facing::rear;
+}
+
+bool CameraController::previewMirrored() const {
+    // A selection with no matching entry (nothing selected yet, or a stale id
+    // after re-enumeration) is treated as unknown, which keeps the
+    // desktop-webcam default of mirroring.
     const std::string id = selectedDeviceId_.toStdString();
     for (const auto& device : deviceInfos_) {
         if (device.identifier == id) {
-            return device.facing != platform::camera::Facing::rear;
+            return previewMirroredFor(device.facing);
         }
     }
-    return true;
+    return previewMirroredFor(platform::camera::Facing::unknown);
 }
 
 void CameraController::refreshDevices() {
