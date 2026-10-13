@@ -34,7 +34,7 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -58,7 +58,7 @@ jobs:
     steps:
       # fetch-depth: 0 is required for vcpkg's version resolution - see the
       # equivalent comment on build-and-test below.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -74,7 +74,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -220,7 +220,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -245,7 +245,7 @@ jobs:
           triplet: ${{ matrix.triplet }}
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -277,7 +277,7 @@ jobs:
       # Prebuilt Qt (official binaries) so the GUI app builds without
       # compiling Qt from source. Sets QT_ROOT_DIR for find_package(Qt6).
       - name: Install Qt (prebuilt)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.8.3"
           modules: "qtquick3d qtshadertools"
@@ -344,7 +344,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -381,7 +381,7 @@ jobs:
           triplet: arm64-android
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -395,7 +395,7 @@ jobs:
       # ONLY, which would otherwise hide both Qt kits and vcpkg's install
       # tree from find_package() (confirmed locally on windows-msvc/android).
       - name: Install Qt (prebuilt, Android)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.8.3"
           target: android
@@ -494,7 +494,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -509,7 +509,7 @@ jobs:
           triplet: arm64-ios
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
@@ -555,7 +555,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -571,7 +571,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
           cmakeVersion: "latest"
 
