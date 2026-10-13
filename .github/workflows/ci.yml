@@ -266,8 +266,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # >= v4.0.2: v4.0.1's default `packages: tools platform-tools` asks
+      # sdkmanager for the long-removed `tools` package ("Warning: Failed to
+      # find package 'tools'", exit code 1), which failed this step after the
+      # licences were already accepted. v4.0.2 dropped it from the default.
       - name: Install Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Install Android NDK
         run: |
