@@ -18,6 +18,7 @@
 #include <QSGRendererInterface>
 #include <QtTest/QTest>
 
+#include <cstdio>
 #include <stdexcept>
 
 namespace cube::systest {
@@ -120,6 +121,8 @@ void App::boot() {
 }
 
 void App::reset() {
+    QElapsedTimer cost;
+    cost.start();
     FakeCamera::instance().clear_script();
     go("launch");
     // Leaving the scan screen stops the camera; wait for it so the next test
@@ -153,6 +156,11 @@ void App::reset() {
     pump(150);
     // The camera list the launch screen's AppState asked for at start-up.
     wait_for([this]() { return !runtime_->camera().busy(); });
+    // What every case pays before it starts. Printed, because on a software
+    // renderer it is not small and nothing else says how much of a case's
+    // time it is.
+    std::fprintf(stderr, "[system]   reset: %.1fs\n", static_cast<double>(cost.elapsed()) / 1000.0);
+    std::fflush(stderr);
 }
 
 // ---- the application -------------------------------------------------------

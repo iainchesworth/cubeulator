@@ -788,10 +788,12 @@ jobs:
       - name: Install gcovr
         run: pip install --quiet gcovr==8.6
 
+      # The Qt the app ships on: the build legs' version and action pin, so the
+      # system tests run the Qt that users run, and share the legs' Qt cache.
       - name: Install Qt (prebuilt)
         uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
-          version: "6.8.3"
+          version: "6.12.0"
           modules: "qtquick3d qtshadertools"
           cache: true
 

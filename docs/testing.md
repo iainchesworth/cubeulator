@@ -148,11 +148,13 @@ cmake --build --preset <preset> --target cube_system_tests
 ctest --preset <preset> -L system --output-on-failure
 ```
 
-That is four ctest entries: `system.walk` (the suite bar the tour, one
-session of the app), `system.tour` (the screenshot tour, below, a session of
-its own), `system.reach` (the reach gate, below; reads the walk's report,
-needs no display) and `system.relaunch` (a second launch with a setting
-already in the store).
+That is a handful of ctest entries: `system.walk.<n>of<count>` (the suite bar
+the tour, cut into shards, five by default - a run of the app each),
+`system.tour` (the screenshot tour, below, a run of its own), `system.reach`
+(the reach gate, below; merges what the shards saw, needs no display) and
+`system.relaunch` (a second launch with a setting already in the store).
+`ctest -R system.walk` runs the shards; `-j` runs them side by side where
+there is a CPU to spare.
 
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
@@ -164,8 +166,9 @@ QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 \
 ```
 
 It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
-`tour/screens/*.png` (the screenshot tour), `reach.json` and `reach.txt` (what
-the walk visited). CI uploads that directory as the `system-test-output`
+`tour/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
+with `.txt` beside each (what that shard visited; a whole walk run by hand
+writes `reach.json`). CI uploads that directory as the `system-test-output`
 artifact.
 
 While it runs it prints a line to stderr as each case and section starts and
@@ -173,7 +176,10 @@ ends, with the seconds since the process began (`[system +  12.3s] case: ...`,
 from `progress_listener.cpp`). Catch2's own reporter says nothing about a case
 until it ends, so a run that hits ctest's timeout would otherwise leave a log
 with nothing in it; these are flushed as they are written and show which case
-the time went on.
+the time went on. Each case also prints what its reset cost (`[system]   reset:
+12.3s`), and the end of a run what the reach sampler cost the app's thread: on
+a software renderer neither is small, and nothing else says how much of a
+case's time they are.
 
 The `system` label keeps it out of the plain `ctest` runs of the build legs
 (`-LE system`): it needs somewhere to draw.
@@ -210,10 +216,23 @@ The `system` label keeps it out of the plain `ctest` runs of the build legs
 
 ### Time budget
 
-Both entries are bounded by a ctest `TIMEOUT` of 900 s, and under Xvfb with
-Mesa's llvmpipe the cube is drawn on the CPU, so what costs time there is
-frames, not logic. Four choices keep the walk inside it, and each is worth
-keeping when a case is added:
+Under Xvfb with Mesa's llvmpipe the cube is drawn on the CPU, so what costs
+time there is frames, not logic: the whole walk is around half an hour on a
+CI runner, against a few minutes on a desktop GPU. One ctest entry for that
+either hits its timeout or hides which case was slow, so the walk is cut into
+**shards** - Catch2's `--shard-count`/`--shard-index` split the
+declaration-order list into contiguous runs, `CUBE_SYSTEM_WALK_SHARDS` of them
+(5). Every case is in exactly one, a case added tomorrow is in one without
+being told, and each shard's `TIMEOUT` (1500 s) is a safety net, not a budget.
+Cases are independent - each begins with `App::fresh()` - so a shard needs
+nothing from the one before.
+
+The reach gate is the reason the shards write reports of their own: it merges
+the `reach-shard-*` files and judges the union, and fails if one of them is
+missing, so a shard that did not run cannot pass as a smaller suite.
+
+Four choices keep each shard short, and each is worth keeping when a case is
+added:
 
 - **Short scrambles.** The cases that need a solved cube to come back from a
   scan use `cube::systest::scramble(seed)` (`app.hpp`, `kScrambleMoves`),
@@ -233,7 +252,8 @@ keeping when a case is added:
 - **A sampler that is not the busiest thing in the room.** The reach sampler
   looks every 50 ms, not every 25.
 
-If a run still times out, the progress lines above say which case it was in.
+If a shard still times out, the progress lines above say which case it was in
+and the reset lines how much of each case was before it began.
 
 ### Decisions
 
