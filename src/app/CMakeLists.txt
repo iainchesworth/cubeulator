@@ -373,3 +373,16 @@ if(CUBEULATOR_BUILD_APP)
     # above stays untouched.
     target_link_libraries(cube_app PRIVATE cube_app_i18n)
 endif()
+
+# ---------------------------------------------------------------------------
+# Third-party notices (docs/licensing.md). Generated from the build so they
+# cannot drift from what ships: the cube_third_party_notices target writes
+# third-party-notices.json and THIRD-PARTY-NOTICES.txt before cube_app links,
+# embeds them as :/licences/* for the About and Licences screens, and installs
+# the text file with LICENSE into every desktop package. Append-only block of
+# the licensing workstream (E0b).
+# ---------------------------------------------------------------------------
+if(TARGET cube_app)
+    include(ThirdPartyNotices)
+    cube_add_third_party_notices(cube_app)
+endif()

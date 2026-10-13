@@ -49,16 +49,6 @@ Vec3 normal_of(Face face) {
     return kNormal[static_cast<std::size_t>(face)];
 }
 
-Face face_of_normal(Vec3 n) {
-    for (std::size_t i = 0; i < kNormal.size(); ++i) {
-        if (kNormal[i] == n) {
-            return static_cast<Face>(i);
-        }
-    }
-    FAIL("not a unit axis normal");
-    return Face::U;
-}
-
 // cube.cpp's position_of(): sticker position for solver row-major `index`.
 Vec3 position_of(Face face, int index) {
     const int row = index / 3;
@@ -125,7 +115,7 @@ std::array<double, 3> rotate(const Quat& q, std::array<double, 3> v) {
     const Quat p = {0.0F, static_cast<float>(v[0]), static_cast<float>(v[1]),
                     static_cast<float>(v[2])};
     const Quat r = quat_multiply(quat_multiply(q, p), quat_conjugate(q));
-    return {r[1], r[2], r[3]};
+    return {static_cast<double>(r[1]), static_cast<double>(r[2]), static_cast<double>(r[3])};
 }
 
 Mat3 int_matrix_of(const Quat& q) {
@@ -312,7 +302,7 @@ TEST_CASE("quantize24 snaps every orientation within 40 degrees of an element ba
                 for (int negate = 0; negate < 2; ++negate) {
                     const auto snapped = quantize24(q);
                     REQUIRE(snapped.index == static_cast<int>(i));
-                    REQUIRE(std::abs(snapped.theta_deg - angle) < 0.6);
+                    REQUIRE(std::abs(static_cast<double>(snapped.theta_deg) - angle) < 0.6);
                     q = {-q[0], -q[1], -q[2], -q[3]};
                 }
             }
@@ -362,7 +352,7 @@ TEST_CASE("resolve_alignment recovers an injected gauge under noise with a wide 
 
             const auto exact_pred = resolve_alignment(q_obs, q_true);
             REQUIRE(exact_pred.lattice_index == expected);
-            REQUIRE(std::abs(exact_pred.theta_deg - noise_deg) < 0.5);
+            REQUIRE(std::abs(static_cast<double>(exact_pred.theta_deg) - noise_deg) < 0.5);
             // Runner-up candidates sit >= 90 degrees from the winner, so
             // the margin survives the injected noise with room to spare.
             REQUIRE(exact_pred.margin_deg > 90.0F - 2.0F * static_cast<float>(noise_deg) - 5.0F);
@@ -371,7 +361,7 @@ TEST_CASE("resolve_alignment recovers an injected gauge under noise with a wide 
             // change the resolution, only the reported theta.
             const auto drifted_pred = resolve_alignment(q_obs, quat_multiply(q_true, drift));
             REQUIRE(drifted_pred.lattice_index == expected);
-            REQUIRE(drifted_pred.theta_deg < noise_deg + drift_deg + 0.5);
+            REQUIRE(static_cast<double>(drifted_pred.theta_deg) < noise_deg + drift_deg + 0.5);
 
             // Double cover on either argument is invisible.
             const Quat neg_obs = {-q_obs[0], -q_obs[1], -q_obs[2], -q_obs[3]};

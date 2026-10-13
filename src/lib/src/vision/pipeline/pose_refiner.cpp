@@ -115,7 +115,9 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
 
     const auto to_camera = [&](const cv::Point3f& p) {
         const cv::Matx31d c =
-            rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+            rotation * cv::Matx31d(static_cast<double>(p.x), static_cast<double>(p.y),
+                                   static_cast<double>(p.z)) +
+            cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         return cv::Vec3d(c(0, 0), c(1, 0), c(2, 0));
     };
     const auto project = [&](const cv::Vec3d& camera_point) {
@@ -137,7 +139,9 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
     std::array<double, 6> frontality{};
     for (int face = 0; face < 6; ++face) {
         const cv::Point3f n = face_normal(face);
-        const cv::Matx31d normal_c = rotation * cv::Matx31d(n.x, n.y, n.z);
+        const cv::Matx31d normal_c =
+            rotation * cv::Matx31d(static_cast<double>(n.x), static_cast<double>(n.y),
+                                   static_cast<double>(n.z));
         const cv::Vec3d centre_c = to_camera(n);  // face centre = its unit normal, half-edge 1
         const double along = normal_c(0, 0) * centre_c[0] + normal_c(1, 0) * centre_c[1] +
                              normal_c(2, 0) * centre_c[2];

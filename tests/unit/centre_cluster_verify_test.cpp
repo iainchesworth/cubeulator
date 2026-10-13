@@ -100,23 +100,6 @@ Color color_of(char letter) noexcept {
     }
 }
 
-char letter_of(Color color) noexcept {
-    switch (color) {
-        case Color::White:
-            return 'W';
-        case Color::Yellow:
-            return 'Y';
-        case Color::Red:
-            return 'R';
-        case Color::Orange:
-            return 'O';
-        case Color::Green:
-            return 'G';
-        default:
-            return 'B';
-    }
-}
-
 cube::model::FacetColor facet_of(Color color) noexcept {
     switch (color) {
         case Color::White:

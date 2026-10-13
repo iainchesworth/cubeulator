@@ -31,9 +31,10 @@ namespace {
 // out per the interface doc.
 std::vector<float> craft_tensor(int anchors, int hot, float cx, float cy, float w, float h,
                                 float score) {
-    std::vector<float> data(static_cast<std::size_t>(29) * anchors, 0.0F);
+    std::vector<float> data(static_cast<std::size_t>(29) * static_cast<std::size_t>(anchors), 0.0F);
     const auto at = [&](int row, int a) -> float& {
-        return data[static_cast<std::size_t>(row) * anchors + a];
+        return data[static_cast<std::size_t>(row) * static_cast<std::size_t>(anchors) +
+                    static_cast<std::size_t>(a)];
     };
     at(0, hot) = cx;
     at(1, hot) = cy;

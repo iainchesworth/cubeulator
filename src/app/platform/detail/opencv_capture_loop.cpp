@@ -72,7 +72,7 @@ OpenCvCaptureLoop::~OpenCvCaptureLoop() {
 }
 
 Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
-    const ScopedCom scoped_com;
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     // A simple index probe: friendly device names aren't reliably available
     // across OpenCV's desktop backends, so devices are identified by index.
@@ -97,7 +97,7 @@ Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
 }
 
 Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
-    const ScopedCom scoped_com;
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     if (is_capturing()) {
         return std::unexpected(CubeError::camera_start_failed);
@@ -275,7 +275,7 @@ void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
 }
 
 void OpenCvCaptureLoop::run() {
-    const ScopedCom scoped_com;
+    [[maybe_unused]] const ScopedCom scoped_com;
 
     cv::Mat frame;
     while (!stop_requested_.load(std::memory_order_acquire)) {

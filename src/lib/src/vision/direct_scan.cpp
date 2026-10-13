@@ -147,8 +147,8 @@ struct Lattice {
         design.at<double>(i, 0) = cells[index].x;
         design.at<double>(i, 1) = cells[index].y;
         design.at<double>(i, 2) = 1.0;
-        target.at<double>(i, 0) = points[index].x;
-        target.at<double>(i, 1) = points[index].y;
+        target.at<double>(i, 0) = static_cast<double>(points[index].x);
+        target.at<double>(i, 1) = static_cast<double>(points[index].y);
     }
     cv::Mat solution;
     cv::solve(design, target, solution, cv::DECOMP_SVD);

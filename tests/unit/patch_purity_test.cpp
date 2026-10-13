@@ -164,8 +164,8 @@ FootprintStats footprint_stats(const cv::Mat& bgr_frame, const std::array<cv::Po
     stats.rect_area = static_cast<double>(x1 - x0) * static_cast<double>(y1 - y0);
 
     const cv::Point2f top_edge = corners[1] - corners[0];
-    float degrees =
-        std::abs(static_cast<float>(std::atan2(top_edge.y, top_edge.x) * 180.0 / CV_PI));
+    float degrees = std::abs(static_cast<float>(
+        static_cast<double>(std::atan2(top_edge.y, top_edge.x)) * 180.0 / CV_PI));
     degrees = std::fmod(degrees, 90.0F);
     stats.rotation_deg = degrees > 45.0F ? 90.0F - degrees : degrees;
     return stats;

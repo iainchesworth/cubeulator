@@ -158,10 +158,12 @@ int replica_corner_candidates(const cv::Mat& bgr_frame) {
         const float aspect = std::max(min_rect.size.width, min_rect.size.height) /
                              std::min(min_rect.size.width, min_rect.size.height);
         if (aspect > 3.0F) {
-            std::printf("  corner-candidate reject aspect: area=%.0f aspect=%.2f\n", area, aspect);
+            std::printf("  corner-candidate reject aspect: area=%.0f aspect=%.2f\n", area,
+                        static_cast<double>(aspect));
             continue;
         }
-        const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
+        const double rect_area =
+            static_cast<double>(min_rect.size.width) * static_cast<double>(min_rect.size.height);
         if (rect_area <= 0.0 || area / rect_area < 0.55) {
             std::printf("  corner-candidate reject fill: area=%.0f fill=%.2f\n", area,
                         rect_area > 0.0 ? area / rect_area : 0.0);
@@ -190,7 +192,8 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     std::printf("bright-path candidates: %zu\n", bright.size());
     for (const auto& candidate : bright) {
         std::printf("  bright cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n",
-                    candidate.center.x, candidate.center.y, candidate.area, candidate.bounds.width,
+                    static_cast<double>(candidate.center.x),
+                    static_cast<double>(candidate.center.y), candidate.area, candidate.bounds.width,
                     candidate.bounds.height);
     }
 
@@ -198,8 +201,9 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     const auto dark = detail::find_dark_square_candidates(frame);
     std::printf("dark-path candidates: %zu\n", dark.size());
     for (const auto& candidate : dark) {
-        std::printf("  dark cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n", candidate.center.x,
-                    candidate.center.y, candidate.area, candidate.bounds.width,
+        std::printf("  dark cand: center=(%.0f,%.0f) area=%.0f bounds=%dx%d\n",
+                    static_cast<double>(candidate.center.x),
+                    static_cast<double>(candidate.center.y), candidate.area, candidate.bounds.width,
                     candidate.bounds.height);
     }
 
@@ -207,14 +211,16 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     const auto saturated = replica_saturation_candidates(frame);
     std::printf("saturation candidates: %zu\n", saturated.size());
     for (const auto& candidate : saturated) {
-        std::printf("  sat cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x,
-                    candidate.center.y, candidate.area);
+        std::printf("  sat cand: center=(%.0f,%.0f) area=%.0f\n",
+                    static_cast<double>(candidate.center.x),
+                    static_cast<double>(candidate.center.y), candidate.area);
     }
     const auto white = replica_white_candidates(frame);
     std::printf("white candidates: %zu\n", white.size());
     for (const auto& candidate : white) {
-        std::printf("  white cand: center=(%.0f,%.0f) area=%.0f\n", candidate.center.x,
-                    candidate.center.y, candidate.area);
+        std::printf("  white cand: center=(%.0f,%.0f) area=%.0f\n",
+                    static_cast<double>(candidate.center.x),
+                    static_cast<double>(candidate.center.y), candidate.area);
     }
 
     // Stage 2: lattice fit over the bright path alone, then bright+dark.
@@ -235,9 +241,11 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     // vs glare vs classification drift).
     const auto face = observe_face(frame);
     if (face.has_value()) {
-        std::printf("observe_face: OK conf=%.2f face_quad=(%.0f,%.0f)-(%.0f,%.0f)\n",
-                    face->geometry_confidence, face->face_quad[0].x, face->face_quad[0].y,
-                    face->face_quad[2].x, face->face_quad[2].y);
+        std::printf(
+            "observe_face: OK conf=%.2f face_quad=(%.0f,%.0f)-(%.0f,%.0f)\n",
+            static_cast<double>(face->geometry_confidence),
+            static_cast<double>(face->face_quad[0].x), static_cast<double>(face->face_quad[0].y),
+            static_cast<double>(face->face_quad[2].x), static_cast<double>(face->face_quad[2].y));
         const char* names[] = {"unknown", "white", "yellow", "red", "orange", "green", "blue"};
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
@@ -252,8 +260,9 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
                 // nearest_palette_color shows what naive distance would say.
                 std::printf(
                     "  cell[%d,%d] center=(%.0f,%.0f) lab=(%.0f,%.0f,%.0f) -> %s (naive: %s)\n",
-                    row, col, center.x, center.y, lab[0], lab[1], lab[2],
-                    names[static_cast<int>(classify_lab(lab).color)],
+                    row, col, static_cast<double>(center.x), static_cast<double>(center.y),
+                    static_cast<double>(lab[0]), static_cast<double>(lab[1]),
+                    static_cast<double>(lab[2]), names[static_cast<int>(classify_lab(lab).color)],
                     names[static_cast<int>(nearest_palette_color(lab))]);
             }
         }
@@ -267,11 +276,11 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
     std::printf("completion placements: %zu\n", placements.size());
     for (const auto& placement : placements) {
         const auto center = [&](float u, float v) {
-            const double x = placement.transform.at<double>(0, 0) * u +
-                             placement.transform.at<double>(0, 1) * v +
+            const double x = placement.transform.at<double>(0, 0) * static_cast<double>(u) +
+                             placement.transform.at<double>(0, 1) * static_cast<double>(v) +
                              placement.transform.at<double>(0, 2);
-            const double y = placement.transform.at<double>(1, 0) * u +
-                             placement.transform.at<double>(1, 1) * v +
+            const double y = placement.transform.at<double>(1, 0) * static_cast<double>(u) +
+                             placement.transform.at<double>(1, 1) * static_cast<double>(v) +
                              placement.transform.at<double>(1, 2);
             return cv::Point2f(static_cast<float>(x), static_cast<float>(y));
         };
@@ -281,10 +290,14 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
             "  placement: anchor=(%.0f,%.0f) pitch=%.1f inliers=%d gap_mean=%.1f gap_peak=%.1f "
             "contrast=%.1f "
             "cell_mad=%.2f min_l=%.2f edge=%.1f%s\n",
-            anchor.x, anchor.y, std::hypot(col_end.x - anchor.x, col_end.y - anchor.y),
-            placement.inlier_count, placement.mean_gap_deviation, placement.peak_gap_deviation,
-            placement.anchor_contrast, placement.cell_mad, placement.min_cell_lightness,
-            placement.boundary_contrast, placement.accepted ? " ACCEPTED" : "");
+            static_cast<double>(anchor.x), static_cast<double>(anchor.y),
+            static_cast<double>(std::hypot(col_end.x - anchor.x, col_end.y - anchor.y)),
+            placement.inlier_count, static_cast<double>(placement.mean_gap_deviation),
+            static_cast<double>(placement.peak_gap_deviation),
+            static_cast<double>(placement.anchor_contrast), static_cast<double>(placement.cell_mad),
+            static_cast<double>(placement.min_cell_lightness),
+            static_cast<double>(placement.boundary_contrast),
+            placement.accepted ? " ACCEPTED" : "");
     }
 
     // Optional overlay dump: CUBE_DEBUG_OVERLAY=<path.png> draws the
@@ -329,14 +342,18 @@ TEST_CASE("replay a dumped analysis frame through every pipeline stage", "[.fram
         "pitch_ratio=%.2f "
         "shared_px=%.1f]\n",
         edge.has_value() ? "OK" : "FAILED", edge_diag.candidate_count, edge_diag.splits_evaluated,
-        edge_diag.basis_sets, edge_diag.best_split_x, edge_diag.best_left_inliers,
-        edge_diag.best_right_inliers, edge_diag.best_pitch_ratio, edge_diag.best_shared_edge_px);
+        edge_diag.basis_sets, static_cast<double>(edge_diag.best_split_x),
+        edge_diag.best_left_inliers, edge_diag.best_right_inliers,
+        static_cast<double>(edge_diag.best_pitch_ratio),
+        static_cast<double>(edge_diag.best_shared_edge_px));
     if (edge.has_value()) {
         const auto edge_pose = project_cube_from_edge(*edge, frame.size());
         if (edge_pose.has_value()) {
             std::printf("  edge pose: q=(%.3f,%.3f,%.3f,%.3f) reproj=%.3f\n",
-                        edge_pose->orientation[0], edge_pose->orientation[1],
-                        edge_pose->orientation[2], edge_pose->orientation[3],
+                        static_cast<double>(edge_pose->orientation[0]),
+                        static_cast<double>(edge_pose->orientation[1]),
+                        static_cast<double>(edge_pose->orientation[2]),
+                        static_cast<double>(edge_pose->orientation[3]),
                         edge_pose->max_reproj_fraction);
         } else {
             std::printf("  edge pose: FAILED\n");
@@ -743,13 +760,19 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
 
         std::printf("%d,%lld,%lld,%d,%.3f,%d,%.3f,%d,%d,%d,", row.pass,
                     static_cast<long long>(row.t_ms), static_cast<long long>(dt_ms),
-                    face.has_value() ? 1 : 0, face.has_value() ? face->geometry_confidence : 0.0F,
+                    face.has_value() ? 1 : 0,
+                    face.has_value() ? static_cast<double>(face->geometry_confidence)
+                                     : static_cast<double>(0.0F),
                     corner.has_value() ? 1 : 0,
-                    corner.has_value() ? corner->geometry_confidence : 0.0F, face_gated ? 1 : 0,
-                    corner_gated ? 1 : 0, pose.has_value() && pose->orientation_valid ? 1 : 0);
+                    corner.has_value() ? static_cast<double>(corner->geometry_confidence)
+                                       : static_cast<double>(0.0F),
+                    face_gated ? 1 : 0, corner_gated ? 1 : 0,
+                    pose.has_value() && pose->orientation_valid ? 1 : 0);
         if (pose.has_value() && pose->orientation_valid) {
-            std::printf("%.5f,%.5f,%.5f,%.5f,", pose->orientation[0], pose->orientation[1],
-                        pose->orientation[2], pose->orientation[3]);
+            std::printf("%.5f,%.5f,%.5f,%.5f,", static_cast<double>(pose->orientation[0]),
+                        static_cast<double>(pose->orientation[1]),
+                        static_cast<double>(pose->orientation[2]),
+                        static_cast<double>(pose->orientation[3]));
         } else {
             std::printf(",,,,");
         }
@@ -769,7 +792,7 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
             locked_fronts_by_epoch[track.epoch].insert(front);
         }
         std::printf("%s,%s,%c,%d,%s,%.2f,%d,%d,", state_name(track.state), gate_name(track.gate),
-                    front, track.epoch, pose_src, track.belief_margin,
+                    front, track.epoch, pose_src, static_cast<double>(track.belief_margin),
                     track.identity_certain ? 1 : 0, certain_front ? 1 : 0);
 
         // Independent best/runner-up recomputation over the full lattice.
@@ -807,8 +830,11 @@ TEST_CASE("replay a recorded analysis sequence pass by pass", "[.track-replay]")
         }
         const float thresh =
             std::min(cfg.basin_ceiling_deg, track.sigma_deg + cfg.max_interframe_deg);
-        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n", track.theta_deg, track.margin_deg,
-                    r0, r1, l0, l1, accept_deg, track.sigma_deg, thresh);
+        std::printf("%.2f,%.2f,%.2f,%.2f,%d,%d,%.2f,%.2f,%.2f\n",
+                    static_cast<double>(track.theta_deg), static_cast<double>(track.margin_deg),
+                    static_cast<double>(r0), static_cast<double>(r1), l0, l1,
+                    static_cast<double>(accept_deg), static_cast<double>(track.sigma_deg),
+                    static_cast<double>(thresh));
 
         // Boundary attribution + accept mirror, after the row is emitted.
         if (track.epoch != previous_epoch) {

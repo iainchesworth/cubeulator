@@ -80,10 +80,10 @@ const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>>& face_permutations
 // bars.
 [[nodiscard]] double cell_cost(const cv::Vec3f& a, const cv::Vec3f& b) {
     constexpr double kShadingAxisWeight = 0.2;
-    const double dl = a[0] - b[0];
-    const double da = a[1] - b[1];
-    const double db = a[2] - b[2];
-    const double dc = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
+    const double dl = static_cast<double>(a[0] - b[0]);
+    const double da = static_cast<double>(a[1] - b[1]);
+    const double db = static_cast<double>(a[2] - b[2]);
+    const double dc = static_cast<double>(std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]));
     // |dc| <= sqrt(da^2+db^2) by the reverse triangle inequality; the
     // clamp guards rounding.
     const double dh_squared = std::max(0.0, da * da + db * db - dc * dc);
