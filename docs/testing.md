@@ -223,16 +223,32 @@ either hits its timeout or hides which case was slow, so the walk is cut into
 **shards** - Catch2's `--shard-count`/`--shard-index` split the
 declaration-order list into contiguous runs, `CUBE_SYSTEM_WALK_SHARDS` of them
 (5). Every case is in exactly one, a case added tomorrow is in one without
-being told, and each shard's `TIMEOUT` (1500 s) is a safety net, not a budget.
+being told, and each shard's `TIMEOUT` (1200 s) is a safety net, not a budget.
 Cases are independent - each begins with `App::fresh()` - so a shard needs
 nothing from the one before.
+
+What a case costs there is mostly **bringing a screen with the 3D cube up**:
+the launch and solve screens (and the settings preview) are a `View3D` with
+MSAA, a procedural light probe and six lights, and each time one is created
+llvmpipe spends ten seconds or more on its first frame. Measured with the CI
+preset (`linux-gcc-coverage`, Qt 6.8.3, 20 cores): every `App::fresh()` that
+came back to the launch screen from another screen cost 10-12 s, and the two
+loops that did it 36 times each (every control inside the window; the same in
+Hebrew) were 555 s and 1349 s of a 55-minute walk. They are 55 s and 62 s now.
 
 The reach gate is the reason the shards write reports of their own: it merges
 the `reach-shard-*` files and judges the union, and fails if one of them is
 missing, so a shard that did not run cannot pass as a smaller suite.
 
-Four choices keep each shard short, and each is worth keeping when a case is
+Five choices keep each shard short, and each is worth keeping when a case is
 added:
+
+- **Start where the case is going.** `App::fresh(App::Start::elsewhere)` leaves
+  the app on the permission screen (nothing drawn, no camera) instead of the
+  launch screen; a case that is about to go to another screen uses it, so it
+  does not pay to bring the launch cube up and tear it down. A loop over
+  screens and sizes does one reset per screen and takes the window through the
+  sizes by resizing, which is also a thing a person does.
 
 - **Short scrambles.** The cases that need a solved cube to come back from a
   scan use `cube::systest::scramble(seed)` (`app.hpp`, `kScrambleMoves`),
@@ -253,7 +269,27 @@ added:
   looks every 50 ms, not every 25.
 
 If a shard still times out, the progress lines above say which case it was in
-and the reset lines how much of each case was before it began.
+and the reset lines (`reset: 12.0s (launch 0.5 cameras 0.0 language 11.3 ...)`)
+how much of each case was before it began and in which phase; a phase that
+shows the seconds is usually the first one that ran the event loop long enough
+for a frame, not the one that did the work.
+
+Two things the Linux runs showed about the harness, kept here because they
+look like test bugs and are not:
+
+- **The window reports its new size before the scene has it** (X11: the
+  geometry change arrives as an event). `App::resize` waits for the content
+  item, and `App::layout()` reads the scene's width, not the window's; before
+  that the sampler credited the wide layout's controls to `@narrow` for the
+  moments between the two, and the solve screen's `wide` read stale after a
+  resize.
+- **Qt crashed twice on the launch-to-other-screen change** that is the cost
+  above: under the threaded loop with Qt 6.12 on Windows (render thread), and
+  with the basic loop on Qt 6.8.3 under llvmpipe (main thread, inside the batch
+  renderer's RHI call, `QSGBatchRenderer::Renderer::prepareRenderPass`, a
+  frame after the old `View3D` was destroyed). Both are in Qt, and the app
+  makes the same screen change at "Start scanning". Fewer of these in the
+  walk makes both rarer; it does not make them go away.
 
 ### Decisions
 
