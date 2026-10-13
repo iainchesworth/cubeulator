@@ -83,6 +83,10 @@ public:
 
     [[nodiscard]] bool isSolving() const;
 
+    // Solves a cube handed over already validated - the direct-scan path -
+    // and emits solveReady.
+    void solveCube(const cube::solver::Cube& cube);
+
 public slots:
     void nextMove();
     void previousMove();

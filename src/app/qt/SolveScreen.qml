@@ -196,7 +196,9 @@ Rectangle {
         Row {
             width: parent.width
             padding: Theme.space3
-            Text { text: "Solving — beginner method"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.inkMuted(0.6); width: parent.width - 160 }
+            // Every move is named for a side as held this way; without it the
+            // moves mean nothing.
+            Text { text: "Hold yellow on top, green facing you"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink; width: parent.width - 160 }
             Text { text: AppState.elapsedLabel() + " · " + SolveController.moveIndex + "/" + SolveController.totalMoves; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
         }
         Rectangle { width: parent.width; height: 2; color: Theme.divider }

@@ -115,6 +115,8 @@ if(CUBEULATOR_BUILD_APP)
     add_library(cube_app_controllers STATIC
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
+        qt/controllers/direct_scan.hpp
+        qt/controllers/direct_scan.cpp
         qt/controllers/scan_session.hpp
         qt/controllers/scan_session.cpp
         qt/controllers/settings_model.hpp
@@ -197,6 +199,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
             qt/ScanScreen.qml
+            qt/DirectScanScreen.qml
             qt/SolveScreen.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml

@@ -1,4 +1,5 @@
 #include "controllers/camera_controller.hpp"
+#include "controllers/direct_scan.hpp"
 #include "controllers/frame_image_provider.hpp"
 #include "controllers/scan_session.hpp"
 #include "controllers/settings_model.hpp"
@@ -124,6 +125,12 @@ int main(int argc, char* argv[]) {
     cube::app::ScanSession scanSession;
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "ScanSession", &scanSession);
 
+    // The scan screen's controller. ScanSession above is the previous scan
+    // pipeline, still registered because the settings screen binds to it,
+    // but no screen starts it.
+    cube::app::DirectScan directScan;
+    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "DirectScan", &directScan);
+
     cube::app::SettingsModel settingsModel;
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settingsModel);
 
@@ -133,11 +140,17 @@ int main(int argc, char* argv[]) {
     // after scanSession so it's destroyed first.
     SolveController solveController(scanSession);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solveController);
+    QObject::connect(&directScan, &cube::app::DirectScan::scanCompleted, &solveController, [&]() {
+        if (const auto cube = directScan.cube(); cube.has_value()) {
+            solveController.solveCube(*cube);
+        }
+    });
 
     QQmlApplicationEngine engine;
-    // addImageProvider takes ownership; scanSession outlives engine (engine
-    // is declared - and so destroyed first - after scanSession).
-    engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(scanSession));
+    // addImageProvider takes ownership; directScan outlives engine (engine
+    // is declared - and so destroyed first - after directScan).
+    engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(
+                                             [&directScan]() { return directScan.latestFrame(); }));
     engine.loadFromModule("Cubeulator", "Main");
 
     if (engine.rootObjects().isEmpty()) {

@@ -197,6 +197,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qt_controller_tests
         qt_test_main.cpp
         unit/camera_controller_test.cpp
+        unit/direct_scan_controller_test.cpp
         unit/scan_session_test.cpp
         unit/scan_session_binding_test.cpp
         unit/settings_model_test.cpp

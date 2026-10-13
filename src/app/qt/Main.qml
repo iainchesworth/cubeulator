@@ -26,7 +26,7 @@ ApplicationWindow {
 
     Component { id: launchScreen; LaunchScreen {} }
     Component { id: permissionScreen; PermissionScreen {} }
-    Component { id: scanScreen; ScanScreen {} }
+    Component { id: scanScreen; DirectScanScreen {} }
     Component { id: solveScreen; SolveScreen {} }
     Component { id: settingsScreen; SettingsScreen {} }
     Component { id: completeScreen; CompleteScreen {} }

@@ -118,9 +118,13 @@ void SolveController::onScanCompleted() {
     emit solveReady();
 }
 
+void SolveController::solveCube(const Cube& cube) {
+    beginSolve(cube);
+    emit solveReady();
+}
+
 void SolveController::beginSolve(const Cube& scrambled) {
-    // isSolving_ can't already be true here: onScanCompleted() (the only
-    // caller) fires from ScanSession::scanCompleted, which fires once per
+    // isSolving_ can't already be true here: both callers fire once per
     // completed scan, and the scan screen isn't reachable again until this
     // solve's result has been applied (see AppState.qml).
     isSolving_ = true;
