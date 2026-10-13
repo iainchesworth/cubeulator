@@ -19,5 +19,5 @@ macOS) remains the fully-supported target for now.
 
 **Why GPL-3.0-or-later if this is meant to ship to app stores?**
 That tension is flagged, not resolved, in
-[LICENSE-NOTE.md](https://github.com/iainchesworth/cubeulator/blob/develop/LICENSE-NOTE.md) —
+[LICENSE-NOTE.md](https://github.com/iainchesworthlabs/cubeulator/blob/develop/LICENSE-NOTE.md) —
 worth reading before a first store submission.

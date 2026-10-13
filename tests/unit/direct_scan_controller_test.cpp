@@ -223,6 +223,34 @@ TEST_CASE("a recorded scan replays to the cube it read", "[qt][controllers][dire
     CHECK(*read == cube);
 }
 
+TEST_CASE("only a scan is recorded, never the solve screen's camera",
+          "[qt][controllers][direct-scan]") {
+    QTemporaryDir folder;
+    REQUIRE(folder.isValid());
+    DirectScan scan;
+    scan.setRecordingRoot(folder.path());
+
+    // Watching from the start: nothing is written at all.
+    scan.setWatching(true);
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture * 2);
+    CHECK(QDir(folder.path()).isEmpty());
+
+    // A scan under way is recorded; turning to watching closes that
+    // recording and adds no more frames to it.
+    scan.setWatching(false);
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture);
+    scan.setWatching(true);
+    const QStringList scans = QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    REQUIRE(scans.size() == 1);
+    const QDir recorded(QDir(folder.path()).filePath(scans.front()));
+    const auto written = recorded.entryList({"rec_*.jpg"}, QDir::Files).size();
+    CHECK(written == kFramesToCapture);
+
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture * 2);
+    CHECK(recorded.entryList({"rec_*.jpg"}, QDir::Files).size() == written);
+    CHECK(QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size() == 1);
+}
+
 TEST_CASE("each scan is recorded to its own folder", "[qt][controllers][direct-scan]") {
     QTemporaryDir folder;
     REQUIRE(folder.isValid());

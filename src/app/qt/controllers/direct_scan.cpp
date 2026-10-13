@@ -127,16 +127,50 @@ cv::Mat DirectScan::latestFrame() const {
 }
 
 void DirectScan::start(const QString& deviceId) {
+    setWatching(false);
     if (start_watcher_.isRunning()) {
         // Back on the scan screen while the camera is still opening: cancel
         // the stop queued in between, or the camera would open and close.
         stop_requested_while_starting_ = false;
+        restart();
         return;
     }
-    if (running_) {
-        return;
-    }
+    // A scan always begins with a camera freshly opened, so its exposure and
+    // white balance are metered and fixed for this scan. One left running by
+    // the solve screen is still fixed on the scan before.
+    stop();
     restart();
+    openCamera(deviceId);
+}
+
+void DirectScan::watch(const QString& deviceId) {
+    setWatching(true);
+    if (start_watcher_.isRunning()) {
+        stop_requested_while_starting_ = false;
+        return;
+    }
+    if (!running_) {
+        openCamera(deviceId);
+    }
+}
+
+void DirectScan::setWatching(bool watching) {
+    if (watching == watching_) {
+        return;
+    }
+    watching_ = watching;
+    if (watching_) {
+        // Only a scan is recorded. What the solve screen's camera sees is not.
+        finishRecording();
+    }
+    read_.reset();
+    reading_ = false;
+    capture_progress_ = 0.0;
+    emit runningChanged();
+    emit frameUpdated();
+}
+
+void DirectScan::openCamera(const QString& deviceId) {
     camera_error_.clear();
 
     // Opening a camera takes seconds on some drivers; keep the GUI alive.
@@ -187,6 +221,7 @@ void DirectScan::stop() {
     // Also puts the camera's exposure and white balance back as found.
     cube::platform::camera::stop();
     running_ = false;
+    watching_ = false;
     awaiting_lock_ = false;
     finishRecording();
     read_.reset();
@@ -210,7 +245,7 @@ void DirectScan::restart() {
     capture_progress_ = 0.0;
     sides_.clear();
     conflicted_ = false;
-    cube_.reset();
+    scanned_.reset();
     emit frameUpdated();
     emit sidesChanged();
 }
@@ -238,7 +273,17 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     frame_height_ = bgr.rows;
     ++frame_seq_;
 
-    if (cube_.has_value()) {
+    if (watching_) {
+        // The solve screen's camera: say what side is in view and leave the
+        // scan alone - whether or not there is one. Nothing seen here may
+        // start or change a scan.
+        read_ = cube::vision::read_side(bgr);
+        emit frameUpdated();
+        emit frameWatched();
+        return;
+    }
+
+    if (scanned_.has_value()) {
         // Scan finished; keep the preview live until the screen changes.
         emit frameUpdated();
         return;
@@ -269,11 +314,11 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     }
     sides_ = std::move(sides);
 
-    auto cube = scan_.cube();
+    auto cube = scan_.scanned();
     conflicted_ = !cube.has_value() && cube.error() != cube::CubeError::face_capture_incomplete;
     if (cube.has_value()) {
         // Nothing more is read, so nothing is marked on the picture.
-        cube_ = *cube;
+        scanned_ = *cube;
         read_.reset();
         reading_ = false;
         capture_progress_ = 0.0;
@@ -283,7 +328,7 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // listener that leaves the scan screen on scanCompleted would otherwise
     // never show it.
     emit sidesChanged();
-    if (cube_.has_value()) {
+    if (scanned_.has_value()) {
         finishRecording();
         emit scanCompleted();
     }

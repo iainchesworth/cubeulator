@@ -27,6 +27,13 @@ namespace cube::app {
 // pose tracker, no detector model and no scan mode to choose: what is on the
 // screen is exactly what the reader has (see docs/recovery-plan.md).
 //
+// Once the cube is read the camera has a second job. The solve screen keeps
+// it running and asks only to be told what side is in view (watch()):
+// HeldCube matches that against the cube as it should now stand, to draw the
+// cube the way it is held. Nothing is added to the scan while watching, and
+// the exposure and white balance the scan fixed stay fixed, so a sticker
+// still measures what it measured then.
+//
 // Everything here runs on the GUI thread. A frame's read is a few
 // milliseconds, well inside the poll interval, so there is no worker and no
 // state to hand between threads; only latestFrame() is called from elsewhere
@@ -75,6 +82,10 @@ class DirectScan : public QObject {
     // included - until whoever listens for scanCompleted moves on.
     Q_PROPERTY(bool complete READ complete NOTIFY sidesChanged)
 
+    // The camera is being kept for the solve screen: sides are looked for in
+    // every frame and reported (frameWatched), and none is added to the scan.
+    Q_PROPERTY(bool watching READ watching NOTIFY runningChanged)
+
 public:
     explicit DirectScan(QObject* parent = nullptr);
     ~DirectScan() override;
@@ -92,7 +103,8 @@ public:
     [[nodiscard]] QVariantList sides() const;
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
-    [[nodiscard]] bool complete() const noexcept { return cube_.has_value(); }
+    [[nodiscard]] bool complete() const noexcept { return scanned_.has_value(); }
+    [[nodiscard]] bool watching() const noexcept { return watching_; }
     [[nodiscard]] QString recordingRoot() const { return recording_root_; }
 
     // Developer recording, for building the corpus of real scans. Off by
@@ -100,11 +112,29 @@ public:
     // variable (read at construction) or by this call - there is no switch
     // for it in the app. While it is on, every scan writes its frames, at
     // the size the reader works at, to a new folder under `root` in the
-    // format tools/scan replays. An empty root turns it off.
+    // format tools/scan replays. An empty root turns it off. Only a scan is
+    // ever recorded: the solve screen's camera (watching) writes nothing.
     void setRecordingRoot(const QString& root);
 
     // The cube, once scanCompleted has fired for the current scan.
-    [[nodiscard]] std::optional<cube::solver::Cube> cube() const { return cube_; }
+    [[nodiscard]] std::optional<cube::solver::Cube> cube() const {
+        return scanned_.transform([](const cube::vision::ScannedCube& s) { return s.cube; });
+    }
+    // What each colour measured in that scan; later frames from the same
+    // camera session are matched against these.
+    [[nodiscard]] std::optional<cube::vision::SessionColours> colours() const {
+        return scanned_.transform([](const cube::vision::ScannedCube& s) { return s.colours; });
+    }
+
+    // The side in the frame just processed, if there was one square to the
+    // camera. While watching this is every frame's read, held still or not.
+    [[nodiscard]] const std::optional<cube::vision::SideRead>& read() const noexcept {
+        return read_;
+    }
+
+    // Turns watching on or off without touching the camera. watch() is what
+    // the screens call; this is the part of it that needs no device.
+    void setWatching(bool watching);
 
     // The most recent camera frame (BGR). Safe from any thread.
     [[nodiscard]] cv::Mat latestFrame() const;
@@ -118,6 +148,11 @@ public slots:
     // Opens the camera and begins a fresh scan. `deviceId` is a
     // CameraController device identifier.
     void start(const QString& deviceId);
+    // Keeps the camera for the solve screen: watching on, the scan and the
+    // cube it produced left alone. A camera already running stays as it is,
+    // lock and all; one that was closed (coming back from settings) is
+    // opened again.
+    void watch(const QString& deviceId);
     void stop();
     // Forgets every side read so far and scans again, camera still running.
     void restart();
@@ -129,12 +164,16 @@ signals:
     void recordingRootChanged();
     // Six sides have been read and make exactly one valid cube: cube().
     void scanCompleted();
+    // A frame has been looked at while watching: read() is its side, or
+    // empty. Emitted after frameUpdated, once per frame.
+    void frameWatched();
 
 private:
     void poll();
     void handleStartFinished();
     void record(const cv::Mat& bgr, std::int64_t t_ms);
     void finishRecording();
+    void openCamera(const QString& deviceId);
 
     QTimer poll_timer_;
     QFutureWatcher<cube::Result<void>> start_watcher_;
@@ -158,7 +197,8 @@ private:
     qreal capture_progress_ = 0.0;
     std::vector<cube::vision::SideScan::Side> sides_;
     bool conflicted_ = false;
-    std::optional<cube::solver::Cube> cube_;
+    std::optional<cube::vision::ScannedCube> scanned_;
+    bool watching_ = false;
 
     QString recording_root_;
     cube::vision::recording::AsyncRecorder recorder_;
