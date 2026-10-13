@@ -402,8 +402,9 @@ TEST_CASE("the camera preview closes in on the cube and follows it", "[qml][solv
     const auto whole = [&]() { return preview->property("wholeScale").toDouble(); };
     // Where a pixel of the camera's picture lands in the preview.
     const auto lands = [&](const cv::Point2f& pixel) {
-        return QPointF(preview->property("pictureX").toDouble() + pixel.x * scale(),
-                       preview->property("pictureY").toDouble() + pixel.y * scale());
+        return QPointF(
+            preview->property("pictureX").toDouble() + static_cast<double>(pixel.x) * scale(),
+            preview->property("pictureY").toDouble() + static_cast<double>(pixel.y) * scale());
     };
     const auto in_the_middle = [&](const cv::Point2f& pixel) {
         const QPointF at = lands(pixel);

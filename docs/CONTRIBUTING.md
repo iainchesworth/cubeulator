@@ -45,7 +45,11 @@ the required check.
 - Formatting follows the repo's
   [`.clang-format`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-format) —
   run `clang-format` before committing, or configure your editor to do it
-  on save.
+  on save. The version is **23.1.3**: CI installs that wheel from
+  [`ci/requirements-lint.txt`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/ci/requirements-lint.txt)
+  and checks with it (`pip install -r ci/requirements-lint.txt` gives you the
+  same one). A 21, 22 or 23 formats the tree the same way, so any is fine
+  locally.
 - [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
   runs as part of the build; compiler warnings are treated as errors, so fix
   them rather than silencing them where you reasonably can.

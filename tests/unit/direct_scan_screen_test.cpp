@@ -128,7 +128,8 @@ TEST_CASE("the scan screen's picture and its dots flip together, and nothing els
         // Its left edge is at the screen's right edge when mirrored.
         const QQuickItem* picture = screen.one("scan.picture");
         REQUIRE(screen.on_screen(picture, {0.0, 0.0}).x() == (mirrored ? kWidth : 0.0));
-        REQUIRE(screen.on_screen(picture, {picture->width(), 0.0}).x() == (mirrored ? 0.0 : kWidth));
+        REQUIRE(screen.on_screen(picture, {picture->width(), 0.0}).x() ==
+                (mirrored ? 0.0 : kWidth));
     }
 
     SECTION("every dot is on the sticker it marks, as the picture shows it") {

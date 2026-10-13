@@ -24,16 +24,22 @@ namespace {
 
 struct JsonValue;
 using JsonArray = std::vector<JsonValue>;
-using JsonObject = std::vector<std::pair<std::string, JsonValue>>;
+// Keys and values are parallel vectors: a std::vector<std::pair<std::string, JsonValue>>
+// would instantiate std::pair<..., JsonValue> while JsonValue is still incomplete, which
+// GCC lets through and Clang with libstdc++ rejects (incomplete type in is_trivially_destructible).
+struct JsonObject {
+    std::vector<std::string> keys;
+    std::vector<JsonValue> values;
+};
 
 struct JsonValue {
     std::variant<std::nullptr_t, bool, double, std::string, JsonArray, JsonObject> value;
 
     [[nodiscard]] const JsonValue* find(const std::string& key) const {
         if (const auto* object = std::get_if<JsonObject>(&value)) {
-            for (const auto& [k, v] : *object) {
-                if (k == key) {
-                    return &v;
+            for (std::size_t i = 0; i < object->keys.size(); ++i) {
+                if (object->keys[i] == key) {
+                    return &object->values[i];
                 }
             }
         }
@@ -222,7 +228,8 @@ private:
             if (!value) {
                 return value;
             }
-            object.emplace_back(std::move(*key), std::move(*value));
+            object.keys.push_back(std::move(*key));
+            object.values.push_back(std::move(*value));
             skip_whitespace();
             if (consume('}')) {
                 return JsonValue{std::move(object)};

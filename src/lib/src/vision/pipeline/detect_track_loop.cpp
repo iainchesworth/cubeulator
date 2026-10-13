@@ -330,8 +330,9 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // 24 view-canonical rotations.
             if (result.detection.found && confident_corners >= 4) {
                 const auto& box = result.detection.box;
-                const double diagonal = std::sqrt(static_cast<double>(box.width) * box.width +
-                                                  static_cast<double>(box.height) * box.height);
+                const double diagonal =
+                    std::sqrt(static_cast<double>(box.width) * static_cast<double>(box.width) +
+                              static_cast<double>(box.height) * static_cast<double>(box.height));
                 double best = -1.0;
                 int best_perm = -1;
                 double pinned_mean = -1.0;

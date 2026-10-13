@@ -38,6 +38,8 @@ jobs:
         with:
           persist-credentials: false
 
+      # Pinned to one release, not to whatever `clang-format` means this year:
+      # the repo is formatted with one release (docs/CONTRIBUTING.md).
       # clang-format comes from a pinned PyPI wheel, not apt: the apt package
       # is whatever Ubuntu ships, so a runner-image bump could change the
       # formatting rules under an unchanged tree. Pinning also lets a
@@ -57,6 +59,7 @@ jobs:
 
       - name: Check formatting
         run: |
+          clang-format --version
           find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
             | xargs -0 clang-format --dry-run --Werror
 

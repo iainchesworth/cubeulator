@@ -190,16 +190,18 @@ std::string face_record(const std::string& kind, const std::string& clip, int pa
         colours += color_letter(cube::vision::classify_lab(lab).color);
     }
     char head[512];
-    std::snprintf(head, sizeof(head),
-                  "%s,%s,%d,%lld,%d,%c,%c,%d,%s,%d,%d,%.2f,%.2f,%.4f,%.3f,%d,%d,%.3f,%s",
-                  kind.c_str(), clip.c_str(), pass, static_cast<long long>(t_ms), epoch, epoch_face,
-                  store_face, slot, outcome.c_str(), contrib_obs, corner_fed ? 1 : 0, frontal_deg,
-                  pass_rot_deg, motion_score, belief_margin, certain ? 1 : 0, certain_face ? 1 : 0,
-                  convergence, colours.c_str());
+    std::snprintf(
+        head, sizeof(head), "%s,%s,%d,%lld,%d,%c,%c,%d,%s,%d,%d,%.2f,%.2f,%.4f,%.3f,%d,%d,%.3f,%s",
+        kind.c_str(), clip.c_str(), pass, static_cast<long long>(t_ms), epoch, epoch_face,
+        store_face, slot, outcome.c_str(), contrib_obs, corner_fed ? 1 : 0,
+        static_cast<double>(frontal_deg), static_cast<double>(pass_rot_deg),
+        static_cast<double>(motion_score), static_cast<double>(belief_margin), certain ? 1 : 0,
+        certain_face ? 1 : 0, static_cast<double>(convergence), colours.c_str());
     std::string row(head);
     for (const auto& lab : captured.lab) {
         char cell[64];
-        std::snprintf(cell, sizeof(cell), ",%.2f,%.2f,%.2f", lab[0], lab[1], lab[2]);
+        std::snprintf(cell, sizeof(cell), ",%.2f,%.2f,%.2f", static_cast<double>(lab[0]),
+                      static_cast<double>(lab[1]), static_cast<double>(lab[2]));
         row += cell;
     }
     return row;
