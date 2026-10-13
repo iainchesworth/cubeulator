@@ -47,7 +47,7 @@ branch's head commit.
 ### Self-hosted runners
 
 The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
-load even a seconds-long required check queues for half an hour. Four jobs can
+load even a seconds-long required check queues for half an hour. Five jobs can
 therefore run on the organisation's self-hosted fleet instead (the
 `iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
 not this repo, decide who may use it):
@@ -57,6 +57,7 @@ not this repo, decide who may use it):
 | `Validate gitflow branch name` | `branch-name-check.yml` |
 | `Scan dependency diff` | `dependency-review.yml` |
 | `clang-format` | `ci.yml` |
+| `platform-isolation` | `ci.yml` |
 | `Plan build legs` | `ci.yml` |
 
 They are routed by the `CONTROL_RUNNER_JSON` repository variable, a JSON array

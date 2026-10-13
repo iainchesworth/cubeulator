@@ -64,7 +64,10 @@ jobs:
   platform-isolation:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - platform-isolation' || 'platform-isolation' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',platform-isolation,') }}
-    runs-on: ubuntu-26.04
+    # Seconds-long, so routed like clang-format: by the CONTROL_RUNNER_JSON
+    # repository variable, with a fork PR pinned to the hosted image (see
+    # docs/ci.md). The fleet image ships pwsh, which the check needs.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
