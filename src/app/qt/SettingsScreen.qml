@@ -301,6 +301,10 @@ Rectangle {
                 Cube3DView {
                     id: previewCube
                     width: 280; height: 280
+                    homeRotation: Qt.vector3d(0, 0, 0)
+                    viewPitch: 24
+                    viewYaw: -32
+                    dragTurnsView: true
                     shaderStyle: SettingsState.shaderStyleIndex
                     autoRotate: SettingsState.cubeAutoRotate
                     autoRotateSpeed: SettingsState.rotateSpeedValue

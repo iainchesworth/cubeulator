@@ -233,6 +233,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qml_tests
         qml_test_main.cpp
         unit/cube_view_test.cpp
+        unit/showpiece_view_test.cpp
         unit/solve_screen_gallery_test.cpp
         unit/solve_screen_test.cpp)
 

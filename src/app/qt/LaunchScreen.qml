@@ -27,6 +27,12 @@ Rectangle {
             Cube3DView {
                 width: 190; height: 190
                 anchors.centerIn: parent
+                // Top, front and right side, however far round it has spun,
+                // and a drag tips it towards the viewer from wherever it is.
+                homeRotation: Qt.vector3d(0, 0, 0)
+                viewPitch: 24
+                viewYaw: -32
+                dragTurnsView: true
                 shaderStyle: SettingsState.shaderStyleIndex
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue
@@ -154,6 +160,10 @@ Rectangle {
             Cube3DView {
                 width: 320; height: 320
                 anchors.centerIn: parent
+                homeRotation: Qt.vector3d(0, 0, 0)
+                viewPitch: 24
+                viewYaw: -32
+                dragTurnsView: true
                 shaderStyle: SettingsState.shaderStyleIndex
                 autoRotate: SettingsState.cubeAutoRotate
                 autoRotateSpeed: SettingsState.rotateSpeedValue

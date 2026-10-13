@@ -103,13 +103,16 @@ Item {
     readonly property bool viewMoving: pitchSwing.running || yawSwing.running || holdSwing.running
     onViewMovingChanged: scheduleGuide()
 
-    // Dragging can turn the cube two ways. Left alone it spins cubeRoot, as
-    // on the launch screen. With dragTurnsView it moves the viewpoint
-    // instead: round the vertical and over the top, added to viewYaw and
-    // viewPitch, and letting go brings the view back to where they say. The
-    // solve screen uses this to look round the back of the cube without
-    // disturbing how it is held or the layer that is nudging - which carries
-    // on while it is dragged.
+    // Dragging can turn the cube two ways. Left alone it spins cubeRoot,
+    // which is inside the idle spin and so tips the cube off to one side
+    // once it has turned part way round. With dragTurnsView it moves the
+    // viewpoint instead: round the vertical and over the top, added to
+    // viewYaw and viewPitch, and letting go brings the view back to where
+    // they say. The solve screen uses this to look round the back of the
+    // cube without disturbing how it is held or the layer that is nudging -
+    // which carries on while it is dragged - and the launch and settings
+    // screens use it so a cube that is spinning tips towards the viewer
+    // wherever it has got to.
     property bool dragTurnsView: false
     property real dragYaw: 0
     property real dragPitch: 0
@@ -202,7 +205,14 @@ Item {
     readonly property real step: cubieSize + cubieGap
     readonly property real stickerInset: 0.86
 
-    property vector3d homeRotation: Qt.vector3d(-24, -32, 0)
+    // The tilt the cube rests at, and what a plain drag eases back to.
+    // Rotations are right-handed: a positive x tips the top towards the
+    // viewer, and a negative y brings the right side round, so this shows
+    // the top, the front and the right side. It is applied inside the idle
+    // spin, which carries the tilt round with it - a cube that spins should
+    // leave this at zero and take viewPitch and viewYaw instead, which keep
+    // the top in sight all the way round.
+    property vector3d homeRotation: Qt.vector3d(24, -32, 0)
 
     // Turns a layer a quarter turn: axis is "x"|"y"|"z", layerIndex is
     // -1|0|1, and `clockwise` is clockwise seen from the positive end of the
@@ -1055,7 +1065,8 @@ Item {
                                           Math.min(85 - root.shownPitch, root.dragPitch + dy * 0.5));
             } else {
                 cubeRoot.eulerRotation.y = cubeRoot.eulerRotation.y + dx * 0.4;
-                cubeRoot.eulerRotation.x = Math.max(-85, Math.min(85, cubeRoot.eulerRotation.x - dy * 0.4));
+                // Dragged down, the top comes towards the viewer, as above.
+                cubeRoot.eulerRotation.x = Math.max(-85, Math.min(85, cubeRoot.eulerRotation.x + dy * 0.4));
             }
             lastX = centroid.position.x;
             lastY = centroid.position.y;
