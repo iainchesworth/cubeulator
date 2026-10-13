@@ -63,6 +63,14 @@ add_executable(cube_unit_tests
     unit/solver/cfop_test.cpp
     unit/solver/stepped_solution_test.cpp)
 
+# two_phase_test.cpp includes two_phase_tables.hpp, so it meets the same GCC 15
+# -Wstringop-overflow false positive the library's own sources do; the reasons
+# are in src/lib/CMakeLists.txt.
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    set_property(SOURCE unit/solver/two_phase_test.cpp
+        APPEND PROPERTY COMPILE_OPTIONS "-Wno-stringop-overflow")
+endif()
+
 target_link_libraries(cube_unit_tests
     PRIVATE
         cube::lib
