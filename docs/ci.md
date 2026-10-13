@@ -241,23 +241,23 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | Android | NDK r28c (28.2.13676358), JDK 21, platform 36, build-tools 36.0.0 | r30 exists. r28c is newer than the r27c Qt 6.12 names and builds its libraries with: Qt recommends matching it but does not rule a newer NDK out, so this is outside Qt's tested configuration on purpose (r27c is the fallback). r28c's libc++ has `std::expected::transform`/`and_then`, `std::format`/`std::print`, `ranges::contains`/`fold_left` and `mdspan`, which r26b lacks; it still lacks float `from_chars`, `views::enumerate` and `flat_map`. |
 | CMake | newest 4.x (`lukka/get-cmake`, `cmakeVersion: latest`); policies to 4.4 | No. |
 | mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
-| vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, bgfx, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
+| vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
 | iOS deployment target | 18.0 (`CMakePresets.json`) | No - 18 is Qt 6.12's minimum iOS (it was 16.3 for Qt 6.8), built with Xcode 16's iOS 18 SDK. iOS CI is build-only and does not build Qt, so this is the project's own floor, not something Qt exercises there. |
 
 ## Dependencies
 
-vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
-Runtime, and bgfx on every triplet, desktop and mobile alike, via a
+vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV and ONNX
+Runtime on every triplet, desktop and mobile alike, via a
 chainloaded toolchain on `arm64-ios`/`arm64-android` — see below. Qt is a
 separate prebuilt install (`jurplel/install-qt-action` in CI,
 `ci/install-qt.*` locally) — kept out of vcpkg for build size and Windows
 `MAX_PATH` reasons.
 
-Mobile (arm64-ios/arm64-android) vcpkg builds of opencv4/onnxruntime/bgfx are
+Mobile (arm64-ios/arm64-android) vcpkg builds of opencv4/onnxruntime are
 new and not yet proven out in CI (the `android-build`/`ios-build` jobs stay
 `continue-on-error: true` until they are) — see
 [Dependency strategy](dependency-strategy.md) for the evidence and the
-fallback plan if any of the three doesn't work out.
+fallback plan if either doesn't work out.
 
 ## Dependabot
 
@@ -299,6 +299,6 @@ the latest?":
   Clang packages the `clang-format`/`clang-tidy` jobs install.
 - **Runner images** — every `runs-on:` label, and the `matrix.os` values.
 - **CMake policy range** — the upper bound in `cmake_minimum_required()`.
-- **Libraries built by vcpkg** (OpenCV, ONNX Runtime, bgfx, ...) — these move
+- **Libraries built by vcpkg** (OpenCV, ONNX Runtime, ...) — these move
   only with the `builtin-baseline`, and only as far as the vcpkg registry has
   them.

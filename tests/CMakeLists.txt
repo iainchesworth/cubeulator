@@ -95,7 +95,6 @@ add_executable(cube_unit_tests
 target_link_libraries(cube_unit_tests
     PRIVATE
         cube::lib
-        cube::gpu_render
         cube_test_platform
         cube::warnings
         cube::sanitizers

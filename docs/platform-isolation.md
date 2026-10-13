@@ -21,7 +21,7 @@ turns the `platform-isolation` check red.
 ```
 src/app/
   interfaces/        what the shell needs from a platform: one header each
-    camera.hpp  gpu_surface.hpp  inference_env.hpp  paths.hpp
+    camera.hpp  inference_env.hpp  paths.hpp
     platform_info.hpp  crash_handler.hpp
   platform/
     windows/ macos/ linux/ android/ ios/
@@ -67,8 +67,8 @@ axis and stay in `cmake/CompilerWarnings.cmake`, `Sanitizers.cmake` and
 ## Adding a platform
 
 1. Create `src/app/platform/<name>/` with one implementation of each
-   interface (`camera_<name>.cpp`, `gpu_surface_<name>.cpp`,
-   `inference_env_<name>.cpp`, `paths_<name>.cpp`, `platform_info_<name>.cpp`)
+   interface (`camera_<name>.cpp`, `inference_env_<name>.cpp`,
+   `paths_<name>.cpp`, `platform_info_<name>.cpp`)
    and `platform.cmake`. Copy the closest existing platform's and change what
    differs; use `posix/` files where the implementation is the same.
 2. Add a branch for it in `cmake/Platform.cmake`.

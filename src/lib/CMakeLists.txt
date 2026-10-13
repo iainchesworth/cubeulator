@@ -1,5 +1,5 @@
 # ---------------------------------------------------------------------------
-# cube::lib - solver/vision/render/i18n placeholders, no GUI, no platform code.
+# cube::lib - solver, vision and i18n, no GUI, no platform code.
 # ---------------------------------------------------------------------------
 add_library(cube_lib)
 add_library(cube::lib ALIAS cube_lib)
@@ -7,7 +7,7 @@ add_library(cube::lib ALIAS cube_lib)
 # fmt fills the gap std::format leaves on Android: the NDK's libc++ doesn't
 # implement <format> (it needs locale support the NDK's minimal libc doesn't
 # provide). Resolved via vcpkg on every triplet, including mobile - unlike
-# opencv4/onnxruntime/bgfx, fmt has no native/platform-specific code to make
+# opencv4/onnxruntime, fmt has no native/platform-specific code to make
 # mobile triplets risky (see docs/dependency-strategy.md).
 find_package(fmt CONFIG REQUIRED)
 
@@ -82,7 +82,6 @@ target_sources(cube_lib
         src/vision/recording_v2.cpp
         src/vision/direct_scan.cpp
         src/vision/held_cube.cpp
-        src/render/render.cpp
         src/i18n/i18n.cpp)
 
 add_dependencies(cube_lib cube_version)
