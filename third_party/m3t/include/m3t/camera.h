@@ -31,6 +31,12 @@ namespace m3t {
  */
 class Camera {
  public:
+  // CUBEULATOR PATCH 5: Camera is a polymorphic base (pure virtuals, derived
+  // in client code) with a non-virtual destructor; deleting a derived camera
+  // through a Camera pointer was undefined behaviour and GCC rejects deriving
+  // from it under -Wnon-virtual-dtor.
+  virtual ~Camera() = default;
+
   // Setup method
   virtual bool SetUp() = 0;
 
