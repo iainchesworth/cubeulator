@@ -506,7 +506,7 @@ Known gaps, so nobody mistakes them for done:
    The Windows build used a copy of an existing vcpkg installed tree, merged
    with five ports built in this session, configured with
    `VCPKG_MANIFEST_INSTALL=OFF`: another session held the shared
-   `D:cpkg-buildtrees` lock while building onnxruntime. The libraries are
+   `D:/vcpkg-buildtrees` lock while building onnxruntime. The libraries are
    the ones the manifest resolves to at the pinned baseline, but a clean
    vcpkg install was not run end to end here.
 3. **The deployment scan covers shared-library files** (`.dll`, `.so`,
