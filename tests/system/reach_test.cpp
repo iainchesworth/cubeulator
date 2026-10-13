@@ -5,8 +5,8 @@
 // order runs it after everything else in the same process. Run on its own it
 // has nothing to judge and says so.
 
-#include "app.hpp"
 #include "reach.hpp"
+#include "app.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -16,7 +16,8 @@
 
 #include <cstdio>
 
-TEST_CASE("reach: every screen, state and control in the inventory was visited", "[system][reach]") {
+TEST_CASE("reach: every screen, state and control in the inventory was visited",
+          "[system][reach]") {
     cube::systest::App* app = cube::systest::App::booted();
     if (app == nullptr || app->reach().to_json().value("screens").toArray().size() < 4) {
         SKIP("the reach gate judges a whole run; run cube_system_tests without a filter");

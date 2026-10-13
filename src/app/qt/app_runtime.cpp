@@ -2,8 +2,8 @@
 
 #include "controllers/frame_image_provider.hpp"
 
-#include <QQuickWindow>
 #include <QtQml/qqml.h>
+#include <QQuickWindow>
 
 namespace cube::app {
 
@@ -31,9 +31,8 @@ AppRuntime::AppRuntime() : solve_(scan_session_) {
 
     // addImageProvider takes ownership; direct_scan_ outlives engine_ (engine_
     // is declared - and so destroyed first - after it).
-    engine_.addImageProvider("scanFrame", new FrameImageProvider([this]() {
-                                 return direct_scan_.latestFrame();
-                             }));
+    engine_.addImageProvider(
+        "scanFrame", new FrameImageProvider([this]() { return direct_scan_.latestFrame(); }));
 }
 
 bool AppRuntime::load() {

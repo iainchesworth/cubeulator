@@ -94,7 +94,8 @@ TEST_CASE("the theme switches live, and the choice is kept", "[system][settings]
 
     // System follows the operating system's own setting.
     app.click("settings.theme.0");
-    REQUIRE(app.wait_for([&]() { return app.settings_state().property("themeMode").toString() == "system"; }));
+    REQUIRE(app.wait_for(
+        [&]() { return app.settings_state().property("themeMode").toString() == "system"; }));
     const bool os_dark = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
     CHECK(theme_is_dark(app) == os_dark);
 }
@@ -129,8 +130,8 @@ TEST_CASE("every setting on the screen can be pressed in both layouts", "[system
             }
             INFO("control " << key.toStdString());
             REQUIRE(control != nullptr);
-            if (!control->isEnabled() ||
-                (control->property("enabled").isValid() && !control->property("enabled").toBool())) {
+            if (!control->isEnabled() || (control->property("enabled").isValid() &&
+                                          !control->property("enabled").toBool())) {
                 continue;
             }
             app.click(control);

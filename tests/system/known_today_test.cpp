@@ -119,7 +119,8 @@ TEST_CASE("known today: there is no back, and nothing takes keyboard focus",
     }
     QQuickItem* focused = app.window().activeFocusItem();
     const bool on_a_control =
-        focused != nullptr && QByteArray(focused->metaObject()->className()).startsWith("AppButton");
+        focused != nullptr &&
+        QByteArray(focused->metaObject()->className()).startsWith("AppButton");
     CHECK_FALSE(on_a_control);
 }
 

@@ -51,7 +51,9 @@ struct Tour {
 
     void shoot(const QString& name) {
         app.settle();
-        written.push_back(app.shot(QString("%1-%2-%3").arg(name, QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
+        written.push_back(app.shot(
+            QString("%1-%2-%3")
+                .arg(name, QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
     }
 };
 
@@ -124,7 +126,9 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
         }
         REQUIRE(app.wait_for([&]() { return scan.complete(); }, 60'000));
         // The beat before the solution is short; this picture is taken in it.
-        tour.written.push_back(app.shot(QString("scan-cube-read-%1-%2").arg(QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
+        tour.written.push_back(app.shot(
+            QString("scan-cube-read-%1-%2")
+                .arg(QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
 
         // The solution, at the start, part way and done.
         REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }, 180'000));

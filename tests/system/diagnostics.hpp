@@ -12,7 +12,7 @@
 namespace cube::systest {
 
 struct QmlWarning {
-    QString where;    // qrc:/qt/qml/Cubeulator/DirectScanScreen.qml:73:13
+    QString where;  // qrc:/qt/qml/Cubeulator/DirectScanScreen.qml:73:13
     QString message;
 };
 

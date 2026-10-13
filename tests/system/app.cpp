@@ -31,9 +31,15 @@ std::unique_ptr<App> g_app;
 
 // QML types declared in a .qml file get a generated class name
 // ("AppButton_QMLTYPE_12"), so the QML file's type name is a prefix.
-[[nodiscard]] bool is_app_button(const QObject* object) { return class_is(object, "AppButton"); }
-[[nodiscard]] bool is_cube_view(const QObject* object) { return class_is(object, "Cube3DView"); }
-[[nodiscard]] bool is_mouse_area(const QObject* object) { return class_is(object, "QQuickMouseArea"); }
+[[nodiscard]] bool is_app_button(const QObject* object) {
+    return class_is(object, "AppButton");
+}
+[[nodiscard]] bool is_cube_view(const QObject* object) {
+    return class_is(object, "Cube3DView");
+}
+[[nodiscard]] bool is_mouse_area(const QObject* object) {
+    return class_is(object, "QQuickMouseArea");
+}
 
 // The app marks what is pressable with the pointing-hand cursor
 // (AppButton, the settings toggles). An empty MouseArea that only swallows
@@ -302,7 +308,8 @@ void App::click(QQuickItem* item) {
     QQuickItem* target = click_target(item);
     scroll_into_view(target);
     pump(20);
-    const QPoint at = target->mapToScene(QPointF(target->width() / 2, target->height() / 2)).toPoint();
+    const QPoint at =
+        target->mapToScene(QPointF(target->width() / 2, target->height() / 2)).toPoint();
     INFO("click on " << control_key(item).toStdString() << " at " << at.x() << "," << at.y());
     REQUIRE(QRect(QPoint(0, 0), window_->size()).contains(at));
     reach_->activated(control_key(item), layout());
@@ -330,7 +337,8 @@ void App::tap(QQuickItem* item) {
     QQuickItem* target = click_target(item);
     scroll_into_view(target);
     pump(20);
-    const QPoint at = target->mapToScene(QPointF(target->width() / 2, target->height() / 2)).toPoint();
+    const QPoint at =
+        target->mapToScene(QPointF(target->width() / 2, target->height() / 2)).toPoint();
     INFO("tap on " << control_key(item).toStdString() << " at " << at.x() << "," << at.y());
     REQUIRE(QRect(QPoint(0, 0), window_->size()).contains(at));
     reach_->activated(control_key(item), layout());
@@ -427,15 +435,24 @@ QString App::graphics_api() const {
         return "none yet";
     }
     switch (renderer->graphicsApi()) {
-        case QSGRendererInterface::Software: return "Software";
-        case QSGRendererInterface::OpenVG: return "OpenVG";
-        case QSGRendererInterface::OpenGL: return "OpenGL";
-        case QSGRendererInterface::Direct3D11: return "Direct3D11";
-        case QSGRendererInterface::Direct3D12: return "Direct3D12";
-        case QSGRendererInterface::Vulkan: return "Vulkan";
-        case QSGRendererInterface::Metal: return "Metal";
-        case QSGRendererInterface::Null: return "Null";
-        case QSGRendererInterface::Unknown: break;
+        case QSGRendererInterface::Software:
+            return "Software";
+        case QSGRendererInterface::OpenVG:
+            return "OpenVG";
+        case QSGRendererInterface::OpenGL:
+            return "OpenGL";
+        case QSGRendererInterface::Direct3D11:
+            return "Direct3D11";
+        case QSGRendererInterface::Direct3D12:
+            return "Direct3D12";
+        case QSGRendererInterface::Vulkan:
+            return "Vulkan";
+        case QSGRendererInterface::Metal:
+            return "Metal";
+        case QSGRendererInterface::Null:
+            return "Null";
+        case QSGRendererInterface::Unknown:
+            break;
     }
     return "unknown";
 }

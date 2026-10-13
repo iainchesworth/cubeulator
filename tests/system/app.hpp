@@ -105,13 +105,13 @@ public:
     [[nodiscard]] QString control_key(QQuickItem* item) const;
 
     // ---- input -------------------------------------------------------------
-    void click(QQuickItem* item);                 // a mouse click on its centre
+    void click(QQuickItem* item);  // a mouse click on its centre
     void click(const QString& object_name);
     void click_button(const QString& label);
-    void tap(QQuickItem* item);                   // a finger: touch press and release
+    void tap(QQuickItem* item);  // a finger: touch press and release
     void tap(const QString& object_name);
-    void drag(QQuickItem* item, QPoint by);       // press, move, release
-    void key(Qt::Key which);                      // to the window's focus item
+    void drag(QQuickItem* item, QPoint by);  // press, move, release
+    void key(Qt::Key which);                 // to the window's focus item
 
     // ---- waiting -----------------------------------------------------------
     // Runs the event loop until `done` holds. False if `timeout_ms` passed.
@@ -125,7 +125,7 @@ public:
 
     // ---- window ------------------------------------------------------------
     void resize(QSize size);
-    void set_theme(const QString& mode);          // "system" | "light" | "dark"
+    void set_theme(const QString& mode);  // "system" | "light" | "dark"
     // The scene graph's graphics API ("OpenGL", "Direct3D11", "Software"...).
     [[nodiscard]] QString graphics_api() const;
     // The window as rendered, in device pixels.

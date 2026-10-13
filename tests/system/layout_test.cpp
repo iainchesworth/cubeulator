@@ -121,14 +121,15 @@ TEST_CASE("every control on every screen is inside the window", "[system][layout
             const QRect window(QPoint(0, 0), app.window().size());
             for (QQuickItem* control : app.visible_controls()) {
                 const QRect box = control->mapRectToScene(control->boundingRect()).toAlignedRect();
-                INFO("control " << app.control_key(control).toStdString() << " at " << box.x() << ","
-                                << box.y() << " " << box.width() << "x" << box.height());
+                INFO("control " << app.control_key(control).toStdString() << " at " << box.x()
+                                << "," << box.y() << " " << box.width() << "x" << box.height());
                 // A control scrolled out of a list is reached by scrolling,
                 // not by the window being the wrong size.
                 bool in_flickable = false;
                 for (QQuickItem* up = control->parentItem(); up != nullptr; up = up->parentItem()) {
-                    in_flickable = in_flickable ||
-                                   QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
+                    in_flickable =
+                        in_flickable ||
+                        QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
                 }
                 if (!in_flickable) {
                     CHECK(window.contains(box));

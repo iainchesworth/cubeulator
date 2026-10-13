@@ -22,8 +22,8 @@ void capture(QtMsgType type, const QMessageLogContext& context, const QString& m
     const QString file = QString::fromUtf8(context.file != nullptr ? context.file : "");
     if (problem && (file.endsWith(".qml") || message.contains(".qml:"))) {
         const QMutexLocker lock(&g_mutex);
-        g_warnings.push_back({file.isEmpty() ? QString() : file + ":" + QString::number(context.line),
-                              message});
+        g_warnings.push_back(
+            {file.isEmpty() ? QString() : file + ":" + QString::number(context.line), message});
     }
     if (g_previous != nullptr) {
         g_previous(type, context, message);

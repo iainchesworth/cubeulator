@@ -20,7 +20,8 @@ const std::vector<ScreenDef>& screen_inventory() {
     static const std::vector<ScreenDef> screens = {
         {"launch", "LaunchScreen.qml", ""},
         {"permission", "PermissionScreen.qml",
-         "no control leads here on a desktop: AppState.beginScan() skips it unless the platform is mobile"},
+         "no control leads here on a desktop: AppState.beginScan() skips it unless the platform is "
+         "mobile"},
         {"scan", "DirectScanScreen.qml", ""},
         {"solve", "SolveScreen.qml", ""},
         {"settings", "SettingsScreen.qml", ""},
@@ -33,7 +34,8 @@ const std::vector<ScreenDef>& screen_inventory() {
 const std::map<QString, QString>& dead_screen_files() {
     static const std::map<QString, QString> dead = {
         {"ScanScreen.qml",
-         "the previous scan screen: not instantiated by Main.qml, kept for ScanSession until R6 removes both"},
+         "the previous scan screen: not instantiated by Main.qml, kept for ScanSession until R6 "
+         "removes both"},
     };
     return dead;
 }
@@ -50,7 +52,8 @@ const std::vector<StateDef>& state_inventory() {
              return a.screen() == "permission" && permission != nullptr &&
                     permission->property("status").toInt() == 1;
          },
-         "Qt reports camera access as granted on desktop platforms, so the denied wording never shows"},
+         "Qt reports camera access as granted on desktop platforms, so the denied wording never "
+         "shows"},
 
         {"scan", "opening-camera",
          [](App& a) {
@@ -59,7 +62,9 @@ const std::vector<StateDef>& state_inventory() {
          },
          ""},
         {"scan", "camera-unavailable",
-         [](App& a) { return a.screen() == "scan" && !a.runtime().directScan().cameraError().isEmpty(); },
+         [](App& a) {
+             return a.screen() == "scan" && !a.runtime().directScan().cameraError().isEmpty();
+         },
          ""},
         {"scan", "setting-up-camera",
          [](App& a) {
@@ -97,12 +102,14 @@ const std::vector<StateDef>& state_inventory() {
 
         {"solve", "solving",
          [](App& a) { return a.screen() == "solve" && a.runtime().solve().isSolving(); },
-         "AppState only leaves the scan screen once the solution is ready, so the spinner never shows "
+         "AppState only leaves the scan screen once the solution is ready, so the spinner never "
+         "shows "
          "on this path"},
         {"solve", "at-start",
          [](App& a) {
              auto& solve = a.runtime().solve();
-             return a.screen() == "solve" && !solve.isSolving() && solve.atStart() && solve.totalMoves() > 0;
+             return a.screen() == "solve" && !solve.isSolving() && solve.atStart() &&
+                    solve.totalMoves() > 0;
          },
          ""},
         {"solve", "mid-solution",
@@ -172,8 +179,7 @@ void Reach::sample() {
         // AppButton declares its own `enabled`; the item's own says whether a
         // parent switched the whole row off.
         const QVariant enabled = control->property("enabled");
-        const bool is_enabled =
-            control->isEnabled() && (!enabled.isValid() || enabled.toBool());
+        const bool is_enabled = control->isEnabled() && (!enabled.isValid() || enabled.toBool());
         if (is_enabled) {
             discovered_.insert(key);
             disabled_.erase(key);
@@ -203,7 +209,8 @@ std::vector<QString> Reach::gaps() const {
     for (const ScreenDef& screen : screen_inventory()) {
         for (const char* layout : {"narrow", "wide"}) {
             if (screens_.count((screen.name + "@" + layout).toStdString()) == 0) {
-                gaps.push_back("screen " + screen.name + " never shown in the " + layout + " layout");
+                gaps.push_back("screen " + screen.name + " never shown in the " + layout +
+                               " layout");
             }
         }
     }
@@ -217,7 +224,8 @@ std::vector<QString> Reach::gaps() const {
 
     for (const std::string& control : discovered_) {
         if (activated_.count(control) == 0) {
-            gaps.push_back("control " + QString::fromStdString(control) + " was on screen but never pressed");
+            gaps.push_back("control " + QString::fromStdString(control) +
+                           " was on screen but never pressed");
         }
     }
     return gaps;
@@ -227,8 +235,8 @@ std::vector<QString> Reach::known_gaps() const {
     std::vector<QString> out;
     for (const ScreenDef& screen : screen_inventory()) {
         if (!screen.reached_by_ui.isEmpty()) {
-            out.push_back("screen " + screen.name + " is put up by App::go, not by a control: " +
-                          screen.reached_by_ui);
+            out.push_back("screen " + screen.name +
+                          " is put up by App::go, not by a control: " + screen.reached_by_ui);
         }
     }
     for (const auto& [file, why] : dead_screen_files()) {
@@ -238,7 +246,8 @@ std::vector<QString> Reach::known_gaps() const {
         if (!state.cannot_reach_because.isEmpty()) {
             const bool seen = states_.count((state.screen + "/" + state.name).toStdString()) != 0;
             out.push_back("state " + state.screen + "/" + state.name +
-                          (seen ? " (seen anyway) - " : " not reachable here - ") + state.cannot_reach_because);
+                          (seen ? " (seen anyway) - " : " not reachable here - ") +
+                          state.cannot_reach_because);
         }
     }
     for (const std::string& control : disabled_) {
@@ -264,7 +273,8 @@ QString Reach::summary() const {
     for (const StateDef& state : state_inventory()) {
         if (state.cannot_reach_because.isEmpty()) {
             ++state_total;
-            state_seen += static_cast<int>(states_.count((state.screen + "/" + state.name).toStdString()));
+            state_seen +=
+                static_cast<int>(states_.count((state.screen + "/" + state.name).toStdString()));
         }
     }
 
@@ -274,7 +284,11 @@ QString Reach::summary() const {
     }
 
     line(QString("reach: screens %1/%2 (narrow and wide), states %3/%4, controls pressed %5/%6")
-             .arg(shown).arg(screen_total).arg(state_seen).arg(state_total).arg(pressed)
+             .arg(shown)
+             .arg(screen_total)
+             .arg(state_seen)
+             .arg(state_total)
+             .arg(pressed)
              .arg(discovered_.size()));
     for (const QString& gap : gaps()) {
         line("  GAP    " + gap);

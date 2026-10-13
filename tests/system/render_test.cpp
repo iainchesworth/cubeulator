@@ -74,7 +74,8 @@ struct Content {
         }
     }
     Content content;
-    content.non_background = total > 0 ? static_cast<double>(differs) / static_cast<double>(total) : 0.0;
+    content.non_background =
+        total > 0 ? static_cast<double>(differs) / static_cast<double>(total) : 0.0;
     content.distinct = static_cast<int>(colours.size());
     for (const long band : per_band) {
         content.saturated_hues += (coloured > 0 && band * 50 >= coloured) ? 1 : 0;
