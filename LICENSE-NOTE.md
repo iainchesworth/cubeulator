@@ -21,3 +21,11 @@ Options worth considering at that point include: a store-specific
 distribution exception (many GPL projects add one), dual-licensing, or
 re-licensing before any store-bound code is written. Whatever is decided,
 update this file (or replace it) with the actual resolution and reasoning.
+
+---
+
+**2026-10-13 - analysis added, conclusion unchanged.** The question above is
+still open and is still Iain's to decide. [docs/licensing.md](docs/licensing.md)
+now holds the inventory of third-party components, the check of Qt's licences
+(Qt Quick 3D is GPL-3.0-only or commercial; it matters more than the app's own
+code does), and the options for the App Store with their cost.
