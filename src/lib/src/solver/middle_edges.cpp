@@ -6,7 +6,7 @@
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
 
-#include "bfs_search.hpp"
+#include "piece_search.hpp"
 
 namespace cube::solver {
 
@@ -51,6 +51,16 @@ std::uint64_t first_layer_corners_key(const Cube& cube) noexcept {
     }
     return key;
 }
+
+// The facelet codes (face * 9 + index, as piece_code_edge numbers them) at
+// which an edge piece's first colour can sit while the piece is in the U
+// layer: on U itself, or on the top edge sticker of a side face.
+constexpr std::array<std::uint64_t, 8> kUEdgeCodes = {
+    static_cast<std::uint64_t>(Face::U) * 9 + 1, static_cast<std::uint64_t>(Face::U) * 9 + 3,
+    static_cast<std::uint64_t>(Face::U) * 9 + 5, static_cast<std::uint64_t>(Face::U) * 9 + 7,
+    static_cast<std::uint64_t>(Face::F) * 9 + 1, static_cast<std::uint64_t>(Face::R) * 9 + 1,
+    static_cast<std::uint64_t>(Face::B) * 9 + 1, static_cast<std::uint64_t>(Face::L) * 9 + 1,
+};
 
 }  // namespace
 
@@ -113,6 +123,14 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             };
         };
 
+        const auto signature = make_signature(true);
+        // Where the signature stands on a solved cube: every piece home, the
+        // target included. The rest holds one code per tracked piece - the
+        // four first-layer corners, the edges already placed, the target,
+        // which was pushed last and so is its low six bits.
+        const detail::SignatureKey solved_key = signature(Cube::solved());
+        const std::size_t rest_codes = 4 + i + 1;
+
         // Unlike corners (where a D turn can cycle a misplaced piece
         // through all 4 D-slots), there's no single whole-layer turn that
         // cycles among the 4 middle slots. A single search allowing every
@@ -140,8 +158,14 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 const Cube::EdgeLocation l = c.locate_edge(color_a, color_b);
                 return l.face_a == Face::U || l.face_b == Face::U;
             };
-            Result<std::vector<Move>> eject_step = detail::bfs_search(
-                cube, eject_allowed, eject_postcondition, make_signature(true), 8);
+            // "In the U layer" is one of eight codes for the target.
+            detail::PieceGoal eject_goal{.rest_codes = rest_codes, .keys = {}};
+            for (const std::uint64_t code : kUEdgeCodes) {
+                eject_goal.keys.push_back(
+                    detail::SignatureKey{solved_key.cross, (solved_key.rest & ~63ULL) | code});
+            }
+            Result<std::vector<Move>> eject_step =
+                detail::search(cube, eject_allowed, eject_postcondition, signature, 8, eject_goal);
             if (!eject_step.has_value()) {
                 return std::unexpected(eject_step.error());
             }
@@ -152,8 +176,9 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             return placed_so_far(c) && slot_solved(c, target);
         };
         const std::vector<Face> insert_allowed = {Face::U, target.side_a, target.side_b};
-        Result<std::vector<Move>> insert_step = detail::bfs_search(
-            cube, insert_allowed, insert_postcondition, make_signature(true), 10);
+        const detail::PieceGoal insert_goal{.rest_codes = rest_codes, .keys = {solved_key}};
+        Result<std::vector<Move>> insert_step =
+            detail::search(cube, insert_allowed, insert_postcondition, signature, 10, insert_goal);
         if (insert_step.has_value()) {
             apply_step(*insert_step);
             continue;
@@ -165,8 +190,8 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
         // always runs first (see above), but a defensive net is cheap and
         // this is off the hot path.
         const std::vector<Face> wide_allowed(kAllFaces.begin(), kAllFaces.end());
-        Result<std::vector<Move>> wide_step = detail::bfs_search(
-            cube, wide_allowed, insert_postcondition, make_signature(true), 10, 4'000'000);
+        Result<std::vector<Move>> wide_step = detail::search(
+            cube, wide_allowed, insert_postcondition, signature, 10, insert_goal, 4'000'000);
         if (!wide_step.has_value()) {
             return std::unexpected(wide_step.error());
         }

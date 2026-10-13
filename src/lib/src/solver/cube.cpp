@@ -196,6 +196,35 @@ constexpr auto kMoveTables = [] {
     return tables;
 }();
 
+// The same tables seen from the stickers' side: facelet (face * 9 + index) to
+// the facelet it moves to. Built from kMoveTables, so it cannot disagree with
+// apply().
+constexpr auto kFaceletMaps = [] {
+    std::array<std::array<Cube::FaceletMap, 3>, 6> maps{};
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t turns = 0; turns < 3; ++turns) {
+            Cube::FaceletMap& map = maps.at(face).at(turns);
+            for (std::size_t i = 0; i < map.size(); ++i) {
+                map.at(i) = static_cast<std::uint8_t>(i);
+            }
+            for (const StickerMove& sticker : kMoveTables.at(face).at(turns)) {
+                map.at(static_cast<std::size_t>(sticker.src_face) * 9 + sticker.src_index) =
+                    static_cast<std::uint8_t>(static_cast<std::size_t>(sticker.dst_face) * 9 +
+                                              sticker.dst_index);
+            }
+        }
+    }
+    return maps;
+}();
+
+constexpr Cube::FaceletMap kIdentityFaceletMap = [] {
+    Cube::FaceletMap map{};
+    for (std::size_t i = 0; i < map.size(); ++i) {
+        map.at(i) = static_cast<std::uint8_t>(i);
+    }
+    return map;
+}();
+
 struct EdgePosition {
     Face face_a;
     std::uint8_t index_a;
@@ -317,6 +346,15 @@ Cube Cube::apply(Move move) const noexcept {
         result.set(sticker.dst_face, sticker.dst_index, at(sticker.src_face, sticker.src_index));
     }
     return result;
+}
+
+const Cube::FaceletMap& Cube::facelet_map(Move move) noexcept {
+    if (move.turns < 1 || move.turns > 3 ||
+        static_cast<std::size_t>(move.face) >= kFaceletMaps.size()) {
+        return kIdentityFaceletMap;
+    }
+    return kFaceletMaps.at(static_cast<std::size_t>(move.face))
+        .at(static_cast<std::size_t>(move.turns - 1));
 }
 
 bool Cube::is_solved() const noexcept {

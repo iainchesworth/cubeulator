@@ -33,11 +33,12 @@ CI's 4-core runners aren't oversubscribed).
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
 compiles unoptimized *and* enables ASan/UBSan (see
 [Sanitizers.cmake](https://github.com/iainchesworthlabs/cubeulator/blob/main/cmake/Sanitizers.cmake)). The solver's first-two-layer
-searches (`cube::solver::detail::bfs_search`, see
-[bfs_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/bfs_search.hpp)) visit up to millions
-of nodes per stage, and an unoptimized build alone - independent of the
-sanitizers - is well over an order of magnitude slower there than Release,
-turning a fast Release corpus run into many Debug minutes.
+searches (`cube::solver::detail::piece_search`, see
+[piece_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/piece_search.hpp)) visit up to
+hundreds of thousands of nodes per stage, and an unoptimized build alone -
+independent of the sanitizers - is well over an order of magnitude slower
+there than Release, turning a fast Release corpus run into many Debug
+minutes.
 
 For local dev/test iteration, prefer the `fastdebug` preset
 (`windows-msvc-fastdebug`/`linux-gcc-fastdebug`/`macos-clang-fastdebug`):

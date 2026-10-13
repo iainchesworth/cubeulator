@@ -99,6 +99,8 @@ struct Options {
     return true;
 }
 
+constexpr std::uint64_t kDigestStart = 0xCBF29CE484222325ULL;
+
 // FNV-1a over the notation of every step, with the stage and a separator, so
 // moving a move across a stage boundary changes the digest too.
 void mix(std::uint64_t& hash, std::string_view text) {
@@ -136,7 +138,7 @@ int main(int argc, char** argv) {
     }
 
     std::vector<double> millis;
-    std::uint64_t digest = 0xCBF29CE484222325ULL;
+    std::uint64_t digest = kDigestStart;
     std::size_t total_moves = 0;
     unsigned failed = 0;
 
@@ -156,16 +158,23 @@ int main(int argc, char** argv) {
         }
         millis.push_back(ms);
         std::size_t moves = 0;
+        // The same bytes feed the corpus digest and this solution's own.
+        std::uint64_t own = kDigestStart;
+        const auto both = [&](std::string_view text) {
+            mix(digest, text);
+            mix(own, text);
+        };
         for (const cube::solver::SolveStep& step : solution->steps) {
             moves += step.moves.size();
-            mix(digest, std::to_string(static_cast<int>(step.stage)));
-            mix(digest, ":");
-            mix(digest, cube::solver::to_string(step.moves));
-            mix(digest, ";");
+            both(std::to_string(static_cast<int>(step.stage)));
+            both(":");
+            both(cube::solver::to_string(step.moves));
+            both(";");
         }
         total_moves += moves;
         if (options.list) {
-            std::printf("seed %u: %8.1f ms  %3zu moves\n", seed, ms, moves);
+            std::printf("seed %u: %8.1f ms  %3zu moves  %016llx\n", seed, ms, moves,
+                        static_cast<unsigned long long>(own));
         }
     }
 
