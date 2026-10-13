@@ -219,3 +219,28 @@ if(CUBEULATOR_BUILD_APP)
     catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")
 endif()
+
+# --- E4a: desktop manners (window geometry, KeepAwake) ---------------------
+# Its own binary rather than more cases in cube_qt_controller_tests: it links
+# cube_app_desktop (and with it Qt Gui) and nothing from the controllers.
+# Plain QCoreApplication from qt_test_main.cpp is enough: no window is shown.
+if(CUBEULATOR_BUILD_APP AND TARGET cube_app_desktop)
+    add_executable(cube_desktop_tests
+        qt_test_main.cpp
+        unit/keep_awake_test.cpp
+        unit/window_geometry_test.cpp)
+
+    target_link_libraries(cube_desktop_tests
+        PRIVATE
+            cube_app_desktop
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Qt6::Core
+            Catch2::Catch2)
+
+    cube_deploy_sanitizer_runtime(cube_desktop_tests)
+
+    catch_discover_tests(cube_desktop_tests DISCOVERY_MODE PRE_TEST
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_desktop_tests>")
+endif()

@@ -3,6 +3,7 @@
 #include "controllers/frame_image_provider.hpp"
 #include "controllers/scan_session.hpp"
 #include "controllers/settings_model.hpp"
+#include "desktop/desktop_integration.hpp"
 #include "solve_controller.hpp"
 
 #include <QGuiApplication>
@@ -113,6 +114,11 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
+    // E4a - desktop identity (AppUserModelID, desktop file name, window icon),
+    // remembered window geometry, KeepAwake and AppInfo for QML. Declared
+    // before the engine so that it outlives it.
+    cube::app::DesktopIntegration desktop(app);
+
     // Registered imperatively via qmlRegisterSingletonInstance rather than
     // QML_ELEMENT: cube_app_controllers is a separate target from
     // cube_app_qml specifically so its controllers are linkable into a
@@ -151,11 +157,13 @@ int main(int argc, char* argv[]) {
     // is declared - and so destroyed first - after directScan).
     engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(
                                              [&directScan]() { return directScan.latestFrame(); }));
+    desktop.prepare(engine);  // E4a: singletons and the window's initial geometry
     engine.loadFromModule("Cubeulator", "Main");
 
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }
+    desktop.attach(engine);  // E4a: start remembering the window's geometry
 
     return QGuiApplication::exec();
 }
