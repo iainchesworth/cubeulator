@@ -115,6 +115,22 @@ admin is expected to bypass through the PR.
 - **Allow merge commits / squash / rebase**: all on at the repo level; the
   rulesets above restrict `develop` to merge commits.
 
+## Dependabot pull requests
+
+Dependabot opens its pull requests against `develop` from `dependabot/*`
+branches (its prefix is not configurable, so `branch-name-check.yml` allows
+it). `dependabot-auto-merge.yml` then enables auto-merge on the low-risk ones —
+minor and patch updates of GitHub Actions and the pip tooling — so they go
+through the queue like any other pull request. Nothing is bypassed: it uses the
+workflow's `GITHUB_TOKEN`, not an admin identity, and the `develop-protection`
+and `merge-queue-develop` rules apply unchanged.
+
+The queue merges once the *required* checks pass, so the set of ecosystems that
+may merge themselves is tied to the [Required checks](#required-checks) table:
+major updates, and the vcpkg baseline + `deps/vcpkg` submodule, stay manual until
+the build and test checks that would catch their breakage are promoted. The
+policy and the one place to widen it are in `dependabot-auto-merge.yml`.
+
 ## Other scanners (visible-only)
 
 `osv-scanner.yml`, `zizmor.yml`, and `scorecard.yml` upload SARIF to
