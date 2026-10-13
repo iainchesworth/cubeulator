@@ -209,7 +209,7 @@ Added 2026-10-13. Five branches hold finished or running work. None of the
 |---|---|---|---|
 | `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by Iain 2026-10-13** and merged into `feature/app-experience` the same day |
 | `feature/ax-system-tests` | E0a | 11 | pushed; reconciling start-up, below |
-| `feature/ax-licences` | E0b | 6 | local |
+| `feature/ax-licences` | E0b | 7 | local |
 | `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
 | `feature/ax-kit` | E2a | 7, running | local; has not yet merged this branch |
 
@@ -275,15 +275,17 @@ E4a as they finish, each merging `feature/app-experience` before it lands.
 2026-10-13 (`docs/kit.md` on `feature/ax-kit`), checked against the
 branches.
 
-- **Fonts have no notice until two branches agree.** The kit bundles six
-  font files under `src/app/qt/fonts/`: Archivo in three weights, IBM Plex
-  Mono Medium, Noto Sans Hebrew and Noto Sans Arabic. The licences manifest
-  (`third_party/notices/manifest.json` on `feature/ax-licences`) has entries
-  for Archivo and IBM Plex Mono only, pointing at `assets/fonts/`, and emits
-  an entry only when files exist at its path. Left alone, the fonts ship
-  with no notice and nothing fails. The manifest follows the files: its
-  paths change, the two Noto faces gain entries, and a bundled font with no
-  entry becomes a failure.
+- **Font notices: fixed on the licences branch, to be proven at the
+  merge.** The kit bundles six font files under `src/app/qt/fonts/`: Archivo
+  in three weights, IBM Plex Mono Medium, Noto Sans Hebrew and Noto Sans
+  Arabic. The licences manifest had entries for Archivo and IBM Plex Mono
+  only, pointing at `assets/fonts/`, and emitted an entry only when files
+  existed there, so the fonts would have shipped with no notice and nothing
+  would have failed. From `60e74ab` on `feature/ax-licences` the manifest
+  follows the files, the two Noto faces have entries, and a font file that
+  no entry claims fails the notices test and the install check. The entries
+  are dormant until the files exist: when the kit and the licences branch
+  are both on this branch, run that test.
 - **The `AppState.qml` split is proposed, not agreed.** The proposal is at
   the foot of `docs/kit.md` and was written before the solve lane added
   `solveCamera` and `rescan()`. It is re-read against the merged file, then
