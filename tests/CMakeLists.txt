@@ -136,9 +136,9 @@ target_link_libraries(cube_integration_tests
 target_compile_definitions(cube_integration_tests PRIVATE
     "$<$<OR:$<CXX_COMPILER_ID:MSVC>,$<AND:$<PLATFORM_ID:Windows>,$<CXX_COMPILER_ID:Clang>>>:_CRT_SECURE_NO_WARNINGS>")
 
-# Committed capture frames (tests/data) are inputs, not deployables - the
-# refine-cadence test reads one from the source tree rather than have the
-# build copy binary fixtures next to every test binary.
+# Capture frames (tests/data, local only - see .gitignore) are inputs, not
+# deployables - the refine-cadence test reads one from the source tree when
+# it is there rather than have the build copy fixtures next to every binary.
 target_compile_definitions(cube_integration_tests PRIVATE
     "CUBE_TEST_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\"")
 

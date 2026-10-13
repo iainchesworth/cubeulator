@@ -222,12 +222,12 @@ ClientBin/
 # Cubeulator: CMake / vcpkg / Ninja / tooling
 # ---------------------------------------------------------------------------
 
-# The stock VisualStudio [Dd]ebug/ pattern above silently swallowed the
-# capture-debug dumps under tests/data/captures/<clip>/debug/ for weeks
-# (docs/pipeline-plan.md, Phase 0). Nothing under tests/data/ is build
-# output; re-include all of it explicitly.
-!tests/data/**/[Dd]ebug/
-!tests/data/**/[Dd]ebug/**
+# Webcam captures show the person holding the cube, and this repository is
+# public: they stay out of it, and were removed from its history on
+# 2026-10-13. Recordings live outside the tree (see tools/scan); a test that
+# wants one skips when it is not there.
+/tests/data/captures/
+/docs/evidence/
 /build/
 build*/
 cmake-build-*/
