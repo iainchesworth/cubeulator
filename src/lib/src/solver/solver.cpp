@@ -6,11 +6,13 @@
 #include <vector>
 
 #include <cube/profiling.hpp>
+#include <cube/solver/cfop.hpp>
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
 #include <cube/solver/middle_edges.hpp>
 #include <cube/solver/oll.hpp>
 #include <cube/solver/pll.hpp>
+#include <cube/solver/two_phase.hpp>
 
 namespace cube::solver {
 
@@ -86,8 +88,9 @@ Solution merge_adjacent_moves(Solution solution) {
     return solution;
 }
 
-Result<Solution> solve(const Cube& scrambled) {
-    CUBE_ZONE_SCOPED_N("solver.solve");
+namespace {
+
+Result<Solution> solve_beginner(const Cube& scrambled) {
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
@@ -121,6 +124,27 @@ Result<Solution> solve(const Cube& scrambled) {
     // sequence into an equivalent one, so the check above is of the moves
     // the stage solvers actually produced.
     return merge_adjacent_moves(std::move(solution));
+}
+
+}  // namespace
+
+Result<Solution> solve(const Cube& scrambled, SolveMethod method) {
+    CUBE_ZONE_SCOPED_N("solver.solve");
+    switch (method) {
+        case SolveMethod::Beginner:
+            return solve_beginner(scrambled);
+        case SolveMethod::Intermediate:
+            return solve_cfop(scrambled);
+        case SolveMethod::Advanced:
+            return solve_two_phase(scrambled);
+    }
+    return solve_beginner(scrambled);
+}
+
+void prepare(SolveMethod method) {
+    if (method == SolveMethod::Advanced) {
+        prepare_two_phase();
+    }
 }
 
 }  // namespace cube::solver

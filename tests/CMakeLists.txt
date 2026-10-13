@@ -41,46 +41,14 @@ add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
     unit/profiling_test.cpp
-    unit/model_test.cpp
-    unit/grid_detection_test.cpp
-    unit/session_palette_test.cpp
-    unit/face_observation_test.cpp
-    unit/temporal_fusion_test.cpp
     unit/color_resolution_test.cpp
-    unit/corner_observation_test.cpp
-    unit/edge_observation_test.cpp
-    unit/orientation_lattice_test.cpp
-    unit/orientation_tracker_test.cpp
-    unit/tracker_sweep_test.cpp
-    unit/pattern_id_test.cpp
-    unit/patch_purity_test.cpp
-    unit/centre_cluster_assembly_test.cpp
-    unit/centre_cluster_verify_test.cpp
-    unit/centre_palette_test.cpp
-    unit/capture_routing_test.cpp
-    unit/store_to_assembly_test.cpp
-    unit/crash_hunt_test.cpp
-    unit/pose_estimation_test.cpp
-    unit/frame_debug_test.cpp
-    unit/cross_session_test.cpp
-    unit/routing_replay_test.cpp
-    unit/assembly_probe_test.cpp
-    unit/raw_probe_test.cpp
-    unit/union_assembly_test.cpp
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
     unit/direct_scan_test.cpp
     unit/held_cube_test.cpp
-    unit/color_classification_test.cpp
-    unit/stability_test.cpp
-    unit/auto_advance_test.cpp
-    unit/vision_facade_test.cpp
-    unit/hand_presence_capability_test.cpp
-    unit/idle_gate_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
     unit/solver/last_layer_test.cpp
-    unit/solver/scan_conversion_test.cpp
     unit/solver/scan_assembly_test.cpp
     unit/solver/notation_test.cpp
     unit/solver/hold_test.cpp
@@ -90,12 +58,14 @@ add_executable(cube_unit_tests
     unit/solver/oll_test.cpp
     unit/solver/pll_test.cpp
     unit/solver/solve_test.cpp
+    unit/solver/cubie_test.cpp
+    unit/solver/two_phase_test.cpp
+    unit/solver/cfop_test.cpp
     unit/solver/stepped_solution_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
         cube::lib
-        cube::gpu_render
         cube_test_platform
         cube::warnings
         cube::sanitizers
@@ -134,7 +104,6 @@ catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
     integration/platform_integration_test.cpp
-    integration/hand_presence_integration_test.cpp
     # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
     # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
     # camera-less machine) try to open a device. See the file header.
@@ -165,19 +134,8 @@ file(GLOB CUBE_PLATFORM_TEST_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/platform/${CUBEULATOR_PLATFORM}/*.cpp")
 target_sources(cube_integration_tests PRIVATE ${CUBE_PLATFORM_TEST_SOURCES})
 
-# Capture frames (tests/data, local only - see .gitignore) are inputs, not
-# deployables - the refine-cadence test reads one from the source tree when
-# it is there rather than have the build copy fixtures next to every binary.
-target_compile_definitions(cube_integration_tests PRIVATE
-    "CUBE_TEST_DATA_DIR=\"${CMAKE_CURRENT_SOURCE_DIR}/data\"")
-
 cube_deploy_sanitizer_runtime(cube_integration_tests)
-cube_deploy_vision_assets(cube_integration_tests)
 
-# WORKING_DIRECTORY: cube_deploy_vision_assets() copies model assets next to
-# the built executable (CMAKE_RUNTIME_OUTPUT_DIRECTORY), so the ONNX
-# integration tests' relative model path only resolves if ctest actually
-# runs the binary from there rather than its own invocation directory.
 catch_discover_tests(cube_integration_tests DISCOVERY_MODE PRE_TEST
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_integration_tests>")
 
@@ -196,7 +154,6 @@ if(CUBEULATOR_BUILD_APP)
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
-        unit/settings_model_test.cpp
         unit/solve_controller_test.cpp)
 
     target_link_libraries(cube_qt_controller_tests
@@ -211,7 +168,6 @@ if(CUBEULATOR_BUILD_APP)
             Catch2::Catch2)
 
     cube_deploy_sanitizer_runtime(cube_qt_controller_tests)
-    cube_deploy_vision_assets(cube_qt_controller_tests)
 
     catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")

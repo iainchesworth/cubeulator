@@ -139,6 +139,10 @@ void App::reset() {
     settings_state_->setProperty("cubeAutoRotate", true);
     settings_state_->setProperty("rotateSpeedIndex", 1);
     settings_state_->setProperty("statsForNerds", false);
+    // Putting the method back solves on from the cube in hand; let that land
+    // here, not part-way through the next case.
+    settings_state_->setProperty("solveMethod", 0);
+    wait_for([this]() { return !runtime_->solve().isSolving(); }, 60'000);
     settings_state_->setProperty("graphicsBackend", "auto");
     settings_state_->setProperty("languageIndex", 0);
 

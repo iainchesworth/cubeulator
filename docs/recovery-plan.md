@@ -1,7 +1,8 @@
 # Recovery plan
 
-Status: **accepted 2026-10-13.** Supersedes
-`pipeline-plan.md`.
+Status: **accepted 2026-10-13.** Supersedes the tracking-first plan
+(`pipeline-plan.md`, removed from the tree in R6; it and its phase gates are
+at the tag `archive/tracking-first`).
 
 ## Verdict
 
@@ -49,13 +50,14 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Progress
 
-**2026-10-13.** R0, R2 done; R1 started; R3 half done; R6 half done; R4 not run.
+**2026-10-13.** R0, R2, R6 done; R1 started; R3 half done; R4 not run.
 
 - **R0.** Previous tip tagged `archive/tracking-first`. Webcam frames
   showing the user (`tests/data/captures`, `docs/evidence`) are removed from
   every unpushed commit; commits already on GitHub are untouched, so
-  `develop` still fast-forwards. Commit hashes quoted in `docs/gates` and
-  `pipeline-plan.md` predate that rewrite. Originals are in the bundles
+  `develop` still fast-forwards. Commit hashes quoted in the phase gates and
+  `pipeline-plan.md` (now only at `archive/tracking-first`) predate that
+  rewrite. Originals are in the bundles
   under `D:\cubeulator-backup`, and the removed files are in
   `D:\cubeulator-corpus\legacy-capture-dumps`. The July recording corpus,
   recorded as lost, was still in the local LFS store: 6,035 frames in 14
@@ -170,8 +172,20 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   loop, pose refiner, face projection, track fusion), the vendored M3T
   tracker and its glew/glfw dependencies, the offline runner, and the
   previous scan controller and screen with the two settings that drove
-  them. Still to go: the classical cascade those sat on, the hand detector
-  and onnxruntime, and the old pipeline's documents.
+  them.
+- **R6, second half.** Removed: the classical cascade those sat on (grid
+  detection, face, corner and edge observation, pose estimation, the
+  orientation lattice and tracker, capture routing and gates, the idle gate,
+  stability, auto-advance, the `vision.hpp` facade and the temporal fusion
+  aggregator), the hand detector with onnxruntime, its palm model, the
+  settings model and the inference-environment seam that existed for it, the
+  legacy scan model (`ScanProgress`, colour scheme, `cube_from_scan`), the
+  synthetic-corpus and labelling tools, the analysis scripts, and the old
+  pipeline's plan, gates, metrics, trace and ground-truth documents. Their
+  data-dependent tests went with them: each ran only against a local corpus
+  and fed nothing back to the product. `cube_scan board` is the scoreboard.
+  `docs/vision-pipeline.md` and `docs/recording-format.md` describe what is
+  left.
 
 ## Why it does not work today
 
@@ -203,9 +217,9 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
    Android and iOS cameras are stubs; the detector weights are
    AGPL-derived (`assets/models/cube_corner_pose_PROVENANCE.md`).
 
-The Jul 26 handoff (`handoff-grid-fit.md`) already recommended square-on
-per-face capture from the daylight overlays. The Jul 30 plan went the other
-way.
+The Jul 26 handoff (`handoff-grid-fit.md`, at `archive/tracking-first`)
+already recommended square-on per-face capture from the daylight overlays.
+The Jul 30 plan went the other way.
 
 ## Keep and remove
 
@@ -272,7 +286,7 @@ returns only to drive the cosmetic 3D mirror cube, never the read.
 
 **R6 — Demolition.** Remove the legacy cascade, the tracking read path, the
 M3T and onnxruntime dependencies and the environment-variable modes. Merge
-to `develop`, then `main`.
+to `develop`, then `main`. The demolition is on `develop` (see Progress).
 
 ## What is not known
 
