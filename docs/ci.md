@@ -48,7 +48,7 @@ branch's head commit.
 ### Self-hosted runners
 
 The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
-load even a seconds-long required check queues for half an hour. Five jobs can
+load even a seconds-long required check queues for half an hour. Six jobs can
 therefore run on the organisation's self-hosted fleet instead (the
 `iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
 not this repo, decide who may use it):
@@ -60,6 +60,7 @@ not this repo, decide who may use it):
 | `clang-format` | `ci.yml` |
 | `platform-isolation` | `ci.yml` |
 | `Plan build legs` | `ci.yml` |
+| `Prune Actions caches` | `cache-hygiene.yml` |
 
 They are routed by the `CONTROL_RUNNER_JSON` repository variable, a JSON array
 of runner labels. Unset, each job runs on the hosted image it names, exactly as
