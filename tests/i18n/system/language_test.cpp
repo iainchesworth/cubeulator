@@ -361,21 +361,29 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
     std::set<std::string> overflowing;
     std::set<std::string> on_show;
     for (const char* name : screens) {
-        for (const QSize& size : sizes) {
-            App& app = App::fresh();
-            LanguageGuard guard(app);
-            app.resize(size);
-            switch_to(app, "he");
-            if (QString::fromLatin1(name) == QLatin1String("solve")) {
-                auto& solve = app.runtime().solve();
-                if (solve.totalMoves() == 0) {
-                    solve.solveCube(cube::solver::random_scramble(21));
-                }
-                REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        // One reset and one switch of language per screen, then the sizes by
+        // resizing (as layout_test.cpp does): the switch re-translates the
+        // whole scene and the launch and solve screens draw a 3D cube, and on
+        // a software renderer each of those is seconds - this case was the
+        // longest of the suite, at some twenty minutes, doing it per size.
+        App& app = App::fresh(QString::fromLatin1(name) == QLatin1String("launch")
+                                  ? App::Start::launch
+                                  : App::Start::elsewhere);
+        LanguageGuard guard(app);
+        switch_to(app, "he");
+        if (QString::fromLatin1(name) == QLatin1String("solve")) {
+            auto& solve = app.runtime().solve();
+            if (solve.totalMoves() == 0) {
+                solve.solveCube(cube::solver::random_scramble(21));
             }
-            app.go(QString::fromLatin1(name));
-            REQUIRE(app.screen() == QString::fromLatin1(name));
-            app.settle();
+            REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        }
+        app.go(QString::fromLatin1(name));
+        REQUIRE(app.screen() == QString::fromLatin1(name));
+        app.settle();
+        for (const QSize& size : sizes) {
+            app.resize(size);
+            app.pump(80);
 
             const QRect window(QPoint(0, 0), app.window().size());
             for (QQuickItem* control : app.visible_controls()) {
