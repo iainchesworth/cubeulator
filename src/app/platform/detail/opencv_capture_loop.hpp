@@ -7,10 +7,10 @@
 
 #include <opencv2/videoio.hpp>
 
+#include <atomic>
 #include <cstdint>
 #include <mutex>
 #include <optional>
-#include <stop_token>
 #include <thread>
 #include <vector>
 
@@ -55,7 +55,7 @@ public:
     [[nodiscard]] std::optional<PhotometryLockReport> take_photometry_report();
 
 private:
-    void run(std::stop_token stop_token);
+    void run();
     // Called from run() only, between grabs - never with a read() in
     // flight. Consumes whatever request is pending and publishes a report.
     void service_photometry_requests();
@@ -65,7 +65,11 @@ private:
     cv::VideoCaptureAPIs backend_;
     Photometry photometry_;
     cv::VideoCapture capture_;
-    std::jthread capture_thread_;
+    // A plain thread and a flag, not std::jthread/std::stop_token: those are
+    // still experimental in Apple's libc++ and the NDK's (opt-in behind
+    // -fexperimental-library), so macOS, iOS and Android would not compile.
+    std::thread capture_thread_;
+    std::atomic<bool> stop_requested_{false};
     std::mutex mailbox_mutex_;
     // Guards the photometry request/report hand-off between the caller's
     // thread and the capture thread. Held only around the plain-data
