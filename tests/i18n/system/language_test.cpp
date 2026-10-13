@@ -28,6 +28,7 @@
 #include <QQuickWindow>
 #include <QSettings>
 #include <QStringList>
+#include <QtGlobal>
 
 #include <cmath>
 #include <functional>
@@ -133,6 +134,18 @@ void visit(QQuickItem* item, const std::function<void(QQuickItem*)>& fn) {
     return bad;
 }
 
+// The picture reflected left to right. QImage::mirrored() is scheduled for
+// deprecation in Qt 6.13 and already warns on 6.12 (and warnings are errors
+// here); its replacement, flipped(), arrived in 6.9. The project still
+// accepts Qt 6.5, so both are kept.
+[[nodiscard]] QImage reflected(const QImage& image) {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 9, 0)
+    return image.flipped(Qt::Horizontal);
+#else
+    return image.mirrored(true, false);
+#endif
+}
+
 }  // namespace
 
 TEST_CASE("the language switches live: English, the pseudo-locale, Hebrew, and back",
@@ -233,7 +246,7 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
     // ...and the cube in it is the same cube, not its reflection.
     const QImage in_hebrew = cube_picture();
     // The control: a reflection of this cube is a visibly different picture.
-    CHECK(difference(in_english, in_english.mirrored(true, false)) > 0.05);
+    CHECK(difference(in_english, reflected(in_english)) > 0.05);
     CHECK(difference(in_english, in_hebrew) < 0.02);
 }
 
