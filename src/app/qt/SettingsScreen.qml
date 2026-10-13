@@ -133,6 +133,19 @@ Rectangle {
 
         Column {
             width: parent.width
+            spacing: Theme.space2
+            SectionLabel { text: qsTrId("settings.section.solving") }
+            // The way the next cube is solved. The solve screen has the same
+            // row, which also carries on from the cube in hand.
+            SolveMethodPicker {
+                objectName: "settings.method"
+                current: SettingsState.solveMethod
+                onSelected: (method) => SettingsState.solveMethod = method
+            }
+        }
+
+        Column {
+            width: parent.width
             spacing: Theme.space3
             SectionLabel { text: "SCANNING" }
             Toggle {

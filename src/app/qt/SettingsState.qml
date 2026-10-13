@@ -23,6 +23,23 @@ QtObject {
 
     property bool statsForNerds: false
 
+    // Which way the cube is solved: a SolveController.Method value (0 =
+    // Beginner, 1 = Intermediate, 2 = Advanced). Persisted, because it is a
+    // standing preference - the next cube is solved the way the last was -
+    // and handed to the controller below, which also re-solves from the cube
+    // in hand when it changes. This is the one place it is written.
+    property Settings solvingSettings: Settings {
+        id: solvingSettingsId
+        category: "solving"
+        property int method: 0
+    }
+    property alias solveMethod: solvingSettingsId.method
+    property var solveMethodBinding: Binding {
+        target: SolveController
+        property: "method"
+        value: settings.solveMethod
+    }
+
     // Persisted (survives restart) because it can only take effect on the
     // next launch - QQuickWindow's graphics API is fixed for the process's
     // lifetime, see main.cpp. "auto" leaves Qt's own per-platform default.

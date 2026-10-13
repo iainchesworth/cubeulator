@@ -15,6 +15,7 @@ using cube::solver::Cube;
 using cube::solver::cube_from_scan;
 using cube::solver::Face;
 using cube::solver::solve;
+using cube::solver::SolveMethod;
 using cube::solver::SteppedSolution;
 
 namespace {
@@ -64,16 +65,29 @@ QVariantList face_colors(const Cube& cube, Face face) {
     return colors;
 }
 
-// solve() now completes in seconds on any scramble (the last layer uses
-// fixed 2-look algorithms - see src/lib/src/solver/last_layer.hpp; it once
-// ranged up to tens of minutes when that stage was searched per-scramble).
-// beginSolve() below still runs it on a background thread via
+SolveMethod to_solver_method(SolveController::Method method) {
+    switch (method) {
+        case SolveController::Beginner:
+            return SolveMethod::Beginner;
+        case SolveController::Intermediate:
+            return SolveMethod::Intermediate;
+        case SolveController::Advanced:
+            return SolveMethod::Advanced;
+    }
+    return SolveMethod::Beginner;
+}
+
+// Every method completes in seconds or far less on any scramble (the beginner
+// method's last layer uses fixed 2-look algorithms - see
+// src/lib/src/solver/last_layer.hpp; it once ranged up to tens of minutes
+// when that stage was searched per-scramble - and the other two take
+// milliseconds). beginSolve() below still runs it on a background thread via
 // QtConcurrent::run rather than the UI thread, so even those seconds never
 // affect app responsiveness.
 
 // Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
-SteppedSolution solve_stepped(Cube scrambled) {
-    const auto solution = solve(scrambled);
+SteppedSolution solve_stepped(Cube scrambled, SolveMethod method) {
+    const auto solution = solve(scrambled, method);
     if (solution.has_value()) {
         return SteppedSolution::from(scrambled, *solution);
     }
@@ -125,18 +139,45 @@ void SolveController::solveCube(const Cube& cube) {
     beginSolve(cube);
 }
 
-void SolveController::beginSolve(const Cube& scrambled) {
-    // isSolving_ can't already be true here: both callers fire once per
-    // completed scan, and the scan screen isn't reachable again until this
-    // solve's result has been applied (see AppState.qml).
+void SolveController::setMethod(Method method) {
+    if (method == method_) {
+        return;
+    }
+    method_ = method;
+    emit methodChanged();
+
+    // Nothing scanned yet: the method is only recorded, and the next solve
+    // uses it.
+    if (!pending_.has_value()) {
+        return;
+    }
+    // Carry on from the cube as it stands. A solve still in flight is
+    // replaced - its cube is the one to solve - rather than waited for: the
+    // QFutureWatcher drops the old future's result when it is given a new one.
+    const Cube from = isSolving_ ? *pending_ : stepped_.current_cube();
+    // It continues a solution only if one had landed for this cube. A scan
+    // whose solve is still being worked out has none, and what it replaces is
+    // still "a new cube to solve" (HeldCube starts that from the stated hold).
+    const bool continuation = isSolving_ ? solving_continuation_ : true;
+    beginSolve(from, continuation);
+}
+
+void SolveController::beginSolve(const Cube& scrambled, bool continuation) {
+    // A scan can't complete while a solve is in flight (the scan screen isn't
+    // reachable again until this solve's result has been applied - see
+    // AppState.qml), but a method change can: it replaces the solve.
+    pending_ = scrambled;
+    solving_continuation_ = continuation;
     isSolving_ = true;
     emit stateChanged();
-    solveWatcher_.setFuture(QtConcurrent::run(&solve_stepped, scrambled));
+    solveWatcher_.setFuture(
+        QtConcurrent::run(&solve_stepped, scrambled, to_solver_method(method_)));
 }
 
 void SolveController::applySolveResult() {
     stepped_ = solveWatcher_.result();
     isSolving_ = false;
+    continuation_ = solving_continuation_;
     emit solutionChanged();
     emit stateChanged();
 }

@@ -454,6 +454,32 @@ TEST_CASE("a new cube to solve starts from the hold the screen asks for",
     CHECK_FALSE(session.held.seen());
 }
 
+TEST_CASE("changing how the cube is solved keeps the hold the camera has seen",
+          "[qt][controllers][held-cube]") {
+    // The method changes and the cube in the hand does not: its hold is still
+    // what the camera saw, and a solution to the same cube is not "a new cube
+    // to solve" (the case above), which has no hold yet.
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    const Hold hold{Face::L, Face::D};
+    session.show(cube, hold, kFramesToTrust);
+    REQUIRE(session.held.hold() == hold);
+    REQUIRE(session.held.seen());
+
+    session.solve.setMethod(SolveController::Advanced);
+    QElapsedTimer waited;
+    waited.start();
+    while (session.solve.isSolving() && waited.elapsed() < 60'000) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 50);
+    }
+    REQUIRE_FALSE(session.solve.isSolving());
+    REQUIRE(session.solve.solutionContinuesCube());
+    CHECK(session.held.hold() == hold);
+    CHECK(session.held.seen());
+    // And it is the same cube, solved on from where it stands.
+    CHECK(session.solve.currentCube() == cube);
+}
+
 TEST_CASE("a move shown with a finger across a sticker is still seen, and never called wrong",
           "[qt][controllers][held-cube]") {
     const Cube cube = cube::solver::random_scramble(3);

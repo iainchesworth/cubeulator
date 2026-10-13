@@ -103,8 +103,14 @@ public:
     }
 
     [[nodiscard]] QQuickItem* cube() const { return cube_; }
+    [[nodiscard]] QQuickItem* item() const { return item_.get(); }
     [[nodiscard]] QObject* find(const char* name) const {
         return item_->findChild<QObject*>(QString::fromLatin1(name));
+    }
+    // An item made by a Repeater is a visual child, not a QObject child, so
+    // find() cannot see it; this walks the visual tree.
+    [[nodiscard]] QQuickItem* find_visual(const QString& name) const {
+        return find_in(item_.get(), name);
     }
     [[nodiscard]] QVariant get(const char* name) const { return item_->property(name); }
     void call(const char* method) { REQUIRE(QMetaObject::invokeMethod(item_.get(), method)); }
@@ -131,6 +137,18 @@ public:
     }
 
 private:
+    static QQuickItem* find_in(QQuickItem* item, const QString& name) {
+        if (item->objectName() == name) {
+            return item;
+        }
+        for (QQuickItem* child : item->childItems()) {
+            if (QQuickItem* found = find_in(child, name)) {
+                return found;
+            }
+        }
+        return nullptr;
+    }
+
     std::unique_ptr<QQuickItem> item_;
     QQuickItem* cube_ = nullptr;
 };
@@ -456,4 +474,127 @@ TEST_CASE("the camera preview closes in on the cube and follows it", "[qml][solv
     REQUIRE(wait_for([&]() { return std::abs(scale() - whole()) < 1e-3; }));
 
     camera.setWatching(false);
+}
+
+// ---------------------------------------------------------------------------
+// Choosing how the cube is solved
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The persisted choice. The picker writes it; a binding there hands it to the
+// controller, which re-solves from the cube as it stands.
+[[nodiscard]] QObject* settings_state() {
+    QObject* settings =
+        cube::test::qml_engine().singletonInstance<QObject*>("Cubeulator", "SettingsState");
+    REQUIRE(settings != nullptr);
+    return settings;
+}
+
+void choose_method(int method) {
+    REQUIRE(settings_state()->setProperty("solveMethod", method));
+    SolveController& solver = cube::test::app_controllers().solve;
+    REQUIRE(wait_for(
+        [&]() { return static_cast<int>(solver.method()) == method && !solver.isSolving(); },
+        60'000));
+}
+
+// What the picker's button for `method` looks like: primary when chosen.
+[[nodiscard]] QString variant_of(const Screen& screen, int method) {
+    QObject* button = screen.find_visual(QStringLiteral("solve.method.%1").arg(method));
+    REQUIRE(button != nullptr);
+    return button->property("variant").toString();
+}
+
+void press_method(const Screen& screen, int method) {
+    QObject* button = screen.find_visual(QStringLiteral("solve.method.%1").arg(method));
+    REQUIRE(button != nullptr);
+    REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
+}
+
+}  // namespace
+
+TEST_CASE("the solve screen's picker changes how the cube is solved, from where it stands",
+          "[qml][solve-screen][solve-method]") {
+    SolveController& solver = cube::test::app_controllers().solve;
+    const Cube scrambled = cube::solver::random_scramble(11);
+
+    choose_method(SolveController::Beginner);
+    solve_in_app(scrambled);
+    Screen screen;
+    screen.settle();
+
+    // Beginner: five stages, and the picker says so.
+    CHECK(screen.get("stageCount").toInt() == 5);
+    CHECK(screen.get("stagePosition").toInt() == 0);
+    CHECK(variant_of(screen, 0) == "primary");
+    CHECK(variant_of(screen, 1) == "secondary");
+    CHECK(variant_of(screen, 2) == "secondary");
+
+    // Part-way in, switch to Intermediate by pressing its button.
+    for (int i = 0; i < 4; ++i) {
+        const int index = solver.moveIndex();
+        screen.call("next");
+        REQUIRE(wait_for([&]() { return solver.moveIndex() == index + 1; }));
+    }
+    const Cube here = solver.currentCube();
+    press_method(screen, SolveController::Intermediate);
+    REQUIRE(wait_for(
+        [&]() { return solver.method() == SolveController::Intermediate && !solver.isSolving(); },
+        60'000));
+    screen.settle();
+
+    CHECK(settings_state()->property("solveMethod").toInt() == SolveController::Intermediate);
+    CHECK(solver.currentCube() == here);
+    CHECK(solver.moveIndex() == 0);
+    CHECK(screen.get("stageCount").toInt() == 4);
+    CHECK(screen.get("stagePosition").toInt() == 0);
+    CHECK(variant_of(screen, 0) == "secondary");
+    CHECK(variant_of(screen, 1) == "primary");
+    // The cube on screen is still the cube in hand, repainted not reset.
+    CHECK(screen.shows(here));
+
+    // And on to Advanced: two stages, then solved by stepping the screen.
+    press_method(screen, SolveController::Advanced);
+    REQUIRE(wait_for(
+        [&]() { return solver.method() == SolveController::Advanced && !solver.isSolving(); },
+        60'000));
+    screen.settle();
+    CHECK(screen.get("stageCount").toInt() == 2);
+    CHECK(solver.currentCube() == here);
+    CHECK(screen.shows(here));
+
+    Cube expected = here;
+    while (!solver.atEnd()) {
+        const int index = solver.moveIndex();
+        const Move move{side_of(solver.currentMoveFace()), solver.currentMoveTurns()};
+        screen.settle();
+        screen.call("next");
+        REQUIRE(wait_for([&]() { return solver.moveIndex() == index + 1; }));
+        expected = expected.apply(move);
+        REQUIRE(solver.currentCube() == expected);
+    }
+    CHECK(expected.is_solved());
+    // At the end the last stage is the one shown as current.
+    CHECK(screen.get("stagePosition").toInt() == 1);
+
+    choose_method(SolveController::Beginner);
+}
+
+TEST_CASE("each stage of each method has words", "[qml][solve-screen][solve-method]") {
+    // The stages are named by cube::solver::Stage value; a value with no copy
+    // would show a blank heading. Every stage of every method must have a
+    // title and a line saying what it does (ids, so under test they are the
+    // ids themselves - never empty and never undefined).
+    solve_in_app(cube::solver::random_scramble(12));
+    const Screen screen;
+    for (int stage = 0; stage < 8; ++stage) {
+        INFO("stage " << stage);
+        QVariant copy;
+        REQUIRE(QMetaObject::invokeMethod(screen.item(), "copyFor", Q_RETURN_ARG(QVariant, copy),
+                                          Q_ARG(QVariant, stage)));
+        const QVariantMap words = copy.toMap();
+        CHECK_FALSE(words.value("title").toString().isEmpty());
+        CHECK_FALSE(words.value("detail").toString().isEmpty());
+    }
 }

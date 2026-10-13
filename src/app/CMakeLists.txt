@@ -214,6 +214,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/ScanScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml
+            qt/SolveMethodPicker.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml
         SOURCES

@@ -43,37 +43,36 @@ Besides the literals:
 
 | file | line | literal | id in strings.json |
 |---|---|---|---|
-| `CompleteScreen.qml` | 146 | METHOD | none: needs a string |
-| `CompleteScreen.qml` | 147 | Beginner | none: needs a string |
-| `SettingsScreen.qml` | 135 | SCANNING | none: needs a string |
-| `SettingsScreen.qml` | 139 | Detect hands with AI | none: needs a string |
-| `SettingsScreen.qml` | 154 | Auto-advance between faces | none: needs a string |
-| `SettingsScreen.qml` | 205 | Shader style for the 3D cube shown around the app. | none: needs a string |
-| `SettingsScreen.qml` | 220 | CUBE MOTION | none: needs a string |
-| `SettingsScreen.qml` | 223 | Auto-rotate when idle | none: needs a string |
-| `SettingsScreen.qml` | 238 | RENDERING | none: needs a string |
-| `SettingsScreen.qml` | 345 | Test turn | none: needs a string |
+| `CompleteScreen.qml` | 153 | METHOD | none: needs a string |
+| `SettingsScreen.qml` | 150 | SCANNING | none: needs a string |
+| `SettingsScreen.qml` | 155 | Detect hands with AI | none: needs a string |
+| `SettingsScreen.qml` | 171 | Auto-advance between faces | none: needs a string |
+| `SettingsScreen.qml` | 224 | Shader style for the 3D cube shown around the app. | none: needs a string |
+| `SettingsScreen.qml` | 240 | CUBE MOTION | none: needs a string |
+| `SettingsScreen.qml` | 244 | Auto-rotate when idle | none: needs a string |
+| `SettingsScreen.qml` | 260 | RENDERING | none: needs a string |
+| `SettingsScreen.qml` | 370 | Test turn | none: needs a string |
 | `StatsOverlay.qml` | 63 | FPS  | none: needs a string |
 
 ### kit session (feature/ax-kit)
 
 | file | line | literal | id in strings.json |
 |---|---|---|---|
-| `SettingsState.qml` | 44 | System | none: needs a string |
-| `SettingsState.qml` | 45 | Light | `settings.theme.light` |
-| `SettingsState.qml` | 46 | Dark | `settings.theme.dark` |
-| `SettingsState.qml` | 63 | Auto | none: needs a string |
-| `SettingsState.qml` | 66 | D3D11 | none: needs a string |
-| `SettingsState.qml` | 67 | D3D12 | none: needs a string |
-| `SettingsState.qml` | 68 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 69 | GL | none: needs a string |
-| `SettingsState.qml` | 72 | Metal | none: needs a string |
-| `SettingsState.qml` | 73 | GL | none: needs a string |
-| `SettingsState.qml` | 76 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 77 | GL | none: needs a string |
-| `SettingsState.qml` | 80 | Vulkan | none: needs a string |
-| `SettingsState.qml` | 81 | GLES | none: needs a string |
-| `SettingsState.qml` | 84 | Metal | none: needs a string |
+| `SettingsState.qml` | 61 | System | none: needs a string |
+| `SettingsState.qml` | 62 | Light | `settings.theme.light` |
+| `SettingsState.qml` | 63 | Dark | `settings.theme.dark` |
+| `SettingsState.qml` | 80 | Auto | none: needs a string |
+| `SettingsState.qml` | 83 | D3D11 | none: needs a string |
+| `SettingsState.qml` | 84 | D3D12 | none: needs a string |
+| `SettingsState.qml` | 85 | Vulkan | none: needs a string |
+| `SettingsState.qml` | 86 | GL | none: needs a string |
+| `SettingsState.qml` | 89 | Metal | none: needs a string |
+| `SettingsState.qml` | 90 | GL | none: needs a string |
+| `SettingsState.qml` | 93 | Vulkan | none: needs a string |
+| `SettingsState.qml` | 94 | GL | none: needs a string |
+| `SettingsState.qml` | 97 | Vulkan | none: needs a string |
+| `SettingsState.qml` | 98 | GLES | none: needs a string |
+| `SettingsState.qml` | 101 | Metal | none: needs a string |
 | `SettingsState.qml` | 16 | Physically-Based Realism | none: needs a string |
 | `SettingsState.qml` | 16 | Instructional Glow | none: needs a string |
 | `SettingsState.qml` | 16 | Borderlands Cel-Shading | none: needs a string |
@@ -84,19 +83,20 @@ Besides the literals:
 |---|---|---|---|
 | `AppState.qml` | 118 | One face looked misread — keep scanning, show faces again | none: needs a string |
 | `AppState.qml` | 127 | Cube changed mid-scan — starting the capture over | none: needs a string |
-| `DirectScanScreen.qml` | 32 | Camera unavailable | none: needs a string |
-| `DirectScanScreen.qml` | 34 | Cube read | `scan.title.complete` |
-| `DirectScanScreen.qml` | 36 | Starting the camera… | `scan.title.starting` |
-| `DirectScanScreen.qml` | 37 |  of 6 sides read | none: needs a string |
-| `DirectScanScreen.qml` | 43 | All six sides make a valid cube. Working out the solution… | `scan.guide.complete` |
-| `DirectScanScreen.qml` | 47 | Setting the camera's exposure and colour balance… | `scan.guide.settling` |
-| `DirectScanScreen.qml` | 49 | These six sides do not make a valid cube yet. Show each side again, square to the camera. | `scan.guide.conflict` |
-| `DirectScanScreen.qml` | 51 | Reading this side — hold it there | none: needs a string |
-| `DirectScanScreen.qml` | 53 | Hold it still | `scan.guide.inView` |
-| `DirectScanScreen.qml` | 55 | Hold one side of the cube square to the camera | `scan.guide.first` |
-| `DirectScanScreen.qml` | 56 | Turn to a side that is not filled in below, square to the camera | `scan.guide.next` |
-| `DirectScanScreen.qml` | 203 | Cancel | `common.cancel` |
-| `DirectScanScreen.qml` | 209 | Start over | `scan.startOver` |
+| `DirectScanScreen.qml` | 42 | Camera unavailable | none: needs a string |
+| `DirectScanScreen.qml` | 44 | Cube read | `scan.title.complete` |
+| `DirectScanScreen.qml` | 46 | Starting the camera… | `scan.title.starting` |
+| `DirectScanScreen.qml` | 47 |  of 6 sides read | none: needs a string |
+| `DirectScanScreen.qml` | 53 | All six sides make a valid cube. Working out the solution… | `scan.guide.complete` |
+| `DirectScanScreen.qml` | 57 | Setting the camera's exposure and colour balance… | `scan.guide.settling` |
+| `DirectScanScreen.qml` | 59 | These six sides do not make a valid cube yet. Show each side again, square to the camera. | `scan.guide.conflict` |
+| `DirectScanScreen.qml` | 61 | Reading this side — hold it there | none: needs a string |
+| `DirectScanScreen.qml` | 63 | Hold it still | `scan.guide.inView` |
+| `DirectScanScreen.qml` | 65 | Hold one side of the cube square to the camera | `scan.guide.first` |
+| `DirectScanScreen.qml` | 66 | Turn to a side that is not filled in below, square to the camera | `scan.guide.next` |
+| `DirectScanScreen.qml` | 163 | Recording this scan to  | none: needs a string |
+| `DirectScanScreen.qml` | 260 | Cancel | `common.cancel` |
+| `DirectScanScreen.qml` | 266 | Start over | `scan.startOver` |
 | `ScanScreen.qml` | 111 | Scan didn't look right — keep scanning, show faces again | none: needs a string |
 | `ScanScreen.qml` | 140 | Re-orienting — hold the cube in view | none: needs a string |
 | `ScanScreen.qml` | 141 | lost | none: needs a string |
@@ -131,13 +131,13 @@ Besides the literals:
 | `ScanScreen.qml` | 16 | Hold steady — reading three faces… | none: needs a string |
 | `ScanScreen.qml` | 17 | Show me any face —  | none: needs a string |
 | `ScanScreen.qml` | 19 | or show a corner — three faces at once | none: needs a string |
-| `controllers/scan_session.cpp` | 2439 | cube changed mid-scan | none: needs a string |
-| `controllers/scan_session.cpp` | 2496 | the least confident face | none: needs a string |
-| `controllers/scan_session.cpp` | 2497 | the %1-centred face | none: needs a string |
-| `controllers/scan_session.cpp` | 2673 |  - keep showing faces | none: needs a string |
-| `controllers/scan_session.cpp` | 2682 |  - keep showing faces | none: needs a string |
-| `controllers/settings_model.cpp` | 18 | Hand-detection model not found on this device. | none: needs a string |
-| `controllers/settings_model.cpp` | 20 | No AI inference hardware detected. | none: needs a string |
+| `controllers/scan_session.cpp` | 2488 | cube changed mid-scan | none: needs a string |
+| `controllers/scan_session.cpp` | 2547 | the least confident face | none: needs a string |
+| `controllers/scan_session.cpp` | 2548 | the %1-centred face | none: needs a string |
+| `controllers/scan_session.cpp` | 2727 |  - keep showing faces | none: needs a string |
+| `controllers/scan_session.cpp` | 2736 |  - keep showing faces | none: needs a string |
+| `controllers/settings_model.cpp` | 20 | Hand-detection model not found on this device. | none: needs a string |
+| `controllers/settings_model.cpp` | 22 | No AI inference hardware detected. | none: needs a string |
 
 ### solve lane (feature/solve-guidance)
 
@@ -153,40 +153,40 @@ Besides the literals:
 | `SolveScreen.qml` | 24 | Orient the last layer's edges and corners so the top side reads solid. | none: needs a string |
 | `SolveScreen.qml` | 25 | Permute last layer | none: needs a string |
 | `SolveScreen.qml` | 25 | Permute the last layer's pieces into their solved positions. | none: needs a string |
-| `SolveScreen.qml` | 112 | wrong | none: needs a string |
-| `SolveScreen.qml` | 112 | That was not the move | none: needs a string |
-| `SolveScreen.qml` | 113 | unknown | none: needs a string |
-| `SolveScreen.qml` | 113 | That side is not expected | none: needs a string |
-| `SolveScreen.qml` | 309 | STAGE  | none: needs a string |
-| `SolveScreen.qml` | 309 |  OF  | none: needs a string |
-| `SolveScreen.qml` | 313 | Solved | `complete.title` |
-| `SolveScreen.qml` | 341 | Drag the cube to look round it | none: needs a string |
-| `SolveScreen.qml` | 555 | Rescan the cube and carry on from there | none: needs a string |
-| `SolveScreen.qml` | 581 | Only the view has turned. Keep your cube as it is. | none: needs a string |
-| `SolveScreen.qml` | 686 | STAGES | none: needs a string |
-| `SolveScreen.qml` | 735 | Previous | `solution.previous` |
-| `SolveScreen.qml` | 747 | Finish | `solve.finish` |
-| `SolveScreen.qml` | 747 | Next move | none: needs a string |
-| `SolveScreen.qml` | 766 | Out of step? Rescan | none: needs a string |
-| `SolveScreen.qml` | 810 | Solving… | `settings.section.solving` |
-| `SolveScreen.qml` | 67 |  on top,  | none: needs a string |
-| `SolveScreen.qml` | 68 |  facing you | none: needs a string |
-| `SolveScreen.qml` | 86 | Camera unavailable | none: needs a string |
-| `SolveScreen.qml` | 88 | Starting the camera… | `scan.title.starting` |
-| `SolveScreen.qml` | 94 | Matched to your cube | none: needs a string |
-| `SolveScreen.qml` | 98 | Matched. The camera cannot see the side facing you: press Next after this move. | none: needs a string |
-| `SolveScreen.qml` | 99 | Matched. Make the move and it steps on by itself. | none: needs a string |
-| `SolveScreen.qml` | 100 | That side looks the same turned. Show another to tell which way up. | none: needs a string |
-| `SolveScreen.qml` | 101 | Not the move that was asked for | none: needs a string |
-| `SolveScreen.qml` | 102 | Not the side that was expected | none: needs a string |
-| `SolveScreen.qml` | 104 | Show a side again if you turn the cube over | none: needs a string |
-| `SolveScreen.qml` | 105 | Hold any side square to the camera and the cube here turns to match | none: needs a string |
-| `SolveScreen.qml` | 119 |  was turned, but not the way shown. Turn it back and try again. | none: needs a string |
-| `SolveScreen.qml` | 121 | ) was turned instead. Turn it back, then make the move shown. | none: needs a string |
-| `SolveScreen.qml` | 124 | The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan. | none: needs a string |
-| `SolveScreen.qml` | 146 | Left side | none: needs a string |
-| `SolveScreen.qml` | 146 | Right side | none: needs a string |
-| `SolveScreen.qml` | 152 | half turn | `amount.half` |
-| `SolveScreen.qml` | 152 | quarter turn | `amount.quarter` |
-| `SolveScreen.qml` | 165 | Seen from behind | none: needs a string |
+| `SolveScreen.qml` | 148 | wrong | none: needs a string |
+| `SolveScreen.qml` | 148 | That was not the move | none: needs a string |
+| `SolveScreen.qml` | 149 | unknown | none: needs a string |
+| `SolveScreen.qml` | 149 | That side is not expected | none: needs a string |
+| `SolveScreen.qml` | 348 | STAGE  | none: needs a string |
+| `SolveScreen.qml` | 348 |  OF  | none: needs a string |
+| `SolveScreen.qml` | 352 | Solved | `complete.title` |
+| `SolveScreen.qml` | 380 | Drag the cube to look round it | none: needs a string |
+| `SolveScreen.qml` | 624 | Rescan the cube and carry on from there | none: needs a string |
+| `SolveScreen.qml` | 650 | Only the view has turned. Keep your cube as it is. | none: needs a string |
+| `SolveScreen.qml` | 778 | STAGES | none: needs a string |
+| `SolveScreen.qml` | 827 | Previous | `solution.previous` |
+| `SolveScreen.qml` | 839 | Finish | `stage.finish.title` |
+| `SolveScreen.qml` | 839 | Next move | none: needs a string |
+| `SolveScreen.qml` | 858 | Out of step? Rescan | none: needs a string |
+| `SolveScreen.qml` | 902 | Solving… | `settings.section.solving` |
+| `SolveScreen.qml` | 103 |  on top,  | none: needs a string |
+| `SolveScreen.qml` | 104 |  facing you | none: needs a string |
+| `SolveScreen.qml` | 122 | Camera unavailable | none: needs a string |
+| `SolveScreen.qml` | 124 | Starting the camera… | `scan.title.starting` |
+| `SolveScreen.qml` | 130 | Matched to your cube | none: needs a string |
+| `SolveScreen.qml` | 134 | Matched. The camera cannot see the side facing you: press Next after this move. | none: needs a string |
+| `SolveScreen.qml` | 135 | Matched. Make the move and it steps on by itself. | none: needs a string |
+| `SolveScreen.qml` | 136 | That side looks the same turned. Show another to tell which way up. | none: needs a string |
+| `SolveScreen.qml` | 137 | Not the move that was asked for | none: needs a string |
+| `SolveScreen.qml` | 138 | Not the side that was expected | none: needs a string |
+| `SolveScreen.qml` | 140 | Show a side again if you turn the cube over | none: needs a string |
+| `SolveScreen.qml` | 141 | Hold any side square to the camera and the cube here turns to match | none: needs a string |
+| `SolveScreen.qml` | 155 |  was turned, but not the way shown. Turn it back and try again. | none: needs a string |
+| `SolveScreen.qml` | 157 | ) was turned instead. Turn it back, then make the move shown. | none: needs a string |
+| `SolveScreen.qml` | 160 | The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan. | none: needs a string |
+| `SolveScreen.qml` | 182 | Left side | none: needs a string |
+| `SolveScreen.qml` | 182 | Right side | none: needs a string |
+| `SolveScreen.qml` | 188 | half turn | `amount.half` |
+| `SolveScreen.qml` | 188 | quarter turn | `amount.quarter` |
+| `SolveScreen.qml` | 201 | Seen from behind | none: needs a string |
 

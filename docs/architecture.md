@@ -72,7 +72,13 @@ under a fixed camera-holding convention (documented in
 scan screen), validated via `Cube::is_physically_valid()`.
 `src/app/qt/solve_controller.hpp` calls it once `ScanSession::scanCompleted`
 fires, feeding the solver the real scanned cube instead of a
-`random_scramble()`; a rejected scan (e.g. a colour misclassification)
+`random_scramble()`. Which of the three methods it uses is
+`SolveController.method`, chosen on the solve screen and in settings
+(`SolveMethodPicker.qml`) and kept by `SettingsState.solveMethod`; changing it
+mid-solve solves on from the cube as it stands, off the UI thread, and keeps
+the hold the camera has seen (`solutionContinuesCube`). The screens word each
+stage by its `cube::solver::Stage` value, since the methods have different
+stages. A rejected scan (e.g. a colour misclassification)
 resets scanning back to face 1 rather than silently solving the wrong
 cube. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
 the solver's actual output, with a hidden-face badge for moves on faces
