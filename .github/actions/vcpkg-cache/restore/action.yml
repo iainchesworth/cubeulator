@@ -1,0 +1,42 @@
+name: Restore vcpkg binary cache
+description: >-
+  Points vcpkg's `files` binary cache at a directory under RUNNER_TEMP and
+  fills it from the newest cache saved for this triplet. Pair it with
+  ../save, run with `if: always()` as the job's last step.
+
+inputs:
+  triplet:
+    description: vcpkg triplet the cache is keyed on (x64-linux, arm64-osx, ...).
+    required: true
+
+outputs:
+  listing:
+    description: Fingerprint of what was restored; hand it to ../save.
+    value: ${{ steps.fingerprint.outputs.listing }}
+
+runs:
+  using: composite
+  steps:
+    - name: Create the cache directory and point vcpkg at it
+      shell: bash
+      run: |
+        mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+        echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+    # `key` is never an exact hit: entries are named after their contents
+    # (see ../save), so this always falls through to restore-keys, which
+    # GitHub resolves to the most recently created entry with that prefix.
+    - name: Restore the newest cache for this triplet
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/vcpkg-cache
+        key: vcpkg-binary-cache-${{ inputs.triplet }}-restore
+        restore-keys: |
+          vcpkg-binary-cache-${{ inputs.triplet }}-
+
+    - name: Fingerprint what was restored
+      id: fingerprint
+      shell: bash
+      run: |
+        cd "$RUNNER_TEMP/vcpkg-cache"
+        echo "listing=$(LC_ALL=C ls -R . | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
