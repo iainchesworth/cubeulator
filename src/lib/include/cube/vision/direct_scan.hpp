@@ -35,6 +35,10 @@ struct SideRead {
     // How many of the nine stickers were found as blobs; the rest of the
     // lattice is placed by the fit through those.
     int stickers_found = 0;
+    // Which of the nine they were, in the same order as centres and lab. A
+    // sticker that was not found is usually one with a finger across it; its
+    // place is still sampled, and what is sampled may be the finger.
+    std::array<bool, 9> found{};
 };
 
 // Finds the 3x3 sticker lattice of a side held roughly square to the camera

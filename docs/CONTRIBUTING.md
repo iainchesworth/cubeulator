@@ -7,7 +7,7 @@ from the code.
 ## Before you start
 
 For anything more than a typo fix, it's worth
-[opening an issue](https://github.com/iainchesworth/cubeulator/issues) first
+[opening an issue](https://github.com/iainchesworthlabs/cubeulator/issues) first
 to say what you're thinking — it avoids duplicated effort and lets us agree
 on the approach before you sink time into it.
 
@@ -15,9 +15,11 @@ on the approach before you sink time into it.
 
 This project follows [gitflow](https://nvie.com/posts/a-successful-git-branching-model/):
 
-- **`develop`** is the integration branch — target your PR here.
-- **`main`** only receives tagged releases; day-to-day work never targets
-  it directly.
+- **`develop`** is the integration branch — target your PR here. It is
+  protected: nothing is pushed to it directly, and pull requests land
+  through a [merge queue](branch-protection.md) rather than by hand.
+- **`main`** only receives tagged releases (a `develop` → `main` release PR,
+  or a `hotfix/*`); day-to-day work never targets it directly.
 - Branch names must start with `feature/`, `bugfix/`, `release/`,
   `hotfix/`, or `support/` — a required CI check
   (`Validate gitflow branch name`) enforces this on every PR.
@@ -41,10 +43,10 @@ the required check.
 ## Code style
 
 - Formatting follows the repo's
-  [`.clang-format`](https://github.com/iainchesworth/cubeulator/blob/develop/.clang-format) —
+  [`.clang-format`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-format) —
   run `clang-format` before committing, or configure your editor to do it
   on save.
-- [`.clang-tidy`](https://github.com/iainchesworth/cubeulator/blob/develop/.clang-tidy)
+- [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
   runs as part of the build; compiler warnings are treated as errors, so fix
   them rather than silencing them where you reasonably can.
 - Modern C++23 is encouraged over older idioms — see
@@ -55,9 +57,16 @@ the required check.
 
 1. Push your `feature/*` or `bugfix/*` branch and open a PR against
    `develop`.
-2. Make sure CI is green: build matrix, coverage gate, CodeQL, and the
-   branch-name check all have to pass before a PR can merge.
-3. Keep PRs focused — a bug fix doesn't need to carry an unrelated
+2. Make sure the required checks are green — see
+   [Branch protection and the merge queue](branch-protection.md) for which
+   checks are required on `develop` today (the set grows as the build and
+   analysis jobs go green).
+3. When it's ready, put it in the queue: `gh pr merge --auto --merge <n>`
+   (or **Merge when ready** on the PR). GitHub merges it onto the current
+   `develop` tip, re-runs the required checks on that tree, and lands it —
+   you don't rebase or re-merge `develop` yourself unless the PR conflicts.
+   Your remote branch is deleted once it merges.
+4. Keep PRs focused — a bug fix doesn't need to carry an unrelated
    refactor along with it.
 
 That's it. If anything here is unclear or out of date, flagging it in an

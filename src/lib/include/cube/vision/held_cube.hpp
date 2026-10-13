@@ -44,6 +44,12 @@ struct HoldFit {
 [[nodiscard]] std::array<HoldFit, 24> fit_holds(const std::array<cv::Vec3f, 9>& lab,
                                                 const solver::Cube& cube,
                                                 const SessionColours& colours);
+// The same for a read, counting only the stickers the reader actually found.
+// A cube in the hand has fingers on it; a sticker under a finger is sampled
+// where it must be and comes out the colour of the finger, which says
+// nothing about the cube.
+[[nodiscard]] std::array<HoldFit, 24> fit_holds(const SideRead& read, const solver::Cube& cube,
+                                                const SessionColours& colours);
 
 // A read shows a hold when it sits this close to it.
 inline constexpr float kHoldFitDistance = 3.5F;
@@ -71,5 +77,15 @@ struct HoldReading {
 
 [[nodiscard]] HoldReading read_hold(const std::array<cv::Vec3f, 9>& lab, const solver::Cube& cube,
                                     const SessionColours& colours);
+// The same for a read, counting only the stickers the reader actually found.
+[[nodiscard]] HoldReading read_hold(const SideRead& read, const solver::Cube& cube,
+                                    const SessionColours& colours);
+
+// How many of the stickers a read found are some other colour than the one
+// `expected` has there - nearer, that is, to another of the session's six
+// colours than to their own. One such is as likely a glint on a sticker as a
+// sticker in the wrong place; two or more are a different side.
+[[nodiscard]] int stickers_off(const SideRead& read, const std::array<solver::Color, 9>& expected,
+                               const SessionColours& colours);
 
 }  // namespace cube::vision

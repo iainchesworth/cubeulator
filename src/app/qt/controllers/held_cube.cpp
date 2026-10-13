@@ -3,7 +3,12 @@
 #include "controllers/direct_scan.hpp"
 #include "solve_controller.hpp"
 
+#include <QDateTime>
+#include <QFile>
+#include <QIODevice>
 #include <QMatrix3x3>
+#include <QTextStream>
+#include <QtGlobal>
 
 #include <array>
 #include <cstddef>
@@ -158,7 +163,7 @@ std::optional<Face> HeldCube::side_turned_instead(const cube::vision::SideRead& 
             if (asked.has_value() && move == *asked) {
                 continue;
             }
-            const HoldReading after = cube::vision::read_hold(read.lab, now.apply(move), colours);
+            const HoldReading after = cube::vision::read_hold(read, now.apply(move), colours);
             if (!after.shows(hold_) ||
                 unmoved_distance < after.distance + cube::vision::kHoldClearDistance) {
                 continue;
@@ -170,6 +175,63 @@ std::optional<Face> HeldCube::side_turned_instead(const cube::vision::SideRead& 
         }
     }
     return turned;
+}
+
+bool HeldCube::half_way_there(const cube::vision::SideRead& read,
+                              const cube::vision::SessionColours& colours) const {
+    const auto asked = solve_.currentMove();
+    if (!asked.has_value() || asked->turns != 2) {
+        return false;
+    }
+    for (const int turns : {1, 3}) {
+        const Cube part_way = solve_.currentCube().apply(cube::solver::Move{asked->face, turns});
+        if (cube::vision::read_hold(read, part_way, colours).shows(hold_)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void HeldCube::note(const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
+                    const Verdict& verdict) const {
+    static const QString path = qEnvironmentVariable("CUBE_HELD_LOG");
+    if (path.isEmpty()) {
+        return;
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::Append | QIODevice::Text)) {
+        return;
+    }
+    static const char* const kKinds[] = {"nothing", "held", "moved", "unsure", "wrong", "unknown"};
+    const Cube& now = solve_.currentCube();
+    const auto asked = solve_.currentMove();
+    const HoldReading here = cube::vision::read_hold(read, now, colours);
+    QString line = QStringLiteral("%1 move %2 asked %3 -> %4")
+                       .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs))
+                       .arg(solve_.moveIndex())
+                       .arg(solve_.currentMoveNotation(),
+                            QString::fromLatin1(kKinds[static_cast<int>(verdict.kind)]));
+    line +=
+        QStringLiteral(
+            " | shown as up %1 front %2 seen %3 | found %4/9 | as it stood %5 "
+            "(%6 off)")
+            .arg(side_letter(hold_.up), side_letter(hold_.front))
+            .arg(seen_)
+            .arg(read.stickers_found)
+            .arg(static_cast<double>(here.distance), 0, 'f', 2)
+            .arg(cube::vision::stickers_off(read, cube::solver::camera_view(now, hold_), colours));
+    if (asked.has_value()) {
+        const Cube next = now.apply(*asked);
+        line += QStringLiteral(" | after the move %1 (%2 off)")
+                    .arg(static_cast<double>(cube::vision::read_hold(read, next, colours).distance),
+                         0, 'f', 2)
+                    .arg(cube::vision::stickers_off(read, cube::solver::camera_view(next, hold_),
+                                                    colours));
+    }
+    if (verdict.kind == Verdict::Kind::Wrong) {
+        line += QStringLiteral(" | turned instead: %1").arg(side_letter(verdict.side));
+    }
+    QTextStream(&file) << line << '\n';
 }
 
 void HeldCube::forget() {
@@ -215,16 +277,21 @@ HeldCube::Verdict HeldCube::judge(const cube::vision::SideRead& read,
                                   const cube::vision::SessionColours& colours) const {
     using Kind = Verdict::Kind;
     const Cube& now = solve_.currentCube();
-    const HoldReading here = cube::vision::read_hold(read.lab, now, colours);
+    // Every comparison counts only the stickers the reader found: a cube in
+    // the hand has fingers on it, and a sticker under a finger is no
+    // evidence of anything.
+    const HoldReading here = cube::vision::read_hold(read, now, colours);
 
     // Has the move been made? Asked first, and asked as a comparison: the
     // side in view is on the cube as it stands after the move, and the cube
     // as it stood explains it clearly worse. A move can change as little as
     // one sticker of a side, which the cube before it would still fit
     // loosely - but never as well.
+    std::optional<Cube> next;
     std::optional<HoldReading> there;
     if (const auto move = solve_.currentMove(); move.has_value()) {
-        there = cube::vision::read_hold(read.lab, now.apply(*move), colours);
+        next = now.apply(*move);
+        there = cube::vision::read_hold(read, *next, colours);
         if (!there->holds.empty() &&
             here.distance >= there->distance + cube::vision::kHoldClearDistance) {
             if (const auto hold = choose(there->holds); hold.has_value()) {
@@ -259,10 +326,35 @@ HeldCube::Verdict HeldCube::judge(const cube::vision::SideRead& read,
         }
         return say(Kind::Unsure);
     }
-    // Not the cube as it stood, nor as the move asked for leaves it. A turn
-    // of some other side - or of the right side the wrong way - is the
-    // likeliest thing to have happened, and worth naming if it is the only
-    // one that fits.
+
+    // What is left is a side that is neither the cube as it stood nor the
+    // cube after the move. Before calling that a mistake the evidence has to
+    // be good, because being told a correct move was wrong is worse than
+    // having to press Next:
+    //  - the whole side was seen, all nine stickers found, and
+    //  - at least two of them are plainly not the colour either cube has
+    //    there. One sticker out is a glint, a shadow or a fingertip at least
+    //    as often as it is a sticker in the wrong place.
+    if (read.stickers_found < 9) {
+        return say(Kind::Nothing);
+    }
+    const int off_as_it_stood =
+        cube::vision::stickers_off(read, cube::solver::camera_view(now, hold_), colours);
+    const int off_after_move =
+        next.has_value()
+            ? cube::vision::stickers_off(read, cube::solver::camera_view(*next, hold_), colours)
+            : off_as_it_stood;
+    if (off_as_it_stood < 2 || off_after_move < 2) {
+        return say(Kind::Nothing);
+    }
+    // A half turn made a quarter at a time passes through a cube that is
+    // neither: that is the move under way, not a wrong one.
+    if (half_way_there(read, colours)) {
+        return say(Kind::Nothing);
+    }
+    // A turn of some other side - or of the right side the wrong way - is
+    // the likeliest thing to have happened, and worth naming if it is the
+    // only one that fits.
     if (const auto side = side_turned_instead(read, colours, here.distance); side.has_value()) {
         return say(Kind::Wrong, hold_, *side);
     }
@@ -290,12 +382,20 @@ void HeldCube::onFrameWatched() {
 
     onSolveChanged();
     const Verdict verdict = judge(*read, *colours);
+    if (!(verdict == last_)) {
+        note(*read, *colours, verdict);
+    }
     streak_ = verdict == last_ ? streak_ + 1 : 1;
     last_ = verdict;
 
     using Kind = Verdict::Kind;
     switch (verdict.kind) {
         case Kind::Nothing:
+            // A side is in view and there is nothing to say about it, good
+            // or bad. Whatever was said of an earlier one no longer stands.
+            if (streak_ >= kFramesToTrust) {
+                setSight(Sight::None);
+            }
             break;
         case Kind::Held:
             if (streak_ >= kFramesToTrust) {
@@ -330,7 +430,7 @@ void HeldCube::onFrameWatched() {
             }
             break;
         case Kind::Wrong:
-            if (streak_ >= kFramesToTrust) {
+            if (streak_ >= kFramesToAccuse) {
                 setSight(Sight::Wrong, verdict.side);
             }
             break;

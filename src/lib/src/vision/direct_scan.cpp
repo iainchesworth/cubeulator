@@ -127,6 +127,8 @@ struct Lattice {
     cv::Point2f row_step;
     std::size_t blobs = 0;
     float rms = 0.0F;  // residual of the blobs about the lattice, in spacings
+    // Which cells (row * 3 + column) have a blob on them.
+    std::array<bool, 9> found{};
 
     [[nodiscard]] cv::Point2f at(int column, int row) const {
         return origin + column_step * static_cast<float>(column) +
@@ -264,7 +266,8 @@ struct Lattice {
             continue;
         }
 
-        const Lattice candidate = fit_affine(on_grid, cells, pitch);
+        Lattice candidate = fit_affine(on_grid, cells, pitch);
+        candidate.found = taken;
         if (!best.has_value() ||
             std::tuple(candidate.blobs, -candidate.rms) > std::tuple(best->blobs, -best->rms)) {
             best = candidate;
@@ -280,19 +283,27 @@ struct Lattice {
 // The nine centres row-major with cell 0 nearest the image's top-left: of
 // the lattice's four quarter-turn labellings, the one whose rows run most
 // nearly rightwards and whose columns run most nearly downwards.
-[[nodiscard]] std::array<cv::Point2f, 9> upright_centres(const Lattice& lattice) {
-    std::array<cv::Point2f, 9> best{};
+struct Upright {
+    std::array<cv::Point2f, 9> centres{};
+    // Whether each of those centres had a blob on it.
+    std::array<bool, 9> found{};
+};
+
+[[nodiscard]] Upright upright_centres(const Lattice& lattice) {
+    Upright best;
     float best_score = -std::numeric_limits<float>::max();
     for (const auto& roll : kRoll) {
-        std::array<cv::Point2f, 9> centres{};
+        Upright upright;
         for (std::size_t i = 0; i < 9; ++i) {
             const int cell = roll[i];
-            centres[i] = lattice.at(cell % 3, cell / 3);
+            upright.centres[i] = lattice.at(cell % 3, cell / 3);
+            upright.found[i] = lattice.found[static_cast<std::size_t>(cell)];
         }
-        const float score = (centres[2] - centres[0]).x + (centres[6] - centres[0]).y;
+        const float score = (upright.centres[2] - upright.centres[0]).x +
+                            (upright.centres[6] - upright.centres[0]).y;
         if (score > best_score) {
             best_score = score;
-            best = centres;
+            best = upright;
         }
     }
     return best;
@@ -506,11 +517,13 @@ std::optional<SideRead> read_side(const cv::Mat& bgr) {
 
     const float pitch = (columns + rows) / 2.0F;
     const int half_width = std::max(2, static_cast<int>(kPatchHalfWidth * pitch));
-    const std::array<cv::Point2f, 9> centres = upright_centres(*lattice);
+    const Upright upright = upright_centres(*lattice);
+    const std::array<cv::Point2f, 9>& centres = upright.centres;
 
     SideRead read;
     read.pitch = pitch * scale;
     read.stickers_found = static_cast<int>(lattice->blobs);
+    read.found = upright.found;
     for (std::size_t i = 0; i < 9; ++i) {
         const std::optional<cv::Vec3f> lab = patch_lab(working, centres[i], half_width);
         if (!lab.has_value()) {

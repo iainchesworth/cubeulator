@@ -1,8 +1,8 @@
 site_name: Cubeulator
 site_description: A camera-driven, on-device Rubik's Cube solver.
-site_url: https://iainchesworth.github.io/cubeulator/
-repo_url: https://github.com/iainchesworth/cubeulator
-repo_name: iainchesworth/cubeulator
+site_url: https://iainchesworthlabs.github.io/cubeulator/
+repo_url: https://github.com/iainchesworthlabs/cubeulator
+repo_name: iainchesworthlabs/cubeulator
 edit_uri: edit/develop/docs/
 
 theme:
