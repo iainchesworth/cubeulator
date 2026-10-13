@@ -111,9 +111,9 @@ int main(int argc, char* argv[]) {
         QDir().mkpath(out);
         QFile json(out + "/reach.json");
         if (json.open(QIODevice::WriteOnly)) {
-            QJsonObject report = booted->reach().to_json();
-            report.insert("filtered", filtered);
-            json.write(QJsonDocument(report).toJson());
+            QJsonObject document = booted->reach().to_json();
+            document.insert("filtered", filtered);
+            json.write(QJsonDocument(document).toJson());
         }
         QFile text(out + "/reach.txt");
         if (text.open(QIODevice::WriteOnly)) {
