@@ -78,13 +78,16 @@ struct Sim {
         const int s = quantize24(q_true).index;
         const Quat relabelled =
             quat_multiply(q_true, quat_conjugate(kLattice24[static_cast<std::size_t>(s)]));
-        std::normal_distribution<float> angle_dist(0.0F, noise_deg);
+        // std::normal_distribution requires stddev > 0 (libstdc++ asserts it in
+        // debug builds); noise_deg == 0 means "no orientation noise".
+        std::normal_distribution<float> angle_dist(0.0F, noise_deg > 0.0F ? noise_deg : 1.0F);
         std::uniform_real_distribution<float> unit(-1.0F, 1.0F);
         std::array<float, 3> axis{unit(rng), unit(rng), unit(rng)};
         if (std::abs(axis[0]) + std::abs(axis[1]) + std::abs(axis[2]) < 1e-3F) {
             axis = {1.0F, 0.0F, 0.0F};
         }
-        return quat_multiply(axis_angle(axis, angle_dist(rng)), relabelled);
+        const float angle_deg = noise_deg > 0.0F ? angle_dist(rng) : 0.0F;
+        return quat_multiply(axis_angle(axis, angle_deg), relabelled);
     }
 
     TrackerPassOutput step_obs(std::optional<Quat> forced = std::nullopt) {
