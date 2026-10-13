@@ -16,7 +16,9 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
 
     const auto to_camera = [&](const cv::Point3f& p) {
         const cv::Matx31d c =
-            rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+            rotation * cv::Matx31d(static_cast<double>(p.x), static_cast<double>(p.y),
+                                   static_cast<double>(p.z)) +
+            cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         return cv::Vec3d(c(0, 0), c(1, 0), c(2, 0));
     };
     const auto project = [&](const cv::Point3f& p) {
@@ -39,7 +41,9 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
         }
         // Frontality: cosine between the outward normal and the ray from
         // the face centre back to the camera. Positive = front-facing.
-        const cv::Matx31d normal_c = rotation * cv::Matx31d(normal.x, normal.y, normal.z);
+        const cv::Matx31d normal_c =
+            rotation * cv::Matx31d(static_cast<double>(normal.x), static_cast<double>(normal.y),
+                                   static_cast<double>(normal.z));
         const cv::Vec3d centre_c =
             to_camera(normal);  // face centre = its unit normal (half-edge 1)
         const double distance = cv::norm(centre_c);
@@ -230,8 +234,8 @@ std::array<std::array<cv::Point2f, 4>, 9> cells_from_grid(const RefinedGrid& gri
             const double x1 = grid.x[static_cast<std::size_t>(col + 1)];
             const double y0 = grid.y[static_cast<std::size_t>(row)];
             const double y1 = grid.y[static_cast<std::size_t>(row + 1)];
-            const double inset_x = (1.0 - kStickerFraction) * 0.5 * (x1 - x0);
-            const double inset_y = (1.0 - kStickerFraction) * 0.5 * (y1 - y0);
+            const double inset_x = (1.0 - static_cast<double>(kStickerFraction)) * 0.5 * (x1 - x0);
+            const double inset_y = (1.0 - static_cast<double>(kStickerFraction)) * 0.5 * (y1 - y0);
             rectified_points.emplace_back(static_cast<float>(x0 + inset_x),
                                           static_cast<float>(y0 + inset_y));
             rectified_points.emplace_back(static_cast<float>(x1 - inset_x),

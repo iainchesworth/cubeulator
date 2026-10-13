@@ -226,7 +226,7 @@ TEST_CASE("detect_cube_grid tolerates a rotated grid", "[vision]") {
             const double expected_y = rotation.at<double>(1, 0) * x +
                                       rotation.at<double>(1, 1) * y + rotation.at<double>(1, 2);
 
-            const auto& cell = detection->cells[row * 3 + col];
+            const auto& cell = detection->cells[static_cast<std::size_t>(row * 3 + col)];
             const double actual_x = cell.bounds.x + cell.bounds.width / 2.0;
             const double actual_y = cell.bounds.y + cell.bounds.height / 2.0;
 

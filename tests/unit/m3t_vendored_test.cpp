@@ -198,7 +198,7 @@ cv::Mat render_frame(const m3t::Transform3fA& body2world) {
 
 // In-memory colour camera: frames are handed in from a vector - no device,
 // no disk, exactly how the offline runner will feed the tracker.
-class InMemColorCamera : public m3t::ColorCamera {
+class InMemColorCamera final : public m3t::ColorCamera {
 public:
     explicit InMemColorCamera(const std::string& name) : ColorCamera{name} {
         intrinsics_ = m3t::Intrinsics{kFu, kFv, kPpu, kPpv, kW, kH};
@@ -374,8 +374,8 @@ TEST_CASE("m3t offscreen silhouette render is non-empty and geometrically sane",
     CHECK(bbox.height <= 250);
     const double cx = bbox.x + bbox.width / 2.0;
     const double cy = bbox.y + bbox.height / 2.0;
-    CHECK(std::abs(cx - kPpu) < 30.0);
-    CHECK(std::abs(cy - kPpv) < 30.0);
+    CHECK(std::abs(cx - static_cast<double>(kPpu)) < 30.0);
+    CHECK(std::abs(cy - static_cast<double>(kPpv)) < 30.0);
     CHECK(bbox.x > 0);
     CHECK(bbox.y > 0);
     CHECK(bbox.x + bbox.width < kW - 1);

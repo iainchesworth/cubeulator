@@ -191,10 +191,12 @@ classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f
         // Solve d = u*col_step + v*row_step via Cramer's rule; u/v are
         // already in lattice-unit space (u=1 means "one col_step away")
         // since col_step/row_step carry the real measured pitch.
-        const double u =
-            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v =
-            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u = (static_cast<double>(d.x) * static_cast<double>(row_step.y) -
+                          static_cast<double>(d.y) * static_cast<double>(row_step.x)) /
+                         det;
+        const double v = (static_cast<double>(col_step.x) * static_cast<double>(d.y) -
+                          static_cast<double>(col_step.y) * static_cast<double>(d.x)) /
+                         det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         if (ru < -1.0 || ru > 1.0 || rv < -1.0 || rv > 1.0) {
@@ -232,8 +234,8 @@ classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f
     LatticeHypothesis hyp{.anchor = {}, .col_step = col_step, .row_step = row_step};
     hyp.slot_candidate.fill(-1);
 
-    const double det =
-        static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    const double det = static_cast<double>(col_step.x) * static_cast<double>(row_step.y) -
+                       static_cast<double>(col_step.y) * static_cast<double>(row_step.x);
     if (std::abs(det) < 1e-6) {
         return hyp;
     }
@@ -247,10 +249,12 @@ classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f
     std::vector<RelativeMatch> matches;
     for (std::size_t idx = 0; idx < candidates.size(); ++idx) {
         const cv::Point2f d = candidates[idx].center - seed_center;
-        const double u =
-            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v =
-            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u = (static_cast<double>(d.x) * static_cast<double>(row_step.y) -
+                          static_cast<double>(d.y) * static_cast<double>(row_step.x)) /
+                         det;
+        const double v = (static_cast<double>(col_step.x) * static_cast<double>(d.y) -
+                          static_cast<double>(col_step.y) * static_cast<double>(d.x)) /
+                         det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         // One face is 3x3: anything further than 2 cells from the seed can
@@ -341,8 +345,8 @@ classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f
     LatticeHypothesis hyp{.anchor = {}, .col_step = col_step, .row_step = row_step};
     hyp.slot_candidate.fill(-1);
 
-    const double det =
-        static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    const double det = static_cast<double>(col_step.x) * static_cast<double>(row_step.y) -
+                       static_cast<double>(col_step.y) * static_cast<double>(row_step.x);
     if (std::abs(det) < 1e-6) {
         return hyp;
     }
@@ -571,7 +575,7 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         }
         const float squareness = std::max(min_rect.size.width, min_rect.size.height) /
                                  std::min(min_rect.size.width, min_rect.size.height);
-        if (squareness > max_aspect) {
+        if (static_cast<double>(squareness) > max_aspect) {
             continue;
         }
         // A convex blob that fills most of its own minAreaRect is box-like;
@@ -581,7 +585,8 @@ std::vector<StickerCandidate> candidates_from_binary_mask(const cv::Mat& binary_
         // replica funnel measured on live1 lost its cells at exactly this
         // gate. Convexity plus the squareness bound still exclude the
         // crescent/wedge shapes the ratio exists to kill.
-        const double rect_area = static_cast<double>(min_rect.size.width) * min_rect.size.height;
+        const double rect_area =
+            static_cast<double>(min_rect.size.width) * static_cast<double>(min_rect.size.height);
         if (rect_area <= 0.0 || area / rect_area < kMinFillRatioLow) {
             continue;
         }

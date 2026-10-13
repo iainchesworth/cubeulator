@@ -438,7 +438,9 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
         }
         const auto p = photometry(*c);
         std::printf("# probe-live: centre %s raw Lab=(%.2f,%.2f,%.2f) chroma=%.2f hue=%.2f\n", name,
-                    (*c)[0], (*c)[1], (*c)[2], p.chroma, p.hue);
+                    static_cast<double>((*c)[0]), static_cast<double>((*c)[1]),
+                    static_cast<double>((*c)[2]), static_cast<double>(p.chroma),
+                    static_cast<double>(p.hue));
     };
     centre_line("R", centre_R);
     centre_line("O", centre_O);
@@ -457,8 +459,10 @@ TEST_CASE("assembly probe live: localise the sticker that blocks a corpus clip",
             "hue=%.2f"
             "  d(R)=%.2f d(O)=%.2f d(Y)=%.2f\n",
             hit.face, slot_face[hit.face], hit.cell, color_letter(hit.from), color_letter(hit.to),
-            raw[0], raw[1], raw[2], p.chroma, p.hue, dist_to(centre_R), dist_to(centre_O),
-            dist_to(centre_Y));
+            static_cast<double>(raw[0]), static_cast<double>(raw[1]), static_cast<double>(raw[2]),
+            static_cast<double>(p.chroma), static_cast<double>(p.hue),
+            static_cast<double>(dist_to(centre_R)), static_cast<double>(dist_to(centre_O)),
+            static_cast<double>(dist_to(centre_Y)));
     };
 
     // The literal single-sticker relabel search the brief names. Reported

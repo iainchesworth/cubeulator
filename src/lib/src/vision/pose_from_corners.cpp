@@ -52,7 +52,8 @@ Result<CornerPnpResult> estimate_pose_from_corners(
     cv::Rodrigues(result.rvec, rotation);
     for (const auto& point : model_points) {
         const cv::Matx31d camera_point =
-            rotation * cv::Matx31d(point.x, point.y, point.z) +
+            rotation * cv::Matx31d(static_cast<double>(point.x), static_cast<double>(point.y),
+                                   static_cast<double>(point.z)) +
             cv::Matx31d(result.tvec[0], result.tvec[1], result.tvec[2]);
         if (camera_point(2, 0) <= 0.0) {
             return std::unexpected(CubeError::no_valid_cube_detected);
@@ -82,7 +83,8 @@ const std::vector<std::array<int, 8>>& singmaster_rotation_permutations() {
                 const cv::Matx31f rotated = rotation * cv::Matx31f(p.x, p.y, p.z);
                 for (int j = 0; j < 8; ++j) {
                     const cv::Point3f q = kSingmasterCornerModel[static_cast<std::size_t>(j)];
-                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) < 0.1F) {
+                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) <
+                        static_cast<double>(0.1F)) {
                         perm[static_cast<std::size_t>(i)] = j;
                         break;
                     }

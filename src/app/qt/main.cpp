@@ -39,7 +39,8 @@ LONG WINAPI writeCrashDump(EXCEPTION_POINTERS* exception) {
     // Replace the trailing "cube_app.exe" with the dump name; on failure the
     // path stays as-is and the dump lands next to the binary regardless.
     if (char* last_slash = std::strrchr(dump_path, '\\'); last_slash != nullptr) {
-        std::snprintf(last_slash + 1, MAX_PATH - (last_slash + 1 - dump_path),
+        std::snprintf(last_slash + 1,
+                      static_cast<std::size_t>(MAX_PATH - (last_slash + 1 - dump_path)),
                       "cube_app_crash.dmp");
     }
 
