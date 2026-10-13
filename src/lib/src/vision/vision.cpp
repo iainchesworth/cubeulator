@@ -1,5 +1,6 @@
 #include <cube/vision/vision.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/color_classification.hpp>
 #include <cube/vision/grid_detection.hpp>
 
@@ -21,6 +22,7 @@ namespace {
 }  // namespace
 
 Result<FaceReading> analyze_frame(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("vision.analyze_frame");
     const auto grid = detect_cube_grid(bgr_frame);
     if (!grid) {
         return std::unexpected(CubeError::no_valid_cube_detected);

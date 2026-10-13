@@ -2,6 +2,7 @@
 
 #include <array>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
 
@@ -66,6 +67,7 @@ bool f2l_solved(const Cube& cube) noexcept {
 }
 
 Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
+    CUBE_ZONE_SCOPED_N("solver.middle_edges");
     std::vector<Move> solution;
     Cube cube = start;
 

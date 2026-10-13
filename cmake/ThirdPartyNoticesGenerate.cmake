@@ -420,6 +420,11 @@ foreach(tok IN LISTS _link_tokens)
         continue()
     endif()
     string(REPLACE "\\" "/" tok "${tok}")
+    # Collapse a run of slashes after the first character (a leading // is a UNC
+    # root and stays). An imported target can carry one - Tracy's exported
+    # config names `<prefix>/lib//TracyClient.lib` - and vcpkg's file lists,
+    # which the lookup below keys on, never do.
+    string(REGEX REPLACE "([^/])/+" "\\1/" tok "${tok}")
     # /WHOLEARCHIVE:path, -Wl,--whole-archive style wrappers
     string(REGEX REPLACE "^/(WHOLEARCHIVE|DEFAULTLIB):" "" tok "${tok}")
     if(tok MATCHES "^-l(.+)")

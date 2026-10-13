@@ -1,5 +1,7 @@
 #include <cube/solver/scan_conversion.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <array>
 #include <cstddef>
 #include <optional>
@@ -78,6 +80,7 @@ constexpr const Permutation& camera_to_solver_permutation(model::Face face) noex
 }  // namespace
 
 Result<Cube> cube_from_scan(const model::ScanProgress& scan) noexcept {
+    CUBE_ZONE_SCOPED_N("solver.cube_from_scan");
     if (!scan.is_complete()) {
         return std::unexpected(CubeError::face_capture_incomplete);
     }

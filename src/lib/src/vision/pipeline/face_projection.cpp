@@ -1,5 +1,7 @@
 #include <cube/vision/pipeline/face_projection.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -10,6 +12,7 @@ namespace cube::vision::pipeline {
 
 std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& tvec,
                                         const cv::Matx33d& camera_matrix, double min_frontality) {
+    CUBE_ZONE_SCOPED_N("vision.derive_faces");
     std::vector<ProjectedFace> out;
     cv::Matx33d rotation;
     cv::Rodrigues(rvec, rotation);
@@ -112,6 +115,7 @@ std::vector<ProjectedFace> derive_faces(const cv::Vec3d& rvec, const cv::Vec3d& 
 
 cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int size,
                      cv::Mat* homography_out) {
+    CUBE_ZONE_SCOPED_N("vision.rectify_face");
     if (bgr_frame.empty() || size < 3) {
         return {};
     }
@@ -140,6 +144,7 @@ cv::Mat rectify_face(const cv::Mat& bgr_frame, const ProjectedFace& face, int si
 }
 
 RefinedGrid refine_cell_grid(const cv::Mat& rectified_bgr) {
+    CUBE_ZONE_SCOPED_N("vision.refine_cell_grid");
     RefinedGrid grid;
     if (rectified_bgr.empty() || rectified_bgr.rows != rectified_bgr.cols ||
         rectified_bgr.rows < 24) {

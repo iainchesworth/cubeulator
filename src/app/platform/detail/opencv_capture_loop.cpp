@@ -1,5 +1,7 @@
 #include "platform/detail/opencv_capture_loop.hpp"
 
+#include <cube/profiling.hpp>
+
 #include <chrono>
 #include <exception>
 #include <string>
@@ -72,6 +74,7 @@ OpenCvCaptureLoop::~OpenCvCaptureLoop() {
 }
 
 Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
+    CUBE_ZONE_SCOPED_N("capture.enumerate_devices");
     [[maybe_unused]] const ScopedCom scoped_com;
 
     // A simple index probe: friendly device names aren't reliably available
@@ -97,6 +100,7 @@ Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
 }
 
 Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
+    CUBE_ZONE_SCOPED_N("capture.start");
     [[maybe_unused]] const ScopedCom scoped_com;
 
     if (is_capturing()) {
@@ -137,6 +141,7 @@ Result<void> OpenCvCaptureLoop::start(const DeviceInfo& device) {
 }
 
 void OpenCvCaptureLoop::stop() {
+    CUBE_ZONE_SCOPED_N("capture.stop");
     if (capture_thread_.joinable()) {
         stop_requested_.store(true, std::memory_order_release);
         capture_thread_.join();
@@ -249,12 +254,14 @@ void OpenCvCaptureLoop::service_photometry_requests() {
     // GUI-thread take_photometry_report(). Nothing else touches capture_
     // while this thread is between grabs, so dropping the lock is safe.
     if (do_restore) {
+        CUBE_ZONE_SCOPED_N("capture.photometry_restore");
         restore(capture_, as_found_);
         return;
     }
     if (!do_lock) {
         return;
     }
+    CUBE_ZONE_SCOPED_N("capture.photometry_lock");
 
     PhotometryLockReport report =
         apply_lock(capture_, request, as_found_, [this](const cv::Mat& frame) { publish(frame); });
@@ -263,6 +270,7 @@ void OpenCvCaptureLoop::service_photometry_requests() {
 }
 
 void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
+    CUBE_ZONE_SCOPED_N("capture.publish");
     // Stamped here, after the (blocking, device-rate) read returns, so the
     // timestamp tracks capture time even when the consumer polls slower
     // than the device delivers and overwritten frames vanish without ever
@@ -276,10 +284,19 @@ void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
 
 void OpenCvCaptureLoop::run() {
     [[maybe_unused]] const ScopedCom scoped_com;
+    CUBE_THREAD_NAME("camera-capture");
 
     cv::Mat frame;
     while (!stop_requested_.load(std::memory_order_acquire)) {
-        if (!capture_.read(frame) || frame.empty()) {
+        bool grabbed = false;
+        {
+            // The blocking, device-rate read: its length IS the camera's frame
+            // interval, so this zone is where "is the camera the bottleneck"
+            // gets answered.
+            CUBE_ZONE_SCOPED_N("capture.read");
+            grabbed = capture_.read(frame) && !frame.empty();
+        }
+        if (!grabbed) {
             continue;
         }
         // Between grabs, on the thread that owns the device - the only
@@ -289,6 +306,7 @@ void OpenCvCaptureLoop::run() {
         // wall-clock time on a device whose CAP_PROP_FPS reads 0.
         service_photometry_requests();
         publish(frame);
+        CUBE_FRAME_MARK_NAMED("Capture");
     }
 }
 

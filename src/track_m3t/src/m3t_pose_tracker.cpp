@@ -1,5 +1,7 @@
 #include <cube/track_m3t/m3t_pose_tracker.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <m3t/body.h>
 #include <m3t/camera.h>
 #include <m3t/common.h>
@@ -145,6 +147,7 @@ M3tPoseTracker::~M3tPoseTracker() = default;
 
 bool M3tPoseTracker::init(const cv::Vec3d& rvec, const cv::Vec3d& tvec, cv::Size frame_size,
                           const cv::Matx33d& camera_matrix) {
+    CUBE_ZONE_SCOPED_N("track.m3t.init");
     try {
         if (impl_->tracker == nullptr || impl_->frame_size != frame_size) {
             impl_->ready = false;
@@ -176,6 +179,7 @@ bool M3tPoseTracker::init(const cv::Vec3d& rvec, const cv::Vec3d& tvec, cv::Size
 }
 
 cube::vision::pipeline::TrackedPose M3tPoseTracker::step(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("track.m3t.step");
     cube::vision::pipeline::TrackedPose result;
     if (!impl_->ready || bgr_frame.empty()) {
         return result;

@@ -1,6 +1,8 @@
 #include "app_runtime.hpp"
 
+#include <cube/profiling.hpp>
 #include <cube/solver/solver.hpp>
+#include <cube/version.hpp>
 
 #include <QGuiApplication>
 #include <QMetaObject>
@@ -113,6 +115,11 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
+    // Tracy names the GUI thread and carries the build's identity into every
+    // trace, so a capture says which commit it measured (cube/profiling.hpp).
+    CUBE_THREAD_NAME("main");
+    CUBE_APP_INFO(cube::version_details());
+
     // The controllers (cube::app::AppControllers), their registration as QML
     // singletons and the engine that loads Main.qml are one AppRuntime, which
     // tests/system boots the same way.
@@ -122,6 +129,17 @@ int main(int argc, char* argv[]) {
     }
     SolveController& solveController = runtime.solve();
     QQmlApplicationEngine& engine = runtime.engine();
+
+    // Tracy's "UI" frame set: one mark per Qt Quick presentation, so the frame
+    // view shows what the user sees (the unnamed set is the vision pass and
+    // "Capture" the camera - three unrelated cadences, three sets). Direct, not
+    // queued: frameSwapped can fire on the scene graph's render thread, and the
+    // mark should timestamp the swap itself.
+    if (QQuickWindow* window = runtime.window()) {
+        QObject::connect(
+            window, &QQuickWindow::frameSwapped, window, [] { CUBE_FRAME_MARK_NAMED("UI"); },
+            Qt::DirectConnection);
+    }
 
     // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
     // scrambled from that seed, no camera and no scan. For working on the

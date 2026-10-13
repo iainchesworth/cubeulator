@@ -1,5 +1,7 @@
 #include <cube/vision/track_fusion.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -130,6 +132,7 @@ const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>>& face_permutations
 
 FeedResult add_observation(FusionStore& fusion, std::map<int, int>& generation_of_epoch,
                            int gauge_epoch, int face_id, const FaceObservation& observation) {
+    CUBE_ZONE_SCOPED_N("vision.track_fusion.add_observation");
     FeedResult result;
     int& generation = generation_of_epoch[gauge_epoch];
     int sub = gauge_epoch * 1000 + generation;
@@ -149,6 +152,7 @@ FeedResult add_observation(FusionStore& fusion, std::map<int, int>& generation_o
 }
 
 RegistrationStats register_epochs(FusionStore& fusion) {
+    CUBE_ZONE_SCOPED_N("vision.track_fusion.register_epochs");
     RegistrationStats stats;
     // The radius and margin judge the BEST-SUPPORTED shared face - the
     // minimum per-face mean cell cost - never a pool over all shared

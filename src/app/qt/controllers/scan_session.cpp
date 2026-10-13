@@ -6,6 +6,7 @@
 
 #include <cube/model/color_scheme.hpp>
 #include <cube/model/face.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/capture_gates.hpp>
@@ -322,6 +323,7 @@ struct LiveTrackSample {
 // from cube::track_m3t; a load failure warns once and degrades the app
 // to the legacy pipeline.
 LiveTrackSample live_m3t_lock(const cv::Mat& analysis_frame, float scale_back) {
+    CUBE_ZONE_SCOPED_N("scan.live_m3t_lock");
     static cube::vision::pipeline::DetectTrackLoop loop;
     static std::unique_ptr<cube::vision::OnnxCornerDetector> detector;
     static std::unique_ptr<cube::track_m3t::M3tPoseTracker> tracker;
@@ -1440,6 +1442,7 @@ void ScanSession::poll() {
     if (!frame) {
         return;
     }
+    CUBE_ZONE_SCOPED_N("scan.poll_frame");
 
     {
         std::scoped_lock lock(frame_mutex_);
@@ -1475,6 +1478,7 @@ void ScanSession::poll() {
             analysis_inflight_timer_.elapsed() > kAnalysisOverrunWarnMs &&
             !analysis_overrun_logged_) {
             analysis_overrun_logged_ = true;
+            CUBE_MESSAGE("scan.analysis_overrun");
             qWarning("ScanSession: analysis pass still unfinished after %lld ms",
                      static_cast<long long>(analysis_inflight_timer_.elapsed()));
         }
@@ -1544,6 +1548,7 @@ void ScanSession::poll() {
 }
 
 void ScanSession::handleAnalysisFinished() {
+    CUBE_ZONE_SCOPED_N("scan.handle_analysis_finished");
     // Cleared unconditionally before ANY early-out: every queued pass must
     // release the gate exactly once, or a result discarded below (post-stop
     // delivery) would leave the gate held forever and no analysis would
@@ -1562,6 +1567,11 @@ void ScanSession::handleAnalysisFinished() {
     // elapsed since THIS pass's frame left the camera mailbox.
     const qint64 gate_latency_ms =
         analysis_inflight_timer_.isValid() ? analysis_inflight_timer_.elapsed() : -1;
+    CUBE_FRAME_MARK();
+    CUBE_PLOT("scan.gate_latency_ms", gate_latency_ms);
+    CUBE_PLOT("scan.motion_score", result.motion_score);
+    CUBE_PLOT("scan.cool_hue_pixels", result.cool_hue_pixels);
+    CUBE_PLOT("scan.hand_present", result.hand_present);
 
     // Overlay persistence: per-frame detection blips (~1 in 4 frames drops
     // even on a good view) must not strobe the AR overlay in and out. A
@@ -1714,6 +1724,7 @@ void ScanSession::handleAnalysisFinished() {
         if (!result.pose_from_track) {
             track = tracker_.on_pass(track_in);
         }
+        CUBE_PLOT("scan.tracker_state", static_cast<int>(track.state));
 
         // Display smoothing - the same nlerp the raw pose stream used to
         // feed, now fed by the tracker (which coasts through detection
@@ -1989,6 +2000,7 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
                                                  bool corner_armed,
                                                  std::optional<cube::vision::PoseSeed> pose_prior,
                                                  bool run_hand_detector, bool skip_detectors) {
+    CUBE_ZONE_SCOPED_N("scan.analyze");
     QElapsedTimer pass_timer;
     pass_timer.start();
     AnalysisResult result;
@@ -2393,6 +2405,7 @@ void log_slot_decision(const std::string& decision) {
 }  // namespace
 
 void ScanSession::tryCommitConverged() {
+    CUBE_ZONE_SCOPED_N("scan.try_commit_converged");
     // Gate 1 (locked + identity-certain + accept streak) was evaluated on
     // the last analysis pass; without it no window may commit, however
     // converged - identity is the routing key, and an uncertain key is a
@@ -2549,6 +2562,7 @@ QString ScanSession::dropMostSuspectSlot(
 }
 
 void ScanSession::finalizeIfComplete() {
+    CUBE_ZONE_SCOPED_N("scan.finalize_if_complete");
     if (router_.filled_count() < static_cast<int>(cube::model::face_count)) {
         return;
     }
@@ -2622,10 +2636,12 @@ void ScanSession::finalizeIfComplete() {
     // Centers gained identity; progressCenters/progressFacelets listen here.
     emit facesScannedChanged();
 
+    CUBE_MESSAGE("scan.completed");
     emit scanCompleted();
 }
 
 void ScanSession::feedTrackFusion(const AnalysisResult& result) {
+    CUBE_ZONE_SCOPED_N("scan.feed_track_fusion");
     for (const auto& read : result.track_face_samples) {
         // The runner's feed bar, verbatim: a sampled centre (purity > 0)
         // is the "this face was really read" proxy - purity 0 means "not
@@ -2649,6 +2665,7 @@ void ScanSession::feedTrackFusion(const AnalysisResult& result) {
 }
 
 void ScanSession::maybeFinalizeTrackFusion() {
+    CUBE_ZONE_SCOPED_N("scan.finalize_track_fusion");
     // A completed scan stays completed: SolveController owns the flow from
     // scanCompleted on, and further passes must not re-fire it (the poll
     // loop keeps running until the user leaves the scan screen).
@@ -2749,6 +2766,7 @@ void ScanSession::maybeFinalizeTrackFusion() {
     }
     log_slot_decision("fusion assembled sub=" + std::to_string(best.sub_epoch));
     emit facesScannedChanged();
+    CUBE_MESSAGE("scan.completed");
     emit scanCompleted();
 }
 

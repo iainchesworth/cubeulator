@@ -1,5 +1,6 @@
 #include <cube/vision/corner_observation.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/face_grid_fit.hpp>
 
 #include <opencv2/imgproc.hpp>
@@ -379,6 +380,7 @@ using detail::FaceFit;
 }  // namespace
 
 Result<CornerObservation> observe_corner(const cv::Mat& bgr_frame, const CornerHint* hint) {
+    CUBE_ZONE_SCOPED_N("vision.observe_corner");
     if (bgr_frame.empty() || bgr_frame.type() != CV_8UC3) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }

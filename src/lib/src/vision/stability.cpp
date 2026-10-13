@@ -1,5 +1,7 @@
 #include <cube/vision/stability.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -24,6 +26,7 @@ constexpr float kSteadyMotionThreshold = 0.02F;
 }  // namespace
 
 StabilityReading StabilityTracker::update(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("vision.stability.update");
     const cv::Mat current = downscale_grayscale(bgr_frame);
 
     if (previous_frame_.empty()) {

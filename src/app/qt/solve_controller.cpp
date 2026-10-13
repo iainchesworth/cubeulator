@@ -6,6 +6,7 @@
 #include <QtConcurrentRun>
 
 #include <cube/error.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/scan_conversion.hpp>
@@ -73,6 +74,7 @@ QVariantList face_colors(const Cube& cube, Face face) {
 
 // Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
 SteppedSolution solve_stepped(Cube scrambled) {
+    CUBE_ZONE_SCOPED_N("app.solve_stepped");
     const auto solution = solve(scrambled);
     if (solution.has_value()) {
         return SteppedSolution::from(scrambled, *solution);
@@ -97,6 +99,7 @@ SolveController::SolveController(cube::app::ScanSession& scanSession, QObject* p
 }
 
 void SolveController::onScanCompleted() {
+    CUBE_ZONE_SCOPED_N("app.solve.on_scan_completed");
     // Free-form scans arrive pre-assembled: ScanSession only emits
     // scanCompleted once cube::solver::assemble_scanned_faces() has
     // produced a validated Cube, exposed via assembledCube() - consume
@@ -130,11 +133,14 @@ void SolveController::beginSolve(const Cube& scrambled) {
     // completed scan, and the scan screen isn't reachable again until this
     // solve's result has been applied (see AppState.qml).
     isSolving_ = true;
+    CUBE_MESSAGE("solve.started");
     emit stateChanged();
     solveWatcher_.setFuture(QtConcurrent::run(&solve_stepped, scrambled));
 }
 
 void SolveController::applySolveResult() {
+    CUBE_ZONE_SCOPED_N("app.solve.apply_result");
+    CUBE_MESSAGE("solve.finished");
     stepped_ = solveWatcher_.result();
     isSolving_ = false;
     emit solutionChanged();

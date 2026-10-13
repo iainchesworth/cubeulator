@@ -1,5 +1,6 @@
 #include <cube/vision/face_observation.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/grid_detection.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -1112,6 +1113,7 @@ namespace {
 }  // namespace
 
 Result<FaceObservation> observe_face(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("vision.observe_face");
     g_placement_diagnostic = detail::PlacementDiagnostic{};
     if (bgr_frame.empty()) {
         return std::unexpected(CubeError::no_valid_cube_detected);

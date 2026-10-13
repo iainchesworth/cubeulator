@@ -1,5 +1,7 @@
 #include <cube/vision/pipeline/pose_refiner.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <opencv2/calib3d.hpp>
 #include <opencv2/imgproc.hpp>
 
@@ -316,6 +318,7 @@ Measurement measure_edges(const cv::Mat& grey, const cv::Vec3d& rvec, const cv::
 
 PoseRefineResult refine_pose(const cv::Mat& image, const cv::Vec3d& rvec, const cv::Vec3d& tvec,
                              const cv::Matx33d& camera_matrix, const PoseRefineParams& params) {
+    CUBE_ZONE_SCOPED_N("vision.refine_pose");
     PoseRefineResult result;
     if (image.empty()) {
         result.reject_reason = "no-image";

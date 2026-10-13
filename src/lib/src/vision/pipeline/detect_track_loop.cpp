@@ -1,5 +1,6 @@
 #include <cube/vision/pipeline/detect_track_loop.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/pipeline/pose_refiner.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
@@ -60,6 +61,7 @@ cv::Matx33d DetectTrackLoop::camera_matrix_for(cv::Size size) const {
 }
 
 DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("vision.detect_track_loop.process");
     DetectTrackResult result;
     result.reinits = reinits_;
     if (!attached() || bgr_frame.empty()) {

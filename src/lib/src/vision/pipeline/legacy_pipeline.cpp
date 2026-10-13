@@ -1,6 +1,7 @@
 #include <cube/vision/pipeline/legacy_pipeline.hpp>
 
 #include <cube/model/face.hpp>
+#include <cube/profiling.hpp>
 #include <cube/vision/capture_gates.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_observation.hpp>
@@ -92,6 +93,7 @@ cv::Rect quad_bounds(const std::array<cv::Point2f, 4>& quad) {
 }  // namespace
 
 LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
+    CUBE_ZONE_SCOPED_N("pipeline.process");
     LegacyPipelineResult result;
     result.trace.seq = frame.seq;
     result.trace.t_ms = frame.t_ms;
@@ -106,6 +108,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
 
     // --- A. acquire --------------------------------------------------------
     auto stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(acquire_zone, "pipeline.acquire");
     StageTrace acquire;
     acquire.stage = "acquire";
     acquire.ran = true;
@@ -123,12 +126,14 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     acquire.add("intrinsics_calibrated", frame.intrinsics_calibrated);
     acquire.add("motion_score", static_cast<double>(motion_score));
     acquire.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(acquire_zone);
     result.trace.stages.push_back(std::move(acquire));
 
     // --- B. detect ---------------------------------------------------------
     // Seed/hint staleness is decided BEFORE the detector stage, exactly as
     // the live pass samples its one prior at queue time.
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(detect_zone, "pipeline.detect");
     StageTrace detect;
     detect.stage = "detect";
     detect.ran = true;
@@ -231,6 +236,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     detect.add("corner_gated", corner_gated);
     detect.add("corner_hinted", corner_hint.has_value());
     detect.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(detect_zone);
     result.trace.stages.push_back(std::move(detect));
 
     // --- C. track ----------------------------------------------------------
@@ -238,6 +244,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // every richer estimator produced no pose at all. The edge DETECTOR
     // runs inside this stage (see the header's honesty note).
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(track_zone, "pipeline.track");
     StageTrace track_trace;
     track_trace.stage = "track";
     track_trace.ran = true;
@@ -433,6 +440,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
         track_trace.add("refine_residual_after_px", dt.refine_residual_after_px);
     }
     track_trace.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(track_zone);
     result.trace.stages.push_back(std::move(track_trace));
 
     // --- D. faces ----------------------------------------------------------
@@ -440,6 +448,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // where the legacy stack can honestly name it (frontal view of a
     // locked/coasting track). rectified stays empty until Phase 3.
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(faces_zone, "pipeline.faces");
     StageTrace faces_trace;
     faces_trace.stage = "faces";
     faces_trace.ran = true;
@@ -518,6 +527,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
                                          result.faces.faces.begin(), result.faces.faces.end(),
                                          [](const FaceView& v) { return v.capture_grade; })));
     faces_trace.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(faces_zone);
     result.trace.stages.push_back(std::move(faces_trace));
 
     // --- E. cells ----------------------------------------------------------
@@ -525,6 +535,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // no per-cell geometry (edge views). No sub-pixel refinement until
     // Phase 4 (refined_px stays zero).
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(cells_zone, "pipeline.cells");
     StageTrace cells_trace;
     cells_trace.stage = "cells";
     cells_trace.ran = true;
@@ -584,6 +595,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     }
     cells_trace.add("faces_with_cells", static_cast<std::int64_t>(faces_with_cells));
     cells_trace.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(cells_zone);
     result.trace.stages.push_back(std::move(cells_trace));
 
     // --- F. sample ---------------------------------------------------------
@@ -591,6 +603,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // those samples into the stage contract. Only capture-grade views may
     // carry colour (the live pipeline never aggregates pose-only Lab).
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(sample_zone, "pipeline.sample");
     StageTrace sample_trace;
     sample_trace.stage = "sample";
     sample_trace.ran = true;
@@ -647,12 +660,14 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     sample_trace.add("sampled_by",
                      std::string(track_geometry ? "track-rectified" : "legacy-detector"));
     sample_trace.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(sample_zone);
     result.trace.stages.push_back(std::move(sample_trace));
 
     // --- G. classify -------------------------------------------------------
     // Provisional classify_lab naming for sampled faces; the authoritative
     // resolve_colors stays a scan-completion concern (stage I).
     stage_start = Clock::now();
+    CUBE_ZONE_BEGIN(classify_zone, "pipeline.classify");
     StageTrace classify_trace;
     classify_trace.stage = "classify";
     classify_trace.ran = true;
@@ -696,6 +711,7 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     classify_trace.add("session_clusters",
                        static_cast<std::int64_t>(session_palette_.cluster_count()));
     classify_trace.duration_ms = elapsed_ms(stage_start);
+    CUBE_ZONE_END(classify_zone);
     result.trace.stages.push_back(std::move(classify_trace));
 
     // --- H. fuse (app-owned until the routing harness lands) ---------------

@@ -15,6 +15,7 @@
 // enforced here, not hoped for.
 
 #include <cube/model/facelet.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/camera_intrinsics.hpp>
 #include <cube/vision/color_resolution.hpp>
@@ -1204,6 +1205,10 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
         packet.full_size = cv::Size(row.full_w, row.full_h);
         const auto result = pipe.process(packet);
         ++replayed;
+        // One frame mark per replayed frame: a profiling build of this tool is how a
+        // corpus clip gets timed (docs/profiling.md), and the unnamed frame set is
+        // the vision pass.
+        CUBE_FRAME_MARK();
 
         if (const auto problem = pipeline::validate_trace(result.trace)) {
             std::fprintf(stderr, "TRACE VIOLATION: %s\n", problem->c_str());

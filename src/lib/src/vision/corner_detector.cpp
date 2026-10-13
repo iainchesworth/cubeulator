@@ -1,5 +1,7 @@
 #include <cube/vision/corner_detector.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <onnxruntime_cxx_api.h>
 
 #include <opencv2/imgproc.hpp>
@@ -138,6 +140,7 @@ OnnxCornerDetector& OnnxCornerDetector::operator=(OnnxCornerDetector&&) noexcept
 
 Result<std::unique_ptr<OnnxCornerDetector>> OnnxCornerDetector::create(
     const std::filesystem::path& model_path) {
+    CUBE_ZONE_SCOPED_N("vision.corner_detector.create");
     if (!std::filesystem::exists(model_path)) {
         return std::unexpected(CubeError::model_load_failed);
     }
@@ -151,6 +154,7 @@ Result<std::unique_ptr<OnnxCornerDetector>> OnnxCornerDetector::create(
 
 Result<std::unique_ptr<OnnxCornerDetector>> OnnxCornerDetector::create_from_memory(
     const void* model_data, std::size_t model_data_size) {
+    CUBE_ZONE_SCOPED_N("vision.corner_detector.create");
     if (model_data == nullptr || model_data_size == 0) {
         return std::unexpected(CubeError::model_load_failed);
     }
@@ -164,6 +168,7 @@ Result<std::unique_ptr<OnnxCornerDetector>> OnnxCornerDetector::create_from_memo
 
 Result<CornerDetectionResult> OnnxCornerDetector::detect(const cv::Mat& bgr_frame,
                                                          float score_threshold) {
+    CUBE_ZONE_SCOPED_N("vision.corner_detector.detect");
     if (bgr_frame.empty() || bgr_frame.type() != CV_8UC3) {
         return std::unexpected(CubeError::inference_failed);
     }
@@ -192,8 +197,11 @@ Result<CornerDetectionResult> OnnxCornerDetector::detect(const cv::Mat& bgr_fram
             memory_info, input.data(), input.size(), input_shape.data(), input_shape.size());
         const char* input_name = impl_->input_names.front().c_str();
         const char* output_name = impl_->output_names.front().c_str();
-        auto outputs = impl_->session.Run(Ort::RunOptions{nullptr}, &input_name, &input_tensor, 1,
-                                          &output_name, 1);
+        auto outputs = [&] {
+            CUBE_ZONE_SCOPED_N("vision.corner_detector.onnx_run");
+            return impl_->session.Run(Ort::RunOptions{nullptr}, &input_name, &input_tensor, 1,
+                                      &output_name, 1);
+        }();
 
         const auto info = outputs.front().GetTensorTypeAndShapeInfo();
         const auto shape = info.GetShape();

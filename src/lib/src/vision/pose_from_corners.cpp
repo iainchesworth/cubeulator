@@ -1,5 +1,6 @@
 #include <cube/vision/pose_from_corners.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/vision/pose_estimation.hpp>
 
 #include <opencv2/calib3d.hpp>
@@ -12,6 +13,7 @@ namespace cube::vision {
 Result<CornerPnpResult> estimate_pose_from_corners(
     const CornerDetectionResult& detection, cv::Size frame_size, float min_confidence,
     const std::optional<cv::Matx33d>& camera_matrix) {
+    CUBE_ZONE_SCOPED_N("vision.estimate_pose_from_corners");
     std::vector<cv::Point3f> model_points;
     std::vector<cv::Point2f> image_points;
     for (int id = 0; id < 8; ++id) {

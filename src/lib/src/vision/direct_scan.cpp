@@ -1,6 +1,7 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/temporal_fusion.hpp>
@@ -488,6 +489,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 }  // namespace
 
 std::optional<SideRead> read_side(const cv::Mat& bgr) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
     if (bgr.empty() || bgr.type() != CV_8UC3) {
         return std::nullopt;
     }

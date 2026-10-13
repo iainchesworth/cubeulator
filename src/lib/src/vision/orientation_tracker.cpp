@@ -1,5 +1,7 @@
 #include <cube/vision/orientation_tracker.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
@@ -119,6 +121,7 @@ void OrientationTracker::to_lost() noexcept {
 }
 
 TrackerPassOutput OrientationTracker::on_pass(const TrackerPassInput& input) {
+    CUBE_ZONE_SCOPED_N("vision.orientation_tracker.on_pass");
     TrackerPassOutput out;
 
     const bool had_time = has_pass_time_;

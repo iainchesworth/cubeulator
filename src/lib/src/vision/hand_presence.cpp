@@ -1,5 +1,7 @@
 #include <cube/vision/hand_presence.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <onnxruntime_cxx_api.h>
 
 #include <opencv2/imgproc.hpp>
@@ -107,6 +109,7 @@ OnnxHandPresenceDetector& OnnxHandPresenceDetector::operator=(OnnxHandPresenceDe
 Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::create(
     const std::filesystem::path& model_path,
     const std::vector<std::string>& /*execution_providers*/) {
+    CUBE_ZONE_SCOPED_N("vision.hand_presence.create");
     if (!std::filesystem::exists(model_path)) {
         return std::unexpected(CubeError::model_load_failed);
     }
@@ -122,6 +125,7 @@ Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::crea
 Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::create_from_memory(
     const void* model_data, std::size_t model_data_size,
     const std::vector<std::string>& /*execution_providers*/) {
+    CUBE_ZONE_SCOPED_N("vision.hand_presence.create");
     if (model_data == nullptr || model_data_size == 0) {
         return std::unexpected(CubeError::model_load_failed);
     }
@@ -135,6 +139,7 @@ Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::crea
 }
 
 Result<bool> OnnxHandPresenceDetector::hand_present(const cv::Mat& bgr_frame) {
+    CUBE_ZONE_SCOPED_N("vision.hand_presence.detect");
     if (bgr_frame.empty()) {
         return std::unexpected(CubeError::inference_failed);
     }
@@ -160,9 +165,12 @@ Result<bool> OnnxHandPresenceDetector::hand_present(const cv::Mat& bgr_frame) {
     }
 
     try {
-        auto outputs =
-            impl_->session.Run(Ort::RunOptions{nullptr}, input_name_ptrs.data(), &input_tensor, 1,
-                               output_name_ptrs.data(), output_name_ptrs.size());
+        auto outputs = [&] {
+            CUBE_ZONE_SCOPED_N("vision.hand_presence.onnx_run");
+            return impl_->session.Run(Ort::RunOptions{nullptr}, input_name_ptrs.data(),
+                                      &input_tensor, 1, output_name_ptrs.data(),
+                                      output_name_ptrs.size());
+        }();
 
         // The confidence tensor is whichever output has a trailing dimension
         // of 1 (the box+landmark tensor's trailing dimension is 18) - this
