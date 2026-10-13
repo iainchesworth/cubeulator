@@ -49,7 +49,10 @@ beginner (layer-by-layer) method - cross, white corners, middle edges,
 first two layers are found by targeted per-piece search; the last layer
 composes the standard 2-look algorithms (edge flip, Sune, A-perm, U-perm),
 which keeps every solve bounded to seconds for interactive mobile use (see
-`src/lib/src/solver/`). `cube::vision` runs a full OpenCV capture-to-state
+`src/lib/src/solver/`). The stages' moves are then tidied in one linear pass,
+so no two neighbouring moves turn the same side - including across a stage
+boundary, where a stage can end up with no moves at all
+(`merge_adjacent_moves`). `cube::vision` runs a full OpenCV capture-to-state
 pipeline - a RANSAC-style lattice fit for grid detection (tolerant of
 uneven lighting, background clutter, and a minority of missed/occluded
 cells, not just a clean dead-on shot), colour classification,
