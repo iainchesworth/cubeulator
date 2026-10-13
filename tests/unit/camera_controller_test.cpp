@@ -74,7 +74,8 @@ TEST_CASE("The preview is mirrored for every camera but a rear one", "[qt][contr
     REQUIRE_FALSE(CameraController::previewMirroredFor(Facing::rear));
 }
 
-TEST_CASE("CameraController mirrors the preview until a camera says otherwise", "[qt][controllers]") {
+TEST_CASE("CameraController mirrors the preview until a camera says otherwise",
+          "[qt][controllers]") {
     // Nothing selected yet, which is how the scan screen first appears on a
     // desktop with a webcam: the default is the mirror.
     CameraController controller;
