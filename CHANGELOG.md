@@ -8,6 +8,17 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The system tests no longer take over the desktop they are run from. The
+  committed test presets exclude the `system` label, so a plain
+  `ctest --preset <preset>` never opens a window; the suite is run with the
+  matching `<preset>-system` preset (CI's system legs use it). Where the
+  platform allows it (`CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW`, Windows today) the
+  window the suite drives is fully transparent, click-through and never
+  activated - still shown, exposed and rendered, and no longer holding the
+  foreground for the length of a run - and `CUBE_SYSTEM_TEST_VISIBLE=1` puts it
+  back on the desktop to watch a case
+  ([docs/testing.md](docs/testing.md#system-tests)).
+
 - Platform isolation: the operating system is now decided in one place
   (`cmake/Platform.cmake`) and everything a platform contributes - sources,
   libraries, defines, deploy and packaging steps - is declared in

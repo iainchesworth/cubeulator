@@ -26,4 +26,10 @@ inline constexpr std::string_view display_variables =
 // test binary.
 inline constexpr std::string_view display_help = "@CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP@";
 
+// Whether a test that draws the real app makes its window invisible to the
+// developer (transparent, click-through, never activated), so a run does not
+// flick windows across the desktop it is run from or take the keyboard. Where
+// it is false the window is shown as any window is.
+inline constexpr bool hide_window = @CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW_CXX@;
+
 }  // namespace cube::test::platform
