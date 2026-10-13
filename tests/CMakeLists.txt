@@ -200,6 +200,7 @@ if(CUBEULATOR_BUILD_APP)
         qt_test_main.cpp
         unit/camera_controller_test.cpp
         unit/direct_scan_controller_test.cpp
+        unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
         unit/scan_session_test.cpp
         unit/scan_session_binding_test.cpp
@@ -233,6 +234,8 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qml_tests
         qml_test_main.cpp
         unit/cube_view_test.cpp
+        unit/direct_scan_screen_test.cpp
+        unit/solve_camera_inset_test.cpp
         unit/solve_screen_gallery_test.cpp
         unit/solve_screen_test.cpp)
 
