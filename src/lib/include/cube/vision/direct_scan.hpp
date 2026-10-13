@@ -46,9 +46,33 @@ struct SideRead {
 // width are reduced first, so the cost does not grow with camera resolution.
 [[nodiscard]] std::optional<SideRead> read_side(const cv::Mat& bgr);
 
+// A read counts only if the side has been held still: its centre sticker
+// within this fraction of a sticker spacing of where the frame before had it.
+// A side still moving is blurred, and its colours are not to be trusted.
+inline constexpr float kSteadyFraction = 0.12F;
+[[nodiscard]] bool held_still(const SideRead& read, const cv::Point2f& previous_centre);
+
 // Display colour for a fused Lab sample (8-bit BGR), for showing the user
 // what was read before the colours have been named.
 [[nodiscard]] cv::Vec3b lab_to_bgr(const cv::Vec3f& lab);
+
+// How far apart two sticker colours are (float CIELAB in, Lab units out),
+// with lightness and chroma counted for a quarter of what hue is: shading
+// moves the first two and leaves hue alone, so a sticker in shadow stays
+// close to its own colour.
+[[nodiscard]] float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b);
+
+// What each of the six sticker colours measured during one scan, indexed by
+// solver::Color. Anything read later in the same session is compared with
+// these and not with any idea of what "red" ought to measure: the camera and
+// the light decide that, and they differ from one session to the next.
+using SessionColours = std::array<cv::Vec3f, 6>;
+
+// A finished scan: the cube, and the colours it was read in.
+struct ScannedCube {
+    solver::Cube cube;
+    SessionColours colours{};
+};
 
 // Accumulates reads over one scan and reports the sides seen so far and,
 // once six are in, the cube.
@@ -89,6 +113,10 @@ public:
     // no_valid_cube_detected or invalid_cube_state while they do not yet
     // make one (a misread side, or the same side captured twice).
     [[nodiscard]] Result<solver::Cube> cube() const;
+    // The same, with what each colour measured: the median over the nine
+    // stickers of that colour, so one odd sticker (a logo on a centre) does
+    // not stand for its colour.
+    [[nodiscard]] Result<ScannedCube> scanned() const;
 
 private:
     struct Group {

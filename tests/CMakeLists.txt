@@ -45,6 +45,7 @@ add_executable(cube_unit_tests
     unit/pose_from_corners_test.cpp
     unit/camera_intrinsics_test.cpp
     unit/direct_scan_test.cpp
+    unit/held_cube_test.cpp
     unit/color_classification_test.cpp
     unit/stability_test.cpp
     unit/auto_advance_test.cpp
@@ -199,6 +200,7 @@ if(CUBEULATOR_BUILD_APP)
         qt_test_main.cpp
         unit/camera_controller_test.cpp
         unit/direct_scan_controller_test.cpp
+        unit/held_cube_controller_test.cpp
         unit/scan_session_test.cpp
         unit/scan_session_binding_test.cpp
         unit/settings_model_test.cpp
@@ -231,6 +233,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qml_tests
         qml_test_main.cpp
         unit/cube_view_test.cpp
+        unit/solve_screen_gallery_test.cpp
         unit/solve_screen_test.cpp)
 
     target_link_libraries(cube_qml_tests
