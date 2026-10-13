@@ -9,13 +9,13 @@ taken, see below.**
 > ships on the desktop (direct download, Linux packages) and, when mobile
 > capture exists, Google Play and F-Droid. This is Option A below. Nothing in
 > the build or the notices changes: the Apple-store question stays open in
-> [`LICENSE-NOTE.md`](../LICENSE-NOTE.md) and returns when an Apple store
+> [`LICENSE-NOTE.md`](https://github.com/iainchesworthlabs/cubeulator/blob/main/LICENSE-NOTE.md) and returns when an Apple store
 > becomes a goal. It is the only reason a Qt commercial licence (Option B)
 > would be needed.
 
 This is an engineering inventory and a decision paper. It is not legal advice,
 it does not change Cubeulator's licence (GPL-3.0-or-later), and it does not
-settle the question [`LICENSE-NOTE.md`](../LICENSE-NOTE.md) leaves open. That
+settle the question [`LICENSE-NOTE.md`](https://github.com/iainchesworthlabs/cubeulator/blob/main/LICENSE-NOTE.md) leaves open. That
 decision is Iain's.
 
 How to read the evidence marks:
