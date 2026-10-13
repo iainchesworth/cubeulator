@@ -47,10 +47,6 @@ constexpr float kMaxLatticeRms = 0.12F;
 // Half-width of the sampled patch, in sticker spacings.
 constexpr float kPatchHalfWidth = 0.22F;
 
-// A read counts only if the lattice centre moved less than this fraction of
-// a sticker spacing since the previous frame.
-constexpr float kSteadyFraction = 0.12F;
-
 // Two reads are the same side when their nine colours agree this closely
 // under some quarter-turn. Recorded scans give the same cube anywhere from
 // 4 to 26, so the value is not delicate.
@@ -332,18 +328,6 @@ struct Lattice {
     return median;
 }
 
-// Lab distance with the shading-carried axes (lightness, chroma) weighted
-// down and the hue residual kept whole.
-[[nodiscard]] float colour_distance(const cv::Vec3f& p, const cv::Vec3f& q) {
-    const float d_lightness = p[0] - q[0];
-    const float d_chroma = std::hypot(p[1], p[2]) - std::hypot(q[1], q[2]);
-    const float d_a = p[1] - q[1];
-    const float d_b = p[2] - q[2];
-    const float hue_squared = std::max(d_a * d_a + d_b * d_b - d_chroma * d_chroma, 0.0F);
-    return std::sqrt(kShadingWeight * (d_lightness * d_lightness + d_chroma * d_chroma) +
-                     hue_squared);
-}
-
 // Mean cell distance between a read and a side under the read's best
 // quarter-turn, and that turn.
 [[nodiscard]] std::pair<float, int> side_distance(const std::array<cv::Vec3f, 9>& read,
@@ -389,6 +373,54 @@ struct Lattice {
 
 using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 
+[[nodiscard]] std::optional<solver::Color> solver_colour(model::FacetColor colour) {
+    switch (colour) {
+        case model::FacetColor::white:
+            return solver::Color::White;
+        case model::FacetColor::yellow:
+            return solver::Color::Yellow;
+        case model::FacetColor::red:
+            return solver::Color::Red;
+        case model::FacetColor::orange:
+            return solver::Color::Orange;
+        case model::FacetColor::green:
+            return solver::Color::Green;
+        case model::FacetColor::blue:
+            return solver::Color::Blue;
+        case model::FacetColor::unknown:
+            break;
+    }
+    return std::nullopt;
+}
+
+// What each colour measured, given the naming that made the cube: the
+// per-channel median over every sticker given that name.
+[[nodiscard]] SessionColours colours_of(const NamedSides& named,
+                                        const std::array<CapturedFace, 6>& faces) {
+    std::array<std::array<std::vector<float>, 3>, 6> samples;
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            const auto colour = solver_colour(named[side][cell].color);
+            if (!colour.has_value()) {
+                continue;
+            }
+            for (std::size_t channel = 0; channel < 3; ++channel) {
+                samples[static_cast<std::size_t>(*colour)][channel].push_back(
+                    faces[side].lab[cell][static_cast<int>(channel)]);
+            }
+        }
+    }
+    SessionColours colours{};
+    for (std::size_t colour = 0; colour < 6; ++colour) {
+        for (std::size_t channel = 0; channel < 3; ++channel) {
+            if (!samples[colour][channel].empty()) {
+                colours[colour][static_cast<int>(channel)] = median_of(samples[colour][channel]);
+            }
+        }
+    }
+    return colours;
+}
+
 // Assembles the cube, letting physical validity settle which colour is which
 // where colour alone cannot.
 //
@@ -404,14 +436,14 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 // opposite pair, three exchanges assemble: the true one, and two that name a
 // valid cube wrongly. The pair that really was confused is the pair that
 // looks alike, so the exchange between the closest two colours wins.
-[[nodiscard]] Result<solver::Cube> assemble(const NamedSides& named,
-                                            const std::array<CapturedFace, 6>& faces) {
+[[nodiscard]] Result<ScannedCube> assemble(const NamedSides& named,
+                                           const std::array<CapturedFace, 6>& faces) {
     const Result<solver::Cube> direct = solver::assemble_scanned_faces(named);
     if (direct.has_value()) {
-        return direct;
+        return ScannedCube{*direct, colours_of(named, faces)};
     }
 
-    Result<solver::Cube> best = direct;
+    Result<ScannedCube> best = std::unexpected(direct.error());
     float best_distance = std::numeric_limits<float>::max();
     for (std::size_t a = 0; a < 6; ++a) {
         for (std::size_t b = a + 1; b < 6; ++b) {
@@ -432,9 +464,9 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
                     }
                 }
             }
-            if (Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
+            if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
                 cube.has_value()) {
-                best = std::move(cube);
+                best = ScannedCube{*cube, colours_of(exchanged, faces)};
                 best_distance = distance;
             }
         }
@@ -490,6 +522,20 @@ std::optional<SideRead> read_side(const cv::Mat& bgr) {
     return read;
 }
 
+float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
+    const float d_lightness = a[0] - b[0];
+    const float d_chroma = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
+    const float d_a = a[1] - b[1];
+    const float d_b = a[2] - b[2];
+    const float hue_squared = std::max(d_a * d_a + d_b * d_b - d_chroma * d_chroma, 0.0F);
+    return std::sqrt(kShadingWeight * (d_lightness * d_lightness + d_chroma * d_chroma) +
+                     hue_squared);
+}
+
+bool held_still(const SideRead& read, const cv::Point2f& previous_centre) {
+    return length(read.centres[4] - previous_centre) < kSteadyFraction * read.pitch;
+}
+
 cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
     const cv::Mat3f source(1, 1, lab);
     cv::Mat3f bgr;
@@ -511,10 +557,8 @@ void SideScan::add(const std::optional<SideRead>& read) {
         previous_centre_.reset();
         return;
     }
-    const cv::Point2f centre = read->centres[4];
-    const bool steady = previous_centre_.has_value() &&
-                        length(centre - *previous_centre_) < kSteadyFraction * read->pitch;
-    previous_centre_ = centre;
+    const bool steady = previous_centre_.has_value() && held_still(*read, *previous_centre_);
+    previous_centre_ = read->centres[4];
     if (!steady) {
         return;
     }
@@ -582,6 +626,10 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
 }
 
 Result<solver::Cube> SideScan::cube() const {
+    return scanned().transform([](const ScannedCube& scanned) { return scanned.cube; });
+}
+
+Result<ScannedCube> SideScan::scanned() const {
     const std::vector<std::size_t> captured = captured_by_support();
     if (captured.size() < 6) {
         return std::unexpected(CubeError::face_capture_incomplete);

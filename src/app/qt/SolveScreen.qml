@@ -1,6 +1,12 @@
 import QtQuick
 import Cubeulator
 
+// The solve screen: the cube as it stands, in 3D, with the layer the next
+// move turns nudging the way it has to go.
+//
+// The cube on screen is the cube in the hand: never mirrored, and turned the
+// way the hold line at the top says it is held. Every move is shown on it by
+// moving the layer itself, so nobody has to read notation to follow along.
 Rectangle {
     id: root
     color: Theme.paper
@@ -15,10 +21,14 @@ Rectangle {
         { title: "White cross", detail: "Bring the four white edges home, matching each side centre." },
         { title: "White corners", detail: "Insert the four white corners to complete the first layer." },
         { title: "Middle layer", detail: "Send the middle-layer edges home." },
-        { title: "Orient last layer", detail: "Orient the last layer's edges and corners so the top face reads solid." },
+        { title: "Orient last layer", detail: "Orient the last layer's edges and corners so the top side reads solid." },
         { title: "Permute last layer", detail: "Permute the last layer's pieces into their solved positions." }
     ]
+    readonly property var currentCopy: stageCopy[SolveController.currentStageIndex]
 
+    // Theme's sticker palette is keyed by colour, under names left over from
+    // a white-on-top scheme: faceU is white, faceD yellow, faceL orange,
+    // faceR red.
     function colorHex(name) {
         switch (name) {
         case "White": return Theme.faceU;
@@ -30,20 +40,465 @@ Rectangle {
         }
         return Theme.paper;
     }
-    function colorsHex(names) {
-        var out = [];
-        for (var i = 0; i < names.length; i++)
-            out.push(colorHex(names[i]));
+
+    // SolveController.stickers with each colour name swapped for its colour:
+    // what the 3D cube is painted from.
+    function painted(stickers) {
+        var out = {};
+        for (var side in stickers) {
+            var names = stickers[side];
+            var colors = [];
+            for (var i = 0; i < names.length; i++)
+                colors.push(colorHex(names[i]));
+            out[side] = colors;
+        }
         return out;
     }
 
-    property real arrowOpacity: 1.0
-    SequentialAnimation on arrowOpacity {
-        loops: Animation.Infinite
-        NumberAnimation { from: 0.3; to: 1.0; duration: 800; easing.type: Easing.InOutQuad }
-        NumberAnimation { from: 1.0; to: 0.3; duration: 800; easing.type: Easing.InOutQuad }
+    readonly property bool guiding: !SolveController.isSolving && !SolveController.atEnd
+
+    // A side is named by the colour of its centre, which never moves.
+    function centreColor(side) { return SolveController.stickers[side][4]; }
+
+    // How the cube is held, in words: every move is shown on the cube as
+    // held this way. An instruction until the camera has seen the cube, a
+    // statement of what it saw after.
+    readonly property string holdWords: (HeldCube.seen ? "Holding " : "Hold ")
+        + centreColor(HeldCube.up).toLowerCase() + " on top, "
+        + centreColor(HeldCube.front).toLowerCase() + " facing you"
+
+    // ---- the camera -----------------------------------------------------------
+    // The solve screen keeps the camera to see how the cube is held. A side
+    // held square to it is matched against the cube as it should stand, and
+    // the cube on screen turns to match the one in the hand.
+    readonly property color good: "#3FE05A"
+    readonly property color sightColor: {
+        switch (HeldCube.sight) {
+        case "matched": return good;
+        case "unsure": return "#FFB347";
+        case "wrong":
+        case "unknown": return Theme.accent;
+        }
+        return Theme.divider;
+    }
+    readonly property string cameraWords: {
+        if (DirectScan.cameraError !== "")
+            return "Camera unavailable";
+        if (DirectScan.frameSeq === 0)
+            return DirectScan.starting ? "Starting the camera…" : "";
+        if (!DirectScan.complete)
+            return ""; // no scan, so nothing to match a side against
+        switch (HeldCube.sight) {
+        case "matched":
+            if (!guiding)
+                return "Matched to your cube";
+            // The side facing the holder is the one side the camera never
+            // sees change; say so rather than leave them waiting.
+            return movePlace === "front"
+                ? "Matched. The camera cannot see the side facing you: press Next after this move."
+                : "Matched. Make the move and it steps on by itself.";
+        case "unsure": return "That side looks the same turned. Show another to tell which way up.";
+        case "wrong": return "Not the move that was asked for";
+        case "unknown": return "Not the side that was expected";
+        }
+        return HeldCube.seen ? "Show a side again if you turn the cube over"
+                             : "Hold any side square to the camera and the cube here turns to match";
     }
 
+    // What the camera makes of a cube that is not as the solution has it.
+    // When one turn explains what it sees, the side that was turned is
+    // named; otherwise all it can say is that something is off. Either way
+    // the buttons still step, and the solution does not move by itself.
+    readonly property string mistakeTitle: HeldCube.sight === "wrong" ? "That was not the move"
+        : HeldCube.sight === "unknown" ? "That side is not expected" : ""
+    readonly property string mistakeWords: {
+        if (HeldCube.sight === "wrong") {
+            var side = HeldCube.wrongSide;
+            var name = "The " + centreColor(side).toLowerCase() + " side";
+            if (side === moveSide)
+                return name + " was turned, but not the way shown. Turn it back and try again.";
+            return name + " (" + placeWords[HeldCube.places[side]].toLowerCase()
+                + ") was turned instead. Turn it back, then make the move shown.";
+        }
+        if (HeldCube.sight === "unknown")
+            return "The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan.";
+        return "";
+    }
+
+    // The camera has seen the move made: take the step without being asked.
+    // If a press got there first and the layer is already turning, that
+    // turn is this move - a second step would be one too many.
+    Connections {
+        target: HeldCube
+        function onMoveSeen() {
+            moveSeenNote.restart();
+            if (root.pendingStep === 0)
+                root.next();
+        }
+    }
+
+    readonly property string moveSide: guiding ? SolveController.currentMoveFace : ""
+    readonly property string moveColor: moveSide !== "" ? centreColor(moveSide) : ""
+    // Where that side is for the person holding the cube: "top", "bottom",
+    // "left", "right", "front", "back", or "" when there is no move.
+    readonly property string movePlace: moveSide !== "" ? HeldCube.places[moveSide] : ""
+    readonly property var placeWords: ({
+        top: "Top", bottom: "Bottom", left: "Left side", right: "Right side", front: "Front", back: "Back"
+    })
+    readonly property string moveWords: {
+        if (moveSide === "")
+            return "";
+        return placeWords[movePlace] + " · "
+            + (SolveController.currentMoveTurns === 2 ? "half turn" : "quarter turn");
+    }
+
+    // ---- where the cube is looked at from ------------------------------------
+    // Normally from above and to the right, which shows the top, the front
+    // and the right side - and two of the three rows of stickers round the
+    // left and bottom layers, enough to see those turn. The back layer is
+    // the one that turns out of sight, so a move on the back swings the
+    // view round behind the cube, and it swings home afterwards. It is the
+    // view that turns: the cube in the hand stays as it is, and the screen
+    // says so while it is turned.
+    readonly property var views: ({
+        home: { pitch: 24, yaw: -32, words: "" },
+        back: { pitch: 24, yaw: -140, words: "Seen from behind" }
+    })
+    readonly property var view: views[movePlace] || views.home
+    readonly property bool viewTurned: view.words !== ""
+    // The note's words outlast the turn, so it does not empty as it fades.
+    property string viewNoteWords: view.words
+    onViewChanged: if (viewTurned) viewNoteWords = view.words
+
+    // ---- stepping ----------------------------------------------------------
+    // A step is shown before it is taken: the layer turns all the way on
+    // screen, and when it lands the solution moves on and the cube is
+    // repainted as it now stands - which, the turn having been the right
+    // one, changes nothing on screen.
+    property int pendingStep: 0
+
+    function next() {
+        if (SolveController.isSolving)
+            return;
+        cube.finishPlaying(); // a turn still in flight lands first
+        if (SolveController.atEnd)
+            return;
+        pendingStep = 1;
+        cube.playMove(SolveController.currentMoveFace, SolveController.currentMoveTurns);
+    }
+
+    function previous() {
+        if (SolveController.isSolving)
+            return;
+        cube.finishPlaying();
+        if (SolveController.atStart)
+            return;
+        // Going back is the last move undone.
+        var last = SolveController.moves[SolveController.moveIndex - 1];
+        pendingStep = -1;
+        cube.playMove(last.face, 4 - last.turns);
+    }
+
+    Connections {
+        target: cube
+        function onMovePlayed() {
+            var step = root.pendingStep;
+            root.pendingStep = 0;
+            if (step > 0)
+                SolveController.nextMove();
+            else if (step < 0)
+                SolveController.previousMove();
+        }
+    }
+
+    // The cube is solved: on to the screen that says so. Only the button does
+    // this - a key held down to step quickly must not run off the end of the
+    // solution and out of the screen.
+    function finish() {
+        if (SolveController.atEnd && !SolveController.isSolving)
+            AppState.screen = "complete";
+    }
+
+    // Hands are on the cube, not the mouse.
+    focus: true
+    Component.onCompleted: forceActiveFocus()
+    Keys.onRightPressed: next()
+    Keys.onSpacePressed: next()
+    Keys.onReturnPressed: next()
+    Keys.onLeftPressed: previous()
+
+    // ---- header -------------------------------------------------------------
+    Item {
+        id: header
+        width: parent.width
+        height: 44
+
+        // Every move is named for a side as held this way; without it the
+        // moves mean nothing.
+        Text {
+            anchors.left: parent.left; anchors.leftMargin: Theme.space3
+            anchors.right: progress.left
+            // Wide, the way-out button sits between this and the count.
+            anchors.rightMargin: Theme.space3 + (root.wide ? leave.width + Theme.space3 : 0)
+            anchors.verticalCenter: parent.verticalCenter
+            text: root.holdWords
+            elide: Text.ElideRight
+            font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink
+        }
+        Text {
+            id: progress
+            anchors.right: parent.right; anchors.rightMargin: Theme.space3
+            anchors.verticalCenter: parent.verticalCenter
+            text: (root.wide ? AppState.elapsedLabel() + " · " : "")
+                + SolveController.moveIndex + "/" + SolveController.totalMoves
+            font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink
+        }
+        Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
+    }
+
+    // ---- the cube -----------------------------------------------------------
+    Item {
+        id: stage
+        anchors.top: header.bottom
+        anchors.left: parent.left
+        width: root.wide ? parent.width - panel.width : parent.width
+        height: root.wide ? parent.height - header.height
+                          : Math.max(230, Math.min(parent.width, (parent.height - header.height) * 0.55))
+
+        Cube3DView {
+            id: cube
+            // Narrow, the note about a turned view sits under the cube, so
+            // room is kept for it there; wide, it sits in a corner the cube
+            // does not reach.
+            readonly property real noteRoom: root.wide ? 0 : 64
+            readonly property real side: Math.min(parent.width, parent.height - noteRoom) * (root.wide ? 0.86 : 0.94)
+            width: side; height: side
+            anchors.centerIn: parent
+            anchors.verticalCenterOffset: root.wide ? 6 : 14 - noteRoom / 2
+
+            // Drag it to look round the back; let go and it comes home. The
+            // layer about to move keeps nudging all the while.
+            interactive: true
+            dragTurnsView: true
+            autoRotate: false
+            HoverHandler { cursorShape: cube.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor }
+            // The colours here are matched against a real cube.
+            evenLight: true
+            shaderStyle: SettingsState.shaderStyleIndex
+            showStats: SettingsState.statsForNerds
+
+            objectName: "solve.cube"
+
+            // Turned the way the cube is held, and seen from wherever shows
+            // the side about to move.
+            homeRotation: Qt.vector3d(0, 0, 0)
+            holdRotation: HeldCube.rotation
+            viewPitch: root.view.pitch
+            viewYaw: root.view.yaw
+
+            faceletColors: root.painted(SolveController.stickers)
+            guideFace: root.moveSide
+            guideTurns: SolveController.currentMoveTurns
+        }
+
+        Column {
+            anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space4
+            spacing: 4
+
+            Text {
+                text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length
+                color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
+            }
+            Text {
+                text: SolveController.atEnd ? "Solved" : SolveController.currentMoveNotation
+                font.family: Theme.fontMono; font.pixelSize: root.wide ? 30 : 22; font.letterSpacing: 1
+                color: Theme.ink
+            }
+            // The move in words: which side, named by where it is and by the
+            // colour of its centre, and how far.
+            Row {
+                visible: root.moveWords !== ""
+                spacing: Theme.space2
+                Rectangle {
+                    width: 14; height: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    color: root.colorHex(root.moveColor)
+                    border.width: 1; border.color: Theme.divider
+                }
+                Text {
+                    text: root.moveWords
+                    font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.DemiBold
+                    color: Theme.ink
+                }
+            }
+        }
+
+        // That the cube can be picked up and looked round is not obvious
+        // from a cube that is busy showing a move.
+        Text {
+            visible: root.wide
+            anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
+            text: "Drag the cube to look round it"
+            font.family: Theme.fontHeading; font.pixelSize: 11
+            color: Theme.inkMuted(0.5)
+        }
+
+        // What the camera sees, small, with a dot on each sticker of the side
+        // it has found. Not mirrored: it is the far side of the cube, seen
+        // from where the camera is.
+        Column {
+            id: inset
+            visible: AppState.solveCamera
+            anchors.top: parent.top; anchors.right: parent.right
+            anchors.margins: Theme.space4
+            width: root.wide ? 176 : 112
+            spacing: Theme.space1
+
+            readonly property real frameAspect: DirectScan.frameWidth > 0
+                ? DirectScan.frameHeight / DirectScan.frameWidth : 9 / 16
+            readonly property var points: DirectScan.stickerPoints
+
+            Rectangle {
+                id: preview
+                width: parent.width
+                height: Math.round(width * inset.frameAspect)
+                color: "#141312"
+                border.width: 2
+                border.color: root.sightColor
+                Behavior on border.color { ColorAnimation { duration: 180 } }
+
+                Image {
+                    id: previewImage
+                    anchors.fill: parent; anchors.margins: 2
+                    fillMode: Image.Stretch
+                    cache: false
+                    // Nothing to show until the camera has delivered a frame.
+                    source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
+                }
+                Repeater {
+                    model: 9
+                    delegate: Rectangle {
+                        readonly property bool found: inset.points.length === 9
+                        readonly property var point: found ? inset.points[index] : Qt.point(0, 0)
+                        visible: found && DirectScan.frameWidth > 0
+                        width: 6; height: 6; radius: 3
+                        x: previewImage.x + point.x * previewImage.width / Math.max(1, DirectScan.frameWidth) - width / 2
+                        y: previewImage.y + point.y * previewImage.height / Math.max(1, DirectScan.frameHeight) - height / 2
+                        color: HeldCube.sight === "matched" ? root.good : "#FFD21F"
+                    }
+                }
+                // The camera saw the move made.
+                Rectangle {
+                    id: moveSeenFlash
+                    anchors.fill: parent
+                    color: root.good
+                    opacity: 0
+                    SequentialAnimation {
+                        id: moveSeenNote
+                        NumberAnimation { target: moveSeenFlash; property: "opacity"; to: 0.55; duration: 90 }
+                        NumberAnimation { target: moveSeenFlash; property: "opacity"; to: 0; duration: 420 }
+                    }
+                }
+            }
+            Text {
+                width: parent.width
+                visible: text !== ""
+                text: root.cameraWords
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignRight
+                font.family: Theme.fontHeading; font.pixelSize: 11
+                color: HeldCube.sight === "unknown" ? Theme.accent : Theme.inkMuted(0.75)
+            }
+        }
+
+        // The view has turned to show a side that faces away. Said plainly,
+        // because a cube turning on screen looks like an instruction to turn
+        // the one in the hand.
+        Column {
+            id: notes
+            anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
+            width: parent.width - 2 * Theme.space4
+            spacing: Theme.space2
+
+        // The cube is not as the solution has it. Says what the camera
+        // made of it, and offers the way back.
+        Rectangle {
+            id: mistakeNote
+            visible: root.mistakeTitle !== ""
+            width: Math.min(380, parent.width)
+            height: mistakeNoteText.implicitHeight + 2 * Theme.space2
+            color: Theme.accent100
+            border.width: 1; border.color: Theme.accent
+            Rectangle { width: 4; height: parent.height; color: Theme.accent }
+            Column {
+                id: mistakeNoteText
+                x: Theme.space3 + 4; y: Theme.space2
+                width: parent.width - 2 * Theme.space3 - 4
+                spacing: 2
+                Text {
+                    text: root.mistakeTitle
+                    font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.ExtraBold
+                    color: Theme.accent
+                }
+                Text {
+                    width: parent.width
+                    text: root.mistakeWords
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: Theme.ink
+                }
+                AppButton {
+                    objectName: "solve.rescanFromNote"
+                    height: 30
+                    variant: "ghost"; text: "Rescan the cube and carry on from there"
+                    onClicked: AppState.rescan()
+                }
+            }
+        }
+
+        Rectangle {
+            id: viewNote
+            width: Math.min(viewNoteText.implicitWidth + 2 * Theme.space3, parent.width)
+            height: viewNoteText.implicitHeight + 2 * Theme.space2
+            color: Theme.accent100
+            border.width: 1; border.color: Theme.accent
+            opacity: root.viewTurned ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+
+            Column {
+                id: viewNoteText
+                x: Theme.space3; y: Theme.space2
+                spacing: 2
+                Text {
+                    text: root.viewNoteWords
+                    font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.ExtraBold
+                    color: Theme.ink
+                }
+                Text {
+                    text: "Only the view has turned. Keep your cube as it is."
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: Theme.inkMuted(0.75)
+                }
+            }
+        }
+        }
+
+        Rectangle {
+            visible: root.wide
+            anchors.right: parent.right
+            width: 2; height: parent.height
+            color: Theme.divider
+        }
+        Rectangle {
+            visible: !root.wide
+            anchors.bottom: parent.bottom
+            width: parent.width; height: 2
+            color: Theme.divider
+        }
+    }
+
+    // ---- stages and stepping -------------------------------------------------
     Component {
         id: stepRow
         Rectangle {
@@ -110,181 +565,107 @@ Rectangle {
         }
     }
 
-    // ---- narrow: fixed animation pane + drawer ----
-    Column {
-        visible: !root.wide
-        anchors.fill: parent
+    Item {
+        id: panel
+        x: root.wide ? stage.width : 0
+        y: root.wide ? stage.y : stage.y + stage.height
+        width: root.wide ? 320 : parent.width
+        height: parent.height - y
 
-        Row {
+        // Wide: every stage, the current one opened out.
+        Column {
+            visible: root.wide
+            anchors.top: parent.top; anchors.bottom: buttons.top
             width: parent.width
-            padding: Theme.space3
+
             Text {
-                text: "⌚ " + AppState.elapsedLabel()
-                font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink
-                width: parent.width - 100
+                width: parent.width
+                padding: Theme.space3
+                text: "STAGES"
+                font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
+                color: Theme.inkMuted(0.6)
             }
-            Text {
-                text: SolveController.moveIndex + " / " + SolveController.totalMoves + " mv"
-                font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink
+            Rectangle { width: parent.width; height: 2; color: Theme.divider }
+            ListView {
+                width: parent.width
+                height: parent.height - 46
+                clip: true
+                model: root.stageCopy
+                delegate: Loader {
+                    sourceComponent: stepRow
+                    onLoaded: { item.idx = index; item.copy = modelData; }
+                }
             }
         }
-        Rectangle {
-            width: parent.width; height: 1; color: Theme.divider
+
+        // Narrow: the current stage only.
+        Column {
+            visible: !root.wide
+            anchors.top: parent.top; anchors.bottom: buttons.top
+            anchors.left: parent.left; anchors.right: parent.right
+            anchors.margins: Theme.space4
+            spacing: Theme.space1
+
+            Text {
+                text: root.currentCopy ? root.currentCopy.title : ""
+                font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink
+            }
+            Text {
+                text: root.currentCopy ? root.currentCopy.detail : ""
+                font.family: Theme.fontHeading; font.pixelSize: 13
+                color: Theme.inkMuted(0.6)
+                width: parent.width; wrapMode: Text.WordWrap
+            }
         }
 
         Item {
-            width: parent.width; height: 230
-            CubeView {
-                id: narrowCubeView
-                width: 200; height: 200
-                anchors.centerIn: parent
-                topColors: root.colorsHex(SolveController.topColors)
-                rightColors: root.colorsHex(SolveController.rightColors)
-                leftColors: root.colorsHex(SolveController.leftColors)
-                showArrow: !SolveController.atEnd
-                arrowOpacity: root.arrowOpacity
-                currentMoveFace: SolveController.currentMoveFace
-                currentMoveTurns: SolveController.currentMoveTurns
-            }
-            Text {
-                anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space3
-                text: SolveController.currentMoveNotation
-                font.family: Theme.fontMono; font.pixelSize: 22; font.letterSpacing: 1
-                color: Theme.ink
-            }
-            Text {
-                anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: Theme.space3
-                text: "orthographic · no perspective"
-                font.family: Theme.fontHeading; font.pixelSize: 11
-                color: Theme.inkMuted(0.55)
-            }
-        }
-        Rectangle { width: parent.width; height: 2; color: Theme.divider }
-
-        Column {
+            id: buttons
+            anchors.bottom: parent.bottom
             width: parent.width
-            padding: Theme.space4
-            spacing: Theme.space1
+            height: 42 + 2 * Theme.space3
 
-            readonly property var copy: root.stageCopy[SolveController.currentStageIndex]
-
-            Text {
-                text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length
-                color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
+            Rectangle { width: parent.width; height: 2; color: Theme.divider }
+            AppButton {
+                id: previousButton
+                objectName: "solve.previous"
+                x: Theme.space3; y: Theme.space3 + 1
+                height: 42
+                variant: "secondary"; text: "Previous"
+                enabled: !SolveController.atStart
+                onClicked: root.previous()
             }
-            Text { text: parent.copy ? parent.copy.title : ""; font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink }
-            Text {
-                text: parent.copy ? parent.copy.detail : ""
-                font.family: Theme.fontHeading; font.pixelSize: 13
-                color: Theme.inkMuted(0.6)
-                width: parent.width - Theme.space8; wrapMode: Text.WordWrap
-            }
-            Item { width: 1; height: Theme.space4 }
-            Row {
-                width: parent.width - Theme.space8
-                spacing: Theme.space2
-                AppButton { height: 44; variant: "secondary"; text: "Previous"; enabled: !SolveController.atStart; onClicked: { SolveController.previousMove(); narrowCubeView.animateMove(); } }
-                AppButton { height: 44; width: parent.width - 100 - Theme.space2; variant: "primary"; text: SolveController.atEnd ? "Solved!" : "Next move"; enabled: !SolveController.atEnd; onClicked: { SolveController.nextMove(); narrowCubeView.animateMove(); } }
+            // The same button steps and, once there is nothing left to step,
+            // leaves for the screen that says so.
+            AppButton {
+                objectName: "solve.next"
+                anchors.left: previousButton.right; anchors.leftMargin: Theme.space2
+                anchors.right: parent.right; anchors.rightMargin: Theme.space3
+                y: Theme.space3 + 1
+                height: 42
+                variant: "primary"; text: SolveController.atEnd ? "Finish" : "Next move"
+                enabled: !SolveController.isSolving
+                onClicked: SolveController.atEnd ? root.finish() : root.next()
             }
         }
     }
 
-    // ---- wide: true split ----
-    Column {
-        visible: root.wide
-        anchors.fill: parent
-
-        Row {
-            width: parent.width
-            padding: Theme.space3
-            // Every move is named for a side as held this way; without it the
-            // moves mean nothing.
-            Text { text: "Hold yellow on top, green facing you"; font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink; width: parent.width - 160 }
-            Text { text: AppState.elapsedLabel() + " · " + SolveController.moveIndex + "/" + SolveController.totalMoves; font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink }
-        }
-        Rectangle { width: parent.width; height: 2; color: Theme.divider }
-
-        Row {
-            width: parent.width
-            height: parent.height - 46
-
-            Item {
-                width: parent.width - 320
-                height: parent.height
-
-                CubeView {
-                    id: wideCubeView
-                    width: 300; height: 300
-                    anchors.centerIn: parent
-                    topColors: root.colorsHex(SolveController.topColors)
-                    rightColors: root.colorsHex(SolveController.rightColors)
-                    leftColors: root.colorsHex(SolveController.leftColors)
-                    showArrow: !SolveController.atEnd
-                    arrowOpacity: root.arrowOpacity
-                    currentMoveFace: SolveController.currentMoveFace
-                    currentMoveTurns: SolveController.currentMoveTurns
-                }
-                Column {
-                    anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space4
-                    spacing: 4
-                    Text { text: "STAGE " + (SolveController.currentStageIndex + 1) + " OF " + root.stageCopy.length; color: Theme.accent; font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4 }
-                    Text { text: SolveController.currentMoveNotation; font.family: Theme.fontMono; font.pixelSize: 30; font.letterSpacing: 1; color: Theme.ink }
-                }
-                Rectangle {
-                    anchors.bottom: parent.bottom; anchors.right: parent.right; anchors.margins: Theme.space4
-                    width: 120; height: 82
-                    color: "#2D2B2B"; border.width: 2; border.color: Theme.ink
-                    Row {
-                        anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
-                        anchors.margins: 6
-                        Text { text: "AUTO"; color: "#BAB6B6"; font.family: Theme.fontMono; font.pixelSize: 10; width: parent.width - 10 }
-                        Rectangle { width: 8; height: 8; radius: 4; color: Theme.detected }
-                    }
-                }
-                Text {
-                    anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.margins: Theme.space4
-                    text: "Orthographic · arrow shows the exact turn"
-                    font.pixelSize: 12; color: Theme.inkMuted(0.55); font.family: Theme.fontHeading
-                }
-                Rectangle { anchors.right: parent.right; width: 2; height: parent.height; color: Theme.divider }
-            }
-
-            Column {
-                width: 320
-                height: parent.height
-
-                Text {
-                    width: parent.width
-                    padding: Theme.space3
-                    text: "STAGES"
-                    font.family: Theme.fontHeading; font.pixelSize: 11; font.letterSpacing: 1.4
-                    color: Theme.inkMuted(0.6)
-                }
-                Rectangle { width: parent.width; height: 2; color: Theme.divider }
-
-                ListView {
-                    width: parent.width
-                    height: parent.height - 46 - 62
-                    clip: true
-                    model: root.stageCopy
-                    delegate: Loader {
-                        sourceComponent: stepRow
-                        onLoaded: { item.idx = index; item.copy = modelData; }
-                    }
-                }
-
-                Rectangle { width: parent.width; height: 2; color: Theme.divider }
-                Row {
-                    padding: Theme.space3
-                    spacing: Theme.space2
-                    AppButton { height: 42; variant: "secondary"; text: "Previous"; enabled: !SolveController.atStart; onClicked: { SolveController.previousMove(); wideCubeView.animateMove(); } }
-                    AppButton { height: 42; width: 320 - 100 - Theme.space2 - Theme.space6; variant: "primary"; text: SolveController.atEnd ? "Solved!" : "Next move"; enabled: !SolveController.atEnd; onClicked: { SolveController.nextMove(); wideCubeView.animateMove(); } }
-                }
-            }
-        }
+    // The way back when the cube and the solution have parted company: read
+    // the cube again as it is now and solve it from there. Whatever is
+    // already done stays done - the new solution starts from the cube as it
+    // stands. In the header when there is room for it beside the hold line;
+    // narrow, the hold line needs the whole header, and this sits above the
+    // stepping buttons.
+    AppButton {
+        id: leave
+        objectName: "solve.rescan"
+        x: root.wide ? progress.x - width - Theme.space3 : root.width - width - Theme.space3
+        y: root.wide ? (header.height - height) / 2 : root.height - buttons.height - height - Theme.space1
+        height: 30
+        variant: "ghost"; text: "Out of step? Rescan"
+        onClicked: AppState.rescan()
     }
 
-    // ---- solving overlay: restart() computes off the UI thread (see
+    // ---- solving overlay: the solve runs off the UI thread (see
     // solve_controller.cpp) but there's nothing sensible to show until it
     // finishes - block interaction with a spinner rather than flashing the
     // previous solve's stale move data.
