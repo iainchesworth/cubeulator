@@ -112,6 +112,34 @@ Item {
         }
     }
 
+    // A recording is never silent. This shows only when a developer has
+    // turned recording on; the app stores nothing otherwise.
+    Rectangle {
+        visible: DirectScan.recordingRoot !== ""
+        anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: Theme.space4
+        width: recordingRow.width + 2 * Theme.space3
+        height: recordingRow.height + 2 * Theme.space2
+        radius: 6
+        color: Qt.rgba(0.08, 0.075, 0.07, 0.78)
+
+        Row {
+            id: recordingRow
+            anchors.centerIn: parent
+            spacing: Theme.space2
+            Rectangle {
+                width: 10; height: 10; radius: 5
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#E5484D"
+            }
+            Text {
+                text: "Recording this scan to " + DirectScan.recordingRoot
+                color: "#F3F2F2"
+                font.family: Theme.fontMono; font.pixelSize: 12
+            }
+        }
+    }
+
     // The sides read so far, in the order they were first shown, each as the
     // camera last saw it. Colours are the measured ones, not tidy swatches.
     Row {

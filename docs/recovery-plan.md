@@ -193,8 +193,10 @@ seconds without progress, and a real error when the solver fails.
 
 **R4 — The live gate.** Five fresh scrambles at the desk, evening and
 daylight. Pass: four of five go from camera to correct solve steps with no
-manual fix, five of five with one. Every failure is recorded automatically
-and joins the corpus.
+manual fix, five of five with one. A failure joins the corpus only if
+recording was on for that scan. Recording is a developer opt-in: the app
+stores nothing unless `CUBE_SCAN_RECORD_DIR` names a folder, and the scan
+screen says so whenever it is recording.
 
 **R5 — Free handling.** Only after R4, in steps, each scored on the corpus:
 (a) no deliberate pause — read any frame where a face is within about 35°

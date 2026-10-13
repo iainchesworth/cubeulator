@@ -3,6 +3,7 @@
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/direct_scan.hpp>
+#include <cube/vision/recording_v2.hpp>
 
 #include <QFutureWatcher>
 #include <QObject>
@@ -12,6 +13,7 @@
 
 #include <opencv2/core.hpp>
 
+#include <cstdint>
 #include <mutex>
 #include <optional>
 
@@ -64,6 +66,11 @@ class DirectScan : public QObject {
     // Six sides are in but do not make a valid cube yet: one was misread, or
     // one side was captured twice under different light.
     Q_PROPERTY(bool conflicted READ conflicted NOTIFY sidesChanged)
+    // Where this scan's frames are being written, or empty. Empty unless a
+    // developer has asked for recording (see setRecordingRoot): the app
+    // stores nothing otherwise. The screen shows it whenever it is set, so a
+    // recording is never silent.
+    Q_PROPERTY(QString recordingRoot READ recordingRoot NOTIFY recordingRootChanged)
     // The cube has been read. The six sides stay on show - the last one
     // included - until whoever listens for scanCompleted moves on.
     Q_PROPERTY(bool complete READ complete NOTIFY sidesChanged)
@@ -86,6 +93,15 @@ public:
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
     [[nodiscard]] bool complete() const noexcept { return cube_.has_value(); }
+    [[nodiscard]] QString recordingRoot() const { return recording_root_; }
+
+    // Developer recording, for building the corpus of real scans. Off by
+    // default; turned on only by the CUBE_SCAN_RECORD_DIR environment
+    // variable (read at construction) or by this call - there is no switch
+    // for it in the app. While it is on, every scan writes its frames, at
+    // the size the reader works at, to a new folder under `root` in the
+    // format tools/scan replays. An empty root turns it off.
+    void setRecordingRoot(const QString& root);
 
     // The cube, once scanCompleted has fired for the current scan.
     [[nodiscard]] std::optional<cube::solver::Cube> cube() const { return cube_; }
@@ -95,7 +111,8 @@ public:
 
     // Feeds one frame through the reader. poll() calls this for every camera
     // frame; it is public so the scan logic can be driven without a camera.
-    void processFrame(const cv::Mat& bgr);
+    // `t_ms` is when the frame was captured, kept with a recorded frame.
+    void processFrame(const cv::Mat& bgr, std::int64_t t_ms = 0);
 
 public slots:
     // Opens the camera and begins a fresh scan. `deviceId` is a
@@ -109,12 +126,15 @@ signals:
     void runningChanged();
     void frameUpdated();
     void sidesChanged();
+    void recordingRootChanged();
     // Six sides have been read and make exactly one valid cube: cube().
     void scanCompleted();
 
 private:
     void poll();
     void handleStartFinished();
+    void record(const cv::Mat& bgr, std::int64_t t_ms);
+    void finishRecording();
 
     QTimer poll_timer_;
     QFutureWatcher<cube::Result<void>> start_watcher_;
@@ -139,6 +159,11 @@ private:
     std::vector<cube::vision::SideScan::Side> sides_;
     bool conflicted_ = false;
     std::optional<cube::solver::Cube> cube_;
+
+    QString recording_root_;
+    cube::vision::recording::AsyncRecorder recorder_;
+    // A scan whose folder could not be created is not retried frame by frame.
+    bool recording_refused_ = false;
 };
 
 }  // namespace cube::app

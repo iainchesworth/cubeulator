@@ -3,6 +3,8 @@
 #include "interfaces/camera.hpp"
 
 #include <QColor>
+#include <QDateTime>
+#include <QDir>
 #include <QPointF>
 #include <QVariantMap>
 #include <QtConcurrent/QtConcurrentRun>
@@ -42,7 +44,8 @@ constexpr int kLockWaitFrames = 240;
 
 }  // namespace
 
-DirectScan::DirectScan(QObject* parent) : QObject(parent) {
+DirectScan::DirectScan(QObject* parent)
+    : QObject(parent), recording_root_(qEnvironmentVariable("CUBE_SCAN_RECORD_DIR")) {
     poll_timer_.setInterval(kPollIntervalMs);
     connect(&poll_timer_, &QTimer::timeout, this, &DirectScan::poll);
     connect(&start_watcher_, &QFutureWatcher<cube::Result<void>>::finished, this,
@@ -50,10 +53,50 @@ DirectScan::DirectScan(QObject* parent) : QObject(parent) {
 }
 
 DirectScan::~DirectScan() {
+    finishRecording();
     start_watcher_.waitForFinished();
     if (running_) {
         cube::platform::camera::stop();
     }
+}
+
+void DirectScan::setRecordingRoot(const QString& root) {
+    if (root == recording_root_) {
+        return;
+    }
+    finishRecording();
+    recording_root_ = root;
+    emit recordingRootChanged();
+}
+
+void DirectScan::record(const cv::Mat& bgr, std::int64_t t_ms) {
+    if (recording_root_.isEmpty() || recording_refused_) {
+        return;
+    }
+    if (!recorder_.running()) {
+        // One folder per scan, named for when it began.
+        const QString dir = QDir(recording_root_)
+                                .filePath(QDateTime::currentDateTime().toString(
+                                    QStringLiteral("yyyyMMdd-HHmmss-zzz")));
+        cube::vision::recording::Manifest manifest;
+        manifest.motion_script = "direct scan";
+        // The reader's own frames only: the full-resolution copy shows more
+        // of the room and nothing the reader uses.
+        if (const auto problem = recorder_.start(dir.toStdString(), manifest, false);
+            problem.has_value()) {
+            qWarning("DirectScan: not recording this scan: %s", problem->c_str());
+            recording_refused_ = true;
+            return;
+        }
+    }
+    recorder_.push(bgr, t_ms);
+}
+
+void DirectScan::finishRecording() {
+    if (recorder_.running()) {
+        (void)recorder_.stop();
+    }
+    recording_refused_ = false;
 }
 
 QVariantList DirectScan::stickerPoints() const {
@@ -145,6 +188,7 @@ void DirectScan::stop() {
     cube::platform::camera::stop();
     running_ = false;
     awaiting_lock_ = false;
+    finishRecording();
     read_.reset();
     reading_ = false;
     {
@@ -158,6 +202,8 @@ void DirectScan::stop() {
 }
 
 void DirectScan::restart() {
+    // A new scan is a new recording.
+    finishRecording();
     scan_.reset();
     read_.reset();
     reading_ = false;
@@ -180,10 +226,10 @@ void DirectScan::poll() {
         ++frames_awaiting_lock_ > kLockWaitFrames) {
         awaiting_lock_ = false;
     }
-    processFrame(frame->frame);
+    processFrame(frame->frame, frame->t_ms);
 }
 
-void DirectScan::processFrame(const cv::Mat& bgr) {
+void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     {
         const std::scoped_lock lock(frame_mutex_);
         latest_frame_ = bgr;
@@ -204,6 +250,9 @@ void DirectScan::processFrame(const cv::Mat& bgr) {
         emit frameUpdated();
         return;
     }
+    // Exactly the frames the scan is built from: none before the camera has
+    // settled, none after the cube is read.
+    record(bgr, t_ms);
     scan_.add(read_);
 
     std::vector<cube::vision::SideScan::Side> sides = scan_.sides();
@@ -235,6 +284,7 @@ void DirectScan::processFrame(const cv::Mat& bgr) {
     // never show it.
     emit sidesChanged();
     if (cube_.has_value()) {
+        finishRecording();
         emit scanCompleted();
     }
 }
