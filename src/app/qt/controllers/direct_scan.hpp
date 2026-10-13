@@ -73,6 +73,10 @@ class DirectScan : public QObject {
     // Six sides are in but do not make a valid cube yet: one was misread, or
     // one side was captured twice under different light.
     Q_PROPERTY(bool conflicted READ conflicted NOTIFY sidesChanged)
+    // Conflicted, and the reason is that the six sides fit together two ways
+    // rather than none: showing each side again cannot help, but turning the
+    // cube so that two sides show at once can.
+    Q_PROPERTY(bool ambiguous READ ambiguous NOTIFY sidesChanged)
     // Where this scan's frames are being written, or empty. Empty unless a
     // developer has asked for recording (see setRecordingRoot): the app
     // stores nothing otherwise. The screen shows it whenever it is set, so a
@@ -103,6 +107,7 @@ public:
     [[nodiscard]] QVariantList sides() const;
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
+    [[nodiscard]] bool ambiguous() const noexcept { return ambiguous_; }
     [[nodiscard]] bool complete() const noexcept { return scanned_.has_value(); }
     [[nodiscard]] bool watching() const noexcept { return watching_; }
     [[nodiscard]] QString recordingRoot() const { return recording_root_; }
@@ -197,6 +202,7 @@ private:
     qreal capture_progress_ = 0.0;
     std::vector<cube::vision::SideScan::Side> sides_;
     bool conflicted_ = false;
+    bool ambiguous_ = false;
     std::optional<cube::vision::ScannedCube> scanned_;
     bool watching_ = false;
 

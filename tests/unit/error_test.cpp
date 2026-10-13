@@ -23,6 +23,8 @@ TEST_CASE("to_string covers every CubeError value", "[error]") {
             "no valid cube was detected in the frame");
     REQUIRE(cube::to_string(CubeError::face_capture_incomplete) ==
             "not all faces have been captured yet");
+    REQUIRE(cube::to_string(CubeError::ambiguous_scan) ==
+            "the scanned sides can be put together in more than one way");
     REQUIRE(cube::to_string(CubeError::model_load_failed) ==
             "the inference model could not be loaded");
     REQUIRE(cube::to_string(CubeError::inference_provider_unavailable) ==

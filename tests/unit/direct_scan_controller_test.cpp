@@ -1,10 +1,12 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include "controllers/direct_scan.hpp"
+#include "drawn_corner.hpp"
 #include "drawn_cube.hpp"
 #include "solve_controller.hpp"
 
 #include <cube/solver/cube.hpp>
+#include <cube/solver/notation.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/vision/direct_scan.hpp>
 
@@ -26,7 +28,6 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::test::draw_side;
-using cube::test::outside_view;
 using cube::test::Pose;
 using cube::test::room;
 using cube::vision::SideScan;
@@ -49,7 +50,7 @@ void hold(DirectScan& scan, const cv::Mat& frame, int frames) {
 
 void show_cube(DirectScan& scan, const Cube& cube) {
     for (const Face face : kAllFaces) {
-        hold(scan, draw_side(outside_view(cube, face), Pose{}), kFramesToCapture + 3);
+        hold(scan, draw_side(cube::test::outside_view(cube, face), Pose{}), kFramesToCapture + 3);
         scan.processFrame(room({640, 360}));  // the cube turns to its next side
     }
 }
@@ -168,6 +169,40 @@ TEST_CASE("the sixth side is on show before the scan is announced complete",
 
     scan.restart();
     CHECK_FALSE(scan.complete());
+}
+
+TEST_CASE("sides that fit two ways are settled when the cube is turned so two show at once",
+          "[qt][controllers][direct-scan]") {
+    // What libc++'s random_scramble(14) draws: perfectly read, its six flat
+    // sides are two cubes (tests/unit/direct_scan_test.cpp).
+    Cube cube = Cube::solved();
+    for (const cube::solver::Move move : *cube::solver::parse_algorithm(
+             "R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2")) {
+        cube = cube.apply(move);
+    }
+    REQUIRE_FALSE(cube::test::sides_make_one_cube(cube));
+
+    DirectScan scan;
+    int completed = 0;
+    QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+    show_cube(scan, cube);
+
+    // Six sides, no cube, and the reason is not a misread.
+    CHECK(scan.sidesRead() == 6);
+    CHECK_FALSE(scan.complete());
+    CHECK(scan.conflicted());
+    CHECK(scan.ambiguous());
+
+    // Turning the cube between sides shows two at once.
+    for (const Face face : kAllFaces) {
+        scan.processFrame(cube::test::draw_cube_corner(cube, face));
+    }
+
+    REQUIRE(scan.complete());
+    CHECK_FALSE(scan.ambiguous());
+    CHECK(completed == 1);
+    REQUIRE(scan.cube().has_value());
+    CHECK(*scan.cube() == cube);
 }
 
 TEST_CASE("a scan stores nothing unless a developer turns recording on",

@@ -229,7 +229,8 @@ TEST_CASE("sides that put together two ways are reported, not guessed", "[direct
     // reader cannot know, and nothing in the flat views says which roll goes
     // with which. About one scramble in eighty is like this (see
     // cube::test::scramble). Naming one would be a coin toss, so the scan
-    // says the sides do not make a cube.
+    // says the sides are ambiguous - until a corner view settles it
+    // (corner_view_test.cpp).
     const Cube cube = after("R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2");
     REQUIRE_FALSE(cube::test::sides_make_one_cube(cube));
 
@@ -239,7 +240,7 @@ TEST_CASE("sides that put together two ways are reported, not guessed", "[direct
     CHECK(scan.sides().size() == 6);
     const auto read = scan.cube();
     REQUIRE_FALSE(read.has_value());
-    CHECK(read.error() == cube::CubeError::invalid_cube_state);
+    CHECK(read.error() == cube::CubeError::ambiguous_scan);
 }
 
 TEST_CASE("a side of one solid colour does not hold up the read", "[direct-scan]") {

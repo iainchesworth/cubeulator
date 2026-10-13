@@ -705,6 +705,11 @@ In your hands.</translation>
         <extracomment>Guidance when six sides are read but something is wrong.</extracomment>
         <translation>These six sides do not make a valid cube yet. Show each side again, square to the camera.</translation>
     </message>
+    <message id="scan.guide.ambiguous">
+        <source>These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.</source>
+        <extracomment>Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which.</extracomment>
+        <translation>These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.</translation>
+    </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>

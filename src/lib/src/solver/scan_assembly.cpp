@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <optional>
 #include <utility>
+#include <vector>
 
 namespace cube::solver {
 
@@ -77,16 +78,15 @@ constexpr std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& fac
     return rotated;
 }
 
-}  // namespace
+// What the search needs from six input faces: each one's four rotations,
+// filed under the solver face its centre pins it to, and which input that
+// was.
+struct Prepared {
+    std::array<std::array<std::array<Color, 9>, 4>, 6> rotations{};
+    std::array<std::size_t, 6> input_index_of_face{};
+};
 
-Result<AssembledScan> assemble_scanned_faces_with_mapping(
-    const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
-    return assemble_scanned_faces_with_mapping(faces, nullptr);
-}
-
-Result<AssembledScan> assemble_scanned_faces_with_mapping(
-    const std::array<std::array<model::Facelet, 9>, 6>& faces, const RotationHint* hint) noexcept {
-    CUBE_ZONE_SCOPED_N("solver.assemble_scan");
+Result<Prepared> prepare(const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
     // Step 1: convert colours and identify each input face's cube position
     // by its centre. Six inputs against six distinct-centre slots means a
     // collision check alone proves the mapping is a bijection.
@@ -131,7 +131,8 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
 
     // Step 2: precompute the four rotations of every face once, rather
     // than re-rotating inside the 4096-combination loop.
-    std::array<std::array<std::array<Color, 9>, 4>, 6> rotations{};
+    Prepared prepared;
+    auto& rotations = prepared.rotations;
     for (std::size_t face_index = 0; face_index < rotations.size(); ++face_index) {
         rotations.at(face_index).at(0) = base.at(face_index);
         for (std::size_t quarter = 1; quarter < 4; ++quarter) {
@@ -139,6 +140,27 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
                 rotated_clockwise(rotations.at(face_index).at(quarter - 1));
         }
     }
+
+    prepared.input_index_of_face = input_index_of_face;
+    return prepared;
+}
+
+}  // namespace
+
+Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
+    return assemble_scanned_faces_with_mapping(faces, nullptr);
+}
+
+Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces, const RotationHint* hint) noexcept {
+    CUBE_ZONE_SCOPED_N("solver.assemble_scan");
+    const Result<Prepared> prepared = prepare(faces);
+    if (!prepared) {
+        return std::unexpected(prepared.error());
+    }
+    const auto& rotations = prepared->rotations;
+    const auto& input_index_of_face = prepared->input_index_of_face;
 
     // Re-key the hint from input indices to solver-face digit positions
     // (the combo's base-4 digits are indexed by solver Face below), and
@@ -275,6 +297,32 @@ Result<Cube> assemble_scanned_faces(
         return std::unexpected(assembled.error());
     }
     return assembled->cube;
+}
+
+std::vector<Cube> assemble_all_scanned_faces(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces, std::size_t limit) noexcept {
+    CUBE_ZONE_SCOPED_N("solver.assemble_all");
+    std::vector<Cube> survivors;
+    const Result<Prepared> prepared = prepare(faces);
+    if (!prepared) {
+        return survivors;
+    }
+    for (unsigned combo = 0; combo < 4096 && survivors.size() < limit; ++combo) {
+        std::array<std::array<Color, 9>, 6> candidate{};
+        unsigned digits = combo;
+        for (std::size_t face_index = 0; face_index < candidate.size(); ++face_index) {
+            candidate[face_index] = prepared->rotations[face_index][digits & 3U];
+            digits >>= 2U;
+        }
+        const auto cube = Cube::from_facelets(candidate);
+        if (!cube || !cube->is_solvable()) {
+            continue;
+        }
+        if (std::find(survivors.begin(), survivors.end(), *cube) == survivors.end()) {
+            survivors.push_back(*cube);
+        }
+    }
+    return survivors;
 }
 
 RotationHint rotation_hint_for_tracked_scan(

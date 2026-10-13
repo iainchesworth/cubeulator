@@ -7,6 +7,7 @@
 
 #include <array>
 #include <cstddef>
+#include <vector>
 
 namespace cube::solver {
 
@@ -75,9 +76,10 @@ struct AssembledScan {
 //   - MORE THAN ONE distinct solvable cube exists. No existing CubeError
 //     code names ambiguity (unsolvable_state would be a lie - the state is
 //     solvable, twice over - and face_capture_incomplete / the vision codes
-//     describe earlier pipeline stages), and ambiguity is only theoretically
-//     possible for cubes within a couple of moves of solved, where several
-//     near-symmetric faces line up. It collapses to the same user remedy as
+//     describe earlier pipeline stages). It is not rare: about one scrambled
+//     cube in eighty puts together two ways from six square-on sides, and
+//     assemble_all_scanned_faces() below is how a caller sees which. It
+//     collapses to the same user remedy as
 //     a misread - rescan - so it deliberately shares invalid_cube_state
 //     rather than growing the enum for an unobservable distinction.
 [[nodiscard]] Result<AssembledScan> assemble_scanned_faces_with_mapping(
@@ -176,6 +178,15 @@ struct RotationHint {
 [[nodiscard]] RotationHint rotation_hint_for_store_scan(
     const std::array<std::array<model::Facelet, 9>, 6>& faces,
     const std::array<model::Face, 6>& body_faces) noexcept;
+
+// Every distinct solvable cube the six faces make, up to `limit` of them -
+// the survivors assemble_scanned_faces_with_mapping() counts to decide
+// between one cube, none, and ambiguity. Empty when the faces are not six
+// distinct centres or make no solvable cube; more than one when they make
+// several, which is when something other than the six flat faces has to
+// say which (two sides seen in one view, for one).
+[[nodiscard]] std::vector<Cube> assemble_all_scanned_faces(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces, std::size_t limit = 16) noexcept;
 
 // As assemble_scanned_faces_with_mapping(), for callers (the solver
 // pipeline) that only need the cube and not the input-index bookkeeping.
