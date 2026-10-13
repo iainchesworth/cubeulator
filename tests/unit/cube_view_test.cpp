@@ -2,27 +2,29 @@
 //
 // Cube3DView.qml is loaded for real and its stickers are read back out of
 // the scene: where each one sits and which way it faces, taken from the
-// nodes' own transforms (stickerPlacements). That is compared, sticker for
-// sticker, with cube::solver::Cube - so what is proved is what is drawn, not
-// a model of it.
+// nodes' own transforms (see cube_view_reading.hpp). That is compared,
+// sticker for sticker, with cube::solver::Cube - so what is proved is what is
+// drawn, not a model of it.
 //
 // The direction of a turn is the point. A layer shown turning the wrong way,
 // or a side painted as its own mirror image, sends someone following the
 // screen the wrong way with a real cube in their hands.
 #include <catch2/catch_test_macros.hpp>
 
+#include "cube_view_reading.hpp"
+#include "qml_test_app.hpp"
+
 #include <cube/solver/cube.hpp>
+#include <cube/solver/hold.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QColor>
-#include <QCoreApplication>
-#include <QElapsedTimer>
-#include <QEventLoop>
 #include <QMetaObject>
 #include <QQmlComponent>
 #include <QQmlEngine>
+#include <QQuaternion>
 #include <QQuickItem>
 #include <QString>
 #include <QUrl>
@@ -30,7 +32,6 @@
 #include <QVariantList>
 #include <QVariantMap>
 
-#include <array>
 #include <cmath>
 #include <cstddef>
 #include <memory>
@@ -40,8 +41,16 @@
 using cube::solver::Color;
 using cube::solver::Cube;
 using cube::solver::Face;
+using cube::solver::Hold;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
+using cube::solver::Place;
+using cube::test::all_moves;
+using cube::test::dot;
+using cube::test::letter;
+using cube::test::Placement;
+using cube::test::Vec;
+using cube::test::wait_for;
 
 namespace {
 
@@ -64,24 +73,6 @@ namespace {
     return {};
 }
 
-[[nodiscard]] QString letter(Face face) {
-    switch (face) {
-        case Face::U:
-            return QStringLiteral("U");
-        case Face::D:
-            return QStringLiteral("D");
-        case Face::L:
-            return QStringLiteral("L");
-        case Face::R:
-            return QStringLiteral("R");
-        case Face::F:
-            return QStringLiteral("F");
-        case Face::B:
-            return QStringLiteral("B");
-    }
-    return {};
-}
-
 // The cube as the solve screen hands it to the view: each side as seen from
 // outside, which is what SolveController::stickers() publishes.
 [[nodiscard]] QVariantMap painting(const Cube& cube) {
@@ -94,75 +85,6 @@ namespace {
         sides.insert(letter(face), colours);
     }
     return sides;
-}
-
-struct Vec {
-    double x = 0.0;
-    double y = 0.0;
-    double z = 0.0;
-};
-
-[[nodiscard]] Vec vec(const QVariant& list) {
-    const QVariantList parts = list.toList();
-    return {parts.at(0).toDouble(), parts.at(1).toDouble(), parts.at(2).toDouble()};
-}
-
-[[nodiscard]] double dot(const Vec& a, const Vec& b) {
-    return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-[[nodiscard]] Vec operator-(const Vec& a, const Vec& b) {
-    return {a.x - b.x, a.y - b.y, a.z - b.z};
-}
-
-struct Placement {
-    QColor colour;
-    Vec cubie;   // which cubie position the sticker is on: x L to R, y D to U, z B to F
-    Vec facing;  // which way it faces
-};
-
-// The side a sticker is on, when it faces squarely along an axis.
-[[nodiscard]] std::optional<Face> side_facing(const Vec& facing) {
-    constexpr double kSquare = 0.999;
-    if (facing.x > kSquare) {
-        return Face::R;
-    }
-    if (facing.x < -kSquare) {
-        return Face::L;
-    }
-    if (facing.y > kSquare) {
-        return Face::U;
-    }
-    if (facing.y < -kSquare) {
-        return Face::D;
-    }
-    if (facing.z > kSquare) {
-        return Face::F;
-    }
-    if (facing.z < -kSquare) {
-        return Face::B;
-    }
-    return std::nullopt;
-}
-
-// Where the solver keeps the sticker at cubie (x, y, z) of a side, restated
-// from the layout documented in cube.hpp rather than borrowed from the code
-// under test: U and D are indexed (row = z + 1, col = x + 1), L and R
-// (row = 1 - y, col = z + 1), F and B (row = 1 - y, col = x + 1). Were this
-// restatement wrong for a side, no turn that carries stickers on or off that
-// side could match Cube::apply below.
-[[nodiscard]] int solver_index(Face face, int x, int y, int z) {
-    switch (face) {
-        case Face::U:
-        case Face::D:
-            return (z + 1) * 3 + (x + 1);
-        case Face::L:
-        case Face::R:
-            return (1 - y) * 3 + (z + 1);
-        case Face::F:
-        case Face::B:
-            return (1 - y) * 3 + (x + 1);
-    }
-    return 0;
 }
 
 // The real Cube3DView, wrapped only to count its movePlayed signals.
@@ -179,22 +101,12 @@ Cube3DView {
 }
 )QML";
 
-template <typename Done>
-[[nodiscard]] bool wait_for(Done done, int milliseconds = 5000) {
-    QElapsedTimer waited;
-    waited.start();
-    while (!done() && waited.elapsed() < milliseconds) {
-        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
-    }
-    return done();
-}
-
 // A Cube3DView on its own, with no window: nothing is drawn, and nothing
 // needs to be.
 class View {
 public:
     View() {
-        QQmlComponent component(&engine_);
+        QQmlComponent component(&cube::test::qml_engine());
         component.setData(kHarness, QUrl(QStringLiteral("qrc:/cube_view_test_harness.qml")));
         if (component.isError()) {
             FAIL(component.errorString().toStdString());
@@ -209,69 +121,14 @@ public:
 
     void set(const char* name, const QVariant& value) { REQUIRE(item_->setProperty(name, value)); }
     [[nodiscard]] QVariant get(const char* name) const { return item_->property(name); }
+    [[nodiscard]] QObject* item() const { return item_.get(); }
 
     void show(const Cube& cube) { set("faceletColors", painting(cube)); }
-
-    [[nodiscard]] std::vector<Placement> placements() const {
-        QVariant result;
-        REQUIRE(QMetaObject::invokeMethod(item_.get(), "stickerPlacements",
-                                          Q_RETURN_ARG(QVariant, result)));
-        std::vector<Placement> out;
-        for (const QVariant& entry : result.toList()) {
-            const QVariantMap map = entry.toMap();
-            out.push_back({QColor(map.value("color").toString()), vec(map.value("cubie")),
-                           vec(map.value("facing"))});
-        }
-        return out;
-    }
-
-    // The stickers as the solver would hold them: [side][index] -> colour.
-    // Fails unless every sticker sits squarely on a cubie position, facing
-    // squarely outwards, and all 54 places are filled once each.
-    [[nodiscard]] std::array<std::array<QColor, 9>, 6> read() const {
-        std::array<std::array<QColor, 9>, 6> sides{};
-        std::array<std::array<int, 9>, 6> seen{};
-        for (const Placement& placement : placements()) {
-            const std::optional<Face> side = side_facing(placement.facing);
-            REQUIRE(side.has_value());
-            const std::array<double, 3> at = {placement.cubie.x, placement.cubie.y,
-                                              placement.cubie.z};
-            std::array<int, 3> cell{};
-            for (std::size_t axis = 0; axis < 3; ++axis) {
-                cell[axis] = static_cast<int>(std::lround(at[axis]));
-                REQUIRE(std::abs(at[axis] - cell[axis]) < 0.01);
-                REQUIRE(std::abs(cell[axis]) <= 1);
-            }
-            const auto index =
-                static_cast<std::size_t>(solver_index(*side, cell[0], cell[1], cell[2]));
-            sides[static_cast<std::size_t>(*side)][index] = placement.colour;
-            ++seen[static_cast<std::size_t>(*side)][index];
-        }
-        for (const auto& side : seen) {
-            for (const int count : side) {
-                REQUIRE(count == 1);
-            }
-        }
-        return sides;
-    }
-
     [[nodiscard]] bool shows(const Cube& cube) const {
-        const auto sides = read();
-        bool same = true;
-        for (const Face face : kAllFaces) {
-            for (int index = 0; index < 9; ++index) {
-                const QColor seen =
-                    sides[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
-                if (seen != paint(cube.at(face, index))) {
-                    UNSCOPED_INFO("side " << letter(face).toStdString() << " index " << index
-                                          << " shows " << seen.name().toStdString()
-                                          << ", the solver has "
-                                          << paint(cube.at(face, index)).name().toStdString());
-                    same = false;
-                }
-            }
-        }
-        return same;
+        return cube::test::shows(item_.get(), cube, &paint);
+    }
+    [[nodiscard]] std::vector<Placement> placements() const {
+        return cube::test::placements(item_.get());
     }
 
     [[nodiscard]] int played() const { return get("played").toInt(); }
@@ -306,19 +163,8 @@ public:
     [[nodiscard]] double turn_angle() const { return get("turnAngle").toDouble(); }
 
 private:
-    QQmlEngine engine_;
     std::unique_ptr<QQuickItem> item_;
 };
-
-[[nodiscard]] std::vector<Move> all_moves() {
-    std::vector<Move> moves;
-    for (const Face face : kAllFaces) {
-        for (int turns = 1; turns <= 3; ++turns) {
-            moves.push_back(Move{face, turns});
-        }
-    }
-    return moves;
-}
 
 // Scrambles with every side mixed, so a sticker in the wrong place shows.
 [[nodiscard]] std::vector<Cube> scrambles() {
@@ -473,4 +319,62 @@ TEST_CASE("asking for the move while its layer is mid-nudge still makes the move
         view.play(move);
         REQUIRE(view.shows(cube.apply(move)));
     }
+}
+
+TEST_CASE("the cube is turned the way it is held, and never mirrored", "[qml][cube-view]") {
+    View view;
+    view.set("viewDuration", 0);
+    cube::app::HeldCube& held = cube::test::app_controllers().held;
+    const Cube cube = cube::solver::random_scramble(61);
+    view.show(cube);
+
+    for (const Hold& hold : cube::solver::all_holds()) {
+        INFO("up " << letter(hold.up).toStdString() << " front "
+                   << letter(hold.front).toStdString());
+        held.setHold(hold);
+        view.set("holdRotation", QVariant::fromValue(held.rotation()));
+        REQUIRE(wait_for([&]() { return !view.get("viewMoving").toBool(); }));
+
+        // Seen square on (no viewpoint applied): the side held on top faces
+        // up the screen, the side held in front faces the viewer, and the
+        // side on the holder's right faces right. All three together rule
+        // out a reflection.
+        const auto faces = [&](Place place, const Vec& way) {
+            const Vec seen =
+                cube::test::side_direction(view.item(), cube::solver::side_at(hold, place));
+            return dot(seen, way) > 0.999;
+        };
+        CHECK(faces(Place::Top, {0, 1, 0}));
+        CHECK(faces(Place::Front, {0, 0, 1}));
+        CHECK(faces(Place::Right, {1, 0, 0}));
+        CHECK(faces(Place::Bottom, {0, -1, 0}));
+        CHECK(faces(Place::Back, {0, 0, -1}));
+        CHECK(faces(Place::Left, {-1, 0, 0}));
+
+        // Turning the whole cube moves no sticker on it.
+        CHECK(view.shows(cube));
+    }
+    held.setHold(cube::solver::kStatedHold);
+}
+
+TEST_CASE("the viewpoint shows the top, the front and the right side", "[qml][cube-view]") {
+    // Positive pitch tips the top towards the viewer and negative yaw brings
+    // the right side round - the signs the solve screen relies on.
+    View view;
+    view.set("viewDuration", 0);
+    view.set("viewPitch", 24);
+    view.set("viewYaw", -32);
+    REQUIRE(wait_for([&]() { return !view.get("viewMoving").toBool(); }));
+
+    const auto towards_viewer = [&](Face side) {
+        return cube::test::side_direction(view.item(), side).z;
+    };
+    CHECK(towards_viewer(Face::U) > 0.3);
+    CHECK(towards_viewer(Face::F) > 0.3);
+    CHECK(towards_viewer(Face::R) > 0.3);
+    CHECK(towards_viewer(Face::D) < -0.3);
+    CHECK(towards_viewer(Face::B) < -0.3);
+    CHECK(towards_viewer(Face::L) < -0.3);
+    // Upright: the top still faces up the screen, not off to one side.
+    CHECK(std::abs(cube::test::side_direction(view.item(), Face::U).x) < 1e-6);
 }

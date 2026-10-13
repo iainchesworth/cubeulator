@@ -34,6 +34,13 @@ Item {
     // 2 = Borderlands Cel-Shading
     property int shaderStyle: 0
     property bool showStats: false
+    // Lights the cube alike from every side and takes the gloss off the
+    // stickers, so a sticker is the same colour wherever on the cube it is
+    // and however the cube is turned. For the solve screen, where the
+    // colours on screen are matched against a real cube; the showpiece
+    // lighting elsewhere puts a shine on the top and leaves the underside
+    // dark.
+    property bool evenLight: false
 
     // Per-facelet sticker painting: null keeps the uniform face colours
     // above; otherwise a JS object mapping face letter -> 9 CSS colours,
@@ -88,8 +95,13 @@ Item {
     property int viewDuration: 450
     property real shownPitch: viewPitch
     property real shownYaw: viewYaw
-    Behavior on shownPitch { NumberAnimation { duration: root.viewDuration; easing.type: Easing.InOutCubic } }
-    Behavior on shownYaw { NumberAnimation { duration: root.viewDuration; easing.type: Easing.InOutCubic } }
+    Behavior on shownPitch { NumberAnimation { id: pitchSwing; duration: root.viewDuration; easing.type: Easing.InOutCubic } }
+    Behavior on shownYaw { NumberAnimation { id: yawSwing; duration: root.viewDuration; easing.type: Easing.InOutCubic } }
+    // True while the cube is on its way to a new viewpoint or orientation.
+    // The nudge waits for it: the cube turns to show a side first, and only
+    // then does that side's layer start to move.
+    readonly property bool viewMoving: pitchSwing.running || yawSwing.running || holdSwing.running
+    onViewMovingChanged: scheduleGuide()
 
     // Skeleton mode: unpainted stickers render as dim translucent
     // placeholder panels instead of their uniform face colour, so a cube
@@ -343,8 +355,8 @@ Item {
         if (!turn || cubieStates.length === 0)
             return;
         pickUp(turn);
-        if (!heldLayer)
-            return;
+        if (!heldLayer || viewMoving)
+            return; // once the cube has stopped turning, this runs again
         nudgeSign = turn.degrees > 0 ? 1 : -1;
         if (Math.abs(turn.degrees) > 90)
             nudgeTwice.restart();
@@ -573,6 +585,9 @@ Item {
             lightProbe: Texture {
                 textureData: ProceduralSkyTextureData {}
             }
+            // The sky lights from above only; evenLight leans on its own
+            // lights instead.
+            probeExposure: root.evenLight ? 0.35 : 1.0
 
             // Borderlands Cel-Shading's vignette + halftone/grunge post
             // pass. Both come from ExtendedSceneEnvironment/Effect, which is
@@ -601,7 +616,7 @@ Item {
 
         DirectionalLight {
             eulerRotation: Qt.vector3d(-35, -35, 0)
-            brightness: 1.1
+            brightness: root.evenLight ? 0.75 : 1.1
         }
         DirectionalLight {
             eulerRotation: Qt.vector3d(40, 150, 0)
@@ -612,9 +627,28 @@ Item {
         // without a sharp catch-light to actually bounce off it, which is
         // what a real studio product-shot key light gives you.
         DirectionalLight {
-            visible: root.shaderStyle === 0
+            visible: root.shaderStyle === 0 && !root.evenLight
             eulerRotation: Qt.vector3d(-60, 20, 0)
             brightness: 1.6
+        }
+        // evenLight: light from where the viewer is and from below as well,
+        // so whichever sides are turned towards the viewer are lit, and lit
+        // alike.
+        DirectionalLight {
+            visible: root.evenLight
+            eulerRotation: Qt.vector3d(0, 0, 0)
+            brightness: 0.75
+            ambientColor: Qt.rgba(0.22, 0.22, 0.22, 1)
+        }
+        DirectionalLight {
+            visible: root.evenLight
+            eulerRotation: Qt.vector3d(55, 25, 0)
+            brightness: 0.5
+        }
+        DirectionalLight {
+            visible: root.evenLight
+            eulerRotation: Qt.vector3d(-50, 40, 0)
+            brightness: 0.45
         }
 
         // Pose-follow stage: externalRotation lands on this dedicated
@@ -663,7 +697,7 @@ Item {
                             id: holdNode
                             rotation: root.holdRotation
                             Behavior on rotation {
-                                QuaternionAnimation { duration: root.viewDuration; type: QuaternionAnimation.Slerp }
+                                QuaternionAnimation { id: holdSwing; duration: root.viewDuration; type: QuaternionAnimation.Slerp }
                             }
 
                             // The layer being turned hangs off this while
@@ -844,11 +878,11 @@ Item {
                                                 scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
                                                 materials: PrincipledMaterial {
                                                     baseColor: stickerNode.shownColor
-                                                    roughness: 0.35
+                                                    roughness: root.evenLight ? 0.6 : 0.35
                                                     metalness: 0.0
-                                                    specularAmount: 0.6
+                                                    specularAmount: root.evenLight ? 0.25 : 0.6
                                                     specularTint: 0.1
-                                                    clearcoatAmount: 0.35
+                                                    clearcoatAmount: root.evenLight ? 0.08 : 0.35
                                                     clearcoatRoughnessAmount: 0.12
                                                 }
                                             }
@@ -934,11 +968,12 @@ Item {
         onFinished: root.endPlay()
     }
 
-    // The nudge for a quarter turn: out with a little kick, a beat held
-    // there, back, and a rest before the next.
+    // The nudge for a quarter turn: a breath, out with a little kick, a
+    // beat held there, back, and a rest before the next.
     SequentialAnimation {
         id: nudgeOnce
         loops: Animation.Infinite
+        PauseAnimation { duration: 300 }
         NumberAnimation {
             target: root; property: "turnAngle"
             to: root.nudgeSign * root.nudgeAngle
@@ -946,13 +981,14 @@ Item {
         }
         PauseAnimation { duration: 190 }
         NumberAnimation { target: root; property: "turnAngle"; to: 0; duration: 260; easing.type: Easing.InOutQuad }
-        PauseAnimation { duration: 460 }
+        PauseAnimation { duration: 160 }
     }
 
     // The nudge for a half turn: two kicks, one after the other, then back.
     SequentialAnimation {
         id: nudgeTwice
         loops: Animation.Infinite
+        PauseAnimation { duration: 300 }
         NumberAnimation {
             target: root; property: "turnAngle"
             to: root.nudgeSign * root.nudgeAngle
@@ -966,7 +1002,7 @@ Item {
         }
         PauseAnimation { duration: 220 }
         NumberAnimation { target: root; property: "turnAngle"; to: 0; duration: 340; easing.type: Easing.InOutQuad }
-        PauseAnimation { duration: 460 }
+        PauseAnimation { duration: 160 }
     }
 
     DragHandler {

@@ -1,9 +1,5 @@
-#include "controllers/camera_controller.hpp"
-#include "controllers/direct_scan.hpp"
+#include "controllers/app_controllers.hpp"
 #include "controllers/frame_image_provider.hpp"
-#include "controllers/scan_session.hpp"
-#include "controllers/settings_model.hpp"
-#include "solve_controller.hpp"
 
 #include <cube/solver/solver.hpp>
 
@@ -118,42 +114,19 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
-    // Registered imperatively via qmlRegisterSingletonInstance rather than
-    // QML_ELEMENT: cube_app_controllers is a separate target from
-    // cube_app_qml specifically so its controllers are linkable into a
-    // Catch2 test binary without pulling in QQmlEngine, and QML_ELEMENT's
-    // compile-time registration only works for sources compiled directly
-    // into a qt_add_qml_module target.
-    cube::app::CameraController cameraController;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "CameraController", &cameraController);
-
-    cube::app::ScanSession scanSession;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "ScanSession", &scanSession);
-
-    // The scan screen's controller. ScanSession above is the previous scan
-    // pipeline, still registered because the settings screen binds to it,
-    // but no screen starts it.
-    cube::app::DirectScan directScan;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "DirectScan", &directScan);
-
-    cube::app::SettingsModel settingsModel;
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settingsModel);
-
-    // Needs a real reference to scanSession (cube::model::ScanProgress can't
-    // cross into QML), so - like the three controllers above - it's
-    // constructed directly here rather than being QML-engine-owned; declared
-    // after scanSession so it's destroyed first.
-    SolveController solveController(scanSession);
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solveController);
-    QObject::connect(&directScan, &cube::app::DirectScan::scanCompleted, &solveController, [&]() {
-        if (const auto cube = directScan.cube(); cube.has_value()) {
-            solveController.solveCube(*cube);
-        }
-    });
+    // The controllers QML talks to are made here, wired to one another, and
+    // registered as singletons - not QML_ELEMENT types the engine would make
+    // for itself, because they need real references to each other
+    // (cube::model types cannot cross into QML). They live in their own
+    // target so the tests can make the same set (see app_controllers.hpp).
+    cube::app::AppControllers controllers;
+    controllers.registerWithQml();
+    cube::app::DirectScan& directScan = controllers.directScan;
+    SolveController& solveController = controllers.solve;
 
     QQmlApplicationEngine engine;
-    // addImageProvider takes ownership; directScan outlives engine (engine
-    // is declared - and so destroyed first - after directScan).
+    // addImageProvider takes ownership; the controllers outlive the engine
+    // (it is declared - and so destroyed first - after them).
     engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(
                                              [&directScan]() { return directScan.latestFrame(); }));
     engine.loadFromModule("Cubeulator", "Main");
@@ -165,21 +138,31 @@ int main(int argc, char* argv[]) {
     // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
     // scrambled from that seed, no camera and no scan. For working on the
     // solve screen itself - trying how a move is shown does not need a real
-    // cube read first.
+    // cube read first. CUBE_SOLVE_DEMO_MOVE=<n> opens it n moves in.
     bool demo = false;
     const unsigned demo_seed = qEnvironmentVariable("CUBE_SOLVE_DEMO").toUInt(&demo);
     if (demo) {
+        const int moves_in = qEnvironmentVariable("CUBE_SOLVE_DEMO_MOVE").toInt();
         solveController.solveCube(cube::solver::random_scramble(demo_seed));
         QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
         auto show_when_solved = std::make_shared<QMetaObject::Connection>();
-        *show_when_solved =
-            QObject::connect(&solveController, &SolveController::stateChanged, app_state,
-                             [&solveController, app_state, show_when_solved]() {
-                                 if (!solveController.isSolving()) {
-                                     app_state->setProperty("screen", QStringLiteral("solve"));
-                                     QObject::disconnect(*show_when_solved);
-                                 }
-                             });
+        *show_when_solved = QObject::connect(
+            &solveController, &SolveController::stateChanged, app_state,
+            [&solveController, app_state, show_when_solved, moves_in]() {
+                if (solveController.isSolving()) {
+                    return;
+                }
+                QObject::disconnect(*show_when_solved);
+                QStringList solution;
+                for (const QVariant& move : solveController.moves()) {
+                    solution.append(move.toMap().value(QStringLiteral("notation")).toString());
+                }
+                qInfo("CUBE_SOLVE_DEMO: %s", qPrintable(solution.join(QLatin1Char(' '))));
+                for (int i = 0; i < moves_in; ++i) {
+                    solveController.nextMove();
+                }
+                app_state->setProperty("screen", QStringLiteral("solve"));
+            });
     }
 
     return QGuiApplication::exec();

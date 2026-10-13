@@ -113,10 +113,14 @@ if(CUBEULATOR_BUILD_APP)
     # both are constructed and wired together directly in main.cpp.
     # ---------------------------------------------------------------------
     add_library(cube_app_controllers STATIC
+        qt/controllers/app_controllers.hpp
+        qt/controllers/app_controllers.cpp
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
         qt/controllers/direct_scan.hpp
         qt/controllers/direct_scan.cpp
+        qt/controllers/held_cube.hpp
+        qt/controllers/held_cube.cpp
         qt/controllers/scan_session.hpp
         qt/controllers/scan_session.cpp
         qt/controllers/settings_model.hpp

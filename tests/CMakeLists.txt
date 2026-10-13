@@ -57,6 +57,7 @@ add_executable(cube_unit_tests
     unit/solver/scan_conversion_test.cpp
     unit/solver/scan_assembly_test.cpp
     unit/solver/notation_test.cpp
+    unit/solver/hold_test.cpp
     unit/solver/cross_test.cpp
     unit/solver/corners_test.cpp
     unit/solver/middle_edges_test.cpp
@@ -229,7 +230,8 @@ if(CUBEULATOR_BUILD_APP)
 
     add_executable(cube_qml_tests
         qml_test_main.cpp
-        unit/cube_view_test.cpp)
+        unit/cube_view_test.cpp
+        unit/solve_screen_test.cpp)
 
     target_link_libraries(cube_qml_tests
         PRIVATE
@@ -245,6 +247,9 @@ if(CUBEULATOR_BUILD_APP)
             Qt6::Quick
             Qt6::Quick3D
             Catch2::Catch2)
+
+    # qml_test_app.hpp, shared by every test file here, sits beside the main.
+    target_include_directories(cube_qml_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
 
     # On Windows the Qt runtime and the QML modules the app imports are
     # copied next to cube_app.exe when it is built; this binary sits in the

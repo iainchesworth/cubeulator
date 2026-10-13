@@ -57,18 +57,46 @@ Rectangle {
 
     readonly property bool guiding: !SolveController.isSolving && !SolveController.atEnd
 
-    // Where each side is, as the cube is held: yellow on top, green facing
-    // the person holding it.
-    readonly property var sideWords: ({ U: "Top", D: "Bottom", L: "Left side", R: "Right side", F: "Front", B: "Back" })
-    readonly property string moveSide: guiding ? SolveController.currentMoveFace : ""
     // A side is named by the colour of its centre, which never moves.
-    readonly property string moveColor: moveSide !== "" ? SolveController.stickers[moveSide][4] : ""
+    function centreColor(side) { return SolveController.stickers[side][4]; }
+
+    // How the cube is held, in words: every move is shown on the cube as
+    // held this way.
+    readonly property string holdWords: "Hold " + centreColor(HeldCube.up).toLowerCase() + " on top, "
+        + centreColor(HeldCube.front).toLowerCase() + " facing you"
+
+    readonly property string moveSide: guiding ? SolveController.currentMoveFace : ""
+    readonly property string moveColor: moveSide !== "" ? centreColor(moveSide) : ""
+    // Where that side is for the person holding the cube: "top", "bottom",
+    // "left", "right", "front", "back", or "" when there is no move.
+    readonly property string movePlace: moveSide !== "" ? HeldCube.places[moveSide] : ""
+    readonly property var placeWords: ({
+        top: "Top", bottom: "Bottom", left: "Left side", right: "Right side", front: "Front", back: "Back"
+    })
     readonly property string moveWords: {
         if (moveSide === "")
             return "";
-        return sideWords[moveSide] + " · "
+        return placeWords[movePlace] + " · "
             + (SolveController.currentMoveTurns === 2 ? "half turn" : "quarter turn");
     }
+
+    // ---- where the cube is looked at from ------------------------------------
+    // Normally from above and to the right, which shows the top, the front
+    // and the right side - and two of the three rows of stickers round the
+    // left and bottom layers, enough to see those turn. The back layer is
+    // the one that turns out of sight, so a move on the back swings the
+    // view round behind the cube, and it swings home afterwards. It is the
+    // view that turns: the cube in the hand stays as it is, and the screen
+    // says so while it is turned.
+    readonly property var views: ({
+        home: { pitch: 24, yaw: -32, words: "" },
+        back: { pitch: 24, yaw: -140, words: "Seen from behind" }
+    })
+    readonly property var view: views[movePlace] || views.home
+    readonly property bool viewTurned: view.words !== ""
+    // The note's words outlast the turn, so it does not empty as it fades.
+    property string viewNoteWords: view.words
+    onViewChanged: if (viewTurned) viewNoteWords = view.words
 
     // ---- stepping ----------------------------------------------------------
     // A step is shown before it is taken: the layer turns all the way on
@@ -131,7 +159,7 @@ Rectangle {
             anchors.left: parent.left; anchors.leftMargin: Theme.space3
             anchors.right: progress.left; anchors.rightMargin: Theme.space3
             anchors.verticalCenter: parent.verticalCenter
-            text: "Hold yellow on top, green facing you"
+            text: root.holdWords
             elide: Text.ElideRight
             font.family: Theme.fontMono; font.pixelSize: 12; color: Theme.ink
         }
@@ -156,21 +184,26 @@ Rectangle {
 
         Cube3DView {
             id: cube
-            readonly property real side: Math.min(parent.width, parent.height)
+            readonly property real side: Math.min(parent.width, parent.height) * 0.86
             width: side; height: side
             anchors.centerIn: parent
-            anchors.verticalCenterOffset: root.wide ? 10 : 14
+            anchors.verticalCenterOffset: root.wide ? 6 : 10
 
             interactive: false
             autoRotate: false
+            // The colours here are matched against a real cube.
+            evenLight: true
             shaderStyle: SettingsState.shaderStyleIndex
             showStats: SettingsState.statsForNerds
 
-            // Yellow on top, green towards the viewer, seen from above and
-            // to the right: the top, the front and the right side in view.
+            objectName: "cube"
+
+            // Turned the way the cube is held, and seen from wherever shows
+            // the side about to move.
             homeRotation: Qt.vector3d(0, 0, 0)
-            viewPitch: 24
-            viewYaw: -32
+            holdRotation: HeldCube.rotation
+            viewPitch: root.view.pitch
+            viewYaw: root.view.yaw
 
             faceletColors: root.painted(SolveController.stickers)
             guideFace: root.moveSide
@@ -205,6 +238,37 @@ Rectangle {
                     text: root.moveWords
                     font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.DemiBold
                     color: Theme.ink
+                }
+            }
+        }
+
+        // The view has turned to show a side that faces away. Said plainly,
+        // because a cube turning on screen looks like an instruction to turn
+        // the one in the hand.
+        Rectangle {
+            id: viewNote
+            anchors.left: parent.left; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
+            width: Math.min(viewNoteText.implicitWidth + 2 * Theme.space3, parent.width - 2 * Theme.space4)
+            height: viewNoteText.implicitHeight + 2 * Theme.space2
+            color: Theme.accent100
+            border.width: 1; border.color: Theme.accent
+            opacity: root.viewTurned ? 1 : 0
+            visible: opacity > 0
+            Behavior on opacity { NumberAnimation { duration: 180 } }
+
+            Column {
+                id: viewNoteText
+                x: Theme.space3; y: Theme.space2
+                spacing: 2
+                Text {
+                    text: root.viewNoteWords
+                    font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.ExtraBold
+                    color: Theme.ink
+                }
+                Text {
+                    text: "Only the view has turned. Keep your cube as it is."
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: Theme.inkMuted(0.75)
                 }
             }
         }
