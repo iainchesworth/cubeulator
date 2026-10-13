@@ -8,6 +8,7 @@
 #include <vector>
 
 #include <cube/error.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
 
 // Fixed-algorithm solving for the last layer (2-look OLL / 2-look PLL).
@@ -138,6 +139,7 @@ template <typename Postcondition>
 Result<std::vector<Move>> algorithm_search(const Cube& start,
                                            const std::vector<std::vector<Move>>& alphabet,
                                            Postcondition postcondition, int max_words) {
+    CUBE_ZONE_SCOPED_N("solver.algorithm_search");
     if (postcondition(start)) {
         return std::vector<Move>{};
     }
@@ -186,6 +188,7 @@ Result<std::vector<Move>> algorithm_search(const Cube& start,
                 next = next.apply(move);
             }
             if (postcondition(next)) {
+                CUBE_ZONE_SCOPED_VALUE(visited.size());
                 return reconstruct(head, word);
             }
             if (visited.size() >= kMaxLastLayerStates) {

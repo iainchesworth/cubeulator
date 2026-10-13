@@ -69,10 +69,22 @@ target_sources(cube_lib
 
 add_dependencies(cube_lib cube_version)
 
+# Which cube/profiling.hpp the zone macros resolve to: CMake chooses the
+# directory, not an #ifdef in the header (see cmake/Tracy.cmake). PUBLIC
+# because every layer above this one - the app's capture loop and controllers,
+# the tracker wrapper, the tools - is instrumented with the same macros, and
+# the real variant includes Tracy's own headers, which cube::tracy supplies.
+if(CUBEULATOR_ENABLE_TRACY)
+    set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_enabled")
+else()
+    set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_disabled")
+endif()
+
 target_include_directories(cube_lib
     PUBLIC
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>"
+        "$<BUILD_INTERFACE:${CUBEULATOR_PROFILING_DIR}>"
         "$<INSTALL_INTERFACE:include>")
 
 target_compile_features(cube_lib PUBLIC cxx_std_23)
@@ -80,6 +92,7 @@ target_compile_features(cube_lib PUBLIC cxx_std_23)
 target_link_libraries(cube_lib
     PUBLIC
         cube::opencv
+        cube::tracy
     PRIVATE
         cube::warnings
         cube::sanitizers

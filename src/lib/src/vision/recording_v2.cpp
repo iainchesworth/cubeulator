@@ -1,5 +1,6 @@
 #include <cube/vision/recording_v2.hpp>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
 
 #include <opencv2/imgcodecs.hpp>
@@ -19,6 +20,7 @@ namespace cube::vision::recording {
 namespace fs = std::filesystem;
 
 AnalysisFrame analysis_downscale(const cv::Mat& full_bgr) {
+    CUBE_ZONE_SCOPED_N("vision.analysis_downscale");
     AnalysisFrame out;
     out.frame = full_bgr;
     if (full_bgr.cols > kAnalysisWidth) {
@@ -328,6 +330,7 @@ std::optional<std::string> AsyncRecorder::start(const std::string& dir, const Ma
 }
 
 void AsyncRecorder::push(const cv::Mat& full_bgr, std::int64_t t_ms) {
+    CUBE_ZONE_SCOPED_N("vision.recorder.push");
     if (!running_) {
         return;
     }
@@ -369,6 +372,7 @@ AsyncRecorder::Stats AsyncRecorder::stop() {
 }
 
 void AsyncRecorder::writer_loop() {
+    CUBE_THREAD_NAME("recorder-writer");
     const fs::path dir(dir_);
     std::ofstream index(dir / std::string(kIndexCsvName), std::ios::app);
     for (;;) {
@@ -382,6 +386,7 @@ void AsyncRecorder::writer_loop() {
             job = std::move(queue_.front());
             queue_.pop_front();
         }
+        CUBE_ZONE_SCOPED_N("vision.recorder.write_job");
         const auto analysis = analysis_downscale(job.full);
         const std::string name = frame_filename(pass_);
         cv::imwrite((dir / name).string(), analysis.frame, {cv::IMWRITE_JPEG_QUALITY, 90});

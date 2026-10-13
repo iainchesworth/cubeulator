@@ -5,6 +5,7 @@
 #include <utility>
 #include <vector>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
 #include <cube/solver/middle_edges.hpp>
@@ -43,6 +44,7 @@ Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
 }  // namespace
 
 Solution merge_adjacent_moves(Solution solution) {
+    CUBE_ZONE_SCOPED_N("solver.merge_adjacent_moves");
     // One stack over the whole solution rather than a pass per step. The
     // kept moves never have two neighbours on the same face, so an incoming
     // move can only merge with the top of the stack; when that pair cancels,
@@ -85,6 +87,7 @@ Solution merge_adjacent_moves(Solution solution) {
 }
 
 Result<Solution> solve(const Cube& scrambled) {
+    CUBE_ZONE_SCOPED_N("solver.solve");
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
     }

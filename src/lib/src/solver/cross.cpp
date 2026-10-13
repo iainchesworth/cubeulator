@@ -1,5 +1,7 @@
 #include <cube/solver/cross.hpp>
 
+#include <cube/profiling.hpp>
+
 #include "bfs_search.hpp"
 
 namespace cube::solver {
@@ -13,6 +15,7 @@ bool cross_solved(const Cube& cube) noexcept {
 }
 
 Result<std::vector<Move>> solve_cross(const Cube& start) {
+    CUBE_ZONE_SCOPED_N("solver.cross");
     return detail::bfs_search(
         start, std::vector<Face>(kAllFaces.begin(), kAllFaces.end()), cross_solved,
         [](const Cube& c) { return detail::SignatureKey{detail::cross_key(c), 0}; }, 8);

@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/middle_edges.hpp>
 
 #include "last_layer.hpp"
@@ -33,6 +34,7 @@ bool oll_solved(const Cube& cube) noexcept {
 }
 
 Result<std::vector<Move>> solve_oll(const Cube& start) {
+    CUBE_ZONE_SCOPED_N("solver.oll");
     std::vector<Move> solution;
     Cube cube = start;
 

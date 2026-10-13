@@ -9,6 +9,7 @@
 #include <vector>
 
 #include <cube/error.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
 
 namespace cube::solver::detail {
@@ -60,6 +61,7 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
                                      Postcondition postcondition, Signature signature,
                                      int max_depth,
                                      std::size_t max_visited_nodes = kMaxVisitedNodes) {
+    CUBE_ZONE_SCOPED_N("solver.bfs_search");
     if (postcondition(start)) {
         return std::vector<Move>{};
     }
@@ -110,6 +112,8 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
             for (int turns = 1; turns <= 3; ++turns) {
                 Cube next = current.apply(Move{face, turns});
                 if (postcondition(next)) {
+                    // The F2L stages' cost is this number, not the move count.
+                    CUBE_ZONE_SCOPED_VALUE(visited.size());
                     return reconstruct(head, Move{face, turns});
                 }
                 if (visited.size() >= max_visited_nodes) {

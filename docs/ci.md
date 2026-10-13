@@ -86,6 +86,36 @@ gh variable delete CONTROL_RUNNER_JSON                                          
   limit; ONNX Runtime has since been removed, which has not been
   re-measured), and everything macOS, iOS and Android, which the fleet cannot
   build. Moving one is a measured, separate change.
+- **Local actions are referenced as `$/.github/actions/...`, not
+  `./.github/actions/...`** (the vcpkg cache restore/save steps; zizmor's
+  `self-repository` audit asks for it). `$/` resolves to this repository at
+  the workflow's own commit, so the action does not depend on the workspace.
+  It needs runner **2.336.0 or newer** and is github.com-only. Every job that
+  uses it today runs on a hosted image; the fleet reported 2.337.0 on
+  2026-10-13. Check the fleet's runner version before routing such a job
+  there: GitHub's changelog makes 2.336.0 the minimum.
+  actionlint does not parse `$/` yet (as of 1.7.12,
+  [rhysd/actionlint#711](https://github.com/rhysd/actionlint/issues/711));
+  nothing in this repository runs it.
+
+## Toolchain versions
+
+What CI builds with, and why anything is not simply "the newest". The pins that
+are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
+
+| Component | In use | Newer exists? |
+| --- | --- | --- |
+| Qt | 6.12.0 (LTS; every fourth minor, 6.8 before it) | No - 6.12.0 is the newest release. The Windows kit is `msvc2022_64`; Qt ships no MSVC 2026 x64 kit, and it works with the VS 2026 toolset. Installing the Windows kit needs an unreleased aqtinstall (the pinned commit in `ci.yml` and `ci/install-qt.ps1`): the last release predates Qt 6.11's per-architecture repository layout. |
+| MSVC | Visual Studio 2026, via `windows-2025-vs2026` | No. |
+| GCC | 15.2 (`g++-15`, `gcov-15`) | Yes: GCC 16 is released upstream, but ubuntu-26.04's `gcc-16` is a March 2026 snapshot (`16-20260322`), not a release. The `Linux (GCC 15)` check name is also required on `main`. |
+| clang-format | 23.1.3, pinned PyPI wheel (`ci/requirements-lint.txt`) | No. |
+| clang-tidy and its compiler | Clang 23.x from apt.llvm.org | No, but it is a snapshot of `release/23.x` rebuilt as the branch moves, not a frozen version; there is no clang-tidy 23 wheel on PyPI yet. |
+| AppleClang | Xcode 26 on `macos-26` (desktop); `macos-15` (iOS) | iOS stays on `macos-15` for the open vcpkg pkg-config issue [microsoft/vcpkg#50681](https://github.com/microsoft/vcpkg/issues/50681). |
+| Android | NDK r28c (28.2.13676358), JDK 21, platform 36, build-tools 36.0.0 | r30 exists. r28c is newer than the r27c Qt 6.12 names and builds its libraries with: Qt recommends matching it but does not rule a newer NDK out, so this is outside Qt's tested configuration on purpose (r27c is the fallback). r28c's libc++ has `std::expected::transform`/`and_then`, `std::format`/`std::print`, `ranges::contains`/`fold_left` and `mdspan`, which r26b lacks; it still lacks float `from_chars`, `views::enumerate` and `flat_map`. |
+| CMake | newest 4.x (`lukka/get-cmake`, `cmakeVersion: latest`); policies to 4.4 | No. |
+| mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
+| vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, bgfx, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
+| iOS deployment target | 18.0 (`CMakePresets.json`) | No - 18 is Qt 6.12's minimum iOS (it was 16.3 for Qt 6.8), built with Xcode 16's iOS 18 SDK. iOS CI is build-only and does not build Qt, so this is the project's own floor, not something Qt exercises there. |
 
 ## Dependencies
 

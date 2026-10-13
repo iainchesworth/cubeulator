@@ -1,6 +1,7 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
+#include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
 
@@ -487,6 +488,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 }  // namespace
 
 std::optional<SideRead> read_side(const cv::Mat& bgr) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
     if (bgr.empty() || bgr.type() != CV_8UC3) {
         return std::nullopt;
     }
@@ -564,6 +566,7 @@ void SideScan::reset() {
 }
 
 void SideScan::add(const std::optional<SideRead>& read) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
     in_view_.reset();
     if (!read.has_value()) {
         previous_centre_.reset();
@@ -647,6 +650,7 @@ Result<solver::Cube> SideScan::cube() const {
 }
 
 Result<ScannedCube> SideScan::scanned() const {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.scanned");
     const std::vector<std::size_t> captured = captured_by_support();
     if (captured.size() < 6) {
         return std::unexpected(CubeError::face_capture_incomplete);

@@ -2,6 +2,8 @@
 
 #include "interfaces/camera.hpp"
 
+#include <cube/profiling.hpp>
+
 #include <QColor>
 #include <QDateTime>
 #include <QDir>
@@ -70,6 +72,7 @@ void DirectScan::setRecordingRoot(const QString& root) {
 }
 
 void DirectScan::record(const cv::Mat& bgr, std::int64_t t_ms) {
+    CUBE_ZONE_SCOPED_N("direct_scan.record");
     if (recording_root_.isEmpty() || recording_refused_) {
         return;
     }
@@ -255,6 +258,7 @@ void DirectScan::poll() {
     if (!frame.has_value()) {
         return;
     }
+    CUBE_ZONE_SCOPED_N("direct_scan.poll_frame");
     // The lock reports once, when it has been applied or refused. Either
     // way the camera is as steady as it is going to get.
     if (cube::platform::camera::take_photometry_report().has_value() ||
@@ -265,6 +269,8 @@ void DirectScan::poll() {
 }
 
 void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
+    CUBE_ZONE_SCOPED_N("direct_scan.process_frame");
+    CUBE_FRAME_MARK();
     {
         const std::scoped_lock lock(frame_mutex_);
         latest_frame_ = bgr;
@@ -330,6 +336,7 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     emit sidesChanged();
     if (scanned_.has_value()) {
         finishRecording();
+        CUBE_MESSAGE("direct_scan.completed");
         emit scanCompleted();
     }
 }

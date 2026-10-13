@@ -38,6 +38,26 @@
       "dependencies": [
         "catch2"
       ]
+    },
+    "profiling": {
+      "description": "Tracy profiler instrumentation (CUBEULATOR_ENABLE_TRACY) - opt-in, selected by -DCUBEULATOR_ENABLE_TRACY=ON, so a normal build never pulls it in",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "default-features": false,
+          "features": [
+            "on-demand"
+          ]
+        },
+        {
+          "name": "tracy",
+          "host": true,
+          "default-features": false,
+          "features": [
+            "cli-tools"
+          ]
+        }
+      ]
     }
   }
 }

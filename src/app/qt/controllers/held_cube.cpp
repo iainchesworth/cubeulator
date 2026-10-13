@@ -3,6 +3,8 @@
 #include "controllers/direct_scan.hpp"
 #include "solve_controller.hpp"
 
+#include <cube/profiling.hpp>
+
 #include <QDateTime>
 #include <QFile>
 #include <QIODevice>
@@ -275,6 +277,7 @@ std::optional<Hold> HeldCube::choose(const std::vector<Hold>& holds) const {
 
 HeldCube::Verdict HeldCube::judge(const cube::vision::SideRead& read,
                                   const cube::vision::SessionColours& colours) const {
+    CUBE_ZONE_SCOPED_N("held_cube.judge");
     using Kind = Verdict::Kind;
     const Cube& now = solve_.currentCube();
     // Every comparison counts only the stickers the reader found: a cube in
@@ -362,6 +365,7 @@ HeldCube::Verdict HeldCube::judge(const cube::vision::SideRead& read,
 }
 
 void HeldCube::onFrameWatched() {
+    CUBE_ZONE_SCOPED_N("held_cube.on_frame_watched");
     const std::optional<cube::vision::SideRead>& read = scan_.read();
     const std::optional<cube::vision::SessionColours> colours = scan_.colours();
     if (!read.has_value() || !colours.has_value() || solve_.isSolving()) {

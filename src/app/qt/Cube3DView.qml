@@ -54,6 +54,11 @@ Item {
     // turned a layer, painting the cube as it now stands therefore changes
     // nothing on screen - provided the turn shown was the turn made, which
     // is what cube_view_test.cpp holds this file to.
+    //
+    // Hand it a new object each time, as SolveScreen.painted() does. Since
+    // Qt 6.12, a QVariantMap assigned from C++ that equals the current value
+    // no longer emits faceletColorsChanged (Qt 6.8 did), so repainting an
+    // unchanged cube that way would leave a turned layer where it is.
     onFaceletColorsChanged: resetLayers()
 
     // ---- Move guidance ----------------------------------------------------

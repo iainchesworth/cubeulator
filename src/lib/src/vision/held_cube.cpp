@@ -1,5 +1,7 @@
 #include <cube/vision/held_cube.hpp>
 
+#include <cube/profiling.hpp>
+
 #include <algorithm>
 #include <cstddef>
 #include <limits>
@@ -13,6 +15,7 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
 [[nodiscard]] std::array<HoldFit, 24> fit(const std::array<cv::Vec3f, 9>& lab,
                                           const std::array<bool, 9>& counted,
                                           const solver::Cube& cube, const SessionColours& colours) {
+    CUBE_ZONE_SCOPED_N("vision.held_cube.fit");
     std::array<HoldFit, 24> fits{};
     const std::array<solver::Hold, 24> holds = solver::all_holds();
     for (std::size_t i = 0; i < holds.size(); ++i) {

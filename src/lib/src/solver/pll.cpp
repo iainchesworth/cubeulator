@@ -3,6 +3,7 @@
 #include <array>
 #include <vector>
 
+#include <cube/profiling.hpp>
 #include <cube/solver/oll.hpp>
 
 #include "last_layer.hpp"
@@ -49,6 +50,7 @@ bool corners_permuted(const Cube& cube) noexcept {
 }  // namespace
 
 Result<std::vector<Move>> solve_pll(const Cube& start) {
+    CUBE_ZONE_SCOPED_N("solver.pll");
     std::vector<Move> solution;
     Cube cube = start;
 
