@@ -132,15 +132,17 @@ LanguageManager::LanguageManager(QGuiApplication& app, QQmlEngine& engine,
       languages_(loadLanguages()) {
     // A build without the embedded set still has English, so that nothing
     // below has to ask whether the list is empty.
-    if (find(languages_, QStringLiteral("en")) == nullptr) {
-        LanguageInfo english;
-        english.code = QStringLiteral("en");
-        english.file = QStringLiteral("en");
-        english.tag = QStringLiteral("en_GB");
-        english.name = QStringLiteral("English");
-        languages_.insert(languages_.begin(), english);
+    const LanguageInfo* english = find(languages_, QStringLiteral("en"));
+    if (english == nullptr) {
+        LanguageInfo fallback;
+        fallback.code = QStringLiteral("en");
+        fallback.file = QStringLiteral("en");
+        fallback.tag = QStringLiteral("en_GB");
+        fallback.name = QStringLiteral("English");
+        languages_.insert(languages_.begin(), fallback);
+        english = &languages_.front();
     }
-    current_ = *find(languages_, QStringLiteral("en"));
+    current_ = *english;
 }
 
 void LanguageManager::applyInitialLanguage() {
