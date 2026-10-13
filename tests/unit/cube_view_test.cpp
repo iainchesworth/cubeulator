@@ -378,3 +378,49 @@ TEST_CASE("the viewpoint shows the top, the front and the right side", "[qml][cu
     // Upright: the top still faces up the screen, not off to one side.
     CHECK(std::abs(cube::test::side_direction(view.item(), Face::U).x) < 1e-6);
 }
+
+TEST_CASE("a dragged view shows the back, and comes home when let go", "[qml][cube-view]") {
+    View view;
+    view.set("viewDuration", 0);
+    view.set("dragTurnsView", true);
+    view.set("viewPitch", 24);
+    view.set("viewYaw", -32);
+    REQUIRE(wait_for([&]() { return !view.get("viewMoving").toBool(); }));
+    const auto towards_viewer = [&](Face side) {
+        return cube::test::side_direction(view.item(), side).z;
+    };
+    const Cube cube = cube::solver::random_scramble(71);
+    view.show(cube);
+    view.guide(Move{Face::R, 1});
+    REQUIRE(wait_for([&]() { return view.get("nudging").toBool(); }));
+
+    // Half a turn round and tipped over: the back and the bottom come into
+    // view, the front and the top go out of it.
+    view.set("dragYaw", 180.0);
+    view.set("dragPitch", -48.0);
+    CHECK(towards_viewer(Face::B) > 0.3);
+    CHECK(towards_viewer(Face::D) > 0.3);
+    CHECK(towards_viewer(Face::F) < -0.3);
+    CHECK(towards_viewer(Face::U) < -0.3);
+    // Looking round the cube is not turning it: the layer goes on nudging.
+    CHECK(view.get("nudging").toBool());
+
+    view.call("releaseView");
+    REQUIRE(wait_for([&]() {
+        return view.get("dragYaw").toDouble() == 0.0 && view.get("dragPitch").toDouble() == 0.0;
+    }));
+    CHECK(towards_viewer(Face::U) > 0.3);
+    CHECK(towards_viewer(Face::F) > 0.3);
+    CHECK(towards_viewer(Face::R) > 0.3);
+
+    // Wound round more than once, it still comes home, and the short way.
+    view.set("dragYaw", 760.0);
+    view.call("releaseView");
+    CHECK(std::abs(view.get("dragYaw").toDouble()) <= 180.0);
+    REQUIRE(wait_for([&]() { return view.get("dragYaw").toDouble() == 0.0; }));
+
+    // And no sticker has moved for any of it.
+    view.guide(std::nullopt);
+    REQUIRE(wait_for([&]() { return !view.get("nudging").toBool(); }));
+    CHECK(view.shows(cube));
+}

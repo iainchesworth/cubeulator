@@ -121,7 +121,7 @@ Rectangle {
                 + ") was turned instead. Turn it back, then make the move shown.";
         }
         if (HeldCube.sight === "unknown")
-            return "The side facing the camera is not what the solution has there. Check the last move, or step back with Previous.";
+            return "The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan.";
         return "";
     }
 
@@ -211,6 +211,14 @@ Rectangle {
         }
     }
 
+    // The cube is solved: on to the screen that says so. Only the button does
+    // this - a key held down to step quickly must not run off the end of the
+    // solution and out of the screen.
+    function finish() {
+        if (SolveController.atEnd && !SolveController.isSolving)
+            AppState.screen = "complete";
+    }
+
     // Hands are on the cube, not the mouse.
     focus: true
     Component.onCompleted: forceActiveFocus()
@@ -229,7 +237,9 @@ Rectangle {
         // moves mean nothing.
         Text {
             anchors.left: parent.left; anchors.leftMargin: Theme.space3
-            anchors.right: progress.left; anchors.rightMargin: Theme.space3
+            anchors.right: progress.left
+            // Wide, the way-out button sits between this and the count.
+            anchors.rightMargin: Theme.space3 + (root.wide ? leave.width + Theme.space3 : 0)
             anchors.verticalCenter: parent.verticalCenter
             text: root.holdWords
             elide: Text.ElideRight
@@ -239,7 +249,8 @@ Rectangle {
             id: progress
             anchors.right: parent.right; anchors.rightMargin: Theme.space3
             anchors.verticalCenter: parent.verticalCenter
-            text: AppState.elapsedLabel() + " · " + SolveController.moveIndex + "/" + SolveController.totalMoves
+            text: (root.wide ? AppState.elapsedLabel() + " · " : "")
+                + SolveController.moveIndex + "/" + SolveController.totalMoves
             font.family: Theme.fontMono; font.pixelSize: 13; color: Theme.ink
         }
         Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
@@ -265,14 +276,18 @@ Rectangle {
             anchors.centerIn: parent
             anchors.verticalCenterOffset: root.wide ? 6 : 14 - noteRoom / 2
 
-            interactive: false
+            // Drag it to look round the back; let go and it comes home. The
+            // layer about to move keeps nudging all the while.
+            interactive: true
+            dragTurnsView: true
             autoRotate: false
+            HoverHandler { cursorShape: cube.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor }
             // The colours here are matched against a real cube.
             evenLight: true
             shaderStyle: SettingsState.shaderStyleIndex
             showStats: SettingsState.statsForNerds
 
-            objectName: "cube"
+            objectName: "solve.cube"
 
             // Turned the way the cube is held, and seen from wherever shows
             // the side about to move.
@@ -316,6 +331,16 @@ Rectangle {
                     color: Theme.ink
                 }
             }
+        }
+
+        // That the cube can be picked up and looked round is not obvious
+        // from a cube that is busy showing a move.
+        Text {
+            visible: root.wide
+            anchors.right: parent.right; anchors.bottom: parent.bottom; anchors.margins: Theme.space4
+            text: "Drag the cube to look round it"
+            font.family: Theme.fontHeading; font.pixelSize: 11
+            color: Theme.inkMuted(0.5)
         }
 
         // What the camera sees, small, with a dot on each sticker of the side
@@ -395,29 +420,38 @@ Rectangle {
             width: parent.width - 2 * Theme.space4
             spacing: Theme.space2
 
-        // The cube is not as the solution has it.
+        // The cube is not as the solution has it. Says what the camera
+        // made of it, and offers the way back.
         Rectangle {
             id: mistakeNote
             visible: root.mistakeTitle !== ""
-            width: Math.min(360, parent.width)
+            width: Math.min(380, parent.width)
             height: mistakeNoteText.implicitHeight + 2 * Theme.space2
-            color: Theme.accent
+            color: Theme.accent100
+            border.width: 1; border.color: Theme.accent
+            Rectangle { width: 4; height: parent.height; color: Theme.accent }
             Column {
                 id: mistakeNoteText
-                x: Theme.space3; y: Theme.space2
-                width: parent.width - 2 * Theme.space3
+                x: Theme.space3 + 4; y: Theme.space2
+                width: parent.width - 2 * Theme.space3 - 4
                 spacing: 2
                 Text {
                     text: root.mistakeTitle
                     font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.ExtraBold
-                    color: "#FFFFFF"
+                    color: Theme.accent
                 }
                 Text {
                     width: parent.width
                     text: root.mistakeWords
                     wrapMode: Text.WordWrap
                     font.family: Theme.fontHeading; font.pixelSize: 12
-                    color: "#FFFFFF"
+                    color: Theme.ink
+                }
+                AppButton {
+                    objectName: "solve.rescanFromNote"
+                    height: 30
+                    variant: "ghost"; text: "Rescan the cube and carry on from there"
+                    onClicked: AppState.rescan()
                 }
             }
         }
@@ -593,22 +627,42 @@ Rectangle {
             Rectangle { width: parent.width; height: 2; color: Theme.divider }
             AppButton {
                 id: previousButton
+                objectName: "solve.previous"
                 x: Theme.space3; y: Theme.space3 + 1
                 height: 42
                 variant: "secondary"; text: "Previous"
                 enabled: !SolveController.atStart
                 onClicked: root.previous()
             }
+            // The same button steps and, once there is nothing left to step,
+            // leaves for the screen that says so.
             AppButton {
+                objectName: "solve.next"
                 anchors.left: previousButton.right; anchors.leftMargin: Theme.space2
                 anchors.right: parent.right; anchors.rightMargin: Theme.space3
                 y: Theme.space3 + 1
                 height: 42
-                variant: "primary"; text: SolveController.atEnd ? "Solved!" : "Next move"
-                enabled: !SolveController.atEnd
-                onClicked: root.next()
+                variant: "primary"; text: SolveController.atEnd ? "Finish" : "Next move"
+                enabled: !SolveController.isSolving
+                onClicked: SolveController.atEnd ? root.finish() : root.next()
             }
         }
+    }
+
+    // The way back when the cube and the solution have parted company: read
+    // the cube again as it is now and solve it from there. Whatever is
+    // already done stays done - the new solution starts from the cube as it
+    // stands. In the header when there is room for it beside the hold line;
+    // narrow, the hold line needs the whole header, and this sits above the
+    // stepping buttons.
+    AppButton {
+        id: leave
+        objectName: "solve.rescan"
+        x: root.wide ? progress.x - width - Theme.space3 : root.width - width - Theme.space3
+        y: root.wide ? (header.height - height) / 2 : root.height - buttons.height - height - Theme.space1
+        height: 30
+        variant: "ghost"; text: "Out of step? Rescan"
+        onClicked: AppState.rescan()
     }
 
     // ---- solving overlay: the solve runs off the UI thread (see

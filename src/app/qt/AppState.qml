@@ -191,4 +191,11 @@ QtObject {
         elapsedSeconds = 0;
         screen = "scan";
     }
+
+    // Part-way through a solve the cube and the solution no longer agree:
+    // read the cube again as it now is and solve it from there. The same
+    // solve as far as the clock is concerned, so the time keeps running.
+    function rescan() {
+        screen = "scan";
+    }
 }

@@ -92,7 +92,7 @@ public:
         }
         item_->setWidth(900);
         item_->setHeight(640);
-        cube_ = item_->findChild<QQuickItem*>(QStringLiteral("cube"));
+        cube_ = item_->findChild<QQuickItem*>(QStringLiteral("solve.cube"));
         REQUIRE(cube_ != nullptr);
         // How long things take to move is not under test.
         REQUIRE(cube_->setProperty("turnDuration", 30));
@@ -100,6 +100,9 @@ public:
     }
 
     [[nodiscard]] QQuickItem* cube() const { return cube_; }
+    [[nodiscard]] QObject* find(const char* name) const {
+        return item_->findChild<QObject*>(QString::fromLatin1(name));
+    }
     [[nodiscard]] QVariant get(const char* name) const { return item_->property(name); }
     void call(const char* method) { REQUIRE(QMetaObject::invokeMethod(item_.get(), method)); }
 
@@ -184,6 +187,20 @@ TEST_CASE("stepping the solve screen keeps its cube the solver's cube, to solved
     screen.call("next");
     CHECK(solver.atEnd());
 
+    // Solved is not a dead end: the screen can be left for the one that says
+    // so - but only from the end.
+    QObject* app_state =
+        cube::test::qml_engine().singletonInstance<QObject*>("Cubeulator", "AppState");
+    REQUIRE(app_state != nullptr);
+    const QVariant came_from = app_state->property("screen");
+    screen.call("finish");
+    CHECK(app_state->property("screen").toString() == "complete");
+    REQUIRE(app_state->setProperty("screen", came_from));
+    for (const char* control : {"solve.next", "solve.previous", "solve.rescan"}) {
+        INFO(control);
+        CHECK(screen.find(control) != nullptr);
+    }
+
     // And back again: each step back is the last move turned the other way.
     while (!solver.atStart()) {
         const int index = solver.moveIndex();
@@ -192,6 +209,9 @@ TEST_CASE("stepping the solve screen keeps its cube the solver's cube, to solved
         REQUIRE(wait_for([&]() { return solver.moveIndex() == index - 1; }));
         REQUIRE(screen.shows(solver.currentCube()));
     }
+    // Part-way through, there is nothing to finish.
+    screen.call("finish");
+    CHECK(app_state->property("screen") == came_from);
     CHECK(solver.currentCube() == scrambled);
     CHECK(screen.shows(scrambled));
 }
