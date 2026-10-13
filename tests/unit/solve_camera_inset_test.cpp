@@ -96,8 +96,9 @@ TEST_CASE("the solve screen's camera preview follows the camera on whether it is
             cube::test::app_controllers().camera.previewMirrored());
 }
 
-TEST_CASE("the solve screen's camera preview flips the picture and its dots together, and nothing else",
-          "[qml][solve-screen][camera-preview]") {
+TEST_CASE(
+    "the solve screen's camera preview flips the picture and its dots together, and nothing else",
+    "[qml][solve-screen][camera-preview]") {
     const bool mirrored = GENERATE(true, false);
     CAPTURE(mirrored);
 
