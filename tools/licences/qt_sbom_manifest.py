@@ -116,6 +116,9 @@ def merge(per_platform: dict[str, dict[str, dict]]) -> dict:
     for cid, rec in merged.items():
         if rec["kind"] == "module":
             files[f"qt6{rec['name'].lower()}"] = cid
+            # the shared library of QuickShapesPrivate is Qt6QuickShapes.dll
+            if rec["name"].endswith("Private"):
+                files.setdefault(f"qt6{rec['name'][:-len('Private')].lower()}", cid)
         elif rec["kind"] == "plugin":
             files[rec["name"].lower()] = cid
     versions = sorted({r["version"] for r in merged.values() if r["kind"] == "module"})

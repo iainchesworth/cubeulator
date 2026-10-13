@@ -151,13 +151,13 @@ tools/tests only.
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
 | vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
 
-**Linux-specific finding [V: port manifests].** `opencv4[highgui]` on Linux is
-configured with the `gtk` feature (`vcpkg.json`), which makes vcpkg build
-`gtk3` and a chain of about 45 ports: GTK3, GLib, Pango, ATK, gdk-pixbuf,
+**Linux-specific finding [V: port manifests].** `vcpkg.json` asks for
+`opencv4[highgui]` and, on Linux, `opencv4[gtk]`; the `gtk` feature makes vcpkg
+build `gtk3` and a chain of about 45 ports: GTK3, GLib, Pango, ATK, gdk-pixbuf,
 fribidi, gettext (all LGPL-2.0/2.1+), Cairo (LGPL-2.1 or MPL-1.1), D-Bus
 (AFL-2.1 or GPL-2.0+), plus the X11 libraries. The only code in the repository
 that includes `highgui` is the vendored M3T, which R6 removes; the app and
-`cube::lib` do not use it. **Recommendation: drop `highgui` (and with it `gtk`)
+`cube::lib` do not use it. **Recommendation: drop the `highgui` and `gtk` features
 from `vcpkg.json` when M3T goes.** That deletes an LGPL toolkit and ~45 ports
 from every Linux package. The generator will list whatever the build does
 include on Linux; I could not run a Linux build here.
@@ -487,9 +487,11 @@ Known gaps, so nobody mistakes them for done:
    ISC, Zlib - the standard SPDX wording without a copyright line), so a
    reviewer should diff them against <https://spdx.org/licenses/> once. The
    provenance of every text is in `third_party/notices/licences/README.md`.
-   The eight texts that had to be fetched (FTL, Unicode-3.0, AML-glslang,
-   Bison-exception-2.2, X11, HPND, Imlib2, MIT-open-group) were downloaded from
-   the SPDX licence-list repository with Iain's approval on 2026-10-13.
+   Nine texts had to be fetched (FTL, Unicode-3.0, AML-glslang,
+   Bison-exception-2.2, X11, HPND, Imlib2, MIT-open-group, HPND-sell-variant);
+   they were downloaded from the SPDX licence-list repository with Iain's
+   approval on 2026-10-13. `IJG` is the "LEGAL ISSUES" section of
+   libjpeg-turbo's `README.ijg`, from the source vcpkg unpacked locally.
 2. **Only the Windows link line was exercised against a real build here.**
    Linux, macOS and Android configurations are written to the same
    mechanism; CI is where they get checked.
@@ -629,7 +631,8 @@ licence reference. This list exists so a reviewer knows what to look for.
    for the licence and any NOTICE; supplying the real holder is a one-line
    fix once someone checks the OpenCV Zoo.
 6. **GTK3 and about 45 LGPL/X11 ports reach Linux** through
-   `opencv4[highgui]`, for code that only the vendored M3T uses (section 2.4).
+   `opencv4[gtk]`, which exists to back `highgui`, which only the vendored M3T
+   uses (section 2.4).
 7. **bgfx is a declared dependency nothing links**; it would otherwise have
    looked like a shipped component. The inventory distinguishes declared from
    linked because the generator reads the link line.
