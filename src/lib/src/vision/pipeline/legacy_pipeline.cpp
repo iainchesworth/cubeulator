@@ -88,7 +88,9 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     // cv::estimateAffine2D draws from the thread-local RNG; reseeding from
     // the frame seq makes every frame's fits independent of processing
     // history, so identical recordings give byte-identical traces.
-    cv::theRNG().state = 0x9E3779B97F4A7C15ULL ^ static_cast<std::uint64_t>(frame.seq);
+    // UINT64_C, not a bare ULL: on LP64 std::uint64_t is `unsigned long`, and mixing it
+    // with an `unsigned long long` literal trips GCC's -Wsign-conversion.
+    cv::theRNG().state = UINT64_C(0x9E3779B97F4A7C15) ^ static_cast<std::uint64_t>(frame.seq);
 
     // --- A. acquire --------------------------------------------------------
     auto stage_start = Clock::now();
