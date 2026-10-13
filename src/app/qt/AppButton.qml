@@ -12,8 +12,27 @@ Item {
     property string leadingIcon: ""
     property bool block: false // fill width; label flush-left instead of centered
     property bool enabled: true
-    implicitHeight: 44
-    implicitWidth: block ? 200 : (label.implicitWidth + (root.leadingIcon ? 26 : 0) + (root.trailingIcon ? 26 : 0) + Theme.space6)
+    // The widest the button may be, for one that is as wide as its label (a
+    // chip in a row). A label that does not fit wraps onto another line and
+    // the button grows taller; it is never cut off or run past the edge. -1:
+    // as wide as the label, as before. A block button is as wide as it is
+    // given, and wraps the same way.
+    property real maxWidth: -1
+
+    // What the label would measure on one line, whatever room it is given.
+    TextMetrics {
+        id: oneLine
+        font: label.font
+        text: root.text
+    }
+    readonly property real chrome: (root.leadingIcon ? 26 : 0) + (root.trailingIcon ? 26 : 0) + Theme.space6
+    readonly property real textRoom: root.block
+        ? root.width - Theme.space4 * 2 - (root.leadingIcon ? 26 : 0) - (root.trailingIcon ? 26 : 0)
+        : root.width - root.chrome
+
+    implicitHeight: Math.max(44, label.height + Theme.space3 * 2)
+    implicitWidth: block ? 200 : (maxWidth > 0 ? Math.min(oneLine.advanceWidth + chrome, maxWidth)
+                                               : oneLine.advanceWidth + chrome)
 
     signal clicked()
 
@@ -56,6 +75,11 @@ Item {
             font.pixelSize: 14
             anchors.verticalCenter: parent.verticalCenter
             color: root.primary ? Theme.paper : (root.ghost ? Theme.accent : Theme.ink)
+            // As wide as it is, up to the room the button leaves it; past that
+            // it wraps. (Before the button has a width there is no room to
+            // speak of, so it is left whole.)
+            wrapMode: Text.WordWrap
+            width: root.textRoom > 0 ? Math.min(oneLine.advanceWidth, root.textRoom) : oneLine.advanceWidth
         }
     }
 
