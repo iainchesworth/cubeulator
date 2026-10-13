@@ -167,6 +167,9 @@ By what a person waits for, and how far it is from its budget, as found:
 
 The solver's cost per visit fell from 1.7 to 3.4 us to 0.15 to 0.29 us; what it
 did not change is the number of visits, and that is the one lever left (below).
+Over 2000 further scrambles the new search had no failure, a mean of 104 ms, a
+95th percentile of 186 ms and a worst of 341 ms; 120 more gave the digest the
+old search gave.
 
 ## What was not fixed
 
