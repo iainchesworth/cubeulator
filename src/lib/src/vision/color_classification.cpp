@@ -23,14 +23,15 @@ using cube::model::FacetColor;
 ColorPalette default_palette() {
     // Approximate sRGB reference values for standard Rubik's cube sticker
     // colors under neutral lighting (BGR order, matching cv::Vec3b samples).
-    return ColorPalette{.entries = {{
-                            {FacetColor::white, bgr_to_lab(cv::Vec3b(255, 255, 255))},
-                            {FacetColor::yellow, bgr_to_lab(cv::Vec3b(0, 213, 255))},
-                            {FacetColor::red, bgr_to_lab(cv::Vec3b(0, 0, 196))},
-                            {FacetColor::orange, bgr_to_lab(cv::Vec3b(0, 106, 255))},
-                            {FacetColor::green, bgr_to_lab(cv::Vec3b(72, 155, 0))},
-                            {FacetColor::blue, bgr_to_lab(cv::Vec3b(173, 70, 0))},
-                        }}};
+    return ColorPalette{
+        .entries = {{
+            {.color = FacetColor::white, .lab = bgr_to_lab(cv::Vec3b(255, 255, 255))},
+            {.color = FacetColor::yellow, .lab = bgr_to_lab(cv::Vec3b(0, 213, 255))},
+            {.color = FacetColor::red, .lab = bgr_to_lab(cv::Vec3b(0, 0, 196))},
+            {.color = FacetColor::orange, .lab = bgr_to_lab(cv::Vec3b(0, 106, 255))},
+            {.color = FacetColor::green, .lab = bgr_to_lab(cv::Vec3b(72, 155, 0))},
+            {.color = FacetColor::blue, .lab = bgr_to_lab(cv::Vec3b(173, 70, 0))},
+        }}};
 }
 
 }  // namespace cube::vision

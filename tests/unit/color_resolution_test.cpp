@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <numbers>
 #include <random>
 #include <utility>
 
@@ -33,14 +34,14 @@ SyntheticScan make_scan() {
     SyntheticScan scan;
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            scan.faces[face].lab[i] = palette.entries[face].lab;
-            scan.truth[face][i] = palette.entries[face].color;
+            scan.faces.at(face).lab.at(i) = palette.entries.at(face).lab;
+            scan.truth.at(face).at(i) = palette.entries.at(face).color;
         }
     }
     const auto swap_stickers = [&scan](std::size_t face_a, std::size_t cell_a, std::size_t face_b,
                                        std::size_t cell_b) {
-        std::swap(scan.faces[face_a].lab[cell_a], scan.faces[face_b].lab[cell_b]);
-        std::swap(scan.truth[face_a][cell_a], scan.truth[face_b][cell_b]);
+        std::swap(scan.faces.at(face_a).lab.at(cell_a), scan.faces.at(face_b).lab.at(cell_b));
+        std::swap(scan.truth.at(face_a).at(cell_a), scan.truth.at(face_b).at(cell_b));
     };
     swap_stickers(0, 0, 2, 8);
     swap_stickers(1, 1, 4, 7);
@@ -88,7 +89,7 @@ void add_noise(SyntheticScan& scan, float sigma, std::uint32_t seed) {
                 continue;
             }
             for (int channel = 0; channel < 3; ++channel) {
-                face.lab[i][channel] += std::clamp(noise(rng), -1.5F * sigma, 1.5F * sigma);
+                face.lab.at(i)[channel] += std::clamp(noise(rng), -1.5F * sigma, 1.5F * sigma);
             }
         }
     }
@@ -100,9 +101,9 @@ void require_recovered(const SyntheticScan& scan) {
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
             CAPTURE(face, i);
-            REQUIRE((*resolved)[face][i].color == scan.truth[face][i]);
-            REQUIRE((*resolved)[face][i].confidence >= 0.0F);
-            REQUIRE((*resolved)[face][i].confidence <= 1.0F);
+            REQUIRE((*resolved).at(face).at(i).color == scan.truth.at(face).at(i));
+            REQUIRE((*resolved).at(face).at(i).confidence >= 0.0F);
+            REQUIRE((*resolved).at(face).at(i).confidence <= 1.0F);
         }
     }
 }
@@ -158,16 +159,17 @@ TEST_CASE("classify_lab names this cube's warm-cast white face white", "[vision]
         cv::Vec3f lab;
     };
     const std::array<Sample, 10> whites{{
-        {"runD U[3] chroma 15.7", {87.2F, 6.4F, 14.3F}},
-        {"runD B[7] chroma 15.8", {86.1F, 6.4F, 14.4F}},
-        {"runD D[2] chroma 17.6", {82.8F, 7.8F, 15.8F}},
-        {"runD B[2] chroma 17.8", {76.5F, 8.0F, 15.9F}},
-        {"runD R[7] chroma 18.7", {78.0F, 7.8F, 17.1F}},
-        {"runD L[6] chroma 18.8", {78.0F, 7.7F, 17.1F}},
-        {"runD D[4] chroma 19.3", {77.3F, 9.2F, 17.0F}},
-        {"runD R[1] chroma 20.2", {79.3F, 9.3F, 18.0F}},
-        {"runD F[2] chroma 21.0 - the most chromatic white measured", {69.0F, 9.7F, 18.6F}},
-        {"runA U[8] L 66.6 - the darkest white measured", {66.6F, 9.7F, 17.6F}},
+        {.where = "runD U[3] chroma 15.7", .lab = {87.2F, 6.4F, 14.3F}},
+        {.where = "runD B[7] chroma 15.8", .lab = {86.1F, 6.4F, 14.4F}},
+        {.where = "runD D[2] chroma 17.6", .lab = {82.8F, 7.8F, 15.8F}},
+        {.where = "runD B[2] chroma 17.8", .lab = {76.5F, 8.0F, 15.9F}},
+        {.where = "runD R[7] chroma 18.7", .lab = {78.0F, 7.8F, 17.1F}},
+        {.where = "runD L[6] chroma 18.8", .lab = {78.0F, 7.7F, 17.1F}},
+        {.where = "runD D[4] chroma 19.3", .lab = {77.3F, 9.2F, 17.0F}},
+        {.where = "runD R[1] chroma 20.2", .lab = {79.3F, 9.3F, 18.0F}},
+        {.where = "runD F[2] chroma 21.0 - the most chromatic white measured",
+         .lab = {69.0F, 9.7F, 18.6F}},
+        {.where = "runA U[8] L 66.6 - the darkest white measured", .lab = {66.6F, 9.7F, 17.6F}},
     }};
     for (const auto& sample : whites) {
         CAPTURE(sample.where);
@@ -201,21 +203,34 @@ TEST_CASE("the warm-cast white rule steals no green, yellow or blue", "[vision]"
         FacetColor expected;
     };
     const std::array<Sample, 9> tiles{{
-        {"runA R[2] green, chroma 20.5", {22.2F, -11.1F, 17.3F}, FacetColor::green},
-        {"runD B[1] green, chroma 25.8", {39.4F, -14.8F, 21.1F}, FacetColor::green},
-        {"runD D[3] green, chroma 30.7", {40.8F, -18.1F, 24.8F}, FacetColor::green},
-        {"live1 L[4] yellow washed to chroma 16.7 at L 66.4",
-         {66.4F, -1.1F, 16.7F},
-         FacetColor::yellow},
-        {"live1 D[0] yellow washed to chroma 19.3 at L 66.5",
-         {66.5F, 1.2F, 19.3F},
-         FacetColor::yellow},
-        {"runA D[1] yellow, chroma 52.8 at L 77.9", {77.9F, 3.5F, 52.7F}, FacetColor::yellow},
-        {"runA F[2] blue, L 67.6 chroma 18.8 - lighter and less chromatic than the palest white",
-         {67.6F, 3.1F, -18.6F},
-         FacetColor::blue},
-        {"live2 F[1] blue, L 64.1 chroma 21.6", {64.1F, 3.7F, -21.3F}, FacetColor::blue},
-        {"live2 F[3] blue, L 65.0 chroma 22.6", {65.0F, 3.9F, -22.2F}, FacetColor::blue},
+        {.where = "runA R[2] green, chroma 20.5",
+         .lab = {22.2F, -11.1F, 17.3F},
+         .expected = FacetColor::green},
+        {.where = "runD B[1] green, chroma 25.8",
+         .lab = {39.4F, -14.8F, 21.1F},
+         .expected = FacetColor::green},
+        {.where = "runD D[3] green, chroma 30.7",
+         .lab = {40.8F, -18.1F, 24.8F},
+         .expected = FacetColor::green},
+        {.where = "live1 L[4] yellow washed to chroma 16.7 at L 66.4",
+         .lab = {66.4F, -1.1F, 16.7F},
+         .expected = FacetColor::yellow},
+        {.where = "live1 D[0] yellow washed to chroma 19.3 at L 66.5",
+         .lab = {66.5F, 1.2F, 19.3F},
+         .expected = FacetColor::yellow},
+        {.where = "runA D[1] yellow, chroma 52.8 at L 77.9",
+         .lab = {77.9F, 3.5F, 52.7F},
+         .expected = FacetColor::yellow},
+        {.where = "runA F[2] blue, L 67.6 chroma 18.8 - lighter and less chromatic than the palest "
+                  "white",
+         .lab = {67.6F, 3.1F, -18.6F},
+         .expected = FacetColor::blue},
+        {.where = "live2 F[1] blue, L 64.1 chroma 21.6",
+         .lab = {64.1F, 3.7F, -21.3F},
+         .expected = FacetColor::blue},
+        {.where = "live2 F[3] blue, L 65.0 chroma 22.6",
+         .lab = {65.0F, 3.9F, -22.2F},
+         .expected = FacetColor::blue},
     }};
     for (const auto& sample : tiles) {
         CAPTURE(sample.where);
@@ -263,14 +278,16 @@ TEST_CASE("classify_lab refuses to name a dark neutral white", "[vision]") {
         cv::Vec3f lab;
     };
     const std::array<Sample, 8> darks{{
-        {"good1 D[3] L 1.2 chroma 2.1 - unlit background", {1.21F, -1.60F, 1.36F}},
-        {"good1 R[8] L 2.4 chroma 6.4", {2.36F, -3.03F, 5.64F}},
-        {"runD U[0] L 9.1 chroma 9.6 - one of runD's two dark 'whites'", {9.10F, 1.20F, 9.52F}},
-        {"runD U[2] L 13.0 chroma 10.6 - the other one", {13.00F, 1.60F, 10.48F}},
-        {"live1 D[8] L 15.2 chroma 3.6 - lattice gap", {15.20F, 0.90F, 3.49F}},
-        {"live1 L[2] L 28.9 chroma 12.5", {28.90F, 2.50F, 12.25F}},
-        {"good1 F[1] L 32.3 chroma 14.5 - just under the chroma floor", {32.30F, 3.00F, 14.19F}},
-        {"live5 U[6] L 42.1 chroma 13.1", {42.10F, 2.10F, 12.93F}},
+        {.where = "good1 D[3] L 1.2 chroma 2.1 - unlit background", .lab = {1.21F, -1.60F, 1.36F}},
+        {.where = "good1 R[8] L 2.4 chroma 6.4", .lab = {2.36F, -3.03F, 5.64F}},
+        {.where = "runD U[0] L 9.1 chroma 9.6 - one of runD's two dark 'whites'",
+         .lab = {9.10F, 1.20F, 9.52F}},
+        {.where = "runD U[2] L 13.0 chroma 10.6 - the other one", .lab = {13.00F, 1.60F, 10.48F}},
+        {.where = "live1 D[8] L 15.2 chroma 3.6 - lattice gap", .lab = {15.20F, 0.90F, 3.49F}},
+        {.where = "live1 L[2] L 28.9 chroma 12.5", .lab = {28.90F, 2.50F, 12.25F}},
+        {.where = "good1 F[1] L 32.3 chroma 14.5 - just under the chroma floor",
+         .lab = {32.30F, 3.00F, 14.19F}},
+        {.where = "live5 U[6] L 42.1 chroma 13.1", .lab = {42.10F, 2.10F, 12.93F}},
     }};
     for (const auto& sample : darks) {
         CAPTURE(sample.where);
@@ -306,7 +323,7 @@ TEST_CASE("a dark neutral does not fall through into a hue band", "[vision]") {
     // The same lightness and chroma, swept right around the hue circle:
     // every one of them must reject, not scatter across six names.
     for (int hue = 0; hue < 360; hue += 15) {
-        const auto radians = static_cast<float>(hue) * 3.14159265F / 180.0F;
+        const auto radians = static_cast<float>(hue) * std::numbers::pi_v<float> / 180.0F;
         const cv::Vec3f dark{20.0F, 6.0F * std::cos(radians), 6.0F * std::sin(radians)};
         CAPTURE(hue);
         REQUIRE(classify_lab(dark).color == FacetColor::unknown);
@@ -334,14 +351,15 @@ TEST_CASE("classify_lab names a crushed green sticker green, not white", "[visio
         // live5's own green centre (22.2) is shorter than to live5's own
         // white centre (27.5). It appears in all six minimal census-fixing
         // relabellings of the clip.
-        {"live5 F[5] chroma 11.5 hue 185.8 - the pinned defect", {61.39F, -11.46F, -1.16F}},
+        {.where = "live5 F[5] chroma 11.5 hue 185.8 - the pinned defect",
+         .lab = {61.39F, -11.46F, -1.16F}},
         // The second one, and the reason a SESSION-relative floor could not
         // have been the fix: live4 never captures a white centre, so it has
         // no white reference to place a floor against. Its nearest captured
         // centre is live4's own green at 15.8 Lab; every other centre it
         // captured is 39+ away.
-        {"live4 L[6] chroma 9.0 hue 214.7 - no white reference in that clip",
-         {71.98F, -7.36F, -5.10F}},
+        {.where = "live4 L[6] chroma 9.0 hue 214.7 - no white reference in that clip",
+         .lab = {71.98F, -7.36F, -5.10F}},
     }};
     for (const auto& sample : greens) {
         CAPTURE(sample.where);
@@ -370,19 +388,21 @@ TEST_CASE("the green-ward reject steals no warm-cast or near-neutral white", "[v
         // chromatic in the corpus, reached through the soft ceiling. Every
         // one of them points warm (a* +6.4 to +9.2), so the direction gate
         // must be invisible to them.
-        {"runD U[1] chroma 15.8", {86.15F, 6.37F, 14.41F}},
-        {"runD D[2] chroma 17.6", {82.91F, 7.77F, 15.76F}},
-        {"runD U[8] chroma 17.8", {76.48F, 7.98F, 15.92F}},
-        {"runD L[6] chroma 18.8", {78.07F, 7.67F, 17.11F}},
-        {"runD F[2] chroma 18.9", {77.36F, 7.86F, 17.13F}},
-        {"runD D[4] chroma 19.3", {77.27F, 9.15F, 17.02F}},
+        {.where = "runD U[1] chroma 15.8", .lab = {86.15F, 6.37F, 14.41F}},
+        {.where = "runD D[2] chroma 17.6", .lab = {82.91F, 7.77F, 15.76F}},
+        {.where = "runD U[8] chroma 17.8", .lab = {76.48F, 7.98F, 15.92F}},
+        {.where = "runD L[6] chroma 18.8", .lab = {78.07F, 7.67F, 17.11F}},
+        {.where = "runD F[2] chroma 18.9", .lab = {77.36F, 7.86F, 17.13F}},
+        {.where = "runD D[4] chroma 19.3", .lab = {77.27F, 9.15F, 17.02F}},
         // The most green-ward sample the neutral branch must KEEP, and the
         // measurement that sets -4.0 rather than 0.0: a bright tile whose
         // a* is at noise level and whose b* points hard at yellow.
-        {"live4 L[0] a* -1.15 - the closest retained white to the gate", {96.70F, -1.15F, 13.54F}},
+        {.where = "live4 L[0] a* -1.15 - the closest retained white to the gate",
+         .lab = {96.70F, -1.15F, 13.54F}},
         // A near-neutral that clears the lightness floor by little: the
         // gate must not be doing lightness's job.
-        {"live5 R[4] chroma 7.3 - live5's own white centre", {82.00F, 5.97F, 4.25F}},
+        {.where = "live5 R[4] chroma 7.3 - live5's own white centre",
+         .lab = {82.00F, 5.97F, 4.25F}},
     }};
     for (const auto& sample : whites) {
         CAPTURE(sample.where);
@@ -399,7 +419,7 @@ TEST_CASE("the green-ward reject steals no warm-cast or near-neutral white", "[v
 // none. Passes before and after by design.
 TEST_CASE("a dark green-ward neutral is still unknown, not green", "[vision]") {
     for (int hue = 0; hue < 360; hue += 15) {
-        const auto radians = static_cast<float>(hue) * 3.14159265F / 180.0F;
+        const auto radians = static_cast<float>(hue) * std::numbers::pi_v<float> / 180.0F;
         const cv::Vec3f dark{55.0F, 12.0F * std::cos(radians), 12.0F * std::sin(radians)};
         CAPTURE(hue);
         REQUIRE(classify_lab(dark).color == FacetColor::unknown);
@@ -417,7 +437,7 @@ TEST_CASE("resolve_colors recovers an unperturbed scan", "[vision]") {
     REQUIRE(resolved.has_value());
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            REQUIRE((*resolved)[face][i].confidence > 0.9F);
+            REQUIRE((*resolved).at(face).at(i).confidence > 0.9F);
         }
     }
 }
@@ -483,66 +503,66 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     const std::array<std::array<Cell, 9>, 6> measured{{
         // The R face, fused in deep shade: cells 1, 2 and 7 are the
         // shade-darkened oranges this regression is about.
-        {{{{52.4384F, 0.0234F, 0.0156F}, W},
-          {{33.2703F, 27.0078F, 38.7578F}, O},
-          {{33.2031F, 27.3281F, 38.7188F}, O},
-          {{46.8567F, -4.8438F, 47.6484F}, Y},
-          {{20.7336F, 37.0000F, 22.5781F}, R},
-          {{20.6055F, 36.8828F, 22.4219F}, R},
-          {{20.6299F, 36.8047F, 22.8203F}, R},
-          {{33.1726F, 27.1641F, 38.6484F}, O},
-          {{52.4200F, 0.0234F, 0.0156F}, W}}},
-        {{{{60.1318F, 45.9297F, 63.5938F}, O},
-          {{91.1560F, 0.0156F, 0.0000F}, W},
-          {{82.1259F, -7.2031F, 76.6094F}, Y},
-          {{40.1733F, 59.1250F, 39.5078F}, R},
-          {{60.0891F, 45.9531F, 63.5781F}, O},
-          {{81.7413F, -6.9453F, 76.4688F}, Y},
-          {{58.1055F, -53.3594F, 38.4844F}, G},
-          {{58.0627F, -53.3594F, 38.4688F}, G},
-          {{59.2316F, 42.9922F, 61.1719F}, O}}},
-        {{{{34.3872F, 10.8516F, -46.8750F}, B},
-          {{34.6008F, 52.8359F, 34.3438F}, R},
-          {{72.0795F, -6.3359F, 68.5938F}, Y},
-          {{34.2957F, 10.6094F, -46.4531F}, B},
-          {{72.0490F, -6.5781F, 68.5859F}, Y},
-          {{50.7721F, -47.4531F, 34.0625F}, G},
-          {{72.0276F, -6.4688F, 68.5000F}, Y},
-          {{34.5337F, 52.8750F, 34.5625F}, R},
-          {{50.7812F, -47.5469F, 34.1562F}, G}}},
-        {{{{38.2904F, 12.3125F, -51.2812F}, B},
-          {{79.4220F, -6.9375F, 74.8203F}, Y},
-          {{58.0231F, 44.4531F, 61.6719F}, O},
-          {{88.1653F, 0.0156F, 0.0000F}, W},
-          {{88.1653F, 0.0156F, 0.0000F}, W},
-          {{57.8522F, 44.2188F, 61.4922F}, O},
-          {{38.7970F, 57.8516F, 38.3125F}, R},
-          {{79.3671F, -6.7656F, 74.8203F}, Y},
-          {{88.1653F, 0.0156F, 0.0000F}, W}}},
-        {{{{67.1875F, -6.2188F, 64.5078F}, Y},
-          {{74.7070F, 0.0156F, 0.0000F}, W},
-          {{31.7963F, 10.1719F, -44.3438F}, B},
-          {{31.7993F, 9.9141F, -44.3906F}, B},
-          {{31.6925F, 9.9531F, -44.0547F}, B},
-          {{47.2290F, -44.7969F, 31.9062F}, G},
-          {{47.2076F, -44.7422F, 31.9219F}, G},
-          {{31.8115F, 10.1016F, -44.1484F}, B},
-          {{31.8665F, 49.8984F, 32.3828F}, R}}},
-        {{{{83.2550F, 0.0078F, 0.0000F}, W},
-          {{54.5441F, 41.7812F, 58.3594F}, O},
-          {{35.8307F, 11.3984F, -48.3438F}, B},
-          {{35.9009F, 11.6562F, -48.8281F}, B},
-          {{53.0609F, -49.2891F, 35.4453F}, G},
-          {{52.8717F, -49.1797F, 35.4453F}, G},
-          {{36.1847F, 54.6172F, 35.8516F}, R},
-          {{83.1573F, 0.0156F, 0.0000F}, W},
-          {{52.7893F, -49.0703F, 35.6406F}, G}}},
+        {{{.lab = {52.4384F, 0.0234F, 0.0156F}, .expected = W},
+          {.lab = {33.2703F, 27.0078F, 38.7578F}, .expected = O},
+          {.lab = {33.2031F, 27.3281F, 38.7188F}, .expected = O},
+          {.lab = {46.8567F, -4.8438F, 47.6484F}, .expected = Y},
+          {.lab = {20.7336F, 37.0000F, 22.5781F}, .expected = R},
+          {.lab = {20.6055F, 36.8828F, 22.4219F}, .expected = R},
+          {.lab = {20.6299F, 36.8047F, 22.8203F}, .expected = R},
+          {.lab = {33.1726F, 27.1641F, 38.6484F}, .expected = O},
+          {.lab = {52.4200F, 0.0234F, 0.0156F}, .expected = W}}},
+        {{{.lab = {60.1318F, 45.9297F, 63.5938F}, .expected = O},
+          {.lab = {91.1560F, 0.0156F, 0.0000F}, .expected = W},
+          {.lab = {82.1259F, -7.2031F, 76.6094F}, .expected = Y},
+          {.lab = {40.1733F, 59.1250F, 39.5078F}, .expected = R},
+          {.lab = {60.0891F, 45.9531F, 63.5781F}, .expected = O},
+          {.lab = {81.7413F, -6.9453F, 76.4688F}, .expected = Y},
+          {.lab = {58.1055F, -53.3594F, 38.4844F}, .expected = G},
+          {.lab = {58.0627F, -53.3594F, 38.4688F}, .expected = G},
+          {.lab = {59.2316F, 42.9922F, 61.1719F}, .expected = O}}},
+        {{{.lab = {34.3872F, 10.8516F, -46.8750F}, .expected = B},
+          {.lab = {34.6008F, 52.8359F, 34.3438F}, .expected = R},
+          {.lab = {72.0795F, -6.3359F, 68.5938F}, .expected = Y},
+          {.lab = {34.2957F, 10.6094F, -46.4531F}, .expected = B},
+          {.lab = {72.0490F, -6.5781F, 68.5859F}, .expected = Y},
+          {.lab = {50.7721F, -47.4531F, 34.0625F}, .expected = G},
+          {.lab = {72.0276F, -6.4688F, 68.5000F}, .expected = Y},
+          {.lab = {34.5337F, 52.8750F, 34.5625F}, .expected = R},
+          {.lab = {50.7812F, -47.5469F, 34.1562F}, .expected = G}}},
+        {{{.lab = {38.2904F, 12.3125F, -51.2812F}, .expected = B},
+          {.lab = {79.4220F, -6.9375F, 74.8203F}, .expected = Y},
+          {.lab = {58.0231F, 44.4531F, 61.6719F}, .expected = O},
+          {.lab = {88.1653F, 0.0156F, 0.0000F}, .expected = W},
+          {.lab = {88.1653F, 0.0156F, 0.0000F}, .expected = W},
+          {.lab = {57.8522F, 44.2188F, 61.4922F}, .expected = O},
+          {.lab = {38.7970F, 57.8516F, 38.3125F}, .expected = R},
+          {.lab = {79.3671F, -6.7656F, 74.8203F}, .expected = Y},
+          {.lab = {88.1653F, 0.0156F, 0.0000F}, .expected = W}}},
+        {{{.lab = {67.1875F, -6.2188F, 64.5078F}, .expected = Y},
+          {.lab = {74.7070F, 0.0156F, 0.0000F}, .expected = W},
+          {.lab = {31.7963F, 10.1719F, -44.3438F}, .expected = B},
+          {.lab = {31.7993F, 9.9141F, -44.3906F}, .expected = B},
+          {.lab = {31.6925F, 9.9531F, -44.0547F}, .expected = B},
+          {.lab = {47.2290F, -44.7969F, 31.9062F}, .expected = G},
+          {.lab = {47.2076F, -44.7422F, 31.9219F}, .expected = G},
+          {.lab = {31.8115F, 10.1016F, -44.1484F}, .expected = B},
+          {.lab = {31.8665F, 49.8984F, 32.3828F}, .expected = R}}},
+        {{{.lab = {83.2550F, 0.0078F, 0.0000F}, .expected = W},
+          {.lab = {54.5441F, 41.7812F, 58.3594F}, .expected = O},
+          {.lab = {35.8307F, 11.3984F, -48.3438F}, .expected = B},
+          {.lab = {35.9009F, 11.6562F, -48.8281F}, .expected = B},
+          {.lab = {53.0609F, -49.2891F, 35.4453F}, .expected = G},
+          {.lab = {52.8717F, -49.1797F, 35.4453F}, .expected = G},
+          {.lab = {36.1847F, 54.6172F, 35.8516F}, .expected = R},
+          {.lab = {83.1573F, 0.0156F, 0.0000F}, .expected = W},
+          {.lab = {52.7893F, -49.0703F, 35.6406F}, .expected = G}}},
     }};
 
     std::array<CapturedFace, 6> faces{};
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            faces[face].lab[i] = measured[face][i].lab;
+            faces.at(face).lab.at(i) = measured.at(face).at(i).lab;
         }
     }
     const auto resolved = resolve_colors(faces);
@@ -550,7 +570,7 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
             CAPTURE(face, i);
-            REQUIRE((*resolved)[face][i].color == measured[face][i].expected);
+            REQUIRE((*resolved).at(face).at(i).color == measured.at(face).at(i).expected);
         }
     }
     // The three shaded cells are not merely named right, they are priced
@@ -559,14 +579,14 @@ TEST_CASE("resolve_colors names shade-darkened orange cells orange (freerot)", "
     // nearest mean is red's).
     for (const std::size_t cell : {std::size_t{1}, std::size_t{2}, std::size_t{7}}) {
         CAPTURE(cell);
-        REQUIRE((*resolved)[0][cell].color == FacetColor::orange);
-        REQUIRE((*resolved)[0][cell].confidence > 0.0F);
+        REQUIRE((*resolved).at(0).at(cell).color == FacetColor::orange);
+        REQUIRE((*resolved).at(0).at(cell).confidence > 0.0F);
     }
 }
 
 TEST_CASE("resolve_colors rejects a scan with two identical centres", "[vision]") {
     SyntheticScan scan = make_scan();
-    scan.faces[1].lab[4] = scan.faces[0].lab[4];
+    scan.faces.at(1).lab.at(4) = scan.faces.at(0).lab.at(4);
 
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());
@@ -587,7 +607,7 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
     SECTION("NaN in an off-centre sticker") {
         SyntheticScan scan = make_scan();
-        scan.faces[2].lab[7][1] = nan_value;
+        scan.faces.at(2).lab.at(7)[1] = nan_value;
         const auto resolved = resolve_colors(scan.faces);
         REQUIRE_FALSE(resolved.has_value());
         REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
@@ -595,12 +615,12 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
     SECTION("NaN in a centre - the seed-separation guard cannot see it") {
         SyntheticScan scan = make_scan();
-        scan.faces[0].lab[4][0] = nan_value;
+        scan.faces.at(0).lab.at(4)[0] = nan_value;
         // Proof the existing guard is defeated: every pairwise comparison
         // against a NaN centre is false, so the loop that is supposed to
         // reject implausible seeds passes it through.
         for (std::size_t other = 1; other < 6; ++other) {
-            const cv::Vec3f diff = scan.faces[0].lab[4] - scan.faces[other].lab[4];
+            const cv::Vec3f diff = scan.faces.at(0).lab.at(4) - scan.faces.at(other).lab.at(4);
             REQUIRE_FALSE(std::sqrt(diff.dot(diff)) < 12.0F);
         }
         const auto resolved = resolve_colors(scan.faces);
@@ -611,7 +631,7 @@ TEST_CASE("resolve_colors rejects a NaN sample instead of corrupting memory", "[
 
 TEST_CASE("resolve_colors rejects an infinite sample instead of hanging", "[vision]") {
     SyntheticScan scan = make_scan();
-    scan.faces[4].lab[0][2] = -std::numeric_limits<float>::infinity();
+    scan.faces.at(4).lab.at(0)[2] = -std::numeric_limits<float>::infinity();
 
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());

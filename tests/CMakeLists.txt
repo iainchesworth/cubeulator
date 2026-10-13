@@ -356,6 +356,20 @@ if(CUBEULATOR_BUILD_APP)
     endif()
 endif()
 
+# --- Release tooling (tools/release, docs/releasing.md) --------------------
+# The changelog's shape, the cut, the release notes' layout and the version
+# edit are held by the tools' own tests; the same file also checks that this
+# repository's CHANGELOG.md and CMakeLists.txt are in a state the tools can
+# work with, so that the first thing to find out is not a tag.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME release_tools_selftest
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tools/release/test_release_tools.py")
+    set_tests_properties(release_tools_selftest
+        PROPERTIES LABELS "release" ENVIRONMENT "PYTHONUTF8=1")
+endif()
+
 # --- Third-party notices (E0b, docs/licensing.md) --------------------------
 # Fails when a component that ships has no notice: a linked library, a Qt
 # module or QML import, a deployed DLL, a file under assets/, a directory

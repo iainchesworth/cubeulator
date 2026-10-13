@@ -50,14 +50,15 @@ using Vec = std::array<int, 3>;
 }
 
 [[nodiscard]] Vec times(const std::array<int, 9>& m, const Vec& v) {
-    return {(m[0] * v[0]) + (m[1] * v[1]) + (m[2] * v[2]),
-            (m[3] * v[0]) + (m[4] * v[1]) + (m[5] * v[2]),
-            (m[6] * v[0]) + (m[7] * v[1]) + (m[8] * v[2])};
+    return {(m.at(0) * v.at(0)) + (m.at(1) * v.at(1)) + (m.at(2) * v.at(2)),
+            (m.at(3) * v.at(0)) + (m.at(4) * v.at(1)) + (m.at(5) * v.at(2)),
+            (m.at(6) * v.at(0)) + (m.at(7) * v.at(1)) + (m.at(8) * v.at(2))};
 }
 
 [[nodiscard]] int determinant(const std::array<int, 9>& m) {
-    return (m[0] * ((m[4] * m[8]) - (m[5] * m[7]))) - (m[1] * ((m[3] * m[8]) - (m[5] * m[6]))) +
-           (m[2] * ((m[3] * m[7]) - (m[4] * m[6])));
+    return (m.at(0) * ((m.at(4) * m.at(8)) - (m.at(5) * m.at(7)))) -
+           (m.at(1) * ((m.at(3) * m.at(8)) - (m.at(5) * m.at(6)))) +
+           (m.at(2) * ((m.at(3) * m.at(7)) - (m.at(4) * m.at(6))));
 }
 
 // Where the solver keeps the sticker at cubie (x, y, z) of a side - the
@@ -66,13 +67,13 @@ using Vec = std::array<int, 3>;
     switch (face) {
         case Face::U:
         case Face::D:
-            return ((at[2] + 1) * 3) + (at[0] + 1);
+            return ((at.at(2) + 1) * 3) + (at.at(0) + 1);
         case Face::L:
         case Face::R:
-            return ((1 - at[1]) * 3) + (at[2] + 1);
+            return ((1 - at.at(1)) * 3) + (at.at(2) + 1);
         case Face::F:
         case Face::B:
-            return ((1 - at[1]) * 3) + (at[0] + 1);
+            return ((1 - at.at(1)) * 3) + (at.at(0) + 1);
     }
     return 0;
 }
@@ -140,15 +141,17 @@ TEST_CASE("a camera facing the holder sees the far side, the right way up", "[so
                 for (int y = -1; y <= 1; ++y) {
                     for (int z = -1; z <= 1; ++z) {
                         const Vec at{x, y, z};
-                        if ((at[0] * out[0]) + (at[1] * out[1]) + (at[2] * out[2]) != 1) {
+                        if ((at.at(0) * out.at(0)) + (at.at(1) * out.at(1)) +
+                                (at.at(2) * out.at(2)) !=
+                            1) {
                             continue;  // not on the far side
                         }
                         const Vec held = times(turn, at);
-                        REQUIRE(held[2] == -1);
-                        const int row = 1 - held[1];
-                        const int column = 1 + held[0];
+                        REQUIRE(held.at(2) == -1);
+                        const int row = 1 - held.at(1);
+                        const int column = 1 + held.at(0);
                         // Seen from behind, the holder's +x is on the left.
-                        expected[static_cast<std::size_t>((row * 3) + (2 - column))] =
+                        expected.at(static_cast<std::size_t>((row * 3) + (2 - column))) =
                             cube.at(far, solver_index(far, at));
                         ++placed;
                     }

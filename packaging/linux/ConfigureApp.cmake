@@ -56,6 +56,8 @@ cube_string_from_inventory("store.summary" CUBEULATOR_STORE_SUMMARY)
 cube_string_from_inventory("about.what" CUBEULATOR_ABOUT_WHAT)
 # Honours SOURCE_DATE_EPOCH, so a reproducible build stays reproducible.
 string(TIMESTAMP CUBEULATOR_RELEASE_DATE "%Y-%m-%d" UTC)
+# AppStream orders versions the way Debian does: "~" sorts before the release.
+string(REPLACE "-" "~" CUBEULATOR_APPSTREAM_VERSION "${CUBEULATOR_VERSION_FULL}")
 
 configure_file("${PROJECT_SOURCE_DIR}/packaging/linux/cubeulator.desktop.in"
     "${CUBEULATOR_PACKAGING_DIR}/${CUBEULATOR_APP_ID}.desktop" @ONLY)

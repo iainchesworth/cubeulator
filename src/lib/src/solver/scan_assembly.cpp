@@ -7,6 +7,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <utility>
 
 namespace cube::solver {
 
@@ -71,7 +72,7 @@ constexpr std::array<std::size_t, 9> kClockwiseSource = {6, 3, 0, 7, 4, 1, 8, 5,
 constexpr std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) noexcept {
     std::array<Color, 9> rotated{};
     for (std::size_t i = 0; i < face.size(); ++i) {
-        rotated[i] = face[kClockwiseSource[i]];
+        rotated.at(i) = face.at(kClockwiseSource.at(i));
     }
     return rotated;
 }
@@ -95,21 +96,21 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
     for (std::size_t input_index = 0; input_index < faces.size(); ++input_index) {
         std::array<Color, 9> converted{};
         for (std::size_t i = 0; i < converted.size(); ++i) {
-            const auto color = to_solver_color(faces[input_index][i].color);
+            const auto color = to_solver_color(faces.at(input_index).at(i).color);
             if (!color) {
                 return std::unexpected(CubeError::invalid_cube_state);
             }
-            converted[i] = *color;
+            converted.at(i) = *color;
         }
 
-        const Face face = face_for_center_color(converted[model::center_facelet_index]);
+        const Face face = face_for_center_color(converted.at(model::center_facelet_index));
         const auto face_index = static_cast<std::size_t>(face);
-        if (face_assigned[face_index]) {
+        if (face_assigned.at(face_index)) {
             return std::unexpected(CubeError::invalid_cube_state);  // duplicate centres
         }
-        face_assigned[face_index] = true;
-        base[face_index] = converted;
-        input_index_of_face[face_index] = input_index;
+        face_assigned.at(face_index) = true;
+        base.at(face_index) = converted;
+        input_index_of_face.at(face_index) = input_index;
 
         // Handedness correction. An outside-view capture relates to the
         // solver's cross-unfolded layout by a pure rotation only where
@@ -122,8 +123,8 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         // in-plane rotation remains, so WHICH reflection is immaterial.
         if (face == Face::D || face == Face::R || face == Face::B) {
             for (int row = 0; row < 3; ++row) {
-                std::swap(base[face_index][static_cast<std::size_t>(row * 3)],
-                          base[face_index][static_cast<std::size_t>(row * 3 + 2)]);
+                std::swap(base.at(face_index).at(static_cast<std::size_t>(row * 3)),
+                          base.at(face_index).at(static_cast<std::size_t>((row * 3) + 2)));
             }
         }
     }
@@ -132,9 +133,10 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
     // than re-rotating inside the 4096-combination loop.
     std::array<std::array<std::array<Color, 9>, 4>, 6> rotations{};
     for (std::size_t face_index = 0; face_index < rotations.size(); ++face_index) {
-        rotations[face_index][0] = base[face_index];
+        rotations.at(face_index).at(0) = base.at(face_index);
         for (std::size_t quarter = 1; quarter < 4; ++quarter) {
-            rotations[face_index][quarter] = rotated_clockwise(rotations[face_index][quarter - 1]);
+            rotations.at(face_index).at(quarter) =
+                rotated_clockwise(rotations.at(face_index).at(quarter - 1));
         }
     }
 
@@ -150,9 +152,9 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
     bool hint_usable = false;
     if (hint != nullptr) {
         for (std::size_t face_index = 0; face_index < hint_digit_of_face.size(); ++face_index) {
-            const int digit = hint->quarter_turns[input_index_of_face[face_index]];
+            const int digit = hint->quarter_turns.at(input_index_of_face.at(face_index));
             if (digit >= 0 && digit < 4) {
-                hint_digit_of_face[face_index] = digit;
+                hint_digit_of_face.at(face_index) = digit;
                 hint_usable = true;
             }
         }
@@ -185,7 +187,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         std::array<std::array<Color, 9>, 6> candidate{};
         unsigned digits = combo;
         for (std::size_t face_index = 0; face_index < candidate.size(); ++face_index) {
-            candidate[face_index] = rotations[face_index][digits & 3U];
+            candidate.at(face_index) = rotations.at(face_index).at(digits & 3U);
             digits >>= 2U;
         }
 
@@ -212,15 +214,15 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         int score = 0;
         digits = combo;
         for (std::size_t face_index = 0; face_index < candidate.size(); ++face_index) {
-            if (hint_digit_of_face[face_index] == static_cast<int>(digits & 3U)) {
+            if (std::cmp_equal(hint_digit_of_face.at(face_index), digits & 3U)) {
                 ++score;
             }
             digits >>= 2U;
         }
         bool merged = false;
         for (std::size_t i = 0; i < survivor_count; ++i) {
-            if (survivors[i]->cube == *cube) {
-                survivors[i]->best_score = std::max(survivors[i]->best_score, score);
+            if (survivors.at(i)->cube == *cube) {
+                survivors.at(i)->best_score = std::max(survivors.at(i)->best_score, score);
                 merged = true;
                 break;
             }
@@ -229,7 +231,7 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
             if (survivor_count == kMaxHintSurvivors) {
                 return std::unexpected(CubeError::invalid_cube_state);
             }
-            survivors[survivor_count++] = Survivor{*cube, score};
+            survivors.at(survivor_count++) = Survivor{.cube = *cube, .best_score = score};
         }
     }
 
@@ -242,10 +244,10 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
         std::size_t best = 0;
         bool tie = false;
         for (std::size_t i = 1; i < survivor_count; ++i) {
-            if (survivors[i]->best_score > survivors[best]->best_score) {
+            if (survivors.at(i)->best_score > survivors.at(best)->best_score) {
                 best = i;
                 tie = false;
-            } else if (survivors[i]->best_score == survivors[best]->best_score) {
+            } else if (survivors.at(i)->best_score == survivors.at(best)->best_score) {
                 tie = true;
             }
         }
@@ -254,13 +256,14 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
             // ambiguity stands, same failure and remedy as unhinted.
             return std::unexpected(CubeError::invalid_cube_state);
         }
-        return AssembledScan{survivors[best]->cube, input_index_of_face};
+        return AssembledScan{.cube = survivors.at(best)->cube,
+                             .input_index_of_face = input_index_of_face};
     }
 
     if (!found) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
-    return AssembledScan{*found, input_index_of_face};
+    return AssembledScan{.cube = *found, .input_index_of_face = input_index_of_face};
 }
 
 Result<Cube> assemble_scanned_faces(
@@ -305,21 +308,21 @@ RotationHint rotation_hint_for_tracked_scan(
     std::array<bool, 6> face_taken{};
     std::array<bool, 6> id_taken{};
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const int id = model_face_ids[i];
-        if (id < 0 || id >= 6 || id_taken[static_cast<std::size_t>(id)]) {
+        const int id = model_face_ids.at(i);
+        if (id < 0 || id >= 6 || id_taken.at(static_cast<std::size_t>(id))) {
             return {};
         }
-        id_taken[static_cast<std::size_t>(id)] = true;
-        const auto color = to_solver_color(faces[i][model::center_facelet_index].color);
+        id_taken.at(static_cast<std::size_t>(id)) = true;
+        const auto color = to_solver_color(faces.at(i).at(model::center_facelet_index).color);
         if (!color) {
             return {};
         }
         const Face face = face_for_center_color(*color);
-        if (face_taken[static_cast<std::size_t>(face)]) {
+        if (face_taken.at(static_cast<std::size_t>(face))) {
             return {};
         }
-        face_taken[static_cast<std::size_t>(face)] = true;
-        face_of_input[i] = face;
+        face_taken.at(static_cast<std::size_t>(face)) = true;
+        face_of_input.at(i) = face;
     }
 
     // The body->solver rotation, column a = the image of body axis +e_a.
@@ -330,39 +333,39 @@ RotationHint rotation_hint_for_tracked_scan(
     std::array<std::array<int, 3>, 3> column{};
     std::array<bool, 3> column_set{};
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const int id = model_face_ids[i];
+        const int id = model_face_ids.at(i);
         const int body_axis = id / 2;
         const int sign = (id % 2 == 0) ? 1 : -1;
-        const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
-        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1],
-                                          sign * solver_axis[2]};
-        if (!column_set[static_cast<std::size_t>(body_axis)]) {
-            column[static_cast<std::size_t>(body_axis)] = image;
-            column_set[static_cast<std::size_t>(body_axis)] = true;
-        } else if (column[static_cast<std::size_t>(body_axis)] != image) {
+        const std::array<int, 3> solver_axis = axis_of_face(face_of_input.at(i));
+        const std::array<int, 3> image = {sign * solver_axis.at(0), sign * solver_axis.at(1),
+                                          sign * solver_axis.at(2)};
+        if (!column_set.at(static_cast<std::size_t>(body_axis))) {
+            column.at(static_cast<std::size_t>(body_axis)) = image;
+            column_set.at(static_cast<std::size_t>(body_axis)) = true;
+        } else if (column.at(static_cast<std::size_t>(body_axis)) != image) {
             return {};
         }
     }
-    const auto& cx = column[0];
-    const auto& cy = column[1];
-    const auto& cz = column[2];
-    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) -
-                    cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
-                    cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
+    const auto& cx = column.at(0);
+    const auto& cy = column.at(1);
+    const auto& cz = column.at(2);
+    const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
+                    (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
+                    (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
     if (det != 1) {
         return {};
     }
 
     RotationHint hint;
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const int id = model_face_ids[i];
+        const int id = model_face_ids.at(i);
         const int body_axis = id / 2;
         const int sign = (id % 2 == 0) ? 1 : -1;
         // Outside-view sampling axes, matching face_projection.cpp: the
         // cyclic pair on negative body faces, swapped on positive ones.
         const int axis_u = (sign > 0) ? (body_axis + 2) % 3 : (body_axis + 1) % 3;
         const int axis_v = (sign > 0) ? (body_axis + 1) % 3 : (body_axis + 2) % 3;
-        const Face face = face_of_input[i];
+        const Face face = face_of_input.at(i);
 
         // Where each captured cell's sticker lands on the solver face:
         // body-frame cell centre -> solver frame -> the (row, col) formulas
@@ -372,34 +375,35 @@ RotationHint rotation_hint_for_tracked_scan(
         for (int row = 0; row < 3; ++row) {
             for (int col = 0; col < 3; ++col) {
                 std::array<int, 3> p{};
-                p[static_cast<std::size_t>(body_axis)] = sign;
-                p[static_cast<std::size_t>(axis_u)] = col - 1;
-                p[static_cast<std::size_t>(axis_v)] = row - 1;
+                p.at(static_cast<std::size_t>(body_axis)) = sign;
+                p.at(static_cast<std::size_t>(axis_u)) = col - 1;
+                p.at(static_cast<std::size_t>(axis_v)) = row - 1;
                 std::array<int, 3> q{};
                 for (int k = 0; k < 3; ++k) {
-                    q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
-                                                     column[1][static_cast<std::size_t>(k)] * p[1] +
-                                                     column[2][static_cast<std::size_t>(k)] * p[2];
+                    q.at(static_cast<std::size_t>(k)) =
+                        (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
+                        (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
+                        (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
                 }
                 int assembled_index = -1;
                 switch (face) {
                     case Face::U:
                     case Face::D:
-                        assembled_index = (q[2] + 1) * 3 + (q[0] + 1);
+                        assembled_index = ((q.at(2) + 1) * 3) + (q.at(0) + 1);
                         break;
                     case Face::R:
                     case Face::L:
-                        assembled_index = (1 - q[1]) * 3 + (q[2] + 1);
+                        assembled_index = ((1 - q.at(1)) * 3) + (q.at(2) + 1);
                         break;
                     case Face::F:
                     case Face::B:
-                        assembled_index = (1 - q[1]) * 3 + (q[0] + 1);
+                        assembled_index = ((1 - q.at(1)) * 3) + (q.at(0) + 1);
                         break;
                 }
                 if (assembled_index < 0 || assembled_index > 8) {
                     return {};
                 }
-                source_of[static_cast<std::size_t>(assembled_index)] = row * 3 + col;
+                source_of.at(static_cast<std::size_t>(assembled_index)) = (row * 3) + col;
             }
         }
 
@@ -419,8 +423,9 @@ RotationHint rotation_hint_for_tracked_scan(
             bool matches = true;
             for (std::size_t j = 0; j < gather.size(); ++j) {
                 const int captured_index =
-                    flip_corrected ? kFlipColumns[static_cast<std::size_t>(gather[j])] : gather[j];
-                if (captured_index != source_of[j]) {
+                    flip_corrected ? kFlipColumns.at(static_cast<std::size_t>(gather.at(j)))
+                                   : gather.at(j);
+                if (captured_index != source_of.at(j)) {
                     matches = false;
                     break;
                 }
@@ -431,14 +436,14 @@ RotationHint rotation_hint_for_tracked_scan(
             }
             std::array<int, 9> next{};
             for (std::size_t j = 0; j < next.size(); ++j) {
-                next[j] = gather[kClockwiseSource[j]];
+                next.at(j) = gather.at(kClockwiseSource.at(j));
             }
             gather = next;
         }
         if (digit == RotationHint::kNoHint) {
             return {};
         }
-        hint.quarter_turns[i] = digit;
+        hint.quarter_turns.at(i) = digit;
     }
     return hint;
 }
@@ -504,21 +509,21 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
     std::array<bool, 6> face_taken{};
     std::array<bool, 6> body_taken{};
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const auto body_index = static_cast<std::size_t>(body_faces[i]);
-        if (body_index >= body_taken.size() || body_taken[body_index]) {
+        const auto body_index = static_cast<std::size_t>(body_faces.at(i));
+        if (body_index >= body_taken.size() || body_taken.at(body_index)) {
             return {};
         }
-        body_taken[body_index] = true;
-        const auto color = to_solver_color(faces[i][model::center_facelet_index].color);
+        body_taken.at(body_index) = true;
+        const auto color = to_solver_color(faces.at(i).at(model::center_facelet_index).color);
         if (!color) {
             return {};
         }
         const Face face = face_for_center_color(*color);
-        if (face_taken[static_cast<std::size_t>(face)]) {
+        if (face_taken.at(static_cast<std::size_t>(face))) {
             return {};
         }
-        face_taken[static_cast<std::size_t>(face)] = true;
-        face_of_input[i] = face;
+        face_taken.at(static_cast<std::size_t>(face)) = true;
+        face_of_input.at(i) = face;
     }
 
     // The body->solver rotation, column a = the image of body axis +e_a.
@@ -529,24 +534,24 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
     std::array<std::array<int, 3>, 3> column{};
     std::array<bool, 3> column_set{};
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const int body_axis = body_axis_of(body_faces[i]);
-        const int sign = body_sign_of(body_faces[i]);
-        const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
-        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1],
-                                          sign * solver_axis[2]};
-        if (!column_set[static_cast<std::size_t>(body_axis)]) {
-            column[static_cast<std::size_t>(body_axis)] = image;
-            column_set[static_cast<std::size_t>(body_axis)] = true;
-        } else if (column[static_cast<std::size_t>(body_axis)] != image) {
+        const int body_axis = body_axis_of(body_faces.at(i));
+        const int sign = body_sign_of(body_faces.at(i));
+        const std::array<int, 3> solver_axis = axis_of_face(face_of_input.at(i));
+        const std::array<int, 3> image = {sign * solver_axis.at(0), sign * solver_axis.at(1),
+                                          sign * solver_axis.at(2)};
+        if (!column_set.at(static_cast<std::size_t>(body_axis))) {
+            column.at(static_cast<std::size_t>(body_axis)) = image;
+            column_set.at(static_cast<std::size_t>(body_axis)) = true;
+        } else if (column.at(static_cast<std::size_t>(body_axis)) != image) {
             return {};
         }
     }
-    const auto& cx = column[0];
-    const auto& cy = column[1];
-    const auto& cz = column[2];
-    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) -
-                    cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
-                    cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
+    const auto& cx = column.at(0);
+    const auto& cy = column.at(1);
+    const auto& cz = column.at(2);
+    const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
+                    (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
+                    (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
     if (det != 1) {
         return {};
     }
@@ -554,8 +559,8 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
     constexpr std::array<int, 9> kFlipColumns = {2, 1, 0, 5, 4, 3, 8, 7, 6};
     RotationHint hint;
     for (std::size_t i = 0; i < faces.size(); ++i) {
-        const model::Face body = body_faces[i];
-        const Face face = face_of_input[i];
+        const model::Face body = body_faces.at(i);
+        const Face face = face_of_input.at(i);
         // Two independent column flips meet in this function, on two
         // different keys. The SEAM flip (slot_to_outside_view) was applied
         // on the BODY label before these inputs existed - undone per cell
@@ -574,7 +579,7 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
         source_of.fill(-1);
         for (int cell = 0; cell < 9; ++cell) {
             const int body_cell =
-                seam_flipped ? kFlipColumns[static_cast<std::size_t>(cell)] : cell;
+                seam_flipped ? kFlipColumns.at(static_cast<std::size_t>(cell)) : cell;
             const int row = body_cell / 3;
             const int col = body_cell % 3;
             std::array<int, 3> p{};
@@ -600,29 +605,30 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
             }
             std::array<int, 3> q{};
             for (int k = 0; k < 3; ++k) {
-                q[static_cast<std::size_t>(k)] = column[0][static_cast<std::size_t>(k)] * p[0] +
-                                                 column[1][static_cast<std::size_t>(k)] * p[1] +
-                                                 column[2][static_cast<std::size_t>(k)] * p[2];
+                q.at(static_cast<std::size_t>(k)) =
+                    (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
+                    (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
+                    (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
             }
             int assembled_index = -1;
             switch (face) {
                 case Face::U:
                 case Face::D:
-                    assembled_index = (q[2] + 1) * 3 + (q[0] + 1);
+                    assembled_index = ((q.at(2) + 1) * 3) + (q.at(0) + 1);
                     break;
                 case Face::R:
                 case Face::L:
-                    assembled_index = (1 - q[1]) * 3 + (q[2] + 1);
+                    assembled_index = ((1 - q.at(1)) * 3) + (q.at(2) + 1);
                     break;
                 case Face::F:
                 case Face::B:
-                    assembled_index = (1 - q[1]) * 3 + (q[0] + 1);
+                    assembled_index = ((1 - q.at(1)) * 3) + (q.at(0) + 1);
                     break;
             }
             if (assembled_index < 0 || assembled_index > 8) {
                 return {};
             }
-            source_of[static_cast<std::size_t>(assembled_index)] = cell;
+            source_of.at(static_cast<std::size_t>(assembled_index)) = cell;
         }
 
         // The digit is the k whose candidate array matches the geometry.
@@ -640,8 +646,9 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
             bool matches = true;
             for (std::size_t j = 0; j < gather.size(); ++j) {
                 const int input_index =
-                    flip_corrected ? kFlipColumns[static_cast<std::size_t>(gather[j])] : gather[j];
-                if (input_index != source_of[j]) {
+                    flip_corrected ? kFlipColumns.at(static_cast<std::size_t>(gather.at(j)))
+                                   : gather.at(j);
+                if (input_index != source_of.at(j)) {
                     matches = false;
                     break;
                 }
@@ -652,14 +659,14 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
             }
             std::array<int, 9> next{};
             for (std::size_t j = 0; j < next.size(); ++j) {
-                next[j] = gather[kClockwiseSource[j]];
+                next.at(j) = gather.at(kClockwiseSource.at(j));
             }
             gather = next;
         }
         if (digit == RotationHint::kNoHint) {
             return {};
         }
-        hint.quarter_turns[i] = digit;
+        hint.quarter_turns.at(i) = digit;
     }
     return hint;
 }

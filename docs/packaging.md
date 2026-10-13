@@ -23,10 +23,16 @@ release is cut by tagging, through `.github/workflows/release.yml` (see
 ### Publishing
 
 The same packages, built from a version tag by the `Release` workflow, are
-attached to a draft GitHub Release. See [Cutting a release](releasing.md).
-Both CI and the release run `packaging/check-package.sh` on what CPack wrote,
-which looks inside each package for Qt, the executable, the icon, the
-identifier and the notices.
+checksummed (`SHA512SUMS`), signed with the project's GPG key, attested and
+attached to a draft GitHub Release with notes rendered from `CHANGELOG.md`. See
+[Cutting a release](releasing.md). Both CI and the release run
+`packaging/check-package.sh` on what CPack wrote, which looks inside each package
+for Qt, the executable, the icon, the identifier and the notices.
+
+The package names carry the pre-release label (`Cubeulator-0.1.0-beta.1-...`):
+`cmake/Packaging.cmake` names them from `CUBEULATOR_VERSION_FULL`, and the Linux
+formats say it their own way (`0.1.0~beta.1`, rpm release `0.beta.1`) so that a
+beta sorts before its final release.
 
 ### Building one locally
 
@@ -202,8 +208,16 @@ yet: the screens turn it on in E3.
 
 ## Signing
 
-Not configured, and no certificate is referenced anywhere (Iain has not
-decided). It plugs in at two places:
+Two different things are called signing here.
+
+**What the release does already** (`release.yml`, [Cutting a release](releasing.md)):
+a SHA-512 manifest, a detached GPG signature on it and on every package from the
+project's key, a build-provenance attestation for each package and an SBOM. They
+prove where a file came from. The operating system does not look at them.
+
+**What the operating system looks at is not configured**, and no certificate is
+referenced anywhere (Iain has not decided; both cost an account and a yearly
+fee, and neither can be tried without one). It plugs in at two places:
 
 - **Windows**: after CPack writes the installer, sign it with `signtool`
   from a `CPACK_POST_BUILD_SCRIPTS` script. Until then SmartScreen warns on

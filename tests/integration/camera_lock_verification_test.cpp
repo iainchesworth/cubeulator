@@ -82,12 +82,13 @@ Photometry measure(const cv::Mat& bgr) {
 
     cv::Mat a_signed;
     cv::Mat b_signed;
-    planes[1].convertTo(a_signed, CV_32F, 1.0, -128.0);
-    planes[2].convertTo(b_signed, CV_32F, 1.0, -128.0);
+    planes.at(1).convertTo(a_signed, CV_32F, 1.0, -128.0);
+    planes.at(2).convertTo(b_signed, CV_32F, 1.0, -128.0);
     cv::Mat chroma;
     cv::magnitude(a_signed, b_signed, chroma);
 
-    return Photometry{.l = cv::mean(planes[0])[0] * 100.0 / 255.0, .chroma = cv::mean(chroma)[0]};
+    return Photometry{.l = cv::mean(planes.at(0))[0] * 100.0 / 255.0,
+                      .chroma = cv::mean(chroma)[0]};
 }
 
 struct Spread {

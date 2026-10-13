@@ -135,7 +135,7 @@ TEST_CASE("a same-resolution recording longer than the ring drops its overwritte
     csv << kIndexCsvHeader << '\n';
     const int total_rows = kRecordRingFrames + 2;
     for (int pass = 0; pass < total_rows; ++pass) {
-        csv << pass << ',' << 1000 + 33LL * pass << ",640,360,1920,1080\n";
+        csv << pass << ',' << 1000 + (33LL * pass) << ",640,360,1920,1080\n";
     }
     std::istringstream stream(csv.str());
     const auto rows = read_index(stream);
@@ -160,8 +160,8 @@ TEST_CASE("read_index keeps every parseable row and drops the rest", "[replay]")
                               "\n0,1000,640,360,1920,1080\n1,1033,640,360,1920,1080\n2,10");
     const auto rows = read_index(stream);
     REQUIRE(rows.size() == 2);
-    CHECK(rows[0].pass == 0);
-    CHECK(rows[1].t_ms == 1033);
+    CHECK(rows.at(0).pass == 0);
+    CHECK(rows.at(1).t_ms == 1033);
 }
 
 TEST_CASE("a synthetic recording round-trips from disk via the shared format", "[replay]") {
@@ -175,10 +175,10 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
         std::ofstream index(dir / std::string(kIndexCsvName), std::ios::trunc);
         index << kIndexCsvHeader << '\n';
         for (int pass = 0; pass < 2; ++pass) {
-            const cv::Mat frame(36, 64, CV_8UC3, cv::Scalar(20 + 100 * pass, 40, 60));
+            const cv::Mat frame(36, 64, CV_8UC3, cv::Scalar(20 + (100 * pass), 40, 60));
             REQUIRE(cv::imwrite((dir / frame_filename(pass)).string(), frame,
                                 {cv::IMWRITE_JPEG_QUALITY, 90}));
-            index << pass << ',' << 1000 + 33 * pass << ",64,36,1280,720\n";
+            index << pass << ',' << 1000 + (33 * pass) << ",64,36,1280,720\n";
         }
     }
 
@@ -201,5 +201,5 @@ TEST_CASE("a synthetic recording round-trips from disk via the shared format", "
         CHECK(frame.cols == row.w);
         CHECK(frame.rows == row.h);
     }
-    CHECK(rows[1].t_ms - rows[0].t_ms == 33);
+    CHECK(rows.at(1).t_ms - rows.at(0).t_ms == 33);
 }

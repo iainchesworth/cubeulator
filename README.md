@@ -9,20 +9,50 @@
 [![C++23](https://img.shields.io/badge/C%2B%2B-23-blue)](docs/architecture.md)
 [![License: GPL v3+](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)](LICENSE)
 
-A camera-driven, on-device Rubik's Cube solver: point a camera at a
-scrambled cube, capture its six faces, and get a step-by-step solution
-rendered as a technical drawing.
+A camera-driven, on-device Rubik's Cube solver: hold each side of a scrambled
+cube up to the camera, and Cubeulator works out the cube, solves it, and shows
+you the solution turn by turn on a 3D cube.
 
-> **Status: repository skeleton (Spec 00).** No solver, computer vision,
-> edge-AI, or rendering logic is implemented yet — this repo is currently
-> the build/CI foundation those specs land on. See
-> [Architecture](https://iainchesworthlabs.github.io/cubeulator/architecture/)
-> for what's real today versus planned.
+> **Status: pre-release.** For Windows, macOS and Linux. The scan has been
+> checked on recorded sessions and a webcam, not yet across cameras, rooms and
+> cubes, and there is no review screen yet. [CHANGELOG.md](CHANGELOG.md) says
+> what each release does and what is not yet proven.
 
 Full docs live at
 **[iainchesworthlabs.github.io/cubeulator](https://iainchesworthlabs.github.io/cubeulator/)**.
 
-## Quick start
+## Install
+
+Download the package for your system from the
+[Releases page](https://github.com/iainchesworthlabs/cubeulator/releases)
+(releases are pre-releases for now, so the newest is the first one listed).
+You need a camera; a webcam is enough.
+
+| Platform | Package | The first time |
+| --- | --- | --- |
+| Windows 10 and later, 64-bit | `Cubeulator-<version>-windows-x64.exe` | SmartScreen may say "Windows protected your PC": *More info*, then *Run anyway* |
+| macOS 14.4 and later, Apple Silicon | `Cubeulator-<version>-macos-arm64.dmg` | Drag it to Applications; right-click it and choose *Open* (it is not notarised) |
+| Debian, Ubuntu | `Cubeulator-<version>-linux-x64.deb` | `sudo apt install ./Cubeulator-<version>-linux-x64.deb` |
+| Fedora, openSUSE | `Cubeulator-<version>-linux-x64.rpm` | `sudo dnf install ./Cubeulator-<version>-linux-x64.rpm` |
+
+The packages are not yet signed by Microsoft or Apple, which is why Windows and
+macOS ask. What each release does carry is a SHA-512 manifest, GPG signatures,
+and a build-provenance attestation for every file; how to check them is in the
+[security policy](docs/SECURITY.md#verifying-build-authenticity).
+
+## Using it
+
+1. Open Cubeulator and, when it asks, **Allow camera**.
+2. Choose **Scan a cube**, then hold each side of the cube square to the camera
+   until its chip on the screen fills.
+3. With six sides read, it solves the cube. Pick *Beginner* (layer by layer,
+   about 100 moves), *Intermediate* (CFOP, about 52) or *Advanced* (the fewest,
+   about 20).
+4. Follow the 3D cube one turn at a time. The camera stays on, so it sees the
+   side you turned and steps on by itself.
+
+## Build from source
+
 
 ```sh
 git clone --recurse-submodules https://github.com/iainchesworthlabs/cubeulator
