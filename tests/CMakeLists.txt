@@ -406,6 +406,13 @@ if(TARGET cube_app)
     cube_add_third_party_notices_test(cube_app)
 endif()
 
+# --- System tests: the whole application driven from its UI (tests/system) ---
+# Needs a platform that can draw; labelled `system` so CI's plain ctest legs
+# can exclude it. See docs/testing.md.
+if(CUBEULATOR_BUILD_APP)
+    add_subdirectory(system)
+endif()
+
 # --- E4a: desktop manners (window geometry, KeepAwake) ---------------------
 # Its own binary rather than more cases in cube_qt_controller_tests: it links
 # cube_app_desktop (and with it Qt Gui) and nothing from the controllers.

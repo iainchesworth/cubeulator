@@ -387,6 +387,34 @@ if(TARGET cube_app)
     cube_add_third_party_notices(cube_app)
 endif()
 
+# ---------------------------------------------------------------------------
+# cube_app_runtime - the application's start-up, shared by cube_app (main.cpp)
+# and the system tests (tests/system): the controllers (AppControllers),
+# their registration as QML singletons, the language (cube_app_i18n) and the
+# engine. A separate target from cube_app_controllers because that one stays
+# free of QQmlEngine.
+# ---------------------------------------------------------------------------
+if(CUBEULATOR_BUILD_APP)
+    add_library(cube_app_runtime STATIC
+        qt/app_runtime.hpp
+        qt/app_runtime.cpp)
+
+    target_include_directories(cube_app_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
+
+    target_link_libraries(cube_app_runtime
+        PUBLIC
+            cube_app_controllers
+            cube_app_i18n
+            Qt6::Qml
+            Qt6::Quick
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
+
+    target_link_libraries(cube_app PRIVATE cube_app_runtime)
+endif()
+
 # ===========================================================================
 # E4a - desktop packaging and manners (experience lane; this block only).
 #
@@ -442,6 +470,16 @@ if(CUBEULATOR_BUILD_APP AND NOT ANDROID AND NOT IOS)
         target_link_libraries(cube_app_desktop PRIVATE Qt6::DBus)
     endif()
 
+    # CUBE_DESKTOP_SHELL is how code that is shared with the mobile builds
+    # (main.cpp, AppRuntime) knows the desktop shell exists. It is public on
+    # cube_app_desktop so that everything that links it - the runtime, the
+    # app and the system tests - sees the same class layouts.
+    target_compile_definitions(cube_app_desktop PUBLIC CUBE_DESKTOP_SHELL)
+
+    # AppRuntime owns what the screens read from the shell (KeepAwake,
+    # AppInfo), so that the system tests boot the same Main.qml with the same
+    # singletons the app has.
+    target_link_libraries(cube_app_runtime PUBLIC cube_app_desktop)
     target_link_libraries(cube_app PRIVATE cube_app_desktop)
 
     # DesktopShell.qml: shortcuts, the macOS menu bar and the placeholder

@@ -73,14 +73,16 @@ QString AppInfo::build() const {
                              static_cast<qsizetype>(cube::git_describe.size()));
 }
 
-DesktopIntegration::DesktopIntegration(QGuiApplication& /*app*/, QObject* parent)
-    : QObject(parent) {
+void DesktopServices::registerWithQml() {
+    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "KeepAwake", &keepAwake_);
+    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "AppInfo", &info_);
+}
+
+DesktopIntegration::DesktopIntegration(QGuiApplication& /*app*/, QObject* parent) : QObject(parent) {
     applyIdentity();
 }
 
 void DesktopIntegration::prepare(QQmlApplicationEngine& engine) {
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "KeepAwake", &keepAwake_);
-    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "AppInfo", &info_);
     engine.setInitialProperties(geometry_.initialProperties());
 }
 

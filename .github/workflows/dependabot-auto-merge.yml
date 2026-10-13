@@ -1,0 +1,95 @@
+name: Dependabot auto-merge
+
+# Puts Dependabot's low-risk pull requests into develop's merge queue by
+# enabling auto-merge on them; the queue then merges each one once the
+# required checks pass on the queue's own temporary ref (see
+# docs/branch-protection.md). Nothing here bypasses a ruleset: it is the same
+# `gh pr merge --auto --merge` a maintainer would run.
+#
+# What qualifies (everything else is left for a human):
+#   - the ecosystem is github-actions or pip, and
+#   - every updated dependency is a minor or patch bump. A major, or an
+#     update type the metadata does not report, fails closed.
+#
+# vcpkg and git-submodule updates never qualify, on purpose: a baseline bump
+# rebuilds every dependency, and develop does not yet require the build jobs
+# (docs/branch-protection.md, "Required checks"). Add an ecosystem to
+# ALLOWED_ECOSYSTEMS below when the checks that would catch its breakage are
+# required on develop.
+#
+# This workflow produces no required check, so it deliberately does not carry
+# a merge_group trigger (the rule in docs/branch-protection.md).
+
+on:
+  pull_request:
+    branches: [develop]
+
+permissions: {}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    # The author, not github.actor: a maintainer re-running a Dependabot PR's
+    # checks must not make this job think a human opened it, or vice versa.
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    # Nothing here checks out or pushes code; both scopes are what
+    # `gh pr merge --auto` (GraphQL enablePullRequestAutoMerge) is gated on.
+    permissions:
+      contents: write # required by enablePullRequestAutoMerge, alongside pull-requests
+      pull-requests: write # enables auto-merge on the Dependabot pull request itself
+    env:
+      # Dependabot's own names for the ecosystems, as fetch-metadata reports
+      # them (github_actions, pip, ...).
+      ALLOWED_ECOSYSTEMS: "github_actions pip"
+    steps:
+      - name: Fetch Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Decide whether this update may auto-merge
+        id: policy
+        env:
+          ECOSYSTEM: ${{ steps.metadata.outputs.package-ecosystem }}
+          UPDATED_JSON: ${{ steps.metadata.outputs.updated-dependencies-json }}
+          NAMES: ${{ steps.metadata.outputs.dependency-names }}
+        run: |
+          allowed=no
+          for e in $ALLOWED_ECOSYSTEMS; do
+            if [ "$ECOSYSTEM" = "$e" ]; then allowed=yes; fi
+          done
+          if [ "$allowed" != yes ]; then
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "Not auto-merging: ecosystem '$ECOSYSTEM' is not in '$ALLOWED_ECOSYSTEMS'."
+            exit 0
+          fi
+
+          # Fails closed: a missing/unknown updateType is not minor or patch.
+          if jq -e 'length > 0 and all(.[]; .updateType == "version-update:semver-minor" or .updateType == "version-update:semver-patch")' <<<"$UPDATED_JSON" >/dev/null; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+            echo "Auto-merging: minor/patch update of $NAMES ($ECOSYSTEM)."
+          else
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+            echo "Not auto-merging: $NAMES includes a major (or unclassified) update."
+          fi
+
+      - name: Enable auto-merge (merge commit, via the queue)
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          # A push by Dependabot to an open PR can clear auto-merge, and this
+          # job re-runs on every push; do not fail if it is already armed.
+          if [ "$(gh pr view "$PR_URL" --json autoMergeRequest --jq '.autoMergeRequest != null')" = true ]; then
+            echo "Auto-merge is already enabled on $PR_URL."
+            exit 0
+          fi
+          gh pr merge --auto --merge "$PR_URL"

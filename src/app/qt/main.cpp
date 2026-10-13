@@ -1,13 +1,10 @@
-#include "controllers/app_controllers.hpp"
+#include "app_runtime.hpp"
 #include "desktop/desktop_integration.hpp"
-#include "i18n/language_manager.hpp"
 
 #include <cube/solver/solver.hpp>
 
-#include <QtQml/qqml.h>
 #include <QGuiApplication>
 #include <QMetaObject>
-#include <QQmlApplicationEngine>
 #include <QQuickWindow>
 #include <QSettings>
 
@@ -117,32 +114,23 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
-    // E4a - desktop identity (AppUserModelID, desktop file name, window icon),
-    // remembered window geometry, KeepAwake and AppInfo for QML. Declared
-    // before the engine so that it outlives it.
+    // E4a - the process's identity (AppUserModelID, desktop file name, window
+    // icon) and the remembered window geometry: what only the real application
+    // does with its window. Declared before the runtime so that it outlives
+    // the engine. The singletons DesktopShell.qml reads are the runtime's.
     cube::app::DesktopIntegration desktop(app);
 
-    // The controllers QML talks to are made here, wired to one another, and
-    // registered as singletons - not QML_ELEMENT types the engine would make
-    // for itself, because they need real references to each other
-    // (cube::model types cannot cross into QML). They live in their own
-    // target so the tests can make the same set (see app_controllers.hpp).
-    cube::app::AppControllers controllers;
-    controllers.registerWithQml();
-    SolveController& solveController = controllers.solve;
-
-    // Declared after the controllers, and so destroyed before them.
-    QQmlApplicationEngine engine;
-    controllers.addImageProviders(engine);
-    desktop.prepare(engine);  // E4a: singletons and the window's initial geometry
-    // The language - translators, direction, locale - before the first frame.
-    cube::i18n::install(app, engine);
-    engine.loadFromModule("Cubeulator", "Main");
-
-    if (engine.rootObjects().isEmpty()) {
+    // The controllers (cube::app::AppControllers), their registration as QML
+    // singletons and the engine that loads Main.qml are one AppRuntime, which
+    // tests/system boots the same way.
+    cube::app::AppRuntime runtime;
+    desktop.prepare(runtime.engine());  // E4a: the window's initial geometry
+    if (!runtime.load()) {
         return -1;
     }
-    desktop.attach(engine);  // E4a: start remembering the window's geometry
+    desktop.attach(runtime.engine());  // E4a: start remembering it
+    SolveController& solveController = runtime.solve();
+    QQmlApplicationEngine& engine = runtime.engine();
 
     // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
     // scrambled from that seed, no camera and no scan. For working on the
