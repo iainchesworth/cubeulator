@@ -48,6 +48,7 @@ target_sources(cube_lib
         src/solver/scan_assembly.cpp
         src/solver/notation.cpp
         src/solver/outside_view.cpp
+        src/solver/hold.cpp
         src/solver/cross.cpp
         src/solver/corners.cpp
         src/solver/middle_edges.cpp
