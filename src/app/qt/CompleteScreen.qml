@@ -84,8 +84,8 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; text: qsTrId("complete.review") }
-            AppButton { width: parent.width; height: 44; variant: "secondary"; block: true; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
+            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; objectName: "complete.review"; text: qsTrId("complete.review") }
+            AppButton { width: parent.width; height: 44; variant: "secondary"; block: true; objectName: "complete.scanAnother"; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
         }
     }
 
@@ -157,8 +157,8 @@ Rectangle {
             Flow {
                 width: parent.width - parent.padding * 2
                 spacing: Theme.space3
-                AppButton { height: 48; variant: "primary"; text: qsTrId("complete.review") }
-                AppButton { height: 48; variant: "secondary"; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
+                AppButton { height: 48; variant: "primary"; objectName: "complete.review"; text: qsTrId("complete.review") }
+                AppButton { height: 48; variant: "secondary"; objectName: "complete.scanAnother"; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
             }
         }
     }

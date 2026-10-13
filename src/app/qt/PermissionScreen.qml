@@ -88,18 +88,18 @@ Rectangle {
             spacing: Theme.space2
             AppButton {
                 width: parent.width; height: 46; variant: "primary"; block: true
-                text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
+                objectName: "permission.enable"; text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
                 onClicked: CameraPermission.request()
             }
             AppButton {
                 visible: root.denied
                 width: parent.width; height: 40; variant: "ghost"
-                text: qsTrId("common.openDeviceSettings")
+                objectName: "permission.openSettings"; text: qsTrId("common.openDeviceSettings")
                 onClicked: CameraPermission.openSettings()
             }
             AppButton {
                 width: parent.width; height: 40; variant: "ghost"
-                text: qsTrId("permission.notNow")
+                objectName: "permission.notNow"; text: qsTrId("permission.notNow")
                 onClicked: AppState.goLaunch()
             }
         }
@@ -141,11 +141,11 @@ Rectangle {
                 topPadding: Theme.space3
                 AppButton {
                     height: 46; variant: "primary"
-                    text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
+                    objectName: "permission.enable"; text: root.denied ? qsTrId("common.tryAgain") : qsTrId("permission.allow")
                     onClicked: CameraPermission.request()
                 }
-                AppButton { visible: root.denied; height: 46; variant: "ghost"; text: qsTrId("common.openDeviceSettings"); onClicked: CameraPermission.openSettings() }
-                AppButton { height: 46; variant: "secondary"; text: qsTrId("permission.notNow"); onClicked: AppState.goLaunch() }
+                AppButton { visible: root.denied; height: 46; variant: "ghost"; objectName: "permission.openSettings"; text: qsTrId("common.openDeviceSettings"); onClicked: CameraPermission.openSettings() }
+                AppButton { height: 46; variant: "secondary"; objectName: "permission.notNow"; text: qsTrId("permission.notNow"); onClicked: AppState.goLaunch() }
             }
         }
 

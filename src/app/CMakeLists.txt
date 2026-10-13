@@ -386,3 +386,31 @@ if(TARGET cube_app)
     include(ThirdPartyNotices)
     cube_add_third_party_notices(cube_app)
 endif()
+
+# ---------------------------------------------------------------------------
+# cube_app_runtime - the application's start-up, shared by cube_app (main.cpp)
+# and the system tests (tests/system): the controllers (AppControllers),
+# their registration as QML singletons, the language (cube_app_i18n) and the
+# engine. A separate target from cube_app_controllers because that one stays
+# free of QQmlEngine.
+# ---------------------------------------------------------------------------
+if(CUBEULATOR_BUILD_APP)
+    add_library(cube_app_runtime STATIC
+        qt/app_runtime.hpp
+        qt/app_runtime.cpp)
+
+    target_include_directories(cube_app_runtime PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qt")
+
+    target_link_libraries(cube_app_runtime
+        PUBLIC
+            cube_app_controllers
+            cube_app_i18n
+            Qt6::Qml
+            Qt6::Quick
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
+
+    target_link_libraries(cube_app PRIVATE cube_app_runtime)
+endif()
