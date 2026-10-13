@@ -202,17 +202,18 @@ Item {
         width: Math.min(320, Overlay.overlay ? Overlay.overlay.width - 32 : 320)
         padding: 24
 
-        Accessible.role: Accessible.Dialog
-        Accessible.name: qsTr("About Cubeulator")
-
         background: Rectangle {
             color: Theme.paper
             border.width: 1
             border.color: Theme.ink
         }
 
+        // Accessible attaches to an Item, so it sits on the content item
+        // rather than on the Popup.
         contentItem: Column {
             spacing: 8
+            Accessible.role: Accessible.Dialog
+            Accessible.name: qsTr("About Cubeulator")
             Text {
                 text: AppInfo.name
                 font.pixelSize: 28
