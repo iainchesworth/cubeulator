@@ -1,8 +1,9 @@
 # App experience plan
 
 Written 2026-10-13. Status: **in effect.** E0a, E0b and E1 have reported;
-E2a and E4a are running. Nothing has been merged into
-`feature/app-experience` except the design. See [Integration](#integration).
+E2a and E4a are running. `feature/app-experience` holds the design and the
+accepted solve work; no `ax` code branch has landed on it yet. See
+[Integration](#integration).
 
 This covers everything a person meets in Cubeulator apart from the two things
 already in flight - reading the cube ([recovery-plan.md](recovery-plan.md))
@@ -193,16 +194,19 @@ Found in the audit, belonging to the active lanes:
 
 ## Integration
 
-Added 2026-10-13. Five branches hold finished or running work and none
-contains another.
+Added 2026-10-13. Five branches hold finished or running work. None of the
+`ax` branches contains another.
 
-| branch | lane | commits | pushed |
+| branch | lane | commits | state |
 |---|---|---|---|
-| `feature/solve-guidance` | solve | 9 on `fa81b2e` | no |
-| `feature/ax-system-tests` | E0a | 11 | yes; CI still running at the time of writing |
-| `feature/ax-licences` | E0b | 6 | no |
-| `feature/ax-desktop` | E4a | 5, running | no |
-| `feature/ax-kit` | E2a | running, uncommitted | no |
+| `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by Iain 2026-10-13** and merged into `feature/app-experience` the same day |
+| `feature/ax-system-tests` | E0a | 11 | pushed; reconciling start-up, below |
+| `feature/ax-licences` | E0b | 6 | local |
+| `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
+| `feature/ax-kit` | E2a | running | local |
+
+`feature/app-experience` is on `origin` from 2026-10-13, so an `ax` pull
+request can target it.
 
 **Start-up is contested.** Four of them changed `main.cpp` independently:
 
@@ -225,17 +229,24 @@ One shape, applied by whichever lands second:
   later shell concern are single lines around it, as E4a and E2a already
   wrote them.
 
-**Where the lines meet.** The solve branch lands on `feature/direct-scan`
-when Iain accepts it. The `ax` branches land on `feature/app-experience`.
-The two meet when `feature/app-experience` merges `feature/direct-scan`
-forward, and that merge is where the start-up shape is reconciled. The
-system-test session does it, because its tests are what prove the result.
-In the same change:
+**Where the lines meet.** The `ax` branches land on
+`feature/app-experience`, which now holds the solve work: it merged
+`feature/solve-guidance` directly, because `feature/direct-scan` is the scan
+lane's to move and has not moved. The merge was clean, since this branch
+had only documents of its own. Start-up on `feature/app-experience` is
+therefore the solve lane's `AppControllers`, and every `ax` branch meets it
+on its next merge.
+
+The system-test session reconciles the shape, on its own branch, because
+its tests are what prove the result. In the same change:
 
 - `known_today_test` stops asserting that Complete is unreachable and that
   the solve screen has no exit.
 - The journey test walks Finish to Complete and the rescan way out.
-- `e554bcd`, the temporary CI trigger for the branch, is dropped.
+- The temporary CI trigger for the branch (`e554bcd`) is taken out.
+  CI runs on pull requests into `main` and `develop` only, which is why E4a's
+  draft is against `develop`; `feature/app-experience` joins that list
+  instead, until this branch itself lands on `develop`.
 
 Order otherwise: E0a first, since it is the safety net; E0b; then E2a and
 E4a as they finish, each merging `feature/app-experience` before it lands.
@@ -354,6 +365,51 @@ privacy policy; the licence decision recorded; README, CHANGELOG and docs
 brought up to date.
 Gate: four of five people get from launch to a solved cube without help.
 
+## Family alignment and V1.1
+
+Added 2026-10-13, from a read of the other apps in the suite: ICL Forge,
+Countdown Solver and Automate. The full account, with sources, is
+[`design/family.md`](design/family.md). Two findings matter to this plan:
+
+- Cubeulator's palette, type, corners and rules are already ICL Forge's
+  `signal` palette, value for value. E1's `tokens.json` can be checked
+  against `apps/shared/theme/assets/qml/Theme.qml` there.
+- The suite's common machinery (version stamp, Linguist and a
+  `LanguageManager`, endonym language list, `QSettings`, no telemetry) is
+  mostly shared already. The gaps are small and are cheapest to close in
+  the sessions that are open now.
+
+Nothing below is decided until Iain says so. The decisions are D1 to D9 in
+`family.md`.
+
+**Before V1.0** - cheap now, a migration or a rework later. Each rides in a
+session that is already planned; none is a new session.
+
+| item | rides with | what changes |
+|---|---|---|
+| F1 publisher line | E4a, E3b | one string in the version resource, `Info.plist`, AppStream, About (after D1) |
+| F2 setting keys | E2a, E3a | the keys named in `design/screens/settings.md` in the family's `group/name` style, listed in one place |
+| F3 language manager | E2b | its brief says **port** the family `LanguageManager` and its CI gates; add locale-aware numbers, plurals, the unwrapped-string lint |
+| F4 Hebrew and Arabic faces | E2a, before it bundles fonts | Noto Sans Hebrew and Noto Sans Arabic in place of the IBM Plex pair (after D3) |
+| F5 About build line | E3b | the compact version line and a **Copy** button on it |
+| F9 token mapping | E2a | a note in `tokens.json` and `system.md`; no value moves |
+| machine-translation note | E5 | one sentence under the language list, as ICL Forge and Countdown Solver have |
+
+**V1.1** - after E3 and E5 have landed.
+
+| item | what |
+|---|---|
+| F7 Copy details | text-only diagnostics for a bug report: no picture, nothing about the cube (D6) |
+| Yiddish | the family's seventh language (D4) |
+| "Reviewed by" per language | said in the app, per language, once a fluent reader has looked |
+| F10 tour manifest | the screenshot tour gets a manifest and a check that documentation pictures are in it; a capture entry with `--page` and `--language` |
+| Docs skin | the documentation site skinned from `tokens.json` |
+| Dark neutrals | converge with ICL Forge's, if Iain wants it, in the direction he chooses |
+| Back-ports | the list in `family.md` section 4, for the other repositories |
+
+Gate: every line of the checklist in `family.md` section 7 is true of
+Cubeulator, or is recorded as a deliberate difference.
+
 ## Sessions
 
 Every session spawned from this plan runs on **Sonnet 5.5** (Iain,
@@ -374,6 +430,7 @@ Every session spawned from this plan runs on **Sonnet 5.5** (Iain,
 | E4b | Mobile shell | `feature/ax-mobile` | E2a and decision 8 | manifest, iOS build |
 | E5 | Languages | `feature/ax-languages` | E3 gate | translation files |
 | E6 | Release readiness | `feature/ax-release` | E4 and E5 | docs, listings |
+| F | Family alignment (V1.1) | `feature/ax-family` | E3 and E5 landed | About, Settings, `docs/design/family.md` |
 
 ## Testing the app from its UI
 
@@ -416,7 +473,9 @@ stable. Phones are not in CI at first.
 - **How a move is advanced with both hands full** - a large tap, a timer,
   voice, or the camera seeing the turn. It needs trying with a real cube in
   hand. The solve lane owns the mechanism; E1 proposes.
-- **Whether the original design handoff still exists.**
+- **The original design handoff.** Its tokens survive, value for value, in
+  ICL Forge's `signal` palette (`design/family.md`). The handoff files
+  themselves have not been found.
 - **Who reads each translation.**
 - **Screen readers over custom QML on Android and iOS.** The 3D cube and the
   canvas-drawn icons are opaque to them and need text alternatives.
