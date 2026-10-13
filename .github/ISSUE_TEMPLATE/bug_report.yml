@@ -7,7 +7,7 @@ body:
       value: |
         Thanks for taking the time to report a bug. If this is a security
         vulnerability, please use
-        [private reporting](https://github.com/iainchesworth/cubeulator/security/advisories/new)
+        [private reporting](https://github.com/iainchesworthlabs/cubeulator/security/advisories/new)
         instead of a public issue.
 
   - type: input
