@@ -9,6 +9,13 @@ name: Dependency Review
 on:
   pull_request:
     branches: [main, develop]
+  # develop's merge queue needs "Scan dependency diff" to report on its
+  # temporary gh-readonly-queue/... ref: GitHub only runs workflows that opt
+  # into merge_group there, so without this every queue entry would wait out
+  # its check timeout. actions/dependency-review-action diffs a queue entry
+  # against github.event.merge_group.base_sha (supported since v3.1.0).
+  merge_group:
+    branches: [develop]
 
 permissions:
   contents: read
