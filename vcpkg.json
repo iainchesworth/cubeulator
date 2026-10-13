@@ -25,8 +25,7 @@
         { "name": "v4l", "platform": "linux" },
         "webp"
       ]
-    },
-    "bgfx"
+    }
   ],
   "default-features": [],
   "features": {

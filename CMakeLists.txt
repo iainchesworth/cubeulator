@@ -92,11 +92,6 @@ option(CUBEULATOR_BUILD_TESTS "Build the unit and integration test suites" ON)
 # completely GUI-free.
 add_subdirectory(src/lib)
 
-# Shared bgfx setup / technical-drawing shading pipeline. Kept as its own
-# target (rather than folded into src/app) so it is buildable and testable
-# independently of the Qt shell.
-add_subdirectory(src/render)
-
 # Always added: src/app/CMakeLists.txt builds the platform-abstraction
 # library (cube_platform) unconditionally so the per-OS interface selection
 # is exercised on every preset, including CUBEULATOR_BUILD_APP=OFF headless

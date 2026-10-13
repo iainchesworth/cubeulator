@@ -130,7 +130,7 @@ jobs:
           cmakeVersion: "latest"
 
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11 for bgfx, GLU for glew).
+      # build-and-test in ci.yml (X11/GL headers, GLU for glew).
       - name: Install vcpkg build dependencies
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
@@ -301,7 +301,8 @@ jobs:
       # debug and release variants of every package together in one pass,
       # regardless of our own project's build type, so linux-gcc-debug and
       # linux-gcc-release (same x64-linux triplet) would otherwise each
-      # cache a near-identical ~1.8GB copy of opencv4/onnxruntime/bgfx.
+      # cache a near-identical copy of opencv4/onnxruntime (~1.8GB when bgfx
+      # was still in the manifest).
       # GitHub's 10GB-per-repo cache cap was being exceeded by this
       # duplication across every preset/triplet combination, causing
       # semi-random eviction (confirmed via the cache usage API - 10.7GB
@@ -323,8 +324,11 @@ jobs:
       # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
       #
       # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
-      # bgfx's port unconditionally find_package(X11)s even with
-      # examples/tools disabled ("Could NOT find X11"); (2) glew's generated
+      # the X11/GL development headers were added when bgfx's port
+      # unconditionally find_package(X11)d even with examples/tools disabled
+      # ("Could NOT find X11"). bgfx has since been removed from the
+      # manifest; the packages stay until a Linux leg shows that nothing
+      # else (Qt's OpenGL probe, say) wants them; (2) glew's generated
       # glew.pc declares `Requires: glu`, and vcpkg_fixup_pkgconfig() then
       # runs `pkg-config --exists glew`, which fails with "Package 'glu',
       # required by 'glew', not found" (glu.pc comes from libglu1-mesa-dev,
@@ -432,7 +436,7 @@ jobs:
     runs-on: ubuntu-26.04
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
-    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # build-and-test above. opencv4/onnxruntime now build here too (see
     # docs/dependency-strategy.md), including onnxruntime, which already
     # OOM'd desktop runners at default parallelism.
     env:
@@ -486,8 +490,7 @@ jobs:
       # gperf (a transitive dependency, built as a host tool regardless of
       # target triplet) needs these from the system package manager to build
       # from source via autotools - see the equivalent comment on clang-tidy
-      # in build-and-test above. No X11/GL packages needed here: bgfx.cmake
-      # explicitly excludes ANDROID from its X11 path.
+      # in build-and-test above. No X11/GL packages needed here.
       - name: Install vcpkg build dependencies
         run: sudo apt-get install -y autoconf autoconf-archive automake libtool libltdl-dev
 
@@ -524,11 +527,10 @@ jobs:
           modules: "qtquick3d qtshadertools"
           cache: true
 
-      # vcpkg now builds opencv4/onnxruntime/bgfx here too, chainloaded onto
+      # vcpkg now builds opencv4/onnxruntime here too, chainloaded onto
       # the NDK toolchain the same way as fmt - see docs/dependency-strategy.md.
-      # No libx11-dev install needed: bgfx.cmake explicitly excludes ANDROID
-      # from its X11 path. Release only - see the equivalent comment on
-      # build-and-test above.
+      # No libx11-dev install needed. Release only - see the equivalent
+      # comment on build-and-test above.
       - name: Configure
         run: >
           cmake --preset android-clang-release
@@ -601,7 +603,7 @@ jobs:
     runs-on: macos-15
     continue-on-error: true
     # Caps vcpkg's internal build parallelism - see the equivalent comment on
-    # build-and-test above. opencv4/onnxruntime/bgfx now build here too (see
+    # build-and-test above. opencv4/onnxruntime now build here too (see
     # docs/dependency-strategy.md), including onnxruntime, which already
     # OOM'd desktop runners at default parallelism.
     env:
@@ -638,7 +640,7 @@ jobs:
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
       # is available in this job. No Qt install needed - see the android job
       # comment above; the same reasoning applies here. vcpkg now builds
-      # opencv4/onnxruntime/bgfx here too - see the android job comment
+      # opencv4/onnxruntime here too - see the android job comment
       # above. Release only - see the equivalent comment on build-and-test
       # above.
       - name: Configure
@@ -823,7 +825,7 @@ jobs:
       # out of the box - see the equivalent comment on build-and-test above.
       #
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test above (X11 for bgfx, GLU for glew).
+      # build-and-test above (X11/GL headers, GLU for glew).
       - name: Install vcpkg build dependencies
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 

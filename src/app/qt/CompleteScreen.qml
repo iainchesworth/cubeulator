@@ -6,6 +6,13 @@ Rectangle {
     color: Theme.paper
     readonly property bool wide: width >= Theme.wideBreakpoint
 
+    // The way this cube was solved, by SolveController.Method.
+    readonly property var methodNames: [
+        qsTrId("solve.method.beginner"),
+        qsTrId("solve.method.intermediate"),
+        qsTrId("solve.method.advanced")
+    ]
+
     readonly property var solvedCube: ({ top: Array(9).fill(Theme.faceU), right: Array(9).fill(Theme.faceR), left: Array(9).fill(Theme.faceF) })
 
     component BobbingCube: CubeView {
@@ -144,7 +151,16 @@ Rectangle {
                     Column {
                         width: parent.width / 3 - 4; height: parent.height; padding: Theme.space4
                         Text { text: "METHOD"; font.pixelSize: 11; font.letterSpacing: 1; color: Theme.inkMuted(0.6); font.family: Theme.fontHeading }
-                        Text { text: "Beginner"; font.family: Theme.fontMono; font.pixelSize: 18; color: Theme.ink; topPadding: 14 }
+                        // A name, not a number: in the label face, and wrapped
+                        // inside the column - "Intermediate" is wider than the
+                        // column in the mono face at this size.
+                        Text {
+                            text: root.methodNames[SolveController.method]
+                            width: parent.width - 2 * Theme.space4
+                            wrapMode: Text.WordWrap
+                            font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 15
+                            color: Theme.ink; topPadding: 14
+                        }
                     }
                 }
             }

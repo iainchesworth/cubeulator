@@ -6,12 +6,14 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <cube/solver/solver.hpp>
 #include <cube/solver/stepped_solution.hpp>
 
 #include <optional>
 
-// Bridges cube::solver's real beginner-method solve into QML. Owns a
-// SteppedSolution built from the cube the scan read (solveCube). The solve
+// Bridges cube::solver's real solve - in whichever of its three methods is
+// chosen - into QML. Owns a SteppedSolution built from the cube the scan read
+// (solveCube). The solve
 // screen reads the exposed properties to draw the current stickers and the
 // move about to happen. Deliberately thin: all solving and stepping logic
 // lives in cube::solver, which is plain C++ and Catch2-tested independently
@@ -23,6 +25,24 @@
 class SolveController : public QObject {
     Q_OBJECT
 
+public:
+    // How the cube is solved: cube::solver::SolveMethod, in the same order.
+    // Exposed to QML (SolveController.Advanced) so the screens name a method
+    // by what it is, not by a number.
+    enum Method {
+        Beginner,      // layer by layer, about 100 turns: the steps people learn
+        Intermediate,  // CFOP, about 50 turns: how fast solvers do it
+        Advanced,      // two-phase search, about 20 turns: the fewest, nothing to learn
+    };
+    Q_ENUM(Method)
+
+    // The method the next solve uses, and - when it is changed with a cube in
+    // hand - the one the rest of this solve switches to. Changing it
+    // re-solves from the cube as it stands, so nothing already turned is
+    // lost: the new solution starts from here. isSolving is true meanwhile.
+    Q_PROPERTY(Method method READ method WRITE setMethod NOTIFY methodChanged)
+
+private:
     // The 3 visible faces' 9 stickers each, row-major, as colour-name
     // strings ("White"/"Yellow"/"Green"/"Blue"/"Orange"/"Red") - QML maps
     // each name to its Theme.qml hex value, keeping the palette itself
@@ -57,11 +77,16 @@ class SolveController : public QObject {
     Q_PROPERTY(bool atStart READ atStart NOTIFY stateChanged)
     Q_PROPERTY(bool atEnd READ atEnd NOTIFY stateChanged)
 
-    // One entry per solving stage, in order: {stageIndex, startIndex,
-    // endIndex} - lets the stage sidebar highlight "done"/"current" by
-    // comparing moveIndex against a range instead of one entry per move.
-    // Empty until the solve lands (see totalMoves).
+    // One entry per stage of this solution, in order: {stageIndex,
+    // startIndex, endIndex} - lets the stage sidebar highlight
+    // "done"/"current" by comparing moveIndex against a range instead of one
+    // entry per move. stageIndex is a cube::solver::Stage value, not a
+    // position: the three methods have different stages, and a screen words
+    // each by its value (the list's length is how many there are). Empty until
+    // the solve lands (see totalMoves).
     Q_PROPERTY(QVariantList stageRanges READ stageRanges NOTIFY stateChanged)
+    // The cube::solver::Stage value of the stage the next move belongs to (the
+    // last stage's, once solved).
     Q_PROPERTY(int currentStageIndex READ currentStageIndex NOTIFY stateChanged)
 
     // True from the moment a completed scan is accepted until its
@@ -102,6 +127,16 @@ public:
 
     [[nodiscard]] bool isSolving() const;
 
+    [[nodiscard]] Method method() const noexcept { return method_; }
+    void setMethod(Method method);
+
+    // True when the solution now in place is a continuation of the previous
+    // one: the same physical cube, in the same hands, solved a different way
+    // because the method changed. False for a solution to a newly scanned
+    // cube. HeldCube reads it on solutionChanged: a new cube starts from the
+    // hold the screen asks for, a continuation keeps the hold it has seen.
+    [[nodiscard]] bool solutionContinuesCube() const noexcept { return continuation_; }
+
     // Starts solving a cube handed over already validated - the direct-scan
     // path. isSolving is true until the solution lands. Nothing is
     // announced beyond that: the caller decides when to show the solution,
@@ -116,12 +151,17 @@ signals:
     void stateChanged();
     // A different solution is in place: a solve has landed.
     void solutionChanged();
+    // The method changed. The solution is replaced when its solve lands
+    // (solutionChanged); this is for whoever shows which method is chosen.
+    void methodChanged();
 
 private:
-    // Kicks off the background solve for `scrambled` (the scanned cube).
-    // The constructor's solved-cube placeholder is set directly, not through
-    // this path - see the .cpp.
-    void beginSolve(const cube::solver::Cube& scrambled);
+    // Kicks off the background solve for `scrambled` with the current method.
+    // Shared by solveCube() and a method change; the constructor's
+    // solved-cube placeholder is set directly, not through this path - see
+    // the .cpp. `continuation`: this is the cube already being solved, handed
+    // over to another method.
+    void beginSolve(const cube::solver::Cube& scrambled, bool continuation = false);
     // Invoked on the UI thread once solveWatcher_'s background solve()
     // (kicked off from beginSolve()) finishes.
     void applySolveResult();
@@ -129,4 +169,11 @@ private:
     cube::solver::SteppedSolution stepped_;
     QFutureWatcher<cube::solver::SteppedSolution> solveWatcher_;
     bool isSolving_ = false;
+    Method method_ = Beginner;
+    // The cube the solve in flight, or the last one to land, was started
+    // from; empty until the first. A method change with nothing scanned only
+    // records the method.
+    std::optional<cube::solver::Cube> pending_;
+    bool solving_continuation_ = false;
+    bool continuation_ = false;
 };

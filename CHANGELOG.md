@@ -20,6 +20,18 @@ project adheres to [Semantic Versioning](https://semver.org/).
   `unknown compiler` as before), and the Android manifest moved to
   `src/app/platform/android/package/`.
 
+### Removed
+
+- bgfx, and everything that existed only for it. It was declared in
+  `vcpkg.json` but nothing linked it: the `cube::gpu_render` target
+  (`src/render`) was one empty function, and the cube is drawn by Qt Quick 3D
+  and the QML Canvas. Gone with it: the lib-side `cube::render` stub, the
+  `gpu_surface` platform interface and its five per-OS implementations, and the
+  `gpu_surface_unavailable` / `shader_compile_failed` error codes. vcpkg no
+  longer builds seven ports (bgfx, libsquish, lodepng, mgnlibs, miniz, stb,
+  tinyexr) on any leg, and `find_package(bgfx)` is no longer a configure-time
+  requirement. See [docs/architecture.md](docs/architecture.md#gpu-rendering).
+
 ### Added
 
 - Tracy profiler instrumentation, the same as the rest of the application

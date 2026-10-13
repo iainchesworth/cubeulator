@@ -148,7 +148,8 @@ Tools, which Qt publishes under GPLv3 or a commercial licence, not LGPL. If
 that reading holds, an App Store exception on Cubeulator's own code would
 not settle the Apple question, because the same terms arrive through Qt. The
 routes would be a Qt commercial licence, drawing the cube without Quick 3D
-(`src/render` is a stub today), or not shipping on the App Store. Desktop
+(`src/render`, a bgfx stub, held no rendering code and was removed on
+2026-10-13), or not shipping on the App Store. Desktop
 and Google Play are not affected. E0b verifies this before anyone relies on
 it; it is not legal advice.
 

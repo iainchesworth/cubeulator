@@ -17,7 +17,6 @@ set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS macos clang_64)
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/macos/camera_macos.cpp
-    platform/macos/gpu_surface_macos.cpp
     platform/macos/paths_macos.cpp
     platform/macos/platform_info_macos.cpp
     platform/posix/capture_thread_scope_posix.cpp
