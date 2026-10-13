@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cube/vision/prepared_frame.hpp>
+
 #include <opencv2/core.hpp>
 
 #include <array>
@@ -66,5 +68,8 @@ struct CornerRead {
 // `bgr` is an 8-bit BGR frame; frames wider than the reader's working width are
 // reduced first.
 [[nodiscard]] std::optional<CornerRead> read_corner(const cv::Mat& bgr);
+// The same read from a frame already prepared (prepared_frame.hpp), which is
+// how a frame goes to read_side and then here without being worked on twice.
+[[nodiscard]] std::optional<CornerRead> read_corner(const PreparedFrame& frame);
 
 }  // namespace cube::vision
