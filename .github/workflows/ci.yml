@@ -410,6 +410,7 @@ jobs:
         run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR${OPENMP_PREFIX:+;$OPENMP_PREFIX}" $EXTRA_CXX_COMPILER
 
       - name: Build
+        id: build
         run: cmake --build --preset ${{ matrix.preset }}
 
       # The system tests (tests/system, label "system") draw the real app
@@ -422,7 +423,7 @@ jobs:
       # runners' graphics is what this step finds out, and it is reported
       # rather than forced green (docs/testing.md, "System tests").
       - name: System tests (experimental off Linux)
-        if: runner.os != 'Linux'
+        if: ${{ !cancelled() && runner.os != 'Linux' && steps.build.outcome == 'success' }}
         continue-on-error: true
         run: ctest --preset ${{ matrix.preset }} -L system --output-on-failure
 
@@ -437,7 +438,13 @@ jobs:
       # E4a: one installable package per desktop OS, built from the tree just
       # tested and kept as a build artifact. Nothing is released or published.
       # How the packages are put together is docs/packaging.md.
+      # Runs whenever the build did, whatever the test steps said: whether a
+      # package can be made does not depend on a unit test, and a red test
+      # should not hide a packaging problem on a platform that is slow to
+      # report one.
       - name: Package
+        id: package
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
@@ -448,6 +455,7 @@ jobs:
         run: cpack --config "build/${CMAKE_PRESET}/CPackConfig.cmake" -G "${PACKAGE_GENERATORS}"
 
       - name: Upload package
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.package_artifact }}
@@ -463,12 +471,13 @@ jobs:
       # after the upload so the artifact can still be looked at. The release
       # workflow runs the same script on the same packages.
       - name: Check the package contents
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
         shell: bash
         run: packaging/check-package.sh .
 
       # After the upload, so that a metadata complaint cannot lose the package.
       - name: Validate desktop entry and AppStream metadata (Linux)
-        if: runner.os == 'Linux'
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
         run: |
