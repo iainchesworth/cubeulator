@@ -82,6 +82,7 @@ target_sources(cube_lib
         src/vision/corner_detector.cpp
         src/vision/pose_from_corners.cpp
         src/vision/camera_intrinsics.cpp
+        src/vision/direct_scan.cpp
         src/render/render.cpp
         src/i18n/i18n.cpp)
 
