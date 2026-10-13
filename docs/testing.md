@@ -129,6 +129,11 @@ cmake --build --preset <preset> --target cube_system_tests
 ctest --preset <preset> -L system --output-on-failure
 ```
 
+That is three ctest entries: `system.walk` (the suite, one session of the
+app), `system.reach` (the reach gate, below; reads the walk's report, needs
+no display) and `system.relaunch` (a second launch with a setting already in
+the store).
+
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
 
@@ -165,8 +170,13 @@ The `system` label keeps it out of the plain `ctest` runs of the build legs
   name can match twice; `App::find` returns the one on show.
 - **One session, reset between cases.** The suite is one session of the app
   (the controllers are process-wide singletons), and each case begins with
-  `App::fresh()`: launch screen, light theme, desktop size, camera idle. The
-  cases run in declaration order and the reach gate is last.
+  `App::fresh()`: launch screen, light theme, desktop size, camera idle.
+- **A camera that takes a moment.** The fake camera's `start()` sleeps 150 ms
+  on the pool thread, as a real one takes longer, so the scan screen's
+  "opening the camera" state is a state the suite sees rather than a race.
+- **Sweeps.** `press_every_control` (`sweep.hpp`) presses everything the live
+  item tree offers on a screen, once; a control added tomorrow is pressed
+  with no test change, and what it does is for a case of its own.
 - **QML warnings are failures.** `diagnostics.cpp` collects what the app's own
   QML printed; the journey cases assert it is nothing.
 
@@ -215,7 +225,7 @@ is self-reported: a sampler watches the running app, states are predicates
 over properties the controllers already expose, and controls are discovered
 from the live item tree.
 
-The last case, `reach: ...`, fails when something in the app has no visit:
+`system.reach` fails when something in the app has no visit:
 
 - a `*Screen.qml` in the module that is in neither the screen inventory nor
   the list of known-dead files;
@@ -225,10 +235,23 @@ The last case, `reach: ...`, fails when something in the app has no visit:
   known gaps, not hidden);
 - a control that was on screen, enabled, and never pressed.
 
-A new button therefore fails the suite until a test presses it, which is the
-property line coverage would have given. It measures *what was exercised*,
-not which lines ran: a screen can be reached and half its handlers never
-fire.
+A new button therefore fails the gate until a test presses it - and the
+sweeps press it without being told - which is the property line coverage
+would have given. It measures *what was exercised*, not which lines ran: a
+screen can be reached and half its handlers never fire.
+
+State ids are `screen.state`, the form `docs/design/journey.md` uses, so the
+inventory in `reach.cpp` can be replaced by its ids as screens are rebuilt.
+
+### Layout defects the suite found
+
+`layout_test.cpp` checks that every control is inside the window at six
+sizes (375x667 to 1280x800). It found two screens that still size by
+subtraction (plan, "What was found"): on the permission screen "Not now" is
+below the window on a phone and at 719x640 (and "Open settings", when the
+platform reports camera access as denied), and on the complete screen both
+buttons are below a 1280x800 window. They are listed in the test as they
+are; a new overflow fails it, and so does the day one of these is fixed.
 
 ### Known today
 
