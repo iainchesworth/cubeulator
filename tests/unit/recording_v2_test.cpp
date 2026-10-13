@@ -1,4 +1,4 @@
-// Recorder v2 (docs/pipeline-plan.md Phase 0 item 2): manifest oracle
+// Recorder v2 (docs/recording-format.md): manifest oracle
 // validation, the shared analysis downscale, the async writer's integrity
 // contract, and check_recording's audit.
 

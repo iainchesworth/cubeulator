@@ -18,7 +18,8 @@ rendered as a technical drawing.
 1. **Cube state model + Kociemba solving** from a hardcoded scramble.
 2. **OpenCV capture-to-state pipeline** with manual per-face confirmation.
 3. **Edge-AI live tracking** (coverage detection, auto-advance).
-4. **bgfx technical-drawing render** (progress overlay, step animation).
+4. **Technical-drawing render** (progress overlay, step animation), in
+   Qt Quick (QML Canvas and Quick 3D).
 
 Each stage is a separate, later spec, built in the order above once the
 skeleton (this spec) is green.

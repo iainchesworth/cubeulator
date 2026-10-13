@@ -12,7 +12,6 @@
       "owner": "experience lane (feature/app-experience)",
       "reason": "The Method statistic, which the design drops. E3d rebuilds Complete on the kit.",
       "literals": [
-        "Beginner",
         "METHOD"
       ]
     },
@@ -133,15 +132,6 @@
         "%1 move %2 asked %3 -> %4",
         " | after the move %1 (%2 off)",
         " | turned instead: %1"
-      ]
-    },
-    {
-      "file": "src/app/qt/controllers/settings_model.cpp",
-      "owner": "scan lane (feature/direct-scan)",
-      "reason": "handDetectionUnavailableReason: the setting dies with ScanSession. Until then, expose a code (model-missing, no-provider) and word it in QML.",
-      "literals": [
-        "Hand-detection model not found on this device.",
-        "No AI inference hardware detected."
       ]
     }
   ]

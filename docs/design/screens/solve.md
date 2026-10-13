@@ -69,6 +69,7 @@ away.
 | part | component | string | objectName |
 |---|---|---|---|
 | Pause | icon button, pause icon | `solve.a11y.menu` | `solve.pause` |
+| Method | three buttons in a row, the chosen one primary; wide, a line under them says what it is | `solve.method.beginner`, `solve.method.intermediate`, `solve.method.advanced`, `solve.method.beginner.note`, `solve.method.intermediate.note`, `solve.method.advanced.note` | `solve.method` |
 | Stage | eyebrow | `solve.stageOf`, `stage.1.title`, `stage.2.title`, `stage.3.title`, `stage.4.title`, `stage.5.title` | `solve.stage` |
 | Turn count | `numeral`. A screen reader that moves to it hears the fuller `solve.a11y.progress` | `solve.progress`, `solve.a11y.progress` | `solve.count` |
 | Progress | solve progress bar. Role: progress bar, value in turns | - | `solve.progress` |
@@ -89,6 +90,17 @@ away.
 | Hold step | The cube, a title, a paragraph, one giant button and one small one | `solve.hold.title`, `solve.hold.body`, `solve.hold.match`, `solve.hold.ready`, `solve.hold.check`, `solve.holdResume.title`, `solve.holdResume.body`, `solve.matches` | `solve.hold` |
 | Working | working indicator | `solve.working` | `solve.working` |
 | Message | A title, a sentence and buttons | `solve.failed.title`, `solve.failed.body`, `solve.alreadySolved.title`, `solve.alreadySolved.body`, `scan.checkColours`, `common.scanAgain`, `complete.scanAnother`, `common.home` | `solve.message` |
+
+**The method** is how the cube is being solved: Beginner (layer by layer,
+five stages, about 100 turns), Intermediate (the way fast solvers do it, four
+stages, about 50) or Advanced (the fewest, about 20, two stages that are not
+meant to be learnt). It is chosen here and in settings; the choice is kept.
+Choosing a different one while a solve is under way solves on from the cube
+as it stands: whatever is already done stays done, the turn count starts
+again for the new solution, and the way the cube is held is kept. The stages
+shown are the chosen method's: `stage.1.*` to `stage.5.*` for Beginner,
+`stage.1.*`, `stage.f2l.*`, `stage.4.*` and `stage.5.*` for Intermediate,
+`stage.reduce.*` and `stage.finish.*` for Advanced.
 
 **The instruction** is three lines (`../content.md`, "Naming a turn"): the
 side with a swatch of its centre colour, the direction with its arrow,

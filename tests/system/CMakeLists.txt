@@ -76,7 +76,6 @@ add_dependencies(cube_system_tests cube_app)
 cube_platform_deploy_qt_library(cube_system_tests Qt6::Test)
 
 cube_deploy_sanitizer_runtime(cube_system_tests)
-cube_deploy_vision_assets(cube_system_tests)
 
 # Deliberately not catch_discover_tests: the walk is one session of the app
 # (one engine, one window, state carried from case to case on purpose), and

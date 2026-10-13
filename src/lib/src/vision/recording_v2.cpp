@@ -94,7 +94,7 @@ void append_json_string(std::string& out, const std::string& text) {
 // "key" and returns its string value, std::nullopt for null/absent.
 // Tolerant by design (unknown keys ignored, ordering free); NOT a general
 // JSON parser - the manifest is a flat object of string-or-null values
-// per docs/ground-truth-format.md.
+// per docs/recording-format.md.
 std::optional<std::string> json_string_field(const std::string& text, const std::string& key) {
     const std::string needle = "\"" + key + "\"";
     std::size_t pos = text.find(needle);

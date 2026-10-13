@@ -156,7 +156,7 @@ TEST_CASE("stage_ranges still tile the move list when a merge empties stages",
     for (std::size_t i = 0; i < algorithms.size(); ++i) {
         const auto moves = parse_algorithm(algorithms[i]);
         REQUIRE(moves.has_value());
-        solution.steps.push_back(SolveStep{stages[i], *moves});
+        solution.steps.push_back(SolveStep{.stage = stages[i], .moves = *moves});
     }
 
     const Cube start = random_scramble(3, 10);

@@ -26,8 +26,10 @@ TEST_CASE("parse_move accepts every face letter", "[notation]") {
         char letter;
         Face face;
     };
-    for (auto [letter, face] : {Case{'U', Face::U}, Case{'D', Face::D}, Case{'L', Face::L},
-                                Case{'R', Face::R}, Case{'F', Face::F}, Case{'B', Face::B}}) {
+    for (auto [letter, face] :
+         {Case{.letter = 'U', .face = Face::U}, Case{.letter = 'D', .face = Face::D},
+          Case{.letter = 'L', .face = Face::L}, Case{.letter = 'R', .face = Face::R},
+          Case{.letter = 'F', .face = Face::F}, Case{.letter = 'B', .face = Face::B}}) {
         const auto move = parse_move(std::string_view(&letter, 1));
         REQUIRE(move.has_value());
         REQUIRE(move->face == face);
@@ -69,7 +71,7 @@ TEST_CASE("parse_algorithm propagates the first invalid token's error", "[notati
 TEST_CASE("to_string round-trips through parse_move for every valid move", "[notation]") {
     for (Face face : cube::solver::kAllFaces) {
         for (int turns = 1; turns <= 3; ++turns) {
-            const Move move{face, turns};
+            const Move move{.face = face, .turns = turns};
             const auto parsed = parse_move(cube::solver::to_string(move));
             REQUIRE(parsed.has_value());
             REQUIRE(*parsed == move);
@@ -78,13 +80,19 @@ TEST_CASE("to_string round-trips through parse_move for every valid move", "[not
 }
 
 TEST_CASE("to_string joins an algorithm with single spaces", "[notation]") {
-    const std::vector<Move> moves{Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::F, 2}};
+    const std::vector<Move> moves{Move{.face = Face::R, .turns = 1},
+                                  Move{.face = Face::U, .turns = 3},
+                                  Move{.face = Face::F, .turns = 2}};
     REQUIRE(cube::solver::to_string(moves) == "R U' F2");
 }
 
 TEST_CASE("inverse reverses order and inverts each move", "[notation]") {
-    const std::vector<Move> moves{Move{Face::F, 1}, Move{Face::R, 1}, Move{Face::U, 1}};
-    const std::vector<Move> expected{Move{Face::U, 3}, Move{Face::R, 3}, Move{Face::F, 3}};
+    const std::vector<Move> moves{Move{.face = Face::F, .turns = 1},
+                                  Move{.face = Face::R, .turns = 1},
+                                  Move{.face = Face::U, .turns = 1}};
+    const std::vector<Move> expected{Move{.face = Face::U, .turns = 3},
+                                     Move{.face = Face::R, .turns = 3},
+                                     Move{.face = Face::F, .turns = 3}};
     REQUIRE(cube::solver::inverse(moves) == expected);
 }
 

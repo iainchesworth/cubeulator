@@ -81,8 +81,8 @@ public:
 
     // Builds a Cube from raw per-face sticker data, row-major per the
     // layout documented above (the caller is responsible for correct
-    // facelet ordering - see cube::solver::cube_from_scan(), which derives
-    // it from a camera-oriented scan). Fails with
+    // facelet ordering - see cube::solver::assemble_scanned_faces(), which
+    // derives it from the sides of a scan). Fails with
     // CubeError::invalid_cube_state if the result doesn't pass
     // is_physically_valid() - the guard against a malformed vision-pipeline
     // read this class's own is_physically_valid() doc comment anticipated.

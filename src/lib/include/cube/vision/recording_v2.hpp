@@ -1,24 +1,24 @@
 #pragma once
 
-// Recorder v2 (docs/pipeline-plan.md, Phase 0 item 2): the corpus-grade
-// recording path. Three concerns live here, all shared between the app,
-// the offline runner, and the tests so no side can drift:
+// Recorder v2 (docs/recording-format.md): the corpus-grade recording path.
+// Three concerns live here, all shared between the app, the tests and
+// `cube_scan`, so no side can drift:
 //
 //  - the ANALYSIS DOWNSCALE: the one function that turns a camera frame
-//    into the stream the detectors (and therefore replay) consume. It was
-//    file-local in scan_session.cpp; the recorder thread needs the exact
-//    same rounding, so it lives here now and the app calls this.
+//    into the stream the reader (and therefore replay) consumes. The
+//    recorder thread needs the exact same rounding as the live path, so
+//    it lives here.
 //  - the MANIFEST: per-clip metadata with the cube's true state, VALIDATED
 //    through the real solver oracle at record time (a transcribed state
 //    that cannot build a solvable cube refuses to record - a silent slip
 //    here would poison every exact-state gate downstream).
 //  - the ASYNC RECORDER: a bounded-queue writer thread that persists, per
 //    pushed camera frame, the analysis-scale JPEG (frame_recording.hpp
-//    format, the replay input) plus a full-resolution JPEG (labelling and
-//    future work), and appends the index row. The producer never blocks
+//    format, the replay input) plus, when asked, a full-resolution JPEG,
+//    and appends the index row. The producer never blocks
 //    and never writes: a full queue drops the frame and COUNTS it - the
 //    zero-dropped-frames exit gate is checked, not assumed
-//    (check_recording below, and the runner's `check` subcommand).
+//    (check_recording below).
 
 #include <cube/error.hpp>
 #include <cube/vision/frame_recording.hpp>
@@ -35,14 +35,12 @@
 
 namespace cube::vision::recording {
 
-// The detectors are resolution-independent above this width; analyze()
-// downscales to it and all recorded analysis frames are at most this wide
-// (scan_session.cpp's former file-local kAnalysisWidth).
+// The reader is resolution-independent above this width; the live path
+// downscales to it and all recorded analysis frames are at most this wide.
 inline constexpr int kAnalysisWidth = 640;
 
 // Full-resolution stream: JPEG quality and subdirectory. q95 keeps chroma
-// detail for labelling; the analysis stream stays q90 for replay-format
-// compatibility.
+// detail; the analysis stream stays q90 for replay-format compatibility.
 inline constexpr int kFullResJpegQuality = 95;
 inline constexpr std::string_view kFullResSubdir = "fullres";
 inline constexpr std::string_view kManifestName = "manifest.json";
@@ -52,12 +50,11 @@ struct AnalysisFrame {
     float scale_back = 1.0F;  // full-frame px per analysis px (derived from actual resize)
 };
 
-// EXACTLY analyze()'s historical behaviour, including the rounding note:
 // scale_back comes from the actual resized width because cv::resize rounds
 // the output size.
 [[nodiscard]] AnalysisFrame analysis_downscale(const cv::Mat& full_bgr);
 
-// Per-clip manifest (docs/ground-truth-format.md). Absent optional fields
+// Per-clip manifest (docs/recording-format.md). Absent optional fields
 // serialise as JSON null.
 struct Manifest {
     std::optional<std::string> state;  // 54-char URFDLB face-major, row-major faces

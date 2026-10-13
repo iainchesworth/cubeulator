@@ -29,10 +29,6 @@ enum class CubeError : std::uint8_t {
     inference_provider_unavailable,
     inference_failed,
 
-    // Rendering
-    gpu_surface_unavailable,
-    shader_compile_failed,
-
     // i18n
     locale_resource_not_found,
 };
@@ -63,10 +59,6 @@ enum class CubeError : std::uint8_t {
             return "no suitable inference execution provider is available";
         case CubeError::inference_failed:
             return "inference failed to produce a result";
-        case CubeError::gpu_surface_unavailable:
-            return "no GPU-compatible render surface is available";
-        case CubeError::shader_compile_failed:
-            return "a shader failed to compile";
         case CubeError::locale_resource_not_found:
             return "a locale resource file could not be found";
     }

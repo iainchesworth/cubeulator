@@ -1,4 +1,5 @@
 #include <cube/solver/notation.hpp>
+#include <ranges>
 
 #include <fmt/format.h>
 
@@ -66,7 +67,7 @@ Result<Move> parse_move(std::string_view token) {
         }
     }
 
-    return Move{face, turns};
+    return Move{.face = face, .turns = turns};
 }
 
 Result<std::vector<Move>> parse_algorithm(std::string_view text) {
@@ -117,8 +118,8 @@ std::string to_string(const std::vector<Move>& moves) {
 std::vector<Move> inverse(const std::vector<Move>& moves) {
     std::vector<Move> result;
     result.reserve(moves.size());
-    for (auto it = moves.rbegin(); it != moves.rend(); ++it) {
-        result.push_back(it->inverse());
+    for (auto move : std::views::reverse(moves)) {
+        result.push_back(move.inverse());
     }
     return result;
 }

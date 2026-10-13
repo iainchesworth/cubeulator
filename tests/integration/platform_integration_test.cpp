@@ -1,8 +1,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 #include <interfaces/camera.hpp>
-#include <interfaces/gpu_surface.hpp>
-#include <interfaces/inference_env.hpp>
 #include <interfaces/paths.hpp>
 #include <interfaces/platform_info.hpp>
 
@@ -11,20 +9,6 @@
 #include <string>
 #include <string_view>
 #include <vector>
-
-TEST_CASE("the platform-selected paths and inference_env implementations agree on a build",
-          "[integration][platform]") {
-    // Exercises the CMake-selected per-OS translation units end to end,
-    // rather than any single interface in isolation.
-    const auto paths = cube::platform::paths::current();
-    const auto env = cube::platform::inference_env::current();
-
-    REQUIRE_FALSE(env.execution_providers.empty());
-    // Every platform's provider list includes a CPU fallback.
-    REQUIRE(std::ranges::find(env.execution_providers, "CPU") != env.execution_providers.end());
-
-    (void)paths;  // Desktop platforms populate this; mobile stubs may not yet.
-}
 
 TEST_CASE("camera enumeration returns a result rather than throwing", "[integration][platform]") {
     const auto devices = cube::platform::camera::enumerate_devices();
@@ -48,14 +32,6 @@ TEST_CASE("try_pop_latest_frame and is_capturing are safe before any start() and
 
     REQUIRE_FALSE(cube::platform::camera::is_capturing());
     REQUIRE_FALSE(cube::platform::camera::try_pop_latest_frame().has_value());
-}
-
-TEST_CASE("gpu_surface::current wraps a native handle without crashing",
-          "[integration][platform]") {
-    int fake_native_window = 0;
-    const auto surface = cube::platform::gpu_surface::current(&fake_native_window);
-    REQUIRE(surface.has_value());
-    REQUIRE(surface->native_handle == &fake_native_window);
 }
 
 TEST_CASE("platform_info::current offers only graphics backends the app can apply",

@@ -11,7 +11,9 @@ on:
 
 concurrency:
   group: codeql-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Same rule as ci.yml: a push to develop or main finishes, because it is the
+  # run that stores the vcpkg cache pull requests restore from.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
 
 jobs:
   analyze:
@@ -64,10 +66,10 @@ jobs:
       # out of the box - see the equivalent comment on ci.yml's build-and-test
       # job.
       #
-      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf, GLU for glew).
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11/GL headers, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
 
       # Sanitizers disabled: CodeQL's build tracer sets its own LD_PRELOAD for
       # the whole build step, which collides with ASan needing to be first in

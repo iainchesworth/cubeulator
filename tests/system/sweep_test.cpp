@@ -67,11 +67,26 @@ TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]")
         app.click("solve.next");
         REQUIRE(app.wait_for([&]() { return solve.moveIndex() >= 1; }, 15'000));
 
-        const QStringList pressed = press_every_control(app, "solve");
+        // A method button solves on from the cube in hand, which starts a new
+        // solution at its first turn: Previous would have nothing to undo for
+        // the rest of the sweep. So after one, wait for the new solution and
+        // go one step in again, as above.
+        cube::systest::SweepOptions options;
+        options.after_press = [&app, &solve](const QString& key) {
+            if (key.startsWith("solve.method.")) {
+                REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 60'000));
+                app.click("solve.next");
+                REQUIRE(app.wait_for([&]() { return solve.moveIndex() >= 1; }, 15'000));
+            }
+        };
+        const QStringList pressed = press_every_control(app, "solve", options);
         INFO("pressed " << pressed.join(", ").toStdString());
-        // Next, Previous (enabled by Next), Rescan and the cube.
+        // Next, Previous (enabled by Next), the three methods, Rescan and the cube.
         CHECK(pressed.contains("solve.next"));
         CHECK(pressed.contains("solve.previous"));
+        CHECK(pressed.contains("solve.method.0"));
+        CHECK(pressed.contains("solve.method.1"));
+        CHECK(pressed.contains("solve.method.2"));
         CHECK(pressed.contains("solve.rescan"));
         CHECK(app.screen() == "solve");
     }
@@ -107,6 +122,7 @@ TEST_CASE("every control on the settings screen can be pressed", "[system][sweep
         CHECK(app.settings_state().property("shaderStyleIndex").toInt() == 2);
         CHECK(app.settings_state().property("rotateSpeedIndex").toInt() == 2);
         CHECK(app.settings_state().property("themeMode").toString() == "dark");
+        CHECK(app.settings_state().property("solveMethod").toInt() == 2);
         // The toggles were pressed twice: back where they started.
         CHECK(app.settings_state().property("cubeAutoRotate").toBool());
         CHECK_FALSE(app.settings_state().property("statsForNerds").toBool());

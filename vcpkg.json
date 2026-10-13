@@ -15,8 +15,6 @@
         "calib3d",
         { "name": "dshow", "platform": "windows & !uwp" },
         "fs",
-        { "name": "gtk", "platform": "linux" },
-        "highgui",
         "intrinsics",
         "jpeg",
         { "name": "msmf", "platform": "windows & !uwp & !mingw" },
@@ -25,12 +23,9 @@
         "thread",
         "tiff",
         { "name": "v4l", "platform": "linux" },
-        "webp",
-        { "name": "win32ui", "platform": "windows & !uwp" }
+        "webp"
       ]
-    },
-    "onnxruntime",
-    "bgfx"
+    }
   ],
   "default-features": [],
   "features": {
