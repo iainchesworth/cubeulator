@@ -5,9 +5,24 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Manual runs can name the legs they want, so a fix to one platform does
+  # not pay for all of them (the full matrix is hours of hosted runners and
+  # the pool is shared with other repositories):
+  #   gh workflow run ci.yml --ref <branch> -f legs=macos
+  # Jobs of a dispatched run are renamed "dispatch - <name>", so a run that
+  # skips legs can never report a check under a required check's name on the
+  # branch's head commit.
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: >-
+          Comma-separated legs to run: clang-format, clang-tidy, linux, macos,
+          windows, coverage, android, ios - or "all".
+        type: string
+        default: all
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.legs }}
   cancel-in-progress: true
 
 permissions:
@@ -15,7 +30,8 @@ permissions:
 
 jobs:
   clang-format:
-    name: clang-format
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-format' || 'clang-format' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
     runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -31,7 +47,8 @@ jobs:
             | xargs -0 clang-format --dry-run --Werror
 
   clang-tidy:
-    name: clang-tidy
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-tidy' || 'clang-tidy' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-tidy,') }}
     runs-on: ubuntu-26.04
     # Caps vcpkg's internal build parallelism - see the equivalent comment
     # on build-and-test below (onnxruntime OOM'd this runner at full nproc
@@ -67,10 +84,10 @@ jobs:
         with:
           cmakeVersion: "latest"
 
-      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf).
+      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11 for bgfx, autotools for gperf, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       # clang-tidy uses its own clang frontend to parse the compile commands
       # regardless of which compiler actually built the code, so this job
@@ -111,8 +128,55 @@ jobs:
             | grep -E '/(src|tests)/' \
             | xargs clang-tidy-21 -p build/linux-gcc-debug --warnings-as-errors='*'
 
+  # Picks the desktop build legs. A push, pull request or merge_group run
+  # always gets all three; only a manual dispatch can narrow it. The matrix
+  # lives here, as JSON, because a job-level `if` cannot see `matrix` - this
+  # is the one place the legs are defined.
+  plan:
+    name: Plan build legs
+    runs-on: ubuntu-26.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Select build legs
+        id: plan
+        shell: bash
+        env:
+          LEGS: ${{ github.event_name == 'workflow_dispatch' && inputs.legs || 'all' }}
+        run: |
+          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
+          # links unconditionally on macOS ("ld: framework 'AGL' not
+          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
+          all='[
+            {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux"},
+            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-15",            "preset": "macos-clang-release", "triplet": "arm64-osx"},
+            {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows"}
+          ]'
+          for leg in ${LEGS//,/ }; do
+            case "$leg" in
+              all|clang-format|clang-tidy|linux|macos|windows|coverage|android|ios) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, android, ios, all)"
+                 exit 1 ;;
+            esac
+          done
+          if [ -z "$LEGS" ] || [ "$LEGS" = all ]; then
+            selected=$(jq -c . <<<"$all")
+          else
+            selected=$(jq -c --arg legs ",${LEGS// /},"               '[.[] | select(.leg as $leg | $legs | contains("," + $leg + ","))]' <<<"$all")
+          fi
+          count=$(jq 'length' <<<"$selected")
+          # Only the desktop legs are chosen here; a dispatch that names just
+          # clang-format, android, ios or coverage legitimately selects none.
+          echo "legs: $LEGS -> $count desktop leg(s)"
+          echo "matrix=$selected" >> "$GITHUB_OUTPUT"
+
   build-and-test:
-    name: ${{ matrix.name }}
+    name: ${{ github.event_name == 'workflow_dispatch' && format('dispatch - {0}', matrix.name) || matrix.name }}
+    needs: plan
+    # The matrix is empty when a dispatch names no desktop leg, which would
+    # otherwise be an error rather than a skip.
+    if: ${{ needs.plan.outputs.matrix != '[]' }}
     runs-on: ${{ matrix.os }}
     # Caps vcpkg's internal build parallelism (used for every port it
     # compiles, including a single heavy port's own --parallel build step).
@@ -135,23 +199,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: Linux (GCC 15)
-            os: ubuntu-26.04
-            preset: linux-gcc-release
-            triplet: x64-linux
-          # Pinned to macos-15, not the newer macos-26: confirmed in CI that
-          # macos-26's Xcode/SDK has dropped AGL.framework, which Qt 6.8.3
-          # links unconditionally on macOS ("ld: framework 'AGL' not
-          # found"). Revisit once Qt or vcpkg's mobile ports account for it.
-          - name: macOS (AppleClang)
-            os: macos-15
-            preset: macos-clang-release
-            triplet: arm64-osx
-          - name: Windows (MSVC)
-            os: windows-2025-vs2026
-            preset: windows-msvc-release
-            triplet: x64-windows
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     steps:
       # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
@@ -201,16 +249,21 @@ jobs:
       # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
       # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
       #
-      # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
+      # Three distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
       # bgfx's port unconditionally find_package(X11)s even with
       # examples/tools disabled ("Could NOT find X11"); (2) gperf (a
       # transitive dependency via gettext, itself pulled in by
       # onnxruntime/protobuf) needs the autotools chain to build from source
       # ("gperf currently requires ... autoconf autoconf-archive automake
-      # libtoolize"). Both confirmed in CI.
+      # libtoolize"); (3) glew's generated glew.pc declares `Requires: glu`, and
+      # vcpkg_fixup_pkgconfig() then runs `pkg-config --exists glew`, which
+      # fails with "Package 'glu', required by 'glew', not found" (glu.pc
+      # comes from libglu1-mesa-dev, which ubuntu-26.04 does not preinstall
+      # - the build of glew:x64-linux dies with BUILD_FAILED). All three
+      # confirmed in CI.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
@@ -225,12 +278,26 @@ jobs:
           modules: "qtquick3d qtshadertools"
           cache: true
 
+      # AppleClang ships no OpenMP runtime, and the vendored M3T tracker
+      # (third_party/m3t) does find_package(OpenMP REQUIRED): without libomp
+      # configure fails with "Could NOT find OpenMP_C (missing:
+      # OpenMP_C_FLAGS OpenMP_C_LIB_NAMES)" (confirmed in CI). Homebrew's
+      # libomp is keg-only, so it is on no default search path; its prefix
+      # is handed to CMake via CMAKE_PREFIX_PATH below, which FindOpenMP's
+      # find_library()/find_path() honour.
+      - name: Install libomp (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install libomp
+          echo "OPENMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
+
       - name: Configure
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
           EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-15' || '' }}
-        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER
+        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR${OPENMP_PREFIX:+;$OPENMP_PREFIX}" $EXTRA_CXX_COMPILER
 
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
@@ -258,7 +325,8 @@ jobs:
           if-no-files-found: ignore
 
   android-build:
-    name: Android (arm64-v8a)
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Android (arm64-v8a)' || 'Android (arm64-v8a)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',android,') }}
     # ubuntu-26.04, matching every other build agent - see the diagnostic
     # step below for why this needed a closer look before deciding whether
     # to stay here.
@@ -285,8 +353,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      # >= v4.0.2: v4.0.1's default `packages: tools platform-tools` asks
+      # sdkmanager for the long-removed `tools` package ("Warning: Failed to
+      # find package 'tools'", exit code 1), which failed this step after the
+      # licences were already accepted. v4.0.2 dropped it from the default.
       - name: Install Android SDK
-        uses: android-actions/setup-android@40fd30fb8d7440372e1316f5d1809ec01dcd3699 # v4.0.1
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
 
       - name: Install Android NDK
         run: |
@@ -396,7 +468,8 @@ jobs:
           if-no-files-found: ignore
 
   ios-build:
-    name: iOS (device, build-only, unsigned)
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - iOS (device, build-only, unsigned)' || 'iOS (device, build-only, unsigned)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',ios,') }}
     # Pinned to macos-15, not the newer macos-26: confirmed in CI that
     # libwebp's arm64-ios build intermittently fails vcpkg_fixup_pkgconfig
     # on macos-26 ("pkg-config --exists libsharpyuv failed") - a known,
@@ -579,7 +652,8 @@ jobs:
             build/coverage-app.json
 
   coverage:
-    name: Coverage (Linux, GCC)
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Coverage (Linux, GCC)' || 'Coverage (Linux, GCC)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',coverage,') }}
     runs-on: ubuntu-26.04
     # Caps vcpkg's internal build parallelism - see the equivalent comment
     # on build-and-test above (onnxruntime OOM'd this runner at full nproc
@@ -624,10 +698,10 @@ jobs:
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
       # out of the box - see the equivalent comment on build-and-test above.
       #
-      # Two vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test above (X11 for bgfx, autotools for gperf).
+      # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test above (X11 for bgfx, autotools for gperf, GLU for glew).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr

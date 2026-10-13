@@ -8,6 +8,6 @@
 
 ---
 
-- [ ] Branch follows [gitflow naming](https://iainchesworth.github.io/cubeulator/CONTRIBUTING/#branching-model) (`feature/*`, `bugfix/*`, ...) and targets `develop`
-- [ ] New/changed behaviour has test coverage ([Testing & coverage](https://iainchesworth.github.io/cubeulator/testing/))
+- [ ] Branch follows [gitflow naming](https://iainchesworthlabs.github.io/cubeulator/CONTRIBUTING/#branching-model) (`feature/*`, `bugfix/*`, ...) and targets `develop`
+- [ ] New/changed behaviour has test coverage ([Testing & coverage](https://iainchesworthlabs.github.io/cubeulator/testing/))
 - [ ] `clang-format`/`clang-tidy` clean

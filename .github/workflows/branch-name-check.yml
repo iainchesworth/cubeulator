@@ -7,17 +7,27 @@ name: Branch Name Check
 # dependabot/* branches are allowed into develop too: Dependabot's branch
 # prefix isn't configurable to match gitflow, so it's special-cased here
 # instead (target-branch: develop is set in .github/dependabot.yml).
+#
+# develop's merge queue (see docs/branch-protection.md) needs "Validate
+# gitflow branch name" to report on its temporary gh-readonly-queue/...
+# ref, so this workflow also triggers on merge_group. A queue entry has no
+# head_ref - the name was already checked when the pull request was
+# opened - so the job is skipped there, and a skipped job counts as a pass
+# for a required check.
 
 on:
   pull_request:
     types: [opened, reopened, synchronize, edited]
     branches: [main, develop]
+  merge_group:
+    branches: [develop]
 
 permissions: {}
 
 jobs:
   check-branch-name:
     name: Validate gitflow branch name
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
       - name: Validate source and target branch pairing

@@ -10,6 +10,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -103,6 +104,22 @@ struct Drawing {
         }
     }
     return frame;
+}
+
+// A finger across one sticker of a drawn side, reaching in from the edge of
+// the picture: skin-coloured, narrower than the sticker so some of it still
+// shows either side, and covering the middle of it, which is where a sticker
+// is sampled. `cell` is row-major, as the camera sees the side.
+inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
+    const auto column = static_cast<float>(cell % 3 - 1);
+    const auto row = static_cast<float>(cell / 3 - 1);
+    const cv::Point2f tip = place(pose, column - 0.25F, row);
+    // In from the nearer side edge of the picture.
+    const float edge = column >= 0.0F ? static_cast<float>(frame.cols) : 0.0F;
+    const float half = 0.3F * pose.pitch;
+    cv::rectangle(frame, cv::Point2f(std::min(tip.x, edge), tip.y - half),
+                  cv::Point2f(std::max(tip.x + 0.5F * pose.pitch, edge), tip.y + half),
+                  cv::Scalar(140, 170, 222), cv::FILLED, cv::LINE_AA);
 }
 
 [[nodiscard]] inline std::array<solver::Color, 9> turned_clockwise(

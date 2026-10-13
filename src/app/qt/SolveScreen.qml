@@ -343,33 +343,120 @@ Rectangle {
             color: Theme.inkMuted(0.5)
         }
 
-        // What the camera sees, small, with a dot on each sticker of the side
-        // it has found. Not mirrored: it is the far side of the cube, seen
-        // from where the camera is.
-        Column {
+        // What the camera sees of the cube, with a dot on each sticker of the
+        // side it has found. Not mirrored: it is the far side of the cube,
+        // seen from where the camera is.
+        //
+        // The preview is small, so it does not show the whole picture. It
+        // closes in on the cube and follows it about the frame, so that what
+        // is being shown to the camera can actually be seen. The camera does
+        // not move - this is only which part of its picture is on show - and
+        // small movements are not chased, so the view sits still while the
+        // cube is roughly where it was.
+        Item {
             id: inset
             visible: AppState.solveCamera
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: Theme.space4
-            width: root.wide ? 176 : 112
-            spacing: Theme.space1
+            width: root.wide ? 184 : 124
+            height: preview.height
 
-            readonly property real frameAspect: DirectScan.frameWidth > 0
-                ? DirectScan.frameHeight / DirectScan.frameWidth : 9 / 16
             readonly property var points: DirectScan.stickerPoints
+            readonly property bool found: points.length === 9
+            readonly property real frameW: Math.max(1, DirectScan.frameWidth)
+            readonly property real frameH: Math.max(1, DirectScan.frameHeight)
+            // The window on the picture, inside the border.
+            readonly property real viewW: preview.width - 4
+            readonly property real viewH: preview.height - 4
+            // Screen pixels per frame pixel with the whole picture in view
+            // (filling the window, as the scan screen fills the screen)...
+            readonly property real wholeScale: Math.max(viewW / frameW, viewH / frameH)
+            // ...and how much of the window's shorter side the cube is given
+            // once it has been found.
+            readonly property real cubeShare: 0.6
+
+            // Where the view is heading: the frame pixel at its centre, and
+            // its scale. Changed only when the cube has moved or changed
+            // size by enough to matter.
+            property real aimX: frameW / 2
+            property real aimY: frameH / 2
+            property real aimScale: wholeScale
+            // How long without a side in view before the view lets go of
+            // where the cube was and opens out to the whole picture.
+            property int lostAfter: 2500
+
+            function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+            function follow() {
+                // Asked of the points themselves: `found` may not have caught
+                // up with them yet when this runs.
+                if (points.length !== 9) {
+                    if (!lost.running)
+                        lost.start();
+                    return;
+                }
+                lost.stop();
+                // Corner stickers are two spacings apart; the side is three.
+                var side = 1.5 * Math.max(dist(points[0], points[2]), dist(points[6], points[8]),
+                                          dist(points[0], points[6]), dist(points[2], points[8]));
+                if (side <= 0)
+                    return;
+                var wanted = Math.max(wholeScale,
+                                      Math.min(4 * wholeScale, cubeShare * Math.min(viewW, viewH) / side));
+                var slack = 0.1 * Math.min(viewW, viewH) / aimScale; // in frame pixels
+                if (Math.abs(points[4].x - aimX) > slack || Math.abs(points[4].y - aimY) > slack
+                        || Math.abs(wanted / aimScale - 1) > 0.15) {
+                    aimX = points[4].x;
+                    aimY = points[4].y;
+                    aimScale = wanted;
+                }
+            }
+            onPointsChanged: follow()
+            onWholeScaleChanged: if (points.length !== 9) aimScale = wholeScale
+            Timer {
+                id: lost
+                interval: inset.lostAfter
+                onTriggered: {
+                    inset.aimX = inset.frameW / 2;
+                    inset.aimY = inset.frameH / 2;
+                    inset.aimScale = inset.wholeScale;
+                }
+            }
+
+            // What is on show now: eased towards the aim, and never past the
+            // edge of the picture.
+            property real shownScale: aimScale
+            property real shownX: Math.max(viewW / (2 * shownScale),
+                                           Math.min(frameW - viewW / (2 * shownScale), aimX))
+            property real shownY: Math.max(viewH / (2 * shownScale),
+                                           Math.min(frameH - viewH / (2 * shownScale), aimY))
+            Behavior on shownScale { SmoothedAnimation { duration: 350; velocity: -1 } }
+            Behavior on shownX { SmoothedAnimation { duration: 350; velocity: -1 } }
+            Behavior on shownY { SmoothedAnimation { duration: 350; velocity: -1 } }
 
             Rectangle {
                 id: preview
+                objectName: "solve.camera"
+                // What the tests read: where a frame pixel lands in here.
+                readonly property real pictureX: previewImage.x
+                readonly property real pictureY: previewImage.y
+                readonly property real pictureScale: inset.shownScale
+                readonly property real wholeScale: inset.wholeScale
+                property alias lostAfter: inset.lostAfter
+
+                anchors.right: parent.right
                 width: parent.width
-                height: Math.round(width * inset.frameAspect)
+                // Squarer than the camera's picture: it is the cube that
+                // has to fit, not the room.
+                height: Math.round(width * 3 / 4)
                 color: "#141312"
-                border.width: 2
-                border.color: root.sightColor
-                Behavior on border.color { ColorAnimation { duration: 180 } }
+                clip: true
 
                 Image {
                     id: previewImage
-                    anchors.fill: parent; anchors.margins: 2
+                    x: 2 + inset.viewW / 2 - inset.shownX * inset.shownScale
+                    y: 2 + inset.viewH / 2 - inset.shownY * inset.shownScale
+                    width: inset.frameW * inset.shownScale
+                    height: inset.frameH * inset.shownScale
                     fillMode: Image.Stretch
                     cache: false
                     // Nothing to show until the camera has delivered a frame.
@@ -378,13 +465,14 @@ Rectangle {
                 Repeater {
                     model: 9
                     delegate: Rectangle {
-                        readonly property bool found: inset.points.length === 9
-                        readonly property var point: found ? inset.points[index] : Qt.point(0, 0)
-                        visible: found && DirectScan.frameWidth > 0
-                        width: 6; height: 6; radius: 3
-                        x: previewImage.x + point.x * previewImage.width / Math.max(1, DirectScan.frameWidth) - width / 2
-                        y: previewImage.y + point.y * previewImage.height / Math.max(1, DirectScan.frameHeight) - height / 2
+                        readonly property bool there: inset.points.length === 9
+                        readonly property var point: there ? inset.points[index] : Qt.point(0, 0)
+                        visible: there && DirectScan.frameWidth > 0
+                        width: 7; height: 7; radius: 3.5
+                        x: previewImage.x + point.x * inset.shownScale - width / 2
+                        y: previewImage.y + point.y * inset.shownScale - height / 2
                         color: HeldCube.sight === "matched" ? root.good : "#FFD21F"
+                        border.width: 1; border.color: "#141312"
                     }
                 }
                 // The camera saw the move made.
@@ -399,15 +487,29 @@ Rectangle {
                         NumberAnimation { target: moveSeenFlash; property: "opacity"; to: 0; duration: 420 }
                     }
                 }
+                // The frame, drawn over the picture, in the colour of what
+                // the camera makes of the cube.
+                Rectangle {
+                    anchors.fill: parent
+                    color: "transparent"
+                    border.width: 2
+                    border.color: root.sightColor
+                    Behavior on border.color { ColorAnimation { duration: 180 } }
+                }
             }
+            // Beside the preview where there is room, so it does not run
+            // down into the cube; under it on a narrow screen.
             Text {
-                width: parent.width
+                x: root.wide ? -width - Theme.space2 : 0
+                y: root.wide ? 0 : preview.height + Theme.space1
+                width: root.wide ? 150 : parent.width
                 visible: text !== ""
                 text: root.cameraWords
                 wrapMode: Text.WordWrap
                 horizontalAlignment: Text.AlignRight
                 font.family: Theme.fontHeading; font.pixelSize: 11
-                color: HeldCube.sight === "unknown" ? Theme.accent : Theme.inkMuted(0.75)
+                color: HeldCube.sight === "unknown" || HeldCube.sight === "wrong"
+                    ? Theme.accent : Theme.inkMuted(0.75)
             }
         }
 

@@ -49,6 +49,7 @@ namespace {
 // first frame has nothing to be steady against.
 constexpr int kFramesToCapture = static_cast<int>(SideScan::kMinReads) + 1;
 constexpr int kFramesToTrust = HeldCube::kFramesToTrust + 1;
+constexpr int kFramesToAccuse = HeldCube::kFramesToAccuse + 1;
 constexpr int kFramesToDoubt = HeldCube::kFramesToDoubt + 1;
 
 // The app's camera and solver with a cube scanned, solved and being watched.
@@ -311,7 +312,10 @@ TEST_CASE("a turn of some other side, made in view of the camera, is named",
     CHECK(session.held.wrongSide().isEmpty());
     session.look_away();
 
+    // Saying so takes longer than seeing a move made.
     session.show(strayed, *hold, kFramesToTrust);
+    CHECK(session.held.sight() != "wrong");
+    session.show(strayed, *hold, kFramesToAccuse);
     CHECK(session.held.sight() == "wrong");
     CHECK(session.held.wrongSide() == side_letter(wrong->face));
     // Named, and nothing else: the solution does not move and the cube on
@@ -340,7 +344,7 @@ TEST_CASE("the right side turned the wrong way is named as that side",
 
     session.show(cube, *hold, kFramesToTrust);
     session.look_away();
-    session.show(cube.apply(wrong), *hold, kFramesToTrust);
+    session.show(cube.apply(wrong), *hold, kFramesToAccuse);
     CHECK(session.held.sight() == "wrong");
     CHECK(session.moves_seen == 0);
     CHECK(session.held.wrongSide() == side_letter(asked.face));
@@ -448,4 +452,96 @@ TEST_CASE("a new cube to solve starts from the hold the screen asks for",
     REQUIRE_FALSE(session.solve.isSolving());
     CHECK(session.held.hold() == kStatedHold);
     CHECK_FALSE(session.held.seen());
+}
+
+TEST_CASE("a move shown with a finger across a sticker is still seen, and never called wrong",
+          "[qt][controllers][held-cube]") {
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    const Move move = *session.solve.currentMove();
+    const Cube moved = cube.apply(move);
+    const std::optional<Hold> hold = hold_that_sees(cube, move);
+    REQUIRE(hold.has_value());
+    int complaints = 0;
+    QObject::connect(&session.held, &HeldCube::sightChanged, [&]() {
+        complaints += session.held.sight() == "wrong" || session.held.sight() == "unknown" ? 1 : 0;
+    });
+
+    session.show(cube, *hold, kFramesToTrust);
+    REQUIRE(session.held.sight() == "matched");
+    session.look_away();
+
+    // Held up again after the move, a finger across each sticker in turn -
+    // for longer than it takes to be accused of anything.
+    for (const int covered : {0, 2, 3, 5, 6, 8}) {
+        INFO("finger across sticker " << covered);
+        cv::Mat frame = draw_side(camera_view(moved, *hold), Pose{});
+        cube::test::lay_finger(frame, Pose{}, covered);
+        session.show(frame, kFramesToDoubt);
+        session.look_away();
+    }
+    CHECK(complaints == 0);
+    // Some fingers hide the very stickers the move changed; the rest leave
+    // it plain to see, and once is all it is ever announced.
+    CHECK(session.moves_seen == 1);
+}
+
+TEST_CASE("one sticker that reads as the wrong colour is not called a mistake",
+          "[qt][controllers][held-cube]") {
+    // A glint off a sticker, or a shadow across one, with the cube exactly
+    // as the solution has it.
+    const Cube cube = cube::solver::random_scramble(3);
+    Session session(cube);
+    int complaints = 0;
+    QObject::connect(&session.held, &HeldCube::sightChanged, [&]() {
+        complaints += session.held.sight() == "wrong" || session.held.sight() == "unknown" ? 1 : 0;
+    });
+    session.show(cube, kStatedHold, kFramesToTrust);
+    REQUIRE(session.held.sight() == "matched");
+
+    for (std::size_t glint = 0; glint < 9; ++glint) {
+        std::array<Color, 9> side = camera_view(cube, kStatedHold);
+        side[glint] = side[glint] == Color::White ? Color::Yellow : Color::White;
+        session.look_away();
+        session.show(draw_side(side, Pose{}), 2 * kFramesToDoubt);
+    }
+    CHECK(complaints == 0);
+    CHECK(session.moves_seen == 0);
+    CHECK(session.held.hold() == kStatedHold);
+}
+
+TEST_CASE("a half turn made a quarter at a time is not called wrong on the way",
+          "[qt][controllers][held-cube]") {
+    const Cube scrambled = cube::solver::random_scramble(3);
+    Session session(scrambled);
+    while (session.solve.currentMove().has_value() && session.solve.currentMove()->turns != 2) {
+        session.solve.nextMove();
+    }
+    REQUIRE(session.solve.currentMove().has_value());
+    const Cube cube = session.solve.currentCube();
+    const Move asked = *session.solve.currentMove();
+    const Cube half_way = cube.apply(Move{asked.face, 1});
+    const Cube moved = cube.apply(asked);
+    const std::optional<Hold> hold = hold_that_sees(cube, Move{asked.face, 1});
+    REQUIRE(hold.has_value());
+    int complaints = 0;
+    QObject::connect(&session.held, &HeldCube::sightChanged, [&]() {
+        complaints += session.held.sight() == "wrong" || session.held.sight() == "unknown" ? 1 : 0;
+    });
+
+    session.show(cube, *hold, kFramesToTrust);
+    REQUIRE(session.held.sight() == "matched");
+    session.look_away();
+
+    // A pause with the first quarter made, long enough to be accused.
+    session.show(half_way, *hold, 2 * kFramesToDoubt);
+    CHECK(complaints == 0);
+    CHECK(session.moves_seen == 0);
+
+    session.look_away();
+    session.show(moved, *hold, kFramesToTrust);
+    CHECK(complaints == 0);
+    if (camera_view(moved, *hold) != camera_view(cube, *hold)) {
+        CHECK(session.moves_seen == 1);
+    }
 }

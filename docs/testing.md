@@ -88,6 +88,13 @@ To *use* the solve screen without scanning a cube first, start the app with
 from that seed, camera off. `CUBE_SOLVE_DEMO_MOVE=<n>` opens it `n` moves in,
 and the solution is logged (run with `QT_FORCE_STDERR_LOGGING=1` to see it).
 
+To find out why the solve screen's camera took a move the way it did, start
+the app with `CUBE_HELD_LOG=<file>`. Each time what it makes of the cube
+changes, one line is appended: the move asked for, the verdict, how many of
+the nine stickers were found, and how far the side in view sits from the cube
+as it stood and from the cube after the move. Numbers only - no picture is
+kept.
+
 ## Hardware tests (camera)
 
 Two integration cases open a real camera, so they are fenced twice over: a
