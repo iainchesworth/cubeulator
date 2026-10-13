@@ -141,3 +141,6 @@
 .solve-side{overflow:hidden auto}
 .work{min-height:0;overflow:auto}
 @container app (max-width:839px){.col.fill{flex:1}.push{margin-top:auto;padding-top:8px}}
+.legend{display:flex;gap:6px;padding:4px}
+.legend span{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px;align-items:center;font-size:calc(var(--rem)*.8125);color:var(--inkSecondary);text-align:center}
+.legend .stk{width:100%;max-width:56px;aspect-ratio:1;border:2px solid var(--cubeEdge)}

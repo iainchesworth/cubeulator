@@ -118,7 +118,15 @@ function rvBreak(kind) {
 Object.assign(actions, {
   rvSide(el) { RV.side = el.dataset.arg; RV.centre = false; render(); },
   rvColour(el) { RV.colour = el.dataset.arg; RV.centre = false; render(); },
-  rvPaint(el) { const i = +el.dataset.arg; RV.centre = i === 4; if (i !== 4) { RV.f[RV.side][i] = RV.colour; RV.dirty = true; } P.state = reviewState(); render(); },
+  rvPaint(el) {
+    const i = +el.dataset.arg; RV.centre = i === 4;
+    if (i !== 4) {
+      const was = RV.f[RV.side].every(Boolean);
+      RV.f[RV.side][i] = RV.colour; RV.dirty = true;
+      if (!was && RV.f[RV.side].every(Boolean)) RV.side = RORDER.find(s => RV.f[s].some(c => !c)) || RV.side;
+    }
+    P.state = reviewState(); render();
+  },
   rvClear() { RV.f[RV.side] = RV.f[RV.side].map((c, i) => i === 4 ? c : null); RV.dirty = true; P.state = reviewState(); render(); },
   rvSolve() { P.state = 'working'; render(); setTimeout(() => { if (P.screen !== 'review' || P.state !== 'working') return; RV.f = null; solveReset(0); P.d.t0 = Date.now(); go('solve', 'hold', {push: false}); }, 1300); },
   rvScan() { if (RV.dirty) { RV.then = 'scan'; P.state = 'confirm-discard'; return render(); } RV.f = null; actions.scan(); },
@@ -233,6 +241,7 @@ screens.settings = {
       <div class="sect"><div class="eyebrow">${t('settings.section.appearance')}</div>
         ${choice(t('settings.theme'), [['auto', same], ['light', t('settings.theme.light')], ['dark', t('settings.theme.dark')]], o.theme, 'theme')}
         <div class="rows">${sw(t('settings.marks'), t('settings.marks.note'), o.marks, 'marks')}</div>
+        <div class="legend" dir="ltr">${Object.keys(MARKS).map(c => `<span role="img" aria-label="${t('colour.' + c)}, ${t('mark.' + MARKS[c])}">${stk(c)}<small>${t('colour.' + c)}</small></span>`).join('')}</div>
         ${choice(t('settings.textSize'), [['system', t('settings.textSize.system')], ['large', t('settings.textSize.large')], ['larger', t('settings.textSize.larger')]], o.textPref, 'textPref')}
         ${choice(t('settings.motion'), [['auto', t('settings.motion.system')], ['reduced', t('settings.motion.reduced')], ['full', t('settings.motion.full')]], o.motion, 'motion')}</div>
       <div class="sect"><div class="eyebrow">${t('settings.section.solving')}</div>

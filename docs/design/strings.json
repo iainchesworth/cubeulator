@@ -26,7 +26,6 @@
   "common.scanInstead": ["Scan instead", "Button on the hand-entry screen. Switches to the camera."],
   "common.more": ["More", "Button. Opens a short list of less common actions."],
   "common.carryOn": ["Carry on", "Button. Continue what was in progress. US: 'Continue'."],
-  "common.skipToContent": ["Skip to the main content", "Hidden link for keyboard and screen-reader users."],
 
   "colour.white": ["White", "A cube colour, as a label under a swatch."],
   "colour.yellow": ["Yellow", "A cube colour."],

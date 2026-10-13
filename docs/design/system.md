@@ -102,6 +102,9 @@ picture behind the panel.
 - **The camera picture never carries marks.** It shows the real cube. The
   chips beneath it do.
 - Wherever one colour is *meant* ("yellow on top"), the word is there too.
+- Each mark has a name (`mark.*`: ring, slash, plus, dot, bar, no mark).
+  The names appear in one place, the legend under the switch in Settings,
+  where they tell a screen-reader user which shape goes with which colour.
 - These are tidy swatches for drawn cubes. The scan chips show the colours
   the camera measured; the mark on each chip sticker says what the reader
   took it for.
@@ -386,7 +389,8 @@ the switch at the trailing side. The whole row is the target, 56 high.
 | pressed | row fill `pressWash` | - |
 | disabled | 2 px `divider` | `divider`; label `inkDisabled`; the reason in the note |
 
-On and off differ by position and by the check, not by colour.
+On and off differ by position and by the check, not by colour. A screen
+reader reads the state as `common.on` or `common.off`.
 
 ### Choice
 

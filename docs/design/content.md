@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-382 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+381 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -205,7 +205,6 @@ Review the solution.
 | `common.scanInstead` | Scan instead | Button on the hand-entry screen. Switches to the camera. |
 | `common.more` | More | Button. Opens a short list of less common actions. |
 | `common.carryOn` | Carry on | Button. Continue what was in progress. US: 'Continue'. |
-| `common.skipToContent` | Skip to the main content | Hidden link for keyboard and screen-reader users. |
 
 #### `colour`
 

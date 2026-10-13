@@ -84,6 +84,12 @@ native on macOS from Qt 6.8; otherwise `Qt.labs.platform`)**.
 | **Window** | Minimise (Cmd+M) · Zoom · Bring All to Front |
 | **Help** | Cubeulator Help (Cmd+?) |
 
+The wording is in `strings.json`: the menu titles and items are `menu.*`
+(File, New Scan, Enter Colours by Hand, View, Window, Settings..., Quit
+Cubeulator, Cubeulator Help), and About is `about.title`. The items macOS
+supplies itself (Services, Hide, Minimise, Zoom, full screen) take the
+system's own translations.
+
 No Edit menu: there is no text to edit. An item that cannot act where the
 person is (New Scan during a solve asks nothing; it is simply available
 from `home`, `complete` and `history` only) is disabled, not hidden, as

@@ -667,7 +667,7 @@ screens.home = {
     const resume = (st === 'resume' || st === 'confirm-discard') ? (P.d.resume || {turn: 23, total: N}) : null;
     const foot = [['history', 'home.history', 'history'], ['help', 'common.help', 'help'], ['settings', 'common.settings', 'settings']]
       .map(([i, k, to]) => btn(t(k), 'go', {v: 'ghost', icon: i, arg: to})).join('');
-    let notice = '', scan = btn(t('home.scan'), 'scan', {v: 'primary', cls: 'block thumb', trail: 'chev-r'}), enterV = 'secondary';
+    let notice = '', scan = btn(t('home.scan'), 'scan', {v: resume ? 'secondary' : 'primary', cls: 'block thumb', trail: 'chev-r'}), enterV = 'secondary';
     if (st === 'finding-camera') notice = `<div class="status-line" role="status"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>${t('home.findingCamera')}</div>`;
     if (st === 'no-camera') {
       notice = `<div class="notice" role="status">${ico('alert')}<div><strong>${t('home.noCamera.title')}</strong><span>${t('home.noCamera.body')}</span><div class="acts">${btn(t('common.lookAgain'), 'pick', {icon: 'refresh', arg: 'home.finding-camera'})}</div></div></div>`;
@@ -1022,10 +1022,12 @@ app.addEventListener('click', e => {
   if (fn) fn(el, e);
 });
 document.addEventListener('keydown', e => {
-  if (!$('#map').hidden || e.target.closest('.pbar')) return;
+  const tgt = e.target instanceof Element ? e.target : document.body;
+  if (!$('#map').hidden || tgt.closest('.pbar')) return;
   if (e.key === 'Escape') { e.preventDefault(); return back(); }
+  if (P.screen === 'review' && /^[1-6]$/.test(e.key) && !app.querySelector('.scrim')) { RV.colour = Object.keys(MARKS)[+e.key - 1]; RV.centre = false; return render(); }
   if (P.screen !== 'solve' || app.querySelector('.scrim')) return;
-  const onControl = e.target.closest('button,select,a');
+  const onControl = tgt.closest('button,select,a');
   const fwd = P.opts.dir === 'rtl' ? 'ArrowLeft' : 'ArrowRight', bwd = P.opts.dir === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
   const advance = () => { const st = P.state; if (['hold', 'hold-resume'].includes(st)) actions.holdReady(); else if (st === 'stage-done') actions.stageGo(); else if (st === 'auto') actions.autoPause(); else if (st === 'auto-paused') actions.autoGo(); else nextTurn(); };
   if ((e.key === ' ' || e.key === 'Enter') && !onControl) { e.preventDefault(); advance(); }
