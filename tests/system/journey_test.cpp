@@ -17,6 +17,7 @@
 
 #include <cube/solver/solver.hpp>
 
+#include <QCoreApplication>
 #include <QQuickItem>
 #include <QQuickWindow>
 
@@ -290,13 +291,12 @@ TEST_CASE("with no camera plugged in the settings say so, and refreshing finds o
     REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
     app.click("settings.refreshCameras");
     REQUIRE(app.wait_for([&]() { return !camera.busy(); }));
-    REQUIRE(app.wait_for([&]() {
-        return app.find_text("No camera was detected. Plug one in, then refresh.") != nullptr;
-    }));
+    REQUIRE(
+        app.wait_for([&]() { return app.find_text(qtTrId("settings.camera.none")) != nullptr; }));
 
     FakeCamera::instance().reset();
     app.click("settings.refreshCameras");
     REQUIRE(app.wait_for([&]() { return !camera.busy() && camera.devices().size() == 1; }));
-    CHECK(app.find_text("Choose which device Cubeulator reads the cube's faces from.") != nullptr);
+    CHECK(app.find_text(qtTrId("settings.camera.choose")) != nullptr);
     CHECK(app.find("settings.camera.0") != nullptr);
 }

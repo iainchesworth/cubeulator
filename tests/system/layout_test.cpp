@@ -105,15 +105,14 @@ TEST_CASE("every control on every screen is inside the window, bar the known few
     // window, or a column wider than a phone. It looks at where each control
     // is, not how it looks.
     //
-    // Two screens still have it, found by this case (plan, "What was found":
-    // "phone layouts sized by subtraction"). They are listed here as they are,
-    // so a new overflow fails and so does the day one of these is fixed.
-    // Owner: experience lane, E3a/E3b on the kit. permission.openSettings is
-    // only on show when the platform reports camera access as denied.
+    // The complete screen still has it, found by this case (plan, "What was
+    // found": "phone layouts sized by subtraction"): both buttons are below
+    // a 1280x800 window. It is listed here as it is, so a new overflow fails
+    // and so does the day this one is fixed. The permission screen had it
+    // too, on a phone, until the translations work rebuilt it; this case
+    // said so by failing. Owner: experience lane, E3a on the kit.
     const std::set<std::string> known = {
-        "permission.notNow @ 375x667",     "permission.openSettings @ 375x667",
-        "permission.notNow @ 390x844",     "permission.openSettings @ 390x844",
-        "permission.notNow @ 719x640",     "complete.review @ 1280x800",
+        "complete.review @ 1280x800",
         "complete.scanAnother @ 1280x800",
     };
 

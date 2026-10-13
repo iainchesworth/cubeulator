@@ -8,6 +8,7 @@
 #include <catch2/generators/catch_generators.hpp>
 
 #include <QColor>
+#include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -38,7 +39,7 @@ TEST_CASE("settings open from launch and close back to it", "[system][settings]"
         app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
 
         open_settings(app);
-        CHECK(app.find_text("Settings") != nullptr);
+        CHECK(app.find_text(qtTrId("common.settings")) != nullptr);
         CHECK(app.find("settings.back") != nullptr);
         CHECK(app.find("settings.theme.0") != nullptr);
 

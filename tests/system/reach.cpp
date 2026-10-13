@@ -40,11 +40,10 @@ const std::map<QString, QString>& dead_screen_files() {
 }
 
 const std::map<QString, QString>& unpressable_controls() {
-    static const std::map<QString, QString> controls = {
-        {"permission.notNow@narrow",
-         "below the bottom of a phone-sized window (layout_test.cpp lists it); the press has "
-         "nowhere to land"},
-    };
+    // None now. permission.notNow was below the bottom of a phone-sized
+    // window until the permission screen was rebuilt; the layout case that
+    // listed it failed the day that landed, which is what it is for.
+    static const std::map<QString, QString> controls = {};
     return controls;
 }
 
@@ -149,7 +148,7 @@ const std::vector<StateDef>& state_inventory() {
         {"settings", "restart-for-backend",
          [](App& a) {
              return a.screen() == "settings" &&
-                    a.find_text("Restart Cubeulator to switch to this backend.") != nullptr;
+                    a.find_text(qtTrId("settings.dev.restart")) != nullptr;
          },
          ""},
 

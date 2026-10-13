@@ -135,6 +135,10 @@ void App::reset() {
     wait_for([&scan]() { return !scan.starting() && !scan.running(); });
     FakeCamera::instance().reset();
     scan.restart();
+    // A case may have unplugged the camera; the controller keeps the list it
+    // was last given until it is asked again.
+    runtime_->camera().refreshDevices();
+    wait_for([this]() { return !runtime_->camera().busy(); });
 
     reset_language();
     settings_state_->setProperty("themeMode", "light");

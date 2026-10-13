@@ -81,8 +81,11 @@ cube_deploy_vision_assets(cube_system_tests)
 # earlier case to have run in the same process.
 set(CUBE_SYSTEM_OUT "${CMAKE_BINARY_DIR}/system-test-output")
 
+# Declaration order: the gate is deterministic. Catch2's default is a random
+# order, which is how a case that leaves state behind is found - run the
+# executable with --order rand (and --rng-seed) for that.
 add_test(NAME system.walk
-    COMMAND cube_system_tests "~[.restart]"
+    COMMAND cube_system_tests "~[.restart]" --order decl
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
 set_tests_properties(system.walk PROPERTIES
     LABELS "system"
