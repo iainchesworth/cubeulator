@@ -1,7 +1,17 @@
 # Licensing: inventory, the Qt finding, options
 
 Written 2026-10-13 for workstream E0b of the
-[app experience plan](app-experience-plan.md). Status: **for Iain's review.**
+[app experience plan](app-experience-plan.md). Status: **reviewed; one decision
+taken, see below.**
+
+> **Decision (Iain, 2026-10-13): skip the iOS App Store and the Mac App Store
+> for now and deal with them later.** Cubeulator stays GPL-3.0-or-later and
+> ships on the desktop (direct download, Linux packages) and, when mobile
+> capture exists, Google Play and F-Droid. This is Option A below. Nothing in
+> the build or the notices changes: the Apple-store question stays open in
+> [`LICENSE-NOTE.md`](../LICENSE-NOTE.md) and returns when an Apple store
+> becomes a goal. It is the only reason a Qt commercial licence (Option B)
+> would be needed.
 
 This is an engineering inventory and a decision paper. It is not legal advice,
 it does not change Cubeulator's licence (GPL-3.0-or-later), and it does not
