@@ -3,12 +3,18 @@
 #include <cube/version.hpp>
 
 #include <string>
+#include <string_view>
 
 TEST_CASE("semantic version is populated", "[version]") {
-    REQUIRE(cube::version_major == 0);
-    REQUIRE(cube::version_minor == 1);
-    REQUIRE(cube::version_patch == 0);
-    REQUIRE(cube::version_string == "0.1.0");
+    // Not a literal: the version moves with every release, and a test that
+    // names it would have to be edited by each one. The string is the three
+    // numbers, then a "-label.N" for a pre-release (docs/releasing.md).
+    const std::string numbers = std::to_string(cube::version_major) + "." +
+                                std::to_string(cube::version_minor) + "." +
+                                std::to_string(cube::version_patch);
+    const std::string_view full = cube::version_string;
+    REQUIRE(full.substr(0, numbers.size()) == numbers);
+    REQUIRE((full.size() == numbers.size() || full.at(numbers.size()) == '-'));
 }
 
 TEST_CASE("git provenance is stamped", "[version]") {

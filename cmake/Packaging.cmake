@@ -49,11 +49,17 @@ set(CPACK_PACKAGE_HOMEPAGE_URL "${PROJECT_HOMEPAGE_URL}")
 set(CPACK_PACKAGE_VERSION_MAJOR "${PROJECT_VERSION_MAJOR}")
 set(CPACK_PACKAGE_VERSION_MINOR "${PROJECT_VERSION_MINOR}")
 set(CPACK_PACKAGE_VERSION_PATCH "${PROJECT_VERSION_PATCH}")
+# 0.1.0, or 0.1.0-beta.1: what the installer shows. The Linux formats cannot
+# take the hyphen as it is and say what they do instead in
+# packaging/linux/Packaging.cmake.
+set(CPACK_PACKAGE_VERSION "${CUBEULATOR_VERSION_FULL}")
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "Cubeulator")
 set(CPACK_RESOURCE_FILE_LICENSE "${PROJECT_SOURCE_DIR}/LICENSE")
 set(CPACK_VERBATIM_VARIABLES ON)
 
-# Cubeulator-0.1.0-windows-x64.exe, ...-macos-arm64.dmg, ...-linux-x64.deb
+# Cubeulator-0.1.0-windows-x64.exe, ...-macos-arm64.dmg, ...-linux-x64.deb;
+# a pre-release carries its label (Cubeulator-0.1.0-beta.1-windows-x64.exe), so
+# that it is never mistaken for the final release that follows it.
 set(_cube_pkg_os "${CUBEULATOR_PLATFORM}")
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _cube_pkg_arch)
 if(_cube_pkg_arch MATCHES "^(amd64|x86_64|x64)$")
@@ -61,7 +67,7 @@ if(_cube_pkg_arch MATCHES "^(amd64|x86_64|x64)$")
 elseif(_cube_pkg_arch MATCHES "^(arm64|aarch64)$")
     set(_cube_pkg_arch "arm64")
 endif()
-set(CPACK_PACKAGE_FILE_NAME "Cubeulator-${PROJECT_VERSION}-${_cube_pkg_os}-${_cube_pkg_arch}")
+set(CPACK_PACKAGE_FILE_NAME "Cubeulator-${CUBEULATOR_VERSION_FULL}-${_cube_pkg_os}-${_cube_pkg_arch}")
 
 set(CPACK_GENERATOR "ZIP")
 
