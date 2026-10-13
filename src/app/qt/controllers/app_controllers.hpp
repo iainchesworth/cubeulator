@@ -4,7 +4,6 @@
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
 #include "controllers/platform_facts.hpp"
-#include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
 
 class QQmlEngine;
@@ -29,11 +28,8 @@ struct AppControllers {
     void addImageProviders(QQmlEngine& engine);
 
     CameraController camera;
-    // The previous scan pipeline: still here because the settings screen
-    // binds to it, but no screen starts it.
     // The scan screen's controller.
     DirectScan directScan;
-    SettingsModel settings;
     // What the platform says about itself; QML binds to it instead of
     // testing Qt.platform.os.
     PlatformFacts platform;

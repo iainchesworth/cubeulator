@@ -57,6 +57,7 @@ nav:
   - Solve methods: solver-methods.md
   - Platform isolation: platform-isolation.md
   - Vision pipeline: vision-pipeline.md
+  - Recording format: recording-format.md
   - Dependency strategy: dependency-strategy.md
   - Licensing: licensing.md
   - FAQ / troubleshooting: faq.md

@@ -19,7 +19,6 @@ set(CUBEULATOR_PLATFORM_SOURCES
     platform/windows/camera_windows.cpp
     platform/windows/capture_thread_scope_windows.cpp
     platform/windows/crash_handler_windows.cpp
-    platform/windows/inference_env_windows.cpp
     platform/windows/paths_windows.cpp
     platform/windows/platform_info_windows.cpp)
 

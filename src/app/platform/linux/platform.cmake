@@ -21,7 +21,6 @@ set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS gcc_64)
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/linux/camera_linux.cpp
-    platform/linux/inference_env_linux.cpp
     platform/linux/paths_linux.cpp
     platform/linux/platform_info_linux.cpp
     platform/posix/capture_thread_scope_posix.cpp

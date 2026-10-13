@@ -76,7 +76,6 @@ include(Sanitizers)
 include(Coverage)
 include(Tracy)
 include(MobileDependencies)
-include(VisionAssets)
 
 cube_configure_mobile_dependencies()
 
