@@ -119,15 +119,15 @@ before sign-off.
 | D8 | Size classes are compact (under 600), medium (600-839) and expanded (840 and over), with a short class for heights under 480 | Replaces the single 720 breakpoint. Short is a phone on its side, which is how many people will prop it |
 | D9 | First run is one screen, not a carousel | People skip carousels. Three numbered steps and one button fit on a phone |
 | D10 | Source strings are British English, matching the app today ("colour", "anticlockwise", "licence"). There is no US or Australian variant. **Confirmed by Iain, 2026-10-13** | One English to write, review and test |
-| D12 | The app's identifier is `org.iainchesworthlabs.cubeulator` on every platform | *(Iain, 2026-10-13.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. It was `org.iainchesworth.cubeulator` until the repository moved to the `iainchesworthlabs` account later the same day; Iain changed it then, while nothing had shipped, because it can never change after a store release. Hearth shows what to avoid: its Android and macOS ids differ |
-| D13 | The publisher is written "Iain Chesworth Labs" | *(Iain, 2026-10-13.)* The publisher follows the account (`family.md`, rule 6), and the account is now `iainchesworthlabs`. It replaces "Iain Chesworth" in About, the packages and the store listing. The copyright line was not part of this decision and still names Iain Chesworth |
+| D12 | The app's identifier is `org.iainchesworthlabs.cubeulator` on every platform | *(Iain, 2026-10-13: follow Countdown Solver; amended the same day when the repository moved to `iainchesworthlabs`.)* That app is `org.iainchesworth.countdownsolver`: `org`, the GitHub account, the repository name in lower case. Hearth shows what to avoid: its Android and macOS ids differ |
 | D11 | Text never goes below 13 px at the default size, and body text is 16 px | The audit found 29 sizes of 11 px or less |
 
 ## Open questions for Iain
 
 Answered on 2026-10-13 and folded into the tables above: failed-scan
 recording (developer builds only), reading turns aloud (out), US English
-(no), the identifier (`org.iainchesworthlabs.cubeulator`), the publisher ("Iain Chesworth Labs").
+(no), the identifier (`org.iainchesworthlabs.cubeulator`, after the
+repository's move).
 
 Still open:
 

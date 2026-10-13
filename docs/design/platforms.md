@@ -196,10 +196,10 @@ value.
 | | value | status |
 |---|---|---|
 | Display name | Cubeulator | Fixed |
-| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `org.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. The account became `iainchesworthlabs` when the repository moved, and the id followed while nothing had shipped. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
-| Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Proposed. Publisher, then product. Groups the taskbar button with its shortcut |
+| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `org.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13; amended the same day when the repository moved to `iainchesworthlabs`.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
+| Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Proposed; follows the publisher. Groups the taskbar button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | Wired for CPack; not yet in the Windows resource or the Android manifest |
-| Publisher | Iain Chesworth Labs | *(Iain, 2026-10-13.)* What `Packaging.cmake` says on `develop` since the repository moved. The copyright line is a separate matter and still names Iain Chesworth |
+| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1) |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |
 | Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |
