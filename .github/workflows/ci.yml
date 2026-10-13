@@ -17,7 +17,7 @@ on:
       legs:
         description: >-
           Comma-separated legs to run: clang-format, clang-tidy, linux, macos,
-          windows, coverage, android, ios - or "all".
+          windows, coverage, system, android, ios - or "all".
         type: string
         default: all
 
@@ -38,13 +38,18 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y clang-format
+      # Pinned to 22, not to whatever `clang-format` means this year: the
+      # unversioned package is a moving target, and the repo is formatted with
+      # one release (docs/CONTRIBUTING.md). 22 formats this tree byte for byte
+      # as 21.1.6 did, so moving to it changed no source line.
+      - name: Install clang-format 22
+        run: sudo apt-get update && sudo apt-get install -y clang-format-22
 
       - name: Check formatting
         run: |
+          clang-format-22 --version
           find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
-            | xargs -0 clang-format --dry-run --Werror
+            | xargs -0 clang-format-22 --dry-run --Werror
 
   clang-tidy:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-tidy' || 'clang-tidy' }}
@@ -94,8 +99,14 @@ jobs:
       # member 'expected'" errors on every file (confirmed in CI on that
       # image). ubuntu-26.04 ships clang-21 directly (20/21/22 side by side),
       # so no LLVM apt-repo pin is needed anymore - just install it.
+      #
+      # libomp-21-dev: the vendored M3T tracker (third_party/m3t) does
+      # find_package(OpenMP REQUIRED) for C and C++. GCC ships libgomp, but
+      # clang++ only has an OpenMP runtime with LLVM's libomp, so without it
+      # configure stops at "Could NOT find OpenMP_CXX (missing:
+      # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
       - name: Install Clang 21
-        run: sudo apt-get install -y clang-21 clang-tidy-21
+        run: sudo apt-get install -y clang-21 clang-tidy-21 libomp-21-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
@@ -160,8 +171,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|clang-tidy|linux|macos|windows|coverage|android|ios) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, android, ios, all)"
+              all|clang-format|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
                  exit 1 ;;
             esac
           done
@@ -301,8 +312,27 @@ jobs:
       - name: Build
         run: cmake --build --preset ${{ matrix.preset }}
 
+      # The system tests (tests/system, label "system") draw the real app
+      # and need a display; they have their own legs below.
       - name: Test
-        run: ctest --preset ${{ matrix.preset }}
+        run: ctest --preset ${{ matrix.preset }} -LE system
+
+      # The same system suite on the Windows and macOS runners, which have a
+      # desktop session. Not a gate yet: whether Qt Quick 3D renders on these
+      # runners' graphics is what this step finds out, and it is reported
+      # rather than forced green (docs/testing.md, "System tests").
+      - name: System tests (experimental off Linux)
+        if: runner.os != 'Linux'
+        continue-on-error: true
+        run: ctest --preset ${{ matrix.preset }} -L system --output-on-failure
+
+      - name: Upload system-test pictures
+        if: always() && runner.os != 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output-${{ matrix.triplet }}
+          path: build/${{ matrix.preset }}/system-test-output
+          if-no-files-found: ignore
 
       # Saved even when a later step fails: otherwise a red leg throws away every
       # package vcpkg had already built and the next attempt starts from nothing
@@ -529,6 +559,130 @@ jobs:
         uses: ./.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-ios
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The system tests: the real app, started from its main() wiring, driven by
+  # mouse, touch and key events, rendered for real. Qt Quick 3D has no
+  # software fallback, so the display is Xvfb and the GL is Mesa's llvmpipe.
+  # Built with coverage instrumentation, so the same run measures the C++
+  # under src/app/qt - reported here, not gated (docs/testing.md).
+  system-tests:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - System tests (Linux, Xvfb + software GL)' || 'System tests (Linux, Xvfb + software GL)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',system,') }}
+    runs-on: ubuntu-26.04
+    # See the equivalent comment on build-and-test.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+      QT_QPA_PLATFORM: xcb
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      # fetch-depth: 0 is required - see the comment on build-and-test.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The x64-linux triplet cache, shared with build-and-test's Linux leg.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        with:
+          cmakeVersion: "latest"
+
+      # The vcpkg build dependencies (see build-and-test; libglu1-mesa-dev is
+      # glew's glu.pc, which a stock runner lacks and every Linux leg tripped
+      # over), then what a Qt window needs to open on Xvfb and render in
+      # software: the xcb platform plugin's libraries, Mesa's software
+      # rasteriser, and xauth for xvfb-run.
+      - name: Install build and display dependencies
+        run: >
+          sudo apt-get install -y
+          libx11-dev libgl1-mesa-dev libglu1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+          autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev
+          xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libfontconfig1 libxkbcommon-x11-0
+          libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+          libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
+
+      - name: Install gcovr
+        run: pip install --quiet gcovr
+
+      - name: Install Qt (prebuilt)
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: "6.8.3"
+          modules: "qtquick3d qtshadertools"
+          cache: true
+
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-coverage
+          -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-coverage
+
+      # What the display and GL stack actually are, in the log: the first
+      # thing to read when the render checks fail.
+      - name: Show the display stack
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" bash -c 'glxinfo -B 2>/dev/null | head -20 || true'
+
+      - name: System tests
+        run: >
+          xvfb-run -a -s "-screen 0 1280x1024x24"
+          ctest --preset linux-gcc-coverage -L system --output-on-failure
+
+      # The controller tests drive the same classes without a window; their
+      # lines count toward the same report.
+      - name: Controller tests
+        working-directory: build/linux-gcc-coverage/bin
+        run: ./cube_qt_controller_tests
+
+      - name: Upload system-test pictures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output
+          path: build/linux-gcc-coverage/system-test-output
+          if-no-files-found: warn
+
+      # C++ under src/app/qt, measured but not gated: nothing here joins the
+      # 80% gate of the Coverage job below until the numbers have been looked
+      # at. QML is not in this report - gcov cannot see it; the reach report
+      # in the artifact above is the QML measure.
+      - name: App coverage report
+        if: always()
+        run: >
+          gcovr --root . --filter 'src/app/qt/.*'
+          --gcov-executable gcov-15
+          --exclude-throw-branches --exclude-unreachable-branches
+          --gcov-ignore-errors=no_working_dir_found
+          --object-directory build/linux-gcc-coverage
+          --print-summary --html-details build/coverage-app.html
+          --json-summary build/coverage-app.json
+
+      - name: Upload app coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-app
+          path: |
+            build/coverage-app*.html
+            build/coverage-app.json
+
+      # Saved even when a later step fails - see build-and-test.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
 
   coverage:

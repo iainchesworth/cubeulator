@@ -351,6 +351,10 @@ classify_candidates(const std::vector<StickerCandidate>& candidates, cv::Point2f
         return hyp;
     }
 
+    if (candidates.empty()) {
+        return hyp;  // no candidates, no median: *mid_x below would dereference end()
+    }
+
     std::vector<float> xs;
     std::vector<float> ys;
     xs.reserve(candidates.size());

@@ -51,9 +51,11 @@ nav:
   - Getting started: getting-started.md
   - Building & packaging: building.md
   - Testing & coverage: testing.md
+  - Translations: i18n.md
   - Architecture: architecture.md
   - Vision pipeline: vision-pipeline.md
   - Dependency strategy: dependency-strategy.md
+  - Licensing: licensing.md
   - FAQ / troubleshooting: faq.md
   - Contributing: CONTRIBUTING.md
   - Code of conduct: CODE_OF_CONDUCT.md

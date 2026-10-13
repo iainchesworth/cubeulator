@@ -4,9 +4,13 @@ import Cubeulator
 // The scan screen: the camera, a dot on each sticker of the side in view,
 // and a chip for every side read so far.
 //
-// Nothing here is mirrored. A chip has to match the cube in the user's hand
-// when they turn it to look, and a mirror image of a side never matches the
-// side itself in any orientation.
+// The picture is shown the way a mirror shows it, so the cube moves on screen
+// the way the hand moves it (CameraController.previewMirrored: a front or
+// unknown camera, never a rear one). That is the only mirroring there is.
+// The frame that is read is the camera's own, and the chips are made from it:
+// a chip has to match the cube in the user's hand when they turn it to look,
+// and a mirror image of a side never matches the side itself in any
+// orientation.
 Item {
     id: root
 
@@ -19,6 +23,12 @@ Item {
     readonly property bool complete: DirectScan.complete
 
     readonly property color good: "#3FE05A"
+
+    // Whether the picture is shown the way a mirror shows it: the camera
+    // faces the user, so it is, unless it is a rear one. A property of the
+    // screen, not just a read of the controller, so the screen can be seen
+    // both ways without a camera of each kind.
+    property bool mirrored: CameraController.previewMirrored
 
     // The preview fills the screen and crops what does not fit; sticker
     // points arrive in frame pixels and are mapped through the same crop.
@@ -58,30 +68,47 @@ Item {
 
     Rectangle { anchors.fill: parent; color: "#141312" }
 
-    Image {
+    // The camera and the dots on it are one picture and flip together, about
+    // its middle, so a dot stays on its sticker. The status, the chips and the
+    // buttons are not part of it and are never flipped.
+    Item {
+        id: video
+        objectName: "scan.video"
         anchors.fill: parent
-        fillMode: Image.PreserveAspectCrop
-        cache: false
-        // Nothing to show until the camera has delivered a frame.
-        source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
-    }
+        transform: Scale {
+            origin.x: video.width / 2
+            xScale: root.mirrored ? -1 : 1
+        }
 
-    // One dot per sticker: yellow when the side is seen, green while it counts.
-    Repeater {
-        model: 9
-        delegate: Rectangle {
-            readonly property var point: root.cubeInView ? root.points[index] : Qt.point(0, 0)
-            visible: root.cubeInView
-            width: 14; height: 14; radius: 7
-            x: root.frameLeft + point.x * root.frameScale - width / 2
-            y: root.frameTop + point.y * root.frameScale - height / 2
-            color: DirectScan.reading ? root.good : "#FFD21F"
-            border.color: "#141312"; border.width: 2
+        Image {
+            objectName: "scan.picture"
+            anchors.fill: parent
+            fillMode: Image.PreserveAspectCrop
+            cache: false
+            // Nothing to show until the camera has delivered a frame.
+            source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
+        }
+
+        // One dot per sticker: yellow when the side is seen, green while it
+        // counts. Placed in frame pixels, as the container flips them.
+        Repeater {
+            model: 9
+            delegate: Rectangle {
+                objectName: "scan.dot"
+                readonly property var point: root.cubeInView ? root.points[index] : Qt.point(0, 0)
+                visible: root.cubeInView
+                width: 14; height: 14; radius: 7
+                x: root.frameLeft + point.x * root.frameScale - width / 2
+                y: root.frameTop + point.y * root.frameScale - height / 2
+                color: DirectScan.reading ? root.good : "#FFD21F"
+                border.color: "#141312"; border.width: 2
+            }
         }
     }
 
     // Status, top left.
     Rectangle {
+        objectName: "scan.status"
         x: Theme.space4; y: Theme.space4
         width: Math.min(root.width - 2 * Theme.space4, 520)
         height: statusColumn.height + 2 * Theme.space3
@@ -112,10 +139,39 @@ Item {
         }
     }
 
+    // A recording is never silent. This shows only when a developer has
+    // turned recording on; the app stores nothing otherwise.
+    Rectangle {
+        visible: DirectScan.recordingRoot !== ""
+        anchors.right: parent.right; anchors.top: parent.top
+        anchors.margins: Theme.space4
+        width: recordingRow.width + 2 * Theme.space3
+        height: recordingRow.height + 2 * Theme.space2
+        radius: 6
+        color: Qt.rgba(0.08, 0.075, 0.07, 0.78)
+
+        Row {
+            id: recordingRow
+            anchors.centerIn: parent
+            spacing: Theme.space2
+            Rectangle {
+                width: 10; height: 10; radius: 5
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#E5484D"
+            }
+            Text {
+                text: "Recording this scan to " + DirectScan.recordingRoot
+                color: "#F3F2F2"
+                font.family: Theme.fontMono; font.pixelSize: 12
+            }
+        }
+    }
+
     // The sides read so far, in the order they were first shown, each as the
     // camera last saw it. Colours are the measured ones, not tidy swatches.
     Row {
         id: chips
+        objectName: "scan.chips"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: buttons.top
         anchors.bottomMargin: Theme.space4
@@ -193,6 +249,7 @@ Item {
 
     Row {
         id: buttons
+        objectName: "scan.buttons"
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Theme.space4

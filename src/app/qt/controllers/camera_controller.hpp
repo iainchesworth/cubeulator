@@ -46,6 +46,12 @@ public:
     [[nodiscard]] QString lastError() const;
     [[nodiscard]] bool previewMirrored() const;
 
+    // The rule previewMirrored() applies to one device's facing, on its own
+    // so it can be checked without a camera. The mirror is how the picture is
+    // painted and nothing else: the frames that are read stay as the camera
+    // delivered them (see FrameImageProvider, DirectScan::latestFrame).
+    [[nodiscard]] static bool previewMirroredFor(platform::camera::Facing facing) noexcept;
+
 public slots:
     void refreshDevices();
     void selectDevice(const QString& deviceId);

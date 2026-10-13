@@ -10,9 +10,13 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QElapsedTimer>
 #include <QPointF>
+#include <QTemporaryDir>
 #include <QVariantMap>
+
+#include <opencv2/imgcodecs.hpp>
 
 #include <array>
 #include <cstddef>
@@ -165,6 +169,106 @@ TEST_CASE("the sixth side is on show before the scan is announced complete",
 
     scan.restart();
     CHECK_FALSE(scan.complete());
+}
+
+TEST_CASE("a scan stores nothing unless a developer turns recording on",
+          "[qt][controllers][direct-scan]") {
+    // The permission screen promises that nothing is stored. That holds
+    // because recording has no switch in the app: it is off unless a
+    // developer names a folder for it.
+    DirectScan scan;
+    CHECK(scan.recordingRoot().isEmpty());
+
+    QTemporaryDir folder;
+    REQUIRE(folder.isValid());
+    show_cube(scan, cube::solver::random_scramble(13));
+    REQUIRE(scan.complete());
+    CHECK(QDir(folder.path()).isEmpty());
+}
+
+TEST_CASE("a recorded scan replays to the cube it read", "[qt][controllers][direct-scan]") {
+    const Cube cube = cube::solver::random_scramble(14);
+    QTemporaryDir folder;
+    REQUIRE(folder.isValid());
+
+    DirectScan scan;
+    int announced = 0;
+    QObject::connect(&scan, &DirectScan::recordingRootChanged, [&announced]() { ++announced; });
+    scan.setRecordingRoot(folder.path());
+    CHECK(scan.recordingRoot() == folder.path());
+    CHECK(announced == 1);
+
+    show_cube(scan, cube);
+    REQUIRE(scan.complete());
+
+    // One folder for the one scan, holding the frames the reader worked on
+    // and nothing larger.
+    const QStringList scans = QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    REQUIRE(scans.size() == 1);
+    const QDir recorded(QDir(folder.path()).filePath(scans.front()));
+    CHECK(recorded.exists("manifest.json"));
+    CHECK_FALSE(recorded.exists("fullres"));
+    const QStringList frames = recorded.entryList({"rec_*.jpg"}, QDir::Files, QDir::Name);
+    REQUIRE_FALSE(frames.isEmpty());
+
+    // What was written is enough to reach the same cube again.
+    SideScan replay;
+    for (const QString& frame : frames) {
+        const cv::Mat bgr = cv::imread(recorded.filePath(frame).toStdString(), cv::IMREAD_COLOR);
+        REQUIRE_FALSE(bgr.empty());
+        replay.add(cube::vision::read_side(bgr));
+    }
+    const auto read = replay.cube();
+    REQUIRE(read.has_value());
+    CHECK(*read == cube);
+}
+
+TEST_CASE("only a scan is recorded, never the solve screen's camera",
+          "[qt][controllers][direct-scan]") {
+    QTemporaryDir folder;
+    REQUIRE(folder.isValid());
+    DirectScan scan;
+    scan.setRecordingRoot(folder.path());
+
+    // Watching from the start: nothing is written at all.
+    scan.setWatching(true);
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture * 2);
+    CHECK(QDir(folder.path()).isEmpty());
+
+    // A scan under way is recorded; turning to watching closes that
+    // recording and adds no more frames to it.
+    scan.setWatching(false);
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture);
+    scan.setWatching(true);
+    const QStringList scans = QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    REQUIRE(scans.size() == 1);
+    const QDir recorded(QDir(folder.path()).filePath(scans.front()));
+    const auto written = recorded.entryList({"rec_*.jpg"}, QDir::Files).size();
+    CHECK(written == kFramesToCapture);
+
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture * 2);
+    CHECK(recorded.entryList({"rec_*.jpg"}, QDir::Files).size() == written);
+    CHECK(QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size() == 1);
+}
+
+TEST_CASE("each scan is recorded to its own folder", "[qt][controllers][direct-scan]") {
+    QTemporaryDir folder;
+    REQUIRE(folder.isValid());
+    DirectScan scan;
+    scan.setRecordingRoot(folder.path());
+
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture);
+    scan.restart();
+    // Folders are named to the millisecond; let the clock move on.
+    QElapsedTimer waited;
+    waited.start();
+    while (waited.elapsed() < 5) {
+    }
+    hold(scan, draw_side(kMixed, Pose{}), kFramesToCapture);
+    scan.setRecordingRoot(QString());
+
+    CHECK(QDir(folder.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size() == 2);
+    CHECK(scan.recordingRoot().isEmpty());
 }
 
 TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
