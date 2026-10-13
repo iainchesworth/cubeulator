@@ -60,6 +60,8 @@ AbstractButton {
     checkable: true
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
+    horizontalPadding: Theme.space4
+    verticalPadding: Theme.space3
     implicitWidth: 320
     implicitHeight: Math.max(Theme.targetThumb, textColumn.implicitHeight + 2 * Theme.space3)
 

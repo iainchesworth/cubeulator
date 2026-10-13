@@ -11,6 +11,7 @@ Rectangle {
     // The colour of the box and its text. Not `color`: that is the Rectangle's fill.
     property color ink: Theme.ink
 
+    objectName: "kitKeyName"
     implicitWidth: label.implicitWidth + 2 * Theme.space2
     implicitHeight: label.implicitHeight + 2 * Theme.space1
 

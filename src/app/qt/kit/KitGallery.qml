@@ -83,21 +83,34 @@ KitPage {
         }
     }
 
-    // What the camera shows: any picture. The worst case is bright, so that is
-    // what the overlay components are shown on.
+    // What the camera shows: any picture, and the worst case is a bright one.
+    // Over-the-camera components sit on a panel on that picture, as they do on
+    // the scan screen; the status panel brings its own.
     component Backdrop: Rectangle {
+        id: backdrop
+        property bool panel: true
         default property alias content: inner.data
-        implicitWidth: inner.childrenRect.width + 2 * Theme.space4
-        implicitHeight: inner.childrenRect.height + 2 * Theme.space4
+        readonly property real pad: backdrop.panel ? Theme.space4 : 0
+        implicitWidth: inner.childrenRect.width + 2 * pad + 2 * Theme.space4
+        implicitHeight: inner.childrenRect.height + 2 * pad + 2 * Theme.space4
         color: "#FFFFFF"
         border.width: 1
         border.color: Theme.divider
-        Item {
-            id: inner
+
+        Rectangle {
             x: Theme.space4
             y: Theme.space4
-            width: childrenRect.width
-            height: childrenRect.height
+            width: inner.childrenRect.width + 2 * backdrop.pad
+            height: inner.childrenRect.height + 2 * backdrop.pad
+            color: backdrop.panel ? Theme.overlay.panel : "transparent"
+
+            Item {
+                id: inner
+                x: backdrop.pad
+                y: backdrop.pad
+                width: childrenRect.width
+                height: childrenRect.height
+            }
         }
     }
 
@@ -772,6 +785,7 @@ KitPage {
             Specimen {
                 caption: modelData.key
                 Backdrop {
+                    panel: false
                     KitStatusPanel {
                         objectName: "specimen/statuspanel/" + modelData.key
                         width: 360

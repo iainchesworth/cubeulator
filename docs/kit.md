@@ -132,6 +132,12 @@ QML engine). Run `ctest -L kit` or the binary directly.
 | `navigator_test.cpp` | the back rules and every platform's binding |
 | `settings_test.cpp` | defaults; every setting survives a second engine; applies live |
 | `system_helpers_test.cpp` | helper overrides; an announcement reaches the accessibility layer |
+| `fonts_test.cpp` | the four families are bundled; each weight resolves to its own face; with no app fonts registered and the machine's own the only ones, the app still shows Archivo; numerals are Plex Mono; Hebrew and Arabic UIs are Plex |
+| `kit_rules_test.cpp` | on the source: no words or colour literals inside a component, icons are Shapes not a Canvas, every component names itself and says what it is to a reader |
+
+`CUBE_KIT_SCREENSHOT_DIR=some/folder cube_kit_tests "[.screenshots]"` renders
+the gallery to pictures (both themes, both directions, text at 2x), which is
+also the start of a screenshot tour for the parts.
 
 Every component declares the pairings it draws as a `contrastPairs` array
 (foreground, background, target). That is how the gallery test checks all of
@@ -192,15 +198,22 @@ Qt version did, on 6.8.3. Each is in the code where it bites and has a test.
   fallback, predictive back, the iOS edge drag. Written from the Qt docs.
 - **macOS and iOS code** (`system_query_apple.mm`) is not compiled.
 - **Linux, macOS, Android builds** of the kit. Windows built and tested.
-- **Archivo in the app** until the font files are added (below).
+- **Qt's address-space and leak checks.** The tests were run in a
+  RelWithDebInfo build on Windows; the sanitizer presets were not.
 
 ## Fonts
 
 `src/app/qt/fonts/*.ttf` are compiled in under `:/fonts` and registered by
-`kit::installBundledFonts()` before any QML loads. Wanted: Archivo 400, 700,
-800; IBM Plex Mono 500; IBM Plex Sans Hebrew and Arabic 400, 700; each with its
-OFL text beside it. The generated notices (E0b, `feature/ax-licences`) must
-list them, so that session needs to know the list above.
+`kit::installBundledFonts()` before any QML loads: Archivo 400, 700, 800; IBM
+Plex Mono 500; IBM Plex Sans Hebrew and Arabic 400, 700, each with its OFL
+text beside it. Fetched unmodified from the projects' own repositories; the
+sources, versions and checksums are in `src/app/qt/fonts/README.md` (1.5 MB in
+all). **The generated notices (E0b, `feature/ax-licences`) must list all four
+families**; that session needs to be told.
+
+Two of the files carry legacy family names (Archivo ExtraBold, IBM Plex Mono
+Medm) beside the typographic ones. On Windows Qt resolves weights 800 and 500
+to the right faces (tested); macOS and Linux were not run.
 
 ## Proposed split of `AppState.qml`
 

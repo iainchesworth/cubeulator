@@ -44,6 +44,8 @@ AbstractButton {
     objectName: "kitListRow"
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
+    horizontalPadding: Theme.space4
+    verticalPadding: Theme.space3
     implicitWidth: 320
     implicitHeight: Math.max(Theme.targetThumb, content.implicitHeight + 2 * Theme.space3 + Theme.borderHair)
 

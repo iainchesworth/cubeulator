@@ -130,6 +130,8 @@ FocusScope {
                 text: modelData
                 checkable: false
                 hoverEnabled: true
+                horizontalPadding: Theme.space4
+                verticalPadding: Theme.space3
                 focusPolicy: Qt.StrongFocus
                 onActiveFocusChanged: {
                     if (!activeFocus)

@@ -72,9 +72,16 @@ FocusScope {
             item.forceActiveFocus(Qt.TabFocusReason);
     }
 
-    Flow {
+    // One option's width, wide enough for its sticker or its name.
+    readonly property real cellWidth: Math.max(stickerSize + 2 * Theme.space2, widestLabel + Theme.space2)
+    property real widestLabel: 0
+    // Six in a row if they fit, otherwise two rows of three: never five and one.
+    readonly property bool oneRow: names.length * cellWidth + (names.length - 1) * Theme.space2 <= width
+
+    Grid {
         id: flow
         width: root.width
+        columns: root.oneRow ? root.names.length : 3
         spacing: Theme.space2
 
         Repeater {
@@ -102,6 +109,16 @@ FocusScope {
 
                 implicitWidth: Math.max(root.stickerSize + 2 * Theme.space2, caption.implicitWidth + Theme.space2)
                 implicitHeight: root.stickerSize + Theme.space2 + caption.implicitHeight + 2 * Theme.space2
+                onImplicitWidthChanged: {
+                    const wanted = caption.implicitWidth;
+                    if (wanted > root.widestLabel)
+                        root.widestLabel = wanted;
+                }
+                Component.onCompleted: {
+                    const wanted = caption.implicitWidth;
+                    if (wanted > root.widestLabel)
+                        root.widestLabel = wanted;
+                }
 
                 background: Rectangle {
                     color: option.down ? Theme.colour("pressWash", root.onOverlay || Theme.effectiveDark)

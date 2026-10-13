@@ -22,6 +22,7 @@ Text {
     readonly property var spec: Theme.typeRole(role)
     readonly property bool isHeading: role === "display" || role === "title" || role === "headline"
 
+    objectName: "kitText"
     color: onOverlay ? Theme.overlay.ink : Theme.ink
     textFormat: Text.PlainText
     wrapMode: Text.Wrap

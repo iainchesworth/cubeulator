@@ -21,6 +21,7 @@ Item {
         && KitIcons.mirrors(name, Theme.script)
         && (parent ? parent.LayoutMirroring.enabled : false)
 
+    objectName: "kitIcon"
     implicitWidth: size
     implicitHeight: size
 

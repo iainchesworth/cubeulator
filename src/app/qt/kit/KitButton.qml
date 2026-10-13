@@ -93,6 +93,10 @@ AbstractButton {
     objectName: "kitButton"
     hoverEnabled: true
     focusPolicy: Qt.StrongFocus
+    // The label and icons are inset from the button's edge, the same on both
+    // sides so that a right-to-left layout needs nothing from it.
+    horizontalPadding: Theme.space4
+    verticalPadding: Theme.space3
 
     // As wide as its words want, but never wider than the screen's content
     // column: a label longer than that wraps (the label's own width follows).

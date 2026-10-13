@@ -8,10 +8,13 @@
 
 #include "kit_fixture.hpp"
 
+#include <QDir>
+#include <QImage>
 #include <QQuickItem>
 #include <QSet>
 
 #include <algorithm>
+#include <cmath>
 
 using namespace cube::test;
 
@@ -267,5 +270,61 @@ TEST_CASE("The cube is never mirrored, though the layout is", "[kit][gallery][rt
     QQuickItem* arrow = find(fixture.gallery, "directionIcon");
     REQUIRE(arrow != nullptr);
     CHECK_FALSE(layoutMirrored(arrow));
+    resetKitState();
+}
+
+// ---- A picture of the gallery, for people ------------------------------------------
+//
+// Hidden from the normal run. Renders the gallery with the software scene
+// graph, a window's height at a time, in both themes and both directions and at
+// twice the text size, into CUBE_KIT_SCREENSHOT_DIR:
+//
+//   CUBE_KIT_SCREENSHOT_DIR=some/folder cube_kit_tests "[.screenshots]"
+//
+// What E0a's screenshot tour does for whole screens, for the parts.
+TEST_CASE("Render the gallery to pictures", "[.screenshots]") {
+    const QString directory = qEnvironmentVariable("CUBE_KIT_SCREENSHOT_DIR");
+    if (directory.isEmpty()) {
+        SKIP("set CUBE_KIT_SCREENSHOT_DIR to a folder");
+    }
+    QDir().mkpath(directory);
+
+    struct Variant {
+        const char* name;
+        const char* theme;
+        const char* language;
+        double textScale;
+    };
+    for (const Variant v : {Variant{"light-ltr", "light", "en", 1.0}, Variant{"dark-ltr", "dark", "en", 1.0},
+                            Variant{"light-rtl", "light", "he", 1.0}, Variant{"light-2x", "light", "en", 2.0}}) {
+        resetKitState();
+        set("SettingsState", "themeMode", v.theme);
+        set("SettingsState", "language", v.language);
+        invoke(singleton("SystemTextScale"), "setOverride", {v.textScale});
+
+        GalleryFixture fixture;
+        fixture.host.window()->resize(900, 700);
+        fixture.host.settle();
+
+        QQuickItem* flick = nullptr;
+        for (QQuickItem* item : allItems(fixture.gallery)) {
+            if (item->inherits("QQuickFlickable")) {
+                flick = item;
+                break;
+            }
+        }
+        REQUIRE(flick != nullptr);
+        const double content = flick->property("contentHeight").toDouble();
+        const double page = flick->height();
+        const int steps = std::max(1, static_cast<int>(std::ceil(content / page)));
+        for (int i = 0; i < steps; ++i) {
+            flick->setProperty("contentY", std::min(i * page, std::max(0.0, content - page)));
+            fixture.host.settle();
+            const QImage image = fixture.host.window()->grabWindow();
+            REQUIRE_FALSE(image.isNull());
+            const QString file = QString("%1/%2-%3.png").arg(directory, v.name).arg(i, 2, 10, QChar('0'));
+            REQUIRE(image.save(file));
+        }
+    }
     resetKitState();
 }
