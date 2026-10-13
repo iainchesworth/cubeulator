@@ -28,7 +28,8 @@ add_executable(cube_system_tests
     sweep_test.cpp
     render_test.cpp
     tour_test.cpp
-    known_today_test.cpp)
+    known_today_test.cpp
+    progress_listener.cpp)
 
 target_include_directories(cube_system_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -76,33 +77,63 @@ cube_platform_deploy_qt_library(cube_system_tests Qt6::Test)
 
 cube_deploy_sanitizer_runtime(cube_system_tests)
 
-# One ctest entry for the whole suite, deliberately not catch_discover_tests:
-# the suite is one session of the app (one engine, one window, state carried
-# from case to case on purpose) and the reach gate at the end needs every
-# earlier case to have run in the same process.
+# Deliberately not catch_discover_tests: each entry below is a run of the app
+# of its own (one engine, one window, a case beginning from App::fresh()), and
+# the reach gate judges what all of them saw together. The screenshot tour is
+# its own entry as well: it is the slowest part by far, and a picture that
+# cannot be taken should not hide what the walk found.
 set(CUBE_SYSTEM_OUT "${CMAKE_BINARY_DIR}/system-test-output")
 
+# The walk, cut into shards. On a software renderer the whole suite is around
+# half an hour - frames are what cost - and one ctest entry for it either hits
+# its timeout or hides which case was the slow one. Catch2 cuts the declaration
+# order list into this many contiguous runs (--shard-count/--shard-index); every
+# case is in exactly one, and a case added tomorrow is in one without being
+# told. Each shard writes its own reach report; system.reach merges them.
+#
 # Declaration order: the gate is deterministic. Catch2's default is a random
 # order, which is how a case that leaves state behind is found - run the
 # executable with --order rand (and --rng-seed) for that.
-add_test(NAME system.walk
-    COMMAND cube_system_tests "~[.restart]" --order decl
+set(CUBE_SYSTEM_WALK_SHARDS 5 CACHE STRING
+    "How many ctest entries (system.walk.<n>of<count>) the system walk is cut into")
+set(cube_system_walk_tests "")
+foreach(shard RANGE 1 ${CUBE_SYSTEM_WALK_SHARDS})
+    math(EXPR shard_index "${shard} - 1")
+    set(walk_test "system.walk.${shard}of${CUBE_SYSTEM_WALK_SHARDS}")
+    add_test(NAME ${walk_test}
+        COMMAND cube_system_tests "~[.restart]~[tour]" --order decl
+                --shard-count ${CUBE_SYSTEM_WALK_SHARDS} --shard-index ${shard_index}
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
+    # The timeout is a safety net sized for a slow runner, not a budget: the
+    # progress lines the run prints say where the time went.
+    set_tests_properties(${walk_test} PROPERTIES
+        LABELS "system"
+        TIMEOUT 1500
+        ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
+    list(APPEND cube_system_walk_tests ${walk_test})
+endforeach()
+
+# The screenshot tour: a picture of every screen and state, narrow and wide,
+# light and dark. Writes <build>/system-test-output/tour/screens/*.png.
+add_test(NAME system.tour
+    COMMAND cube_system_tests "[tour]"
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
-set_tests_properties(system.walk PROPERTIES
+set_tests_properties(system.tour PROPERTIES
     LABELS "system"
-    TIMEOUT 900
-    ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
+    TIMEOUT 1500
+    ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour")
 
 # The reach gate: whether the walk visited every screen, state and control in
-# the inventory. Reads the report the walk wrote; needs no display. Catch2 runs
-# a binary's cases in no order a gate could rely on, so this is its own entry,
-# ordered after the walk.
+# the inventory. Reads the reports the shards wrote and judges their union
+# (and fails if a shard's is missing); needs no display. Catch2 runs a binary's
+# cases in no order a gate could rely on, so this is its own entry, ordered
+# after the walk.
 add_test(NAME system.reach
-    COMMAND cube_system_tests --check-reach "${CUBE_SYSTEM_OUT}/reach.json"
+    COMMAND cube_system_tests --check-reach "${CUBE_SYSTEM_OUT}"
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
 set_tests_properties(system.reach PROPERTIES
     LABELS "system"
-    DEPENDS system.walk
+    DEPENDS "${cube_system_walk_tests}"
     TIMEOUT 60)
 
 # A second launch of the app, with the theme already in the settings store.

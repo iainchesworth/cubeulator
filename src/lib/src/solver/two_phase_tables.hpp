@@ -276,36 +276,36 @@ struct Phase1MoveTables {
 // Phase 2 move tables and the pruning tables - built on first use
 // ---------------------------------------------------------------------------
 
-// The next permutation in lexicographic order, wrapping from the last to the
-// first exactly like std::next_permutation. Written out instead of called:
-// GCC 15 inlines std::next_permutation's std::reverse of these small arrays
-// into the table constructor and then reports -Wstringop-overflow ("writing 16
-// bytes into a region of size 3") for writes the loop bounds rule out, which
-// -Werror turns into a failed Release build of two_phase.cpp. Plain indexed
-// swaps over a constant-size array give the compiler nothing to misread.
+// The permutation of 0..N-1 with the given rank (lexicographic order,
+// identity = 0): the inverse of rank_permutation(), in the same bitmask style.
+//
+// This is how the loops below get each permutation in turn, rather than
+// stepping one with std::next_permutation: at -O3 GCC 15 vectorises the
+// library's reverse of a suffix whose length it cannot see, and reports a
+// stringop-overflow into these 4- and 8-byte arrays that cannot happen; the
+// Release leg builds with -Werror. Nothing here reverses, shifts or copies a
+// range - each digit picks one set bit - so there is no loop for it to
+// misjudge.
 template <std::size_t N>
-inline void advance_permutation(std::array<std::uint8_t, N>& p) noexcept {
-    std::size_t i = N - 1;
-    while (i > 0 && p[i - 1] >= p[i]) {
-        --i;
-    }
-    if (i > 0) {
-        std::size_t j = N - 1;
-        while (p[j] <= p[i - 1]) {
-            --j;
+[[nodiscard]] constexpr std::array<std::uint8_t, N> permutation_of_rank(std::size_t rank) noexcept {
+    static_assert(N >= 1 && N <= 8, "the factorials below stop at 8!");
+    constexpr std::array<std::size_t, 9> kFactorial = {1, 1, 2, 6, 24, 120, 720, 5040, 40320};
+    std::array<std::uint8_t, N> p{};
+    unsigned unplaced = (1u << N) - 1u;
+    for (std::size_t i = 0; i < N; ++i) {
+        const std::size_t place = kFactorial[N - 1 - i];
+        // The digit is how many unplaced values come before this one.
+        std::size_t before = rank / place;
+        rank %= place;
+        unsigned bits = unplaced;
+        for (; before > 0; --before) {
+            bits &= bits - 1u;  // drop the lowest set bit
         }
-        const std::uint8_t held = p[i - 1];
-        p[i - 1] = p[j];
-        p[j] = held;
+        const auto value = static_cast<unsigned>(std::countr_zero(bits));
+        p[i] = static_cast<std::uint8_t>(value);
+        unplaced &= ~(1u << value);
     }
-    // The suffix is in descending order; reversing it makes it the smallest.
-    // When i == 0 this reverses everything: the last permutation wraps to the
-    // first.
-    for (std::size_t lo = i, hi = N - 1; lo < hi; ++lo, --hi) {
-        const std::uint8_t held = p[lo];
-        p[lo] = p[hi];
-        p[hi] = held;
-    }
+    return p;
 }
 
 // The eight-element permutation move table, [rank * 10 + index into
@@ -315,11 +315,9 @@ inline void advance_permutation(std::array<std::uint8_t, N>& p) noexcept {
 // turns need a rank taken; U2, U', D2 and D' are U and D composed.
 inline void fill_perm_moves(std::uint16_t* out, bool edges) noexcept {
     constexpr std::array<std::size_t, 6> kBase = {0, 3, 6, 7, 8, 9};  // U D L2 R2 F2 B2
-    std::array<std::uint8_t, 8> p{0, 1, 2, 3, 4, 5, 6, 7};
     std::array<std::uint8_t, 8> q{};
-    // Lexicographic order is rank order, so walking the permutations in that
-    // order yields each rank without computing it.
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kPermCount); ++rank) {
+        const std::array<std::uint8_t, 8> p = permutation_of_rank<8>(rank);
         for (const std::size_t i : kBase) {
             const CubieCube& move = move_cubie(kPhase2Moves[i]);
             const std::uint8_t* const from = edges ? move.ep.data() : move.cp.data();
@@ -329,7 +327,6 @@ inline void fill_perm_moves(std::uint16_t* out, bool edges) noexcept {
             out[rank * kPhase2MoveCount + i] =
                 static_cast<std::uint16_t>(rank_permutation(q.data(), 8));
         }
-        advance_permutation(p);
     }
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kPermCount); ++rank) {
         std::uint16_t* const row = out + rank * kPhase2MoveCount;
@@ -342,9 +339,9 @@ inline void fill_perm_moves(std::uint16_t* out, bool edges) noexcept {
 
 // The middle-layer edges' permutation (4! = 24) over the ten moves.
 inline void fill_sperm_moves(std::uint16_t* out) noexcept {
-    std::array<std::uint8_t, 4> p{0, 1, 2, 3};
     std::array<std::uint8_t, 4> q{};
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kSlicePermCount); ++rank) {
+        const std::array<std::uint8_t, 4> p = permutation_of_rank<4>(rank);
         for (std::size_t i = 0; i < static_cast<std::size_t>(kPhase2MoveCount); ++i) {
             const CubieCube& move = move_cubie(kPhase2Moves[i]);
             for (std::size_t k = 0; k < 4; ++k) {
@@ -353,7 +350,6 @@ inline void fill_sperm_moves(std::uint16_t* out) noexcept {
             out[rank * kPhase2MoveCount + i] =
                 static_cast<std::uint16_t>(rank_permutation(q.data(), 4));
         }
-        advance_permutation(p);
     }
 }
 

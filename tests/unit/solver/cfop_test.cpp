@@ -54,6 +54,26 @@ using cube::solver::detail::solve_cfop_stages;
 
 namespace {
 
+// All 24 orders of 0..3, as plain nested loops. (Not std::next_permutation
+// over a byte array: GCC 15 at -O3 reports a stringop-overflow out of the
+// library's reverse for that, and the Release leg builds with -Werror.)
+std::array<std::array<std::uint8_t, 4>, 24> all_orders_of_four() {
+    std::array<std::array<std::uint8_t, 4>, 24> orders{};
+    std::size_t n = 0;
+    for (std::uint8_t a = 0; a < 4; ++a) {
+        for (std::uint8_t b = 0; b < 4; ++b) {
+            for (std::uint8_t c = 0; c < 4; ++c) {
+                for (std::uint8_t d = 0; d < 4; ++d) {
+                    if (a != b && a != c && a != d && b != c && b != d && c != d) {
+                        orders[n++] = {a, b, c, d};
+                    }
+                }
+            }
+        }
+    }
+    return orders;
+}
+
 Cube apply_all(Cube cube, const std::vector<Move>& moves) {
     for (const Move& move : moves) {
         cube = cube.apply(move);
@@ -99,14 +119,7 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
     // mismatched parities and cannot occur on a real cube. Each is run
     // through the two lookups exactly as solve_cfop() does, on the cubie
     // model, and must come out as the identity.
-    std::array<std::array<std::uint8_t, 4>, 24> perms{};
-    {
-        std::array<std::uint8_t, 4> p = {0, 1, 2, 3};
-        std::size_t n = 0;
-        do {
-            perms[n++] = p;
-        } while (std::ranges::next_permutation(p).found);
-    }
+    const std::array<std::array<std::uint8_t, 4>, 24> perms = all_orders_of_four();
 
     std::size_t states = 0;
     std::size_t oll_moves = 0;
@@ -245,11 +258,10 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
     // A PLL slot is the corners' rank * 24 + the edges' rank; only slots
     // whose two parities agree occur on a real cube, and the lookup refuses
     // the rest.
-    std::array<std::uint8_t, 4> corner_order = {0, 1, 2, 3};
+    const std::array<std::array<std::uint8_t, 4>, 24> orders = all_orders_of_four();
     std::size_t used = 0;
-    do {
-        std::array<std::uint8_t, 4> edge_order = {0, 1, 2, 3};
-        do {
+    for (const auto& corner_order : orders) {
+        for (const auto& edge_order : orders) {
             CubieCube state;
             for (std::size_t i = 0; i < 4; ++i) {
                 state.cp[i] = corner_order[i];
@@ -263,8 +275,8 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
             }
             same(pll_algorithm(state), generated_words::kPllWords[slot]);
             ++used;
-        } while (std::ranges::next_permutation(edge_order).found);
-    } while (std::ranges::next_permutation(corner_order).found);
+        }
+    }
     CHECK(used == 288);
 }
 

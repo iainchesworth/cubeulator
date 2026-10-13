@@ -7,7 +7,6 @@
 #include <cstdint>
 #include <random>
 #include <thread>
-#include <type_traits>
 #include <vector>
 
 #include <cube/solver/notation.hpp>
@@ -284,36 +283,43 @@ bool same_contents(const A& a, const B& b) {
 
 }  // namespace
 
-TEST_CASE("advance_permutation walks the same order as std::next_permutation, and wraps",
-          "[two-phase]") {
-    // It replaces std::next_permutation in the table builders (GCC 15's
-    // -Wstringop-overflow misreads the standard one there), so the table
-    // contents depend on it being the same sequence, including the wrap.
-    const auto check = []<std::size_t N>(std::integral_constant<std::size_t, N>) {
-        std::array<std::uint8_t, N> ours{};
-        std::array<std::uint8_t, N> theirs{};
-        for (std::size_t i = 0; i < N; ++i) {
-            ours[i] = theirs[i] = static_cast<std::uint8_t>(i);
+TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[two-phase]") {
+    // The first-use tables take each permutation in turn by its rank (they do
+    // not step one with std::next_permutation, which GCC 15 at -O3 misreads
+    // into a stringop-overflow). Every one of the 4! and 8! must be a real
+    // permutation, numbered by rank_permutation() as the rank it was asked
+    // for, and later ranks must come later in lexicographic order.
+    using cube::solver::detail::permutation_of_rank;
+    using cube::solver::detail::rank_permutation;
+
+    for (std::size_t rank = 0; rank < 24; ++rank) {
+        const auto p = permutation_of_rank<4>(rank);
+        unsigned seen = 0;
+        for (const std::uint8_t v : p) {
+            seen |= 1u << v;
         }
-        std::size_t count = 0;
-        std::size_t factorial = 1;
-        for (std::size_t i = 2; i <= N; ++i) {
-            factorial *= i;
+        REQUIRE(seen == 0xFu);
+        CHECK(rank_permutation(p.data(), 4) == static_cast<int>(rank));
+    }
+
+    std::array<std::uint8_t, 8> previous{};
+    for (std::size_t rank = 0; rank < 40320; ++rank) {
+        const auto p = permutation_of_rank<8>(rank);
+        unsigned seen = 0;
+        for (const std::uint8_t v : p) {
+            seen |= 1u << v;
         }
-        do {
-            REQUIRE(ours == theirs);
-            cube::solver::detail::advance_permutation(ours);
-            ++count;
-        } while (std::next_permutation(theirs.begin(), theirs.end()));
-        REQUIRE(count == factorial);
-        // theirs wrapped to ascending when next_permutation returned false;
-        // ours has wrapped the same way.
-        REQUIRE(ours == theirs);
-    };
-    check(std::integral_constant<std::size_t, 1>{});
-    check(std::integral_constant<std::size_t, 2>{});
-    check(std::integral_constant<std::size_t, 4>{});
-    check(std::integral_constant<std::size_t, 8>{});
+        REQUIRE(seen == 0xFFu);
+        REQUIRE(rank_permutation(p.data(), 8) == static_cast<int>(rank));
+        if (rank > 0) {
+            REQUIRE(
+                std::lexicographical_compare(previous.begin(), previous.end(), p.begin(), p.end()));
+        }
+        previous = p;
+    }
+    // The first is the identity and the last is the reverse.
+    CHECK(permutation_of_rank<8>(0) == std::array<std::uint8_t, 8>{0, 1, 2, 3, 4, 5, 6, 7});
+    CHECK(permutation_of_rank<8>(40319) == std::array<std::uint8_t, 8>{7, 6, 5, 4, 3, 2, 1, 0});
 }
 
 TEST_CASE("the compile-time tables equal a direct construction, entry for entry", "[two-phase]") {
