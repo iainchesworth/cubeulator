@@ -104,8 +104,8 @@ system's own setting multiplied in; text that wraps instead of eliding.
 **6. The publisher is Iain Chesworth Labs, ICL** *(Iain, 2026-10-13)*: the
 umbrella for his personal and shared work. Its names are `iainchesworth`,
 `iainchesworthlabs` and `icl` (as in ICL Forge, `iclforge`). No app shows a
-publisher or a copyright line in its window today. Decision D1 asks how it
-is written in the app.
+publisher or a copyright line in its window today. Decision D1 asked how it
+is written in the app; for Cubeulator the answer is "Iain Chesworth".
 
 ## 2. Side by side
 
@@ -155,9 +155,10 @@ today, and the proposal. Lane and timing are in section 6.
   (`brief.md` D12) and matches Countdown Solver.
 - **Proposal.** One publisher string, used in the same five places: the
   Windows version resource, `Info.plist`, the AppStream `<developer>`, the
-  store listing, and the About small print. Default: **Iain Chesworth
-  Labs**, with the copyright line in the person's name. Long form, short
-  form or the person alone is D1.
+  store listing, and the About small print. **Decided (D1): "Iain
+  Chesworth"**, the person alone, in all five and in the copyright line.
+  Iain Chesworth Labs remains the umbrella's name; Cubeulator does not
+  print it.
 
 ### F2. Settings store and keys
 
@@ -401,7 +402,7 @@ told otherwise.
 
 | # | decision | default | blocks |
 |---|---|---|---|
-| D1 | How the publisher is written in the app: *Iain Chesworth Labs*, *ICL*, or *Iain Chesworth*. Today the CPack vendor and the macOS copyright say "Iain Chesworth" | "Iain Chesworth Labs" in About and the packages; copyright line "Copyright © 2026 Iain Chesworth" | E4a, E3b |
+| D1 | How the publisher is written in the app: *Iain Chesworth Labs*, *ICL*, or *Iain Chesworth*. Today the CPack vendor and the macOS copyright say "Iain Chesworth" | **"Iain Chesworth"**, the person's name, in About, the packages and the copyright line alike. *(Iain, 2026-10-13, asked twice.)* The proposal had been "Iain Chesworth Labs" in About and the packages | E4a, E3b |
 | D2 | Is Signal the suite's look? Countdown Solver and Automate are Calm | Cubeulator stays Signal; no other app is reskinned by this plan | nothing here |
 | D3 | Hebrew and Arabic faces | **Noto Sans Hebrew and Noto Sans Arabic** (the family's). *(Iain, 2026-10-13.)* The files ICL Forge vendors are variable, weight 100 to 900, so the 700 ceiling goes | E2a, when it bundles fonts |
 | D4 | Yiddish | Not in V1.0 (decision 3 stands); added in V1.1 if wanted | E5 |
@@ -459,4 +460,5 @@ What an app in the suite has, so a new one starts from it:
   Countdown Solver say in the app that theirs have not.
 - Whether the other apps will be reskinned (D2).
 - Whether the suite wants one component kit (D8).
-- How the publisher is written in the app (D1).
+- How the publisher is written in the other apps. Cubeulator's is decided
+  (D1).

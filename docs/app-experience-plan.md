@@ -130,6 +130,8 @@ default above, the answer stands.
   files the other apps ship (`design/family.md` D3).
 - Translations are keyed by id, as `strings.json` already is, not by the
   English text (`design/family.md` D5).
+- The publisher is written "Iain Chesworth" in About, the packages and the
+  copyright line (`design/family.md` D1).
 
 **On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
 own terms are his to change. But the app links Qt Quick 3D and Qt Shader
@@ -392,7 +394,7 @@ session that is already planned; none is a new session.
 
 | item | rides with | what changes |
 |---|---|---|
-| F1 publisher line | E4a, E3b | one string in the version resource, `Info.plist`, AppStream, About (after D1) |
+| F1 publisher line | E4a, E3b | one string, "Iain Chesworth", in the version resource, `Info.plist`, AppStream, About (D1, decided) |
 | F2 setting keys | E2a, E3a | the keys named in `design/screens/settings.md` in the family's `group/name` style, listed in one place |
 | F3 language manager | E2b | its brief says **port** the family `LanguageManager` and its CI gates; add locale-aware numbers, plurals, the unwrapped-string lint |
 | F4 Hebrew and Arabic faces | E2a, before it bundles fonts | Noto Sans Hebrew and Noto Sans Arabic in place of the IBM Plex pair (D3, decided) |
