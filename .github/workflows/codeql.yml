@@ -49,17 +49,11 @@ jobs:
       # actions/cache tolerates concurrent jobs racing to populate the same
       # key (whichever finishes first wins; the others just skip their own
       # save harmlessly).
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-x64-linux-
+          triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -93,3 +87,14 @@ jobs:
         uses: github/codeql-action/analyze@99df26d4f13ea111d4ec1a7dddef6063f76b97e9 # v4.37.0
         with:
           category: "/language:cpp"
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
