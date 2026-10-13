@@ -928,7 +928,7 @@ QVariantList ScanSession::cellConfidence() const {
 }
 
 qreal ScanSession::overallConfidence() const noexcept {
-    return overall_confidence_;
+    return static_cast<double>(overall_confidence_);
 }
 
 bool ScanSession::isSteady() const noexcept {
@@ -2039,8 +2039,9 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
     // detectors and pose are elided, so the pass still ticks the tracker's
     // clock as an honest no-observation pass.
     if (skip_detectors) {
-        VisionDebugStats idle_stats{.is_steady = result.is_steady,
-                                    .hand_present = result.hand_present};
+        VisionDebugStats idle_stats{};
+        idle_stats.is_steady = result.is_steady;
+        idle_stats.hand_present = result.hand_present;
         idle_stats.face_status = "idle-skipped";
         idle_stats.corner_status = "idle-skipped";
         dump_vision_debug(analysis_frame, idle_stats);
@@ -2078,8 +2079,9 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
         result.track_gauge_epoch = sample.gauge_epoch;
         result.track_face_samples = std::move(sample.faces);
         result.pass_ms = static_cast<double>(pass_timer.nsecsElapsed()) / 1.0e6;
-        VisionDebugStats track_stats{.is_steady = result.is_steady,
-                                     .hand_present = result.hand_present};
+        VisionDebugStats track_stats{};
+        track_stats.is_steady = result.is_steady;
+        track_stats.hand_present = result.hand_present;
         track_stats.face_status = sample.pose.has_value() ? "track-locked" : "track-lost";
         track_stats.corner_status = track_stats.face_status;
         dump_vision_debug(analysis_frame, track_stats);
@@ -2102,8 +2104,9 @@ ScanSession::AnalysisResult ScanSession::analyze(const cv::Mat& frame, std::int6
                center.y < static_cast<float>(frame.rows);
     };
 
-    VisionDebugStats debug_stats{.is_steady = result.is_steady,
-                                 .hand_present = result.hand_present};
+    VisionDebugStats debug_stats{};
+    debug_stats.is_steady = result.is_steady;
+    debug_stats.hand_present = result.hand_present;
 
     // Pose-only face observations (translation-ambiguous lattice fits, see
     // FaceObservation::pose_only) are held OUT of result.face on purpose:

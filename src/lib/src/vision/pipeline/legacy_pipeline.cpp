@@ -108,15 +108,9 @@ LegacyPipelineResult LegacyPipeline::process(const FramePacket& frame) {
     acquire.stage = "acquire";
     acquire.ran = true;
     double fx = frame.fx;
-    double fy = frame.fy;
-    double cx = frame.cx;
-    double cy = frame.cy;
     if (fx <= 0.0) {
         const cv::Matx33d k = approximate_camera_matrix(frame.bgr.size());
         fx = k(0, 0);
-        fy = k(1, 1);
-        cx = k(0, 2);
-        cy = k(1, 2);
     }
     const float motion_score = stability_.update(frame.bgr).motion_score;
     acquire.add("w", static_cast<std::int64_t>(frame.bgr.cols));
