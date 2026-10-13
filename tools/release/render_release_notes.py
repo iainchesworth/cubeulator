@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from datetime import date
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -205,6 +206,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--attested", action="store_true", help="provenance attestations exist")
     parser.add_argument("--sbom", action="store_true", help="an SPDX SBOM is attached")
     parser.add_argument("--install-notes", type=Path, default=HERE / "install-notes.md")
+    parser.add_argument(
+        "--from-unreleased",
+        action="store_true",
+        help="a dry run: when there is no section for the version, read [Unreleased] as if "
+        "it had been cut as that version today",
+    )
     parser.add_argument("--output", type=Path, help="write here instead of stdout")
     args = parser.parse_args(argv)
 
@@ -223,6 +230,8 @@ def main(argv: list[str] | None = None) -> int:
     text = changelog.normalise(args.changelog.read_text(encoding="utf-8"))
     template = args.install_notes.read_text(encoding="utf-8") if args.install_notes.exists() else ""
     try:
+        if args.from_unreleased and changelog.get(text, args.version) is None:
+            text = changelog.cut(text, args.version, date.today())
         notes = render(
             text,
             version=args.version,

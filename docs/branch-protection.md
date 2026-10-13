@@ -105,8 +105,19 @@ informational (`continue-on-error`) and are never required.
 (`branch-name-check.yml` enforces the pairing). The ruleset requires a pull
 request with 1 approval (dismiss stale), every check in the table above with
 "up to date" **on**, conversation resolution, and blocks force pushes and
-deletions. Releases are a deliberate human step, so they are the one place an
-admin is expected to bypass through the PR.
+deletions. Releases are a deliberate human step ([Cutting a release](releasing.md)):
+the release PR is the decision, and the tag on the merge commit is the build.
+
+As configured (read from the ruleset on 2026-10-14) it has **no bypass actor**,
+unlike `develop-protection`: a release PR merges only with all nine checks green
+on its tip and an approval from someone other than its author. Both are a
+decision for the repository's owner, not something this page can paper over;
+what a release PR needs to merge is the first thing to settle before the first
+release.
+
+`release-check.yml` ("Release readiness") also runs on a pull request into
+`main`. It is advisory, not in the table above, and says whether the tree is a
+release the Release workflow will accept and what its notes would say.
 
 ## Repository settings
 
