@@ -34,7 +34,7 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
     runs-on: ubuntu-26.04
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -63,7 +63,7 @@ jobs:
     steps:
       # fetch-depth: 0 is required for vcpkg's version resolution - see the
       # equivalent comment on build-and-test below.
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -79,9 +79,10 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.4"
+          ninjaVersion: "1.13.2"
 
       # Three vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11 for bgfx, autotools for gperf, GLU for glew).
@@ -225,7 +226,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -250,9 +251,10 @@ jobs:
           triplet: ${{ matrix.triplet }}
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.4"
+          ninjaVersion: "1.13.2"
 
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships
       # GCC 13/14/15 side by side out of the box (unlike ubuntu-24.04, which
@@ -284,7 +286,7 @@ jobs:
         run: |
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
               -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
-            choco install nsis --no-progress -y
+            choco install nsis --version 3.13.0 --no-progress -y
           }
 
       - name: Install packaging tools (Linux)
@@ -298,7 +300,7 @@ jobs:
       # Prebuilt Qt (official binaries) so the GUI app builds without
       # compiling Qt from source. Sets QT_ROOT_DIR for find_package(Qt6).
       - name: Install Qt (prebuilt)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.8.3"
           modules: "qtquick3d qtshadertools"
@@ -354,50 +356,13 @@ jobs:
 
       # A package that built but is missing its Qt (a deploy script that
       # quietly did nothing on a platform) is worse than a failed job. Run
-      # after the upload so the artifact can still be looked at.
-      - name: Check the package contents (Windows)
-        if: runner.os == 'Windows'
+      # after the upload so the artifact can still be looked at. The release
+      # workflow runs the same script on the same packages.
+      - name: Check the package contents
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
-        run: |
-          installer=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.exe)
-          "/c/Program Files/7-Zip/7z.exe" l "$installer" | tee /tmp/contents.txt
-          grep -q 'Cubeulator.exe' /tmp/contents.txt
-          grep -q 'Qt6Core.dll' /tmp/contents.txt
-          grep -q 'qwindows.dll' /tmp/contents.txt
-
-      - name: Check the package contents (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        env:
-          CMAKE_PRESET: ${{ matrix.preset }}
-        run: |
-          dmg=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.dmg)
-          hdiutil attach "$dmg" -mountpoint /tmp/cubeulator-dmg -nobrowse -quiet
-          trap 'hdiutil detach /tmp/cubeulator-dmg -quiet' EXIT
-          app=/tmp/cubeulator-dmg/Cubeulator.app
-          test -x "$app/Contents/MacOS/Cubeulator"
-          test -d "$app/Contents/Frameworks/QtCore.framework"
-          test -f "$app/Contents/Resources/Cubeulator.icns"
-          /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$app/Contents/Info.plist" | grep -qx "com.iainchesworthlabs.cubeulator"
-          /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$app/Contents/Info.plist"
-
-      - name: Check the package contents (Linux)
-        if: runner.os == 'Linux'
-        shell: bash
-        env:
-          CMAKE_PRESET: ${{ matrix.preset }}
-        run: |
-          deb=$(ls "build/${CMAKE_PRESET}"/Cubeulator-*.deb)
-          dpkg-deb -c "$deb" | tee /tmp/contents.txt
-          dpkg-deb -f "$deb" Package Version Depends Recommends
-          grep -q 'libQt6Core.so' /tmp/contents.txt
-          grep -q ' ./usr/bin/cubeulator' /tmp/contents.txt
-          grep -q 'com.iainchesworthlabs.cubeulator.desktop' /tmp/contents.txt
-          grep -q 'icons/hicolor/scalable/apps/com.iainchesworthlabs.cubeulator.svg' /tmp/contents.txt
-          dpkg-deb -f "$deb" Recommends | grep -q fonts-noto-cjk
-          rpm -qlp build/${CMAKE_PRESET}/Cubeulator-*.rpm | grep -q 'libQt6Core.so'
+        run: packaging/check-package.sh "build/${CMAKE_PRESET}"
 
       # After the upload, so that a metadata complaint cannot lose the package.
       - name: Validate desktop entry and AppStream metadata (Linux)
@@ -442,7 +407,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -479,9 +444,10 @@ jobs:
           triplet: arm64-android
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.4"
+          ninjaVersion: "1.13.2"
 
       # All platforms share the same Qt/QML shell (see docs/architecture.md),
       # so this leg installs Qt for Android same as build-and-test installs
@@ -493,7 +459,7 @@ jobs:
       # ONLY, which would otherwise hide both Qt kits and vcpkg's install
       # tree from find_package() (confirmed locally on windows-msvc/android).
       - name: Install Qt (prebuilt, Android)
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.8.3"
           target: android
@@ -592,7 +558,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -607,9 +573,10 @@ jobs:
           triplet: arm64-ios
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.4"
+          ninjaVersion: "1.13.2"
 
       # Unsigned build only (see the ios-clang-* preset's
       # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
@@ -653,7 +620,7 @@ jobs:
       # the tip commit's objects, so it fails for any port whose pinned tree
       # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
       # protobuf, a transitive onnxruntime dependency).
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: recursive
           fetch-depth: 0
@@ -669,9 +636,10 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
         with:
-          cmakeVersion: "latest"
+          cmakeVersion: "4.4.4"
+          ninjaVersion: "1.13.2"
 
       # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
       # out of the box - see the equivalent comment on build-and-test above.
@@ -682,7 +650,7 @@ jobs:
         run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev autoconf autoconf-archive automake libtool libltdl-dev libxtst-dev libglu1-mesa-dev
 
       - name: Install gcovr
-        run: pip install --quiet gcovr
+        run: pip install --quiet gcovr==8.6
 
       # No GUI app needed to measure coverage of cube::lib/cube::platform, so
       # this leg skips the Qt install entirely.
