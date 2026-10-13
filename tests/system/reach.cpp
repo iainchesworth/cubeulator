@@ -31,11 +31,9 @@ const std::vector<ScreenDef>& screen_inventory() {
 }
 
 const std::map<QString, QString>& dead_screen_files() {
-    static const std::map<QString, QString> dead = {
-        {"ScanScreen.qml",
-         "the previous scan screen: not instantiated by Main.qml, kept for ScanSession until R6 "
-         "removes both"},
-    };
+    // None now. ScanScreen.qml, the previous scan screen, was listed here
+    // until it was removed with the pipeline it showed.
+    static const std::map<QString, QString> dead = {};
     return dead;
 }
 

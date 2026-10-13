@@ -5,7 +5,7 @@ import Cubeulator
 
 // Demo/mock settings state, following the same pattern as AppState. Camera
 // device selection lives on CameraController (selectedDeviceId/
-// selectDevice()), not here - it's the same controller ScanSession.start()
+// selectDevice()), not here - it's the same controller DirectScan.start()
 // reads from, so there's a single source of truth for which device is live.
 QtObject {
     id: settings

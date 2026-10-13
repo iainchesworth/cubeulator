@@ -62,7 +62,6 @@ target_sources(cube_lib
         src/vision/face_grid_fit.cpp
         src/vision/edge_observation.cpp
         src/vision/temporal_fusion.cpp
-        src/vision/track_fusion.cpp
         src/vision/color_resolution.cpp
         src/vision/corner_observation.cpp
         src/vision/orientation_lattice.cpp
@@ -74,16 +73,7 @@ target_sources(cube_lib
         src/vision/auto_advance.cpp
         src/vision/hand_presence.cpp
         src/vision/idle_gate.cpp
-        src/vision/pipeline/trace.cpp
-        src/vision/pipeline/legacy_pipeline.cpp
-        src/vision/pipeline/detect_track_loop.cpp
-        src/vision/pipeline/pose_refiner.cpp
-        src/vision/pipeline/face_projection.cpp
         src/vision/recording_v2.cpp
-        src/vision/groundtruth.cpp
-        src/vision/corner_detector.cpp
-        src/vision/pose_from_corners.cpp
-        src/vision/camera_intrinsics.cpp
         src/vision/direct_scan.cpp
         src/vision/held_cube.cpp
         src/render/render.cpp

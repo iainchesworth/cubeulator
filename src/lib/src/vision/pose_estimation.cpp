@@ -1,7 +1,5 @@
 #include <cube/vision/pose_estimation.hpp>
 
-#include <cube/profiling.hpp>
-
 #include <opencv2/calib3d.hpp>
 
 #include <algorithm>
@@ -458,7 +456,6 @@ std::optional<EdgeHint> compute_edge_hint(const PoseSeed& seed) {
 
 Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation,
                                                   cv::Size frame_size, const PoseSeed* seed) {
-    CUBE_ZONE_SCOPED_N("vision.project_cube_from_face");
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -607,7 +604,6 @@ Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observa
 
 Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation,
                                                     cv::Size frame_size, const PoseSeed* seed) {
-    CUBE_ZONE_SCOPED_N("vision.project_cube_from_corner");
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -770,7 +766,6 @@ Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& obs
 
 Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation,
                                                   cv::Size frame_size, const PoseSeed* seed) {
-    CUBE_ZONE_SCOPED_N("vision.project_cube_from_edge");
     if (frame_size.width <= 0 || frame_size.height <= 0) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }

@@ -557,6 +557,30 @@ if(NOT _deployed_roots)
     cn_warning("manifest.json qt.deployedRoots has no list for '${_platform}': Qt plugins that the deployment tool adds on its own will be missing until the notices test is run against a ${_platform} deployment and the list is filled in")
 endif()
 
+# Qt modules only a test executable loads (QtTest). The test copies the
+# module's library into the runtime directory it shares with the app, where
+# the scan below would take it for something the app deploys. Listed by
+# component id in the manifest; the scan skips a file that maps to one. An id
+# that qt-modules.json does not know (a Qt upgrade renamed or dropped it) is
+# unresolved, so the list cannot quietly outlive what it names.
+set(_test_only_qt "")
+string(JSON _n_test_only ERROR_VARIABLE _test_only_err LENGTH "${_manifest}" qt testOnlyModules)
+if(NOT _test_only_err AND _n_test_only GREATER 0)
+    math(EXPR _last_test_only "${_n_test_only} - 1")
+    foreach(i RANGE ${_last_test_only})
+        string(JSON _tid MEMBER "${_manifest}" qt testOnlyModules ${i})
+        if(_tid STREQUAL "_comment")
+            continue()
+        endif()
+        string(JSON _ttype ERROR_VARIABLE _terr TYPE "${_qt}" components "${_tid}")
+        if(_terr)
+            cn_unresolved("manifest.json qt.testOnlyModules lists '${_tid}', which is not in third_party/notices/qt-modules.json")
+        else()
+            list(APPEND _test_only_qt "${_tid}")
+        endif()
+    endforeach()
+endif()
+
 set(_deployed_report "")
 set(_deployed_ports "")
 set(_deployed_unknown "")
@@ -564,13 +588,20 @@ if(DEFINED CUBE_NOTICES_DEPLOY_DIR AND IS_DIRECTORY "${CUBE_NOTICES_DEPLOY_DIR}"
     # NB: the runtime directory is shared by the app, the tests and the tools,
     # so a vcpkg DLL beside the exe is only evidence, never a reason to add a
     # component by itself (see the warning below). Qt files are different:
-    # windeployqt puts only what the app needs into plugin directories.
+    # windeployqt puts only what the app needs into plugin directories - apart
+    # from the test-only modules above, which tests copy in themselves.
     file(GLOB_RECURSE _deployed "${CUBE_NOTICES_DEPLOY_DIR}/*.dll" "${CUBE_NOTICES_DEPLOY_DIR}/*.so" "${CUBE_NOTICES_DEPLOY_DIR}/*.dylib")
     foreach(dfile IN LISTS _deployed)
         string(REPLACE "\\" "/" dfile "${dfile}")
         get_filename_component(_dn "${dfile}" NAME)
         cn_qt_file_key(_k "${dfile}")
         cn_qt_lookup(_qid "${_k}")
+        if(_qid IN_LIST _test_only_qt)
+            # Not a root: nothing the app links names it. Were the app to link
+            # or import it, the link line and the QML imports would add it
+            # with its whole closure - this only drops the file's own vote.
+            continue()
+        endif()
         if(_qid)
             list(APPEND _qt_roots "${_qid}")
             list(APPEND _deployed_report "${_dn}=${_qid}")

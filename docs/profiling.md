@@ -3,10 +3,10 @@
 Cubeulator is instrumented with [Tracy](https://github.com/wolfpld/tracy), the
 same profiler and the same workflow the rest of the application family uses
 (ICL Forge, Aqualink Automate), so a trace from any of them is read, captured
-and exported the same way. The instrumentation goes all the way through: the
-camera capture thread, the vision pass and its nine pipeline stages, both ONNX
-inference calls, the M3T tracker, the Qt Quick frame, and every stage of the
-solver.
+and exported the same way. The instrumentation goes all the way through the
+code the application runs: the camera capture thread, the direct scan's read
+and the held-cube judging, the recorder, startup, the Qt Quick frame, and every
+stage of the solver.
 
 It is **off by default and free when off**. A normal build compiles the
 instrumentation to nothing and does not need Tracy installed at all.
@@ -102,55 +102,46 @@ interleave into a single meaningless graph:
 
 | Frame set | One mark per | Where |
 | --- | --- | --- |
-| *(unnamed)* | completed vision pass (legacy scan) / processed camera frame (direct scan) | `ScanSession::handleAnalysisFinished`, `DirectScan::processFrame` |
+| *(unnamed)* | camera frame processed by the direct scan (the vision pass) | `DirectScan::processFrame` |
 | `Capture` | camera frame delivered by the device | `OpenCvCaptureLoop::run` |
 | `UI` | Qt Quick presentation (`frameSwapped`) | `main.cpp` |
 
 ### Threads
 
-`main` (GUI), `camera-capture`, `recorder-writer`. Pool threads that run an
-analysis pass or a solve keep their default name - they are shared, and a
-name is written once.
+`main` (GUI), `camera-capture`, `recorder-writer`. Pool threads that run a
+solve keep their default name - they are shared, and a name is written once.
 
 ### Zones
 
 | Layer | Zones |
 | --- | --- |
 | **capture** | `capture.read` (the blocking device read: its length *is* the camera's frame interval), `capture.publish`, `capture.start`, `capture.stop`, `capture.enumerate_devices`, `capture.photometry_lock`, `capture.photometry_restore` |
-| **scan** (legacy session) | `scan.poll_frame`, `scan.analyze` (the worker pass), `scan.live_m3t_lock`, `scan.handle_analysis_finished`, `scan.try_commit_converged`, `scan.finalize_if_complete`, `scan.feed_track_fusion`, `scan.finalize_track_fusion` |
-| **direct scan** | `direct_scan.poll_frame`, `direct_scan.process_frame`, `direct_scan.record`, `vision.direct_scan.read_side`, `held_cube.on_frame_watched`, `held_cube.judge`, `vision.held_cube.fit` |
-| **pipeline** | `pipeline.process`, and one per stage - `pipeline.acquire`, `.detect`, `.track`, `.faces`, `.cells`, `.sample`, `.classify` - the same stage names the [trace schema](pipeline-trace-schema.md) uses |
-| **vision** | `vision.detect_cube_grid`, `vision.find_square_candidates`, `vision.find_dark_square_candidates`, `vision.fit_lattice`, `vision.partial_lattice_placements`, `vision.fit_face_grid`, `vision.observe_face`, `vision.observe_corner`, `vision.observe_edge`, `vision.project_cube_from_{face,corner,edge}`, `vision.estimate_pose_from_corners`, `vision.orientation_tracker.on_pass`, `vision.track_fusion.{add_observation,register_epochs}`, `vision.capture_router.{register_epoch_gauge,commit}`, `vision.resolve_colors`, `vision.stability.update`, `vision.idle_gate.count_cool_hue_pixels`, `vision.detect_track_loop.process`, `vision.refine_pose`, `vision.derive_faces`, `vision.rectify_face`, `vision.refine_cell_grid`, `vision.analysis_downscale`, `vision.analyze_frame`, `vision.recorder.{push,write_job}` |
-| **inference** | `vision.corner_detector.detect` and `.onnx_run`, `vision.hand_presence.detect` and `.onnx_run` - `detect` minus `onnx_run` is the pre/post-processing; `.create` is the model load (session creation) |
-| **tracker** | `track.m3t.init`, `track.m3t.step` |
-| **solver** | `solver.solve`; per stage `solver.cross`, `.corners`, `.middle_edges`, `.oll`, `.pll`, then `solver.merge_adjacent_moves`; underneath, `solver.bfs_search` and `solver.algorithm_search` (templates, so each stage's instantiation is its own row in the statistics) carry the **visited-node count** as a zone value (the first-two-layer searches' real cost, which is why the [slow tests](testing.md#slow-tests) are slow); `solver.cube_from_scan`, `solver.assemble_scan` |
-| **app** | startup: `app.i18n_install`, `app.load_qml` (the largest single startup cost); `app.solve_stepped` (the worker), `app.solve.on_scan_completed`, `app.solve.apply_result`; `app.frame_image.request` (the preview's `cv::Mat` to `QImage` copy) |
+| **direct scan** | `direct_scan.poll_frame`, `direct_scan.process_frame`, `direct_scan.record`; `vision.direct_scan.read_side` (the per-frame sticker read), `vision.direct_scan.add` (fusing a read into the scan), `vision.direct_scan.scanned` (colour resolution and assembly, once per completed scan) |
+| **held cube** | `held_cube.on_frame_watched`, `held_cube.judge`, `vision.held_cube.fit` |
+| **colour and recording** | `vision.resolve_colors`, `vision.analysis_downscale`, `vision.recorder.push` (the GUI-thread clone) and `vision.recorder.write_job` (the writer thread's disk write) |
+| **solver** | `solver.solve`; per stage `solver.cross`, `.corners`, `.middle_edges`, `.oll`, `.pll`, then `solver.merge_adjacent_moves`; underneath, `solver.bfs_search` and `solver.algorithm_search` (templates, so each stage's instantiation is its own row in the statistics) carry the **visited-node count** as a zone value (the first-two-layer searches' real cost, which is why the [slow tests](testing.md#slow-tests) are slow); `solver.assemble_scan` |
+| **app** | startup: `app.i18n_install`, `app.load_qml` (the largest single startup cost); `app.solve_stepped` (the worker), `app.solve.apply_result`; `app.frame_image.request` (the preview's `cv::Mat` to `QImage` copy) |
 
-### Plots and messages
+### Messages
 
-| Name | Kind | Meaning |
-| --- | --- | --- |
-| `scan.gate_latency_ms` | plot | queue-to-handled latency of a pass (thread-pool wait + the GUI hand-back) |
-| `scan.motion_score` | plot | the stability tracker's score for the pass |
-| `scan.cool_hue_pixels` | plot | the idle gate's cube-presence statistic |
-| `scan.hand_present` | plot | 0/1 |
-| `scan.tracker_state` | plot | `TrackState`: 0 lost, 1 acquiring, 2 locked, 3 coasting |
-| `scan.completed`, `direct_scan.completed` | message | the scan produced a cube |
-| `scan.analysis_overrun` | message | a pass has held the in-flight gate past the watchdog |
-| `solve.started`, `solve.finished` | message | the solve worker's bounds |
+| Name | Meaning |
+| --- | --- |
+| `direct_scan.completed` | the scan produced a cube |
+| `solve.started`, `solve.finished` | the solve worker's bounds |
+
+There are no plots today; `CUBE_PLOT` is available for the next one (a
+per-frame statistic worth correlating with the zones).
 
 The trace's **information** window carries the build (`cube::version_details()`:
 version, commit, branch, dirty flag), so a capture says what it measured.
 
-### How this relates to the pipeline trace
+### What is not instrumented
 
-The [JSONL pipeline trace](pipeline-trace-schema.md) and Tracy answer
-different questions and neither replaces the other. The trace is
-deterministic, per frame, written offline, and carries the *facts* a stage saw
-(`confidence`, `pose_src`, ...), byte-identical across replays. Tracy is a
-live timeline of *where the time went* and in what order across threads. The
-stage zones deliberately use the trace's stage names, so a frame number from
-one finds the matching region of the other.
+The library's observation, orientation-tracking and capture-routing code
+(`observe_face`, `OrientationTracker`, `CaptureRouter` and the rest of the old
+scan pipeline) has no caller in the application any more - only tests reach
+it - so it carries no zones, which could never fire. When it is wired back in,
+instrument it then.
 
 ## Adding instrumentation
 
@@ -161,7 +152,7 @@ is available, on purpose: the macros are what compiles to nothing.
 | Macro | Use |
 | --- | --- |
 | `CUBE_ZONE_SCOPED_N("layer.name")` | a zone for the rest of the C++ scope. The default choice. `CUBE_ZONE_SCOPED()` names it after the function |
-| `CUBE_ZONE_BEGIN(var, "layer.name")` / `CUBE_ZONE_END(var)` | a span that is not one scope - the pipeline's stages, which share variables and live in one long function. Exception safe: the zone closes on unwind if `END` was not reached |
+| `CUBE_ZONE_BEGIN(var, "layer.name")` / `CUBE_ZONE_END(var)` | a span that is not one scope - several stages that share variables in one long function. Nothing needs it today; it is here, tested, because this family's other apps have it. Exception safe: the zone closes on unwind if `END` was not reached |
 | `CUBE_ZONE_VALUE(var, n)` / `CUBE_ZONE_SCOPED_VALUE(n)` | attach an unsigned number (a count, a size) to the zone |
 | `CUBE_FRAME_MARK()` / `CUBE_FRAME_MARK_NAMED("Name")` | frame boundary on the default / a named set |
 | `CUBE_PLOT("name", n)` | a number on a timeline; integer, floating point or bool |
@@ -183,8 +174,7 @@ Rules that keep it honest:
   mailbox) go *after* the early return, or the trace fills with zero-length
   zones.
 - **A manual zone is for the one function that needs it.** Prefer the scoped
-  form, and wrap a statement in a lambda or block when you need to isolate it
-  (see the two `onnx_run` zones).
+  form, and wrap a statement in a lambda or block when you need to isolate it.
 
 ## Licence
 

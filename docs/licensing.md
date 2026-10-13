@@ -124,13 +124,18 @@ Libraries) or a written offer, the licence text, and no further restrictions
 
 | component | licence | where the text lives | ships | obligation |
 |---|---|---|---|---|
-| M3T tracker (`third_party/m3t`, commit f021061) | MIT, (c) 2023 Manuel Stoiber / DLR [V] | `third_party/m3t/LICENSE` | W M L (desktop only; not A, I) | keep notice. **Removed by recovery plan R6.** |
-| `filesystem.h`, nanoflann, tiny_obj_loader (bundled inside M3T) | MIT; BSD-2-Clause; MIT [V: `third_party/m3t/README.md`] | in-file headers | with M3T | keep notice |
 | MediaPipe palm detection model (`palm_detection_mediapipe_2023feb_int8.onnx`) | Apache-2.0 [V: OpenCV Zoo README: "All files in this directory are licensed under Apache 2.0 License"] | `assets/models/palm_detection_mediapipe_LICENSE.txt` (an **unfilled** Apache template: `Copyright [yyyy] [name of copyright owner]`) | W M L A I (embedded as `:/models/`) | licence copy; state changes (none); the repo does not record the copyright holder or the download URL - add them |
-| Corner-detector weights `cube_corner_pose.onnx` | AGPL-3.0, derived from Ultralytics YOLO11n-pose [V: `PROVENANCE`] | - | **not distributed** [V]; but `src/app/CMakeLists.txt` embeds the file *whenever it exists locally* | the notices generator treats its presence as a blocking error so a local copy cannot reach a package |
 | Lucide icon shapes (`Icon.qml`: camera, globe, menu, sun, refresh) | ISC, (c) Lucide Icons and Contributors [V: Lucide `LICENSE`] | `licences/ISC.txt` + the copyright line | all | notice must appear in all copies |
 | Feather-derived shapes (chevron-left, chevron-right, check, alert-triangle, help-circle) | MIT, (c) 2013-present Cole Bemis [V: same file lists these as Feather-derived] | `licences/MIT.txt` + the copyright line | all | notice |
 | Archivo, IBM Plex Mono, Noto Sans Hebrew, Noto Sans Arabic (bundled by the kit under `src/app/qt/fonts/` on `feature/ax-kit`) | OFL-1.1 [V: each family's OFL text, vendored by the kit] | the kit's `OFL-<family>.txt` beside the fonts; the manifest's `licenseFile` points at it | yes, once the kit merges (the entries are dormant until the files exist) | OFL: licence text travels with the fonts, no sale of the fonts alone, reserved font names ("Plex"). Copyright lines are copied from the OFL texts: Archivo (c) 2020 The Archivo Project Authors; IBM Plex Mono (c) 2017 IBM Corp.; Noto Sans Hebrew and Arabic (c) 2022 The Noto Project Authors. **Any font file under `assets/` or `src/app/qt/` that no emitted manifest component claims is an unresolved error**, so a new font cannot ship unnoticed |
+
+The vendored M3T tracker (MIT, with `filesystem.h`, nanoflann and
+tiny_obj_loader inside it) and the corner-detector weights
+`cube_corner_pose.onnx` (AGPL-3.0, derived from Ultralytics YOLO11n-pose, never
+distributed) were listed here until recovery plan R6 removed the tracking
+pipeline. Nothing embeds or links either now. The weights stay in `.gitignore`;
+a copy left in an old checkout is a file under `assets/` that no component
+claims, which the generator reports as unresolved.
 
 ### 2.4 vcpkg ports
 
@@ -153,11 +158,10 @@ tools/tests only.
 | abseil, flatbuffers, dlpack | 20260107.1#3, 25.12.19, 1.3 | Apache-2.0 | with onnxruntime | licence copy |
 | protobuf, utf8-range | 6.33.4 | BSD-3-Clause, MIT | with onnxruntime | notice |
 | re2, cpuinfo | 2025-11-05, 2026-04-13 | BSD-3-Clause, BSD-2-Clause | with onnxruntime | notice |
-| eigen3 | 5.0.1 | MPL-2.0 (with BSD-3 and others in the file) | with onnxruntime and M3T | MPL file-level copyleft: unmodified, so the duty is to say where the source is |
+| eigen3 | 5.0.1 | MPL-2.0 (with BSD-3 and others in the file) | with onnxruntime | MPL file-level copyleft: unmodified, so the duty is to say where the source is |
 | boost-config, boost-mp11, boost-headers | 1.91.0 | BSL-1.0 | with onnxruntime | none for machine-executable object code (BSL-1.0 text) |
 | date, cxxopts, nlohmann-json, ms-gsl, safeint, optional-lite, wil (W only) | various | MIT / MIT / MIT / MIT / MIT / BSL-1.0 / MIT | with onnxruntime | notice |
 | fmt | 12.2.0 | MIT | all (`cube_lib`) | notice |
-| glew, glfw3 | 2.3.1, 3.4#1 | MIT/BSD-style (port: none), Zlib | W M L (via M3T; not A: `!android`) | notice. Removed with M3T |
 | bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **no - nothing links it** [V: the file API's link line of `cube_app` has no bgfx; `src/render` is a stub] | none until the render pipeline links it; the generator will start emitting it the day it does |
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
 | vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
@@ -167,20 +171,20 @@ tools/tests only.
 build `gtk3` and a chain of about 45 ports: GTK3, GLib, Pango, ATK, gdk-pixbuf,
 fribidi, gettext (all LGPL-2.0/2.1+), Cairo (LGPL-2.1 or MPL-1.1), D-Bus
 (AFL-2.1 or GPL-2.0+), plus the X11 libraries. The only code in the repository
-that includes `highgui` is the vendored M3T, which R6 removes; the app and
+that included `highgui` was the vendored M3T, which R6 has removed; the app and
 `cube::lib` do not use it. **Recommendation: drop the `highgui` and `gtk` features
-from `vcpkg.json` when M3T goes.** That deletes an LGPL toolkit and ~45 ports
-from every Linux package. The generator will list whatever the build does
-include on Linux; I could not run a Linux build here.
+from `vcpkg.json` now that M3T has gone** (not done yet). That deletes an LGPL
+toolkit and ~45 ports from every Linux package. The generator will list
+whatever the build does include on Linux; I could not run a Linux build here.
 
 ### 2.5 Per-platform differences that change obligations
 
 | platform | what differs |
 |---|---|
 | Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`, vcpkg applocal). On the 2026-10-13 build the deployment directory held 41 Qt modules and 45 Qt plugins and QML plugins, all attributed, **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which I could not source locally. The `windeployqt` call is not in my lane to change. |
-| macOS | Not built or verified here. M3T links (desktop). Mac App Store adds Apple's terms (section 4). |
+| macOS | Not built or verified here. Mac App Store adds Apple's terms (section 4). |
 | Linux | GTK3 chain via OpenCV (above). Qt is installed from `jurplel/install-qt-action` in CI; the DEB/RPM packages set `SHLIBDEPS`/`AUTOREQPROV`, so Qt may be a dependency of the package rather than part of it - then Qt's source/notice duty moves to the distribution that provides it [I][L]. |
-| Android | No M3T, GLEW, GLFW. Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
+| Android | Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
 | iOS | The app does not build today. Qt for iOS is normally linked statically [I - **not stated** in the Qt iOS documentation pages I read; Qt's own tracker has an open request to allow dynamic builds, QTBUG-85974]. |
 
 ## 3. The Qt question
@@ -440,7 +444,7 @@ conclusion.
 
 ```
  vcpkg installed tree  ──┐                  third_party/notices/
- (status, info/*.list,   │                    manifest.json      hand-kept: m3t, the model,
+ (status, info/*.list,   │                    manifest.json      hand-kept: the model,
   share/<port>/copyright,│                                       icons, fonts, elections
   ports/<port>/vcpkg.json)│                   qt-modules.json   generated from Qt's SBOMs
                           ├─► cube_third_party_notices ──►      licences/<SPDX>.txt
@@ -460,15 +464,17 @@ conclusion.
   closure of each over vcpkg's `Depends` and Qt's SBOM edges. A vcpkg port
   that installs nothing outside `share/` is a build helper and is skipped.
   Nothing is added by hand for a vcpkg port: the day `bgfx` is linked, it
-  appears; the day R6 removes M3T and onnxruntime, they and their dependency
-  chains disappear.
+  appears; the day R6 removes onnxruntime, it and its dependency chain
+  disappear (M3T, GLEW and GLFW already have).
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists vendored code, models, icons and fonts, the licence
   elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
   licences for ports whose manifest says `license: null`.
 - **The test** (`third_party_notices_complete`, label `licensing`) re-runs the
   generator with the deployment directory added - every Qt module, plugin and
-  vcpkg DLL beside the executable - and fails if anything is unresolved, if a
+  vcpkg DLL beside the executable, except the test-only Qt modules named in
+  `qt.testOnlyModules` (QtTest, which `cube_system_tests` copies into the
+  directory it shares with the app) - and fails if anything is unresolved, if a
   component has no licence or text, if a licence text the build needs is not
   in `third_party/notices/licences/`, or if the deployment holds a component
   the embedded notices do not list. It also fails for: a file under `assets/`
@@ -487,6 +493,7 @@ Maintaining it:
 | add a vcpkg dependency | nothing; it is picked up. A port with `license: null` needs a `portLicences` line. |
 | vendor code under `third_party/` or add a file under `assets/` | add a `components` entry (or `ignoredFiles`) in `manifest.json` |
 | add a QML `import` of a new Qt module | add it to `qt.qmlImports`; the module may need to be added to `qt-modules.json` |
+| a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
 | add the bundled fonts | add the files under `assets/fonts/`; the planned manifest entries start emitting; verify their copyright lines against the fonts |
 | add a platform (Linux, macOS) | run the Qt SBOM tool on that platform's Qt install; its components are over-included until then (the JSON says `qtPlatformVerified:false`) |
@@ -654,10 +661,10 @@ licence reference. This list exists so a reviewer knows what to look for.
    prebuilt Qt for iOS and the 2014 Qt developer-list threads assume it, but a
    shared build is possible and tracked as an open request [I]. It changes
    which LGPL 4(d) option applies, not whether the store question exists.
-3. **`cube_corner_pose.onnx` is embedded whenever the file exists**
+3. **`cube_corner_pose.onnx` was embedded whenever the file existed**
    (`src/app/CMakeLists.txt`). A developer's local copy of the AGPL-derived
-   weights would be compiled into a package without any other check. The
-   generator now fails packaging if it is present.
+   weights would have been compiled into a package without any other check.
+   Closed by R6: the corner detector is gone and nothing embeds the file.
 4. **The CPack packages contain nothing today**: no `install()` rule exists
    for `cube_app`. The notices install rule is the only one. E4a owns the
    rest; until then a ZIP/NSIS package is just the notices and the licence.
@@ -668,7 +675,7 @@ licence reference. This list exists so a reviewer knows what to look for.
    fix once someone checks the OpenCV Zoo.
 6. **GTK3 and about 45 LGPL/X11 ports reach Linux** through
    `opencv4[gtk]`, which exists to back `highgui`, which only the vendored M3T
-   uses (section 2.4).
+   used (section 2.4). M3T is gone; the two features are still asked for.
 7. **bgfx is a declared dependency nothing links**; it would otherwise have
    looked like a shipped component. The inventory distinguishes declared from
    linked because the generator reads the link line.

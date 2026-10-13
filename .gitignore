@@ -229,7 +229,9 @@ ClientBin/
 /tests/data/captures/
 /docs/evidence/
 
-# Not distributed: see assets/models/cube_corner_pose_PROVENANCE.md.
+# Weights of the corner detector that was removed with the tracking pipeline.
+# AGPL-derived and never distributed; ignored so that a copy left in an old
+# checkout cannot be committed.
 /assets/models/cube_corner_pose.onnx
 /build/
 build*/

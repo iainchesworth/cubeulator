@@ -265,8 +265,13 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
 
 Result<Cube> assemble_scanned_faces(
     const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
-    return assemble_scanned_faces_with_mapping(faces).transform(
-        [](const AssembledScan& assembled) { return assembled.cube; });
+    // Checked by hand rather than with Result::transform: the Android NDK's
+    // libc++ (r26) has no monadic std::expected.
+    const auto assembled = assemble_scanned_faces_with_mapping(faces);
+    if (!assembled) {
+        return std::unexpected(assembled.error());
+    }
+    return assembled->cube;
 }
 
 RotationHint rotation_hint_for_tracked_scan(

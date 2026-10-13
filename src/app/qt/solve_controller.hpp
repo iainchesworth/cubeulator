@@ -10,26 +10,16 @@
 
 #include <optional>
 
-namespace cube::app {
-class ScanSession;
-}
-
 // Bridges cube::solver's real beginner-method solve into QML. Owns a
-// SteppedSolution built from the real scanned cube - normally the
-// free-form-assembled Cube the ScanSession this controller is constructed
-// with exposes via assembledCube(), with cube::solver::cube_from_scan()
-// as the fallback when none is set - rather than a random_scramble().
-// SolveScreen.qml/
-// CubeView.qml read the exposed properties to draw the current stickers and
-// an arrow for the exact move about to happen, rather than the old static
-// demo data. Deliberately thin: all solving and stepping logic lives in
-// cube::solver, which is plain C++ and Catch2-tested independently of Qt.
+// SteppedSolution built from the cube the scan read (solveCube). The solve
+// screen reads the exposed properties to draw the current stickers and the
+// move about to happen. Deliberately thin: all solving and stepping logic
+// lives in cube::solver, which is plain C++ and Catch2-tested independently
+// of Qt.
 //
-// Constructed directly in main.cpp and registered via
-// qmlRegisterSingletonInstance, like CameraController/ScanSession/
-// SettingsModel - not QML_ELEMENT/QML_SINGLETON, since it needs a real C++
-// reference to the live ScanSession (cube::model::ScanProgress can't cross
-// into QML - cube::model stays Qt-free) rather than being engine-owned.
+// Constructed in C++ and registered via qmlRegisterSingletonInstance, like
+// the other controllers - not QML_ELEMENT/QML_SINGLETON, since the scan
+// controller hands it a cube::solver::Cube, which cannot cross into QML.
 class SolveController : public QObject {
     Q_OBJECT
 
@@ -81,7 +71,7 @@ class SolveController : public QObject {
     Q_PROPERTY(bool isSolving READ isSolving NOTIFY stateChanged)
 
 public:
-    explicit SolveController(cube::app::ScanSession& scanSession, QObject* parent = nullptr);
+    explicit SolveController(QObject* parent = nullptr);
 
     [[nodiscard]] QVariantList topColors() const;
     [[nodiscard]] QVariantList rightColors() const;
@@ -113,9 +103,9 @@ public:
     [[nodiscard]] bool isSolving() const;
 
     // Starts solving a cube handed over already validated - the direct-scan
-    // path. isSolving is true until the solution lands. solveReady is not
-    // emitted: the caller decides when to show the solution, so a finished
-    // scan can stay on screen while this runs.
+    // path. isSolving is true until the solution lands. Nothing is
+    // announced beyond that: the caller decides when to show the solution,
+    // so a finished scan can stay on screen while this runs.
     void solveCube(const cube::solver::Cube& cube);
 
 public slots:
@@ -127,35 +117,15 @@ signals:
     // A different solution is in place: a solve has landed.
     void solutionChanged();
 
-    // Emitted once a completed scan is accepted and its background solve is
-    // kicked off (isSolving becomes true at the same point) - AppState.qml
-    // navigates to the solve screen on this, not on
-    // ScanSession::scanCompleted directly, since a completed scan isn't
-    // necessarily a valid one.
-    void solveReady();
-
-    // Emitted instead of solveReady when the fallback
-    // cube::solver::cube_from_scan() path rejected the completed scan
-    // (e.g. a genuine colour misclassification failing
-    // Cube::is_physically_valid()); `reason` is cube::to_string(CubeError).
-    // scanSession_'s progress is already reset (via restartScan()) by the
-    // time this fires. Unreachable when assembledCube() is set - assembly
-    // already validated that cube before scanCompleted ever fired.
-    void scanRejected(QString reason);
-
 private:
-    // Connected to scanSession_'s scanCompleted signal.
-    void onScanCompleted();
-    // Kicks off the background solve for `scrambled` (the real scanned
-    // cube). Shared by onScanCompleted() and the constructor's initial
-    // solved-cube placeholder is set directly, not through this path - see
-    // the .cpp.
+    // Kicks off the background solve for `scrambled` (the scanned cube).
+    // The constructor's solved-cube placeholder is set directly, not through
+    // this path - see the .cpp.
     void beginSolve(const cube::solver::Cube& scrambled);
     // Invoked on the UI thread once solveWatcher_'s background solve()
     // (kicked off from beginSolve()) finishes.
     void applySolveResult();
 
-    cube::app::ScanSession& scanSession_;
     cube::solver::SteppedSolution stepped_;
     QFutureWatcher<cube::solver::SteppedSolution> solveWatcher_;
     bool isSolving_ = false;

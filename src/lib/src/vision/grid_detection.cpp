@@ -1,7 +1,5 @@
 #include <cube/vision/grid_detection.hpp>
 
-#include <cube/profiling.hpp>
-
 #include <opencv2/imgproc.hpp>
 
 #include <algorithm>
@@ -686,13 +684,11 @@ namespace {
 }  // namespace
 
 std::vector<StickerCandidate> find_square_candidates(const cv::Mat& bgr_frame, double max_aspect) {
-    CUBE_ZONE_SCOPED_N("vision.find_square_candidates");
     return find_brightness_candidates(bgr_frame, cv::THRESH_BINARY, max_aspect);
 }
 
 std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_frame,
                                                           double max_aspect) {
-    CUBE_ZONE_SCOPED_N("vision.find_dark_square_candidates");
     // The mirror image of find_square_candidates(), for light-bodied cubes:
     // a white/light plastic lattice between tiles makes every coloured cell
     // a local brightness MINIMUM, invisible to the brighter-than-local-mean
@@ -706,7 +702,6 @@ std::vector<StickerCandidate> find_dark_square_candidates(const cv::Mat& bgr_fra
 // bounds for any slot without a matched candidate.
 std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> candidates,
                                                   cv::Size frame_size) {
-    CUBE_ZONE_SCOPED_N("vision.fit_lattice");
     candidates = collapse_duplicate_candidates(std::move(candidates));
 
     if (candidates.size() > kMaxCandidatesForLatticeSearch) {
@@ -748,7 +743,6 @@ std::optional<GridFitDetail> fit_lattice_detailed(std::vector<StickerCandidate> 
 
 std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCandidate> candidates,
                                                          cv::Size frame_size) {
-    CUBE_ZONE_SCOPED_N("vision.partial_lattice_placements");
     candidates = collapse_duplicate_candidates(std::move(candidates));
     if (candidates.size() < static_cast<std::size_t>(kMinPartialInliers)) {
         return {};
@@ -910,7 +904,6 @@ std::vector<PartialPlacement> partial_lattice_placements(std::vector<StickerCand
 }  // namespace detail
 
 std::optional<GridFitDetail> detect_cube_grid_detailed(const cv::Mat& bgr_frame) {
-    CUBE_ZONE_SCOPED_N("vision.detect_cube_grid");
     if (bgr_frame.empty()) {
         return std::nullopt;
     }

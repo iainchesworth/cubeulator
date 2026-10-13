@@ -1,6 +1,5 @@
 #include <cube/vision/capture_routing.hpp>
 
-#include <cube/profiling.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/orientation_lattice.hpp>
 
@@ -168,7 +167,6 @@ float oriented_cell_lab_distance(const CapturedFace& epoch_face, const CapturedF
 EpochRegistration register_epoch_gauge(const std::vector<EpochFaceSample>& epoch_faces,
                                        const std::array<std::optional<CapturedFace>, 6>& slots,
                                        const RoutingConfig& config) {
-    CUBE_ZONE_SCOPED_N("vision.capture_router.register_epoch_gauge");
     EpochRegistration out;
 
     // Tight-re-association pins: an epoch face matching exactly ONE stored
@@ -954,7 +952,6 @@ CaptureRouter::DirectCommit CaptureRouter::commit_direct(Face epoch_face,
 
 CommitResult CaptureRouter::commit(Face epoch_face, const CapturedFace& captured,
                                    std::int64_t now_ms) {
-    CUBE_ZONE_SCOPED_N("vision.capture_router.commit");
     CommitResult result;
 
     if (!gauge_known_) {

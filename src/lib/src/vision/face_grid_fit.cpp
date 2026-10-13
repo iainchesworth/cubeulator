@@ -1,7 +1,5 @@
 #include <cube/vision/face_grid_fit.hpp>
 
-#include <cube/profiling.hpp>
-
 #include <algorithm>
 #include <cmath>
 #include <limits>
@@ -143,7 +141,6 @@ std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers,
 std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv::Point2f col_dir,
                                      cv::Point2f row_dir, std::size_t min_candidates,
                                      int min_inliers) {
-    CUBE_ZONE_SCOPED_N("vision.fit_face_grid");
     if (centers.size() < min_candidates) {
         return std::nullopt;
     }

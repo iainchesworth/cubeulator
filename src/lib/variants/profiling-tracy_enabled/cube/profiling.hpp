@@ -113,8 +113,8 @@ private:
 #define CUBE_ZONE_VALUE(var, number) var.value(static_cast<std::uint64_t>(number))
 #define CUBE_ZONE_SCOPED_VALUE(number) ZoneValue(static_cast<std::uint64_t>(number))
 
-// One per real-time frame, for the frame view. The unnamed set is the vision
-// analysis pass; "Capture" (camera frames delivered) and "UI" (Qt Quick
+// One per real-time frame, for the frame view. The unnamed set is the direct
+// scan's per-frame pass; "Capture" (camera frames delivered) and "UI" (Qt Quick
 // presentations) are named sets alongside it, so three unrelated cadences
 // never interleave into one meaningless graph.
 #define CUBE_FRAME_MARK() FrameMark

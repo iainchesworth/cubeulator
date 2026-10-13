@@ -61,8 +61,8 @@ function(cube_import_onnxruntime)
     # target carries that directory as an interface include dir; on Linux
     # (and anywhere the static layout is used) it carries none, so the
     # include is not found ("onnxruntime_cxx_api.h: No such file or
-    # directory" in corner_detector.cpp / hand_presence.cpp). Do not depend
-    # on the target to say where its own headers are.
+    # directory" in hand_presence.cpp). Do not depend on the target to say
+    # where its own headers are.
     find_path(CUBE_ONNXRUNTIME_INCLUDE_DIR
         NAMES onnxruntime_cxx_api.h
         PATH_SUFFIXES onnxruntime

@@ -1,6 +1,5 @@
 #include <cube/vision/edge_observation.hpp>
 
-#include <cube/profiling.hpp>
 #include <cube/vision/face_grid_fit.hpp>
 #include <cube/vision/face_observation.hpp>
 
@@ -146,7 +145,6 @@ namespace detail {
 
 Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const EdgeHint* hint,
                                                EdgeDiagnostics* diagnostics) {
-    CUBE_ZONE_SCOPED_N("vision.observe_edge");
     EdgeDiagnostics local{};
     EdgeDiagnostics& diag = diagnostics != nullptr ? *diagnostics : local;
     diag = EdgeDiagnostics{};

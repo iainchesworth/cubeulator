@@ -1,13 +1,10 @@
 #include <cube/vision/idle_gate.hpp>
 
-#include <cube/profiling.hpp>
-
 #include <opencv2/imgproc.hpp>
 
 namespace cube::vision {
 
 int count_cool_hue_pixels(const cv::Mat& bgr_frame) {
-    CUBE_ZONE_SCOPED_N("vision.idle_gate.count_cool_hue_pixels");
     if (bgr_frame.empty()) {
         return 0;
     }
