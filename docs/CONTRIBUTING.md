@@ -45,7 +45,9 @@ the required check.
 - Formatting follows the repo's
   [`.clang-format`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-format) —
   run `clang-format` before committing, or configure your editor to do it
-  on save.
+  on save. The version is **22**: CI installs `clang-format-22` and checks
+  with it, and a 21 or a 22 formats the tree the same way, so either is fine
+  locally.
 - [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
   runs as part of the build; compiler warnings are treated as errors, so fix
   them rather than silencing them where you reasonably can.

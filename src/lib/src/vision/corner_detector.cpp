@@ -31,8 +31,10 @@ Letterbox letterbox(const cv::Mat& bgr, int size) {
     Letterbox out;
     out.scale = std::min(static_cast<float>(size) / static_cast<float>(bgr.rows),
                          static_cast<float>(size) / static_cast<float>(bgr.cols));
-    const int new_w = std::max(1, static_cast<int>(std::lround(bgr.cols * out.scale)));
-    const int new_h = std::max(1, static_cast<int>(std::lround(bgr.rows * out.scale)));
+    const int new_w =
+        std::max(1, static_cast<int>(std::lround(static_cast<float>(bgr.cols) * out.scale)));
+    const int new_h =
+        std::max(1, static_cast<int>(std::lround(static_cast<float>(bgr.rows) * out.scale)));
     const float dw = static_cast<float>(size - new_w) / 2.0F;
     const float dh = static_cast<float>(size - new_h) / 2.0F;
     out.pad_x = dw;

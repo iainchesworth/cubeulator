@@ -23,7 +23,7 @@ namespace {
 
 // The seam speaks half-edge = 1; the CAD model is the classic 57 mm cube.
 constexpr float kEdgeMetres = 0.057F;
-constexpr double kScale = kEdgeMetres / 2.0;  // seam units -> metres
+constexpr double kScale = static_cast<double>(kEdgeMetres) / 2.0;  // seam units -> metres
 
 // The cube CAD model, written once per process (binary vertex order, CCW
 // winding, metres) - same recipe the vendored smoke test uses.

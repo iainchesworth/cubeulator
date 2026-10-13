@@ -397,6 +397,15 @@ if(CUBEULATOR_BUILD_APP)
     endif()
 endif()
 
+# --- Third-party notices (E0b, docs/licensing.md) --------------------------
+# Fails when a component that ships has no notice: a linked library, a Qt
+# module or QML import, a deployed DLL, a file under assets/, a directory
+# under third_party/. Append-only block of the licensing workstream.
+if(TARGET cube_app)
+    include(ThirdPartyNotices)
+    cube_add_third_party_notices_test(cube_app)
+endif()
+
 # --- E4a: desktop manners (window geometry, KeepAwake) ---------------------
 # Its own binary rather than more cases in cube_qt_controller_tests: it links
 # cube_app_desktop (and with it Qt Gui) and nothing from the controllers.

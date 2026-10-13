@@ -185,7 +185,7 @@ cv::Mat render_overlay(const cv::Mat& frame, const pipeline::LegacyPipelineResul
         total_ms += stage.duration_ms;
     }
     std::snprintf(line2.data(), line2.size(), "src %s  conf %.2f  reproj %.3f  faces %zu  %5.1f ms",
-                  track.pose_source.c_str(), result.detection.confidence, track.reproj_fraction,
+                  track.pose_source.c_str(), static_cast<double>(result.detection.confidence), track.reproj_fraction,
                   result.faces.faces.size(), total_ms);
     cv::rectangle(canvas, cv::Rect(0, 0, canvas.cols, 38), cv::Scalar(20, 20, 20), cv::FILLED);
     cv::putText(canvas, line1.data(), {6, 15}, cv::FONT_HERSHEY_SIMPLEX, 0.42, cv::Scalar(240, 240, 240), 1,
@@ -354,7 +354,7 @@ const std::vector<std::array<int, 8>>& corner_rotation_perms() {
                 const cv::Matx31f rotated = rotation * cv::Matx31f(p.x, p.y, p.z);
                 for (int j = 0; j < 8; ++j) {
                     const cv::Point3f q = kSingmasterCornerModel[static_cast<std::size_t>(j)];
-                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) < 0.1F) {
+                    if (cv::norm(cv::Point3f(rotated(0), rotated(1), rotated(2)) - q) < static_cast<double>(0.1F)) {
                         perm[static_cast<std::size_t>(i)] = j;
                         break;
                     }
@@ -420,12 +420,12 @@ double segment_jitter(const ClipMetrics::SteadyJitterAccum& accum) {
     for (const auto& samples : accum.corners) {
         cv::Point2d mean(0.0, 0.0);
         for (const auto& p : samples) {
-            mean += cv::Point2d(p.x, p.y);
+            mean += cv::Point2d(static_cast<double>(p.x), static_cast<double>(p.y));
         }
         mean /= static_cast<double>(samples.size());
         double sum_squares = 0.0;
         for (const auto& p : samples) {
-            const cv::Point2d d = cv::Point2d(p.x, p.y) - mean;
+            const cv::Point2d d = cv::Point2d(static_cast<double>(p.x), static_cast<double>(p.y)) - mean;
             sum_squares += d.dot(d);
         }
         worst = std::max(worst, std::sqrt(sum_squares / static_cast<double>(samples.size() - 1)));
@@ -522,7 +522,7 @@ double score_tracked_frame(const cube::vision::groundtruth::Keyframe& keyframe,
             for (int view_id = 0; view_id < 8; ++view_id) {
                 if (perm[static_cast<std::size_t>(view_id)] == labelled.model_id) {
                     const cv::Point2f residual = projected[static_cast<std::size_t>(view_id)] - labelled.px;
-                    const double err = cv::norm(residual) / extent;
+                    const double err = cv::norm(residual) / static_cast<double>(extent);
                     total += err;
                     ++count;
                     if (labelled.model_id >= 0 && labelled.model_id < 8) {
@@ -531,7 +531,7 @@ double score_tracked_frame(const cube::vision::groundtruth::Keyframe& keyframe,
                         }
                         if (accumulate_bias) {
                             metrics.gt_track_bias_sum[static_cast<std::size_t>(labelled.model_id)] +=
-                                cv::Point2d(residual.x / extent, residual.y / extent);
+                                cv::Point2d(static_cast<double>(residual.x / extent), static_cast<double>(residual.y / extent));
                             ++metrics.gt_track_bias_count[static_cast<std::size_t>(labelled.model_id)];
                         }
                     }
@@ -601,7 +601,7 @@ void score_tracked_faces(const cube::vision::groundtruth::Keyframe& keyframe,
         min_y = std::min(min_y, corner.px.y);
         max_y = std::max(max_y, corner.px.y);
     }
-    const double extent = std::max(max_x - min_x, max_y - min_y);
+    const double extent = static_cast<double>(std::max(max_x - min_x, max_y - min_y));
     if (extent <= 1.0) {
         return;
     }
@@ -770,7 +770,7 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
                     for (int view_id = 0; view_id < 8; ++view_id) {
                         if (perm[static_cast<std::size_t>(view_id)] == labelled.model_id) {
                             if (detected_by_id[view_id] != nullptr) {
-                                errors.push_back(cv::norm(*detected_by_id[view_id] - labelled.px) / extent);
+                                errors.push_back(cv::norm(*detected_by_id[view_id] - labelled.px) / static_cast<double>(extent));
                             }
                             break;
                         }
@@ -831,7 +831,7 @@ void score_keyframe(const cube::vision::groundtruth::Keyframe& keyframe,
 
         // Nearest detected capture-grade face view with cells.
         int best = -1;
-        double best_distance = diagonal * 0.5;
+        double best_distance = static_cast<double>(diagonal) * 0.5;
         for (std::size_t f = 0; f < result.faces.faces.size(); ++f) {
             if (f >= result.cells.faces.size()) {
                 continue;
@@ -1510,7 +1510,7 @@ int replay_clip(const fs::path& dir, const fs::path& out_dir, bool write_video, 
                 100.0 * metrics.frames_pose_valid / std::max(1, metrics.frames_replayed),
                 100.0 * metrics.frames_locked / std::max(1, metrics.frames_replayed), metrics.max_epoch,
                 100.0 * static_cast<double>(metrics.cells_unknown) /
-                    std::max<std::int64_t>(1, metrics.cells_classified),
+                    static_cast<double>(std::max<std::int64_t>(1, metrics.cells_classified)),
                 metrics.trace_violations > 0 ? "  TRACE-VIOLATIONS" : "");
     if (metrics.has_ground_truth) {
         if (!metrics.gt_corner_err_extent.empty()) {

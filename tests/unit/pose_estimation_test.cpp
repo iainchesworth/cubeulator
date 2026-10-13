@@ -237,9 +237,10 @@ TEST_CASE("project_cube_from_corner pins seven corners and completes the eighth"
     // documented either/or is: a valid orientation is a unit quaternion,
     // an invalid one is exactly identity (the UI's idle-rotation fallback).
     const auto& q = projection->orientation;
-    const double norm =
-        std::sqrt(static_cast<double>(q[0]) * q[0] + static_cast<double>(q[1]) * q[1] +
-                  static_cast<double>(q[2]) * q[2] + static_cast<double>(q[3]) * q[3]);
+    const double norm = std::sqrt(static_cast<double>(q[0]) * static_cast<double>(q[0]) +
+                                  static_cast<double>(q[1]) * static_cast<double>(q[1]) +
+                                  static_cast<double>(q[2]) * static_cast<double>(q[2]) +
+                                  static_cast<double>(q[3]) * static_cast<double>(q[3]));
     if (projection->orientation_valid) {
         REQUIRE(std::abs(norm - 1.0) < 1e-3);
     } else {

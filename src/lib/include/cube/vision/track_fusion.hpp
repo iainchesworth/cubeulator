@@ -105,7 +105,7 @@ inline constexpr double kTakeoverJumpLab = 24.0;
 // at the transplant is a no-op on all seven synthetic clips, so the store
 // keeps its evidence and the invariant still holds where it decides
 // anything.
-inline constexpr double kCrossSlotDuplicateLab = kMinCentreSeedSeparationLab;
+inline constexpr double kCrossSlotDuplicateLab = static_cast<double>(kMinCentreSeedSeparationLab);
 
 // P6.11 registration bars, re-derived by measurement in the decomposed
 // (hue-aware) cell cost by dumping best and runner-up candidate costs for

@@ -79,7 +79,7 @@ bool census_ok(const Faces& f) {
     auto c = census(f);
     if (c[0] != 0)
         return false;  // no unknowns
-    for (int i = 1; i <= 6; ++i) {
+    for (std::size_t i = 1; i <= 6; ++i) {
         if (c[i] != 9)
             return false;
     }
