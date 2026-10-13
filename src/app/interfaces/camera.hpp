@@ -98,15 +98,19 @@ struct TimedFrame {
 //     flag as a side effect.
 //   - BRIGHTNESS: settable, proven (42 L points of authority).
 //   - SATURATION: settable, proven (monotone in chroma with L flat).
-//   - AUTO_WB: a plain 0/1 boolean that round-trips cleanly. Its PIXEL effect
-//     is NOT yet proven - the probe ran against a covered lens - so this one
-//     is offered but reported honestly rather than assumed to work.
-//   - WB_TEMPERATURE, AUTO_EXPOSURE, GAMMA: absent. get() returns OpenCV's
-//     -1 "unsupported" sentinel and every write is rejected; 2800K vs 6500K
-//     produced bit-identical frames. There is therefore NO Kelvin control to
-//     calibrate, so the "sweep white balance until a white card reads
-//     neutral" path is not implementable on this device - see the note on
-//     PhotometryLockRequest for what replaces it.
+//   - AUTO_WB: a plain 0/1 boolean that round-trips cleanly. Clearing it
+//     does NOT freeze the balance: the driver falls back to a stored manual
+//     temperature (4000 K here - 12% bluer than the automatic's choice in
+//     daylight, measured 2026-10-13 with the lens uncovered).
+//   - WHITE BALANCE TEMPERATURE: present, under CAP_PROP_WHITE_BALANCE_BLUE_U.
+//     It reads the kelvin the automatics chose, and writes move the picture
+//     monotonically (2800 K blue/green 1.25, 4700 K 1.03, 6500 K 0.79) about
+//     half a second later. The lock writes the automatic's temperature back
+//     after clearing AUTO_WB and checks the picture did not move.
+//   - CAP_PROP_WB_TEMPERATURE, AUTO_EXPOSURE (reads), GAMMA: absent. get()
+//     returns OpenCV's -1 "unsupported" sentinel and writes are rejected.
+//     The first of these is why the temperature control above went
+//     unnoticed: it is the obvious name and it is dead in this backend.
 //   - GAIN and CONTRAST read back but showed no pixel effect above the noise
 //     floor of the probe's dark scene. Deliberately NOT exposed here: an
 //     unproven control in a photometry lock is worse than a missing one,
@@ -172,6 +176,10 @@ struct PhotometryLockReport {
     // non-Windows backend today) - distinct from "the device refused", and
     // the two must read differently to the user.
     bool platform_supported = false;
+    // The white-balance temperature the lock is holding, when the device has
+    // one to hold. Empty means auto white balance is off but the balance sits
+    // wherever the driver's own fallback put it.
+    std::optional<double> white_balance_kelvin;
 
     [[nodiscard]] const ControlResult& result(PhotometryControl control) const noexcept;
     // Locked exposure is the single measurement that matters: it is the one
@@ -194,12 +202,8 @@ struct PhotometryLockReport {
 // be probed/derived, never hardcoded to one device's numbers" - a value the
 // driver just reported is in range by construction.
 //
-// This is also the surviving half of the white-reference calibration. There
-// is no Kelvin control to sweep on this hardware (see above), so the
-// achievable form is: let the camera's own AWB settle on the white paper
-// backdrop that is already in the user's scene, then freeze it there by
-// switching AWB off. Lock while the white surface fills the view and the
-// frozen setting is the one AWB chose for a neutral target.
+// White balance is held the same way: the camera's own AWB settles on the
+// scene, and the lock freezes it at the temperature it chose.
 struct PhotometryLockRequest {
     bool lock_auto_white_balance = true;
     bool lock_exposure = true;

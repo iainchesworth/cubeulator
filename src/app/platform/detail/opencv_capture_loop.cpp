@@ -254,9 +254,22 @@ void OpenCvCaptureLoop::service_photometry_requests() {
         return;
     }
 
-    PhotometryLockReport report = apply_lock(capture_, request, as_found_);
+    PhotometryLockReport report =
+        apply_lock(capture_, request, as_found_, [this](const cv::Mat& frame) { publish(frame); });
     std::scoped_lock lock(photometry_mutex_);
     report_ = std::move(report);
+}
+
+void OpenCvCaptureLoop::publish(const cv::Mat& frame) {
+    // Stamped here, after the (blocking, device-rate) read returns, so the
+    // timestamp tracks capture time even when the consumer polls slower
+    // than the device delivers and overwritten frames vanish without ever
+    // being observed - see the TimedFrame contract in interfaces/camera.hpp.
+    const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now().time_since_epoch())
+                            .count();
+    std::scoped_lock lock(mailbox_mutex_);
+    latest_ = TimedFrame{.frame = frame.clone(), .t_ms = now_ms};
 }
 
 void OpenCvCaptureLoop::run(std::stop_token stop_token) {
@@ -273,16 +286,7 @@ void OpenCvCaptureLoop::run(std::stop_token stop_token) {
         // settling wait measures real frames from this camera rather than
         // wall-clock time on a device whose CAP_PROP_FPS reads 0.
         service_photometry_requests();
-        // Stamped here, after the (blocking, device-rate) read returns, so
-        // the timestamp tracks capture time even when the consumer polls
-        // slower than the device delivers and overwritten frames vanish
-        // without ever being observed - see the TimedFrame contract in
-        // interfaces/camera.hpp.
-        const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                                std::chrono::steady_clock::now().time_since_epoch())
-                                .count();
-        std::scoped_lock lock(mailbox_mutex_);
-        latest_ = TimedFrame{.frame = frame.clone(), .t_ms = now_ms};
+        publish(frame);
     }
 }
 

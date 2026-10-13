@@ -2,9 +2,11 @@
 
 #include "interfaces/camera.hpp"
 
+#include <opencv2/core.hpp>
 #include <opencv2/videoio.hpp>
 
 #include <array>
+#include <functional>
 #include <optional>
 
 namespace cube::platform::camera::detail {
@@ -45,9 +47,15 @@ struct PhotometrySnapshot {
 //
 // MUST be called from the capture thread, or from a caller that has proven
 // no grab is in flight (stop() does the latter, after joining).
+// Holding white balance means reading frames between writes (see
+// apply_lock). Each frame read that way is handed to the sink so the caller
+// can keep its preview alive instead of freezing for the duration.
+using FrameSink = std::function<void(const cv::Mat&)>;
+
 [[nodiscard]] PhotometryLockReport apply_lock(cv::VideoCapture& capture,
                                               const PhotometryLockRequest& request,
-                                              PhotometrySnapshot& as_found);
+                                              PhotometrySnapshot& as_found,
+                                              const FrameSink& on_frame = {});
 
 // Writes back everything in the snapshot and clears it. Same threading rule
 // as apply_lock().

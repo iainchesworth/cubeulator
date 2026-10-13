@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -169,10 +170,128 @@ ControlResult apply_one(cv::VideoCapture& capture, PhotometryControl control,
     return out;
 }
 
+// The white-balance temperature, in kelvin. In OpenCV 4's DirectShow backend
+// this is IAMVideoProcAmp's WhiteBalance under its legacy name;
+// CAP_PROP_WB_TEMPERATURE reads -1 there and refuses every write, which is
+// how this control went unnoticed.
+constexpr int kWhiteBalanceKelvin = cv::CAP_PROP_WHITE_BALANCE_BLUE_U;
+// The range UVC cameras accept. A write outside a device's own range is
+// refused, and a refused write ends the search.
+constexpr double kMinKelvin = 2800.0;
+constexpr double kMaxKelvin = 6500.0;
+// A temperature write reaches the picture some frames later: more than 12
+// on the workstation webcam, so a measurement taken sooner reads the
+// previous setting.
+constexpr int kWhiteBalanceSettleFrames = 18;
+// How close the held picture's blue/green balance must come to the
+// automatic one, as a fraction. The stored preset this replaces was 12% out.
+constexpr double kWhiteBalanceTolerance = 0.03;
+constexpr int kWhiteBalanceSearchSteps = 6;
+
+// Mean blue over mean green of the frame `frames` reads from now. Nothing if
+// the device stops delivering.
+std::optional<double> blue_green_after(cv::VideoCapture& capture, int frames,
+                                       const FrameSink& on_frame) {
+    cv::Mat frame;
+    for (int i = 0; i < frames; ++i) {
+        if (!capture.read(frame) || frame.empty()) {
+            return std::nullopt;
+        }
+        if (on_frame) {
+            on_frame(frame);
+        }
+    }
+    const cv::Scalar mean = cv::mean(frame);
+    if (mean[1] <= 0.0) {
+        return std::nullopt;
+    }
+    return mean[0] / mean[1];
+}
+
+// Turns auto white balance off AND keeps the balance it had reached.
+//
+// Switching the automatic off does not freeze it. The driver falls back to
+// its stored manual temperature - 4000 K on the workstation webcam, 12% bluer
+// than the automatic's own choice in daylight and amber under tungsten - so
+// a lock that only cleared the flag tinted every scan by whatever light the
+// room was not. The temperature has to be written back.
+//
+// The driver reports the temperature its automatics settled on, and writing
+// that back is normally the whole job. It can also report a stale manual
+// value for a while after the automatic is re-enabled, so the result is
+// checked against the picture: if the held frame's blue/green balance has
+// moved, the temperature is searched for the one that restores it (blue
+// falls as the temperature rises).
+ControlResult hold_white_balance(cv::VideoCapture& capture, PhotometrySnapshot& as_found,
+                                 const FrameSink& on_frame, std::optional<double>& held_kelvin) {
+    const std::optional<double> automatic = blue_green_after(capture, 2, on_frame);
+    const double reported = capture.get(kWhiteBalanceKelvin);
+
+    ControlResult result =
+        apply_one(capture, PhotometryControl::auto_white_balance, std::nullopt, as_found);
+    if (result.outcome != ControlOutcome::applied || !automatic.has_value()) {
+        return result;
+    }
+
+    // How far the picture at `kelvin` sits from the automatic one: positive
+    // is bluer. Nothing if the device has no temperature control.
+    const auto error_at = [&](double kelvin) -> std::optional<double> {
+        capture.set(kWhiteBalanceKelvin, kelvin);
+        if (!read_back_matches(kelvin, capture.get(kWhiteBalanceKelvin))) {
+            return std::nullopt;
+        }
+        const auto held = blue_green_after(capture, kWhiteBalanceSettleFrames, on_frame);
+        if (!held.has_value()) {
+            return std::nullopt;
+        }
+        return *held / *automatic - 1.0;
+    };
+
+    if (reported >= kMinKelvin && reported <= kMaxKelvin) {
+        const auto error = error_at(reported);
+        if (!error.has_value()) {
+            return result;
+        }
+        if (std::abs(*error) <= kWhiteBalanceTolerance) {
+            held_kelvin = reported;
+            return result;
+        }
+    }
+
+    double low = kMinKelvin;
+    double high = kMaxKelvin;
+    double best = 0.0;
+    double best_error = std::numeric_limits<double>::max();
+    double current = 0.0;
+    for (int step = 0; step < kWhiteBalanceSearchSteps; ++step) {
+        current = std::round((low + high) / 2.0);
+        const auto error = error_at(current);
+        if (!error.has_value()) {
+            // No temperature control here: the balance stays wherever the
+            // driver put it, which is what this lock did before.
+            return result;
+        }
+        if (std::abs(*error) < best_error) {
+            best_error = std::abs(*error);
+            best = current;
+        }
+        if (best_error <= kWhiteBalanceTolerance) {
+            break;
+        }
+        (*error > 0.0 ? low : high) = current;
+    }
+    if (best != current) {
+        capture.set(kWhiteBalanceKelvin, best);
+        (void)blue_green_after(capture, kWhiteBalanceSettleFrames, on_frame);
+    }
+    held_kelvin = best;
+    return result;
+}
+
 }  // namespace
 
 PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockRequest& request,
-                                PhotometrySnapshot& as_found) {
+                                PhotometrySnapshot& as_found, const FrameSink& on_frame) {
     PhotometryLockReport report;
     report.platform_supported = true;
     for (std::size_t i = 0; i < kPhotometryControls.size(); ++i) {
@@ -200,7 +319,9 @@ PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockR
             continue;
         }
         report.controls[static_cast<std::size_t>(step.control)] =
-            apply_one(capture, step.control, step.override_value, as_found);
+            step.control == PhotometryControl::auto_white_balance
+                ? hold_white_balance(capture, as_found, on_frame, report.white_balance_kelvin)
+                : apply_one(capture, step.control, step.override_value, as_found);
     }
     return report;
 }
