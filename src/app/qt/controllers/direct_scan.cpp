@@ -248,6 +248,7 @@ void DirectScan::restart() {
     capture_progress_ = 0.0;
     sides_.clear();
     conflicted_ = false;
+    ambiguous_ = false;
     scanned_.reset();
     emit frameUpdated();
     emit sidesChanged();
@@ -305,6 +306,14 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // settled, none after the cube is read.
     record(bgr, t_ms);
     scan_.add(read_);
+    bool corner_added = false;
+    if (!read_.has_value()) {
+        // Not a side square to the camera. It may still be two sides in one
+        // view, which is what settles a cube whose flat sides fit two ways.
+        const auto corner = cube::vision::read_corner(bgr);
+        scan_.add_corner(corner);
+        corner_added = corner.has_value();
+    }
 
     std::vector<cube::vision::SideScan::Side> sides = scan_.sides();
     reading_ = scan_.reading();
@@ -315,13 +324,16 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
             : 0.0;
     emit frameUpdated();
 
-    if (same_sides(sides, sides_)) {
+    // New sides, or - for a scan that is ambiguous - a new view of two at
+    // once, which may be what settles it.
+    if (same_sides(sides, sides_) && !(ambiguous_ && corner_added)) {
         return;
     }
     sides_ = std::move(sides);
 
     auto cube = scan_.scanned();
     conflicted_ = !cube.has_value() && cube.error() != cube::CubeError::face_capture_incomplete;
+    ambiguous_ = !cube.has_value() && cube.error() == cube::CubeError::ambiguous_scan;
     if (cube.has_value()) {
         // Nothing more is read, so nothing is marked on the picture.
         scanned_ = *cube;

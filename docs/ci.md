@@ -5,7 +5,8 @@
 | Workflow | Purpose | Blocking? | In the merge queue? |
 | --- | --- | --- | --- |
 | `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
-| `release.yml` | Builds the three desktop packages on a version tag and attaches them to a **draft** GitHub Release ([Cutting a release](releasing.md)). A PR that changes it runs only its cheap verify job | N/A (tags and manual runs) | No |
+| `release.yml` | Builds the three desktop packages on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run. A PR that changes it runs only the release tools' self-test | N/A (tags and manual runs) | No |
+| `release-check.yml` | On a PR into `main`: is this a release the Release workflow will accept, and what would its notes say (in the job summary) | No (advisory) | No |
 | `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes | Yes (skipped, a pass) |
 | `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes | Yes |
@@ -114,7 +115,7 @@ minutes on the Windows leg, OpenCV 14 on Linux, and a whole macOS or iOS
 configure is over an hour. With the cache restored it is seconds (96 of 98
 Linux packages came back in 19 s; a macOS configure took 43 s instead of 67
 minutes). Every job that runs vcpkg uses the same two composite actions,
-[`.github/actions/vcpkg-cache/restore` and `/save`](../.github/actions/vcpkg-cache),
+[`.github/actions/vcpkg-cache/restore` and `/save`](https://github.com/iainchesworthlabs/cubeulator/tree/main/.github/actions/vcpkg-cache),
 which wrap vcpkg's `files` binary-cache provider (its `x-gha` provider was
 removed) around `actions/cache`.
 
@@ -184,7 +185,7 @@ Consequences worth knowing:
 
 The quota is 10 GB per repository. Past it GitHub evicts least-recently-used
 entries without regard to what they cost: a one-hour macOS cache was gone within
-two hours of being saved. [`cache-hygiene.yml`](../.github/workflows/cache-hygiene.yml)
+two hours of being saved. [`cache-hygiene.yml`](https://github.com/iainchesworthlabs/cubeulator/blob/main/.github/workflows/cache-hygiene.yml)
 runs `ci/prune-actions-cache.sh` when a pull request closes and on every push to
 `develop` or `main`, and removes
 

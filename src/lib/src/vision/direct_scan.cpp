@@ -1,13 +1,14 @@
+#include <algorithm>
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
+#include <cube/vision/corner_fit.hpp>
 
 #include <opencv2/imgproc.hpp>
 
-#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <tuple>
@@ -87,7 +88,7 @@ template <typename T>
 [[nodiscard]] std::vector<Blob> sticker_blobs(const cv::Mat& bgr) {
     std::array<cv::Mat, 3> channels;
     cv::split(bgr, channels.data());
-    cv::Mat value = cv::max(cv::max(channels[0], channels[1]), channels[2]);
+    cv::Mat value = cv::max(cv::max(channels.at(0), channels.at(1)), channels.at(2));
     cv::GaussianBlur(value, value, cv::Size(5, 5), 0.0);
 
     const int block = static_cast<int>(std::min(bgr.rows, bgr.cols) * 0.12) | 1;
@@ -115,7 +116,7 @@ template <typename T>
         if (static_cast<float>(area) / (shorter * longer) < kMinBlobFill) {
             continue;
         }
-        blobs.push_back(Blob{rect.center, std::sqrt(shorter * longer)});
+        blobs.push_back(Blob{.centre = rect.center, .side = std::sqrt(shorter * longer)});
     }
     return blobs;
 }
@@ -144,11 +145,11 @@ struct Lattice {
     cv::Mat target(n, 2, CV_64F);
     for (int i = 0; i < n; ++i) {
         const auto index = static_cast<std::size_t>(i);
-        design.at<double>(i, 0) = cells[index].x;
-        design.at<double>(i, 1) = cells[index].y;
+        design.at<double>(i, 0) = cells.at(index).x;
+        design.at<double>(i, 1) = cells.at(index).y;
         design.at<double>(i, 2) = 1.0;
-        target.at<double>(i, 0) = static_cast<double>(points[index].x);
-        target.at<double>(i, 1) = static_cast<double>(points[index].y);
+        target.at<double>(i, 0) = static_cast<double>(points.at(index).x);
+        target.at<double>(i, 1) = static_cast<double>(points.at(index).y);
     }
     cv::Mat solution;
     cv::solve(design, target, solution, cv::DECOMP_SVD);
@@ -164,7 +165,7 @@ struct Lattice {
 
     double squared = 0.0;
     for (std::size_t i = 0; i < points.size(); ++i) {
-        const cv::Point2f residual = lattice.at(cells[i].x, cells[i].y) - points[i];
+        const cv::Point2f residual = lattice.at(cells.at(i).x, cells.at(i).y) - points.at(i);
         squared += static_cast<double>(residual.dot(residual));
     }
     lattice.rms =
@@ -204,7 +205,7 @@ struct Lattice {
                 if (i == j) {
                     continue;
                 }
-                const cv::Point2f offset = points[j] - points[i];
+                const cv::Point2f offset = points.at(j) - points.at(i);
                 const float distance = std::hypot(offset.x, offset.y);
                 if (distance < nearest) {
                     nearest = distance;
@@ -244,10 +245,10 @@ struct Lattice {
             continue;
         }
 
-        const auto [min_a, max_a] = std::minmax_element(
-            cells.begin(), cells.end(), [](const auto& l, const auto& r) { return l.x < r.x; });
-        const auto [min_b, max_b] = std::minmax_element(
-            cells.begin(), cells.end(), [](const auto& l, const auto& r) { return l.y < r.y; });
+        const auto [min_a, max_a] = std::ranges::minmax_element(
+            cells, [](const auto& l, const auto& r) { return l.x < r.x; });
+        const auto [min_b, max_b] = std::ranges::minmax_element(
+            cells, [](const auto& l, const auto& r) { return l.y < r.y; });
         const cv::Point low(min_a->x, min_b->y);
         // Anything other than a full three-by-three span leaves the lattice's
         // position on the side unknown by a row or a column.
@@ -258,7 +259,7 @@ struct Lattice {
         bool duplicate = false;
         for (cv::Point& cell : cells) {
             cell -= low;
-            bool& slot = taken[static_cast<std::size_t>(cell.y * 3 + cell.x)];
+            bool& slot = taken.at(static_cast<std::size_t>((cell.y * 3) + cell.x));
             duplicate = duplicate || slot;
             slot = true;
         }
@@ -295,12 +296,12 @@ struct Upright {
     for (const auto& roll : kRoll) {
         Upright upright;
         for (std::size_t i = 0; i < 9; ++i) {
-            const int cell = roll[i];
-            upright.centres[i] = lattice.at(cell % 3, cell / 3);
-            upright.found[i] = lattice.found[static_cast<std::size_t>(cell)];
+            const int cell = roll.at(i);
+            upright.centres.at(i) = lattice.at(cell % 3, cell / 3);
+            upright.found.at(i) = lattice.found.at(static_cast<std::size_t>(cell));
         }
-        const float score = (upright.centres[2] - upright.centres[0]).x +
-                            (upright.centres[6] - upright.centres[0]).y;
+        const float score = (upright.centres.at(2) - upright.centres.at(0)).x +
+                            (upright.centres.at(6) - upright.centres.at(0)).y;
         if (score > best_score) {
             best_score = score;
             best = upright;
@@ -315,7 +316,7 @@ struct Upright {
     const int x = static_cast<int>(std::lround(centre.x));
     const int y = static_cast<int>(std::lround(centre.y));
     const cv::Rect patch =
-        cv::Rect(x - half_width, y - half_width, 2 * half_width + 1, 2 * half_width + 1) &
+        cv::Rect(x - half_width, y - half_width, (2 * half_width) + 1, (2 * half_width) + 1) &
         cv::Rect(0, 0, bgr.cols, bgr.rows);
     if (patch.area() < 9) {
         return std::nullopt;
@@ -349,7 +350,8 @@ struct Upright {
         float total = 0.0F;
         for (std::size_t i = 0; i < 9; ++i) {
             total += colour_distance(
-                read[static_cast<std::size_t>(kRoll[static_cast<std::size_t>(roll)][i])], side[i]);
+                read.at(static_cast<std::size_t>(kRoll.at(static_cast<std::size_t>(roll)).at(i))),
+                side.at(i));
         }
         if (total / 9.0F < best) {
             best = total / 9.0F;
@@ -362,7 +364,8 @@ struct Upright {
 [[nodiscard]] std::array<cv::Vec3f, 9> rolled(const std::array<cv::Vec3f, 9>& read, int roll) {
     std::array<cv::Vec3f, 9> out{};
     for (std::size_t i = 0; i < 9; ++i) {
-        out[i] = read[static_cast<std::size_t>(kRoll[static_cast<std::size_t>(roll)][i])];
+        out.at(i) =
+            read.at(static_cast<std::size_t>(kRoll.at(static_cast<std::size_t>(roll)).at(i)));
     }
     return out;
 }
@@ -374,9 +377,9 @@ struct Upright {
     for (std::size_t cell = 0; cell < 9; ++cell) {
         for (int channel = 0; channel < 3; ++channel) {
             for (std::size_t i = 0; i < reads.size(); ++i) {
-                values[i] = reads[i][cell][channel];
+                values.at(i) = reads.at(i).at(cell)[channel];
             }
-            fused[cell][channel] = median_of(values);
+            fused.at(cell)[channel] = median_of(values);
         }
     }
     return fused;
@@ -411,25 +414,49 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     std::array<std::array<std::vector<float>, 3>, 6> samples;
     for (std::size_t side = 0; side < 6; ++side) {
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            const auto colour = solver_colour(named[side][cell].color);
+            const auto colour = solver_colour(named.at(side).at(cell).color);
             if (!colour.has_value()) {
                 continue;
             }
             for (std::size_t channel = 0; channel < 3; ++channel) {
-                samples[static_cast<std::size_t>(*colour)][channel].push_back(
-                    faces[side].lab[cell][static_cast<int>(channel)]);
+                samples.at(static_cast<std::size_t>(*colour))
+                    .at(channel)
+                    .push_back(faces.at(side).lab.at(cell)[static_cast<int>(channel)]);
             }
         }
     }
     SessionColours colours{};
     for (std::size_t colour = 0; colour < 6; ++colour) {
         for (std::size_t channel = 0; channel < 3; ++channel) {
-            if (!samples[colour][channel].empty()) {
-                colours[colour][static_cast<int>(channel)] = median_of(samples[colour][channel]);
+            if (!samples.at(colour).at(channel).empty()) {
+                colours.at(colour)[static_cast<int>(channel)] =
+                    median_of(samples.at(colour).at(channel));
             }
         }
     }
     return colours;
+}
+
+// The cube among several that the six sides make, if the corner reads say
+// which: the one that most of them fit, and more than any other. A read
+// that fits every candidate (it showed sides whose edges the candidates
+// agree on) says nothing, and a read that fits none is a blurred frame.
+[[nodiscard]] std::optional<solver::Cube> choose_by_corners(
+    const std::vector<solver::Cube>& candidates, const std::vector<CornerRead>& corners,
+    const SessionColours& colours) {
+    std::vector<std::size_t> fits(candidates.size(), 0);
+    for (const CornerRead& read : corners) {
+        for (std::size_t i = 0; i < candidates.size(); ++i) {
+            if (fit_corner(read, candidates[i], colours).fits) {
+                ++fits[i];
+            }
+        }
+    }
+    const auto best = std::max_element(fits.begin(), fits.end());
+    if (best == fits.end() || *best == 0 || std::count(fits.begin(), fits.end(), *best) != 1) {
+        return std::nullopt;
+    }
+    return candidates[static_cast<std::size_t>(best - fits.begin())];
 }
 
 // Assembles the cube, letting physical validity settle which colour is which
@@ -448,23 +475,40 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 // valid cube wrongly. The pair that really was confused is the pair that
 // looks alike, so the exchange between the closest two colours wins.
 [[nodiscard]] Result<ScannedCube> assemble(const NamedSides& named,
-                                           const std::array<CapturedFace, 6>& faces) {
+                                           const std::array<CapturedFace, 6>& faces,
+                                           const std::vector<CornerRead>& corners) {
+    // A naming that makes one cube is done. One that makes several is a
+    // valid naming, so exchanging names would only invent a different cube:
+    // the sides themselves are ambiguous, and only more than six flat
+    // views can say which.
+    const std::vector<solver::Cube> candidates = solver::assemble_all_scanned_faces(named);
+    if (candidates.size() == 1) {
+        return ScannedCube{candidates.front(), colours_of(named, faces)};
+    }
+    if (candidates.size() > 1) {
+        const SessionColours colours = colours_of(named, faces);
+        if (const auto chosen = choose_by_corners(candidates, corners, colours);
+            chosen.has_value()) {
+            return ScannedCube{*chosen, colours};
+        }
+        return std::unexpected(CubeError::ambiguous_scan);
+    }
     const Result<solver::Cube> direct = solver::assemble_scanned_faces(named);
     if (direct.has_value()) {
-        return ScannedCube{*direct, colours_of(named, faces)};
+        return ScannedCube{.cube = *direct, .colours = colours_of(named, faces)};
     }
 
     Result<ScannedCube> best = std::unexpected(direct.error());
     float best_distance = std::numeric_limits<float>::max();
     for (std::size_t a = 0; a < 6; ++a) {
         for (std::size_t b = a + 1; b < 6; ++b) {
-            const float distance = colour_distance(faces[a].lab[4], faces[b].lab[4]);
+            const float distance = colour_distance(faces.at(a).lab.at(4), faces.at(b).lab.at(4));
             if (distance >= best_distance) {
                 continue;
             }
             // Side a's centre carries one name and side b's the other.
-            const model::FacetColor first = named[a][4].color;
-            const model::FacetColor second = named[b][4].color;
+            const model::FacetColor first = named.at(a).at(4).color;
+            const model::FacetColor second = named.at(b).at(4).color;
             NamedSides exchanged = named;
             for (auto& side : exchanged) {
                 for (model::Facelet& facelet : side) {
@@ -477,7 +521,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
             }
             if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
                 cube.has_value()) {
-                best = ScannedCube{*cube, colours_of(exchanged, faces)};
+                best = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
                 best_distance = distance;
             }
         }
@@ -526,12 +570,12 @@ std::optional<SideRead> read_side(const cv::Mat& bgr) {
     read.stickers_found = static_cast<int>(lattice->blobs);
     read.found = upright.found;
     for (std::size_t i = 0; i < 9; ++i) {
-        const std::optional<cv::Vec3f> lab = patch_lab(working, centres[i], half_width);
+        const std::optional<cv::Vec3f> lab = patch_lab(working, centres.at(i), half_width);
         if (!lab.has_value()) {
             return std::nullopt;
         }
-        read.lab[i] = *lab;
-        read.centres[i] = centres[i] * scale;
+        read.lab.at(i) = *lab;
+        read.centres.at(i) = centres.at(i) * scale;
     }
     return read;
 }
@@ -541,13 +585,13 @@ float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
     const float d_chroma = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
     const float d_a = a[1] - b[1];
     const float d_b = a[2] - b[2];
-    const float hue_squared = std::max(d_a * d_a + d_b * d_b - d_chroma * d_chroma, 0.0F);
-    return std::sqrt(kShadingWeight * (d_lightness * d_lightness + d_chroma * d_chroma) +
+    const float hue_squared = std::max((d_a * d_a) + (d_b * d_b) - (d_chroma * d_chroma), 0.0F);
+    return std::sqrt((kShadingWeight * ((d_lightness * d_lightness) + (d_chroma * d_chroma))) +
                      hue_squared);
 }
 
 bool held_still(const SideRead& read, const cv::Point2f& previous_centre) {
-    return length(read.centres[4] - previous_centre) < kSteadyFraction * read.pitch;
+    return length(read.centres.at(4) - previous_centre) < kSteadyFraction * read.pitch;
 }
 
 cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
@@ -561,6 +605,7 @@ cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
 
 void SideScan::reset() {
     groups_.clear();
+    corners_.clear();
     previous_centre_.reset();
     in_view_.reset();
 }
@@ -573,7 +618,7 @@ void SideScan::add(const std::optional<SideRead>& read) {
         return;
     }
     const bool steady = previous_centre_.has_value() && held_still(*read, *previous_centre_);
-    previous_centre_ = read->centres[4];
+    previous_centre_ = read->centres.at(4);
     if (!steady) {
         return;
     }
@@ -582,7 +627,7 @@ void SideScan::add(const std::optional<SideRead>& read) {
     float nearest_distance = std::numeric_limits<float>::max();
     int nearest_roll = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const auto [distance, roll] = side_distance(read->lab, groups_[i].fused);
+        const auto [distance, roll] = side_distance(read->lab, groups_.at(i).fused);
         if (distance < nearest_distance) {
             nearest = i;
             nearest_distance = distance;
@@ -590,7 +635,7 @@ void SideScan::add(const std::optional<SideRead>& read) {
         }
     }
     if (nearest.has_value() && nearest_distance < kSameSideDistance) {
-        Group& group = groups_[*nearest];
+        Group& group = groups_.at(*nearest);
         group.reads.push_back(rolled(read->lab, nearest_roll));
         group.fused = fuse(group.reads);
         group.roll = nearest_roll;
@@ -601,8 +646,21 @@ void SideScan::add(const std::optional<SideRead>& read) {
     }
 }
 
+void SideScan::add_corner(const std::optional<CornerRead>& read) {
+    if (!read.has_value()) {
+        return;
+    }
+    // Bounded: the newest are the ones worth having, and each is a few
+    // hundred bytes.
+    constexpr std::size_t kKeptCornerReads = 48;
+    if (corners_.size() >= kKeptCornerReads) {
+        corners_.erase(corners_.begin());
+    }
+    corners_.push_back(*read);
+}
+
 std::size_t SideScan::reads_in_view() const noexcept {
-    return in_view_.has_value() ? groups_[*in_view_].reads.size() : 0;
+    return in_view_.has_value() ? groups_.at(*in_view_).reads.size() : 0;
 }
 
 std::vector<SideScan::Side> SideScan::sides() const {
@@ -610,17 +668,17 @@ std::vector<SideScan::Side> SideScan::sides() const {
     // stray capture in place of a side that is actually being used.
     std::vector<std::size_t> shown = captured_by_support();
     shown.resize(std::min<std::size_t>(shown.size(), 6));
-    std::sort(shown.begin(), shown.end());
+    std::ranges::sort(shown);
 
     std::vector<Side> out;
     for (const std::size_t i : shown) {
-        const Group& group = groups_[i];
+        const Group& group = groups_.at(i);
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
         Side side{.reads = group.reads.size(), .in_view = in_view_ == i};
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            side.lab[static_cast<std::size_t>(kRoll[static_cast<std::size_t>(group.roll)][cell])] =
-                group.fused[cell];
+            side.lab.at(static_cast<std::size_t>(
+                kRoll.at(static_cast<std::size_t>(group.roll)).at(cell))) = group.fused.at(cell);
         }
         out.push_back(side);
     }
@@ -630,12 +688,12 @@ std::vector<SideScan::Side> SideScan::sides() const {
 std::vector<std::size_t> SideScan::captured_by_support() const {
     std::vector<std::size_t> captured;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        if (groups_[i].reads.size() >= kMinReads) {
+        if (groups_.at(i).reads.size() >= kMinReads) {
             captured.push_back(i);
         }
     }
-    std::stable_sort(captured.begin(), captured.end(), [this](std::size_t l, std::size_t r) {
-        return groups_[l].reads.size() > groups_[r].reads.size();
+    std::ranges::stable_sort(captured, [this](std::size_t l, std::size_t r) {
+        return groups_.at(l).reads.size() > groups_.at(r).reads.size();
     });
     return captured;
 }
@@ -660,13 +718,13 @@ Result<ScannedCube> SideScan::scanned() const {
     // best-supported groups are the six sides.
     std::array<CapturedFace, 6> faces{};
     for (std::size_t i = 0; i < 6; ++i) {
-        faces[i].lab = groups_[captured[i]].fused;
+        faces.at(i).lab = groups_.at(captured.at(i)).fused;
     }
     const auto named = resolve_colors(faces);
     if (!named) {
         return std::unexpected(named.error());
     }
-    return assemble(*named, faces);
+    return assemble(*named, faces, corners_);
 }
 
 }  // namespace cube::vision

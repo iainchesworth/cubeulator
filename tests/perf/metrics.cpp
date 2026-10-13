@@ -6,6 +6,7 @@
 
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
+#include <cube/vision/corner_view.hpp>
 #include <cube/vision/direct_scan.hpp>
 
 // The solver's own hard caps, which are private: the budgets are held under
@@ -237,6 +238,40 @@ std::vector<Metric> scan_metrics() {
                              "x working-width read"));
     }
 
+    // The corner reader, which runs on every frame beside read_side: two sides
+    // meeting at an edge, at the working width and at 1080p, and a room.
+    std::array<double, 2> corner_bytes{};
+    const solver::Cube corner_cube = test::scramble(1);
+    constexpr std::array<std::size_t, 2> kCornerSizes = {0, 2};
+    for (std::size_t i = 0; i < kCornerSizes.size(); ++i) {
+        const SceneSize size = kSceneSizes[kCornerSizes[i]];
+        const std::string at = std::to_string(size.width) + "x" + std::to_string(size.height);
+        const cv::Mat frame = corner_frame(corner_cube, size);
+        std::optional<vision::CornerRead> read;
+        const BufferWork found = count_buffers([&] { read = vision::read_corner(frame); });
+        corner_bytes[i] = static_cast<double>(found.bytes);
+        out.push_back(metric("corner." + at + ".missed",
+                             read.has_value() && read->sides.size() >= 2 ? 0.0 : 1.0, 0.0, kNoSeed,
+                             "reads"));
+        out.push_back(metric("corner." + at + ".buffers", static_cast<double>(found.allocations),
+                             static_cast<double>(b::kCornerBuffers), kNoSeed, "Mat buffers"));
+        out.push_back(metric("corner." + at + ".bytes", static_cast<double>(found.bytes),
+                             static_cast<double>(b::kCornerBytes), kNoSeed, "bytes"));
+    }
+    out.push_back(metric("corner.1920x1080.bytes_vs_640x360", corner_bytes[1] / corner_bytes[0],
+                         b::kReadBytesGrowth, kNoSeed, "x working-width read"));
+    {
+        const cv::Mat nothing = empty_frame(kSceneSizes[0]);
+        std::optional<vision::CornerRead> read;
+        const BufferWork empty = count_buffers([&] { read = vision::read_corner(nothing); });
+        out.push_back(
+            metric("corner.empty_frame_read", read.has_value() ? 1.0 : 0.0, 0.0, kNoSeed, "reads"));
+        out.push_back(metric("corner.empty_frame.buffers", static_cast<double>(empty.allocations),
+                             static_cast<double>(b::kEmptyCornerBuffers), kNoSeed, "Mat buffers"));
+        out.push_back(metric("corner.empty_frame.bytes", static_cast<double>(empty.bytes),
+                             static_cast<double>(b::kEmptyCornerBytes), kNoSeed, "bytes"));
+    }
+
     // Feeding a scan and finishing it work on Lab triples, not pictures.
     const solver::Cube cube = test::scramble(1);
     vision::SideScan scan;
@@ -326,6 +361,23 @@ std::vector<Metric> read_timing_metrics() {
     out.push_back(timed("timing.read_side.640x360_empty",
                         time_against_calibration(read(nothing360), b::kFastRuns),
                         b::kEmptyReadTime360, kNoSeed));
+
+    const cv::Mat corner360 = corner_frame(test::scramble(1), kSceneSizes[0]);
+    const cv::Mat corner1080 = corner_frame(test::scramble(1), kSceneSizes[2]);
+    const auto read_corner = [](const cv::Mat& frame) {
+        return [&frame]() -> std::uint64_t {
+            return vision::read_corner(frame).has_value() ? 1U : 0U;
+        };
+    };
+    out.push_back(timed("timing.read_corner.640x360",
+                        time_against_calibration(read_corner(corner360), b::kFastRuns),
+                        b::kCornerReadTime360, kNoSeed));
+    out.push_back(timed("timing.read_corner.1920x1080",
+                        time_against_calibration(read_corner(corner1080), b::kFastRuns),
+                        b::kCornerReadTime1080, kNoSeed));
+    out.push_back(timed("timing.read_corner.640x360_empty",
+                        time_against_calibration(read_corner(nothing360), b::kFastRuns),
+                        b::kEmptyCornerReadTime360, kNoSeed));
     return out;
 }
 

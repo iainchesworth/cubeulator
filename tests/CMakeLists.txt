@@ -45,6 +45,7 @@ add_executable(cube_unit_tests
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
     unit/direct_scan_test.cpp
+    unit/corner_view_test.cpp
     unit/held_cube_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
@@ -419,6 +420,20 @@ if(CUBEULATOR_BUILD_APP)
     else()
         message(WARNING "Python 3 not found: the translation gates that are scripts are not registered")
     endif()
+endif()
+
+# --- Release tooling (tools/release, docs/releasing.md) --------------------
+# The changelog's shape, the cut, the release notes' layout and the version
+# edit are held by the tools' own tests; the same file also checks that this
+# repository's CHANGELOG.md and CMakeLists.txt are in a state the tools can
+# work with, so that the first thing to find out is not a tag.
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME release_tools_selftest
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tools/release/test_release_tools.py")
+    set_tests_properties(release_tools_selftest
+        PROPERTIES LABELS "release" ENVIRONMENT "PYTHONUTF8=1")
 endif()
 
 # --- Third-party notices (E0b, docs/licensing.md) --------------------------

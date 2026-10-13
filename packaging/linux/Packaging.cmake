@@ -19,6 +19,21 @@ set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 set(CPACK_DEBIAN_PACKAGE_SECTION "games")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 
+# A pre-release must sort BEFORE the release it leads up to, or `apt upgrade`
+# would never take a person from 0.1.0-beta.1 to 0.1.0. Debian's "~" does that
+# ("0.1.0~beta.1" < "0.1.0"); a hyphen would not, it starts the Debian revision
+# and sorts after. RPM does it with the Release field: "0.beta.1" for a
+# pre-release, "1" for a final release.
+if(CUBEULATOR_VERSION_PRERELEASE STREQUAL "")
+    set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_RPM_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_RPM_PACKAGE_RELEASE "1")
+else()
+    set(CPACK_DEBIAN_PACKAGE_VERSION "${PROJECT_VERSION}~${CUBEULATOR_VERSION_PRERELEASE}")
+    set(CPACK_RPM_PACKAGE_VERSION "${PROJECT_VERSION}")
+    set(CPACK_RPM_PACKAGE_RELEASE "0.${CUBEULATOR_VERSION_PRERELEASE}")
+endif()
+
 find_program(CUBEULATOR_DPKG_DEB_EXECUTABLE dpkg-deb)
 if(CUBEULATOR_DPKG_DEB_EXECUTABLE)
     list(APPEND CPACK_GENERATOR "DEB")

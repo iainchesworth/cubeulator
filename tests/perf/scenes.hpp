@@ -4,9 +4,11 @@
 // recording shows whoever was holding the cube), by the helpers the scan's own
 // tests use (tests/unit/drawn_cube.hpp).
 
+#include "drawn_corner.hpp"
 #include "drawn_cube.hpp"
 
 #include <cube/solver/cube.hpp>
+#include <cube/solver/outside_view.hpp>
 #include <cube/vision/direct_scan.hpp>
 
 #include <opencv2/core.hpp>
@@ -38,6 +40,26 @@ inline constexpr std::array<SceneSize, 3> kSceneSizes = {{{640, 360}, {1280, 720
     const test::Pose pose{
         .centre = {size.width / 2.0F, size.height / 2.0F}, .pitch = 40.0F * scale, .degrees = 6.0F};
     return test::draw_side(kMixedSide, pose, test::Drawing{.size = {size.width, size.height}});
+}
+
+// Two sides of `cube` meeting at an edge, as a camera turned to the corner sees
+// them (the pose of the corner reader's own tests, scaled to the frame).
+[[nodiscard]] inline cv::Mat corner_frame(const solver::Cube& cube, SceneSize size) {
+    const float scale = static_cast<float>(size.width) / 640.0F;
+    const test::CornerPose pose{.edge_x = 320.0F * scale,
+                                .edge_y = 180.0F * scale,
+                                .pitch = 40.0F * scale,
+                                .left_width = 30.0F * scale,
+                                .right_width = 24.0F * scale,
+                                .tilt = 4.0F * scale};
+    const solver::Face left = solver::Face::F;
+    const solver::Face neighbour = solver::right_of(left);
+    std::array<solver::Color, 9> right = solver::outside_view(cube, neighbour);
+    for (int i = 0; i < (3 - test::edge_towards(neighbour, left) + 4) % 4; ++i) {
+        right = test::turned_clockwise(right);
+    }
+    return test::draw_corner(solver::outside_view(cube, left), right, pose,
+                             test::Drawing{.size = {size.width, size.height}});
 }
 
 // A frame with no cube in it: the read that finds nothing, which is most of

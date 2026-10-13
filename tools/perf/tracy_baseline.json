@@ -5,76 +5,84 @@
   "tolerance": 3.0,
   "zones": {
     "perf.calibration": {
-      "count": 108,
+      "count": 156,
       "ratio": 1.0
     },
     "solver.algorithm_search": {
       "count": 88,
-      "ratio": 0.0001952
+      "ratio": 0.0002054
+    },
+    "solver.assemble_all": {
+      "count": 17,
+      "ratio": 0.06448
     },
     "solver.assemble_scan": {
-      "count": 19,
-      "ratio": 0.06238
+      "count": 5,
+      "ratio": 0.07474
     },
     "solver.bfs_search": {
       "count": 225,
-      "ratio": 1.718e-05
+      "ratio": 1.622e-05
     },
     "solver.cfop": {
       "count": 28,
-      "ratio": 0.1441
+      "ratio": 0.1286
     },
     "solver.corners": {
       "count": 22,
-      "ratio": 0.1415
+      "ratio": 0.1305
     },
     "solver.cross": {
       "count": 22,
-      "ratio": 0.9638
+      "ratio": 0.8583
     },
     "solver.merge_adjacent_moves": {
       "count": 68,
-      "ratio": 0.0004014
+      "ratio": 0.0004217
     },
     "solver.middle_edges": {
       "count": 22,
-      "ratio": 57.05
+      "ratio": 62.79
     },
     "solver.oll": {
       "count": 22,
-      "ratio": 0.006461
+      "ratio": 0.007094
     },
     "solver.pll": {
       "count": 22,
-      "ratio": 0.002671
+      "ratio": 0.003314
     },
     "solver.solve": {
       "count": 54,
-      "ratio": 0.1441
+      "ratio": 0.1286
     },
     "solver.two_phase": {
       "count": 18,
-      "ratio": 7.197
+      "ratio": 8.736
     },
     "solver.two_phase.prepare": {
       "count": 2,
-      "ratio": 1.964e-05
+      "ratio": 2.433e-05
+    },
+    "vision.corner_view.read_corner": {
+      "count": 51,
+      "ratio": 0.2058
     },
     "vision.direct_scan.add": {
       "count": 1756,
-      "ratio": 1.227e-06
+      "ratio": 1.352e-06
     },
     "vision.direct_scan.read_side": {
       "count": 67,
-      "ratio": 0.1574
+      "ratio": 0.1721
     },
     "vision.direct_scan.scanned": {
       "count": 17,
-      "ratio": 0.115
+      "ratio": 0.1162
     },
     "vision.resolve_colors": {
       "count": 17,
-      "ratio": 0.0468
+      "ratio": 0.04832
     }
   }
 }

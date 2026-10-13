@@ -32,9 +32,9 @@ constexpr std::array<Stage, 5> kStagesInOrder = {Stage::Cross, Stage::WhiteCorne
 Solution solution_of(const std::array<std::string, 5>& per_stage) {
     Solution solution;
     for (std::size_t i = 0; i < per_stage.size(); ++i) {
-        const auto moves = parse_algorithm(per_stage[i]);
+        const auto moves = parse_algorithm(per_stage.at(i));
         REQUIRE(moves.has_value());
-        solution.steps.push_back(SolveStep{.stage = kStagesInOrder[i], .moves = *moves});
+        solution.steps.push_back(SolveStep{.stage = kStagesInOrder.at(i), .moves = *moves});
     }
     return solution;
 }
@@ -52,14 +52,14 @@ std::array<std::string, 5> notation_per_stage(const Solution& solution) {
     REQUIRE(solution.steps.size() == 5);
     std::array<std::string, 5> out;
     for (std::size_t i = 0; i < out.size(); ++i) {
-        out[i] = to_string(solution.steps[i].moves);
+        out.at(i) = to_string(solution.steps.at(i).moves);
     }
     return out;
 }
 
 bool has_adjacent_same_face(const std::vector<Move>& moves) {
     for (std::size_t i = 1; i < moves.size(); ++i) {
-        if (moves[i].face == moves[i - 1].face) {
+        if (moves.at(i).face == moves.at(i - 1).face) {
             return true;
         }
     }
@@ -193,7 +193,7 @@ TEST_CASE("merge_adjacent_moves merges across a stage boundary into exactly one 
             merge_adjacent_moves(solution_of({"R U F", "F' U' R'", "", "", ""}));
         REQUIRE(tidied.steps.size() == kStagesInOrder.size());
         for (std::size_t i = 0; i < kStagesInOrder.size(); ++i) {
-            REQUIRE(tidied.steps[i].stage == kStagesInOrder[i]);
+            REQUIRE(tidied.steps.at(i).stage == kStagesInOrder.at(i));
         }
     }
 }
@@ -224,7 +224,7 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         CAPTURE(trial);
         std::vector<Move> sequence(static_cast<std::size_t>(length_dist(rng)));
         for (Move& move : sequence) {
-            move = Move{.face = kFaces[face_dist(rng)], .turns = turn_dist(rng)};
+            move = Move{.face = kFaces.at(face_dist(rng)), .turns = turn_dist(rng)};
         }
 
         // Four cut points, so the five stages get consecutive slices (some
@@ -239,9 +239,9 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         Solution original;
         std::size_t from = 0;
         for (std::size_t i = 0; i < kStagesInOrder.size(); ++i) {
-            const std::size_t to = i < cuts.size() ? cuts[i] : sequence.size();
+            const std::size_t to = i < cuts.size() ? cuts.at(i) : sequence.size();
             original.steps.push_back(SolveStep{
-                .stage = kStagesInOrder[i],
+                .stage = kStagesInOrder.at(i),
                 .moves = std::vector<Move>(sequence.begin() + static_cast<std::ptrdiff_t>(from),
                                            sequence.begin() + static_cast<std::ptrdiff_t>(to))});
             from = to;

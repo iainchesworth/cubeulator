@@ -22,10 +22,10 @@ struct EdgeSlot {
 // Each side face's equatorial (y=0) edge index is (row=1)*3+col - see
 // cube.cpp's layout derivation.
 constexpr std::array<EdgeSlot, 4> kEdgeSlots = {{
-    {Face::F, 5, Face::R, 5},  // FR
-    {Face::F, 3, Face::L, 5},  // FL
-    {Face::B, 5, Face::R, 3},  // BR
-    {Face::B, 3, Face::L, 3},  // BL
+    {.side_a = Face::F, .side_a_index = 5, .side_b = Face::R, .side_b_index = 5},  // FR
+    {.side_a = Face::F, .side_a_index = 3, .side_b = Face::L, .side_b_index = 5},  // FL
+    {.side_a = Face::B, .side_a_index = 5, .side_b = Face::R, .side_b_index = 3},  // BR
+    {.side_a = Face::B, .side_a_index = 3, .side_b = Face::L, .side_b_index = 3},  // BL
 }};
 
 bool slot_solved(const Cube& cube, const EdgeSlot& slot) noexcept {
@@ -79,7 +79,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
     };
 
     for (std::size_t i = 0; i < kEdgeSlots.size(); ++i) {
-        const EdgeSlot& target = kEdgeSlots[i];
+        const EdgeSlot& target = kEdgeSlots.at(i);
         const Color color_a = canonical_color(target.side_a);
         const Color color_b = canonical_color(target.side_b);
 
@@ -88,7 +88,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 return false;
             }
             for (std::size_t j = 0; j < i; ++j) {
-                if (!slot_solved(c, kEdgeSlots[j])) {
+                if (!slot_solved(c, kEdgeSlots.at(j))) {
                     return false;
                 }
             }
@@ -101,7 +101,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             return [&, track_target](const Cube& c) {
                 std::uint64_t rest = first_layer_corners_key(c);
                 for (std::size_t j = 0; j < i; ++j) {
-                    const EdgeSlot& s = kEdgeSlots[j];
+                    const EdgeSlot& s = kEdgeSlots.at(j);
                     rest = detail::push_code(rest,
                                              detail::piece_code_edge(c, canonical_color(s.side_a),
                                                                      canonical_color(s.side_b)));
@@ -109,7 +109,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 if (track_target) {
                     rest = detail::push_code(rest, detail::piece_code_edge(c, color_a, color_b));
                 }
-                return detail::SignatureKey{detail::cross_key(c), rest};
+                return detail::SignatureKey{.cross = detail::cross_key(c), .rest = rest};
             };
         };
 

@@ -134,6 +134,15 @@ inline constexpr std::uint64_t kEmptyReadBytes = 2'320'000;
 // working-width read did: they pay for the one reduction, and nothing else.
 // Measured 1.00.
 inline constexpr double kReadBytesGrowth = 1.10;
+// One read_corner() - two sides meeting at an edge, which the live scan reads
+// on every frame beside read_side() - on the same terms. Measured: 966 to
+// 1,022 buffers and 2.0 MB with the corner in view, at either size (it is about
+// a thousand small buffers, which a profile of the scan should look at before
+// anything is added to them), and 32 buffers, 1.85 MB for a room.
+inline constexpr std::uint64_t kCornerBuffers = 1300;
+inline constexpr std::uint64_t kCornerBytes = 2'520'000;
+inline constexpr std::uint64_t kEmptyCornerBuffers = 45;
+inline constexpr std::uint64_t kEmptyCornerBytes = 2'320'000;
 // SideScan::add() works on nine Lab triples and a few vectors, not pictures:
 // no pixel buffer at all (measured 0). SideScan::scanned() converts a handful
 // of single colours through cv::cvtColor on the way to naming them (measured
@@ -175,6 +184,11 @@ inline constexpr TimeBudget kEmptyReadTime360 = {2.0};
 // 0.08 to 0.10 each: a hundred reads fed to SideScan::add, and one scanned().
 inline constexpr TimeBudget kScanAddTime = {1.0};
 inline constexpr TimeBudget kScannedTime = {1.0};
+
+// 0.32 to 0.38, 0.89 to 1.12 and 0.17 to 0.18.
+inline constexpr TimeBudget kCornerReadTime360 = {3.0};
+inline constexpr TimeBudget kCornerReadTime1080 = {8.0};
+inline constexpr TimeBudget kEmptyCornerReadTime360 = {2.0};
 
 // How many timed runs each takes, after one that is thrown away.
 inline constexpr int kSolveRuns = 5;
