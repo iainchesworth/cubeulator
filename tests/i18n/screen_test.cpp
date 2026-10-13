@@ -156,8 +156,8 @@ public:
     [[nodiscard]] QStringList buttons_below_screen() const {
         QStringList bad;
         visit(screen_.get(), [&](QQuickItem* item) {
-            if (!item->isVisible() ||
-                !QString::fromLatin1(item->metaObject()->className()).startsWith(QLatin1String("AppButton"))) {
+            if (!item->isVisible() || !QString::fromLatin1(item->metaObject()->className())
+                                           .startsWith(QLatin1String("AppButton"))) {
                 return;
             }
             for (const QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {

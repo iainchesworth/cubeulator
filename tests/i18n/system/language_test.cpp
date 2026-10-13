@@ -120,7 +120,8 @@ void visit(QQuickItem* item, const std::function<void(QQuickItem*)>& fn) {
         const double content_h = item->property("contentHeight").toDouble();
         const QPointF at = item->mapToScene(QPointF(0, 0));
         const bool elided = item->property("truncated").toBool();
-        const bool off_window = at.x() < window.left() - 0.5 || at.x() + content_w > window.right() + 0.5 ||
+        const bool off_window = at.x() < window.left() - 0.5 ||
+                                at.x() + content_w > window.right() + 0.5 ||
                                 (!scrolls(item) && at.y() + content_h > window.bottom() + 0.5);
         const QQuickItem* pane = item->parentItem();
         const bool out_of_pane = pane != nullptr && pane != screen && pane->width() > 0 &&
@@ -194,8 +195,8 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
     REQUIRE(cube != nullptr);
     const auto cube_picture = [&]() {
         const QPointF at = cube->mapToScene(QPointF(0, 0));
-        const QRect box(static_cast<int>(at.x()), static_cast<int>(at.y()), static_cast<int>(cube->width()),
-                        static_cast<int>(cube->height()));
+        const QRect box(static_cast<int>(at.x()), static_cast<int>(at.y()),
+                        static_cast<int>(cube->width()), static_cast<int>(cube->height()));
         return app.grab().copy(box);
     };
     // Fraction of pixels that differ between two pictures of the same size.
@@ -207,7 +208,8 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
                 const QColor p = a.pixelColor(x, y);
                 const QColor q = b.pixelColor(x, y);
                 if (std::abs(p.red() - q.red()) + std::abs(p.green() - q.green()) +
-                        std::abs(p.blue() - q.blue()) > 40) {
+                        std::abs(p.blue() - q.blue()) >
+                    40) {
                     ++differing;
                 }
             }
@@ -235,7 +237,8 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
     CHECK(difference(in_english, in_hebrew) < 0.02);
 }
 
-TEST_CASE("the pseudo-locale cuts nothing off on the converted screens", "[system][language][pseudo]") {
+TEST_CASE("the pseudo-locale cuts nothing off on the converted screens",
+          "[system][language][pseudo]") {
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
         App& app = App::fresh();
@@ -262,14 +265,16 @@ TEST_CASE("the pseudo-locale cuts nothing off on the converted screens", "[syste
             app.go(QString::fromLatin1(screen));
             app.settle();
             check_screen(screen);
-            app.shot(QStringLiteral("language_%1_pseudo_%2").arg(QString::fromLatin1(screen),
-                                                                QString::fromLatin1(cube::systest::to_string(layout))));
+            app.shot(QStringLiteral("language_%1_pseudo_%2")
+                         .arg(QString::fromLatin1(screen),
+                              QString::fromLatin1(cube::systest::to_string(layout))));
         }
         app.go("launch");
     }
 }
 
-TEST_CASE("choosing a language in Settings switches it at once and keeps it", "[system][language][settings]") {
+TEST_CASE("choosing a language in Settings switches it at once and keeps it",
+          "[system][language][settings]") {
     App& app = App::fresh();
     LanguageGuard guard(app);
     switch_to(app, "en");
@@ -330,7 +335,8 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
         "complete.scanAnother @ 1280x800",
     };
 
-    const std::vector<QSize> sizes = {{375, 667}, {390, 844}, {719, 640}, {720, 640}, {900, 640}, {1280, 800}};
+    const std::vector<QSize> sizes = {{375, 667}, {390, 844}, {719, 640},
+                                      {720, 640}, {900, 640}, {1280, 800}};
     const char* screens[] = {"launch", "permission", "scan", "solve", "settings", "complete"};
 
     std::set<std::string> overflowing;
@@ -361,15 +367,16 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
                 if (in_flickable) {
                     continue;
                 }
-                const std::string key = (app.control_key(control) + " @ " + QString::number(size.width()) + "x" +
-                                         QString::number(size.height()))
-                                            .toStdString();
+                const std::string key =
+                    (app.control_key(control) + " @ " + QString::number(size.width()) + "x" +
+                     QString::number(size.height()))
+                        .toStdString();
                 on_show.insert(key);
                 const QRect box = control->mapRectToScene(control->boundingRect()).toAlignedRect();
                 if (!window.contains(box)) {
                     overflowing.insert(key);
-                    UNSCOPED_INFO(key << " is at " << box.x() << "," << box.y() << " " << box.width() << "x"
-                                      << box.height());
+                    UNSCOPED_INFO(key << " is at " << box.x() << "," << box.y() << " "
+                                      << box.width() << "x" << box.height());
                 }
             }
         }
