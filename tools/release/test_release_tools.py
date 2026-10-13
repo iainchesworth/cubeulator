@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import check_release  # noqa: E402
 import prepare_release  # noqa: E402
 import render_release_notes as notes  # noqa: E402
 
@@ -306,6 +307,57 @@ class Prepare(unittest.TestCase):
         self.assertIsNotNone(prepare_release.project_prerelease(cmake))
         log = (prepare_release.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         self.assertEqual(changelog.validate(log), [])
+
+
+class Check(unittest.TestCase):
+    CMAKE = Prepare.CMAKE.replace("VERSION 0.1.0", "VERSION 0.2.0").replace(
+        'set(CUBEULATOR_VERSION_PRERELEASE "" CACHE INTERNAL "pre-release label")',
+        'set(CUBEULATOR_VERSION_PRERELEASE "beta.1")',
+    )
+
+    def tree(self, log: str, cmake: str | None = None):
+        tmp = tempfile.TemporaryDirectory()
+        root = Path(tmp.name)
+        (root / "CHANGELOG.md").write_text(log, encoding="utf-8", newline="")
+        (root / "CMakeLists.txt").write_text(cmake or self.CMAKE, encoding="utf-8", newline="")
+        self.addCleanup(tmp.cleanup)
+        return root
+
+    def test_a_prepared_tree_is_ready(self):
+        result = check_release.check(self.tree(GOOD), tag="v0.2.0-beta.1")
+        self.assertEqual(result.problems, [])
+        self.assertEqual((result.version, result.tag, result.prerelease), ("0.2.0-beta.1", "v0.2.0-beta.1", True))
+
+    def test_a_tag_that_names_another_version_is_refused(self):
+        for tag in ("v0.2.0", "v0.1.0", "v0.2.0-beta.2"):
+            result = check_release.check(self.tree(GOOD), tag=tag)
+            self.assertTrue(any("CMakeLists.txt says" in p for p in result.problems), tag)
+
+    def test_a_tree_not_yet_prepared_is_not_ready_but_a_dry_run_can_read_unreleased(self):
+        log = UNRELEASED
+        strict = check_release.check(self.tree(log))
+        self.assertTrue(any("no '## [0.2.0-beta.1]'" in p for p in strict.problems))
+        dry = check_release.check(self.tree(log), dry_run=True)
+        self.assertEqual(dry.problems, [])
+        self.assertTrue(dry.from_unreleased)
+
+    def test_a_dry_run_holds_unreleased_to_the_same_rules(self):
+        bad = UNRELEASED.replace("- **Something.** It does a thing.", "- It does a thing.")
+        dry = check_release.check(self.tree(bad), dry_run=True)
+        self.assertTrue(any("bold lead-in" in p for p in dry.problems))
+
+    def test_the_label_is_required_to_exist(self):
+        root = self.tree(GOOD, cmake='project(Cubeulator\n    VERSION 0.2.0\n    LANGUAGES CXX)\n')
+        result = check_release.check(root)
+        self.assertTrue(any("CUBEULATOR_VERSION_PRERELEASE" in p for p in result.problems))
+
+    def test_github_output_is_written(self):
+        root = self.tree(GOOD)
+        out = root / "out.txt"
+        rc = check_release.main(["--root", str(root), "--tag", "v0.2.0-beta.1", "--github-output", str(out)])
+        self.assertEqual(rc, 0)
+        self.assertIn("version=0.2.0-beta.1\n", out.read_text(encoding="utf-8"))
+        self.assertIn("prerelease=true\n", out.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

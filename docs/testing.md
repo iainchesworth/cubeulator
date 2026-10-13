@@ -32,9 +32,9 @@ CI's 4-core runners aren't oversubscribed).
 
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
 compiles unoptimized *and* enables ASan/UBSan (see
-[Sanitizers.cmake](../cmake/Sanitizers.cmake)). The solver's first-two-layer
+[Sanitizers.cmake](https://github.com/iainchesworthlabs/cubeulator/blob/main/cmake/Sanitizers.cmake)). The solver's first-two-layer
 searches (`cube::solver::detail::bfs_search`, see
-[bfs_search.hpp](../src/lib/src/solver/bfs_search.hpp)) visit up to millions
+[bfs_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/bfs_search.hpp)) visit up to millions
 of nodes per stage, and an unoptimized build alone - independent of the
 sanitizers - is well over an order of magnitude slower there than Release,
 turning a fast Release corpus run into many Debug minutes.
@@ -53,7 +53,7 @@ The solver's corpus tests (`solve_cross`, `solve_corners`,
 the `SteppedSolution` tests (each of the latter runs a full solve) are
 tagged `[slow]` - every one drives one or more random scrambles through
 the searched first-two-layer stages. (The last layer itself is fixed-algorithm and takes
-milliseconds - see [last_layer.hpp](../src/lib/src/solver/last_layer.hpp) -
+milliseconds - see [last_layer.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/last_layer.hpp) -
 so the corpus cost is the cross/corners/middle-edges searches.) The
 intermediate and advanced solvers' corpus tests (`cfop_test.cpp`,
 `two_phase_test.cpp`) carry the same tag, though they are far faster - tens of
@@ -78,7 +78,7 @@ nothing is rendered; it runs headless (offscreen platform off Windows) and
 is part of `ctest`.
 
 Camera frames in these and the controller tests are drawn
-([drawn_cube.hpp](../tests/unit/drawn_cube.hpp)), never recorded: a
+([drawn_cube.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/drawn_cube.hpp)), never recorded: a
 recording shows whoever was holding the cube.
 
 To *look* at the solve screen rather than check it, a hidden case puts the
@@ -92,7 +92,7 @@ cube_qml_tests "[.gallery]"
 ```
 
 The shot names are in
-[solve_screen_gallery_test.cpp](../tests/unit/solve_screen_gallery_test.cpp).
+[solve_screen_gallery_test.cpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/solve_screen_gallery_test.cpp).
 It needs a GPU, so `ctest` never selects it.
 
 To *use* the solve screen without scanning a cube first, start the app with
@@ -126,7 +126,7 @@ set CUBE_CAMERA_LOCK_TEST=1  && cube_integration_tests "[.camera-lock]"
   but leaves the image alone is a common DirectShow trap, and the report
   distinguishes the two.
 - `[.camera-lock]` verifies the photometry lock (see
-  [`interfaces/camera.hpp`](../src/app/interfaces/camera.hpp)) on real
+  [`interfaces/camera.hpp`](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/app/interfaces/camera.hpp)) on real
   hardware: frame-to-frame drift of mean L/chroma with the automatics
   running versus locked, the explicit-override path, that `stop()` puts the
   driver's settings back, and open+first-frame latency before and after.
