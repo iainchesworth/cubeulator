@@ -80,7 +80,7 @@ function(_cube_notices_common_args out app_target)
         "-DCUBE_NOTICES_VCPKG_TRIPLET_DIR=${triplet_dir}")
     # a ;-list inside one -D value would be split; join with a separator the
     # script is told about
-    list(JOIN port_dirs "<SEP>" port_dirs_joined)
+    list(JOIN port_dirs "@SEP@" port_dirs_joined)
     list(APPEND args "-DCUBE_NOTICES_VCPKG_PORT_DIRS_JOINED=${port_dirs_joined}")
     set(${out} "${args}" PARENT_SCOPE)
 endfunction()

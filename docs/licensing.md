@@ -482,14 +482,14 @@ Maintaining it:
 
 Known gaps, so nobody mistakes them for done:
 
-1. **Licence texts still to add, byte-exact:** `FTL`, `Unicode-3.0`,
-   `AML-glslang`, `Bison-exception-2.2`, `X11`, `HPND`, `Imlib2`,
-   `MIT-open-group` (all from <https://github.com/spdx/license-list-data>,
-   `text/<id>.txt`). I could not obtain them verbatim without downloading
-   files, which needs approval, and a summarising fetch tool altered the
-   texts it returned, so none were committed. The test fails on them by
-   design until they are added. `licences/README.md` records the provenance
-   of every text that is present.
+1. **Licence texts are complete for the Windows closure**, but three kinds
+   of file were *typed* rather than copied (MIT, BSD-2-Clause, BSD-3-Clause,
+   ISC, Zlib - the standard SPDX wording without a copyright line), so a
+   reviewer should diff them against <https://spdx.org/licenses/> once. The
+   provenance of every text is in `third_party/notices/licences/README.md`.
+   The eight texts that had to be fetched (FTL, Unicode-3.0, AML-glslang,
+   Bison-exception-2.2, X11, HPND, Imlib2, MIT-open-group) were downloaded from
+   the SPDX licence-list repository with Iain's approval on 2026-10-13.
 2. **Only the Windows link line was exercised against a real build here.**
    Linux, macOS and Android configurations are written to the same
    mechanism; CI is where they get checked.
@@ -560,6 +560,32 @@ Reads `:/licences/third-party-notices.json` (schema 1). Per component:
 Also: a header line stating the platform and Qt version the list was generated
 for (`platform`, `qtVersion`); `THIRD-PARTY-NOTICES.txt` is shown or exported
 as a whole on request; and nothing in the list is hidden by default.
+
+The resource is, in outline (all strings UTF-8; `unresolved` is empty in any
+build that can be packaged):
+
+```json
+{
+  "schema": 1,
+  "project": { "name": "...", "license": "GPL-3.0-or-later", "copyright": "...", "homepage": "...", "source": "..." },
+  "platform": "windows", "qtVersion": "6.8.3", "qtPlatformVerified": true,
+  "components": [
+    { "id": "vcpkg/fmt", "name": "fmt", "version": "12.2.0",
+      "license": "MIT", "distributedUnder": "MIT",
+      "copyright": "", "homepage": "https://github.com/fmtlib/fmt",
+      "kind": "vcpkg | qt | qt-bundled | vendored | model | design | font",
+      "via": [], "licenseRefs": [], "exemptTexts": [], "missingTexts": [],
+      "notes": "", "text": "<the port's copyright file, verbatim>" }
+  ],
+  "licenseTexts": { "GPL-3.0-only": "...", "MIT": "..." },
+  "linked": [ { "input": "...", "kind": "vcpkg|qt|first-party|system|manifest|unresolved", "component": "..." } ],
+  "unresolved": [], "warnings": []
+}
+```
+
+A component's terms are its own `text` when present, otherwise the entries of
+`licenseTexts` named by `licenseRefs`; the Licences screen shows the copyright
+line first, then those texts.
 
 ### 7.3 Per-licence wording the notices must carry
 

@@ -34,7 +34,7 @@
 #   CUBE_NOTICES_QT_PREFIX       Qt install prefix (for classifying link inputs)
 #   CUBE_NOTICES_QT_VERSION      Qt version string
 #   CUBE_NOTICES_VCPKG_TRIPLET_DIR  <vcpkg installed>/<triplet>
-#   CUBE_NOTICES_VCPKG_PORT_DIRS_JOINED  port roots (overlays first), joined with <SEP>
+#   CUBE_NOTICES_VCPKG_PORT_DIRS_JOINED  port roots (overlays first), joined with @SEP@
 #   CUBE_NOTICES_DEPLOY_DIR      optional: directory the app was deployed into
 #                                (windeployqt output), scanned for Qt files
 #   CUBE_NOTICES_CONFIG          optional: configuration to read from the
@@ -136,7 +136,7 @@ file(READ "${_notices_dir}/manifest.json" _manifest)
 file(READ "${_notices_dir}/qt-modules.json" _qt)
 
 if(DEFINED CUBE_NOTICES_VCPKG_PORT_DIRS_JOINED AND NOT DEFINED CUBE_NOTICES_VCPKG_PORT_DIRS)
-    string(REPLACE "<SEP>" ";" CUBE_NOTICES_VCPKG_PORT_DIRS "${CUBE_NOTICES_VCPKG_PORT_DIRS_JOINED}")
+    string(REPLACE "@SEP@" ";" CUBE_NOTICES_VCPKG_PORT_DIRS "${CUBE_NOTICES_VCPKG_PORT_DIRS_JOINED}")
 endif()
 
 set(_platform "${CUBE_NOTICES_PLATFORM}")
@@ -511,39 +511,42 @@ foreach(imp IN LISTS _qml_imports)
 endforeach()
 
 set(_deployed_report "")
+set(_deployed_ports "")
+set(_deployed_unknown "")
 if(DEFINED CUBE_NOTICES_DEPLOY_DIR AND IS_DIRECTORY "${CUBE_NOTICES_DEPLOY_DIR}")
+    # NB: the runtime directory is shared by the app, the tests and the tools,
+    # so a vcpkg DLL beside the exe is only evidence, never a reason to add a
+    # component by itself (see the warning below). Qt files are different:
+    # windeployqt puts only what the app needs into plugin directories.
     file(GLOB_RECURSE _deployed "${CUBE_NOTICES_DEPLOY_DIR}/*.dll" "${CUBE_NOTICES_DEPLOY_DIR}/*.so" "${CUBE_NOTICES_DEPLOY_DIR}/*.dylib")
     foreach(dfile IN LISTS _deployed)
+        string(REPLACE "\\" "/" dfile "${dfile}")
         get_filename_component(_dn "${dfile}" NAME)
+        cn_qt_file_key(_k "${dfile}")
+        cn_qt_lookup(_qid "${_k}")
+        if(_qid)
+            list(APPEND _qt_roots "${_qid}")
+            list(APPEND _deployed_report "${_dn}=${_qid}")
+            continue()
+        endif()
         string(TOLOWER "${_dn}" _dnl)
-        if(_dnl MATCHES "^qt6" OR _dnl MATCHES "^libqt6")
-            cn_qt_file_key(_k "${dfile}")
-            cn_qt_lookup(_qid "${_k}")
-            if(_qid)
-                list(APPEND _qt_roots "${_qid}")
-                list(APPEND _deployed_report "${_dn}=${_qid}")
-            else()
-                cn_unresolved("Deployed Qt file ${_dn} is not in third_party/notices/qt-modules.json")
-            endif()
-        else()
-            # plugin directories: qwindows.dll, qjpeg.dll, qtquick2plugin.dll ...
-            cn_qt_file_key(_k "${dfile}")
-            cn_qt_lookup(_qid "${_k}")
-            if(_qid)
-                list(APPEND _qt_roots "${_qid}")
-                list(APPEND _deployed_report "${_dn}=${_qid}")
-            else()
-                # not a Qt file by name: if vcpkg owns it, it is accounted for
-                # through the link closure; otherwise it is a system or
-                # runtime DLL, noted but not an error.
-                string(REPLACE "\\" "/" _dfs "${dfile}")
-                string(TOLOWER "${_dfs}" _dfl)
-                get_filename_component(_dbase "${_dfs}" NAME)
-                cn_port_for_file(_dport "bin/${_dbase}")
-                if(_dport)
-                    list(APPEND _ports_linked "${_dport}")
-                endif()
-            endif()
+        if(_dnl MATCHES "^(lib)?qt6")
+            cn_unresolved("Deployed Qt file ${_dn} is not in third_party/notices/qt-modules.json")
+            continue()
+        endif()
+        cn_port_for_file(_dport "bin/${_dn}")
+        if(NOT _dport)
+            cn_port_for_file(_dport "lib/${_dn}")
+        endif()
+        if(_dport)
+            list(APPEND _deployed_ports "${_dport}")
+            continue()
+        endif()
+        # neither Qt nor vcpkg: a plugin of a directory windeployqt filled, a
+        # system component copied beside the exe, or something unknown
+        cn_json_get(_known "${_manifest}" deployedFiles "${_dnl}")
+        if(NOT _known)
+            list(APPEND _deployed_unknown "${_dn}")
         endif()
     endforeach()
 endif()
@@ -567,6 +570,16 @@ while(_work)
         endif()
     endforeach()
 endwhile()
+
+foreach(dp IN LISTS _deployed_ports)
+    if(NOT dp IN_LIST _port_closure)
+        cn_warning("DLL of vcpkg port '${dp}' sits beside the app but nothing the app links reaches it - a test or tool needs it? (not a notice duty unless the app loads it)")
+    endif()
+endforeach()
+list(REMOVE_DUPLICATES _deployed_unknown)
+foreach(u IN LISTS _deployed_unknown)
+    cn_unresolved("Deployed file ${u} is not Qt, not owned by a vcpkg port and not in manifest.json deployedFiles")
+endforeach()
 
 # --- 7. closure: Qt ---------------------------------------------------------------
 set(_qt_closure "")
