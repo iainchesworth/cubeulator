@@ -86,11 +86,9 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
         app.click("settings.back");
         REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
 
-        // The two screens no control on a desktop leads to.
+        // The screen no control on a desktop leads to.
         app.go("permission");
         tour.shoot("permission");
-        app.go("complete");
-        tour.shoot("complete");
         app.go("launch");
 
         // A camera that will not start.
@@ -130,20 +128,29 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
             QString("scan-cube-read-%1-%2")
                 .arg(QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
 
-        // The solution, at the start, part way and done.
+        // The solution, at the start, part way and done. A press plays the
+        // turn; the step lands when it has finished.
         REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }, 180'000));
-        tour.shoot("solve-start");
         const int total = solve.totalMoves();
         REQUIRE(total > 0);
-        for (int presses = 0; solve.moveIndex() < total / 2 && presses <= total; ++presses) {
-            app.click_button("Next move");
-        }
+        const auto step_to = [&](int index) {
+            while (solve.moveIndex() < index) {
+                const int before = solve.moveIndex();
+                app.click("solve.next");
+                REQUIRE(app.wait_for([&]() { return solve.moveIndex() == before + 1; }, 15'000));
+            }
+        };
+        tour.shoot("solve-start");
+        step_to(total / 2);
         tour.shoot("solve-middle");
-        for (int presses = 0; !solve.atEnd() && presses <= total; ++presses) {
-            app.click_button("Next move");
-        }
+        step_to(total);
         REQUIRE(solve.atEnd());
         tour.shoot("solve-end");
+
+        // Finish leads to the complete screen.
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+        tour.shoot("complete");
 
         app.go("launch");
         REQUIRE(app.wait_for([&]() { return !scan.running() && !scan.starting(); }));

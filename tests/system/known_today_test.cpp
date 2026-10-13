@@ -4,79 +4,24 @@
 // the day the thing is fixed - which is the prompt to turn the case into a
 // proper journey step and delete it from here. Every one names the line of
 // docs/app-experience-plan.md it comes from. None of them is fixed by this
-// workstream: the solve and scan lanes own the first four, the experience
-// lane the rest, each in its own phase.
+// workstream: the experience lane owns them, each in its own phase.
+//
+// Two cases that used to be here are gone: the solve lane's Finish step now
+// reaches the complete screen, and its Rescan is the way out of the solve
+// screen. Both are journey steps now (journey_test.cpp).
 //
 // Tagged [known-today] so `cube_system_tests "[known-today]"` lists them.
 
 #include "app.hpp"
-#include "fake_camera.hpp"
-#include "scan_script.hpp"
 
 #include "app_runtime.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <cube/solver/solver.hpp>
-
 #include <QQuickItem>
 #include <QQuickWindow>
 
 using cube::systest::App;
-using cube::systest::FakeCamera;
-
-namespace {
-
-// Gets to the solve screen at its last move, the quickest honest way: a cube
-// handed straight to the solver, the screen put up as AppState would.
-void solved_screen_at_end(App& app) {
-    auto& solve = app.runtime().solve();
-    solve.solveCube(cube::solver::random_scramble(5));
-    REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
-    app.go("solve");
-    app.settle();
-    for (int presses = 0; !solve.atEnd() && presses <= solve.totalMoves(); ++presses) {
-        app.click_button("Next move");
-    }
-    REQUIRE(solve.atEnd());
-}
-
-}  // namespace
-
-TEST_CASE("known today: the solve screen has no way out", "[system][known-today]") {
-    // EXPECTED TO CHANGE - plan, "What was found" / Journey: "the Solve
-    // screen has no way out - no back, no cancel, no scan another". Owner:
-    // solve lane (SolveScreen.qml), then E3d.
-    App& app = App::fresh();
-    solved_screen_at_end(app);
-
-    // The only controls are Previous and a disabled "Solved!".
-    QStringList labels;
-    for (QQuickItem* control : app.visible_controls()) {
-        labels << control->property("text").toString();
-    }
-    labels.sort();
-    CHECK(labels == QStringList({"Previous", "Solved!"}));
-    CHECK_FALSE(app.find_button("Solved!")->property("enabled").toBool());
-
-    // Pressing every key a person might reach for goes nowhere.
-    for (const Qt::Key key : {Qt::Key_Escape, Qt::Key_Back, Qt::Key_Return, Qt::Key_Space}) {
-        app.key(key);
-        CHECK(app.screen() == "solve");
-    }
-}
-
-TEST_CASE("known today: nothing ever leads to the complete screen", "[system][known-today]") {
-    // EXPECTED TO CHANGE - plan, Journey: "Nothing ever navigates to the
-    // Complete screen". Owner: solve lane. The screen itself draws (the tour
-    // puts it up with App::go); there is just no way to arrive.
-    App& app = App::fresh();
-    solved_screen_at_end(app);
-    app.pump(500);
-    CHECK(app.screen() == "solve");
-    CHECK_FALSE(app.find_button("Scan another") != nullptr);
-    CHECK_FALSE(app.find_button("Review solution") != nullptr);
-}
 
 TEST_CASE("known today: buttons that do nothing", "[system][known-today]") {
     // EXPECTED TO CHANGE - plan, Journey: "'Solve history', 'Review

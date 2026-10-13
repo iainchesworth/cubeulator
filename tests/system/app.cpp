@@ -254,11 +254,6 @@ QString App::control_key(QQuickItem* item) const {
     if (label.isEmpty() && is_cube_view(item)) {
         label = "cube";
     }
-    // The solve screen's primary button changes its label at the end of the
-    // solution; it is the same control. (Seam: solve.next - see docs/testing.md.)
-    if (label == "Solved!") {
-        label = "Next move";
-    }
     return screen() + ":'" + label + "'";
 }
 
@@ -366,6 +361,46 @@ void App::drag(QQuickItem* item, QPoint by) {
     }
     QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, from + by);
     pump(40);
+}
+
+QQuickItem* App::cube_in_view() const {
+    for (QQuickItem* control : visible_controls()) {
+        if (is_cube_view(control)) {
+            return control;
+        }
+    }
+    return nullptr;
+}
+
+int App::drag_cube() {
+    QQuickItem* cube = cube_in_view();
+    REQUIRE(cube != nullptr);
+    reach_->activated(control_key(cube), layout());
+
+    const QImage before = grab();
+    const QPoint from = cube->mapToScene(QPointF(cube->width() / 2, cube->height() / 2)).toPoint();
+    QTest::mousePress(window_, Qt::LeftButton, Qt::NoModifier, from);
+    for (int step = 1; step <= 8; ++step) {
+        QTest::mouseMove(window_, from + QPoint(12 * step, 4 * step));
+        pump(16);
+    }
+    pump(120);
+    const QImage during = grab();
+    QTest::mouseRelease(window_, Qt::LeftButton, Qt::NoModifier, from + QPoint(96, 32));
+
+    // The cube's box, in device pixels.
+    const qreal ratio = before.devicePixelRatio();
+    const QRect box = cube->mapRectToScene(cube->boundingRect()).toAlignedRect();
+    const QRect pixels = QRect(QPoint(qRound(box.x() * ratio), qRound(box.y() * ratio)),
+                               QSize(qRound(box.width() * ratio), qRound(box.height() * ratio)))
+                             .intersected(before.rect());
+    int changed = 0;
+    for (int y = pixels.top(); y < pixels.bottom(); y += 3) {
+        for (int x = pixels.left(); x < pixels.right(); x += 3) {
+            changed += before.pixel(x, y) != during.pixel(x, y) ? 1 : 0;
+        }
+    }
+    return changed;
 }
 
 void App::key(Qt::Key which) {

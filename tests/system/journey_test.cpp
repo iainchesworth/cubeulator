@@ -114,42 +114,53 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         REQUIRE_FALSE(solve.isSolving());
         REQUIRE(solve.totalMoves() > 0);
         CHECK(solve.atStart());
-        // Leaving the scan screen let go of the camera.
-        REQUIRE(app.wait_for([&]() { return !FakeCamera::instance().capturing(); }));
-        CHECK(FakeCamera::instance().stops() == 1);
+        // The solve screen keeps the camera, to see how the cube is held.
+        CHECK(FakeCamera::instance().capturing());
 
         // Previous is off at the start, Next move is on.
-        QQuickItem* previous = app.find_button("Previous");
-        QQuickItem* next = app.find_button("Next move");
+        QQuickItem* previous = app.find("solve.previous");
+        QQuickItem* next = app.find("solve.next");
         REQUIRE(previous != nullptr);
         REQUIRE(next != nullptr);
         CHECK_FALSE(previous->property("enabled").toBool());
         CHECK(next->property("enabled").toBool());
+        CHECK(next->property("text").toString() == "Next move");
         app.settle();
 
-        // Every move, one press each.
+        // Every move, one press each. A press plays the turn and the step
+        // lands when it has finished.
         const int total = solve.totalMoves();
-        int taken = 0;
-        while (!solve.atEnd() && taken <= total) {
-            app.click_button("Next move");
-            ++taken;
-            CHECK(solve.moveIndex() == taken);
+        for (int taken = 1; taken <= total; ++taken) {
+            app.click("solve.next");
+            INFO("move " << taken << " of " << total);
+            REQUIRE(app.wait_for([&]() { return solve.moveIndex() == taken; }, 15'000));
         }
-        CHECK(taken == total);
         CHECK(solve.atEnd());
         CHECK(app.screen() == "solve");
 
         // And back a move, then forward again.
-        app.click_button("Previous");
-        CHECK(solve.moveIndex() == total - 1);
+        app.click("solve.previous");
+        REQUIRE(app.wait_for([&]() { return solve.moveIndex() == total - 1; }, 15'000));
         CHECK_FALSE(solve.atEnd());
-        app.click_button("Next move");
-        CHECK(solve.atEnd());
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return solve.atEnd(); }, 15'000));
 
-        // The last move leaves a button that says so and does nothing.
-        QQuickItem* done = app.find_button("Solved!");
-        REQUIRE(done != nullptr);
-        CHECK_FALSE(done->property("enabled").toBool());
+        // The last step is Finish, and it leads to the complete screen.
+        next = app.find("solve.next");
+        REQUIRE(next != nullptr);
+        CHECK(next->property("text").toString() == "Finish");
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+        CHECK(app.find("complete.scanAnother") != nullptr);
+        CHECK(app.find("complete.review") != nullptr);
+        // Leaving the solve screen let go of the camera.
+        REQUIRE(app.wait_for([&]() { return !FakeCamera::instance().capturing(); }));
+
+        // And round again: Scan another goes back to scanning from nothing.
+        app.click("complete.scanAnother");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "scan"; }));
+        REQUIRE(app.wait_for([&]() { return scan.running(); }));
+        CHECK(scan.sidesRead() == 0);
 
         const auto warnings = cube::systest::take_qml_warnings();
         for (const auto& warning : warnings) {
@@ -157,6 +168,30 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         }
         CHECK(warnings.empty());
     }
+}
+
+TEST_CASE("the solve screen has a way out that reads the cube again", "[system][solve]") {
+    App& app = App::fresh();
+    auto& scan = app.runtime().directScan();
+    auto& solve = app.runtime().solve();
+
+    // A cube handed straight to the solver; the screen put up as AppState
+    // would after a scan.
+    solve.solveCube(cube::solver::random_scramble(17));
+    REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, kSolveTimeoutMs));
+    app.go("solve");
+    app.settle();
+    REQUIRE(app.wait_for([&]() { return FakeCamera::instance().capturing(); }));
+
+    // Part-way in, out of step with the cube in the hand.
+    app.click("solve.next");
+    REQUIRE(app.wait_for([&]() { return solve.moveIndex() == 1; }, 15'000));
+
+    app.click("solve.rescan");
+    REQUIRE(app.wait_for([&]() { return app.screen() == "scan"; }));
+    REQUIRE(app.wait_for([&]() { return scan.running() && !scan.watching(); }));
+    CHECK(scan.sidesRead() == 0);
+    CHECK(app.find_text("0 of 6 sides read") != nullptr);
 }
 
 TEST_CASE("cancelling mid-scan returns to launch and lets go of the camera", "[system][scan]") {

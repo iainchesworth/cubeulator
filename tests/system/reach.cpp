@@ -25,8 +25,7 @@ const std::vector<ScreenDef>& screen_inventory() {
         {"scan", "DirectScanScreen.qml", ""},
         {"solve", "SolveScreen.qml", ""},
         {"settings", "SettingsScreen.qml", ""},
-        {"complete", "CompleteScreen.qml",
-         "nothing sets AppState.screen to \"complete\" (docs/app-experience-plan.md, Journey)"},
+        {"complete", "CompleteScreen.qml", ""},
     };
     return screens;
 }
@@ -105,6 +104,8 @@ const std::vector<StateDef>& state_inventory() {
          "AppState only leaves the scan screen once the solution is ready, so the spinner never "
          "shows "
          "on this path"},
+        {"solve", "watching-the-camera",
+         [](App& a) { return a.screen() == "solve" && a.runtime().directScan().watching(); }, ""},
         {"solve", "at-start",
          [](App& a) {
              auto& solve = a.runtime().solve();

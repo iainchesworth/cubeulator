@@ -2,11 +2,11 @@ name: CI
 
 on:
   push:
-    # feature/ax-system-tests: TEMPORARY, so the system-test work runs CI
-    # before there is a PR to develop. Remove with the branch.
-    branches: [main, develop, feature/ax-system-tests]
-  pull_request:
     branches: [main, develop]
+  pull_request:
+    # feature/app-experience is the integration branch the ax branches land
+    # on; it comes out of this list when that branch lands on develop.
+    branches: [main, develop, feature/app-experience]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

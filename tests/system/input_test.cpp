@@ -7,6 +7,9 @@
 #include "app_runtime.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+
+#include <cube/solver/solver.hpp>
 
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -40,45 +43,43 @@ TEST_CASE("touch drives the launch, scan and settings screens like the mouse doe
     REQUIRE(app.wait_for([&]() { return !FakeCamera::instance().capturing(); }));
 }
 
-TEST_CASE("the 3D cube turns under a drag", "[system][input][cube]") {
-    App& app = App::fresh();
-    // Idle spin off, so any turn seen is the drag's.
-    app.settings_state().setProperty("cubeAutoRotate", false);
-    app.settle();
+TEST_CASE("the 3D cube turns under a drag, on every screen that has one", "[system][input][cube]") {
+    const cube::systest::Layout layout =
+        GENERATE(cube::systest::Layout::wide, cube::systest::Layout::narrow);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        app.resize(layout == cube::systest::Layout::wide ? cube::systest::kDesktop
+                                                         : cube::systest::kPhone);
+        // Idle spin off, so any turn seen is the drag's.
+        app.settings_state().setProperty("cubeAutoRotate", false);
+        app.settle();
 
-    QQuickItem* cube = nullptr;
-    for (QQuickItem* control : app.visible_controls()) {
-        if (QByteArray(control->metaObject()->className()).startsWith("Cube3DView")) {
-            cube = control;
+        // The launch screen's.
+        REQUIRE(app.cube_in_view() != nullptr);
+        CHECK(app.drag_cube() > 200);
+
+        // The settings preview, which only the wide layout has.
+        app.click("launch.settings");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
+        app.settle();
+        if (layout == cube::systest::Layout::wide) {
+            REQUIRE(app.cube_in_view() != nullptr);
+            CHECK(app.drag_cube() > 200);
+        } else {
+            CHECK(app.cube_in_view() == nullptr);
         }
-    }
-    REQUIRE(cube != nullptr);
-    app.reach().activated(app.control_key(cube), app.layout());
+        app.click("settings.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
 
-    // The view eases back to its presented orientation once let go, so the
-    // picture that proves the turn is the one taken while the button is down.
-    const QImage before = app.grab();
-    const QPoint from = cube->mapToScene(QPointF(cube->width() / 2, cube->height() / 2)).toPoint();
-    QTest::mousePress(&app.window(), Qt::LeftButton, Qt::NoModifier, from);
-    for (int step = 1; step <= 8; ++step) {
-        QTest::mouseMove(&app.window(), from + QPoint(12 * step, 4 * step));
-        app.pump(16);
-    }
-    app.pump(120);
-    const QImage during = app.grab();
-    QTest::mouseRelease(&app.window(), Qt::LeftButton, Qt::NoModifier, from + QPoint(96, 32));
-
-    // The cube's box, in device pixels.
-    const qreal ratio = before.devicePixelRatio();
-    const QRect box = cube->mapRectToScene(cube->boundingRect()).toAlignedRect();
-    const QRect pixels(QPoint(qRound(box.x() * ratio), qRound(box.y() * ratio)),
-                       QSize(qRound(box.width() * ratio), qRound(box.height() * ratio)));
-    int changed = 0;
-    for (int y = pixels.top(); y < pixels.bottom(); y += 3) {
-        for (int x = pixels.left(); x < pixels.right(); x += 3) {
-            changed += before.pixel(x, y) != during.pixel(x, y) ? 1 : 0;
+        // The solve screen's: dragging turns the view to look round the back.
+        auto& solve = app.runtime().solve();
+        if (solve.totalMoves() == 0) {
+            solve.solveCube(cube::solver::random_scramble(31));
         }
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        app.go("solve");
+        app.settle();
+        REQUIRE(app.find("solve.cube") != nullptr);
+        CHECK(app.drag_cube() > 200);
     }
-    // A drag that turned nothing leaves the same picture.
-    CHECK(changed > 200);
 }

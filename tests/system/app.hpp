@@ -111,7 +111,14 @@ public:
     void tap(QQuickItem* item);  // a finger: touch press and release
     void tap(const QString& object_name);
     void drag(QQuickItem* item, QPoint by);  // press, move, release
-    void key(Qt::Key which);                 // to the window's focus item
+    // The draggable 3D cube on show, or nullptr.
+    [[nodiscard]] QQuickItem* cube_in_view() const;
+    // Drags the cube on show across itself and returns how many sampled pixels
+    // of its box differ from before the drag, taken while the button is still
+    // down (the cube eases home once let go). Zero is a drag that turned
+    // nothing.
+    int drag_cube();
+    void key(Qt::Key which);  // to the window's focus item
 
     // ---- waiting -----------------------------------------------------------
     // Runs the event loop until `done` holds. False if `timeout_ms` passed.
