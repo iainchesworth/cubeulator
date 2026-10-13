@@ -56,6 +56,29 @@ struct StateDef {
 // they can be pressed (the report says so).
 [[nodiscard]] const std::map<QString, QString>& unpressable_controls();
 
+// Everything a run saw, as the sets a report holds. A run writes one; the
+// reach gate reads one report or merges several (a walk split into shards
+// visits different parts of the app in each) and judges the union.
+struct Seen {
+    std::set<std::string> screens;     // "<screen>@<layout>"
+    std::set<std::string> states;      // "<screen>.<state>"
+    std::set<std::string> discovered;  // "<control>@<layout>"
+    std::set<std::string> disabled;    // controls seen only disabled
+    std::set<std::string> activated;   // "<control>@<layout>"
+
+    void merge(const Seen& other);
+};
+
+// What was never reached; empty when the inventory is complete.
+[[nodiscard]] std::vector<QString> gaps_of(const Seen& seen);
+// What cannot be reached here and why (the waivers), for the report.
+[[nodiscard]] std::vector<QString> known_gaps_of(const Seen& seen);
+// The report, as lines for the log.
+[[nodiscard]] QString summary_of(const Seen& seen);
+// The report, as JSON for the CI artifact and for the gate to read back.
+[[nodiscard]] QJsonObject to_json(const Seen& seen);
+[[nodiscard]] Seen seen_from_json(const QJsonObject& report);
+
 class Reach {
 public:
     explicit Reach(App& app);
@@ -64,24 +87,23 @@ public:
     // A control was pressed (from App's input helpers).
     void activated(const QString& key, Layout layout);
 
+    [[nodiscard]] const Seen& seen() const noexcept { return seen_; }
     // The report, as lines for the log and as JSON for the CI artifact.
     [[nodiscard]] QString summary() const;
     [[nodiscard]] QJsonObject to_json() const;
-    // What was never reached; empty when the inventory is complete.
-    [[nodiscard]] std::vector<QString> gaps() const;
-    // What cannot be reached here and why (the waivers), for the report.
-    [[nodiscard]] std::vector<QString> known_gaps() const;
+    // What the sampler has cost the app's thread. It walks the item tree on a
+    // timer, which a slow renderer's cases pay for in every wait.
+    [[nodiscard]] int samples() const noexcept { return samples_; }
+    [[nodiscard]] double sampling_ms() const noexcept { return sampling_ms_; }
 
 private:
     void sample();
 
     App& app_;
     QTimer sampler_;
-    std::set<std::string> screens_;     // "<screen>@<layout>"
-    std::set<std::string> states_;      // "<screen>.<state>"
-    std::set<std::string> discovered_;  // "<control>@<layout>"
-    std::set<std::string> disabled_;    // controls seen only disabled
-    std::set<std::string> activated_;   // "<control>@<layout>"
+    Seen seen_;
+    int samples_ = 0;
+    double sampling_ms_ = 0;
 };
 
 }  // namespace cube::systest
