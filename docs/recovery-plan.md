@@ -49,7 +49,7 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Progress
 
-**2026-10-13.** R0 done bar the push; R1 started; R2 done; R3 half done.
+**2026-10-13.** R0 done; R1 started; R2 done; R3 half done.
 
 - **R0.** Previous tip tagged `archive/tracking-first`. Webcam frames
   showing the user (`tests/data/captures`, `docs/evidence`) are removed from
@@ -59,14 +59,20 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   under `D:\cubeulator-backup`, and the removed files are in
   `D:\cubeulator-corpus\legacy-capture-dumps`. The July recording corpus,
   recorded as lost, was still in the local LFS store: 6,035 frames in 14
-  clips, now at `D:\cubeulator-corpus\july-corpus`. Not yet pushed.
+  clips, now at `D:\cubeulator-corpus\july-corpus`. The corner-detector
+  weights (AGPL-derived) were left out of the published history as well.
+  Pushed: `develop`, `feature/direct-scan`, `feature/pipeline-p6-endtoend`,
+  `feature/m3t-vcpkg-port` and the tag.
 - **R1.** Four live sessions recorded in backlit daylight
   (`D:\cubeulator-corpus\direct-scan\20261013`). No cube was solved by
   hand to label them; instead three scans of the unchanged cube agree, and a
   fourth taken after one turn differs from them by exactly one quarter turn
   of the middle slice. Each session's cube is in its `truth.txt`. More
-  lighting conditions and a deliberately scrambled cube are still to record,
-  and the July corpus has not been scored yet.
+  lighting conditions and a deliberately scrambled cube are still to record.
+  The July corpus scores 0 of 14, with almost no lattice reads: it is a
+  different cube, light-bodied with flush tiles and thin pale gaps, and the
+  reader looks for darker plastic between stickers. Many of those clips hold
+  a side square-on, so it is the cube and not the handling.
 - **R2.** `cube::vision::read_side` and `SideScan`
   (`src/lib/.../vision/direct_scan.*`) port the spike and feed the existing
   `resolve_colors`, `assemble_scanned_faces` and `solve`. `cube_scan board`
@@ -95,9 +101,12 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
     cannot tell them apart; it needs two sides in one view, which is R5.
 - **R3.** `DirectScan` and `DirectScanScreen.qml` are the app's scan screen:
   sticker dots, one chip per side read in its measured colours, no
-  mirroring, cancel and start-over. A scan run through the app window
-  reached the solve screen. Still to do: the review screen and hand entry,
-  and R4's live gate has not been run.
+  mirroring, cancel and start-over. A side being held fills the next chip
+  as it counts; a finished scan stays on screen, confirmed, while the solve
+  runs, then fades to the solution. Scans run through the app window by the
+  user reach the solve screen ("the scanning is great"). Still to do: the
+  review screen and hand entry, the solve screen's own UX, and R4's live
+  gate has not been run.
 
 ## Why it does not work today
 
@@ -207,6 +216,8 @@ to `develop`, then `main`.
   the measured drift is larger than the red/orange gap. The review screen
   is the backstop.
 - **Other cubes.** The blob step relies on dark plastic between stickers.
-  Stickerless and white-bodied cubes are out of scope until asked for.
+  Stickerless and white-bodied cubes are out of scope until asked for - and
+  measured: the July corpus is such a cube and reads 0 of 14. It is also
+  the test data for that work when it is wanted.
 - **R5 is where the earlier approach died.** It may land only partly. The
   difference is that the product works without it.
