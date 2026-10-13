@@ -1,5 +1,12 @@
 # cube_corner_pose.onnx — provenance
 
+**The weights are not in this repository.** They derive from AGPL-3.0
+Ultralytics weights (see License below) and that question was never settled,
+so the file was removed from the history before it was first published. The
+direct scan (docs/recovery-plan.md) does not use it. To work on the previous
+pipeline, retrain with `tools/synthdata` as described here and put the result
+at `assets/models/cube_corner_pose.onnx`; the build embeds it when present.
+
 Phase 1 learned corner detector (docs/pipeline-plan.md): finds the cube
 body content-agnostically and localises its 8 outer corners.
 

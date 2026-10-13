@@ -228,6 +228,9 @@ ClientBin/
 # output; re-include all of it explicitly.
 !tests/data/**/[Dd]ebug/
 !tests/data/**/[Dd]ebug/**
+
+# Not distributed: see assets/models/cube_corner_pose_PROVENANCE.md.
+/assets/models/cube_corner_pose.onnx
 /build/
 build*/
 cmake-build-*/
