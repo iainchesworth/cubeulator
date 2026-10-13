@@ -74,7 +74,7 @@ TEST_CASE("the 3D cube turns under a drag, on every screen that has one", "[syst
         // The solve screen's: dragging turns the view to look round the back.
         auto& solve = app.runtime().solve();
         if (solve.totalMoves() == 0) {
-            solve.solveCube(cube::solver::random_scramble(31));
+            solve.solveCube(cube::systest::scramble(31));
         }
         REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
         app.go("solve");

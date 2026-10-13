@@ -103,7 +103,7 @@ inline QStringList press_every_control(App& app, const QString& screen,
         }
         if (app.screen() != screen) {
             app.go(screen);
-            app.settle();
+            app.pump(80);
         }
         return true;
     };

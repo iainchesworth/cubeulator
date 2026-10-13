@@ -17,7 +17,11 @@
 
 #include <cube/solver/solver.hpp>
 
+#include <memory>
+
 #include <QCoreApplication>
+#include <QQmlComponent>
+#include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 
@@ -28,9 +32,10 @@ using cube::systest::FakeCamera;
 using cube::systest::Layout;
 
 constexpr int kScanTimeoutMs = 60'000;
-// The solve runs on a worker; it is a few seconds in an optimised build and
-// longer under coverage instrumentation.
-constexpr int kSolveTimeoutMs = 180'000;
+// The solve runs on a worker and takes a second or two even under coverage
+// instrumentation; a minute is a failure, not a slow machine, and a case that
+// waits it out is the failure being reported, not the suite's time budget.
+constexpr int kSolveTimeoutMs = 60'000;
 
 [[nodiscard]] QSize size_for(Layout layout) {
     return layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone;
@@ -44,6 +49,41 @@ void start_scan_from_launch(App& app) {
 }
 
 }  // namespace
+
+// The scan screen hands over to the solution on a Timer, the elapsed clock is
+// another, and every screen fades in. If a session's timers and animations do
+// not advance, nothing that waits on them can pass, and it shows up as a
+// timeout in whichever journey case waits first. This names it, in seconds.
+// See the render loop settings in system_test_main.cpp.
+TEST_CASE("QML timers and animations advance in this session", "[system][timers]") {
+    App& app = App::fresh();
+    QQmlComponent component(&app.runtime().engine());
+    component.setData(R"(
+        import QtQuick
+        Item {
+            id: root
+            property int ticks: 0
+            property real progress: 0
+            Timer { interval: 20; running: true; repeat: true; onTriggered: root.ticks += 1 }
+            NumberAnimation on progress { from: 0; to: 1; duration: 100 }
+        }
+    )",
+                      QUrl());
+    REQUIRE_FALSE(component.isError());
+    const std::unique_ptr<QObject> made(component.create());
+    auto* probe = qobject_cast<QQuickItem*>(made.get());
+    REQUIRE(probe != nullptr);
+    probe->setParentItem(app.window().contentItem());
+
+    const bool ticked =
+        app.wait_for([&]() { return probe->property("ticks").toInt() >= 5; }, 5'000);
+    const bool finished =
+        app.wait_for([&]() { return probe->property("progress").toDouble() >= 1.0; }, 5'000);
+    INFO("ticks=" << probe->property("ticks").toInt()
+                  << " progress=" << probe->property("progress").toDouble());
+    CHECK(ticked);
+    CHECK(finished);
+}
 
 TEST_CASE("the app opens on the launch screen and draws it", "[system][launch]") {
     App& app = App::fresh();
@@ -80,7 +120,7 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         app.resize(size_for(layout));
         REQUIRE(app.layout() == layout);
 
-        const cube::solver::Cube cube = cube::solver::random_scramble(7);
+        const cube::solver::Cube cube = cube::systest::scramble(7);
         auto& scan = app.runtime().directScan();
         auto& solve = app.runtime().solve();
 
@@ -111,7 +151,20 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         // replaces it.
         CHECK(app.screen() == "scan");
         CHECK(app.find_text("Cube read") != nullptr);
-        REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }, kSolveTimeoutMs));
+        const bool reached_solve =
+            app.wait_for([&]() { return app.screen() == "solve"; }, kSolveTimeoutMs);
+        // Where it stopped, if it did: the solve having finished while the
+        // screen stayed on the scan is a different failure from a solve that
+        // never finished, and a bare "false" says neither.
+        QObject& state = app.app_state();
+        const QObject* beat = qvariant_cast<QObject*>(state.property("completeBeat"));
+        INFO("screen=" << app.screen().toStdString() << " isSolving=" << solve.isSolving()
+                       << " totalMoves=" << solve.totalMoves()
+                       << " scan.complete=" << scan.complete() << " AppState.scanComplete="
+                       << state.property("scanComplete").toBool() << " completeBeat.running="
+                       << (beat != nullptr && beat->property("running").toBool())
+                       << " AppState.elapsedSeconds=" << state.property("elapsedSeconds").toInt());
+        REQUIRE(reached_solve);
         REQUIRE_FALSE(solve.isSolving());
         REQUIRE(solve.totalMoves() > 0);
         CHECK(solve.atStart());
@@ -181,7 +234,7 @@ TEST_CASE("the solve screen has a way out that reads the cube again", "[system][
 
     // A cube handed straight to the solver; the screen put up as AppState
     // would after a scan.
-    solve.solveCube(cube::solver::random_scramble(17));
+    solve.solveCube(cube::systest::scramble(17));
     REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, kSolveTimeoutMs));
     app.go("solve");
     app.settle();
@@ -201,7 +254,7 @@ TEST_CASE("the solve screen has a way out that reads the cube again", "[system][
 TEST_CASE("cancelling mid-scan returns to launch and lets go of the camera", "[system][scan]") {
     App& app = App::fresh();
     auto& scan = app.runtime().directScan();
-    const cube::solver::Cube cube = cube::solver::random_scramble(11);
+    const cube::solver::Cube cube = cube::systest::scramble(11);
 
     start_scan_from_launch(app);
     cube::systest::show_side(cube::test::outside_view(cube, cube::solver::kAllFaces[0]));
@@ -226,7 +279,7 @@ TEST_CASE("start over forgets the sides read and keeps scanning", "[system][scan
     App& app = App::fresh();
     app.resize(size_for(layout));
     auto& scan = app.runtime().directScan();
-    const cube::solver::Cube cube = cube::solver::random_scramble(13);
+    const cube::solver::Cube cube = cube::systest::scramble(13);
 
     start_scan_from_launch(app);
 
