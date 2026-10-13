@@ -414,6 +414,10 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                 fusion.erase(newer);
                 ++stats.merges;
                 merged_any = true;
+                // Leave the scan now: the `for` increment would otherwise
+                // run `++newer` on the iterator just erased (undefined
+                // behaviour - the loop condition is only tested after it).
+                break;
             }
         }
     }
