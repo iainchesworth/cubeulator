@@ -4,6 +4,7 @@
 //
 //   cube_scan replay <session-dir>   one session: the cube and its solution
 //   cube_scan board <root-dir>       every session under root against truth
+//   cube_scan holds <session-dir>    how the cube was held, frame by frame
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -11,11 +12,13 @@
 
 #include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/hold.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/direct_scan.hpp>
+#include <cube/vision/held_cube.hpp>
 #include <cube/vision/temporal_fusion.hpp>
 
 #include <opencv2/imgcodecs.hpp>
@@ -24,9 +27,11 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <filesystem>
 #include <fstream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -297,6 +302,150 @@ int run_board(const fs::path& root) {
     return wrong == 0 ? 0 : 1;
 }
 
+[[nodiscard]] char letter_of(Face face) {
+    switch (face) {
+        case Face::U:
+            return 'U';
+        case Face::D:
+            return 'D';
+        case Face::L:
+            return 'L';
+        case Face::R:
+            return 'R';
+        case Face::F:
+            return 'F';
+        case Face::B:
+            return 'B';
+    }
+    return '?';
+}
+
+[[nodiscard]] float percentile(std::vector<float> values, double fraction) {
+    if (values.empty()) {
+        return 0.0F;
+    }
+    std::sort(values.begin(), values.end());
+    const auto index = static_cast<std::size_t>(fraction * static_cast<double>(values.size() - 1));
+    return values[index];
+}
+
+// Scans the session for its cube, then goes back over every frame asking
+// which way the cube was being held in it (cube/vision/held_cube.hpp). This
+// is where that matcher's two distances were measured: how close a read sits
+// to the hold it shows, and how far off the nearest hold that would look
+// different is.
+int run_holds(const fs::path& session) {
+    const std::vector<fs::path> frames = frames_of(session);
+    cube::vision::SideScan scan;
+    std::vector<std::optional<cube::vision::SideRead>> reads;
+    for (const fs::path& frame : frames) {
+        reads.push_back(cube::vision::read_side(cv::imread(frame.string(), cv::IMREAD_COLOR)));
+        scan.add(reads.back());
+    }
+    const auto scanned = scan.scanned();
+    if (!scanned.has_value()) {
+        fmt::print("{}: no cube, so nothing to match against\n", session.filename().string());
+        return 1;
+    }
+    fmt::print("{}: {}\n", session.filename().string(), layout_of(scanned->cube));
+
+    // One sticker of the wrong colour moves a side's distance by a ninth of
+    // the gap between the two colours; the narrowest gap sets the scale.
+    constexpr std::array<Color, 6> kColours = {Color::White, Color::Yellow, Color::Green,
+                                               Color::Blue,  Color::Orange, Color::Red};
+    float narrowest = std::numeric_limits<float>::max();
+    std::string narrowest_pair;
+    for (std::size_t a = 0; a < kColours.size(); ++a) {
+        for (std::size_t b = a + 1; b < kColours.size(); ++b) {
+            const float gap = cube::vision::colour_distance(
+                scanned->colours[static_cast<std::size_t>(kColours[a])],
+                scanned->colours[static_cast<std::size_t>(kColours[b])]);
+            if (gap < narrowest) {
+                narrowest = gap;
+                narrowest_pair =
+                    fmt::format("{}/{}", letter_of(kColours[a]), letter_of(kColours[b]));
+            }
+        }
+    }
+    fmt::print("  closest two colours: {} at {:.1f}, so one wrong sticker is worth {:.2f}\n",
+               narrowest_pair, narrowest, narrowest / 9.0F);
+
+    std::vector<float> fit;  // best distance, steady reads
+    std::vector<float>
+        clear_by;  // how much nearer the best is than the next different-looking hold
+    std::size_t steady = 0;
+    std::size_t matched = 0;
+    std::size_t undecided = 0;
+    std::optional<cv::Point2f> previous;
+    std::string run;
+    std::size_t run_start = 0;
+    const auto close_run = [&](std::size_t end) {
+        if (!run.empty()) {
+            fmt::print("  frames {:4}-{:4}  {}\n", run_start, end, run);
+        }
+    };
+    for (std::size_t i = 0; i < reads.size(); ++i) {
+        std::string now;
+        if (reads[i].has_value()) {
+            const cv::Point2f centre = reads[i]->centres[4];
+            const cv::Point2f moved = previous.has_value() ? centre - *previous : cv::Point2f{};
+            const bool still =
+                previous.has_value() && std::hypot(moved.x, moved.y) < 0.12F * reads[i]->pitch;
+            previous = centre;
+            if (still) {
+                ++steady;
+                const auto fits =
+                    cube::vision::fit_holds(*reads[i], scanned->cube, scanned->colours);
+                const auto best_view = cube::solver::camera_view(scanned->cube, fits[0].hold);
+                fit.push_back(fits[0].distance);
+                for (const cube::vision::HoldFit& other : fits) {
+                    if (cube::solver::camera_view(scanned->cube, other.hold) != best_view) {
+                        clear_by.push_back(other.distance - fits[0].distance);
+                        break;
+                    }
+                }
+                const cube::vision::HoldReading reading =
+                    cube::vision::read_hold(*reads[i], scanned->cube, scanned->colours);
+                if (reading.holds.empty()) {
+                    now = "read fits no hold";
+                } else {
+                    ++matched;
+                    undecided += reading.holds.size() > 1 ? 1U : 0U;
+                    const cube::solver::Hold hold = reading.holds.front();
+                    now = fmt::format(
+                        "camera sees {}, {} up{}",
+                        letter_of(cube::solver::side_at(hold, cube::solver::Place::Back)),
+                        letter_of(hold.up),
+                        reading.holds.size() > 1
+                            ? fmt::format(" (one of {} that look the same)", reading.holds.size())
+                            : std::string{});
+                }
+            }
+        } else {
+            previous.reset();
+        }
+        if (now != run) {
+            close_run(i == 0 ? 0 : i - 1);
+            run = now;
+            run_start = i;
+        }
+    }
+    close_run(reads.size() - 1);
+
+    fmt::print("  steady reads {}  matched {}  of those undecided between look-alikes {}\n", steady,
+               matched, undecided);
+    fmt::print(
+        "  distance to the hold shown:        median {:.2f}  90% {:.2f}  99% {:.2f}  max "
+        "{:.2f}\n",
+        percentile(fit, 0.5), percentile(fit, 0.9), percentile(fit, 0.99), percentile(fit, 1.0));
+    fmt::print(
+        "  clear of the next different hold:  min {:.2f}  1% {:.2f}  10% {:.2f}  median "
+        "{:.2f}\n",
+        percentile(clear_by, 0.0), percentile(clear_by, 0.01), percentile(clear_by, 0.1),
+        percentile(clear_by, 0.5));
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -307,6 +456,11 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "board") {
         return run_board(fs::path(args[1]));
     }
-    fmt::print("usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n");
+    if (args.size() == 2 && args[0] == "holds") {
+        return run_holds(fs::path(args[1]));
+    }
+    fmt::print(
+        "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
+        "  cube_scan holds <session-dir>\n");
     return 2;
 }
