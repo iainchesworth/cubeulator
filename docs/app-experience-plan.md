@@ -1,0 +1,329 @@
+# App experience plan
+
+Written 2026-10-13. Status: **draft, awaiting Iain's review.**
+
+This covers everything a person meets in Cubeulator apart from the two things
+already in flight - reading the cube ([recovery-plan.md](recovery-plan.md))
+and animating the solve (`feature/solve-guidance`). That is: the design
+language, the journey between screens, wording, languages, accessibility,
+the about box and licences, platform conventions, app identity and
+packaging, and tests that drive the whole app from its UI.
+
+## Verdict
+
+The app has a look but not a system, and the journey is not closed.
+
+Six screens share a palette, a button and a confident direction: flat,
+square, red accent, the feel of a technical drawing. Under that:
+
+- **The journey dead-ends.** Nothing ever navigates to the Complete screen,
+  and the Solve screen has no way out - no back, no cancel, no "scan
+  another". The last move leaves a disabled "Solved!" button.
+- **On a phone it cannot scan.** The Android and iOS camera backends return
+  `camera_not_found`, and iOS does not build the app at all. No plan covers
+  this.
+- **Nothing is translatable, nothing is accessible.** Zero `qsTr`, zero
+  `Accessible`, no keyboard focus anywhere.
+- **The design's fonts are not shipped.** `Theme.qml` names Archivo and IBM
+  Plex Mono; no font file is bundled, so every machine without them
+  installed silently shows something else.
+- **There is no about box, no licence notice, no app icon**, and the Android
+  package is still `org.qtproject.example`.
+
+So the order is: a safety net (tests that drive the UI), then a design phase
+that ends in something to click through and sign off, then a component kit,
+then each screen rebuilt on the kit, then platforms, languages and release.
+
+## What was found
+
+Read from `feature/direct-scan` at `fa81b2e`.
+
+| area | today | where |
+|---|---|---|
+| Journey | Complete screen unreachable; Solve screen has no exit | `AppState.qml` (no `screen = "complete"`), `SolveScreen.qml` |
+| Journey | "Solve history", "Review solution" and the "English" button do nothing or the wrong thing | `LaunchScreen.qml:47,133`, `CompleteScreen.qml:87,156` |
+| Journey | No back handling (Android back, Esc); one remembered screen, for Settings only | `Main.qml`, `AppState.qml:24` |
+| Solve | On a phone the app never says how to hold the cube - "Hold yellow on top, green facing you" exists only in the wide layout, and no move means anything without it | `SolveScreen.qml:202` |
+| Solve | A grey "AUTO" camera box that is not a camera; captions such as "orthographic · no perspective" | `SolveScreen.qml:157,233` |
+| Settings | "Detect hands with AI" and "Auto-advance" drive `ScanSession`, which no screen starts | `SettingsScreen.qml:125-145`, `main.cpp:128` |
+| Settings | Only theme and graphics backend survive a restart; "Rendering" and "Developer" sit beside user settings | `SettingsState.qml` |
+| Languages | No `qsTr`; no Linguist in the build; the language list is `["English"]`; some user text is built in C++ | all QML; `DirectScan.cameraError`, `SettingsModel.handDetectionUnavailableReason` |
+| Accessibility | No `Accessible` roles or names; buttons are `Item` + `MouseArea`, not focusable; checkbox target is 20 px | `AppButton.qml`, `SettingsScreen.qml:34` |
+| Accessibility | State is carried by colour alone (yellow/green dots, chip borders), in an app whose subject is six colours | `DirectScanScreen.qml:69-80` |
+| Accessibility | 77 hard-coded pixel sizes, 29 of them 11 px or smaller; nothing follows the OS text size; looping animations with no reduced-motion switch | all screens |
+| Type | Archivo and IBM Plex Mono named, not bundled, not loaded | `Theme.qml:46` |
+| Layout | One breakpoint (720); phone layouts sized by subtraction (`root.height - 360`); no safe-area insets | `LaunchScreen.qml:26`, `PermissionScreen.qml:69` |
+| Theme | 54 colour literals outside `Theme.qml`, 39 of them in the legacy `ScanScreen.qml` | `DirectScanScreen.qml`, `SolveScreen.qml` |
+| Mobile | Screen can sleep mid-solve; no haptics or sound; orientation unspecified | `AndroidManifest.xml` |
+| Identity | No icon, no splash, no bundle id, no Windows version resource; package `org.qtproject.example` | `src/app/android/`, `cmake/Packaging.cmake` |
+| Legal | No about box; no third-party notices anywhere; the GPL and App Store question is open | `LICENSE-NOTE.md` |
+| Privacy | The permission screen promises "Nothing is stored, uploaded, or shared"; R4 plans to record every failed scan | `PermissionScreen.qml:25`, `recovery-plan.md` R4 |
+| Docs | README and CHANGELOG still say "repository skeleton, no solver" | `README.md:16` |
+| Tests | The coverage job builds with the app off, so nothing under `src/app/qt` counts toward the 80% gate | `ci.yml:495` |
+
+## The person using it
+
+Four facts decide most of the design. They are assumptions until E6 tests
+them with real people.
+
+1. **Both hands are on the cube.** During the solve the device is propped up
+   or lying down, read from arm's length, and touching it means putting the
+   cube down and losing the grip. Nothing on the solve screen may need a
+   small or precise tap, and the screen must not sleep.
+2. **On a phone, scanning is one hand each** - phone in one, cube in the
+   other, with a thumb at best.
+3. **They cannot solve a cube**, or they would not need this. `R U R' U'`
+   is jargon to them. The picture carries the instruction; notation is the
+   secondary reading.
+4. **Colour is the subject.** About one man in twelve has a red-green colour
+   vision deficiency, and a cube's red, orange and green sit exactly there.
+   Wherever the app shows a cube colour it must be tellable apart without
+   hue.
+
+Principles that follow:
+
+- **Never stranded.** Every screen has a way back and a way on, in every
+  state, including the failure ones.
+- **Readable from where the cube is.** Size for arm's length on the solve
+  screen, not for a hand-held phone.
+- **Say what is happening and what to do next**, in plain words, one thing at
+  a time. The scan screen already does this well; it is the model.
+- **Honest.** No button that does nothing, no setting that changes nothing,
+  no promise the build does not keep.
+- **One system.** A screen is built from kit parts and tokens. A colour or a
+  size written into a screen is a defect.
+- **Each platform's manners.** Back, menus, about, insets and installers
+  behave the way that platform's users expect, from one shared QML shell.
+
+## Decisions for Iain
+
+None of these blocks E0. The defaults are what the plan assumes until told
+otherwise.
+
+| # | decision | default | blocks |
+|---|---|---|---|
+| 1 | Who it is for | Someone who cannot solve a cube. Plain words first, notation second | E1 |
+| 2 | Design direction | Keep the existing direction and make it a system, rather than start again. Wanted: the original design handoff (the code cites its `support.js`; it is not in the repo) | E1 |
+| 3 | Languages at first release | English, German, French, Spanish, Japanese, Simplified Chinese. Right-to-left later, but layouts built mirror-safe now. Drafts by machine; each needs a fluent reader before release | E5 |
+| 4 | Platform order | Windows, macOS, Linux first - they scan today. Android next. iOS last | E4 |
+| 5 | Licence and stores | Wait for E0b's report. See below | iOS, E6 |
+| 6 | First-release features | Remove the dead buttons now. "Review solution" in, help and how-to-hold in, solve history out | E1 |
+| 7 | Telemetry, crash upload | None. It keeps the privacy promise simple | E3 |
+| 8 | Who builds mobile capture | A separate workstream after R4, outside this plan. Desktop release does not wait for it | E4b |
+
+**On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
+own terms are his to change. But the app links Qt Quick 3D and Qt Shader
+Tools, which Qt publishes under GPLv3 or a commercial licence, not LGPL. If
+that reading holds, an App Store exception on Cubeulator's own code would
+not settle the Apple question, because the same terms arrive through Qt. The
+routes would be a Qt commercial licence, drawing the cube without Quick 3D
+(`src/render` is a stub today), or not shipping on the App Store. Desktop
+and Google Play are not affected. E0b verifies this before anyone relies on
+it; it is not legal advice.
+
+## Lanes
+
+Two sessions are active. Experience work stays out of their files until
+they land.
+
+| lane | owns | experience work may |
+|---|---|---|
+| **Solve** - `feature/solve-guidance` | `Cube3DView.qml`, `CubeView.qml`, `SolveScreen.qml`, `solve_controller.*`, `src/lib` solver, `tests/qml_test_main.cpp`, `cube_qml_tests` | read. After it lands, E3d restyles the chrome around the cube; the cube view and what a move means stay theirs |
+| **Scan** - `feature/direct-scan` | `DirectScanScreen.qml`, `direct_scan.*`, the scan flow in `AppState.qml`, `ScanSession` and `ScanScreen.qml` (removed in R6), the review and hand-entry screen (R3), `src/app/platform` | read. After R4, E3c restyles the chrome; reading behaviour stays theirs |
+| **Experience** - `feature/app-experience` | `Theme.qml`, `AppButton.qml`, `Icon.qml`, `Main.qml`, Launch, Permission, Settings and Complete screens, new About and Licences screens, `SettingsState.qml`, `main.cpp` start-up, translations, packaging, identity, `tests/system/`, `docs/design/` | - |
+
+Shared files: `src/app/CMakeLists.txt` and `tests/CMakeLists.txt` are
+append-only, each lane in its own block. `AppState.qml` is split in E2a into
+navigation (experience) and scan flow (scan), agreed with the scan lane
+before it is touched.
+
+Contracts every lane keeps:
+
+- **Wording lives in QML, never in a controller.** Controllers expose states
+  and codes; QML turns them into translatable text. `SolveController`
+  already works this way.
+- **Every interactive item has an `objectName` and an accessible name.**
+  Tests find controls by them.
+- **The app starts without a camera.** A test binary can construct the
+  controllers and feed frames.
+- **Cube colours come from `Theme`**, which will gain colour-vision
+  variants.
+
+Found in the audit, belonging to the active lanes:
+
+- Solve: reaching Complete; leaving Solve; the hold instruction on phones;
+  the mock "AUTO" box and developer captions.
+- Scan: the "nothing is stored" promise against R4's automatic recording;
+  the two settings that die with `ScanSession`; `cameraError` text built in
+  C++.
+
+## Phases
+
+Each phase has one gate. Branches are `feature/ax-<topic>`, cut from
+`feature/app-experience`, which was cut from `feature/direct-scan` and
+follows it.
+
+**E0 - Safety net and inventory.** No visual change. Starts now.
+
+- *E0a System tests.* Boot the real `Main.qml` with the real controllers and
+  a test frame source (`tests/unit/drawn_cube.hpp` already draws cube sides
+  with nobody in the picture). Drive it with synthesised input and walk the
+  journey. Save a screenshot of every screen. Put `src/app/qt` into the
+  coverage job.
+- *E0b Licences.* Inventory every component that ships, per platform.
+  Generate the notices from the build (vcpkg installs each port's
+  `copyright` file) so they cannot drift when R6 removes M3T and
+  onnxruntime. Verify the Qt Quick 3D reading. Write the options for
+  `LICENSE-NOTE.md`.
+
+Gate: one command walks launch to solve headless on Linux in CI and uploads
+the screenshots; the coverage report includes `src/app/qt`; the notices are
+generated; the licence options are on Iain's desk.
+
+**E1 - Design.** Starts now, beside E0. Writes `docs/design/` and no app
+code.
+
+- `brief.md` - who it is for, where and how it is used, what the first
+  release holds.
+- `journey.md` - every screen and every state of it (empty, working, failed,
+  refused, interrupted), how each is entered and left, and what "back" does
+  on each platform.
+- `system.md` - tokens (colour with measured contrast, a type scale in
+  relative units, spacing, size classes, motion), every component and its
+  states, minimum target sizes.
+- `screens/` - one spec per screen and size class: first run, permission,
+  scan, review and hand entry, solve, complete, settings, about, licences,
+  privacy, help.
+- `content.md` - voice, a glossary (side, turn, layer; the notation policy),
+  and the full string inventory with keys and notes for translators.
+- `accessibility.md` - the target (WCAG 2.2 AA as the reference), what a
+  screen reader says on each screen, the keyboard map, how six cube colours
+  are told apart without hue, text scaling, reduced motion.
+- `platforms.md` - per platform: back, menus, where About lives, insets,
+  orientation, keep-awake, haptics, window sizes, icons, installers.
+- Identity - app icon, name treatment, store screenshot plan.
+- A click-through prototype of the whole journey, phone and desktop, light
+  and dark.
+
+Gate: Iain has clicked through the prototype at both sizes and signed it
+off; every state in `journey.md` has a spec; the string inventory is
+complete.
+
+**E2 - The kit.** After the E1 gate (E2b can start once E0a lands).
+
+- *E2a Components.* Tokens in `Theme`; bundled fonts with their licences;
+  focusable, accessible controls (button, toggle, choice, list row, dialog,
+  banner, progress); layout primitives with size classes and safe areas; a
+  navigation stack with back handling; settings that persist; a
+  developer-only gallery screen.
+- *E2b Translations plumbing.* Linguist in the build, live language
+  switching, a pseudo-locale (longer, accented strings), locale-aware
+  numbers and times, plural forms, and a lint that fails on an unwrapped
+  user-visible string.
+
+Gate: every kit component is reachable by keyboard, has a name and role,
+meets the target size, and holds 4.5:1 contrast in both themes; the
+pseudo-locale truncates nothing; on a machine without Archivo installed the
+app still shows Archivo.
+
+**E3 - Screens on the kit.** After E2a.
+
+- *E3a* Launch, first run, permission, settings, help.
+- *E3b* About, licences, privacy.
+- *E3c* Scan and review chrome - after R4, with the scan lane.
+- *E3d* Solve and complete chrome - after `feature/solve-guidance` lands.
+
+Gate: the system tests walk the whole journey finding controls by accessible
+name only, by keyboard only, at both sizes, in both themes, in the
+pseudo-locale; no colour or pixel-size literal remains outside `Theme`.
+
+**E4 - Platforms.** Beside E3.
+
+- *E4a Desktop.* Icons; Windows version resource and installer; macOS bundle,
+  menu bar and About; Linux desktop entry and metadata; minimum window size,
+  remembered geometry, keyboard shortcuts.
+- *E4b Mobile shell.* Package id, icons, splash, back button, orientation,
+  keep-awake, insets, haptics; build the Qt app for iOS. Usable only once
+  mobile capture exists (decision 8).
+
+Gate: an installable package per desktop OS with icon, version and About; an
+APK with its own identity; the screen stays awake through a solve.
+
+**E5 - Languages.** Translate the chosen set, add fallback fonts for scripts
+Archivo does not cover, run the screenshot tour per language.
+Gate: a fluent reader has reviewed each language's tour.
+
+**E6 - Release readiness.** A pass with a real screen reader on each OS;
+sessions with five people who cannot solve a cube; store listings and
+privacy policy; the licence decision recorded; README, CHANGELOG and docs
+brought up to date.
+Gate: four of five people get from launch to a solved cube without help.
+
+## Sessions
+
+Every session spawned from this plan runs on **Sonnet 5.5** (Iain,
+2026-10-13).
+
+| id | session | branch | starts when | touches |
+|---|---|---|---|---|
+| E0a | System tests that drive the app from its UI | `feature/ax-system-tests` | now | `tests/system/`, `main.cpp` start-up, `ci.yml`, coverage |
+| E0b | Licence inventory and generated notices | `feature/ax-licences` | now | `cmake/`, `docs/`, `LICENSE-NOTE.md` |
+| E1 | Design the app experience | `feature/ax-design` | now | `docs/design/` only |
+| E2b | Translations plumbing | `feature/ax-i18n` | E0a landed | build, `main.cpp`, `SettingsState.qml` |
+| E2a | Component kit | `feature/ax-kit` | E1 gate | `Theme`, kit components, navigation |
+| E3a | Launch, permission, settings, help | `feature/ax-screens-shell` | E2a | those screens |
+| E3b | About, licences, privacy | `feature/ax-about` | E2a and E0b | new screens |
+| E3c | Scan and review chrome | `feature/ax-scan-chrome` | E2a and R4 | scan lane's QML, with them |
+| E3d | Solve and complete chrome | `feature/ax-solve-chrome` | E2a and solve landed | solve lane's QML, with them |
+| E4a | Desktop packaging and manners | `feature/ax-desktop` | E1 gate | packaging, resources |
+| E4b | Mobile shell | `feature/ax-mobile` | E2a and decision 8 | manifest, iOS build |
+| E5 | Languages | `feature/ax-languages` | E3 gate | translation files |
+| E6 | Release readiness | `feature/ax-release` | E4 and E5 | docs, listings |
+
+## Testing the app from its UI
+
+Layers, the first two existing today:
+
+1. **Unit** and 2. **integration** - Catch2, as now.
+3. **Component** - kit parts loaded for real. Builds on the harness the solve
+   lane added (`cube_qml_tests`: Catch2, `QGuiApplication`, offscreen).
+4. **System** - the whole app, from `Main.qml`, driven by input events.
+
+Journeys the system tests walk: first launch to solved and round again;
+permission refused, then granted; no camera; cancel mid-scan; a scan that
+does not make a valid cube; every setting changed and still set after a
+restart; language and theme switched live; phone and desktop sizes; the
+whole thing by keyboard alone; back at every screen.
+
+Checks that ride on those walks: nothing truncated in the pseudo-locale;
+every interactive item has a name, a role and a big enough target; contrast
+computed from the tokens; the screenshot tour, uploaded from CI as the
+review surface for design, translation and store listings.
+
+**Coverage.** C++ is straightforward: build the app in the coverage job and
+`gcovr` counts `src/app/qt` as it already counts the library. QML is not:
+`gcov` cannot see QML or JavaScript, and Qt's own answer is Coco, a paid
+product. The plan's measure for QML is reach - every screen, every state of
+it, every control activated at least once, counted against the inventory in
+`journey.md` and enforced by a test that fails when something new is never
+visited. E0a measures first; a number is set after that, not before.
+
+**Where it runs.** Linux under a virtual display with software GL is the
+gate (Quick 3D needs a real render path; offscreen alone is enough only for
+tests that never draw). Windows and macOS run the same suite if it proves
+stable. Phones are not in CI at first.
+
+## What is not known
+
+- **QML line coverage without Coco.** Reach may be the honest ceiling.
+- **Quick 3D on CI's software renderers**, on all three desktop runners.
+- **The Qt Quick 3D licence reading.** E0b checks the source of truth.
+- **How a move is advanced with both hands full** - a large tap, a timer,
+  voice, or the camera seeing the turn. It needs trying with a real cube in
+  hand. The solve lane owns the mechanism; E1 proposes.
+- **Whether the original design handoff still exists.**
+- **Who reads each translation.**
+- **Screen readers over custom QML on Android and iOS.** The 3D cube and the
+  canvas-drawn icons are opaque to them and need text alternatives.
+- **Mobile capture.** Until it exists the phone experience can be designed
+  and built but not used.
