@@ -386,3 +386,68 @@ if(TARGET cube_app)
     include(ThirdPartyNotices)
     cube_add_third_party_notices(cube_app)
 endif()
+
+# ===========================================================================
+# E4a - desktop packaging and manners (experience lane; this block only).
+#
+# cube_app_desktop holds what the desktop shells add to start-up: the
+# remembered window geometry, the KeepAwake helper (one implementation per
+# platform) and the process identity. It is a separate static library so that
+# the tests link it without the QML module. cmake/DesktopPackaging.cmake gives
+# cube_app its icon, version resource, bundle metadata and install rules.
+# See docs/packaging.md.
+# ===========================================================================
+if(CUBEULATOR_BUILD_APP AND NOT ANDROID AND NOT IOS)
+    set(_cube_desktop_qt_components Core Gui Qml Quick)
+    if(UNIX AND NOT APPLE)
+        list(APPEND _cube_desktop_qt_components DBus)
+    endif()
+    find_package(Qt6 6.5 REQUIRED COMPONENTS ${_cube_desktop_qt_components})
+
+    set(_cube_desktop_sources
+        desktop/desktop_integration.hpp
+        desktop/desktop_integration.cpp
+        desktop/keep_awake.hpp
+        desktop/keep_awake.cpp
+        desktop/window_geometry.hpp
+        desktop/window_geometry.cpp)
+    if(WIN32)
+        list(APPEND _cube_desktop_sources desktop/keep_awake_windows.cpp)
+    elseif(APPLE)
+        list(APPEND _cube_desktop_sources desktop/keep_awake_macos.cpp)
+    else()
+        list(APPEND _cube_desktop_sources desktop/keep_awake_linux.cpp)
+    endif()
+
+    add_library(cube_app_desktop STATIC ${_cube_desktop_sources})
+    target_include_directories(cube_app_desktop PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(cube_app_desktop
+        PUBLIC
+            cube::lib
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+        PRIVATE
+            cube::warnings
+            cube::sanitizers
+            cube::coverage)
+    if(WIN32)
+        # SetCurrentProcessExplicitAppUserModelID.
+        target_link_libraries(cube_app_desktop PRIVATE shell32)
+    elseif(APPLE)
+        # The no-display-sleep power assertion.
+        target_link_libraries(cube_app_desktop PRIVATE "-framework IOKit" "-framework CoreFoundation")
+    else()
+        target_link_libraries(cube_app_desktop PRIVATE Qt6::DBus)
+    endif()
+
+    target_link_libraries(cube_app PRIVATE cube_app_desktop)
+
+    # DesktopShell.qml: shortcuts, the macOS menu bar and the placeholder
+    # About. Added here rather than to the module's own file list above.
+    qt_target_qml_sources(cube_app_qml QML_FILES qt/DesktopShell.qml)
+
+    include(DesktopPackaging)
+    cube_configure_desktop_app(cube_app)
+endif()

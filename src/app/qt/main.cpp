@@ -1,4 +1,5 @@
 #include "controllers/app_controllers.hpp"
+#include "desktop/desktop_integration.hpp"
 #include "i18n/language_manager.hpp"
 
 #include <cube/solver/solver.hpp>
@@ -116,6 +117,11 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
 
+    // E4a - desktop identity (AppUserModelID, desktop file name, window icon),
+    // remembered window geometry, KeepAwake and AppInfo for QML. Declared
+    // before the engine so that it outlives it.
+    cube::app::DesktopIntegration desktop(app);
+
     // The controllers QML talks to are made here, wired to one another, and
     // registered as singletons - not QML_ELEMENT types the engine would make
     // for itself, because they need real references to each other
@@ -128,6 +134,7 @@ int main(int argc, char* argv[]) {
     // Declared after the controllers, and so destroyed before them.
     QQmlApplicationEngine engine;
     controllers.addImageProviders(engine);
+    desktop.prepare(engine);  // E4a: singletons and the window's initial geometry
     // The language - translators, direction, locale - before the first frame.
     cube::i18n::install(app, engine);
     engine.loadFromModule("Cubeulator", "Main");
@@ -135,6 +142,7 @@ int main(int argc, char* argv[]) {
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }
+    desktop.attach(engine);  // E4a: start remembering the window's geometry
 
     // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
     // scrambled from that seed, no camera and no scan. For working on the

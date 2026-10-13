@@ -39,6 +39,9 @@ ApplicationWindow {
         from: 0; to: 1; duration: 280; easing.type: Easing.OutCubic
     }
 
+    // E4a: desktop shortcuts, the macOS menu bar and the placeholder About.
+    DesktopShell { window: root }
+
     Component { id: launchScreen; LaunchScreen {} }
     Component { id: permissionScreen; PermissionScreen {} }
     Component { id: scanScreen; DirectScanScreen {} }

@@ -73,8 +73,14 @@ what Android does.
 
 ## Menus (macOS)
 
-Built with the native menu bar **(verify: Qt Quick Controls `MenuBar` is
-native on macOS from Qt 6.8; otherwise `Qt.labs.platform`)**.
+Built with Qt Quick Controls' `MenuBar`, whose menus are `Popup.Native`.
+*Checked against Qt 6.8.3 (E4a): `Popup.popupType` is new in 6.8 and
+`QQuickMenuBar` has a native path (`createNativeMenuBar`, logging category
+`qt.quick.controls.nativemenus`). It has not been run on a Mac; if the bar
+turns out to sit inside the window, `Qt.labs.platform`'s `MenuBar` is the
+fallback.* About, Settings and Quit reach the application menu by their
+wording (Qt's text heuristic), and Services, Hide, Hide Others and Show All
+are the system's.
 
 | menu | items |
 |---|---|
@@ -125,7 +131,8 @@ The screen must not dim or lock while the person's hands are on the cube.
 - **On** while `scan` or `solve` is the current screen and the app is in
   front. **Off** everywhere else, when a sheet has been open for two
   minutes, and when the app goes to the background.
-- There is no cross-platform Qt API for this **(verify)**. A `KeepAwake`
+- There is no cross-platform Qt API for this *(checked against Qt 6.8.3's
+  headers, E4a: there is no public one)*. A `KeepAwake`
   helper, one implementation per platform: a keep-screen-on window flag on
   Android; the idle-timer switch on iOS; a display-required execution
   state on Windows; a no-display-sleep power assertion on macOS; the
@@ -197,9 +204,9 @@ value.
 |---|---|---|
 | Display name | Cubeulator | Fixed |
 | Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `com.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`.)* The GitHub account and the repository name in lower case, with `com.` as on ICL Forge's macOS apps. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
-| Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Proposed; follows the publisher. Groups the taskbar button with its shortcut |
-| Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | Wired for CPack; not yet in the Windows resource or the Android manifest |
-| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1) |
+| Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Follows the publisher. Set by the app at start-up and stamped on the installer's Start menu shortcut (E4a), so that the taskbar groups the button with its shortcut |
+| Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | In the Windows resource, `Info.plist`, the AppStream release and every desktop package's name (E4a). Not yet in the Android manifest (E4b) |
+| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1). One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, read by the version resource, the AppStream developer and CPack |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |
 | Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |
