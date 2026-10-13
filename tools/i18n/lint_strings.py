@@ -362,7 +362,7 @@ def main(argv: list[str]) -> int:
         by_owner: dict[str, list[tuple[Hit, str]]] = {}
         for h in hits:
             entry = allow.get(h.file)
-            if entry is None:
+            if entry is None or entry.get("shown") is False:
                 continue
             by_owner.setdefault(entry["owner"], []).append((h, index.get(_norm(h.literal), "")))
         for owner, rows in sorted(by_owner.items()):

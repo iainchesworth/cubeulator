@@ -3,7 +3,8 @@
     "Literals the translation lint (tools/i18n/lint_strings.py) lets through, by file and literal, each with the lane that owns the file.",
     "A new literal in these files fails the lint like any other; an entry whose literal is gone fails it too, so the list can only get shorter.",
     "Whoever converts a literal removes its entry. docs/i18n.md lists, per lane, what has to change; `lint_strings.py --report` prints it.",
-    "Experience-lane files are converted now where the design has a string for the text (docs/design/strings.json). What remains here from that lane is text that has no id because nothing in the design says it."
+    "Experience-lane files are converted now where the design has a string for the text (docs/design/strings.json). What remains here from that lane is text that has no id because nothing in the design says it.",
+    "An entry with \"shown\": false is not text a person reads (a developer log line, say): it is allowed, and is left out of the report of what a lane has to change."
   ],
   "entries": [
     {
@@ -176,6 +177,17 @@
       "reason": "Developer-build overlay; developer strings may stay in English (screens/settings.md).",
       "literals": [
         "FPS "
+      ]
+    },
+    {
+      "file": "src/app/qt/controllers/held_cube.cpp",
+      "owner": "solve lane (feature/solve-guidance)",
+      "reason": "A developer log line, written to the file named by CUBE_HELD_LOG and never shown to a person. Nothing to change; listed so that the lint's C++ heuristic does not report it.",
+      "shown": false,
+      "literals": [
+        "%1 move %2 asked %3 -> %4",
+        " | after the move %1 (%2 off)",
+        " | turned instead: %1"
       ]
     },
     {

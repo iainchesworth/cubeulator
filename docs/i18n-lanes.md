@@ -161,14 +161,14 @@ Besides the literals:
 | `SolveScreen.qml` | 309 |  OF  | none: needs a string |
 | `SolveScreen.qml` | 313 | Solved | `complete.title` |
 | `SolveScreen.qml` | 341 | Drag the cube to look round it | none: needs a string |
-| `SolveScreen.qml` | 453 | Rescan the cube and carry on from there | none: needs a string |
-| `SolveScreen.qml` | 479 | Only the view has turned. Keep your cube as it is. | none: needs a string |
-| `SolveScreen.qml` | 584 | STAGES | none: needs a string |
-| `SolveScreen.qml` | 633 | Previous | `solution.previous` |
-| `SolveScreen.qml` | 645 | Finish | `solve.finish` |
-| `SolveScreen.qml` | 645 | Next move | none: needs a string |
-| `SolveScreen.qml` | 664 | Out of step? Rescan | none: needs a string |
-| `SolveScreen.qml` | 708 | Solving… | `settings.section.solving` |
+| `SolveScreen.qml` | 555 | Rescan the cube and carry on from there | none: needs a string |
+| `SolveScreen.qml` | 581 | Only the view has turned. Keep your cube as it is. | none: needs a string |
+| `SolveScreen.qml` | 686 | STAGES | none: needs a string |
+| `SolveScreen.qml` | 735 | Previous | `solution.previous` |
+| `SolveScreen.qml` | 747 | Finish | `solve.finish` |
+| `SolveScreen.qml` | 747 | Next move | none: needs a string |
+| `SolveScreen.qml` | 766 | Out of step? Rescan | none: needs a string |
+| `SolveScreen.qml` | 810 | Solving… | `settings.section.solving` |
 | `SolveScreen.qml` | 67 |  on top,  | none: needs a string |
 | `SolveScreen.qml` | 68 |  facing you | none: needs a string |
 | `SolveScreen.qml` | 86 | Camera unavailable | none: needs a string |
