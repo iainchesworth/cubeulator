@@ -186,7 +186,8 @@ value.
 | | value | status |
 |---|---|---|
 | Display name | Cubeulator | Fixed |
-| Reverse-domain id (Android package, iOS and macOS bundle id, Linux app id) | Proposed `io.github.<account>.cubeulator`, or a domain Iain owns | **Open.** It can never change after the first store release. `org.qtproject.example` is what is there now |
+| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `org.iainchesworth.cubeulator` | *(Iain, 2026-10-13.)* The Countdown Solver pattern: `org`, the GitHub account, the repository name in lower case. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
+| Windows AppUserModelID | `IainChesworth.Cubeulator` | Proposed. Groups the taskbar button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | Wired for CPack; not yet in the Windows resource or the Android manifest |
 | Publisher | Iain Chesworth | From `Packaging.cmake` |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |

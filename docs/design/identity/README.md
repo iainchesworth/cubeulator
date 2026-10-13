@@ -109,7 +109,6 @@ then follow one turn at a time until it is solved."
 
 ## Open
 
-- The reverse-domain identifier (`platforms.md`).
 - Whether the name and icon clear a trade-mark check.
 - Sound: three short sounds are part of the identity once they exist
   (`platforms.md`, Sound and haptics).

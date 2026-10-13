@@ -281,8 +281,7 @@ Lane: experience. Specs: `screens/about.md`, `screens/licences.md`,
 | `licences.list` | Cubeulator's own licence and one row per third-party component | A row > `licences.detail`. Back |
 | `licences.detail` | One component's notice in full | Back > `licences.list` |
 | `licences.unavailable` | The generated notices could not be loaded | Says where the notices are published. Back |
-| `privacy.default` | The statement for a build that saves no pictures | Back |
-| `privacy.with-recordings` | The statement for a build that can keep pictures of failed scans. Only if that ships (brief, D7) | **Manage saved scans** > the list; back |
+| `privacy.default` | The statement: no picture is saved; history stays on this device; no internet | Back |
 
 ### help
 

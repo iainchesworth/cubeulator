@@ -145,8 +145,8 @@ Review the solution.
 ## For translators
 
 - **Source language: British English.** "Colour", "centre", "licence"
-  (noun), "anticlockwise", "carry on". A US English file is a translation
-  like any other.
+  (noun), "anticlockwise", "carry on". It is the only English: there is
+  no US or Australian variant.
 - **Keys are ids, not English.** A key never changes once a translation
   exists for it. A string whose meaning changes gets a new key.
 - **Whole sentences.** Nothing is built by joining fragments, with one
@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-378 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+374 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -586,7 +586,6 @@ Review the solution.
 | `settings.notation.note` | Adds the letters cubers use, such as R U R'. | Explanation under the switch. The letters are not translated. |
 | `settings.sound` | Sound | Switch. A soft click when a side is read or a turn advances. |
 | `settings.haptics` | Vibration | Switch. Phones only. |
-| `settings.speak` | Read turns aloud | Switch. Proposed; see brief.md open question 3. |
 | `settings.section.camera` | Camera | Section heading. |
 | `settings.camera.finding` | Looking for cameras… | Status. |
 | `settings.camera.choose` | Cubeulator reads the cube with this camera. | Text above the list of cameras. |
@@ -604,6 +603,7 @@ Review the solution.
 | `settings.dev.restart` | Restart Cubeulator to switch to this backend. | Developer builds only. |
 | `settings.dev.cubeStyle` | Cube style | Developer builds only. |
 | `settings.dev.stats` | Show frame rate | Developer builds only. |
+| `settings.dev.recording` | This developer build records failed scans on this device. | Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so. |
 
 #### `about`
 
@@ -635,15 +635,11 @@ Review the solution.
 |---|---|---|
 | `privacy.title` | Privacy | Screen title. |
 | `privacy.camera.title` | The camera | Heading. |
-| `privacy.camera.body` | The camera picture is used on this device to read your cube's colours. No picture is saved, and nothing is sent anywhere. | Body. For builds that save no pictures. |
+| `privacy.camera.body` | The camera picture is used on this device to read your cube's colours. No picture is saved, and nothing is sent anywhere. | Body. Must stay true of every released build. |
 | `privacy.history.title` | Solve history | Heading. |
 | `privacy.history.body` | Cubeulator keeps a list of the cubes you have solved: the colours, the turns, the date and how long it took. It stays on this device. You can clear it, or turn it off, in Settings. | Body. |
 | `privacy.network.title` | The internet | Heading. |
 | `privacy.network.body` | Cubeulator does not use the internet. It has no accounts, no adverts and no tracking. | Body. |
-| `privacy.recordings.title` | Pictures of failed scans | Heading. Only in builds that can keep them. |
-| `privacy.recordings.body` | If a scan fails, Cubeulator can keep the pictures from that scan on this device, so that you can send them to help fix the problem. They show whatever the camera saw, which may include you. This is off unless you turn it on, and nothing is sent unless you send it. | Body. Only in builds that can keep them. |
-| `privacy.recordings.keep` | Keep pictures of failed scans | Switch. Only in builds that can keep them. Off by default. |
-| `privacy.recordings.manage` | Manage saved scans | Button. Only in builds that can keep them. |
 
 #### `help`
 

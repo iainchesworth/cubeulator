@@ -91,6 +91,9 @@ how-to-hold in; solve history in.)*
 | out | why |
 |---|---|
 | Telemetry, crash upload, accounts, sharing | Plan decision 7. Keeps the privacy statement one paragraph long |
+| Saving camera pictures | *(Iain, 2026-10-13.)* Recording failed scans is for developer builds only, so "no picture is saved" holds in every release |
+| Reading turns aloud | *(Iain, 2026-10-13.)* Out of the first release. The words are written as whole sentences (`turn.*`) so that speech can be added without new wording |
+| US or Australian English | *(Iain, 2026-10-13.)* English is English: one English, the British source |
 | Voice commands | No on-device speech recognition that works the same on five platforms; several would send audio off the device. See `screens/solve.md` |
 | The camera watching each turn | The best answer to hands-full, and the hardest. Needs free-handling reads (R5). Designed for, not promised |
 | Stickerless, white-bodied, picture and non-standard-colour cubes | The reader relies on dark plastic between stickers (recovery plan). Help says so plainly |
@@ -112,23 +115,23 @@ before sign-off.
 | D4 | A valid scan goes straight to the solve, as it does today. Checking the colours is offered, not imposed | A valid cube is very probably the right cube. Fifty-four stickers to approve is a wall in front of someone who just wants to start |
 | D5 | Leaving a solve never asks "are you sure". The solve is kept and Home offers **Carry on** | Forgiving beats confirming: an accidental back gesture with a cube in both hands costs one tap to undo |
 | D6 | Advancing a turn: a tap anywhere on the cube or on a bar a third of the screen high, or any of Space, Enter, Page Down, the forward arrow. A paced timer is the option. Voice and camera-follow are later | The tap ships with what exists and works with a knuckle or a page-turner pedal. See `screens/solve.md` for the comparison |
-| D7 | Scanning with the camera never saves a picture in a release build. R4's automatic recording of failed scans is a developer-build tool | It is the only reading under which "nothing is stored" stays true, and those frames show whoever is holding the cube. The other outcome is designed in `screens/privacy.md` in case the scan lane needs it |
+| D7 | Scanning with the camera never saves a picture in a release build. R4's automatic recording of failed scans is a developer-build tool. **Confirmed by Iain, 2026-10-13** | It is the only reading under which "nothing is stored" stays true, and those frames show whoever is holding the cube. A developer build that records says so on its scan screen |
 | D8 | Size classes are compact (under 600), medium (600-839) and expanded (840 and over), with a short class for heights under 480 | Replaces the single 720 breakpoint. Short is a phone on its side, which is how many people will prop it |
 | D9 | First run is one screen, not a carousel | People skip carousels. Three numbered steps and one button fit on a phone |
-| D10 | Source strings are British English, matching the app today ("colour", "anticlockwise", "licence"). US English is a ninth, cheap translation if wanted | Open: Iain to say whether `en_US` ships |
+| D10 | Source strings are British English, matching the app today ("colour", "anticlockwise", "licence"). There is no US or Australian variant. **Confirmed by Iain, 2026-10-13** | One English to write, review and test |
+| D12 | The app's identifier is `org.iainchesworth.cubeulator` on every platform | *(Iain, 2026-10-13: follow Countdown Solver.)* That app is `org.iainchesworth.countdownsolver`: `org`, the GitHub account, the repository name in lower case. Hearth shows what to avoid: its Android and macOS ids differ |
 | D11 | Text never goes below 13 px at the default size, and body text is 16 px | The audit found 29 sizes of 11 px or less |
 
 ## Open questions for Iain
 
-1. **D7** - is failed-scan recording developer-only? It is the scan lane's
-   call as much as this one's.
-2. **D10** - ship `en_US` as well?
-3. **Reading turns aloud.** Qt has text-to-speech on all five platforms and
-   it runs on the device. It would serve hands-full use and people who
-   cannot see the picture. It adds the Qt Speech module. Proposed as a
-   setting, off by default; say if it is in or out of the first release.
-4. **Package identifier.** Android and iOS need a reverse-domain id that
-   will never change. `org.qtproject.example` is what is there now.
-5. **CJK fonts.** Japanese and Chinese fonts are 5-10 MB each. The proposal
+Answered on 2026-10-13 and folded into the tables above: failed-scan
+recording (developer builds only), reading turns aloud (out), US English
+(no), the identifier (`org.iainchesworth.cubeulator`).
+
+Still open:
+
+1. **CJK fonts.** Japanese and Chinese fonts are 5-10 MB each. The proposal
    is to use the system's own, which every target OS ships except minimal
-   Linux installs. See `platforms.md`.
+   Linux installs. See `platforms.md`. It stands unless told otherwise.
+2. **Code signing** for the Windows installer and the macOS app
+   (`platforms.md`). Needed before a public release, not before then.

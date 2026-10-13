@@ -148,10 +148,11 @@ It is possible to follow the solve by ear: hold as told, then one sentence
 a turn, advancing with Space or a double tap. Two things make it workable
 and both are proposals:
 
-- **Read turns aloud** (Settings > Solving), using the platform's own
-  speech, so that a screen reader is not needed just for this and a
-  sighted person with their eyes on the cube gets it too. Open question 3
-  in the brief.
+- **Read turns aloud**, using the platform's own speech, so that a screen
+  reader is not needed just for this and a sighted person with their eyes
+  on the cube gets it too. **Out of the first release** *(Iain,
+  2026-10-13)*. Until it exists, following by ear needs the platform's
+  screen reader, which reads the same sentences.
 - **Describe the cube**, for checking by touch-free comparison at a stage
   change. A person who cannot see the cube's colours cannot make that
   comparison at all; for them the stage check is skipped by one key.
