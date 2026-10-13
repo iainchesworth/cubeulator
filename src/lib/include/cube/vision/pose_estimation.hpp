@@ -48,7 +48,8 @@ struct PoseSeed {
 // into OpenCV extrinsics (PoseSeed rvec via cv::Rodrigues) without
 // re-deriving the axis reconciliation and silently disagreeing with it.
 [[nodiscard]] std::array<float, 4> display_quaternion(const cv::Matx33d& opencv_rotation);
-[[nodiscard]] cv::Matx33d opencv_rotation_from_display(const std::array<float, 4>& display_orientation);
+[[nodiscard]] cv::Matx33d opencv_rotation_from_display(
+    const std::array<float, 4>& display_orientation);
 
 // Derives an observe_corner() hint from a predicted pose: which three
 // model faces the prediction says are visible, re-assigned to the
@@ -175,8 +176,8 @@ struct CubePoseProjection {
 // seeded solve cannot explain the observed quad, the unseeded result
 // stands untouched.
 [[nodiscard]] Result<CubePoseProjection> project_cube_from_face(const FaceObservation& observation,
-                                                                 cv::Size frame_size,
-                                                                 const PoseSeed* seed = nullptr);
+                                                                cv::Size frame_size,
+                                                                const PoseSeed* seed = nullptr);
 
 // As above from a corner view, where the three visible face quads pin
 // seven of the eight corners directly; the hidden eighth is completed by
@@ -207,9 +208,8 @@ struct CubePoseProjection {
 // runs as before - so a seed can only convert an invalid-orientation
 // reading into a valid one or steer between gate-passing solutions, never
 // weaken the gates.
-[[nodiscard]] Result<CubePoseProjection> project_cube_from_corner(const CornerObservation& observation,
-                                                                   cv::Size frame_size,
-                                                                   const PoseSeed* seed = nullptr);
+[[nodiscard]] Result<CubePoseProjection> project_cube_from_corner(
+    const CornerObservation& observation, cv::Size frame_size, const PoseSeed* seed = nullptr);
 
 // As above from a two-face edge view: the two fitted quads pin six unique
 // cube vertices (the shared edge's two endpoints coincide by the
@@ -235,7 +235,7 @@ struct CubePoseProjection {
 // and nothing else - EdgeObservation carries no colour and this function
 // must never grow a sampling side-channel.
 [[nodiscard]] Result<CubePoseProjection> project_cube_from_edge(const EdgeObservation& observation,
-                                                                 cv::Size frame_size,
-                                                                 const PoseSeed* seed = nullptr);
+                                                                cv::Size frame_size,
+                                                                const PoseSeed* seed = nullptr);
 
 }  // namespace cube::vision

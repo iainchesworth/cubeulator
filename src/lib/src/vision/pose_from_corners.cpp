@@ -9,9 +9,9 @@
 
 namespace cube::vision {
 
-Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& detection, cv::Size frame_size,
-                                                   float min_confidence,
-                                                   const std::optional<cv::Matx33d>& camera_matrix) {
+Result<CornerPnpResult> estimate_pose_from_corners(
+    const CornerDetectionResult& detection, cv::Size frame_size, float min_confidence,
+    const std::optional<cv::Matx33d>& camera_matrix) {
     std::vector<cv::Point3f> model_points;
     std::vector<cv::Point2f> image_points;
     for (int id = 0; id < 8; ++id) {
@@ -36,11 +36,13 @@ Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& 
     // than returning false, and a detector hiccup must degrade to
     // "no pose", never to an exception through the pipeline.
     try {
-        if (!cv::solvePnP(model_points, image_points, camera, cv::noArray(), result.rvec, result.tvec,
+        if (!cv::solvePnP(model_points, image_points, camera, cv::noArray(), result.rvec,
+                          result.tvec,
                           /*useExtrinsicGuess=*/false, cv::SOLVEPNP_SQPNP)) {
             return std::unexpected(CubeError::no_valid_cube_detected);
         }
-        cv::solvePnPRefineLM(model_points, image_points, camera, cv::noArray(), result.rvec, result.tvec);
+        cv::solvePnPRefineLM(model_points, image_points, camera, cv::noArray(), result.rvec,
+                             result.tvec);
     } catch (const cv::Exception&) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
@@ -50,7 +52,8 @@ Result<CornerPnpResult> estimate_pose_from_corners(const CornerDetectionResult& 
     cv::Rodrigues(result.rvec, rotation);
     for (const auto& point : model_points) {
         const cv::Matx31d camera_point =
-            rotation * cv::Matx31d(point.x, point.y, point.z) + cv::Matx31d(result.tvec[0], result.tvec[1], result.tvec[2]);
+            rotation * cv::Matx31d(point.x, point.y, point.z) +
+            cv::Matx31d(result.tvec[0], result.tvec[1], result.tvec[2]);
         if (camera_point(2, 0) <= 0.0) {
             return std::unexpected(CubeError::no_valid_cube_detected);
         }
@@ -95,9 +98,9 @@ const std::vector<std::array<int, 8>>& singmaster_rotation_permutations() {
         for (std::size_t i = 0; i < rotations.size(); ++i) {
             for (const auto& generator : {rot_y, rot_z}) {
                 const cv::Matx33f candidate = generator * rotations[i];
-                const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33f& r) {
-                    return cv::norm(r - candidate) < 0.1;
-                });
+                const bool known = std::any_of(
+                    rotations.begin(), rotations.end(),
+                    [&](const cv::Matx33f& r) { return cv::norm(r - candidate) < 0.1; });
                 if (!known) {
                     rotations.push_back(candidate);
                 }

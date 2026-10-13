@@ -49,8 +49,9 @@ struct SlotAssignment {
 // Nearest-integer-lattice-slot assignment under (anchor, col_step,
 // row_step), keeping the closer of any two candidates competing for one
 // slot - the same scheme grid_detection.cpp's classify_candidates() uses.
-[[nodiscard]] SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Point2f anchor,
-                                               cv::Point2f col_step, cv::Point2f row_step);
+[[nodiscard]] SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers,
+                                               cv::Point2f anchor, cv::Point2f col_step,
+                                               cv::Point2f row_step);
 
 struct FaceFit {
     cv::Point2f anchor;    // centre-cell (row=1, col=1) position
@@ -71,9 +72,9 @@ struct FaceFit {
 // basis scaled by the sector's own pitch, provisional classification,
 // affine refit, final classification. Floors default to the corner path's
 // historical values (see above).
-[[nodiscard]] std::optional<FaceFit> fit_face_grid(const std::vector<cv::Point2f>& centers, cv::Point2f col_dir,
-                                                   cv::Point2f row_dir,
-                                                   std::size_t min_candidates = kDefaultMinFaceCandidates,
-                                                   int min_inliers = kDefaultMinFaceInliers);
+[[nodiscard]] std::optional<FaceFit> fit_face_grid(
+    const std::vector<cv::Point2f>& centers, cv::Point2f col_dir, cv::Point2f row_dir,
+    std::size_t min_candidates = kDefaultMinFaceCandidates,
+    int min_inliers = kDefaultMinFaceInliers);
 
 }  // namespace cube::vision::detail

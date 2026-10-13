@@ -25,9 +25,9 @@ const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>>& face_permutations
         for (std::size_t i = 0; i < rotations.size(); ++i) {
             for (const auto& generator : {rot_y, rot_z}) {
                 const cv::Matx33d candidate = generator * rotations[i];
-                const bool known = std::any_of(rotations.begin(), rotations.end(), [&](const cv::Matx33d& r) {
-                    return cv::norm(r - candidate) < 0.1;
-                });
+                const bool known = std::any_of(
+                    rotations.begin(), rotations.end(),
+                    [&](const cv::Matx33d& r) { return cv::norm(r - candidate) < 0.1; });
                 if (!known) {
                     rotations.push_back(candidate);
                 }
@@ -42,7 +42,8 @@ const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>>& face_permutations
                 const cv::Vec3d mapped = rotation * axis;
                 for (int target = 0; target < 3; ++target) {
                     if (std::abs(mapped[target]) > 0.9) {
-                        perm[static_cast<std::size_t>(face)] = target * 2 + (mapped[target] > 0 ? 0 : 1);
+                        perm[static_cast<std::size_t>(face)] =
+                            target * 2 + (mapped[target] > 0 ? 0 : 1);
                     }
                 }
             }
@@ -127,8 +128,8 @@ const std::vector<std::pair<cv::Matx33d, std::array<int, 6>>>& face_permutations
 
 }  // namespace
 
-FeedResult add_observation(FusionStore& fusion, std::map<int, int>& generation_of_epoch, int gauge_epoch,
-                           int face_id, const FaceObservation& observation) {
+FeedResult add_observation(FusionStore& fusion, std::map<int, int>& generation_of_epoch,
+                           int gauge_epoch, int face_id, const FaceObservation& observation) {
     FeedResult result;
     int& generation = generation_of_epoch[gauge_epoch];
     int sub = gauge_epoch * 1000 + generation;
@@ -197,7 +198,8 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                         if (!newer_face) {
                             continue;
                         }
-                        const auto older_it = older->second.find(perm[static_cast<std::size_t>(face)]);
+                        const auto older_it =
+                            older->second.find(perm[static_cast<std::size_t>(face)]);
                         if (older_it == older->second.end()) {
                             continue;
                         }
@@ -206,7 +208,8 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                             continue;
                         }
                         ++shared;
-                        if (cv::norm(newer_face->lab[4] - older_face->lab[4]) > kRegisterVerifyCentreLab) {
+                        if (cv::norm(newer_face->lab[4] - older_face->lab[4]) >
+                            kRegisterVerifyCentreLab) {
                             candidate_verified = false;
                         }
                         double face_total = 0.0;
@@ -216,8 +219,9 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                             if (face_old != perm[static_cast<std::size_t>(face)] || cell_old < 0) {
                                 continue;
                             }
-                            face_total += cell_cost(newer_face->lab[static_cast<std::size_t>(cell)],
-                                                    older_face->lab[static_cast<std::size_t>(cell_old)]);
+                            face_total +=
+                                cell_cost(newer_face->lab[static_cast<std::size_t>(cell)],
+                                          older_face->lab[static_cast<std::size_t>(cell_old)]);
                             ++face_cells;
                         }
                         // Only a full nine-cell grid may carry the score:
@@ -288,7 +292,8 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                 // stand, and all its ambiguous thin pairs stay refused -
                 // their competing rolls land on slots without data, which
                 // no verify can refute).
-                if (chosen_perm == nullptr && best_v_perm != nullptr && best_v_cost <= kRegisterRadiusHue &&
+                if (chosen_perm == nullptr && best_v_perm != nullptr &&
+                    best_v_cost <= kRegisterRadiusHue &&
                     (second_v_cost < 0.0 || second_v_cost - best_v_cost >= kRegisterMarginHue)) {
                     chosen_perm = best_v_perm;
                     chosen_rotation = best_v_rotation;
@@ -341,7 +346,8 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                                      if (a->second.converged() != b->second.converged()) {
                                          return a->second.converged();
                                      }
-                                     return a->second.observation_count() > b->second.observation_count();
+                                     return a->second.observation_count() >
+                                            b->second.observation_count();
                                  });
                 for (const auto& entry : transplant_order) {
                     const int face = entry->first;
@@ -362,14 +368,17 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                     // roll-invariant, so this reads the same before and
                     // after the cell re-index below.
                     bool duplicates_settled = false;
-                    if (aggregator.observation_count() >= static_cast<std::size_t>(kRegisterScoreFloor)) {
+                    if (aggregator.observation_count() >=
+                        static_cast<std::size_t>(kRegisterScoreFloor)) {
                         const cv::Vec3f centre = aggregator.capture().lab[4];
                         for (const auto& [other_id, other] : older->second) {
                             if (other_id == target ||
-                                other.observation_count() < static_cast<std::size_t>(kRegisterScoreFloor)) {
+                                other.observation_count() <
+                                    static_cast<std::size_t>(kRegisterScoreFloor)) {
                                 continue;
                             }
-                            if (cv::norm(centre - other.capture().lab[4]) < kCrossSlotDuplicateLab) {
+                            if (cv::norm(centre - other.capture().lab[4]) <
+                                kCrossSlotDuplicateLab) {
                                 duplicates_settled = true;
                                 break;
                             }
@@ -383,7 +392,8 @@ RegistrationStats register_epochs(FusionStore& fusion) {
                         std::array<bool, 9> cell_taken{};
                         bool mapping_ok = true;
                         for (int cell = 0; cell < 9 && mapping_ok; ++cell) {
-                            const auto [face_old, cell_old] = map_cell(*chosen_rotation, face, cell);
+                            const auto [face_old, cell_old] =
+                                map_cell(*chosen_rotation, face, cell);
                             if (face_old != target || cell_old < 0 || cell_old > 8 ||
                                 cell_taken[static_cast<std::size_t>(cell_old)]) {
                                 mapping_ok = false;
@@ -417,9 +427,10 @@ int distinct_converged_faces(const std::map<int, FaceAggregator>& faces) {
             continue;
         }
         const cv::Vec3f centre = aggregator.capture().lab[4];
-        const bool duplicate = std::any_of(counted.begin(), counted.end(), [&](const cv::Vec3f& seen) {
-            return cv::norm(centre - seen) < kCrossSlotDuplicateLab;
-        });
+        const bool duplicate =
+            std::any_of(counted.begin(), counted.end(), [&](const cv::Vec3f& seen) {
+                return cv::norm(centre - seen) < kCrossSlotDuplicateLab;
+            });
         if (!duplicate) {
             counted.push_back(centre);
         }

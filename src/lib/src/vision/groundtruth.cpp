@@ -63,7 +63,8 @@ private:
     }
 
     void skip_whitespace() {
-        while (pos_ < text_.size() && (std::isspace(static_cast<unsigned char>(text_[pos_])) != 0)) {
+        while (pos_ < text_.size() &&
+               (std::isspace(static_cast<unsigned char>(text_[pos_])) != 0)) {
             ++pos_;
         }
     }
@@ -83,8 +84,10 @@ private:
         }
         const char ch = text_[pos_];
         switch (ch) {
-            case '{': return parse_object();
-            case '[': return parse_array();
+            case '{':
+                return parse_object();
+            case '[':
+                return parse_array();
             case '"': {
                 auto text = parse_string();
                 if (!text) {
@@ -110,13 +113,15 @@ private:
                     return JsonValue{nullptr};
                 }
                 return error("bad literal");
-            default: return parse_number();
+            default:
+                return parse_number();
         }
     }
 
     Parsed<std::string> parse_string() {
         if (!consume('"')) {
-            return std::unexpected("JSON error at offset " + std::to_string(pos_) + ": expected string");
+            return std::unexpected("JSON error at offset " + std::to_string(pos_) +
+                                   ": expected string");
         }
         std::string out;
         while (pos_ < text_.size()) {
@@ -130,9 +135,15 @@ private:
                 }
                 const char escaped = text_[pos_++];
                 switch (escaped) {
-                    case 'n': out.push_back('\n'); break;
-                    case 'r': out.push_back('\r'); break;
-                    case 't': out.push_back('\t'); break;
+                    case 'n':
+                        out.push_back('\n');
+                        break;
+                    case 'r':
+                        out.push_back('\r');
+                        break;
+                    case 't':
+                        out.push_back('\t');
+                        break;
                     case 'u':
                         // The sidecars never need non-ASCII escapes; accept
                         // and substitute so a stray one cannot derail a
@@ -140,7 +151,8 @@ private:
                         pos_ = std::min(pos_ + 4, text_.size());
                         out.push_back('?');
                         break;
-                    default: out.push_back(escaped);
+                    default:
+                        out.push_back(escaped);
                 }
             } else {
                 out.push_back(ch);
@@ -153,7 +165,8 @@ private:
         const std::size_t start = pos_;
         while (pos_ < text_.size() &&
                (std::isdigit(static_cast<unsigned char>(text_[pos_])) != 0 || text_[pos_] == '-' ||
-                text_[pos_] == '+' || text_[pos_] == '.' || text_[pos_] == 'e' || text_[pos_] == 'E')) {
+                text_[pos_] == '+' || text_[pos_] == '.' || text_[pos_] == 'e' ||
+                text_[pos_] == 'E')) {
             ++pos_;
         }
         double number = 0.0;
@@ -272,13 +285,20 @@ std::optional<cube::model::Face> face_from_letter(const std::string& letter) {
         return std::nullopt;
     }
     switch (letter[0]) {
-        case 'U': return cube::model::Face::U;
-        case 'R': return cube::model::Face::R;
-        case 'F': return cube::model::Face::F;
-        case 'D': return cube::model::Face::D;
-        case 'L': return cube::model::Face::L;
-        case 'B': return cube::model::Face::B;
-        default: return std::nullopt;
+        case 'U':
+            return cube::model::Face::U;
+        case 'R':
+            return cube::model::Face::R;
+        case 'F':
+            return cube::model::Face::F;
+        case 'D':
+            return cube::model::Face::D;
+        case 'L':
+            return cube::model::Face::L;
+        case 'B':
+            return cube::model::Face::B;
+        default:
+            return std::nullopt;
     }
 }
 
@@ -307,7 +327,8 @@ Parsed<Segments> parse_segments(const std::string& json_text) {
         }
     }
     const auto* segments = root->find("segments");
-    const auto* segment_array = segments != nullptr ? std::get_if<JsonArray>(&segments->value) : nullptr;
+    const auto* segment_array =
+        segments != nullptr ? std::get_if<JsonArray>(&segments->value) : nullptr;
     if (segment_array == nullptr) {
         return std::unexpected("segments.json: missing 'segments' array");
     }
@@ -351,13 +372,16 @@ Parsed<Segments> parse_segments(const std::string& json_text) {
         for (const int pass : {segment.start, segment.end}) {
             const TagSet tags = out.tags_at(pass);
             if ((tags & kInFrame) != 0 && (tags & kAbsent) != 0) {
-                return std::unexpected("pass " + std::to_string(pass) + " is both in_frame and absent");
+                return std::unexpected("pass " + std::to_string(pass) +
+                                       " is both in_frame and absent");
             }
             if ((tags & kSteady) != 0 && (tags & kTurning) != 0) {
-                return std::unexpected("pass " + std::to_string(pass) + " is both steady and turning");
+                return std::unexpected("pass " + std::to_string(pass) +
+                                       " is both steady and turning");
             }
             if ((tags & kOccluded) != 0 && (tags & kInFrame) == 0) {
-                return std::unexpected("pass " + std::to_string(pass) + " is occluded but not in_frame");
+                return std::unexpected("pass " + std::to_string(pass) +
+                                       " is occluded but not in_frame");
             }
         }
     }
@@ -383,7 +407,8 @@ Parsed<Keyframe> parse_keyframe(const std::string& json_text) {
     }
 
     const auto* corners = root->find("corners");
-    const auto* corner_array = corners != nullptr ? std::get_if<JsonArray>(&corners->value) : nullptr;
+    const auto* corner_array =
+        corners != nullptr ? std::get_if<JsonArray>(&corners->value) : nullptr;
     if (corner_array == nullptr) {
         return std::unexpected("keyframe: missing 'corners' array");
     }
@@ -394,11 +419,13 @@ Parsed<Keyframe> parse_keyframe(const std::string& json_text) {
         const auto id = as_number(entry.find("model_id"));
         const auto point = as_point(&entry);
         if (!id || *id < 0 || *id > 7 || !point) {
-            return std::unexpected("corners[" + std::to_string(i) + "]: bad model_id or coordinates");
+            return std::unexpected("corners[" + std::to_string(i) +
+                                   "]: bad model_id or coordinates");
         }
         corner.model_id = static_cast<int>(*id);
         if (seen_ids[corner.model_id]) {
-            return std::unexpected("corners: duplicate model_id " + std::to_string(corner.model_id));
+            return std::unexpected("corners: duplicate model_id " +
+                                   std::to_string(corner.model_id));
         }
         seen_ids[corner.model_id] = true;
         corner.px = *point;
@@ -414,7 +441,8 @@ Parsed<Keyframe> parse_keyframe(const std::string& json_text) {
         const auto& entry = (*face_array)[i];
         LabeledFace face;
         const auto* letter = entry.find("face");
-        const auto* letter_text = letter != nullptr ? std::get_if<std::string>(&letter->value) : nullptr;
+        const auto* letter_text =
+            letter != nullptr ? std::get_if<std::string>(&letter->value) : nullptr;
         const auto face_id = letter_text != nullptr ? face_from_letter(*letter_text) : std::nullopt;
         if (!face_id) {
             return std::unexpected("faces[" + std::to_string(i) + "]: bad face letter");
@@ -425,20 +453,24 @@ Parsed<Keyframe> parse_keyframe(const std::string& json_text) {
         for (std::size_t c = 0; c < 4; ++c) {
             const auto point = as_point(quad != nullptr ? quad->find(kQuadKeys[c]) : nullptr);
             if (!point) {
-                return std::unexpected("faces[" + std::to_string(i) + "]: quad missing " + kQuadKeys[c]);
+                return std::unexpected("faces[" + std::to_string(i) + "]: quad missing " +
+                                       kQuadKeys[c]);
             }
             face.quad[c] = *point;
         }
         const auto* centres = entry.find("centres");
-        const auto* centre_array = centres != nullptr ? std::get_if<JsonArray>(&centres->value) : nullptr;
+        const auto* centre_array =
+            centres != nullptr ? std::get_if<JsonArray>(&centres->value) : nullptr;
         if (centre_array == nullptr || centre_array->size() != 9) {
-            return std::unexpected("faces[" + std::to_string(i) + "]: centres must be exactly 9 points, got " +
-                                   std::to_string(centre_array == nullptr ? 0 : centre_array->size()));
+            return std::unexpected(
+                "faces[" + std::to_string(i) + "]: centres must be exactly 9 points, got " +
+                std::to_string(centre_array == nullptr ? 0 : centre_array->size()));
         }
         for (std::size_t c = 0; c < 9; ++c) {
             const auto point = as_point(&(*centre_array)[c]);
             if (!point) {
-                return std::unexpected("faces[" + std::to_string(i) + "]: centres[" + std::to_string(c) + "] bad");
+                return std::unexpected("faces[" + std::to_string(i) + "]: centres[" +
+                                       std::to_string(c) + "] bad");
             }
             face.centres[c] = *point;
         }
@@ -473,12 +505,14 @@ Parsed<ClipGroundTruth> load_clip(const std::string& recording_dir) {
             }
             auto keyframe = parse_keyframe(read_file(entry.path()));
             if (!keyframe) {
-                return std::unexpected("keyframes/" + entry.path().filename().string() + ": " + keyframe.error());
+                return std::unexpected("keyframes/" + entry.path().filename().string() + ": " +
+                                       keyframe.error());
             }
             const int name_pass = std::atoi(entry.path().stem().string().c_str());
             if (keyframe->pass != name_pass) {
-                return std::unexpected("keyframes/" + entry.path().filename().string() + ": pass field " +
-                                       std::to_string(keyframe->pass) + " does not match filename");
+                return std::unexpected("keyframes/" + entry.path().filename().string() +
+                                       ": pass field " + std::to_string(keyframe->pass) +
+                                       " does not match filename");
             }
             out.keyframes.emplace(keyframe->pass, std::move(*keyframe));
         }

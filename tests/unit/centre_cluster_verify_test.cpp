@@ -85,34 +85,52 @@ constexpr std::array<ClipFaces, 5> kConsensus{{
 
 Color color_of(char letter) noexcept {
     switch (letter) {
-        case 'W': return Color::White;
-        case 'Y': return Color::Yellow;
-        case 'R': return Color::Red;
-        case 'O': return Color::Orange;
-        case 'G': return Color::Green;
-        default: return Color::Blue;
+        case 'W':
+            return Color::White;
+        case 'Y':
+            return Color::Yellow;
+        case 'R':
+            return Color::Red;
+        case 'O':
+            return Color::Orange;
+        case 'G':
+            return Color::Green;
+        default:
+            return Color::Blue;
     }
 }
 
 char letter_of(Color color) noexcept {
     switch (color) {
-        case Color::White: return 'W';
-        case Color::Yellow: return 'Y';
-        case Color::Red: return 'R';
-        case Color::Orange: return 'O';
-        case Color::Green: return 'G';
-        default: return 'B';
+        case Color::White:
+            return 'W';
+        case Color::Yellow:
+            return 'Y';
+        case Color::Red:
+            return 'R';
+        case Color::Orange:
+            return 'O';
+        case Color::Green:
+            return 'G';
+        default:
+            return 'B';
     }
 }
 
 cube::model::FacetColor facet_of(Color color) noexcept {
     switch (color) {
-        case Color::White: return cube::model::FacetColor::white;
-        case Color::Yellow: return cube::model::FacetColor::yellow;
-        case Color::Red: return cube::model::FacetColor::red;
-        case Color::Orange: return cube::model::FacetColor::orange;
-        case Color::Green: return cube::model::FacetColor::green;
-        default: return cube::model::FacetColor::blue;
+        case Color::White:
+            return cube::model::FacetColor::white;
+        case Color::Yellow:
+            return cube::model::FacetColor::yellow;
+        case Color::Red:
+            return cube::model::FacetColor::red;
+        case Color::Orange:
+            return cube::model::FacetColor::orange;
+        case Color::Green:
+            return cube::model::FacetColor::green;
+        default:
+            return cube::model::FacetColor::blue;
     }
 }
 
@@ -345,10 +363,13 @@ TEST_CASE("CentreClusterVerify", "[.cc-verify]") {
             mirrored[f] = mirror(faces[f]);
         }
         const Breakdown flipped = breakdown(mirrored);
-        const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(to_facelets(faces));
-        std::printf("  %s centres_distinct=%d valid=%4d solvable=%4d | MIRRORED valid=%4d solvable=%4d | assemble=%s\n",
-                    clip.clip, plain.centres_distinct ? 1 : 0, plain.valid, plain.solvable, flipped.valid,
-                    flipped.solvable, assembled.has_value() ? "OK" : "failed");
+        const auto assembled =
+            cube::solver::assemble_scanned_faces_with_mapping(to_facelets(faces));
+        std::printf(
+            "  %s centres_distinct=%d valid=%4d solvable=%4d | MIRRORED valid=%4d solvable=%4d | "
+            "assemble=%s\n",
+            clip.clip, plain.centres_distinct ? 1 : 0, plain.valid, plain.solvable, flipped.valid,
+            flipped.solvable, assembled.has_value() ? "OK" : "failed");
         if (assembled.has_value()) {
             const auto solution = cube::solver::solve(assembled->cube);
             std::printf("    SOLVER: %s\n", solution.has_value() ? "solved" : "unsolvable");
@@ -396,9 +417,10 @@ TEST_CASE("CentreClusterVerify", "[.cc-verify]") {
                 ++any_solvable;
             }
         }
-        std::printf("  random census cubes (%d trials): %.2f%% have >=1 physically-valid rotation, "
-                    "%.2f%% have >=1 SOLVABLE rotation\n",
-                    kTrials, 100.0 * any_valid / kTrials, 100.0 * any_solvable / kTrials);
+        std::printf(
+            "  random census cubes (%d trials): %.2f%% have >=1 physically-valid rotation, "
+            "%.2f%% have >=1 SOLVABLE rotation\n",
+            kTrials, 100.0 * any_valid / kTrials, 100.0 * any_solvable / kTrials);
         std::printf("  mean physically-valid rotations per random cube: %.3f of 4096\n",
                     static_cast<double>(valid_combos) / kTrials);
     }
@@ -434,12 +456,13 @@ TEST_CASE("CentreClusterVerify", "[.cc-verify]") {
             if (breakdown(damaged).valid > 0) {
                 ++valid_any;
             }
-            if (cube::solver::assemble_scanned_faces_with_mapping(to_facelets(damaged)).has_value()) {
+            if (cube::solver::assemble_scanned_faces_with_mapping(to_facelets(damaged))
+                    .has_value()) {
                 ++assembled;
             }
         }
-        std::printf("  %d swaps (~%.1f stickers wrong): %.1f%% physically valid, %.1f%% assemble\n", swaps,
-                    static_cast<double>(changed) / kTrials, 100.0 * valid_any / kTrials,
+        std::printf("  %d swaps (~%.1f stickers wrong): %.1f%% physically valid, %.1f%% assemble\n",
+                    swaps, static_cast<double>(changed) / kTrials, 100.0 * valid_any / kTrials,
                     100.0 * assembled / kTrials);
     }
 

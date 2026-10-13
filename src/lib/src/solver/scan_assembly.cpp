@@ -261,13 +261,15 @@ Result<AssembledScan> assemble_scanned_faces_with_mapping(
     return AssembledScan{*found, input_index_of_face};
 }
 
-Result<Cube> assemble_scanned_faces(const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
+Result<Cube> assemble_scanned_faces(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept {
     return assemble_scanned_faces_with_mapping(faces).transform(
         [](const AssembledScan& assembled) { return assembled.cube; });
 }
 
-RotationHint rotation_hint_for_tracked_scan(const std::array<std::array<model::Facelet, 9>, 6>& faces,
-                                            const std::array<int, 6>& model_face_ids) noexcept {
+RotationHint rotation_hint_for_tracked_scan(
+    const std::array<std::array<model::Facelet, 9>, 6>& faces,
+    const std::array<int, 6>& model_face_ids) noexcept {
     // Solver-frame outward axis per Face - the same embedding cube.cpp's
     // face_from_normal/position_of derivation fixes (X runs L->R, Y D->U,
     // Z B->F).
@@ -325,7 +327,8 @@ RotationHint rotation_hint_for_tracked_scan(const std::array<std::array<model::F
         const int body_axis = id / 2;
         const int sign = (id % 2 == 0) ? 1 : -1;
         const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
-        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1], sign * solver_axis[2]};
+        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1],
+                                          sign * solver_axis[2]};
         if (!column_set[static_cast<std::size_t>(body_axis)]) {
             column[static_cast<std::size_t>(body_axis)] = image;
             column_set[static_cast<std::size_t>(body_axis)] = true;
@@ -336,7 +339,8 @@ RotationHint rotation_hint_for_tracked_scan(const std::array<std::array<model::F
     const auto& cx = column[0];
     const auto& cy = column[1];
     const auto& cz = column[2];
-    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) -
+                    cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
                     cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
     if (det != 1) {
         return {};
@@ -521,7 +525,8 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
         const int body_axis = body_axis_of(body_faces[i]);
         const int sign = body_sign_of(body_faces[i]);
         const std::array<int, 3> solver_axis = axis_of_face(face_of_input[i]);
-        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1], sign * solver_axis[2]};
+        const std::array<int, 3> image = {sign * solver_axis[0], sign * solver_axis[1],
+                                          sign * solver_axis[2]};
         if (!column_set[static_cast<std::size_t>(body_axis)]) {
             column[static_cast<std::size_t>(body_axis)] = image;
             column_set[static_cast<std::size_t>(body_axis)] = true;
@@ -532,7 +537,8 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
     const auto& cx = column[0];
     const auto& cy = column[1];
     const auto& cz = column[2];
-    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) - cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
+    const int det = cx[0] * (cy[1] * cz[2] - cy[2] * cz[1]) -
+                    cy[0] * (cx[1] * cz[2] - cx[2] * cz[1]) +
                     cz[0] * (cx[1] * cy[2] - cx[2] * cy[1]);
     if (det != 1) {
         return {};
@@ -560,7 +566,8 @@ RotationHint rotation_hint_for_store_scan(const std::array<std::array<model::Fac
         std::array<int, 9> source_of{};
         source_of.fill(-1);
         for (int cell = 0; cell < 9; ++cell) {
-            const int body_cell = seam_flipped ? kFlipColumns[static_cast<std::size_t>(cell)] : cell;
+            const int body_cell =
+                seam_flipped ? kFlipColumns[static_cast<std::size_t>(cell)] : cell;
             const int row = body_cell / 3;
             const int col = body_cell % 3;
             std::array<int, 3> p{};

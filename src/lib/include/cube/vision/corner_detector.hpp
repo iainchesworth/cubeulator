@@ -31,8 +31,8 @@
 namespace cube::vision {
 
 struct DetectedCorner {
-    cv::Point2f px{};        // frame pixels (un-letterboxed)
-    float confidence = 0.0F; // keypoint confidence (sigmoid)
+    cv::Point2f px{};         // frame pixels (un-letterboxed)
+    float confidence = 0.0F;  // keypoint confidence (sigmoid)
 };
 
 struct CornerDetectionResult {
@@ -47,12 +47,13 @@ struct CornerDetectionResult {
 
 class OnnxCornerDetector {
 public:
-    static constexpr float kDefaultScoreThreshold = 0.25F;   // matches the eval protocol
-    static constexpr float kDefaultKeypointFloor = 0.30F;    // per-corner display/consume floor
+    static constexpr float kDefaultScoreThreshold = 0.25F;  // matches the eval protocol
+    static constexpr float kDefaultKeypointFloor = 0.30F;   // per-corner display/consume floor
 
-    [[nodiscard]] static Result<std::unique_ptr<OnnxCornerDetector>> create(const std::filesystem::path& model_path);
-    [[nodiscard]] static Result<std::unique_ptr<OnnxCornerDetector>> create_from_memory(const void* model_data,
-                                                                                        std::size_t model_data_size);
+    [[nodiscard]] static Result<std::unique_ptr<OnnxCornerDetector>> create(
+        const std::filesystem::path& model_path);
+    [[nodiscard]] static Result<std::unique_ptr<OnnxCornerDetector>> create_from_memory(
+        const void* model_data, std::size_t model_data_size);
 
     ~OnnxCornerDetector();
     OnnxCornerDetector(OnnxCornerDetector&&) noexcept;
@@ -60,8 +61,8 @@ public:
 
     // One inference on a BGR frame of any size. Returns found=false (not
     // an error) when no anchor clears `score_threshold`.
-    [[nodiscard]] Result<CornerDetectionResult> detect(const cv::Mat& bgr_frame,
-                                                       float score_threshold = kDefaultScoreThreshold);
+    [[nodiscard]] Result<CornerDetectionResult> detect(
+        const cv::Mat& bgr_frame, float score_threshold = kDefaultScoreThreshold);
 
 private:
     struct Impl;
@@ -77,8 +78,9 @@ namespace detail {
 // parameters (scale r, left/top pad), and the original frame size,
 // produce the best-anchor detection in frame pixels with keypoint slots
 // mapped to Singmaster ids.
-[[nodiscard]] CornerDetectionResult decode_pose_output(const float* data, int anchors, float score_threshold,
-                                                       float scale, float pad_x, float pad_y, cv::Size frame);
+[[nodiscard]] CornerDetectionResult decode_pose_output(const float* data, int anchors,
+                                                       float score_threshold, float scale,
+                                                       float pad_x, float pad_y, cv::Size frame);
 
 // Keypoint slot ids are VIEW-CANONICAL, not body-fixed - measured fact,
 // load-bearing, do not "fix" this with a remap table (two of them have

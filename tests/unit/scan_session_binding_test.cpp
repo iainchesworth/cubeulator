@@ -38,7 +38,7 @@ QtObject {
 }
 )QML";
 
-} // namespace
+}  // namespace
 
 TEST_CASE("ScanSession properties drive live QML bindings", "[qt][controllers][qml]") {
     ScanSession session;
@@ -73,7 +73,8 @@ TEST_CASE("ScanSession properties drive live QML bindings", "[qt][controllers][q
         // binding must have re-run - proven by the engine reporting no
         // binding loop or error and the value still tracking the getter.
         REQUIRE(probe->property("boundTrackingState").toString() == session.trackingState());
-        REQUIRE(probe->property("boundOrientationLength").toInt() == session.cubeOrientation().size());
+        REQUIRE(probe->property("boundOrientationLength").toInt() ==
+                session.cubeOrientation().size());
         REQUIRE(probe->property("boundReorienting").toBool() == session.reorienting());
     }
 

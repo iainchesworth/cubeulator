@@ -108,8 +108,9 @@ struct RecordedFrameInfo {
         const auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
         return ec == std::errc{} && ptr == field.data() + field.size();
     };
-    if (!parse_field(info.pass) || !parse_field(info.t_ms) || !parse_field(info.w) || !parse_field(info.h) ||
-        !parse_field(info.full_w) || !parse_field(info.full_h) || !line.empty()) {
+    if (!parse_field(info.pass) || !parse_field(info.t_ms) || !parse_field(info.w) ||
+        !parse_field(info.h) || !parse_field(info.full_w) || !parse_field(info.full_h) ||
+        !line.empty()) {
         return std::nullopt;
     }
     return info;

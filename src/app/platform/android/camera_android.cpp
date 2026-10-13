@@ -38,7 +38,8 @@ void open_permission_settings() {
     QJniObject uri = QJniObject::callStaticObjectMethod(
         "android/net/Uri", "fromParts",
         "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Landroid/net/Uri;",
-        QJniObject::fromString("package").object<jstring>(), package_name.object<jstring>(), nullptr);
+        QJniObject::fromString("package").object<jstring>(), package_name.object<jstring>(),
+        nullptr);
 
     QJniObject action = QJniObject::getStaticObjectField<jstring>(
         "android/provider/Settings", "ACTION_APPLICATION_DETAILS_SETTINGS");

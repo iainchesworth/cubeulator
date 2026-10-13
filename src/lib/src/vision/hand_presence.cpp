@@ -45,9 +45,9 @@ constexpr float kHandPresenceProbabilityThreshold = 0.5F;
 
 }  // namespace
 
-HandDetectionCapability check_hand_detection_capability(bool model_file_present,
-                                                          const std::vector<std::string>& execution_providers,
-                                                          bool user_enabled) {
+HandDetectionCapability check_hand_detection_capability(
+    bool model_file_present, const std::vector<std::string>& execution_providers,
+    bool user_enabled) {
     return HandDetectionCapability{
         .model_file_present = model_file_present,
         .execution_provider_available = !execution_providers.empty(),
@@ -65,7 +65,8 @@ struct OnnxHandPresenceDetector::Impl {
     // - see docs/dependency-strategy.md's general posture on this
     // dependency), so this MVP runs on the CPU provider onnxruntime always
     // supports rather than risk a provider that may not be linked in.
-    explicit Impl(const std::filesystem::path& model_path) : env(ORT_LOGGING_LEVEL_WARNING, "cube_hand_presence") {
+    explicit Impl(const std::filesystem::path& model_path)
+        : env(ORT_LOGGING_LEVEL_WARNING, "cube_hand_presence") {
         Ort::SessionOptions options;
         session = Ort::Session(env, model_path.c_str(), options);
         cache_io_names();
@@ -94,32 +95,38 @@ struct OnnxHandPresenceDetector::Impl {
     std::vector<std::string> output_names;
 };
 
-OnnxHandPresenceDetector::OnnxHandPresenceDetector(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+OnnxHandPresenceDetector::OnnxHandPresenceDetector(std::unique_ptr<Impl> impl)
+    : impl_(std::move(impl)) {}
 OnnxHandPresenceDetector::~OnnxHandPresenceDetector() = default;
 OnnxHandPresenceDetector::OnnxHandPresenceDetector(OnnxHandPresenceDetector&&) noexcept = default;
-OnnxHandPresenceDetector& OnnxHandPresenceDetector::operator=(OnnxHandPresenceDetector&&) noexcept = default;
+OnnxHandPresenceDetector& OnnxHandPresenceDetector::operator=(OnnxHandPresenceDetector&&) noexcept =
+    default;
 
 Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::create(
-    const std::filesystem::path& model_path, const std::vector<std::string>& /*execution_providers*/) {
+    const std::filesystem::path& model_path,
+    const std::vector<std::string>& /*execution_providers*/) {
     if (!std::filesystem::exists(model_path)) {
         return std::unexpected(CubeError::model_load_failed);
     }
     try {
         auto impl = std::make_unique<Impl>(model_path);
-        return std::unique_ptr<OnnxHandPresenceDetector>(new OnnxHandPresenceDetector(std::move(impl)));
+        return std::unique_ptr<OnnxHandPresenceDetector>(
+            new OnnxHandPresenceDetector(std::move(impl)));
     } catch (const Ort::Exception&) {
         return std::unexpected(CubeError::model_load_failed);
     }
 }
 
 Result<std::unique_ptr<OnnxHandPresenceDetector>> OnnxHandPresenceDetector::create_from_memory(
-    const void* model_data, std::size_t model_data_size, const std::vector<std::string>& /*execution_providers*/) {
+    const void* model_data, std::size_t model_data_size,
+    const std::vector<std::string>& /*execution_providers*/) {
     if (model_data == nullptr || model_data_size == 0) {
         return std::unexpected(CubeError::model_load_failed);
     }
     try {
         auto impl = std::make_unique<Impl>(model_data, model_data_size);
-        return std::unique_ptr<OnnxHandPresenceDetector>(new OnnxHandPresenceDetector(std::move(impl)));
+        return std::unique_ptr<OnnxHandPresenceDetector>(
+            new OnnxHandPresenceDetector(std::move(impl)));
     } catch (const Ort::Exception&) {
         return std::unexpected(CubeError::model_load_failed);
     }
@@ -151,8 +158,9 @@ Result<bool> OnnxHandPresenceDetector::hand_present(const cv::Mat& bgr_frame) {
     }
 
     try {
-        auto outputs = impl_->session.Run(Ort::RunOptions{nullptr}, input_name_ptrs.data(), &input_tensor, 1,
-                                           output_name_ptrs.data(), output_name_ptrs.size());
+        auto outputs =
+            impl_->session.Run(Ort::RunOptions{nullptr}, input_name_ptrs.data(), &input_tensor, 1,
+                               output_name_ptrs.data(), output_name_ptrs.size());
 
         // The confidence tensor is whichever output has a trailing dimension
         // of 1 (the box+landmark tensor's trailing dimension is 18) - this
@@ -199,8 +207,8 @@ std::unique_ptr<HandPresenceDetector> make_hand_presence_detector_from_memory(
     const HandDetectionCapability& capability, const void* model_data, std::size_t model_data_size,
     const std::vector<std::string>& execution_providers) {
     if (capability.should_use_model()) {
-        auto onnx_detector = OnnxHandPresenceDetector::create_from_memory(model_data, model_data_size,
-                                                                            execution_providers);
+        auto onnx_detector = OnnxHandPresenceDetector::create_from_memory(
+            model_data, model_data_size, execution_providers);
         if (onnx_detector.has_value()) {
             return std::move(*onnx_detector);
         }
@@ -209,7 +217,7 @@ std::unique_ptr<HandPresenceDetector> make_hand_presence_detector_from_memory(
 }
 
 std::filesystem::path resolve_hand_model_path(const std::filesystem::path& user_model_search_path,
-                                               const std::filesystem::path& bundled_model_path) {
+                                              const std::filesystem::path& bundled_model_path) {
     if (!user_model_search_path.empty()) {
         const auto candidate = user_model_search_path / bundled_model_path.filename();
         if (std::filesystem::exists(candidate)) {

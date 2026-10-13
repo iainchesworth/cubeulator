@@ -7,7 +7,8 @@ namespace cube::solver {
 bool cross_solved(const Cube& cube) noexcept {
     return cube.at(Face::D, 1) == Color::White && cube.at(Face::D, 3) == Color::White &&
            cube.at(Face::D, 5) == Color::White && cube.at(Face::D, 7) == Color::White &&
-           cube.at(Face::F, 7) == cube.at(Face::F, 4) && cube.at(Face::R, 7) == cube.at(Face::R, 4) &&
+           cube.at(Face::F, 7) == cube.at(Face::F, 4) &&
+           cube.at(Face::R, 7) == cube.at(Face::R, 4) &&
            cube.at(Face::B, 7) == cube.at(Face::B, 4) && cube.at(Face::L, 7) == cube.at(Face::L, 4);
 }
 

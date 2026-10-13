@@ -61,7 +61,8 @@ struct EdgeObservation {
 // edges, grids on opposite sides of the split) are the false-positive
 // budget, backed downstream by the pose solve's reprojection gate and the
 // tracker's acquisition streak.
-[[nodiscard]] Result<EdgeObservation> observe_edge(const cv::Mat& bgr_frame, const EdgeHint* hint = nullptr);
+[[nodiscard]] Result<EdgeObservation> observe_edge(const cv::Mat& bgr_frame,
+                                                   const EdgeHint* hint = nullptr);
 
 // Diagnostics seam for the offline frame-replay harness ([.frame-debug]).
 // Not a stable API for anything outside the vision module or its tests.
@@ -84,7 +85,8 @@ struct EdgeDiagnostics {
 
 // observe_edge with the funnel exposed; observe_edge() itself is a thin
 // wrapper over this with a null diagnostics pointer.
-[[nodiscard]] Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame, const EdgeHint* hint,
+[[nodiscard]] Result<EdgeObservation> observe_edge_diagnosed(const cv::Mat& bgr_frame,
+                                                             const EdgeHint* hint,
                                                              EdgeDiagnostics* diagnostics);
 
 }  // namespace detail

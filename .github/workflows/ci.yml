@@ -64,20 +64,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
       # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
       # Linux legs and the coverage job - see the fuller comment there on
       # why per-preset keys were wasteful/over quota.
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-x64-linux-
+          triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -127,6 +121,17 @@ jobs:
           jq -r '.[].file' build/linux-gcc-debug/compile_commands.json \
             | grep -E '/(src|tests)/' \
             | xargs clang-tidy-21 -p build/linux-gcc-debug --warnings-as-errors='*'
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
 
   # Picks the desktop build legs. A push, pull request or merge_group run
   # always gets all three; only a manual dispatch can narrow it. The matrix
@@ -215,13 +220,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      # vcpkg's x-gha binary caching provider was removed; 'files' +
-      # actions/cache is the simplest supported replacement. Set via
-      # GITHUB_ENV since the 'runner' context isn't available in job-level env:.
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
+      # vcpkg's x-gha binary caching provider was removed; its 'files' provider
+      # plus actions/cache is the supported replacement. The local actions below
+      # wrap that pair (restore now, save at the end of the job even on failure).
       # Keyed per vcpkg triplet, not per CMake preset: vcpkg builds both
       # debug and release variants of every package together in one pass,
       # regardless of our own project's build type, so linux-gcc-debug and
@@ -231,13 +232,11 @@ jobs:
       # duplication across every preset/triplet combination, causing
       # semi-random eviction (confirmed via the cache usage API - 10.7GB
       # across 15 entries, over the limit).
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-${{ matrix.triplet }}-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-${{ matrix.triplet }}-
+          triplet: ${{ matrix.triplet }}
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -324,6 +323,17 @@ jobs:
           path: build/${{ matrix.preset }}/system-test-output
           if-no-files-found: ignore
 
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: ${{ matrix.triplet }}
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
   android-build:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Android (arm64-v8a)' || 'Android (arm64-v8a)' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',android,') }}
@@ -373,21 +383,15 @@ jobs:
       - name: Install vcpkg build dependencies
         run: sudo apt-get install -y autoconf autoconf-archive automake libtool libltdl-dev
 
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
       # Keyed per vcpkg triplet (arm64-android) - see the fuller comment on
       # build-and-test above on why per-preset keys were wasteful/over the
       # 10GB cap; keeping the same scheme everywhere avoids reintroducing the
       # same mistake later.
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-arm64-android-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-arm64-android-
+          triplet: arm64-android
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -467,6 +471,17 @@ jobs:
           path: build/android-clang-release/src/app/android-build/build/outputs/apk/**/*.apk
           if-no-files-found: ignore
 
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: arm64-android
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
   ios-build:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - iOS (device, build-only, unsigned)' || 'iOS (device, build-only, unsigned)' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',ios,') }}
@@ -498,19 +513,13 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
       # Keyed per vcpkg triplet (arm64-ios), shared across debug/release -
       # see the equivalent comment on android-build above.
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-arm64-ios-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-arm64-ios-
+          triplet: arm64-ios
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -529,6 +538,17 @@ jobs:
 
       - name: Build
         run: cmake --build --preset ios-clang-release
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: arm64-ios
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
 
   # The system tests: the real app, started from its main() wiring, driven by
   # mouse, touch and key events, rendered for real. Qt Quick 3D has no
@@ -553,18 +573,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
       # The x64-linux triplet cache, shared with build-and-test's Linux leg.
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-x64-linux-
+          triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -652,6 +666,14 @@ jobs:
             build/coverage-app*.html
             build/coverage-app.json
 
+      # Saved even when a later step fails - see build-and-test.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
   coverage:
     name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Coverage (Linux, GCC)' || 'Coverage (Linux, GCC)' }}
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',coverage,') }}
@@ -676,20 +698,14 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Configure vcpkg binary cache
-        shell: bash
-        run: echo "VCPKG_BINARY_SOURCES=clear;files,${{ runner.temp }}/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
-
       # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
       # Linux legs and clang-tidy - see the fuller comment on build-and-test
       # above on why per-preset keys were wasteful/over the 10GB cap.
-      - name: Cache vcpkg binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: ./.github/actions/vcpkg-cache/restore
         with:
-          path: ${{ runner.temp }}/vcpkg-cache
-          key: vcpkg-binary-cache-x64-linux-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            vcpkg-binary-cache-x64-linux-
+          triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
         uses: lukka/get-cmake@f5b8fbb4d77cec1acc5a5f9f0df4beffaf5d98d9 # v4.3.4
@@ -737,3 +753,14 @@ jobs:
         with:
           name: coverage-report
           path: build/coverage*.html
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: ./.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}

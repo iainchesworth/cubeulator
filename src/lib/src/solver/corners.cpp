@@ -71,13 +71,15 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
             for (std::size_t j = 0; j <= i; ++j) {
                 const CornerSlot& s = kCornerSlots[j];
                 rest = detail::push_code(
-                    rest, detail::piece_code_corner(c, Color::White, canonical_color(s.side_a), canonical_color(s.side_b)));
+                    rest, detail::piece_code_corner(c, Color::White, canonical_color(s.side_a),
+                                                    canonical_color(s.side_b)));
             }
             return detail::SignatureKey{detail::cross_key(c), rest};
         };
 
         const std::vector<Face> allowed = {Face::U, Face::D, slot.side_a, slot.side_b};
-        Result<std::vector<Move>> step = detail::bfs_search(cube, allowed, postcondition, signature, 10);
+        Result<std::vector<Move>> step =
+            detail::bfs_search(cube, allowed, postcondition, signature, 10);
         if (!step.has_value()) {
             return std::unexpected(step.error());
         }

@@ -30,12 +30,12 @@ namespace {
 // ---------------------------------------------------------------------------
 
 // Distinct solid faces, one per colour class, centres far apart pairwise.
-const cv::Vec3f kWhite{96.0F, 2.0F, 2.0F};      // chroma < 15
-const cv::Vec3f kYellow{88.0F, 5.0F, 80.0F};    // hue ~86
-const cv::Vec3f kRed{45.0F, 60.0F, 35.0F};      // hue ~30
-const cv::Vec3f kOrange{65.0F, 40.0F, 57.0F};   // hue ~55
-const cv::Vec3f kGreen{50.0F, -50.0F, 45.0F};   // hue ~138
-const cv::Vec3f kBlue{35.0F, 12.0F, -60.0F};    // hue ~281
+const cv::Vec3f kWhite{96.0F, 2.0F, 2.0F};     // chroma < 15
+const cv::Vec3f kYellow{88.0F, 5.0F, 80.0F};   // hue ~86
+const cv::Vec3f kRed{45.0F, 60.0F, 35.0F};     // hue ~30
+const cv::Vec3f kOrange{65.0F, 40.0F, 57.0F};  // hue ~55
+const cv::Vec3f kGreen{50.0F, -50.0F, 45.0F};  // hue ~138
+const cv::Vec3f kBlue{35.0F, 12.0F, -60.0F};   // hue ~281
 // A washed orange tile: hue 36 (classifies RED), centre only ~8.7 Lab from
 // kRed - inside the duplicate radius, same class, identical solid census.
 const cv::Vec3f kWashedOrangeAsRed{50.0F, 55.0F, 40.0F};
@@ -69,7 +69,8 @@ const cv::Vec3f kWashedOrangeAsRed{50.0F, 55.0F, 40.0F};
 }
 
 // One sticker swapped to a different class - census L1 moves by 2 per swap.
-[[nodiscard]] CapturedFace with_sticker(const CapturedFace& face, std::size_t cell, const cv::Vec3f& lab) {
+[[nodiscard]] CapturedFace with_sticker(const CapturedFace& face, std::size_t cell,
+                                        const cv::Vec3f& lab) {
     CapturedFace out = face;
     out.lab[cell] = lab;
     return out;
@@ -224,7 +225,8 @@ TEST_CASE("census conflicts on two distinct faces diagnose a layer turn", "[rout
         CHECK(router.commit(Face::U, solid(kBlue), 5000).outcome == CommitOutcome::quarantined);
         // U verifies fine on the next commit - the earlier conflict was a
         // slip, not a layer turn...
-        CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 6000).outcome == CommitOutcome::updated);
+        CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 6000).outcome ==
+              CommitOutcome::updated);
         // ...so a later conflict on R alone must NOT complete a layer-turn
         // pair with the withdrawn U event.
         const auto conflict = router.commit(Face::R, solid(kYellow), 7000);
@@ -234,7 +236,8 @@ TEST_CASE("census conflicts on two distinct faces diagnose a layer turn", "[rout
     }
 }
 
-TEST_CASE("property: slot censuses never change beyond verify drift without escalation", "[routing]") {
+TEST_CASE("property: slot censuses never change beyond verify drift without escalation",
+          "[routing]") {
     // The invariant, stated as the plan's property test: NO capture
     // sequence may change a slot's census by more than kVerifyCensusDrift
     // unless the change went through quarantine/invalidation (i.e. content
@@ -243,8 +246,14 @@ TEST_CASE("property: slot censuses never change beyond verify drift without esca
     const RoutingConfig config;
     router.on_epoch(1);
     std::mt19937 rng(20260720);
-    const std::array<cv::Vec3f, 8> pool{kWhite, kYellow, kRed,  kOrange,
-                                        kGreen, kBlue,   kWashedOrangeAsRed, cv::Vec3f{70.0F, 30.0F, 40.0F}};
+    const std::array<cv::Vec3f, 8> pool{kWhite,
+                                        kYellow,
+                                        kRed,
+                                        kOrange,
+                                        kGreen,
+                                        kBlue,
+                                        kWashedOrangeAsRed,
+                                        cv::Vec3f{70.0F, 30.0F, 40.0F}};
     std::uniform_int_distribution<std::size_t> pick_face(0, 5);
     std::uniform_int_distribution<std::size_t> pick_colour(0, pool.size() - 1);
     std::uniform_int_distribution<int> pick_dt(0, 1200);
@@ -274,7 +283,8 @@ TEST_CASE("property: slot censuses never change beyond verify drift without esca
         // changed within the verified-update drift bound.
         for (std::size_t i = 0; i < before.size(); ++i) {
             REQUIRE(static_cast<int>(i) < router.filled_count());
-            const int drift = census_l1_distance(before[i], color_census(*router.slot_at(static_cast<int>(i))));
+            const int drift =
+                census_l1_distance(before[i], color_census(*router.slot_at(static_cast<int>(i))));
             CHECK(drift <= config.verify_census_drift);
         }
     }
@@ -327,7 +337,8 @@ TEST_CASE("epoch recovery re-registers a permuted epoch by content", "[routing]"
         // permutation cannot send two faces to one slot), the candidate
         // set goes empty, and NOTHING commits - the router refuses to pick
         // a claimant, however good each single match looks.
-        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome ==
+              CommitOutcome::deferred);
         const auto second = router.commit(Face::D, drifted(solid(kWhite), 5.0F), 11000);
         CHECK(second.outcome == CommitOutcome::deferred);
         CHECK(router.reorienting());
@@ -384,7 +395,7 @@ TEST_CASE("content-equivalent slots break registration ties harmlessly", "[routi
     // filled far enough apart, then pulled together by verified re-show
     // updates as the lighting drifts.
     const CapturedFace red_a = solid(kRed);
-    const CapturedFace red_b = drifted(solid(kRed), 8.0F);   // centres 8 apart: equivalent
+    const CapturedFace red_b = drifted(solid(kRed), 8.0F);  // centres 8 apart: equivalent
     const CapturedFace green_a = solid(kGreen);
     const CapturedFace green_b = drifted(solid(kGreen), 8.0F);
 
@@ -396,8 +407,9 @@ TEST_CASE("content-equivalent slots break registration ties harmlessly", "[routi
             CommitOutcome::filled);
     REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
     REQUIRE(router.commit(Face::F, green_a, 4000).outcome == CommitOutcome::filled);
-    REQUIRE(router.commit(Face::B, with_distinct_ring(drifted(solid(kGreen), 20.0F)), 5000).outcome ==
-            CommitOutcome::filled);
+    REQUIRE(
+        router.commit(Face::B, with_distinct_ring(drifted(solid(kGreen), 20.0F)), 5000).outcome ==
+        CommitOutcome::filled);
     REQUIRE(router.commit(Face::B, green_b, 6000).outcome == CommitOutcome::updated);
 
     router.on_epoch(2);
@@ -405,7 +417,8 @@ TEST_CASE("content-equivalent slots break registration ties harmlessly", "[routi
     // White pins U; the red probe matches BOTH red slots (the aliased
     // pair), pinning nothing - the residual candidates differ only by the
     // 180-degree turn that swaps R/L and F/B, all equivalent pairs.
-    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome ==
+          CommitOutcome::deferred);
     const auto resolved = router.commit(Face::R, drifted(red_a, 2.0F), 11000);
     CHECK(resolved.outcome == CommitOutcome::updated);
     CHECK_FALSE(router.reorienting());
@@ -431,7 +444,8 @@ TEST_CASE("an aliased pair with distinguishable content refuses to guess", "[rou
     REQUIRE(router.commit(Face::L, red_b, 3000).outcome == CommitOutcome::updated);
 
     router.on_epoch(2);
-    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+    CHECK(router.commit(Face::U, drifted(solid(kWhite), 3.0F), 10000).outcome ==
+          CommitOutcome::deferred);
     const auto probe = router.commit(Face::R, drifted(red_a, 2.0F), 11000);
     CHECK(probe.outcome == CommitOutcome::deferred);
     CHECK(router.reorienting());
@@ -642,8 +656,10 @@ namespace {
 // The same physical face as the store would hold it after a whole-cube
 // rotation by `lattice_index`: cell k of `source` on `source_face` becomes
 // cell kBodyRelabel[...][k] of the face it rotates onto.
-[[nodiscard]] CapturedFace relabelled(const CapturedFace& source, Face source_face, int lattice_index) {
-    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)][static_cast<std::size_t>(source_face)];
+[[nodiscard]] CapturedFace relabelled(const CapturedFace& source, Face source_face,
+                                      int lattice_index) {
+    const auto& map = kBodyRelabel[static_cast<std::size_t>(lattice_index)]
+                                  [static_cast<std::size_t>(source_face)];
     CapturedFace out;
     for (std::size_t k = 0; k < source.lab.size(); ++k) {
         out.lab[static_cast<std::size_t>(map.cell[k])] = source.lab[k];
@@ -656,7 +672,7 @@ namespace {
 // about, since the roll ranks Lab and the score ranks census. Each sits
 // just the wrong side of a classify_lab band edge from a `patterned()`
 // colour.
-const cv::Vec3f kWhiteJustRed{96.0F, 14.0F, 8.0F};     // chroma 16.1 -> red, 13.4 Lab from kWhite
+const cv::Vec3f kWhiteJustRed{96.0F, 14.0F, 8.0F};       // chroma 16.1 -> red, 13.4 Lab from kWhite
 const cv::Vec3f kYellowJustOrange{88.0F, 23.0F, 80.0F};  // hue 74 -> orange, 18.0 Lab from kYellow
 
 }  // namespace
@@ -709,7 +725,7 @@ TEST_CASE("a single epoch face registers its roll against two filled slots", "[r
             const int gauge = 4 * 2 + roll;
             std::array<std::optional<CapturedFace>, 6> rolled{};
             rolled[static_cast<std::size_t>(kFacePermutation[static_cast<std::size_t>(gauge)]
-                                                           [static_cast<std::size_t>(Face::F)])] =
+                                                            [static_cast<std::size_t>(Face::F)])] =
                 relabelled(pattern, Face::F, gauge);
             rolled[static_cast<std::size_t>(Face::U)] = solid(kOrange);
             const auto registration = register_epoch_gauge(samples, rolled, config);
@@ -765,7 +781,8 @@ TEST_CASE("the roll tie-break cannot promote a candidate the score rejected", "[
     // the wrong-face hypothesis whose gauge must not be adopted.
     int wrong_gauge = -1;
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
-        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::F)] == Face::U) {
+        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::F)] ==
+            Face::U) {
             wrong_gauge = g;
             break;
         }
@@ -856,7 +873,8 @@ TEST_CASE("the roll tie-break cannot promote a candidate the score rejected", "[
         // the only thing standing between it and a wrong-slot resolution.
         CapturedFace aliasing = relabelled(pattern, Face::F, wrong_gauge);
         aliasing.lab[cube::model::center_facelet_index] = cv::Vec3f{45.0F, 50.0F, 50.0F};
-        REQUIRE(classify_lab(aliasing.lab[cube::model::center_facelet_index]).color == FacetColor::orange);
+        REQUIRE(classify_lab(aliasing.lab[cube::model::center_facelet_index]).color ==
+                FacetColor::orange);
         REQUIRE(centre_lab_distance(pattern, aliasing) < config.same_face_centre_lab);
 
         std::array<std::optional<CapturedFace>, 6> slots{};
@@ -1222,7 +1240,8 @@ TEST_CASE("honest same-face drift still verifies after the radius tightened", "[
     CapturedFace stored = solid(kWhite);
     stored.lab[cube::model::center_facelet_index] = kYellow;
     CapturedFace same_face_drifted = solid(kWhite);
-    same_face_drifted.lab[cube::model::center_facelet_index] = kYellow + cv::Vec3f{-16.0F, 8.0F, -14.0F};
+    same_face_drifted.lab[cube::model::center_facelet_index] =
+        kYellow + cv::Vec3f{-16.0F, 8.0F, -14.0F};
     REQUIRE(cv::norm(same_face_drifted.lab[cube::model::center_facelet_index] - kYellow) > 22.0);
     REQUIRE(classify_lab(same_face_drifted.lab[cube::model::center_facelet_index]).color ==
             classify_lab(kYellow).color);
@@ -1309,7 +1328,8 @@ TEST_CASE("a never-seen face fills an empty slot mid-recovery", "[routing]") {
     REQUIRE(content != nullptr);
     bool consistent = false;
     for (int g = 0; g < static_cast<int>(kLatticeSize); ++g) {
-        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::U)] != *store_face) {
+        if (kFacePermutation[static_cast<std::size_t>(g)][static_cast<std::size_t>(Face::U)] !=
+            *store_face) {
             continue;
         }
         const CapturedFace expected = relabelled(newcomer, Face::U, g);
@@ -1352,7 +1372,8 @@ TEST_CASE("a mid-recovery newcomer only ever lands on an empty key", "[routing]"
         std::int64_t t = 0;
         for (const auto& entry : prefill) {
             t += 1000;
-            REQUIRE(router.commit(entry.first, solid(entry.second), t).outcome == CommitOutcome::filled);
+            REQUIRE(router.commit(entry.first, solid(entry.second), t).outcome ==
+                    CommitOutcome::filled);
         }
         REQUIRE(router.filled_count() == 5);
         REQUIRE(router.face_at(0) == Face::U);
@@ -1369,7 +1390,8 @@ TEST_CASE("a mid-recovery newcomer only ever lands on an empty key", "[routing]"
         // Every pre-existing capture still holds its own colour.
         for (std::size_t i = 0; i < prefill.size(); ++i) {
             REQUIRE(router.slot_at(static_cast<int>(i)) != nullptr);
-            CHECK(centre_lab_distance(*router.slot_at(static_cast<int>(i)), solid(prefill[i].second)) == 0.0F);
+            CHECK(centre_lab_distance(*router.slot_at(static_cast<int>(i)),
+                                      solid(prefill[i].second)) == 0.0F);
         }
     }
 }
@@ -1455,10 +1477,10 @@ TEST_CASE("a mid-recovery guess never decides the roll of a captured slot", "[ro
         // the SAME physical faces seen from a different body frame - the only
         // construction in which "the roll came out wrong" is a statement
         // about the router rather than about the fixture.
-        const auto store_u =
-            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::U)];
-        const auto store_r =
-            kFacePermutation[static_cast<std::size_t>(true_gauge)][static_cast<std::size_t>(Face::R)];
+        const auto store_u = kFacePermutation[static_cast<std::size_t>(true_gauge)]
+                                             [static_cast<std::size_t>(Face::U)];
+        const auto store_r = kFacePermutation[static_cast<std::size_t>(true_gauge)]
+                                             [static_cast<std::size_t>(Face::R)];
         const CapturedFace stored_u = relabelled(epoch_u, Face::U, true_gauge);
         const CapturedFace stored_r = relabelled(epoch_r, Face::R, true_gauge);
 
@@ -1545,7 +1567,8 @@ TEST_CASE("recovery still defers when the evidence contradicts itself", "[routin
     }
 
     SECTION("two epoch faces claiming one stored slot pin nothing") {
-        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome == CommitOutcome::deferred);
+        CHECK(router.commit(Face::F, drifted(solid(kWhite), 3.0F), 10000).outcome ==
+              CommitOutcome::deferred);
         const auto second = router.commit(Face::D, drifted(solid(kWhite), 5.0F), 11000);
         CHECK(second.outcome == CommitOutcome::deferred);
         REQUIRE(second.registration.has_value());
@@ -1805,7 +1828,8 @@ TEST_CASE("a unique registration still has to agree on centre colour", "[routing
     CapturedFace stored = solid(kGreen);
     stored.lab[cube::model::center_facelet_index] = cv::Vec3f{50.0F, 55.0F, 40.0F};  // hue 36: red
     CapturedFace probe = solid(kGreen);
-    probe.lab[cube::model::center_facelet_index] = cv::Vec3f{50.0F, 50.0F, 60.0F};  // hue 50: orange
+    probe.lab[cube::model::center_facelet_index] =
+        cv::Vec3f{50.0F, 50.0F, 60.0F};  // hue 50: orange
     // Aliased population, disagreeing centre CLASS: exactly the case the
     // score is blind to. The centres are 20.6 Lab apart - close enough that
     // the score's centre term stays small, which is the whole difficulty:

@@ -55,7 +55,8 @@ cv::Vec3d face_axis(int face) {
 }  // namespace
 
 cv::Matx33d DetectTrackLoop::camera_matrix_for(cv::Size size) const {
-    return intrinsics_.has_value() ? intrinsics_->scaled_to(size).matrix() : approximate_camera_matrix(size);
+    return intrinsics_.has_value() ? intrinsics_->scaled_to(size).matrix()
+                                   : approximate_camera_matrix(size);
 }
 
 DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
@@ -67,7 +68,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
 
     // Detector decimation applies only while live (a lost loop needs the
     // detector every frame to re-anchor).
-    const bool run_detector = !live_ || live_detect_interval_ <= 1 || ++frames_since_detect_ >= live_detect_interval_;
+    const bool run_detector =
+        !live_ || live_detect_interval_ <= 1 || ++frames_since_detect_ >= live_detect_interval_;
     if (run_detector) {
         frames_since_detect_ = 0;
         if (auto detected = detector_->detect(bgr_frame); detected.has_value()) {
@@ -148,7 +150,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                             sane = false;
                             break;
                         }
-                        perm[static_cast<std::size_t>(face)] = stitch_relabel_[static_cast<std::size_t>(old_face)];
+                        perm[static_cast<std::size_t>(face)] =
+                            stitch_relabel_[static_cast<std::size_t>(old_face)];
                     }
                     if (sane) {
                         result.stitch_candidates.push_back(perm);
@@ -278,8 +281,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // refined pose; the drop/re-anchor decision stays keyed to
             // what the tracker itself believes.
             if (refine_enabled_) {
-                const auto refined =
-                    refine_pose(bgr_frame, result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
+                const auto refined = refine_pose(bgr_frame, result.rvec, result.tvec,
+                                                 camera_matrix_for(bgr_frame.size()));
                 result.refine_matches = refined.matches;
                 result.refine_residual_before_px = refined.mean_residual_before_px;
                 result.refine_residual_after_px = refined.mean_residual_after_px;
@@ -291,17 +294,20 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 }
             }
 
-            std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(), kSingmasterCornerModel.end());
+            std::vector<cv::Point3f> model(kSingmasterCornerModel.begin(),
+                                           kSingmasterCornerModel.end());
             std::vector<cv::Point2f> projected;
             cv::projectPoints(model, result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()),
                               cv::noArray(), projected);
             for (int i = 0; i < 8; ++i) {
-                result.projected[static_cast<std::size_t>(i)] = projected[static_cast<std::size_t>(i)];
+                result.projected[static_cast<std::size_t>(i)] =
+                    projected[static_cast<std::size_t>(i)];
             }
             // Stage-D geometry from the same OUTPUT pose (P3.1): faces,
             // quads and sticker centres are projections of the tracked
             // model - the plan's "no more per-frame face hunting".
-            result.faces = derive_faces(result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
+            result.faces =
+                derive_faces(result.rvec, result.tvec, camera_matrix_for(bgr_frame.size()));
             // Stitched epochs speak the epoch-ORIGINAL face ids.
             for (auto& face : result.faces) {
                 face.face = stitch_relabel_[static_cast<std::size_t>(face.face)];
@@ -313,8 +319,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             std::array<cv::Point2f, 8> raw_projected = result.projected;
             if (result.refine_applied) {
                 std::vector<cv::Point2f> raw;
-                cv::projectPoints(model, tracked.rvec, tracked.tvec, camera_matrix_for(bgr_frame.size()),
-                                  cv::noArray(), raw);
+                cv::projectPoints(model, tracked.rvec, tracked.tvec,
+                                  camera_matrix_for(bgr_frame.size()), cv::noArray(), raw);
                 for (int i = 0; i < 8; ++i) {
                     raw_projected[static_cast<std::size_t>(i)] = raw[static_cast<std::size_t>(i)];
                 }
@@ -324,8 +330,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
             // 24 view-canonical rotations.
             if (result.detection.found && confident_corners >= 4) {
                 const auto& box = result.detection.box;
-                const double diagonal =
-                    std::sqrt(static_cast<double>(box.width) * box.width + static_cast<double>(box.height) * box.height);
+                const double diagonal = std::sqrt(static_cast<double>(box.width) * box.width +
+                                                  static_cast<double>(box.height) * box.height);
                 double best = -1.0;
                 int best_perm = -1;
                 double pinned_mean = -1.0;
@@ -339,7 +345,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                             continue;
                         }
                         const int tracked_id = perms[p][static_cast<std::size_t>(id)];
-                        total += cv::norm(raw_projected[static_cast<std::size_t>(tracked_id)] - corner.px);
+                        total += cv::norm(raw_projected[static_cast<std::size_t>(tracked_id)] -
+                                          corner.px);
                         ++count;
                     }
                     if (count >= 4) {
@@ -369,7 +376,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                 } else if (gauge_settle_ > 0) {
                     --gauge_settle_;
                 }
-                if (best >= 0.0 && diagonal > 1.0 && (turn_deg > kGaugeEvalMaxTurnDeg || gauge_settle_ > 0)) {
+                if (best >= 0.0 && diagonal > 1.0 &&
+                    (turn_deg > kGaugeEvalMaxTurnDeg || gauge_settle_ > 0)) {
                     gauge_fail_streak_ = 0;  // undecidable mid-turn or settling; retry once static
                 } else if (best >= 0.0 && diagonal > 1.0) {
                     if (gauge_slip_holdoff_ > 0) {
@@ -418,8 +426,9 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
                     last_health_pass_ = best / diagonal <= kHealthFailFrac;
                     result.health_frac = best / diagonal;
                     if (result.health_frac > kHealthFailFrac) {
-                        const int streak_needed =
-                            frames_since_anchor_ < kTrackMatureFrames ? kHealthFailStreakYoung : kHealthFailStreak;
+                        const int streak_needed = frames_since_anchor_ < kTrackMatureFrames
+                                                      ? kHealthFailStreakYoung
+                                                      : kHealthFailStreak;
                         if (++health_fail_streak_ >= streak_needed) {
                             live_ = false;
                             // A marginal-band drop is stitchable: the
@@ -444,8 +453,8 @@ DetectTrackResult DetectTrackLoop::process(const cv::Mat& bgr_frame) {
     // P6.2 read grade (see header): only quasi-static, health-current
     // frames may feed reads downstream.
     result.read_grade = live_ && result.step_valid && result.turn_deg >= 0.0 &&
-                        result.turn_deg <= kGaugeEvalMaxTurnDeg && frames_since_health_ <= kHealthGapFrames &&
-                        last_health_pass_;
+                        result.turn_deg <= kGaugeEvalMaxTurnDeg &&
+                        frames_since_health_ <= kHealthGapFrames && last_health_pass_;
     if (live_ && result.step_valid) {
         prev_track_rvec_ = result.rvec;
         prev_track_rvec_valid_ = true;

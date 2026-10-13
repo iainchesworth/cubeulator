@@ -156,14 +156,16 @@ FootprintStats footprint_stats(const cv::Mat& bgr_frame, const std::array<cv::Po
     for (int c = 0; c < 3; ++c) {
         const auto channel = static_cast<std::size_t>(c);
         stats.rect_median[c] = channel_median(rect_channels[channel]);
-        stats.masked_median[c] =
-            masked_channels[channel].empty() ? stats.rect_median[c] : channel_median(masked_channels[channel]);
+        stats.masked_median[c] = masked_channels[channel].empty()
+                                     ? stats.rect_median[c]
+                                     : channel_median(masked_channels[channel]);
     }
     stats.quad_area = std::abs(cv::contourArea(polygon));
     stats.rect_area = static_cast<double>(x1 - x0) * static_cast<double>(y1 - y0);
 
     const cv::Point2f top_edge = corners[1] - corners[0];
-    float degrees = std::abs(static_cast<float>(std::atan2(top_edge.y, top_edge.x) * 180.0 / CV_PI));
+    float degrees =
+        std::abs(static_cast<float>(std::atan2(top_edge.y, top_edge.x) * 180.0 / CV_PI));
     degrees = std::fmod(degrees, 90.0F);
     stats.rotation_deg = degrees > 45.0F ? 90.0F - degrees : degrees;
     return stats;
@@ -197,7 +199,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
         if (recording::frame_overwritten(row.pass, max_pass)) {
             continue;
         }
-        const cv::Mat frame = cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
+        const cv::Mat frame =
+            cv::imread((dir / recording::frame_filename(row.pass)).string(), cv::IMREAD_COLOR);
         if (frame.empty() || frame.cols != row.w || frame.rows != row.h) {
             continue;
         }
@@ -217,7 +220,8 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             face = std::move(*observed);
         }
         if (face.has_value()) {
-            if (auto projected = project_cube_from_face(*face, frame.size(), seed); projected.has_value()) {
+            if (auto projected = project_cube_from_face(*face, frame.size(), seed);
+                projected.has_value()) {
                 seed_prior = PoseSeed{projected->rvec, projected->tvec};
                 seed_t_ms = row.t_ms;
             }
@@ -234,15 +238,20 @@ void emit_clip(const std::filesystem::path& dir, const std::string& clip, std::F
             // the rest corners - the split the defect predicts will matter,
             // since only a corner cell's overshoot can reach off-face.
             const char* position = index == 4 ? "centre" : (index % 2 == 1 ? "edge" : "corner");
-            std::fprintf(out, "%s,%d,%d,%s,%d,%d,%d,%.2f,%.2f,%.2f,%.1f,%.4f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
-                         clip.c_str(), row.pass, index, position, geometry.rect_px, geometry.inside_px,
-                         geometry.outside_cell_px, geometry.quad_area, geometry.rect_area,
-                         static_cast<double>(geometry.rotation_deg), static_cast<double>(sample.cell_quad_area_px),
-                         static_cast<double>(sample.weighted_mad), static_cast<double>(geometry.rect_median[0]),
-                         static_cast<double>(geometry.rect_median[1]), static_cast<double>(geometry.rect_median[2]),
-                         static_cast<double>(geometry.masked_median[0]),
-                         static_cast<double>(geometry.masked_median[1]),
-                         static_cast<double>(geometry.masked_median[2]));
+            std::fprintf(
+                out,
+                "%s,%d,%d,%s,%d,%d,%d,%.2f,%.2f,%.2f,%.1f,%.4f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f\n",
+                clip.c_str(), row.pass, index, position, geometry.rect_px, geometry.inside_px,
+                geometry.outside_cell_px, geometry.quad_area, geometry.rect_area,
+                static_cast<double>(geometry.rotation_deg),
+                static_cast<double>(sample.cell_quad_area_px),
+                static_cast<double>(sample.weighted_mad),
+                static_cast<double>(geometry.rect_median[0]),
+                static_cast<double>(geometry.rect_median[1]),
+                static_cast<double>(geometry.rect_median[2]),
+                static_cast<double>(geometry.masked_median[0]),
+                static_cast<double>(geometry.masked_median[1]),
+                static_cast<double>(geometry.masked_median[2]));
         }
     }
 }
@@ -262,7 +271,8 @@ TEST_CASE("PatchPurityExtract", "[.patch-purity]") {
 
     std::FILE* out = stdout;
     std::fprintf(out,
-                 "clip,pass,cell,position,rect_px,inside_px,outside_cell_px,quad_area,rect_area,rot_deg,cell_area,"
+                 "clip,pass,cell,position,rect_px,inside_px,outside_cell_px,quad_area,rect_area,"
+                 "rot_deg,cell_area,"
                  "mad,rL,ra,rb,mL,ma,mb\n");
     for (const auto& clip : clips) {
         emit_clip(clip, clip.filename().string(), out);
@@ -296,8 +306,9 @@ TEST_CASE("PatchSampleCost", "[.patch-cost]") {
     }
     const auto elapsed = std::chrono::steady_clock::now() - start;
     const double ns_per_cell =
-        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()) / kIterations;
-    std::printf("# patch-cost: %.0f ns per cell, %.1f us per 9-cell face pass (sink %.3f)\n", ns_per_cell,
-                ns_per_cell * 9.0 / 1000.0, static_cast<double>(sink));
+        static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count()) /
+        kIterations;
+    std::printf("# patch-cost: %.0f ns per cell, %.1f us per 9-cell face pass (sink %.3f)\n",
+                ns_per_cell, ns_per_cell * 9.0 / 1000.0, static_cast<double>(sink));
     SUCCEED();
 }

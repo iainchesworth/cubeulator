@@ -23,7 +23,8 @@ public:
 
     // The confirmed center color of each face, or nullopt where that face
     // hasn't been confirmed yet - the input detect_color_scheme() expects.
-    [[nodiscard]] std::array<std::optional<FacetColor>, face_count> observed_centers() const noexcept;
+    [[nodiscard]] std::array<std::optional<FacetColor>, face_count> observed_centers()
+        const noexcept;
 
 private:
     std::array<FaceScan, face_count> faces_{};

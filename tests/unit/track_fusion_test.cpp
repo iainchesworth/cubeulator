@@ -67,7 +67,8 @@ namespace {
 
 }  // namespace
 
-TEST_CASE("fusion feed keys sub-epochs and splits a generation on a centre takeover", "[vision][fusion]") {
+TEST_CASE("fusion feed keys sub-epochs and splits a generation on a centre takeover",
+          "[vision][fusion]") {
     fusion::FusionStore store;
     std::map<int, int> generations;
 
@@ -103,7 +104,8 @@ TEST_CASE("fusion feed keys sub-epochs and splits a generation on a centre takeo
 // rejected); this case is the honest statement of what the feed does NOT
 // catch, so a future reader does not go looking for a guarantee that is
 // not there.
-TEST_CASE("fusion feed cannot see a face arriving under a second, empty label", "[vision][fusion]") {
+TEST_CASE("fusion feed cannot see a face arriving under a second, empty label",
+          "[vision][fusion]") {
     fusion::FusionStore store;
     std::map<int, int> generations;
 

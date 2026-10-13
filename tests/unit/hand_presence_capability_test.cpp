@@ -7,32 +7,30 @@
 using namespace cube::vision;
 
 TEST_CASE("HandDetectionCapability::should_use_model requires every gate", "[vision]") {
-    REQUIRE(HandDetectionCapability{.model_file_present = true,
-                                     .execution_provider_available = true,
-                                     .user_enabled = true}
+    REQUIRE(HandDetectionCapability{
+        .model_file_present = true, .execution_provider_available = true, .user_enabled = true}
                 .should_use_model());
 
-    REQUIRE_FALSE(HandDetectionCapability{.model_file_present = false,
-                                           .execution_provider_available = true,
-                                           .user_enabled = true}
+    REQUIRE_FALSE(HandDetectionCapability{
+        .model_file_present = false, .execution_provider_available = true, .user_enabled = true}
                       .should_use_model());
-    REQUIRE_FALSE(HandDetectionCapability{.model_file_present = true,
-                                           .execution_provider_available = false,
-                                           .user_enabled = true}
+    REQUIRE_FALSE(HandDetectionCapability{
+        .model_file_present = true, .execution_provider_available = false, .user_enabled = true}
                       .should_use_model());
-    REQUIRE_FALSE(HandDetectionCapability{.model_file_present = true,
-                                           .execution_provider_available = true,
-                                           .user_enabled = false}
+    REQUIRE_FALSE(HandDetectionCapability{
+        .model_file_present = true, .execution_provider_available = true, .user_enabled = false}
                       .should_use_model());
 }
 
-TEST_CASE("check_hand_detection_capability derives execution_provider_available from the provider list",
-          "[vision]") {
+TEST_CASE(
+    "check_hand_detection_capability derives execution_provider_available from the provider list",
+    "[vision]") {
     const auto with_providers =
         check_hand_detection_capability(true, std::vector<std::string>{"CPU"}, true);
     REQUIRE(with_providers.execution_provider_available);
 
-    const auto without_providers = check_hand_detection_capability(true, std::vector<std::string>{}, true);
+    const auto without_providers =
+        check_hand_detection_capability(true, std::vector<std::string>{}, true);
     REQUIRE_FALSE(without_providers.execution_provider_available);
 }
 
@@ -60,8 +58,9 @@ TEST_CASE("make_hand_presence_detector falls back to heuristic when the capabili
     REQUIRE_FALSE(*result);
 }
 
-TEST_CASE("resolve_hand_model_path falls back to the bundled path when the user path is empty or missing",
-          "[vision]") {
+TEST_CASE(
+    "resolve_hand_model_path falls back to the bundled path when the user path is empty or missing",
+    "[vision]") {
     const std::filesystem::path bundled = "models/palm_detection_mediapipe_2023feb_int8.onnx";
 
     REQUIRE(resolve_hand_model_path("", bundled) == bundled);

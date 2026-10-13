@@ -11,7 +11,8 @@ namespace cube::solver {
 // Cube's storage) so their order must stay stable.
 enum class Face : std::uint8_t { U, D, L, R, F, B };
 
-inline constexpr std::array<Face, 6> kAllFaces = {Face::U, Face::D, Face::L, Face::R, Face::F, Face::B};
+inline constexpr std::array<Face, 6> kAllFaces = {Face::U, Face::D, Face::L,
+                                                  Face::R, Face::F, Face::B};
 
 // A sticker colour. Deliberately named after the colour, not the face it
 // starts on: Theme.qml's faceU/faceD/etc. constants are a palette keyed by
@@ -85,10 +86,13 @@ public:
     // CubeError::invalid_cube_state if the result doesn't pass
     // is_physically_valid() - the guard against a malformed vision-pipeline
     // read this class's own is_physically_valid() doc comment anticipated.
-    [[nodiscard]] static Result<Cube> from_facelets(const std::array<std::array<Color, 9>, 6>& facelets) noexcept;
+    [[nodiscard]] static Result<Cube> from_facelets(
+        const std::array<std::array<Color, 9>, 6>& facelets) noexcept;
 
     // row, col in [0,3).
-    [[nodiscard]] Color at(Face face, int row, int col) const noexcept { return at(face, row * 3 + col); }
+    [[nodiscard]] Color at(Face face, int row, int col) const noexcept {
+        return at(face, row * 3 + col);
+    }
     [[nodiscard]] Color at(Face face, int index) const noexcept;
 
     // The face's 9 stickers, row-major - a direct match for CubeView.qml's
