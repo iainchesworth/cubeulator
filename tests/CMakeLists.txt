@@ -218,4 +218,41 @@ if(CUBEULATOR_BUILD_APP)
 
     catch_discover_tests(cube_qt_controller_tests DISCOVERY_MODE PRE_TEST
         WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qt_controller_tests>")
+
+    # --- QML tests: the app's own QML, loaded for real. cube_view_test holds
+    # the 3D cube on the solve screen to the solver's cube by reading its
+    # stickers back out of the scene, so it needs the whole "Cubeulator" QML
+    # module (linked whole, as cube_app links it - see src/app/CMakeLists.txt
+    # for why) and a QGuiApplication (qml_test_main.cpp). Nothing is drawn:
+    # it runs on the offscreen platform.
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D)
+
+    add_executable(cube_qml_tests
+        qml_test_main.cpp
+        unit/cube_view_test.cpp)
+
+    target_link_libraries(cube_qml_tests
+        PRIVATE
+            $<LINK_LIBRARY:WHOLE_ARCHIVE,cube_app_qml>
+            cube_app_controllers
+            cube::lib
+            cube::warnings
+            cube::sanitizers
+            cube::coverage
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Qml
+            Qt6::Quick
+            Qt6::Quick3D
+            Catch2::Catch2)
+
+    # On Windows the Qt runtime and the QML modules the app imports are
+    # copied next to cube_app.exe when it is built; this binary sits in the
+    # same directory and runs off the same copy.
+    add_dependencies(cube_qml_tests cube_app)
+
+    cube_deploy_sanitizer_runtime(cube_qml_tests)
+
+    catch_discover_tests(cube_qml_tests DISCOVERY_MODE PRE_TEST
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_qml_tests>")
 endif()

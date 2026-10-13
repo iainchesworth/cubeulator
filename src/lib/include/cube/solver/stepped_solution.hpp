@@ -26,6 +26,9 @@ public:
 
     [[nodiscard]] int move_count() const noexcept { return static_cast<int>(moves_.size()); }
 
+    // Every move of the solution, in order.
+    [[nodiscard]] const std::vector<Move>& moves() const noexcept { return moves_; }
+
     // How many moves have been applied to reach the currently-displayed
     // state; in [0, move_count()].
     [[nodiscard]] int current_index() const noexcept { return index_; }

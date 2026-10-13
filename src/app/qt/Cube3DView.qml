@@ -7,12 +7,12 @@ import Cubeulator
 // (the centre piece is never visible, so it's skipped), each carrying its
 // own 0-3 coloured stickers. Two things fall out of modelling it this way
 // rather than as one 6-face shell:
-//  - turnLayer() can animate a real slice turn (reparent the 9 affected
-//    cubies under a temporary pivot, animate the pivot, then bake the
-//    result back into each cubie) - the foundation the solve-visualisation
-//    work needs to show "this section rotates like this".
+//  - a layer can really turn: its nine cubies hang off a pivot while it
+//    moves and are set down where it leaves them. The solve screen uses
+//    this twice over - guideFace nudges the layer the next move turns, a
+//    little way and back, and playMove() turns it all the way.
 //  - individual stickers can be recoloured per-facelet (faceletColors) -
-//    the scan screen paints captured faces onto a skeleton cube this way.
+//    the solve screen paints the cube as it stands this way.
 // Whole-cube dragging still free-spins cubeRoot; releasing eases it back to
 // the presented orientation instead of leaving it wherever it was thrown.
 // When externalRotation is set (scan-screen pose tracking) drag and idle
@@ -42,6 +42,55 @@ Item {
     // null entries within an array) count as unpainted.
     property var faceletColors: null
 
+    // A new painting is a new cube: every layer goes back where it started,
+    // in the same pass that recolours the stickers. After playMove() has
+    // turned a layer, painting the cube as it now stands therefore changes
+    // nothing on screen - provided the turn shown was the turn made, which
+    // is what cube_view_test.cpp holds this file to.
+    onFaceletColorsChanged: resetLayers()
+
+    // ---- Move guidance ----------------------------------------------------
+    // The side whose layer the next move turns: "U", "D", "L", "R", "F",
+    // "B", or "" for none. While set, that layer nudges a little way in the
+    // direction it has to go and back, over and over. guideTurns is quarter
+    // turns clockwise as seen from outside that side - 1, 2 or 3, as in
+    // cube::solver::Move. A half turn nudges twice before it returns.
+    property string guideFace: ""
+    property int guideTurns: 1
+    onGuideFaceChanged: scheduleGuide()
+    onGuideTurnsChanged: scheduleGuide()
+
+    // How far one nudge swings the layer, in degrees.
+    property real nudgeAngle: 30
+    // How long a quarter turn takes when playMove() turns a layer for real.
+    property int turnDuration: 380
+    // How much the stickers outside the layer in hand darken, 0..1, so the
+    // layer that moves stands out from the rest.
+    property real guideDim: 0
+
+    // True while playMove() is turning a layer.
+    property bool playing: false
+    readonly property bool nudging: nudgeOnce.running || nudgeTwice.running
+    // playMove()'s turn has finished and the layer is set down.
+    signal movePlayed()
+
+    // ---- How the cube is shown --------------------------------------------
+    // The cube's own orientation: identity is U up, F towards the viewer and
+    // R to the viewer's right. The solve screen sets this to how the cube is
+    // being held.
+    property quaternion holdRotation: Qt.quaternion(1, 0, 0, 0)
+    // Where the cube is looked at from, in degrees: viewYaw turns it about
+    // the vertical like a turntable, then viewPitch tips the top towards the
+    // viewer. Applied outside homeRotation, which a screen using these
+    // leaves at zero.
+    property real viewPitch: 0
+    property real viewYaw: 0
+    property int viewDuration: 450
+    property real shownPitch: viewPitch
+    property real shownYaw: viewYaw
+    Behavior on shownPitch { NumberAnimation { duration: root.viewDuration; easing.type: Easing.InOutCubic } }
+    Behavior on shownYaw { NumberAnimation { duration: root.viewDuration; easing.type: Easing.InOutCubic } }
+
     // Skeleton mode: unpainted stickers render as dim translucent
     // placeholder panels instead of their uniform face colour, so a cube
     // with a partial faceletColors map reads as "filling in" one captured
@@ -58,9 +107,8 @@ Item {
     // on the rotating cube itself. The backing model only re-evaluates
     // when this map object is REPLACED, which the scan screen does on
     // capture events alone (facesScannedChanged) - the ring Repeater3D
-    // must never rebuild per frame for the same reason cubieDefs must not
-    // (see that comment); per-frame pose updates merely rotate the shared
-    // parent node.
+    // must never rebuild per frame; per-frame pose updates merely rotate
+    // the shared parent node.
     property var faceRings: null
 
     // faceRings flattened for the Repeater3D, in fixed face order so an
@@ -111,49 +159,239 @@ Item {
     }
 
     // Instructional Glow's active-layer highlight: which layer to call out,
-    // or null for none. This is a placeholder hook - it's checked against
-    // each cubie's *home* position, not its live position after turns, which
-    // is enough for a stationary demo highlight. The solve-visualisation
-    // session owns wiring this to the real "which layer moves next" solver
-    // output.
+    // or null for none, checked against each cubie's *home* position. The
+    // layer in hand (being nudged or turned) glows as well, wherever its
+    // cubies started.
     property var highlightedLayer: null // { axis: "x"|"y"|"z", layer: -1|0|1 } | null
 
     readonly property bool dragging: dragHandler.active
-    readonly property bool turning: turnState.active
+    readonly property bool turning: playing
 
     readonly property real cubieSize: 34
     readonly property real cubieGap: 2
     readonly property real step: cubieSize + cubieGap
     readonly property real stickerInset: 0.86
 
-    readonly property vector3d homeRotation: Qt.vector3d(-24, -32, 0)
+    property vector3d homeRotation: Qt.vector3d(-24, -32, 0)
 
-    // Turns a face layer: axis is "x"|"y"|"z", layerIndex is -1|0|1, positive
-    // is a right-hand-rule turn looking down the positive axis. Ignored while
-    // another turn or a drag is in progress.
+    // Turns a layer a quarter turn: axis is "x"|"y"|"z", layerIndex is
+    // -1|0|1, and `clockwise` is clockwise seen from the positive end of the
+    // axis. Ignored while another turn or a drag is in progress.
     function turnLayer(axis, layerIndex, clockwise) {
-        if (turnState.active || dragHandler.active)
+        if (playing || dragHandler.active)
             return;
-        var affected = [];
-        for (var i = 0; i < cubieStates.length; i++) {
-            if (cubieStates[i].pos[axisIndex(axis)] === layerIndex)
-                affected.push(i);
+        playTurn({ axis: axis, layer: layerIndex, degrees: clockwise ? -90 : 90 });
+    }
+
+    readonly property var sideLayers: ({
+        U: { axis: "y", layer: 1 }, D: { axis: "y", layer: -1 },
+        R: { axis: "x", layer: 1 }, L: { axis: "x", layer: -1 },
+        F: { axis: "z", layer: 1 }, B: { axis: "z", layer: -1 }
+    })
+
+    // The turn a move makes: which layer, about which axis, and how many
+    // degrees about the positive direction of that axis (right-handed, so
+    // positive is anticlockwise seen from the positive end). A move is
+    // quarter turns clockwise seen from outside its side, and D, L and B are
+    // looked at from the negative end of their axis - so for them clockwise
+    // is positive. Null for anything that is not a move.
+    function moveTurn(face, turns) {
+        var side = sideLayers[face];
+        if (!side || turns < 1 || turns > 3)
+            return null;
+        var quarters = turns === 3 ? -1 : turns; // three clockwise is one anticlockwise
+        return { axis: side.axis, layer: side.layer, degrees: -90 * quarters * side.layer };
+    }
+
+    // Turns the layer of `face` the whole way - `turns` quarter turns
+    // clockwise seen from outside it - then sets it down and emits
+    // movePlayed. A turn already under way is finished on the spot first.
+    function playMove(face, turns) {
+        var turn = moveTurn(face, turns);
+        if (!turn)
+            return false;
+        playTurn(turn);
+        return true;
+    }
+
+    function playTurn(turn) {
+        finishPlaying();
+        stopNudge();
+        if (!heldLayer || heldLayer.axis !== turn.axis || heldLayer.layer !== turn.layer) {
+            setDown(0);
+            pickUp(turn);
         }
-        if (affected.length === 0)
+        if (!heldLayer)
             return;
+        playTarget = turn.degrees;
+        playing = true;
+        playAnim.from = turnAngle;
+        playAnim.to = playTarget;
+        playAnim.duration = turnDuration * (Math.abs(playTarget) > 90 ? 1.5 : 1);
+        playAnim.start();
+    }
 
-        pivot.eulerRotation = Qt.vector3d(0, 0, 0);
-        for (var a = 0; a < affected.length; a++)
-            cubieRepeater.objectAt(affected[a]).parent = pivot;
+    // Jumps to the end of the turn under way, if there is one.
+    function finishPlaying() {
+        if (!playing)
+            return;
+        playAnim.stop();
+        endPlay();
+    }
 
-        turnState.axis = axis;
-        turnState.angle = clockwise ? -90 : 90;
-        turnState.affected = affected;
-        turnState.active = true;
-        pivotAnim.property = "eulerRotation." + axis;
-        pivotAnim.from = 0;
-        pivotAnim.to = turnState.angle;
-        pivotAnim.start();
+    function endPlay() {
+        if (!playing)
+            return;
+        setDown(playTarget);
+        playing = false;
+        // Whoever is listening normally repaints the cube as it now stands,
+        // which restarts the guide; if nobody does, it restarts from here.
+        scheduleGuide();
+        movePlayed();
+    }
+
+    // The layer hanging off the pivot, or null:
+    // { axis, layer, cubies: indices into cubieStates }.
+    property var heldLayer: null
+    // The same cubies as a lookup, for the stickers' own bindings.
+    property var heldCubies: ({})
+    // The pivot's angle about heldLayer.axis, in degrees.
+    property real turnAngle: 0
+    property real playTarget: 0
+    property real nudgeSign: 1
+
+    function pickUp(turn) {
+        var along = axisIndex(turn.axis);
+        var cubies = [];
+        var lookup = {};
+        for (var i = 0; i < cubieStates.length; i++) {
+            if (cubieStates[i].pos[along] === turn.layer && cubieRepeater.objectAt(i)) {
+                cubies.push(i);
+                lookup[i] = true;
+            }
+        }
+        if (cubies.length === 0)
+            return;
+        turnAngle = 0;
+        pivot.axis = Qt.vector3d(along === 0 ? 1 : 0, along === 1 ? 1 : 0, along === 2 ? 1 : 0);
+        for (var c = 0; c < cubies.length; c++)
+            cubieRepeater.objectAt(cubies[c]).parent = pivot;
+        heldLayer = { axis: turn.axis, layer: turn.layer, cubies: cubies };
+        heldCubies = lookup;
+    }
+
+    // Puts the layer in hand back on the cube, `degrees` (a multiple of 90)
+    // round from where it was picked up.
+    function setDown(degrees) {
+        if (!heldLayer)
+            return;
+        var m = turnMatrix(heldLayer.axis, degrees);
+        for (var c = 0; c < heldLayer.cubies.length; c++) {
+            var idx = heldLayer.cubies[c];
+            var st = cubieStates[idx];
+            st.pos = matVec(m, st.pos);
+            st.orientation = matMul(m, st.orientation);
+            placeCubie(idx);
+        }
+        turnAngle = 0;
+        heldLayer = null;
+        heldCubies = ({});
+    }
+
+    function placeCubie(idx) {
+        var item = cubieRepeater.objectAt(idx);
+        if (!item)
+            return;
+        var st = cubieStates[idx];
+        item.parent = holdNode;
+        item.position = Qt.vector3d(st.pos[0] * root.step, st.pos[1] * root.step, st.pos[2] * root.step);
+        item.rotation = root.matToQuaternion(st.orientation);
+    }
+
+    // Every cubie back where it started, nothing turning.
+    function resetLayers() {
+        playAnim.stop();
+        playing = false;
+        stopNudge();
+        turnAngle = 0;
+        heldLayer = null;
+        heldCubies = ({});
+        for (var i = 0; i < cubieStates.length; i++) {
+            cubieStates[i].pos = cubieDefs[i].home.slice();
+            cubieStates[i].orientation = matIdentity();
+            placeCubie(i);
+        }
+        scheduleGuide();
+    }
+
+    function stopNudge() {
+        nudgeOnce.stop();
+        nudgeTwice.stop();
+    }
+
+    // The guide restarts once things have settled: a step of the solve
+    // changes the painting, the side and the turn count together, and the
+    // layer should be picked up once, from the cube as repainted.
+    function scheduleGuide() { Qt.callLater(root.applyGuide); }
+
+    function applyGuide() {
+        if (playing)
+            return;
+        stopNudge();
+        setDown(0);
+        var turn = moveTurn(guideFace, guideTurns);
+        if (!turn || cubieStates.length === 0)
+            return;
+        pickUp(turn);
+        if (!heldLayer)
+            return;
+        nudgeSign = turn.degrees > 0 ? 1 : -1;
+        if (Math.abs(turn.degrees) > 90)
+            nudgeTwice.restart();
+        else
+            nudgeOnce.restart();
+    }
+
+    // Every sticker as it sits in the scene right now, measured from the
+    // nodes themselves rather than from the bookkeeping above, in the cube's
+    // own frame and in cubie spacings:
+    //   { color: "#rrggbb", cubie: [x, y, z], facing: [x, y, z] }
+    // - which cubie position the sticker is on (fractional while a layer is
+    // part-way round) and which way it faces. x runs L to R, y D to U, z B
+    // to F. This is what the tests compare with cube::solver::Cube.
+    function stickerPlacements() {
+        var out = [];
+        for (var i = 0; i < cubieDefs.length; i++) {
+            var cubie = cubieRepeater.objectAt(i);
+            for (var j = 0; j < cubieDefs[i].stickers.length; j++) {
+                var sticker = cubie.stickerAt(j);
+                var at = holdNode.mapPositionFromScene(sticker.scenePosition);
+                var facing = holdNode.mapDirectionFromScene(
+                    sticker.mapDirectionToScene(Qt.vector3d(0, 0, 1)));
+                var lift = sticker.faceOffset;
+                out.push({
+                    color: "" + sticker.stickerColor,
+                    cubie: [(at.x - facing.x * lift) / step, (at.y - facing.y * lift) / step,
+                            (at.z - facing.z * lift) / step],
+                    facing: [facing.x, facing.y, facing.z]
+                });
+            }
+        }
+        return out;
+    }
+
+    // Which way each side faces in the scene, where the viewer looks along
+    // -z with +y up and +x to the right: { U: [x, y, z], ... }. A side is
+    // in view when its z is positive.
+    function sideDirections() {
+        var out = {};
+        var keys = { U: "py", D: "ny", F: "pz", B: "nz", L: "nx", R: "px" };
+        for (var letter in keys) {
+            var axis = stickerAxis[keys[letter]];
+            var d = holdNode.mapDirectionToScene(Qt.vector3d(axis[0], axis[1], axis[2]));
+            out[letter] = [d.x, d.y, d.z];
+        }
+        return out;
     }
 
     function axisIndex(axis) { return axis === "x" ? 0 : (axis === "y" ? 1 : 2); }
@@ -180,10 +418,9 @@ Item {
         ];
     }
 
-    // Standard single-axis rotation matrix, built from the same angle used
-    // to drive the pivot's eulerRotation animation - so the baked result
-    // always matches wherever the animation visually left off, regardless
-    // of which rotation-direction convention Quick3D uses internally.
+    // Standard right-handed single-axis rotation matrix for a multiple of
+    // 90 degrees - the same rotation the pivot shows at that angle, so a
+    // layer set down sits exactly where its turn left it.
     function turnMatrix(axis, angleDeg) {
         var rad = angleDeg * Math.PI / 180;
         var c = Math.round(Math.cos(rad));
@@ -219,32 +456,13 @@ Item {
         return Qt.quaternion(qw, qx, qy, qz);
     }
 
-    function finishTurn() {
-        var m = turnMatrix(turnState.axis, turnState.angle);
-        for (var a = 0; a < turnState.affected.length; a++) {
-            var idx = turnState.affected[a];
-            var st = cubieStates[idx];
-            st.pos = matVec(m, st.pos);
-            st.orientation = matMul(m, st.orientation);
-
-            var item = cubieRepeater.objectAt(idx);
-            item.parent = cubeRoot;
-            item.position = Qt.vector3d(st.pos[0] * root.step, st.pos[1] * root.step, st.pos[2] * root.step);
-            item.rotation = root.matToQuaternion(st.orientation);
-        }
-        pivot.eulerRotation = Qt.vector3d(0, 0, 0);
-        turnState.active = false;
-    }
-
     // Facelet indexing convention (row-major 0-8 per face): each face is
     // read looking at it from OUTSIDE the cube, rows top to bottom, columns
     // left to right, with screen-up = +y on the four side faces (F/B/L/R),
     // screen-up = -z (the B edge) on U, and screen-up = +z (the F edge) on
     // D; columns follow the right-handed cross product of view direction
-    // and screen-up. The scan assembler corrects per-face rotations
-    // mathematically, so the load-bearing contract here is only that this
-    // mapping is FIXED and shared by every caller, not that it matches any
-    // printed cube notation.
+    // and screen-up. cube::solver::outside_view() produces exactly this
+    // order from a solver Cube.
     function faceletIndex(letter, xi, yi, zi) {
         if (letter === "U") return (zi + 1) * 3 + (xi + 1);
         if (letter === "D") return (1 - zi) * 3 + (xi + 1);
@@ -256,13 +474,10 @@ Item {
 
     // 26 cubies (skip the fully-hidden centre). Each keeps its stickers on
     // fixed local faces forever; only pos/orientation change as layers turn.
-    // Each sticker resolves its colour per-facelet from faceletColors when
-    // an entry exists, falling back to the uniform face colour; `painted`
-    // records which case so skeleton mode knows which stickers to dim.
-    // Referencing root.faceletColors here means a new map re-evaluates the
-    // whole binding and the Repeater3D rebuilds - fine at scan cadence (a
-    // handful of captures), not something to drive per-frame.
-    property var cubieDefs: {
+    // Nothing here depends on how the cube is painted: each sticker looks
+    // its own colour up (see stickerNode), so repainting recolours 54
+    // materials and rebuilds nothing.
+    readonly property var cubieDefs: {
         var defs = [];
         for (var xi = -1; xi <= 1; xi++) {
             for (var yi = -1; yi <= 1; yi++) {
@@ -270,21 +485,18 @@ Item {
                     if (xi === 0 && yi === 0 && zi === 0)
                         continue;
                     var faces = [];
-                    if (yi === 1) faces.push({ key: "py", letter: "U", uniform: root.topColor });
-                    if (yi === -1) faces.push({ key: "ny", letter: "D", uniform: root.bottomColor });
-                    if (zi === 1) faces.push({ key: "pz", letter: "F", uniform: root.frontColor });
-                    if (zi === -1) faces.push({ key: "nz", letter: "B", uniform: root.backColor });
-                    if (xi === -1) faces.push({ key: "nx", letter: "L", uniform: root.leftColor });
-                    if (xi === 1) faces.push({ key: "px", letter: "R", uniform: root.rightColor });
+                    if (yi === 1) faces.push({ key: "py", letter: "U" });
+                    if (yi === -1) faces.push({ key: "ny", letter: "D" });
+                    if (zi === 1) faces.push({ key: "pz", letter: "F" });
+                    if (zi === -1) faces.push({ key: "nz", letter: "B" });
+                    if (xi === -1) faces.push({ key: "nx", letter: "L" });
+                    if (xi === 1) faces.push({ key: "px", letter: "R" });
                     var stickers = [];
                     for (var f = 0; f < faces.length; f++) {
-                        var arr = root.faceletColors ? root.faceletColors[faces[f].letter] : undefined;
-                        var over = (arr && arr.length === 9)
-                            ? arr[root.faceletIndex(faces[f].letter, xi, yi, zi)] : undefined;
                         stickers.push({
                             face: faces[f].key,
-                            color: over ? over : faces[f].uniform,
-                            painted: !!over
+                            letter: faces[f].letter,
+                            index: faceletIndex(faces[f].letter, xi, yi, zi)
                         });
                     }
                     defs.push({ home: [xi, yi, zi], stickers: stickers });
@@ -292,6 +504,23 @@ Item {
             }
         }
         return defs;
+    }
+
+    function uniformColor(letter) {
+        switch (letter) {
+        case "U": return root.topColor;
+        case "D": return root.bottomColor;
+        case "F": return root.frontColor;
+        case "B": return root.backColor;
+        case "L": return root.leftColor;
+        }
+        return root.rightColor;
+    }
+
+    readonly property color bodyColor: "#1B1A1A"
+    function towardsBody(c, amount) {
+        return Qt.rgba(c.r + (bodyColor.r - c.r) * amount, c.g + (bodyColor.g - c.g) * amount,
+                       c.b + (bodyColor.b - c.b) * amount, 1);
     }
 
     // Runtime pos/orientation per cubie (index-aligned with cubieDefs /
@@ -311,6 +540,7 @@ Item {
         // here too.
         if (externallyDriven)
             cubeRoot.eulerRotation = Qt.vector3d(0, 0, 0);
+        scheduleGuide();
     }
 
     readonly property var stickerOrientation: ({
@@ -412,241 +642,279 @@ Item {
                 Vector3dAnimation { duration: 120 }
             }
 
+            // Where the cube is looked at from: the tip towards the viewer
+            // outside the turntable spin, so the cube's uprights stay
+            // upright on screen however far round it is turned.
             Node {
-                id: cubeRoot
-                eulerRotation: root.homeRotation
+                id: tiltNode
+                eulerRotation: Qt.vector3d(root.shownPitch, 0, 0)
 
-                Node { id: pivot }
-
-                // Capture fill rings (see faceRings above). Parented to
-                // cubeRoot so they turn with the cube under both the pose
-                // feed and drag/idle spin; each ring is four thin bars
-                // rather than a textured quad because Quick3D primitives
-                // have no stroked-rectangle, and four boxes cost nothing.
-                // NoLighting keeps the state colour legible at every
-                // orientation - a ring is a status lamp, not a surface.
-                Repeater3D {
-                    id: faceRingRepeater
-                    model: root.faceRingItems
+                Node {
+                    id: spinNode
+                    eulerRotation: Qt.vector3d(0, root.shownYaw, 0)
 
                     Node {
-                        id: ringNode
-                        required property var modelData
-                        readonly property var orient: root.stickerOrientation[modelData.face]
-                        readonly property var axisVec: root.stickerAxis[modelData.face]
-                        // Just proud of the sticker plane (cubie surface +
-                        // sticker offset ~53.75) so the ring never
-                        // z-fights the stickers it frames.
-                        readonly property real ringDistance: 1.5 * root.step - root.cubieGap / 2 + 1.5
-                        // Frame the full 3x3 face with a little air: the
-                        // ring reads as "this whole face", not as part of
-                        // any one sticker.
-                        readonly property real ringSide: 3 * root.step - root.cubieGap + 4
-                        readonly property real ringHalf: ringSide / 2
-                        readonly property real ringThickness: 2.4
-                        readonly property color ringColor: modelData.state === "conflict"
-                            ? Theme.warning : "#3A9D5D" // the capture-celebration green
+                        id: cubeRoot
+                        eulerRotation: root.homeRotation
 
-                        position: Qt.vector3d(axisVec[0] * ringDistance,
-                                              axisVec[1] * ringDistance,
-                                              axisVec[2] * ringDistance)
-                        eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-
-                        // Local +z now points along the face normal (same
-                        // frame the stickers are laid out in), so the four
-                        // bars live in the local XY plane. Horizontal bars
-                        // overhang by one thickness to close the corners.
-                        Model {
-                            source: "#Cube"
-                            position: Qt.vector3d(0, ringNode.ringHalf, 0)
-                            scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
-                                               ringNode.ringThickness / 100, ringNode.ringThickness / 100)
-                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
-                        }
-                        Model {
-                            source: "#Cube"
-                            position: Qt.vector3d(0, -ringNode.ringHalf, 0)
-                            scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
-                                               ringNode.ringThickness / 100, ringNode.ringThickness / 100)
-                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
-                        }
-                        Model {
-                            source: "#Cube"
-                            position: Qt.vector3d(-ringNode.ringHalf, 0, 0)
-                            scale: Qt.vector3d(ringNode.ringThickness / 100,
-                                               ringNode.ringSide / 100, ringNode.ringThickness / 100)
-                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
-                        }
-                        Model {
-                            source: "#Cube"
-                            position: Qt.vector3d(ringNode.ringHalf, 0, 0)
-                            scale: Qt.vector3d(ringNode.ringThickness / 100,
-                                               ringNode.ringSide / 100, ringNode.ringThickness / 100)
-                            materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
-                        }
-                    }
-                }
-
-                Repeater3D {
-                    id: cubieRepeater
-                    model: root.cubieDefs
-
-                    Node {
-                        id: cubieNode
-                        required property var modelData
-
-                        position: Qt.vector3d(modelData.home[0] * root.step, modelData.home[1] * root.step, modelData.home[2] * root.step)
-
-                        Model {
-                            source: "#Cube"
-                            scale: Qt.vector3d(root.cubieSize / 100, root.cubieSize / 100, root.cubieSize / 100)
-                            materials: PrincipledMaterial { baseColor: "#1B1A1A"; roughness: 1.0; metalness: 0.0 }
-                        }
-
-                        // Style 2's inverted-hull ink outline. A cube's faces
-                        // are all axis-aligned, so a uniformly-scaled duplicate
-                        // mesh rendered front-face-culled (only its backfaces,
-                        // poking out past the real mesh, are visible) gives an
-                        // exact outline with no custom vertex shader needed.
-                        // +1 total (0.5 per side) stays well clear of
-                        // root.cubieGap (2, i.e. a 1-unit half-gap to the next
-                        // cubie) so neighbouring cubies' outlines don't fuse
-                        // into one blob.
-                        Model {
-                            visible: root.shaderStyle === 2
-                            source: "#Cube"
-                            scale: Qt.vector3d((root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100)
-                            materials: PrincipledMaterial {
-                                baseColor: "black"
-                                lighting: PrincipledMaterial.NoLighting
-                                cullMode: Material.FrontFaceCulling
+                        // How the cube itself is turned: everything that
+                        // is part of the cube hangs off this.
+                        Node {
+                            id: holdNode
+                            rotation: root.holdRotation
+                            Behavior on rotation {
+                                QuaternionAnimation { duration: root.viewDuration; type: QuaternionAnimation.Slerp }
                             }
-                        }
 
-                        // Style 0: Physically-Based Realism (default). Roughness/
-                        // metalness/specular/clearcoat tuned for real textured
-                        // ABS plastic with a light lacquer coat - not the bare
-                        // flat PrincipledMaterial default, and not the old
-                        // "glossy studio" chrome-like look either (that used
-                        // metalness 0.35, too metallic for a plastic sticker).
-                        // Environment reflections come from the shared
-                        // lightProbe set on `environment` below.
-                        Repeater3D {
-                            model: cubieNode.modelData.stickers
-                            visible: root.shaderStyle === 0
+                            // The layer being turned hangs off this while
+                            // it moves.
+                            Node {
+                                id: pivot
+                                property vector3d axis: Qt.vector3d(0, 1, 0)
+                                rotation: Quaternion.fromAxisAndAngle(axis, root.turnAngle)
+                            }
 
-                            Model {
-                                required property var modelData
-                                // Skeleton mode hands unpainted stickers to the
-                                // shared placeholder repeater below.
-                                visible: !root.skeleton || modelData.painted
-                                readonly property var orient: root.stickerOrientation[modelData.face]
-                                readonly property var axisVec: root.stickerAxis[modelData.face]
-                                source: "#Rectangle"
-                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                            // Capture fill rings (see faceRings above). Each
+                            // ring is four thin bars rather than a textured
+                            // quad because Quick3D primitives have no
+                            // stroked-rectangle, and four boxes cost
+                            // nothing. NoLighting keeps the state colour
+                            // legible at every orientation - a ring is a
+                            // status lamp, not a surface.
+                            Repeater3D {
+                                id: faceRingRepeater
+                                model: root.faceRingItems
 
-                                materials: PrincipledMaterial {
-                                    baseColor: modelData.color
-                                    roughness: 0.35
-                                    metalness: 0.0
-                                    specularAmount: 0.6
-                                    specularTint: 0.1
-                                    clearcoatAmount: 0.35
-                                    clearcoatRoughnessAmount: 0.12
+                                Node {
+                                    id: ringNode
+                                    required property var modelData
+                                    readonly property var orient: root.stickerOrientation[modelData.face]
+                                    readonly property var axisVec: root.stickerAxis[modelData.face]
+                                    // Just proud of the sticker plane (cubie
+                                    // surface + sticker offset ~53.75) so the
+                                    // ring never z-fights the stickers it
+                                    // frames.
+                                    readonly property real ringDistance: 1.5 * root.step - root.cubieGap / 2 + 1.5
+                                    // Frame the full 3x3 face with a little
+                                    // air: the ring reads as "this whole
+                                    // face", not as part of any one sticker.
+                                    readonly property real ringSide: 3 * root.step - root.cubieGap + 4
+                                    readonly property real ringHalf: ringSide / 2
+                                    readonly property real ringThickness: 2.4
+                                    readonly property color ringColor: modelData.state === "conflict"
+                                        ? Theme.warning : "#3A9D5D" // the capture-celebration green
+
+                                    position: Qt.vector3d(axisVec[0] * ringDistance,
+                                                          axisVec[1] * ringDistance,
+                                                          axisVec[2] * ringDistance)
+                                    eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+
+                                    // Local +z now points along the face
+                                    // normal (same frame the stickers are
+                                    // laid out in), so the four bars live in
+                                    // the local XY plane. Horizontal bars
+                                    // overhang by one thickness to close the
+                                    // corners.
+                                    Model {
+                                        source: "#Cube"
+                                        position: Qt.vector3d(0, ringNode.ringHalf, 0)
+                                        scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
+                                                           ringNode.ringThickness / 100, ringNode.ringThickness / 100)
+                                        materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                                    }
+                                    Model {
+                                        source: "#Cube"
+                                        position: Qt.vector3d(0, -ringNode.ringHalf, 0)
+                                        scale: Qt.vector3d((ringNode.ringSide + ringNode.ringThickness) / 100,
+                                                           ringNode.ringThickness / 100, ringNode.ringThickness / 100)
+                                        materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                                    }
+                                    Model {
+                                        source: "#Cube"
+                                        position: Qt.vector3d(-ringNode.ringHalf, 0, 0)
+                                        scale: Qt.vector3d(ringNode.ringThickness / 100,
+                                                           ringNode.ringSide / 100, ringNode.ringThickness / 100)
+                                        materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                                    }
+                                    Model {
+                                        source: "#Cube"
+                                        position: Qt.vector3d(ringNode.ringHalf, 0, 0)
+                                        scale: Qt.vector3d(ringNode.ringThickness / 100,
+                                                           ringNode.ringSide / 100, ringNode.ringThickness / 100)
+                                        materials: PrincipledMaterial { baseColor: ringNode.ringColor; lighting: PrincipledMaterial.NoLighting }
+                                    }
                                 }
                             }
-                        }
 
-                        // Style 1: Instructional Glow. Quantized-band diffuse +
-                        // fresnel rim (toon.frag) plus an emissive boost on
-                        // stickers belonging to root.highlightedLayer.
-                        Repeater3D {
-                            model: cubieNode.modelData.stickers
-                            visible: root.shaderStyle === 1
+                            Repeater3D {
+                                id: cubieRepeater
+                                model: root.cubieDefs
 
-                            Model {
-                                required property var modelData
-                                visible: !root.skeleton || modelData.painted
-                                readonly property var orient: root.stickerOrientation[modelData.face]
-                                readonly property var axisVec: root.stickerAxis[modelData.face]
-                                source: "#Rectangle"
-                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                                Node {
+                                    id: cubieNode
+                                    required property var modelData
+                                    required property int index
 
-                                readonly property bool inHighlightedLayer: root.highlightedLayer !== null
-                                    && cubieNode.modelData.home[root.axisIndex(root.highlightedLayer.axis)] === root.highlightedLayer.layer
+                                    readonly property bool inHand: root.heldCubies[index] === true
+                                    function stickerAt(j) { return stickerRepeater.objectAt(j); }
 
-                                materials: CustomMaterial {
-                                    shadingMode: CustomMaterial.Shaded
-                                    fragmentShader: "shaders/toon.frag"
-                                    property color uBaseColor: modelData.color
-                                    property color uRimColor: Theme.accent
-                                    property real uRimPower: 2.2
-                                    property real uGlowStrength: inHighlightedLayer ? 1.0 : 0.0
-                                }
-                            }
-                        }
+                                    position: Qt.vector3d(modelData.home[0] * root.step, modelData.home[1] * root.step, modelData.home[2] * root.step)
 
-                        // Style 2: Borderlands Cel-Shading. Hard 2-step banding
-                        // (cel.frag, no colour rim - the outline mesh above
-                        // provides the silhouette line instead); the
-                        // halftone/grunge/vignette look is a screen-space post
-                        // pass on `environment`, not per-sticker.
-                        Repeater3D {
-                            model: cubieNode.modelData.stickers
-                            visible: root.shaderStyle === 2
+                                    Model {
+                                        source: "#Cube"
+                                        scale: Qt.vector3d(root.cubieSize / 100, root.cubieSize / 100, root.cubieSize / 100)
+                                        materials: PrincipledMaterial { baseColor: root.bodyColor; roughness: 1.0; metalness: 0.0 }
+                                    }
 
-                            Model {
-                                required property var modelData
-                                visible: !root.skeleton || modelData.painted
-                                readonly property var orient: root.stickerOrientation[modelData.face]
-                                readonly property var axisVec: root.stickerAxis[modelData.face]
-                                source: "#Rectangle"
-                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                                    // Style 2's inverted-hull ink outline. A
+                                    // cube's faces are all axis-aligned, so a
+                                    // uniformly-scaled duplicate mesh rendered
+                                    // front-face-culled (only its backfaces,
+                                    // poking out past the real mesh, are
+                                    // visible) gives an exact outline with no
+                                    // custom vertex shader needed. +1 total
+                                    // (0.5 per side) stays well clear of
+                                    // root.cubieGap (2, i.e. a 1-unit half-gap
+                                    // to the next cubie) so neighbouring
+                                    // cubies' outlines don't fuse into one
+                                    // blob.
+                                    Model {
+                                        visible: root.shaderStyle === 2
+                                        source: "#Cube"
+                                        scale: Qt.vector3d((root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100, (root.cubieSize + 1) / 100)
+                                        materials: PrincipledMaterial {
+                                            baseColor: "black"
+                                            lighting: PrincipledMaterial.NoLighting
+                                            cullMode: Material.FrontFaceCulling
+                                        }
+                                    }
 
-                                materials: CustomMaterial {
-                                    shadingMode: CustomMaterial.Shaded
-                                    fragmentShader: "shaders/cel.frag"
-                                    property color uBaseColor: modelData.color
-                                }
-                            }
-                        }
+                                    Repeater3D {
+                                        id: stickerRepeater
+                                        model: cubieNode.modelData.stickers
 
-                        // Skeleton placeholders: unpainted stickers render as
-                        // this ONE style-independent dim translucent panel
-                        // (the styled repeaters above skip them) rather than
-                        // three per-style variants - the custom toon/cel
-                        // shaders have no alpha path, and an "empty socket
-                        // awaiting a face" should look identical under every
-                        // shader style anyway. NoLighting keeps the dimness
-                        // constant as the cube rotates under the pose feed.
-                        Repeater3D {
-                            model: cubieNode.modelData.stickers
-                            visible: root.skeleton
+                                        // One sticker: where it sits on its
+                                        // cubie, what colour it is now, and
+                                        // one panel per shader style, of
+                                        // which only the style in use draws.
+                                        Node {
+                                            id: stickerNode
+                                            required property var modelData
+                                            readonly property var orient: root.stickerOrientation[modelData.face]
+                                            readonly property var axisVec: root.stickerAxis[modelData.face]
+                                            readonly property real faceOffset: root.cubieSize / 2 + 0.75
 
-                            Model {
-                                required property var modelData
-                                visible: !modelData.painted
-                                readonly property var orient: root.stickerOrientation[modelData.face]
-                                readonly property var axisVec: root.stickerAxis[modelData.face]
-                                source: "#Rectangle"
-                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
-                                eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
-                                readonly property real faceOffset: root.cubieSize / 2 + 0.75
-                                position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                                            // This sticker's entry in the
+                                            // painting, if it has one.
+                                            readonly property var paint: {
+                                                var side = root.faceletColors ? root.faceletColors[modelData.letter] : undefined;
+                                                return (side && side.length === 9) ? side[modelData.index] : undefined;
+                                            }
+                                            readonly property bool painted: !!paint
+                                            readonly property color stickerColor: painted ? paint : root.uniformColor(modelData.letter)
+                                            // Stickers outside the layer in
+                                            // hand sit back a little.
+                                            readonly property color shownColor: root.guideDim > 0 && root.heldLayer !== null && !cubieNode.inHand
+                                                ? root.towardsBody(stickerColor, root.guideDim) : stickerColor
+                                            // Skeleton mode hands unpainted
+                                            // stickers to the placeholder
+                                            // panel below.
+                                            readonly property bool solid: !root.skeleton || painted
+                                            // Instructional Glow lights up
+                                            // the layer in hand, and any
+                                            // layer highlightedLayer names.
+                                            readonly property bool calledOut: cubieNode.inHand
+                                                || (root.highlightedLayer !== null
+                                                    && cubieNode.modelData.home[root.axisIndex(root.highlightedLayer.axis)] === root.highlightedLayer.layer)
 
-                                materials: PrincipledMaterial {
-                                    baseColor: "#C9C5C5"
-                                    lighting: PrincipledMaterial.NoLighting
-                                    opacity: 0.16
+                                            position: Qt.vector3d(axisVec[0] * faceOffset, axisVec[1] * faceOffset, axisVec[2] * faceOffset)
+                                            eulerRotation: Qt.vector3d(orient.rx, orient.ry, 0)
+
+                                            // Style 0: Physically-Based
+                                            // Realism (default). Roughness/
+                                            // metalness/specular/clearcoat
+                                            // tuned for real textured ABS
+                                            // plastic with a light lacquer
+                                            // coat. Environment reflections
+                                            // come from the shared lightProbe
+                                            // set on `environment`.
+                                            Model {
+                                                visible: root.shaderStyle === 0 && stickerNode.solid
+                                                source: "#Rectangle"
+                                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                                materials: PrincipledMaterial {
+                                                    baseColor: stickerNode.shownColor
+                                                    roughness: 0.35
+                                                    metalness: 0.0
+                                                    specularAmount: 0.6
+                                                    specularTint: 0.1
+                                                    clearcoatAmount: 0.35
+                                                    clearcoatRoughnessAmount: 0.12
+                                                }
+                                            }
+
+                                            // Style 1: Instructional Glow.
+                                            // Quantized-band diffuse + fresnel
+                                            // rim (toon.frag) plus an emissive
+                                            // boost on the layer called out.
+                                            Model {
+                                                visible: root.shaderStyle === 1 && stickerNode.solid
+                                                source: "#Rectangle"
+                                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+
+                                                materials: CustomMaterial {
+                                                    shadingMode: CustomMaterial.Shaded
+                                                    fragmentShader: "shaders/toon.frag"
+                                                    property color uBaseColor: stickerNode.shownColor
+                                                    property color uRimColor: Theme.accent
+                                                    property real uRimPower: 2.2
+                                                    property real uGlowStrength: stickerNode.calledOut ? 1.0 : 0.0
+                                                }
+                                            }
+
+                                            // Style 2: Borderlands
+                                            // Cel-Shading. Hard 2-step banding
+                                            // (cel.frag, no colour rim - the
+                                            // outline mesh above provides the
+                                            // silhouette line instead); the
+                                            // halftone/grunge/vignette look is
+                                            // a screen-space post pass on
+                                            // `environment`, not per-sticker.
+                                            Model {
+                                                visible: root.shaderStyle === 2 && stickerNode.solid
+                                                source: "#Rectangle"
+                                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                                materials: CustomMaterial {
+                                                    shadingMode: CustomMaterial.Shaded
+                                                    fragmentShader: "shaders/cel.frag"
+                                                    property color uBaseColor: stickerNode.shownColor
+                                                }
+                                            }
+
+                                            // Skeleton placeholder: an
+                                            // unpainted sticker renders as
+                                            // this ONE style-independent dim
+                                            // translucent panel rather than
+                                            // three per-style variants - the
+                                            // custom toon/cel shaders have no
+                                            // alpha path, and an "empty socket
+                                            // awaiting a face" should look
+                                            // identical under every shader
+                                            // style anyway. NoLighting keeps
+                                            // the dimness constant as the cube
+                                            // rotates.
+                                            Model {
+                                                visible: root.skeleton && !stickerNode.painted
+                                                source: "#Rectangle"
+                                                scale: Qt.vector3d(root.cubieSize * root.stickerInset / 100, root.cubieSize * root.stickerInset / 100, 1)
+                                                materials: PrincipledMaterial {
+                                                    baseColor: "#C9C5C5"
+                                                    lighting: PrincipledMaterial.NoLighting
+                                                    opacity: 0.16
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -658,20 +926,47 @@ Item {
 
     StatsOverlay { active: root.showStats }
 
-    QtObject {
-        id: turnState
-        property bool active: false
-        property string axis: "y"
-        property real angle: 90
-        property var affected: []
+    NumberAnimation {
+        id: playAnim
+        target: root
+        property: "turnAngle"
+        easing.type: Easing.InOutQuad
+        onFinished: root.endPlay()
     }
 
-    NumberAnimation {
-        id: pivotAnim
-        target: pivot
-        duration: 380
-        easing.type: Easing.InOutQuad
-        onFinished: root.finishTurn()
+    // The nudge for a quarter turn: out with a little kick, a beat held
+    // there, back, and a rest before the next.
+    SequentialAnimation {
+        id: nudgeOnce
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: root; property: "turnAngle"
+            to: root.nudgeSign * root.nudgeAngle
+            duration: 170; easing.type: Easing.OutBack; easing.overshoot: 1.6
+        }
+        PauseAnimation { duration: 190 }
+        NumberAnimation { target: root; property: "turnAngle"; to: 0; duration: 260; easing.type: Easing.InOutQuad }
+        PauseAnimation { duration: 460 }
+    }
+
+    // The nudge for a half turn: two kicks, one after the other, then back.
+    SequentialAnimation {
+        id: nudgeTwice
+        loops: Animation.Infinite
+        NumberAnimation {
+            target: root; property: "turnAngle"
+            to: root.nudgeSign * root.nudgeAngle
+            duration: 160; easing.type: Easing.OutBack; easing.overshoot: 1.6
+        }
+        PauseAnimation { duration: 120 }
+        NumberAnimation {
+            target: root; property: "turnAngle"
+            to: root.nudgeSign * root.nudgeAngle * 2
+            duration: 160; easing.type: Easing.OutBack; easing.overshoot: 1.6
+        }
+        PauseAnimation { duration: 220 }
+        NumberAnimation { target: root; property: "turnAngle"; to: 0; duration: 340; easing.type: Easing.InOutQuad }
+        PauseAnimation { duration: 460 }
     }
 
     DragHandler {

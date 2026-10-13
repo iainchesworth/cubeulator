@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <cube/solver/stepped_solution.hpp>
 
@@ -38,9 +39,21 @@ class SolveController : public QObject {
     Q_PROPERTY(QVariantList rightColors READ rightColors NOTIFY stateChanged)
     Q_PROPERTY(QVariantList leftColors READ leftColors NOTIFY stateChanged)
 
+    // Every sticker of the cube as it stands: side letter ("U", "D", "L",
+    // "R", "F", "B") -> nine colour names, each side as seen from outside
+    // (cube::solver::outside_view). That is the order
+    // Cube3DView.faceletColors takes, so the 3D cube is painted from this
+    // once the names are swapped for the palette's colours.
+    Q_PROPERTY(QVariantMap stickers READ stickers NOTIFY stateChanged)
+
+    // The whole solution, one entry per move: { face: side letter, turns:
+    // quarter turns clockwise seen from outside that side, notation }.
+    // Changes only when a solve lands, not as it is stepped through.
+    Q_PROPERTY(QVariantList moves READ moves NOTIFY solutionChanged)
+
     // The move about to be performed from the current state, structured
-    // for CubeView.qml's arrow geometry (face + turn count) as well as
-    // display text. Empty/meaningless once atEnd is true.
+    // for the cube view (side + turn count) as well as display text.
+    // Empty/meaningless once atEnd is true.
     Q_PROPERTY(QString currentMoveNotation READ currentMoveNotation NOTIFY stateChanged)
     Q_PROPERTY(QString currentMoveFace READ currentMoveFace NOTIFY stateChanged)
     Q_PROPERTY(int currentMoveTurns READ currentMoveTurns NOTIFY stateChanged)
@@ -71,6 +84,13 @@ public:
     [[nodiscard]] QVariantList topColors() const;
     [[nodiscard]] QVariantList rightColors() const;
     [[nodiscard]] QVariantList leftColors() const;
+    [[nodiscard]] QVariantMap stickers() const;
+    [[nodiscard]] QVariantList moves() const;
+
+    // The cube as it stands after the moves stepped through so far.
+    [[nodiscard]] const cube::solver::Cube& currentCube() const noexcept {
+        return stepped_.current_cube();
+    }
 
     [[nodiscard]] QString currentMoveNotation() const;
     [[nodiscard]] QString currentMoveFace() const;
@@ -98,6 +118,8 @@ public slots:
 
 signals:
     void stateChanged();
+    // A different solution is in place: a solve has landed.
+    void solutionChanged();
 
     // Emitted once a completed scan is accepted and its background solve is
     // kicked off (isSolving becomes true at the same point) - AppState.qml
