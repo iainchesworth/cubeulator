@@ -284,34 +284,6 @@
       "notes": "chevron-left, chevron-right, check, alert-triangle and help-circle are on Lucide's list of icons derived from Feather."
     },
     {
-      "id": "font-archivo",
-      "name": "Archivo (typeface)",
-      "version": "",
-      "license": "OFL-1.1",
-      "copyright": "Copyright 2019 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)",
-      "homepage": "https://github.com/Omnibus-Type/Archivo",
-      "kind": "font",
-      "planned": true,
-      "files": [
-        "assets/fonts/Archivo"
-      ],
-      "notes": "Named in Theme.qml, not yet bundled. Emitted only once files exist under assets/fonts/. Verify the copyright line against the bundled font's name table."
-    },
-    {
-      "id": "font-ibm-plex-mono",
-      "name": "IBM Plex Mono (typeface)",
-      "version": "",
-      "license": "OFL-1.1",
-      "copyright": "Copyright (c) 2017 IBM Corp. with Reserved Font Name \"Plex\"",
-      "homepage": "https://github.com/IBM/plex",
-      "kind": "font",
-      "planned": true,
-      "files": [
-        "assets/fonts/IBMPlexMono"
-      ],
-      "notes": "Named in Theme.qml, not yet bundled. Emitted only once files exist under assets/fonts/. Verify the copyright line against the bundled font's name table."
-    },
-    {
       "id": "corner-detector-weights",
       "name": "Corner-detector weights (cube_corner_pose.onnx)",
       "version": "",
@@ -323,6 +295,66 @@
         "assets/models/cube_corner_pose.onnx"
       ],
       "blocking": "AGPL-derived weights are not cleared for distribution. Remove assets/models/cube_corner_pose.onnx before building a package (see assets/models/cube_corner_pose_PROVENANCE.md). src/app/CMakeLists.txt embeds the file whenever it exists."
+    },
+    {
+      "id": "font-archivo",
+      "name": "Archivo (typeface)",
+      "version": "commit 211127690e8f (2026-09-02)",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2020 The Archivo Project Authors (https://github.com/Omnibus-Type/Archivo)",
+      "homepage": "https://github.com/Omnibus-Type/Archivo",
+      "kind": "font",
+      "planned": true,
+      "files": [
+        "src/app/qt/fonts/Archivo"
+      ],
+      "licenseFile": "src/app/qt/fonts/OFL-Archivo.txt",
+      "notes": "Bundled by the kit (feature/ax-kit) under src/app/qt/fonts/; emitted once those files exist. Copyright line taken from the vendored OFL text."
+    },
+    {
+      "id": "font-ibm-plex-mono",
+      "name": "IBM Plex Mono (typeface)",
+      "version": "2.5.0",
+      "license": "OFL-1.1",
+      "copyright": "Copyright © 2017 IBM Corp. with Reserved Font Name \"Plex\"",
+      "homepage": "https://github.com/IBM/plex",
+      "kind": "font",
+      "planned": true,
+      "files": [
+        "src/app/qt/fonts/IBMPlexMono"
+      ],
+      "licenseFile": "src/app/qt/fonts/OFL-IBMPlexMono.txt",
+      "notes": "Bundled by the kit under src/app/qt/fonts/; emitted once those files exist."
+    },
+    {
+      "id": "font-noto-sans-hebrew",
+      "name": "Noto Sans Hebrew (typeface)",
+      "version": "3.001",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/hebrew)",
+      "homepage": "https://github.com/notofonts/hebrew",
+      "kind": "font",
+      "planned": true,
+      "files": [
+        "src/app/qt/fonts/NotoSansHebrew"
+      ],
+      "licenseFile": "src/app/qt/fonts/OFL-NotoSansHebrew.txt",
+      "notes": "Hebrew and Yiddish. Bundled by the kit under src/app/qt/fonts/; emitted once those files exist."
+    },
+    {
+      "id": "font-noto-sans-arabic",
+      "name": "Noto Sans Arabic (typeface)",
+      "version": "2.012",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2022 The Noto Project Authors (https://github.com/notofonts/arabic)",
+      "homepage": "https://github.com/notofonts/arabic",
+      "kind": "font",
+      "planned": true,
+      "files": [
+        "src/app/qt/fonts/NotoSansArabic"
+      ],
+      "licenseFile": "src/app/qt/fonts/OFL-NotoSansArabic.txt",
+      "notes": "Arabic. Bundled by the kit under src/app/qt/fonts/; emitted once those files exist."
     }
   ],
   "ignoredFiles": {
