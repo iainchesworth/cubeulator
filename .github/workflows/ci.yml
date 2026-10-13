@@ -100,8 +100,14 @@ jobs:
       # member 'expected'" errors on every file (confirmed in CI on that
       # image). ubuntu-26.04 ships clang-21 directly (20/21/22 side by side),
       # so no LLVM apt-repo pin is needed anymore - just install it.
+      #
+      # libomp-21-dev: the vendored M3T tracker (third_party/m3t) does
+      # find_package(OpenMP REQUIRED) for C and C++. GCC ships libgomp, but
+      # clang++ only has an OpenMP runtime with LLVM's libomp, so without it
+      # configure stops at "Could NOT find OpenMP_CXX (missing:
+      # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
       - name: Install Clang 21
-        run: sudo apt-get install -y clang-21 clang-tidy-21
+        run: sudo apt-get install -y clang-21 clang-tidy-21 libomp-21-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
