@@ -46,7 +46,7 @@ void start_scan_from_launch(App& app) {
 
 TEST_CASE("the app opens on the launch screen and draws it", "[system][launch]") {
     App& app = App::fresh();
-    cube::systest::take_qml_warnings();
+    static_cast<void>(cube::systest::take_qml_warnings());
 
     CHECK(app.screen() == "launch");
     CHECK(app.window().title() == "Cubeulator");
@@ -75,7 +75,7 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
         App& app = App::fresh();
-        cube::systest::take_qml_warnings();
+        static_cast<void>(cube::systest::take_qml_warnings());
         app.resize(size_for(layout));
         REQUIRE(app.layout() == layout);
 

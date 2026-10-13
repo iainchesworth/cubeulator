@@ -111,7 +111,9 @@ void App::boot() {
     if (!window_->isVisible()) {
         window_->show();
     }
-    QTest::qWaitForWindowExposed(window_);
+    if (!QTest::qWaitForWindowExposed(window_)) {
+        throw std::runtime_error("the window was never exposed: no display to draw on?");
+    }
 
     reach_ = std::make_unique<Reach>(*this);
     reach_->start();

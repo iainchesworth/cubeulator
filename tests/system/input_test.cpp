@@ -2,6 +2,7 @@
 
 #include "app.hpp"
 #include "fake_camera.hpp"
+#include "reach.hpp"
 
 #include "app_runtime.hpp"
 
