@@ -206,6 +206,27 @@ screen uses. Each is tagged `[known-today]`, cites its plan line and owner,
 and is written to **fail the day it is fixed** - that is the prompt to turn
 it into a journey step. Nothing in the suite fixes them.
 
+### Carrying this into the new experience
+
+The suite is written against today's six screens, but what it is built from
+does not depend on them, and `docs/design/journey.md` (E1) was written to be
+its inventory: state ids of the form `screen.state`, "a state nobody visits
+fails the reach check". The hand-off, per screen as E2/E3 rebuild it:
+
+| carries over unchanged | to be rewritten with the screen |
+|---|---|
+| `AppRuntime`, the fake camera, the `App` fixture (find by `objectName`, click, tap, drag, key, wait, grab, shot), QML-warning capture | `reach.cpp`'s screen and state tables - replace them with the ids in `journey.md` (they already use the `screen.state` form) |
+| the tour harness and its four variants (add pseudo-locale, text scale and reduced motion as more variants) | cases that look a control up by its label (`find_button`, `find_text`) on the scan and solve screens: they exist only because those screens have no `objectName`s yet |
+| the reach gate and its rule that a new screen file, state or control fails until it is visited | every `[known-today]` case: each flips to a journey step the day its defect is fixed |
+| the layout checks (breakpoint, one layout on show, every control inside the window) | the `kScreens` list in `layout_test.cpp` and the sizes, once `system.md` fixes the size classes |
+
+What the plan's E3 gate asks for - the whole journey by accessible name
+only, by keyboard only, in both themes, in the pseudo-locale - is the same
+walk with a different way of finding and pressing controls: `App` already
+sends keys, and finding by accessible name is one more lookup beside
+`find(objectName)`. The contract that makes it cheap is the plan's: every
+interactive item has an `objectName` and an accessible name.
+
 ## Coverage gate
 
 CI's `Coverage (Linux, GCC)` job builds the `linux-gcc-coverage` preset

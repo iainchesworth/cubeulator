@@ -74,7 +74,7 @@ private:
     App& app_;
     QTimer sampler_;
     std::set<std::string> screens_;     // "<screen>@<layout>"
-    std::set<std::string> states_;      // "<screen>/<state>"
+    std::set<std::string> states_;      // "<screen>.<state>"
     std::set<std::string> discovered_;  // "<control>@<layout>"
     std::set<std::string> disabled_;    // controls seen only disabled
     std::set<std::string> activated_;   // "<control>@<layout>"

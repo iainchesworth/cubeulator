@@ -170,7 +170,7 @@ void Reach::sample() {
 
     for (const StateDef& state : state_inventory()) {
         if (state.screen == screen && state.holds(app_)) {
-            states_.insert((state.screen + "/" + state.name).toStdString());
+            states_.insert((state.screen + "." + state.name).toStdString());
         }
     }
 
@@ -217,8 +217,8 @@ std::vector<QString> Reach::gaps() const {
 
     for (const StateDef& state : state_inventory()) {
         if (state.cannot_reach_because.isEmpty() &&
-            states_.count((state.screen + "/" + state.name).toStdString()) == 0) {
-            gaps.push_back("state " + state.screen + "/" + state.name + " never seen");
+            states_.count((state.screen + "." + state.name).toStdString()) == 0) {
+            gaps.push_back("state " + state.screen + "." + state.name + " never seen");
         }
     }
 
@@ -244,8 +244,8 @@ std::vector<QString> Reach::known_gaps() const {
     }
     for (const StateDef& state : state_inventory()) {
         if (!state.cannot_reach_because.isEmpty()) {
-            const bool seen = states_.count((state.screen + "/" + state.name).toStdString()) != 0;
-            out.push_back("state " + state.screen + "/" + state.name +
+            const bool seen = states_.count((state.screen + "." + state.name).toStdString()) != 0;
+            out.push_back("state " + state.screen + "." + state.name +
                           (seen ? " (seen anyway) - " : " not reachable here - ") +
                           state.cannot_reach_because);
         }
@@ -274,7 +274,7 @@ QString Reach::summary() const {
         if (state.cannot_reach_because.isEmpty()) {
             ++state_total;
             state_seen +=
-                static_cast<int>(states_.count((state.screen + "/" + state.name).toStdString()));
+                static_cast<int>(states_.count((state.screen + "." + state.name).toStdString()));
         }
     }
 
