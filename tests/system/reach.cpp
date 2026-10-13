@@ -322,6 +322,7 @@ QJsonObject Reach::to_json() const {
         {"controlsActivated", array(activated_)},
         {"gaps", strings(gaps())},
         {"knownGaps", strings(known_gaps())},
+        {"summary", summary()},
     };
 }
 

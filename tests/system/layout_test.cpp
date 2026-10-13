@@ -13,6 +13,8 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 
+#include <set>
+#include <string>
 #include <vector>
 
 namespace {
@@ -97,10 +99,24 @@ TEST_CASE("only one layout's controls are on show at a time", "[system][layout]"
     }
 }
 
-TEST_CASE("every control on every screen is inside the window", "[system][layout]") {
+TEST_CASE("every control on every screen is inside the window, bar the known few",
+          "[system][layout]") {
     // The failure this catches is a footer pushed below the fold on a short
     // window, or a column wider than a phone. It looks at where each control
     // is, not how it looks.
+    //
+    // Two screens still have it, found by this case (plan, "What was found":
+    // "phone layouts sized by subtraction"). They are listed here as they are,
+    // so a new overflow fails and so does the day one of these is fixed.
+    // Owner: experience lane, E3a/E3b on the kit. permission.openSettings is
+    // only on show when the platform reports camera access as denied.
+    const std::set<std::string> known = {
+        "permission.notNow @ 375x667",     "permission.openSettings @ 375x667",
+        "permission.notNow @ 390x844",     "permission.openSettings @ 390x844",
+        "permission.notNow @ 719x640",     "complete.review @ 1280x800",
+        "complete.scanAnother @ 1280x800",
+    };
+
     struct Size {
         const char* what;
         QSize size;
@@ -110,19 +126,16 @@ TEST_CASE("every control on every screen is inside the window", "[system][layout
         {"just wide", {720, 640}},   {"desktop", {900, 640}}, {"large", {1280, 800}},
     };
 
+    std::set<std::string> overflowing;
+    std::set<std::string> on_show;
     for (const Screen& screen : kScreens) {
         for (const Size& size : sizes) {
             App& app = App::fresh();
             app.resize(size.size);
             show(app, screen);
-            INFO("screen " << screen.name << " at " << size.what << " " << size.size.width() << "x"
-                           << size.size.height());
 
             const QRect window(QPoint(0, 0), app.window().size());
             for (QQuickItem* control : app.visible_controls()) {
-                const QRect box = control->mapRectToScene(control->boundingRect()).toAlignedRect();
-                INFO("control " << app.control_key(control).toStdString() << " at " << box.x()
-                                << "," << box.y() << " " << box.width() << "x" << box.height());
                 // A control scrolled out of a list is reached by scrolling,
                 // not by the window being the wrong size.
                 bool in_flickable = false;
@@ -131,10 +144,34 @@ TEST_CASE("every control on every screen is inside the window", "[system][layout
                         in_flickable ||
                         QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
                 }
-                if (!in_flickable) {
-                    CHECK(window.contains(box));
+                if (in_flickable) {
+                    continue;
+                }
+                const std::string key =
+                    (app.control_key(control) + " @ " + QString::number(size.size.width()) + "x" +
+                     QString::number(size.size.height()))
+                        .toStdString();
+                on_show.insert(key);
+                const QRect box = control->mapRectToScene(control->boundingRect()).toAlignedRect();
+                if (!window.contains(box)) {
+                    overflowing.insert(key);
+                    UNSCOPED_INFO(key << " is at " << box.x() << "," << box.y() << " "
+                                      << box.width() << "x" << box.height() << " in a " << size.what
+                                      << " window");
                 }
             }
+        }
+    }
+
+    for (const std::string& key : overflowing) {
+        INFO("a control outside the window that is not in the known list: " << key);
+        CHECK(known.count(key) == 1);
+    }
+    for (const std::string& key : known) {
+        // Only judge the ones this platform put on show at all.
+        if (on_show.count(key) == 1) {
+            INFO("no longer outside the window; remove it from the known list: " << key);
+            CHECK(overflowing.count(key) == 1);
         }
     }
 }

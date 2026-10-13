@@ -17,6 +17,7 @@
 #include "app_runtime.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -27,7 +28,12 @@ TEST_CASE("known today: buttons that do nothing", "[system][known-today]") {
     // EXPECTED TO CHANGE - plan, Journey: "'Solve history', 'Review
     // solution' and the 'English' button do nothing or the wrong thing".
     // Owner: experience lane, E1 decides what stays (decision 6).
+    const cube::systest::Layout layout =
+        GENERATE(cube::systest::Layout::wide, cube::systest::Layout::narrow);
+    INFO("in the " << cube::systest::to_string(layout) << " layout");
     App& app = App::fresh();
+    app.resize(layout == cube::systest::Layout::wide ? cube::systest::kDesktop
+                                                     : cube::systest::kPhone);
 
     app.click("launch.solveHistory");
     app.pump(200);

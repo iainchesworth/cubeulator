@@ -78,10 +78,14 @@ TEST_CASE("the theme switches live, and the choice is kept", "[system][settings]
     const QImage dark = app.grab();
     CHECK(dark.pixelColor(2, 2).lightness() < 80);
 
-    // The choice reached the store the next launch reads.
-    QSettings store;
-    store.sync();
-    CHECK(store.value("appearance/themeMode").toString() == "dark");
+    // The choice reached the store the next launch reads. The QML Settings
+    // type writes a moment after a change (500 ms), not at once.
+    const auto stored = []() {
+        QSettings store;
+        store.sync();
+        return store.value("appearance/themeMode").toString();
+    };
+    CHECK(app.wait_for([&]() { return stored() == "dark"; }, 5000));
 
     // Light.
     app.click("settings.theme.1");
@@ -89,8 +93,7 @@ TEST_CASE("the theme switches live, and the choice is kept", "[system][settings]
     CHECK(app.window().color() == light_paper);
     app.settle();
     CHECK(app.grab().pixelColor(2, 2).lightness() > 180);
-    store.sync();
-    CHECK(store.value("appearance/themeMode").toString() == "light");
+    CHECK(app.wait_for([&]() { return stored() == "light"; }, 5000));
 
     // System follows the operating system's own setting.
     app.click("settings.theme.0");
@@ -98,59 +101,6 @@ TEST_CASE("the theme switches live, and the choice is kept", "[system][settings]
         [&]() { return app.settings_state().property("themeMode").toString() == "system"; }));
     const bool os_dark = QGuiApplication::styleHints()->colorScheme() == Qt::ColorScheme::Dark;
     CHECK(theme_is_dark(app) == os_dark);
-}
-
-TEST_CASE("every setting on the screen can be pressed in both layouts", "[system][settings]") {
-    // Presses each control the settings screen offers, in each layout, and
-    // checks the ones whose effect is visible in the app's own state. The
-    // press itself is what the reach report counts.
-    const Layout layout = GENERATE(Layout::narrow, Layout::wide);
-    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
-        App& app = App::fresh();
-        app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
-        open_settings(app);
-
-        // Chosen once: pressing a control can rebuild the list it came from.
-        QStringList keys;
-        for (QQuickItem* control : app.visible_controls()) {
-            const QString key = app.control_key(control);
-            if (key != "settings.back" && !keys.contains(key)) {
-                keys.append(key);
-            }
-        }
-        REQUIRE(keys.size() > 10);
-
-        for (const QString& key : keys) {
-            QQuickItem* control = nullptr;
-            for (QQuickItem* candidate : app.visible_controls()) {
-                if (app.control_key(candidate) == key) {
-                    control = candidate;
-                    break;
-                }
-            }
-            INFO("control " << key.toStdString());
-            REQUIRE(control != nullptr);
-            if (!control->isEnabled() || (control->property("enabled").isValid() &&
-                                          !control->property("enabled").toBool())) {
-                continue;
-            }
-            app.click(control);
-            CHECK(app.screen() == "settings");
-        }
-
-        // The last press in each chip row stuck.
-        CHECK(app.settings_state().property("shaderStyleIndex").toInt() == 2);
-        CHECK(app.settings_state().property("rotateSpeedIndex").toInt() == 2);
-        CHECK(app.settings_state().property("themeMode").toString() == "dark");
-
-        // The toggles flip what they say they flip.
-        const bool auto_rotate_before = app.settings_state().property("cubeAutoRotate").toBool();
-        app.click("settings.cubeAutoRotate");
-        CHECK(app.settings_state().property("cubeAutoRotate").toBool() == !auto_rotate_before);
-        const bool nerds_before = app.settings_state().property("statsForNerds").toBool();
-        app.click("settings.statsForNerds");
-        CHECK(app.settings_state().property("statsForNerds").toBool() == !nerds_before);
-    }
 }
 
 TEST_CASE("a second launch comes up with the theme the first one left",

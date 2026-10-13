@@ -1,0 +1,98 @@
+// Every control on every screen, pressed, in both layouts.
+//
+// The journey cases press what the journey needs. These press the rest, so
+// that a control which is on screen is also one a test has used - which is
+// what the reach gate asks - and so that none of them takes the app down.
+
+#include "sweep.hpp"
+#include "app.hpp"
+
+#include "app_runtime.hpp"
+
+#include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
+
+#include <cube/solver/solver.hpp>
+
+#include <QQuickItem>
+
+namespace {
+
+using cube::systest::App;
+using cube::systest::Layout;
+using cube::systest::press_every_control;
+
+[[nodiscard]] QSize size_for(Layout layout) {
+    return layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone;
+}
+
+}  // namespace
+
+TEST_CASE("every control on the launch, permission and complete screens can be pressed",
+          "[system][sweep]") {
+    const Layout layout = GENERATE(Layout::narrow, Layout::wide);
+    const std::string name = GENERATE(as<std::string>{}, "launch", "permission", "complete");
+    const QString screen = QString::fromStdString(name);
+    DYNAMIC_SECTION(name << " in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        app.resize(size_for(layout));
+        app.go(screen);
+        app.settle();
+
+        const QStringList pressed = press_every_control(app, screen);
+        INFO("pressed " << pressed.join(", ").toStdString());
+        CHECK(pressed.size() >= 2);
+        // Still a screen of the app, and the window still draws.
+        CHECK(app.screen() == screen);
+        CHECK_FALSE(app.grab().isNull());
+    }
+}
+
+TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]") {
+    const Layout layout = GENERATE(Layout::narrow, Layout::wide);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        auto& solve = app.runtime().solve();
+        if (solve.totalMoves() == 0) {
+            solve.solveCube(cube::solver::random_scramble(41));
+        }
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        app.resize(size_for(layout));
+        app.go("solve");
+        app.settle();
+
+        const QStringList pressed = press_every_control(app, "solve");
+        INFO("pressed " << pressed.join(", ").toStdString());
+        // Next, Previous (enabled by Next), Rescan and the cube.
+        CHECK(pressed.contains("solve.next"));
+        CHECK(pressed.contains("solve.previous"));
+        CHECK(pressed.contains("solve.rescan"));
+        CHECK(app.screen() == "solve");
+    }
+}
+
+TEST_CASE("every control on the settings screen can be pressed", "[system][sweep][settings]") {
+    const Layout layout = GENERATE(Layout::narrow, Layout::wide);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        app.resize(size_for(layout));
+        app.go("settings");
+        app.settle();
+
+        // "Back" leaves; it has a case of its own (settings_test.cpp).
+        cube::systest::SweepOptions options;
+        options.skip.insert("settings.back");
+        const QStringList pressed = press_every_control(app, "settings", options);
+        INFO("pressed " << pressed.join(", ").toStdString());
+        REQUIRE(pressed.size() > 10);
+        CHECK(app.screen() == "settings");
+
+        // The last press in each chip row stuck.
+        CHECK(app.settings_state().property("shaderStyleIndex").toInt() == 2);
+        CHECK(app.settings_state().property("rotateSpeedIndex").toInt() == 2);
+        CHECK(app.settings_state().property("themeMode").toString() == "dark");
+        // The toggles were pressed twice: back where they started.
+        CHECK(app.settings_state().property("cubeAutoRotate").toBool());
+        CHECK_FALSE(app.settings_state().property("statsForNerds").toBool());
+    }
+}

@@ -25,12 +25,10 @@ add_executable(cube_system_tests
     settings_test.cpp
     layout_test.cpp
     input_test.cpp
+    sweep_test.cpp
     render_test.cpp
     tour_test.cpp
-    known_today_test.cpp
-    # Last: Catch2 runs a binary's cases in the order they are registered,
-    # which is link order, and the reach gate judges everything before it.
-    reach_test.cpp)
+    known_today_test.cpp)
 
 target_include_directories(cube_system_tests PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}"
@@ -90,6 +88,18 @@ set_tests_properties(system.walk PROPERTIES
     LABELS "system"
     TIMEOUT 900
     ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
+
+# The reach gate: whether the walk visited every screen, state and control in
+# the inventory. Reads the report the walk wrote; needs no display. Catch2 runs
+# a binary's cases in no order a gate could rely on, so this is its own entry,
+# ordered after the walk.
+add_test(NAME system.reach
+    COMMAND cube_system_tests --check-reach "${CUBE_SYSTEM_OUT}/reach.json"
+    WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
+set_tests_properties(system.reach PROPERTIES
+    LABELS "system"
+    DEPENDS system.walk
+    TIMEOUT 60)
 
 # A second launch of the app, with the theme already in the settings store.
 add_test(NAME system.relaunch

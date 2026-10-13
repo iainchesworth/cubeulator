@@ -171,7 +171,10 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
 }
 
 TEST_CASE("the solve screen has a way out that reads the cube again", "[system][solve]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    INFO("in the " << cube::systest::to_string(layout) << " layout");
     App& app = App::fresh();
+    app.resize(size_for(layout));
     auto& scan = app.runtime().directScan();
     auto& solve = app.runtime().solve();
 
@@ -217,7 +220,10 @@ TEST_CASE("cancelling mid-scan returns to launch and lets go of the camera", "[s
 }
 
 TEST_CASE("start over forgets the sides read and keeps scanning", "[system][scan]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    INFO("in the " << cube::systest::to_string(layout) << " layout");
     App& app = App::fresh();
+    app.resize(size_for(layout));
     auto& scan = app.runtime().directScan();
     const cube::solver::Cube cube = cube::solver::random_scramble(13);
 

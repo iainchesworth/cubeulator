@@ -3,6 +3,7 @@
 #include "drawn_cube.hpp"
 
 #include <chrono>
+#include <thread>
 #include <utility>
 
 namespace cube::systest {
@@ -22,6 +23,7 @@ void FakeCamera::reset() {
                                              .display_name = "Test camera (drawn frames)",
                                              .facing = platform::camera::Facing::unknown}};
     next_start_error_.reset();
+    start_delay_ms_ = 150;
     script_.clear();
     current_ = cube::test::room({640, 360});
     capturing_ = false;
@@ -33,6 +35,11 @@ void FakeCamera::reset() {
 void FakeCamera::set_devices(std::vector<platform::camera::DeviceInfo> devices) {
     const std::scoped_lock lock(mutex_);
     devices_ = std::move(devices);
+}
+
+void FakeCamera::set_start_delay(int milliseconds) {
+    const std::scoped_lock lock(mutex_);
+    start_delay_ms_ = milliseconds;
 }
 
 void FakeCamera::fail_next_start(CubeError error) {
@@ -81,6 +88,15 @@ Result<std::vector<platform::camera::DeviceInfo>> FakeCamera::enumerate() const 
 }
 
 Result<void> FakeCamera::start() {
+    int delay = 0;
+    {
+        const std::scoped_lock lock(mutex_);
+        delay = start_delay_ms_;
+    }
+    // Called from a pool thread (DirectScan::start): sleeping here is the
+    // camera opening, and the GUI thread carries on meanwhile.
+    std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+
     const std::scoped_lock lock(mutex_);
     if (next_start_error_.has_value()) {
         const CubeError error = *next_start_error_;

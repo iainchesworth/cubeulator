@@ -14,13 +14,51 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QSettings>
 #include <QTemporaryDir>
 
 #include <cstdio>
 
+namespace {
+
+// system.reach: judges the report the walk left behind. Needs no display,
+// which is why it can be its own ctest entry: the walk is the one that draws.
+int check_reach(const QString& path) {
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly)) {
+        std::fprintf(stderr, "no reach report at %s: run the system.walk test first\n",
+                     qPrintable(path));
+        return 2;
+    }
+    const QJsonObject report = QJsonDocument::fromJson(file.readAll()).object();
+    std::fputs(qPrintable(report.value("summary").toString()), stdout);
+    if (report.value("filtered").toBool()) {
+        std::fprintf(stderr, "the report is from a filtered run; run the whole walk\n");
+        return 2;
+    }
+    const QJsonArray gaps = report.value("gaps").toArray();
+    for (const QJsonValue& gap : gaps) {
+        std::fprintf(stderr, "GAP %s\n", qPrintable(gap.toString()));
+    }
+    // New screens, new states and new buttons arrive as a failure here until
+    // a test visits them; that is the point. A state the environment cannot
+    // show goes in reach.cpp with its reason, not in a skipped assertion.
+    return gaps.isEmpty() ? 0 : 1;
+}
+
+}  // namespace
+
 int main(int argc, char* argv[]) {
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (QByteArray(argv[i]) == "--check-reach") {
+            return check_reach(QString::fromLocal8Bit(argv[i + 1]));
+        }
+    }
+
 #if defined(Q_OS_LINUX)
     if (!qEnvironmentVariableIsSet("QT_QPA_PLATFORM") && !qEnvironmentVariableIsSet("DISPLAY") &&
         !qEnvironmentVariableIsSet("WAYLAND_DISPLAY")) {
@@ -54,7 +92,16 @@ int main(int argc, char* argv[]) {
     QGuiApplication app(argc, argv);
     cube::systest::install_warning_capture();
 
-    const int result = Catch::Session().run(argc, argv);
+    Catch::Session session;
+    if (const int error = session.applyCommandLine(argc, argv); error != 0) {
+        return error;
+    }
+    // The walk is the whole suite bar the relaunch case; anything narrower
+    // says so in its report, so a developer's single case cannot be mistaken
+    // for a gate.
+    const auto& specs = session.configData().testsOrTags;
+    const bool filtered = !(specs.empty() || (specs.size() == 1 && specs.front() == "~[.restart]"));
+    const int result = session.run();
 
     if (auto* booted = cube::systest::App::booted(); booted != nullptr) {
         const QString report = booted->reach().summary();
@@ -64,7 +111,9 @@ int main(int argc, char* argv[]) {
         QDir().mkpath(out);
         QFile json(out + "/reach.json");
         if (json.open(QIODevice::WriteOnly)) {
-            json.write(QJsonDocument(booted->reach().to_json()).toJson());
+            QJsonObject report = booted->reach().to_json();
+            report.insert("filtered", filtered);
+            json.write(QJsonDocument(report).toJson());
         }
         QFile text(out + "/reach.txt");
         if (text.open(QIODevice::WriteOnly)) {

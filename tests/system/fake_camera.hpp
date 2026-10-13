@@ -34,6 +34,11 @@ public:
     // What enumerate_devices() reports. Empty is a machine with no camera.
     void set_devices(std::vector<platform::camera::DeviceInfo> devices);
 
+    // How long a start() takes. A real camera takes a moment to open (seconds,
+    // on some drivers); the scan screen has a state for it, and a camera that
+    // opened instantly would never show it. Default 150 ms.
+    void set_start_delay(int milliseconds);
+
     // The next start() fails with `error`, once. DirectScan reports it as the
     // camera error on the scan screen.
     void fail_next_start(CubeError error);
@@ -71,6 +76,7 @@ private:
     mutable std::mutex mutex_;
     std::vector<platform::camera::DeviceInfo> devices_;
     std::optional<CubeError> next_start_error_;
+    int start_delay_ms_ = 150;
     std::deque<Scripted> script_;
     cv::Mat current_;
     bool capturing_ = false;
