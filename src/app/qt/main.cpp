@@ -1,5 +1,4 @@
 #include "controllers/app_controllers.hpp"
-#include "controllers/frame_image_provider.hpp"
 
 #include <cube/solver/solver.hpp>
 
@@ -121,14 +120,11 @@ int main(int argc, char* argv[]) {
     // target so the tests can make the same set (see app_controllers.hpp).
     cube::app::AppControllers controllers;
     controllers.registerWithQml();
-    cube::app::DirectScan& directScan = controllers.directScan;
     SolveController& solveController = controllers.solve;
 
+    // Declared after the controllers, and so destroyed before them.
     QQmlApplicationEngine engine;
-    // addImageProvider takes ownership; the controllers outlive the engine
-    // (it is declared - and so destroyed first - after them).
-    engine.addImageProvider("scanFrame", new cube::app::FrameImageProvider(
-                                             [&directScan]() { return directScan.latestFrame(); }));
+    controllers.addImageProviders(engine);
     engine.loadFromModule("Cubeulator", "Main");
 
     if (engine.rootObjects().isEmpty()) {
@@ -145,6 +141,7 @@ int main(int argc, char* argv[]) {
         const int moves_in = qEnvironmentVariable("CUBE_SOLVE_DEMO_MOVE").toInt();
         solveController.solveCube(cube::solver::random_scramble(demo_seed));
         QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
+        app_state->setProperty("solveCamera", false);
         auto show_when_solved = std::make_shared<QMetaObject::Connection>();
         *show_when_solved = QObject::connect(
             &solveController, &SolveController::stateChanged, app_state,

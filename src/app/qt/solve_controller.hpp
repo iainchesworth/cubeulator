@@ -8,6 +8,8 @@
 
 #include <cube/solver/stepped_solution.hpp>
 
+#include <optional>
+
 namespace cube::app {
 class ScanSession;
 }
@@ -90,6 +92,10 @@ public:
     // The cube as it stands after the moves stepped through so far.
     [[nodiscard]] const cube::solver::Cube& currentCube() const noexcept {
         return stepped_.current_cube();
+    }
+    // The move expected next, or nothing once the cube is solved.
+    [[nodiscard]] std::optional<cube::solver::Move> currentMove() const noexcept {
+        return stepped_.at_end() ? std::nullopt : std::optional(stepped_.current_move());
     }
 
     [[nodiscard]] QString currentMoveNotation() const;

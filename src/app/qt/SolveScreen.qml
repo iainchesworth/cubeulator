@@ -61,9 +61,49 @@ Rectangle {
     function centreColor(side) { return SolveController.stickers[side][4]; }
 
     // How the cube is held, in words: every move is shown on the cube as
-    // held this way.
-    readonly property string holdWords: "Hold " + centreColor(HeldCube.up).toLowerCase() + " on top, "
+    // held this way. An instruction until the camera has seen the cube, a
+    // statement of what it saw after.
+    readonly property string holdWords: (HeldCube.seen ? "Holding " : "Hold ")
+        + centreColor(HeldCube.up).toLowerCase() + " on top, "
         + centreColor(HeldCube.front).toLowerCase() + " facing you"
+
+    // ---- the camera -----------------------------------------------------------
+    // The solve screen keeps the camera to see how the cube is held. A side
+    // held square to it is matched against the cube as it should stand, and
+    // the cube on screen turns to match the one in the hand.
+    readonly property color good: "#3FE05A"
+    readonly property color sightColor: {
+        switch (HeldCube.sight) {
+        case "matched": return good;
+        case "unsure": return "#FFB347";
+        case "unknown": return Theme.accent;
+        }
+        return Theme.divider;
+    }
+    readonly property string cameraWords: {
+        if (DirectScan.cameraError !== "")
+            return "Camera unavailable";
+        if (DirectScan.frameSeq === 0)
+            return DirectScan.starting ? "Starting the camera…" : "";
+        if (!DirectScan.complete)
+            return ""; // no scan, so nothing to match a side against
+        switch (HeldCube.sight) {
+        case "matched": return "Matched to your cube";
+        case "unsure": return "That side looks the same turned. Show another to tell which way up.";
+        case "unknown": return "That side is not what the solution expects. Check the last move.";
+        }
+        return HeldCube.seen ? "Show a side again if you turn the cube over"
+                             : "Hold any side square to the camera and the cube here turns to match";
+    }
+
+    // The camera has seen the move made: take the step without being asked.
+    Connections {
+        target: HeldCube
+        function onMoveSeen() {
+            moveSeenNote.restart();
+            root.next();
+        }
+    }
 
     readonly property string moveSide: guiding ? SolveController.currentMoveFace : ""
     readonly property string moveColor: moveSide !== "" ? centreColor(moveSide) : ""
@@ -184,10 +224,14 @@ Rectangle {
 
         Cube3DView {
             id: cube
-            readonly property real side: Math.min(parent.width, parent.height) * 0.86
+            // Narrow, the note about a turned view sits under the cube, so
+            // room is kept for it there; wide, it sits in a corner the cube
+            // does not reach.
+            readonly property real noteRoom: root.wide ? 0 : 64
+            readonly property real side: Math.min(parent.width, parent.height - noteRoom) * (root.wide ? 0.86 : 0.94)
             width: side; height: side
             anchors.centerIn: parent
-            anchors.verticalCenterOffset: root.wide ? 6 : 10
+            anchors.verticalCenterOffset: root.wide ? 6 : 14 - noteRoom / 2
 
             interactive: false
             autoRotate: false
@@ -239,6 +283,74 @@ Rectangle {
                     font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.DemiBold
                     color: Theme.ink
                 }
+            }
+        }
+
+        // What the camera sees, small, with a dot on each sticker of the side
+        // it has found. Not mirrored: it is the far side of the cube, seen
+        // from where the camera is.
+        Column {
+            id: inset
+            visible: AppState.solveCamera
+            anchors.top: parent.top; anchors.right: parent.right
+            anchors.margins: Theme.space4
+            width: root.wide ? 176 : 112
+            spacing: Theme.space1
+
+            readonly property real frameAspect: DirectScan.frameWidth > 0
+                ? DirectScan.frameHeight / DirectScan.frameWidth : 9 / 16
+            readonly property var points: DirectScan.stickerPoints
+
+            Rectangle {
+                id: preview
+                width: parent.width
+                height: Math.round(width * inset.frameAspect)
+                color: "#141312"
+                border.width: 2
+                border.color: root.sightColor
+                Behavior on border.color { ColorAnimation { duration: 180 } }
+
+                Image {
+                    id: previewImage
+                    anchors.fill: parent; anchors.margins: 2
+                    fillMode: Image.Stretch
+                    cache: false
+                    // Nothing to show until the camera has delivered a frame.
+                    source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
+                }
+                Repeater {
+                    model: 9
+                    delegate: Rectangle {
+                        readonly property bool found: inset.points.length === 9
+                        readonly property var point: found ? inset.points[index] : Qt.point(0, 0)
+                        visible: found && DirectScan.frameWidth > 0
+                        width: 6; height: 6; radius: 3
+                        x: previewImage.x + point.x * previewImage.width / Math.max(1, DirectScan.frameWidth) - width / 2
+                        y: previewImage.y + point.y * previewImage.height / Math.max(1, DirectScan.frameHeight) - height / 2
+                        color: HeldCube.sight === "matched" ? root.good : "#FFD21F"
+                    }
+                }
+                // The camera saw the move made.
+                Rectangle {
+                    id: moveSeenFlash
+                    anchors.fill: parent
+                    color: root.good
+                    opacity: 0
+                    SequentialAnimation {
+                        id: moveSeenNote
+                        NumberAnimation { target: moveSeenFlash; property: "opacity"; to: 0.55; duration: 90 }
+                        NumberAnimation { target: moveSeenFlash; property: "opacity"; to: 0; duration: 420 }
+                    }
+                }
+            }
+            Text {
+                width: parent.width
+                visible: text !== ""
+                text: root.cameraWords
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignRight
+                font.family: Theme.fontHeading; font.pixelSize: 11
+                color: HeldCube.sight === "unknown" ? Theme.accent : Theme.inkMuted(0.75)
             }
         }
 

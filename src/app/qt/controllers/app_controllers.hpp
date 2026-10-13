@@ -7,6 +7,8 @@
 #include "controllers/settings_model.hpp"
 #include "solve_controller.hpp"
 
+class QQmlEngine;
+
 namespace cube::app {
 
 // Every controller the QML side talks to, wired to one another the way the
@@ -22,6 +24,9 @@ struct AppControllers {
     // by. Imperative rather than QML_ELEMENT because these are made here,
     // with real references to one another, not by the QML engine.
     void registerWithQml();
+    // Gives `engine` the camera preview ("image://scanFrame/..."). The
+    // controllers must outlive the engine.
+    void addImageProviders(QQmlEngine& engine);
 
     CameraController camera;
     // The previous scan pipeline: still here because the settings screen
@@ -32,8 +37,9 @@ struct AppControllers {
     SettingsModel settings;
     SolveController solve{scanSession};
     // How the cube is held while it is solved: the solve screen turns its
-    // cube to match and words each move from it.
-    HeldCube held;
+    // cube to match and words each move from it. It watches the camera's
+    // frames against the solver's cube, hence the two it is made from.
+    HeldCube held{directScan, solve};
 };
 
 }  // namespace cube::app

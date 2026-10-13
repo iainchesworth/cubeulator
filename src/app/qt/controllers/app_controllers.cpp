@@ -1,7 +1,10 @@
 #include "controllers/app_controllers.hpp"
 
+#include "controllers/frame_image_provider.hpp"
+
 #include <QtQml/qqml.h>
 #include <QObject>
+#include <QQmlEngine>
 
 namespace cube::app {
 
@@ -22,6 +25,13 @@ void AppControllers::registerWithQml() {
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SettingsModel", &settings);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solve);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "HeldCube", &held);
+}
+
+void AppControllers::addImageProviders(QQmlEngine& engine) {
+    // The engine takes ownership of the provider; the provider only borrows
+    // directScan, which is why the controllers have to outlive the engine.
+    engine.addImageProvider("scanFrame",
+                            new FrameImageProvider([this]() { return directScan.latestFrame(); }));
 }
 
 }  // namespace cube::app

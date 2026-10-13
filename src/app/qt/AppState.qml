@@ -30,15 +30,26 @@ QtObject {
     // DirectScan.start() to have a selectedDeviceId ready.
     Component.onCompleted: CameraController.refreshDevices()
 
+    // Whether the solve screen keeps the camera. It does, to see how the
+    // cube is being held; the solve-screen demo (CUBE_SOLVE_DEMO) turns it
+    // off, having no scan for the camera to be matched against.
+    property bool solveCamera: true
+
     // Starts/stops the live capture to match the screen shown.
     onScreenChanged: {
-        if (screen === "scan") {
-            DirectScan.start(CameraController.selectedDeviceId);
-        } else {
+        if (screen !== "scan") {
             scanComplete = false;
             completeBeat.stop();
-            if (DirectScan.running || DirectScan.starting)
-                DirectScan.stop();
+        }
+        if (screen === "scan") {
+            DirectScan.start(CameraController.selectedDeviceId);
+        } else if (screen === "solve" && solveCamera) {
+            // The camera the scan used stays as it is, exposure and white
+            // balance still fixed, so the cube's colours measure what they
+            // measured during the scan.
+            DirectScan.watch(CameraController.selectedDeviceId);
+        } else if (DirectScan.running || DirectScan.starting) {
+            DirectScan.stop();
         }
     }
 

@@ -48,6 +48,7 @@ int main(int argc, char* argv[]) {
     controllers.registerWithQml();
     g_controllers = &controllers;
     QQmlEngine engine;
+    controllers.addImageProviders(engine);
     g_engine = &engine;
 
     const int result = Catch::Session().run(argc, argv);
