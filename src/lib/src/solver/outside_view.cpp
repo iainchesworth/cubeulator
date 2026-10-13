@@ -15,7 +15,7 @@ std::array<Color, 9> outside_view(const Cube& cube, Face face) noexcept {
         case Face::R:
         case Face::B:
             for (std::size_t row = 0; row < 3; ++row) {
-                std::swap(stickers[row * 3], stickers[row * 3 + 2]);
+                std::swap(stickers[row * 3], stickers[(row * 3) + 2]);
             }
             break;
         case Face::D:

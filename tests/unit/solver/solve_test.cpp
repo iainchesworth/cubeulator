@@ -34,7 +34,7 @@ Solution solution_of(const std::array<std::string, 5>& per_stage) {
     for (std::size_t i = 0; i < per_stage.size(); ++i) {
         const auto moves = parse_algorithm(per_stage[i]);
         REQUIRE(moves.has_value());
-        solution.steps.push_back(SolveStep{kStagesInOrder[i], *moves});
+        solution.steps.push_back(SolveStep{.stage = kStagesInOrder[i], .moves = *moves});
     }
     return solution;
 }
@@ -127,12 +127,12 @@ TEST_CASE("merge_adjacent_moves adds turn counts on a face and drops a cancelled
     };
 
     REQUIRE(tidied("R R") == "R2");
-    REQUIRE(tidied("R R'") == "");
-    REQUIRE(tidied("R2 R2") == "");
+    REQUIRE(tidied("R R'").empty());
+    REQUIRE(tidied("R2 R2").empty());
     REQUIRE(tidied("R R2") == "R'");
     REQUIRE(tidied("R' R'") == "R2");
     REQUIRE(tidied("F F F") == "F'");
-    REQUIRE(tidied("F F F F") == "");
+    REQUIRE(tidied("F F F F").empty());
     REQUIRE(tidied("R U F") == "R U F");
     // Opposite faces are not "the same face": they are left alone.
     REQUIRE(tidied("U D U") == "U D U");
@@ -144,8 +144,8 @@ TEST_CASE("merge_adjacent_moves keeps merging when a cancelled pair joins its ne
         return to_string(flatten(merge_adjacent_moves(solution_of({algorithm, "", "", "", ""}))));
     };
 
-    REQUIRE(tidied("R U U' R'") == "");
-    REQUIRE(tidied("R U F F' U' R'") == "");
+    REQUIRE(tidied("R U U' R'").empty());
+    REQUIRE(tidied("R U F F' U' R'").empty());
     // The surviving D and D2 meet once R U U' R' has gone, and add up.
     REQUIRE(tidied("D R U U' R' D2") == "D'");
     // ... and a sum of zero there removes that pair too, exposing L L.
@@ -204,7 +204,9 @@ TEST_CASE("merge_adjacent_moves drops a move that turns nothing", "[solve]") {
     // moves leaves them adjacent.
     Solution solution;
     solution.steps.push_back(
-        SolveStep{Stage::Cross, {Move{Face::R, 1}, Move{Face::U, 0}, Move{Face::R, 1}}});
+        SolveStep{.stage = Stage::Cross,
+                  .moves = {Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 0},
+                            Move{.face = Face::R, .turns = 1}}});
     REQUIRE(to_string(flatten(merge_adjacent_moves(solution))) == "R2");
 }
 
@@ -222,7 +224,7 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         CAPTURE(trial);
         std::vector<Move> sequence(static_cast<std::size_t>(length_dist(rng)));
         for (Move& move : sequence) {
-            move = Move{kFaces[face_dist(rng)], turn_dist(rng)};
+            move = Move{.face = kFaces[face_dist(rng)], .turns = turn_dist(rng)};
         }
 
         // Four cut points, so the five stages get consecutive slices (some
@@ -238,10 +240,10 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         std::size_t from = 0;
         for (std::size_t i = 0; i < kStagesInOrder.size(); ++i) {
             const std::size_t to = i < cuts.size() ? cuts[i] : sequence.size();
-            original.steps.push_back(
-                SolveStep{kStagesInOrder[i],
-                          std::vector<Move>(sequence.begin() + static_cast<std::ptrdiff_t>(from),
-                                            sequence.begin() + static_cast<std::ptrdiff_t>(to))});
+            original.steps.push_back(SolveStep{
+                .stage = kStagesInOrder[i],
+                .moves = std::vector<Move>(sequence.begin() + static_cast<std::ptrdiff_t>(from),
+                                           sequence.begin() + static_cast<std::ptrdiff_t>(to))});
             from = to;
         }
         CAPTURE(to_string(flatten(original)));
