@@ -46,14 +46,17 @@ class SolveController : public QObject {
     Q_PROPERTY(int currentMoveTurns READ currentMoveTurns NOTIFY stateChanged)
 
     Q_PROPERTY(int moveIndex READ moveIndex NOTIFY stateChanged)
-    Q_PROPERTY(int totalMoves READ totalMoves CONSTANT)
+    // Notifying, not constant: the solve lands after the solve screen has
+    // been created, and a constant is read once - as zero - and never again.
+    Q_PROPERTY(int totalMoves READ totalMoves NOTIFY stateChanged)
     Q_PROPERTY(bool atStart READ atStart NOTIFY stateChanged)
     Q_PROPERTY(bool atEnd READ atEnd NOTIFY stateChanged)
 
     // One entry per solving stage, in order: {stageIndex, startIndex,
     // endIndex} - lets the stage sidebar highlight "done"/"current" by
     // comparing moveIndex against a range instead of one entry per move.
-    Q_PROPERTY(QVariantList stageRanges READ stageRanges CONSTANT)
+    // Empty until the solve lands (see totalMoves).
+    Q_PROPERTY(QVariantList stageRanges READ stageRanges NOTIFY stateChanged)
     Q_PROPERTY(int currentStageIndex READ currentStageIndex NOTIFY stateChanged)
 
     // True from the moment a completed scan is accepted until its

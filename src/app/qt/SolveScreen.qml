@@ -51,7 +51,8 @@ Rectangle {
             property var copy: null
             readonly property var range: SolveController.stageRanges[idx]
             readonly property bool isCurrent: SolveController.currentStageIndex === idx
-            readonly property bool isDone: range && SolveController.moveIndex >= range.endIndex
+            // No range yet while the solve is still running.
+            readonly property bool isDone: range !== undefined && SolveController.moveIndex >= range.endIndex
             width: ListView.view ? ListView.view.width : 320
             height: isCurrent ? (detailCol.implicitHeight + Theme.space3 * 2) : 56
             color: isCurrent ? Theme.accent100 : "transparent"

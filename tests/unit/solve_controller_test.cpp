@@ -3,6 +3,9 @@
 #include "controllers/scan_session.hpp"
 #include "solve_controller.hpp"
 
+#include <QMetaObject>
+#include <QMetaProperty>
+
 using cube::app::ScanSession;
 
 // SolveController's reaction to a completed scan (onScanCompleted's
@@ -25,6 +28,21 @@ TEST_CASE("SolveController starts with a solved placeholder and no solve in flig
     REQUIRE(controller.totalMoves() == 0);
     REQUIRE(controller.atStart());
     REQUIRE(controller.atEnd());
+}
+
+TEST_CASE("what changes when a solve lands is announced to the screen", "[qt][controllers]") {
+    // The solve screen is created while the solve is still running. A
+    // property declared constant is read then - as zero moves and no stages -
+    // and never again, which left the screen showing "0 moves" and a dead
+    // stage list beside a solution it could step through.
+    const QMetaObject& meta = SolveController::staticMetaObject;
+    for (const char* name : {"totalMoves", "stageRanges", "moveIndex", "currentMoveNotation", "isSolving"}) {
+        const QMetaProperty property = meta.property(meta.indexOfProperty(name));
+        INFO(name);
+        REQUIRE(property.isValid());
+        CHECK(property.hasNotifySignal());
+        CHECK_FALSE(property.isConstant());
+    }
 }
 
 TEST_CASE("SolveController::nextMove/previousMove are no-ops with nothing to step", "[qt][controllers]") {

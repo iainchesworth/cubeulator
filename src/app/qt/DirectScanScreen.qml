@@ -52,7 +52,8 @@ Item {
         anchors.fill: parent
         fillMode: Image.PreserveAspectCrop
         cache: false
-        source: DirectScan.running ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
+        // Nothing to show until the camera has delivered a frame.
+        source: DirectScan.frameSeq > 0 ? "image://scanFrame/latest#" + DirectScan.frameSeq : ""
     }
 
     // One dot per sticker: yellow when the side is seen, green while it counts.

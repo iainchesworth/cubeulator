@@ -147,6 +147,12 @@ void DirectScan::stop() {
     awaiting_lock_ = false;
     read_.reset();
     reading_ = false;
+    {
+        // The next scan must not open on this one's last frame.
+        const std::scoped_lock lock(frame_mutex_);
+        latest_frame_ = cv::Mat();
+    }
+    frame_seq_ = 0;
     emit runningChanged();
     emit frameUpdated();
 }
