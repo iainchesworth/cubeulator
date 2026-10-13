@@ -217,7 +217,8 @@ TEST_CASE("the pseudo-locale is longer, accented and bracketed", "[i18n][catalog
             // content.md allows a translation 40% more than the English; the
             // pseudo-locale takes all of it, and the brackets besides.
             CHECK(pseudo_text.size() >=
-                  plain.size() + static_cast<qsizetype>(plain.size() * 0.4) - 2);
+                  plain.size() + static_cast<qsizetype>(static_cast<double>(plain.size()) * 0.4) -
+                      2);
             CHECK(argument_placeholders(pseudo_text) == argument_placeholders(plain));
             // Nothing is left looking untouched: a plain ASCII vowel
             // surviving outside a placeholder would be a string that was not
