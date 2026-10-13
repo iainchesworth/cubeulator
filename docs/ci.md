@@ -54,7 +54,7 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | CMake | newest 4.x (`lukka/get-cmake`, `cmakeVersion: latest`); policies to 4.4 | No. |
 | mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
 | vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, bgfx, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
-| iOS deployment target | 16.3 (`CMakePresets.json`) | Qt 6.12's minimum iOS is 18. iOS CI is build-only without Qt, so this is not exercised; raise it with the first Qt-for-iOS build. |
+| iOS deployment target | 18.0 (`CMakePresets.json`) | No - 18 is Qt 6.12's minimum iOS (it was 16.3 for Qt 6.8), built with Xcode 16's iOS 18 SDK. iOS CI is build-only and does not build Qt, so this is the project's own floor, not something Qt exercises there. |
 
 ## Dependencies
 
