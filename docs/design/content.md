@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-374 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+382 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -431,9 +431,9 @@ Review the solution.
 | `review.status.empty` | 48 stickers to fill in | Status line before anything is entered. A cube has 54 stickers; the six centres are already set. |
 | `review.status.partial` | *one:* %n sticker to go<br>*other:* %n stickers to go | Status line during hand entry. |
 | `review.status.miscount` | The colours do not add up | Status headline when some colour is used more or fewer than nine times. |
-| `review.status.miscountOver` | Too many: %1 | %1 is a list such as 'red (10), blue (11)'. |
-| `review.status.miscountUnder` | Too few: %1 | %1 is a list such as 'orange (8), green (7)'. |
-| `review.status.countItem` | %1 (%2) | One item in those lists. %1 is a colour name in lower case, %2 how many stickers have it. |
+| `review.status.miscountOver` | Too many: %1 | %1 is a list such as 'Red (10), Blue (11)'. |
+| `review.status.miscountUnder` | Too few: %1 | %1 is a list such as 'Orange (8), Green (7)'. |
+| `review.status.countItem` | %1 (%2) | One item in those lists. %1 is a colour name exactly as in colour.*, %2 how many stickers have it. |
 | `review.status.impossible` | This cannot be a real cube | Status headline when every colour appears nine times but the pieces do not fit together. |
 | `review.status.impossibleBody` | One sticker is probably on the wrong piece. Check each side against your cube again. | Status body. |
 | `review.status.valid` | This is a valid cube | Status headline when the colours make a cube that can be solved. |
@@ -655,6 +655,14 @@ Review the solution.
 | `help.cubes` | Which cubes work | Topic. |
 | `help.notation` | Cube notation | Topic. |
 | `help.keys` | Keyboard | Topic. Computers only. |
+| `help.scanning.body` | Hold the cube so that one side faces the camera flat, filling about half the picture. /  / Keep it still until that side appears in the row at the bottom. Then turn to another side. The order does not matter, and it does not matter which way up each side is. /  / Use bright, even light. If a sticker shines, tilt the cube a little until the shine goes. A window behind you is better than a window behind the cube. /  / If a side will not read, you can enter the colours by hand. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. |
+| `help.entering.body` | Choose a colour, then tap every sticker of that colour on the side you are looking at. Then choose the next colour. /  / Do one side at a time. The centre of each side is filled in already: it never changes, and it tells you which side you are on. /  / It does not matter which way up you hold each side. Cubeulator works that out. /  / When every sticker is filled in, Cubeulator checks that the colours make a real cube. If they do not, compare each side with your cube again. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. The third paragraph is true only if the scan lane accepts a side in any rotation; see screens/review.md. |
+| `help.holding.body` | For the whole solve, hold the cube the same way round: the side with the yellow centre on top, the side with the green centre facing you. /  / Look at the centres only. The other stickers move; the centres never do. /  / After a turn, do not turn the whole cube round to look at it. If you do, put it back: yellow centre on top, green centre facing you. /  / Prop this device up where you can see it with both hands on the cube. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. |
+| `help.turns.body` | A side is one of the six sides of the cube. Each is named by where it is as you hold it: top, bottom, left, right, front and back. /  / A turn moves one side a quarter of the way round, or half way. /  / The top and bottom turn to the left or to the right. The left and right sides turn upwards or downwards: that is the way the part facing you moves. The front and back turn clockwise or anticlockwise, always as you see it from the front. /  / The picture shows every turn. If the words and the picture ever seem to disagree, follow the picture. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. Use exactly the words chosen for side.*, dir.* and amount.*. |
+| `help.lost.body` | If your cube stops matching the picture, one turn has probably gone the wrong way. /  / First check how you are holding it: yellow centre on top, green centre facing you. /  / Then go back one turn and compare again. /  / If it still does not match, scan the cube again. Cubeulator solves it from where it is now, so nothing is lost but a little time. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. |
+| `help.cubes.body` | Cubeulator works with an ordinary 3x3 cube: nine coloured stickers on each side, with dark plastic between them, in white, yellow, red, orange, green and blue. /  / It does not yet read cubes without stickers, cubes made of white or light plastic, cubes with pictures, or cubes in other colours. You can still enter one of those by hand if its six colours can be matched to the six here. /  / It does not work with other sizes of cube. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. |
+| `help.notation.body` | Cubers write turns as letters. Cubeulator can show them beside its own words: turn on Show cube notation in Settings. /  / U is the top, D the bottom, L the left, R the right, F the front and B the back. /  / A letter alone is a quarter turn clockwise, as you would see it looking straight at that side. An apostrophe after it means anticlockwise. A 2 means a half turn. /  / That is why the bottom and the back can seem to go the wrong way: in notation, clockwise is judged from underneath and from behind. Cubeulator's own words are always from where you are. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. Do not translate the letters U, D, L, R, F, B. |
+| `help.keys.body` | On the solve screen, Space, Enter or Page Down moves to the next turn. Page Up goes back one. P pauses. Esc leaves and keeps your place. /  / Everywhere, Tab moves to the next control, Space or Enter presses it, and Esc goes back. /  / F1 opens Help. | Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences. Computers only. Key names stay in English unless the keyboards sold in your country print them differently. |
 
 #### `menu`
 

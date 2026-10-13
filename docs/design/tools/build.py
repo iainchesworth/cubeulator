@@ -138,6 +138,8 @@ def main():
     strings = load_strings()
     journey = parse_journey()
     html = SRC.read_text(encoding="utf-8")
+    html = html.replace("/*__CSS_MORE__*/", (SRC.parent / "more.css").read_text(encoding="utf-8"))
+    html = html.replace("/*__JS_MORE__*/", (SRC.parent / "more.js").read_text(encoding="utf-8"))
 
     used, missing = keys_used(html, strings)
     if missing:
