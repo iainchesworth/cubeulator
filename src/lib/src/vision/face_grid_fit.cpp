@@ -45,18 +45,20 @@ SlotAssignment classify_to_slots(const std::vector<cv::Point2f>& centers, cv::Po
     std::array<float, 9> residuals{};
     residuals.fill(std::numeric_limits<float>::max());
 
-    const double det =
-        static_cast<double>(col_step.x) * row_step.y - static_cast<double>(col_step.y) * row_step.x;
+    const double det = static_cast<double>(col_step.x) * static_cast<double>(row_step.y) -
+                       static_cast<double>(col_step.y) * static_cast<double>(row_step.x);
     if (std::abs(det) < 1e-6) {
         return assignment;
     }
 
     for (std::size_t idx = 0; idx < centers.size(); ++idx) {
         const cv::Point2f d = centers[idx] - anchor;
-        const double u =
-            (static_cast<double>(d.x) * row_step.y - static_cast<double>(d.y) * row_step.x) / det;
-        const double v =
-            (static_cast<double>(col_step.x) * d.y - static_cast<double>(col_step.y) * d.x) / det;
+        const double u = (static_cast<double>(d.x) * static_cast<double>(row_step.y) -
+                          static_cast<double>(d.y) * static_cast<double>(row_step.x)) /
+                         det;
+        const double v = (static_cast<double>(col_step.x) * static_cast<double>(d.y) -
+                          static_cast<double>(col_step.y) * static_cast<double>(d.x)) /
+                         det;
         const double ru = std::round(u);
         const double rv = std::round(v);
         if (ru < -1.0 || ru > 1.0 || rv < -1.0 || rv > 1.0) {
@@ -106,12 +108,12 @@ std::optional<FaceFit> refit_affine(const std::vector<cv::Point2f>& centers,
         suu += u * u;
         suv += u * v;
         svv += v * v;
-        bx[0] += p.x;
-        bx[1] += u * p.x;
-        bx[2] += v * p.x;
-        by[0] += p.y;
-        by[1] += u * p.y;
-        by[2] += v * p.y;
+        bx[0] += static_cast<double>(p.x);
+        bx[1] += u * static_cast<double>(p.x);
+        bx[2] += v * static_cast<double>(p.x);
+        by[0] += static_cast<double>(p.y);
+        by[1] += u * static_cast<double>(p.y);
+        by[2] += v * static_cast<double>(p.y);
     }
 
     const std::array<double, 9> m = {n, su, sv, su, suu, suv, sv, suv, svv};

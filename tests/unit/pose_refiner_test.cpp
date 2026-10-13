@@ -46,7 +46,9 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
     cv::Rodrigues(rvec, rotation);
     const auto project = [&](const cv::Point3f& p) {
         const cv::Matx31d c =
-            rotation * cv::Matx31d(p.x, p.y, p.z) + cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+            rotation * cv::Matx31d(static_cast<double>(p.x), static_cast<double>(p.y),
+                                   static_cast<double>(p.z)) +
+            cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         const cv::Matx33d k = camera_matrix();
         return cv::Point(static_cast<int>(std::lround(k(0, 0) * c(0, 0) / c(2, 0) + k(0, 2))),
                          static_cast<int>(std::lround(k(1, 1) * c(1, 0) / c(2, 0) + k(1, 2))));
@@ -75,9 +77,13 @@ cv::Mat render_cube(const cv::Vec3d& rvec, const cv::Vec3d& tvec) {
             normal.z = sign;
         }
         centre = normal;
-        const cv::Matx31d normal_c = rotation * cv::Matx31d(normal.x, normal.y, normal.z);
-        const cv::Matx31d centre_c = rotation * cv::Matx31d(centre.x, centre.y, centre.z) +
-                                     cv::Matx31d(tvec[0], tvec[1], tvec[2]);
+        const cv::Matx31d normal_c =
+            rotation * cv::Matx31d(static_cast<double>(normal.x), static_cast<double>(normal.y),
+                                   static_cast<double>(normal.z));
+        const cv::Matx31d centre_c =
+            rotation * cv::Matx31d(static_cast<double>(centre.x), static_cast<double>(centre.y),
+                                   static_cast<double>(centre.z)) +
+            cv::Matx31d(tvec[0], tvec[1], tvec[2]);
         if (normal_c(0, 0) * centre_c(0, 0) + normal_c(1, 0) * centre_c(1, 0) +
                 normal_c(2, 0) * centre_c(2, 0) >=
             0.0) {

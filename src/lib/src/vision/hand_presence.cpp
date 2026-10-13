@@ -22,8 +22,10 @@ constexpr float kHandPresenceProbabilityThreshold = 0.5F;
 [[nodiscard]] cv::Mat letterbox_to_square(const cv::Mat& bgr_frame, int size) {
     const float scale =
         static_cast<float>(size) / static_cast<float>(std::max(bgr_frame.cols, bgr_frame.rows));
-    const int new_w = std::max(1, static_cast<int>(std::lround(bgr_frame.cols * scale)));
-    const int new_h = std::max(1, static_cast<int>(std::lround(bgr_frame.rows * scale)));
+    const int new_w =
+        std::max(1, static_cast<int>(std::lround(static_cast<float>(bgr_frame.cols) * scale)));
+    const int new_h =
+        std::max(1, static_cast<int>(std::lround(static_cast<float>(bgr_frame.rows) * scale)));
 
     cv::Mat resized;
     cv::resize(bgr_frame, resized, cv::Size(new_w, new_h));

@@ -26,10 +26,6 @@ cv::Vec3f lab_of_bgr(float b, float g, float r) {
     return lab.at<cv::Vec3f>(0, 0);
 }
 
-cv::Vec3f blend(const cv::Vec3f& a, const cv::Vec3f& b, float t) {
-    return a * (1.0F - t) + b * t;
-}
-
 }  // namespace
 
 TEST_CASE("session palette rescues a desaturated green", "[session_palette]") {

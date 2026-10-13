@@ -122,7 +122,7 @@ Cube scrambled() {
 TEST_CASE("a stored scan assembles to the exact cube under every gauge",
           "[capture-routing][scan_assembly]") {
     const Cube cube = scrambled();
-    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+    for (int gauge = 0; gauge < static_cast<int>(cube::vision::kLatticeSize); ++gauge) {
         CAPTURE(gauge);
         auto slots = store_under_gauge(cube, gauge);
         for (std::size_t b = 0; b < slots.size(); ++b) {
@@ -142,7 +142,7 @@ TEST_CASE("without the outside-view seam no gauge assembles", "[capture-routing]
     // no quarter-turn recovers a reflection.
     const Cube cube = scrambled();
     int assembled_count = 0;
-    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+    for (int gauge = 0; gauge < static_cast<int>(cube::vision::kLatticeSize); ++gauge) {
         const auto slots = store_under_gauge(cube, gauge);
         const auto assembled = cube::solver::assemble_scanned_faces_with_mapping(decode(slots));
         assembled_count += assembled.has_value() && assembled->cube == cube ? 1 : 0;
@@ -222,7 +222,7 @@ std::array<cube::model::Face, 6> identity_body_faces() {
 TEST_CASE("the store hint producer derives digits that re-orient every slot",
           "[capture-routing][scan_assembly]") {
     const Cube cube = scrambled();
-    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+    for (int gauge = 0; gauge < static_cast<int>(cube::vision::kLatticeSize); ++gauge) {
         CAPTURE(gauge);
         auto slots = store_under_gauge(cube, gauge);
         for (std::size_t b = 0; b < slots.size(); ++b) {
@@ -301,7 +301,7 @@ TEST_CASE("the store hint lifts the near-solved ambiguity under every gauge",
     // must refuse, and the store hint's geometric digits must pick the true
     // cube - under all 24 gauges, 23 of them non-identity.
     const Cube cube = Cube::solved().apply(Move{cube::solver::Face::U, 1});
-    for (int gauge = 0; gauge < cube::vision::kLatticeSize; ++gauge) {
+    for (int gauge = 0; gauge < static_cast<int>(cube::vision::kLatticeSize); ++gauge) {
         CAPTURE(gauge);
         auto slots = store_under_gauge(cube, gauge);
         for (std::size_t b = 0; b < slots.size(); ++b) {

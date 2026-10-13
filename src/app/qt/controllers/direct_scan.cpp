@@ -60,7 +60,7 @@ QVariantList DirectScan::stickerPoints() const {
     QVariantList points;
     if (read_.has_value()) {
         for (const cv::Point2f& centre : read_->centres) {
-            points.append(QPointF(centre.x, centre.y));
+            points.append(QPointF(static_cast<double>(centre.x), static_cast<double>(centre.y)));
         }
     }
     return points;

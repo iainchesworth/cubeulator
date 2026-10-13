@@ -539,9 +539,9 @@ SweepMetrics run_variant(const SweepSettings& settings, const std::vector<Cached
         switch (out.gate) {
             case TrackGate::accepted:
                 ++m.accepted;
-                m.theta_sum += out.theta_deg;
+                m.theta_sum += static_cast<double>(out.theta_deg);
                 m.theta_max = std::max(m.theta_max, out.theta_deg);
-                m.margin_sum += out.margin_deg;
+                m.margin_sum += static_cast<double>(out.margin_deg);
                 break;
             case TrackGate::anchored:
                 ++m.anchored;
