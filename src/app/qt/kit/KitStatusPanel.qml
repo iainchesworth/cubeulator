@@ -104,7 +104,9 @@ Rectangle {
     onBodyChanged: settle.restart()
     Component.onCompleted: settle.restart()
 
+    // Name and guidance together: when it is read rather than announced, one
+    // read says all of it.
     Accessible.role: Accessible.Section
-    Accessible.name: headline
+    Accessible.name: spoken()
     Accessible.description: body
 }

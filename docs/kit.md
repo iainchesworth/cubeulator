@@ -186,6 +186,38 @@ Qt version did, on 6.8.3. Each is in the code where it bites and has a test.
    already used; E2b will meet it.
 10. **`StaticText` is reported focusable to a reader** by Qt Quick, so text can
     be reached; the keyboard's Tab never lands on it (tested).
+11. **Qt's UI Automation bridge** turns `AlertMessage` into a `Window` and
+    `Section` into `Custom`, and `Accessible.description` did not appear where a
+    reader speaks it (HelpText is empty; FullDescription could not be read from
+    the managed API). So a notice is a named group, and anything a person must
+    hear (a switch's reason, a dialog's question, a status panel's guidance, a
+    stage's explanation) is in the name or in text left in the reading order,
+    never in a description alone.
+12. **The design asks for a switch to be read "on" or "off"**
+    (`system.md`, `common.on`/`common.off`). A `KitSwitch` is a check box with
+    a toggle state, and the *platform* says the word (Narrator: "checked").
+    Carrying the translated words in the name instead is possible in E2b; it is
+    not done here, so the wording is the platform's.
+
+## What Windows UI Automation shows
+
+Read from the running gallery (the interface Narrator and NVDA consume):
+
+| kit | control type | patterns / state |
+|---|---|---|
+| `KitButton`, `KitIconButton`, `KitListRow`, `KitSideChip` | Button | Invoke; disabled is not enabled and not focusable |
+| `KitSwitch` | CheckBox | Toggle, `On` / `Off` |
+| `KitChoice`, `KitColourPicker` | Group, with RadioButton options | SelectionItem |
+| `KitTopBar` | ToolBar, with a Text title and a Button back | |
+| `KitNotice`, `KitCard`, `KitEmptyState` | Group | |
+| `KitSolveProgress`, `KitWorking` | ProgressBar | name only; no range value |
+| `KitStageRow` | ListItem | |
+| `KitStatusPanel` | Custom | |
+| `KitInstruction`, `KitText` | Text | |
+
+The AutomationId of each is its `objectName` (`specimen/switch/off`...), and
+real OS Tab moves keyboard focus between the buttons and the group stops in
+reading order.
 
 ## Not verified
 

@@ -129,6 +129,9 @@ Popup {
                 role: "headline"
                 Accessible.ignored: true
             }
+            // The sentence stays in the reading order: it is what the dialog is
+            // asking, and a reader that meets the dialog by its title alone has
+            // not been told the question.
             KitText {
                 id: bodyText
                 objectName: "body"
@@ -136,7 +139,6 @@ Popup {
                 text: root.body
                 role: "body"
                 visible: root.body !== ""
-                Accessible.ignored: true
             }
             Column {
                 width: parent.width

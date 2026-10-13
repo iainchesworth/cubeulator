@@ -545,7 +545,8 @@ TEST_CASE("A notice is an alert that reads its heading then its sentence", "[kit
     Hosted host(create("KitNotice", {{"kind", "caution"}, {"heading", "No camera found"},
                                      {"text", "Plug one in, then look again."}, {"announce", false}, {"width", 360}}));
     const Accessibility info = accessibilityOf(host.item());
-    CHECK(info.role == QAccessible::AlertMessage);
+    // A group named by its words (Qt would make an AlertMessage a Window).
+    CHECK(info.role == QAccessible::Grouping);
     CHECK(info.name == "No camera found. Plug one in, then look again.");
 }
 
@@ -975,7 +976,9 @@ TEST_CASE("A stage row's three states differ by number, fill and check", "[kit][
     CHECK(colour(todo->property("boxFill")).alpha() == 0);
 
     // A screen reader hears the number, the name and the state.
-    CHECK(accessibilityOf(current.get()).name == "2. White corners. current");
+    CHECK(accessibilityOf(current.get()).name == "2. White corners. current. Put the corners in.");
+    // The others are not read with an explanation they are not showing.
+    CHECK(accessibilityOf(todo.get()).name == "2. White corners. todo");
     CHECK(accessibilityOf(current.get()).role == QAccessible::ListItem);
 }
 

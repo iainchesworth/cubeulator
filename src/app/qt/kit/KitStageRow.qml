@@ -105,7 +105,16 @@ Rectangle {
         }
     }
 
+    // The current stage's explanation is part of what it is called, so that
+    // one read of the row says what the stage is for.
     Accessible.role: Accessible.ListItem
-    Accessible.name: stateText !== "" ? (number + ". " + name + ". " + stateText) : (number + ". " + name)
+    Accessible.name: {
+        let said = number + ". " + name;
+        if (stateText !== "")
+            said += ". " + stateText;
+        if (isCurrent && explanation !== "")
+            said += ". " + explanation;
+        return said;
+    }
     Accessible.description: isCurrent ? explanation : ""
 }

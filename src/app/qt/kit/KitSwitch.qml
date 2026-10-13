@@ -92,6 +92,10 @@ AbstractButton {
                 color: root.labelColor
                 Accessible.ignored: true
             }
+            // Not hidden from a reader: when the switch is disabled this is the
+            // reason, and Qt's UI Automation bridge does not surface
+            // Accessible.description where a reader speaks it. It follows the
+            // switch in reading order as plain text.
             KitText {
                 objectName: "note"
                 width: parent.width
@@ -99,7 +103,6 @@ AbstractButton {
                 text: root.note
                 role: "small"
                 color: root.noteColor
-                Accessible.ignored: true
             }
         }
 

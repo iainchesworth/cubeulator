@@ -97,6 +97,9 @@ Rectangle {
             Announcer.announce(root, spoken(), assertive);
     }
 
-    Accessible.role: Accessible.AlertMessage
+    // A group named by its words. Qt's UI Automation bridge turns the
+    // AlertMessage role into a Window, which a note in a page is not; the
+    // announcement on appearing is Announcer's.
+    Accessible.role: Accessible.Grouping
     Accessible.name: spoken()
 }
