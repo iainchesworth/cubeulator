@@ -48,32 +48,31 @@ struct PieceTransitions {
     std::array<std::array<std::uint8_t, 24>, kMoveCount> edge{};
 };
 
-const PieceTransitions& piece_transitions() {
-    static const PieceTransitions kTransitions = [] {
-        PieceTransitions t;
-        for (std::size_t m = 0; m < kMoveCount; ++m) {
-            const CubieCube& move = detail::move_cubie(m);
-            // multiply(): the piece at position q afterwards is the one that
-            // was at move.cp[q] before, turned by move.co[q] more.
-            for (std::size_t q = 0; q < detail::kCornerCount; ++q) {
-                const std::size_t from = move.cp[q];
-                for (std::size_t o = 0; o < 3; ++o) {
-                    t.corner[m][from * 3 + o] =
-                        static_cast<std::uint8_t>(q * 3 + (o + move.co[q]) % 3);
-                }
-            }
-            for (std::size_t q = 0; q < detail::kEdgeCount; ++q) {
-                const std::size_t from = move.ep[q];
-                for (std::size_t o = 0; o < 2; ++o) {
-                    t.edge[m][from * 2 + o] =
-                        static_cast<std::uint8_t>(q * 2 + (o + move.eo[q]) % 2);
-                }
+constexpr PieceTransitions make_piece_transitions() noexcept {
+    PieceTransitions t;
+    for (std::size_t m = 0; m < kMoveCount; ++m) {
+        const CubieCube& move = detail::move_cubie(m);
+        // multiply(): the piece at position q afterwards is the one that
+        // was at move.cp[q] before, turned by move.co[q] more.
+        for (std::size_t q = 0; q < detail::kCornerCount; ++q) {
+            const std::size_t from = move.cp[q];
+            for (std::size_t o = 0; o < 3; ++o) {
+                t.corner[m][from * 3 + o] = static_cast<std::uint8_t>(q * 3 + (o + move.co[q]) % 3);
             }
         }
-        return t;
-    }();
-    return kTransitions;
+        for (std::size_t q = 0; q < detail::kEdgeCount; ++q) {
+            const std::size_t from = move.ep[q];
+            for (std::size_t o = 0; o < 2; ++o) {
+                t.edge[m][from * 2 + o] = static_cast<std::uint8_t>(q * 2 + (o + move.eo[q]) % 2);
+            }
+        }
+    }
+    return t;
 }
+
+// Built by the compiler from the move cubies, so there is no first-use cost
+// and nothing to guard.
+constexpr PieceTransitions kTransitions = make_piece_transitions();
 
 constexpr std::size_t kMaxTracked = 12;  // 12 pieces * 5 bits = 60 bits
 
@@ -147,7 +146,7 @@ std::optional<std::vector<std::uint8_t>> shortest_sequence(const CubieCube& cube
                                                            std::span<const TrackedPiece> tracked,
                                                            unsigned face_mask, int max_side,
                                                            std::size_t node_limit) {
-    const PieceTransitions& transitions = piece_transitions();
+    const PieceTransitions& transitions = kTransitions;
     const std::uint64_t start = pack_state(cube, tracked);
     const std::uint64_t goal = solved_state(tracked);
     if (start == goal) {
@@ -346,7 +345,9 @@ bool solve_f2l(CubieCube& cube, std::vector<std::uint8_t>& out) {
     std::size_t remaining = 0;
     for (std::size_t s = 0; s < kSlotCount; ++s) {
         done[s] = slot_solved(cube, s);
-        remaining += done[s] ? 0 : 1;
+        if (!done[s]) {
+            ++remaining;
+        }
     }
 
     while (remaining > 0) {
@@ -434,23 +435,23 @@ Result<Solution> solve_cfop_stages(const Cube& scrambled) {
     // --- OLL, then PLL: one table entry each. An entry is missing only for
     // a case a valid cube cannot reach (or a malformed table), and applying
     // nothing in its place would hand back a wrong solution.
-    const std::vector<Move>* oll = oll_algorithm(cube);
-    if (oll == nullptr) {
+    const std::optional<std::span<const Move>> oll = oll_algorithm(cube);
+    if (!oll.has_value()) {
         return std::unexpected(CubeError::no_solution);
     }
     for (const Move& move : *oll) {
         cube = multiply(cube, move_cubie(move_index(move)));
     }
-    solution.steps.push_back(SolveStep{Stage::Oll, *oll});
+    solution.steps.push_back(SolveStep{Stage::Oll, std::vector<Move>(oll->begin(), oll->end())});
 
-    const std::vector<Move>* pll = pll_algorithm(cube);
-    if (pll == nullptr) {
+    const std::optional<std::span<const Move>> pll = pll_algorithm(cube);
+    if (!pll.has_value()) {
         return std::unexpected(CubeError::no_solution);
     }
     for (const Move& move : *pll) {
         cube = multiply(cube, move_cubie(move_index(move)));
     }
-    solution.steps.push_back(SolveStep{Stage::Pll, *pll});
+    solution.steps.push_back(SolveStep{Stage::Pll, std::vector<Move>(pll->begin(), pll->end())});
 
     // Verified against the facelet model, the one the rest of the app
     // trusts, before it is handed out.

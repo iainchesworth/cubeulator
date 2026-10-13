@@ -61,39 +61,7 @@ int edge_position_of(Face a, Face b) noexcept {
     return -1;
 }
 
-std::array<CubieCube, kMoveCount> build_move_cubies() noexcept {
-    std::array<CubieCube, kMoveCount> moves{};
-    for (std::size_t i = 0; i < kMoveCount; ++i) {
-        // Deliberately derived from Cube::apply on a solved cube, not typed
-        // in: this is what ties the cubie model to the facelet geometry.
-        const std::optional<CubieCube> cubie = to_cubie(Cube::solved().apply(move_from_index(i)));
-        moves[i] = cubie.value_or(CubieCube{});
-    }
-    return moves;
-}
-
 }  // namespace
-
-CubieCube multiply(const CubieCube& state, const CubieCube& move) noexcept {
-    CubieCube result;
-    for (std::size_t pos = 0; pos < kCornerCount; ++pos) {
-        const std::size_t from = move.cp[pos];
-        result.cp[pos] = state.cp[from];
-        result.co[pos] = static_cast<std::uint8_t>((state.co[from] + move.co[pos]) % 3);
-    }
-    for (std::size_t pos = 0; pos < kEdgeCount; ++pos) {
-        const std::size_t from = move.ep[pos];
-        result.ep[pos] = state.ep[from];
-        result.eo[pos] = static_cast<std::uint8_t>((state.eo[from] + move.eo[pos]) % 2);
-    }
-    return result;
-}
-
-const CubieCube& move_cubie(std::size_t index) noexcept {
-    // Function-local static: initialised once, thread-safely, on first use.
-    static const std::array<CubieCube, kMoveCount> kMoves = build_move_cubies();
-    return kMoves[index];
-}
 
 std::optional<CubieCube> to_cubie(const Cube& cube) noexcept {
     // Piece identity is read through canonical_color's fixed centre scheme,

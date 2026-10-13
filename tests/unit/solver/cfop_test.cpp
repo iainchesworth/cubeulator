@@ -4,6 +4,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <span>
+#include <string_view>
 #include <thread>
 #include <vector>
 
@@ -18,6 +21,14 @@
 #include "cfop_last_layer.hpp"
 #include "cfop_stages.hpp"
 #include "cubie.hpp"
+
+// The generated words as text (kOllWords, kPllWords), so a test can check the
+// compiler's parse of them against parse_algorithm() without going through
+// the lookups. Re-included here, inside a namespace of its own, on purpose:
+// the solver keeps its copy private.
+namespace generated_words {
+#include "cfop_case_words.inc"
+}  // namespace generated_words
 
 using cube::CubeError;
 using cube::solver::Color;
@@ -67,7 +78,7 @@ bool has_adjacent_same_face(const std::vector<Move>& moves) {
     return false;
 }
 
-CubieCube apply_all(CubieCube cubie, const std::vector<Move>& moves) {
+CubieCube apply_all(CubieCube cubie, std::span<const Move> moves) {
     for (const Move& move : moves) {
         cubie = multiply(cubie,
                          cube::solver::detail::move_cubie(cube::solver::detail::move_index(move)));
@@ -133,12 +144,12 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
                     }
                     ++states;
 
-                    const std::vector<Move>* oll = oll_algorithm(state);
-                    REQUIRE(oll != nullptr);
+                    const std::optional<std::span<const Move>> oll = oll_algorithm(state);
+                    REQUIRE(oll.has_value());
                     state = apply_all(state, *oll);
 
-                    const std::vector<Move>* pll = pll_algorithm(state);
-                    REQUIRE(pll != nullptr);
+                    const std::optional<std::span<const Move>> pll = pll_algorithm(state);
+                    REQUIRE(pll.has_value());
                     state = apply_all(state, *pll);
 
                     REQUIRE(cube::solver::detail::is_identity(state));
@@ -147,8 +158,8 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
                     pll_moves += pll->size();
                     oll_longest = std::max(oll_longest, oll->size());
                     pll_longest = std::max(pll_longest, pll->size());
-                    for (const std::vector<Move>* word : {oll, pll}) {
-                        for (const Move& m : *word) {
+                    for (const std::span<const Move> word : {*oll, *pll}) {
+                        for (const Move& m : word) {
                             only_urf = only_urf && (m.face == Face::U || m.face == Face::R ||
                                                     m.face == Face::F);
                         }
@@ -184,16 +195,77 @@ TEST_CASE("the permutation lookup refuses a last layer that is not oriented or n
     // entry, because applying the wrong sequence would scramble the cube.
     CubieCube twisted;
     twisted.co[0] = 1;
-    CHECK(pll_algorithm(twisted) == nullptr);
+    CHECK_FALSE(pll_algorithm(twisted).has_value());
 
     CubieCube flipped;
     flipped.eo[1] = 1;
-    CHECK(pll_algorithm(flipped) == nullptr);
+    CHECK_FALSE(pll_algorithm(flipped).has_value());
 
     // One swapped pair of corners with the edges untouched: parities differ.
     CubieCube mismatched;
     std::swap(mismatched.cp[0], mismatched.cp[1]);
-    CHECK(pll_algorithm(mismatched) == nullptr);
+    CHECK_FALSE(pll_algorithm(mismatched).has_value());
+}
+
+TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[cfop]") {
+    // The words are turned into move arrays at compile time by a parser of
+    // their own (cfop_last_layer.cpp), because the run-time one allocates.
+    // Every one of the 216 + 288 used entries must come out exactly as the
+    // run-time parser reads the same text; the exhaustive test above proves
+    // the moves *work*, this one proves the two parsers agree on the moves.
+    auto same = [](std::optional<std::span<const Move>> got, std::string_view text) {
+        const auto expected = parse_algorithm(text);
+        REQUIRE(expected.has_value());
+        REQUIRE(got.has_value());
+        CHECK(std::vector<Move>(got->begin(), got->end()) == *expected);
+    };
+
+    // An OLL case is read off the top corners' twists and edges' flips by
+    // oll_case(): corners * 8 + edges, with the fourth of each forced.
+    for (std::size_t index = 0; index < cube::solver::detail::kOllCaseCount; ++index) {
+        CubieCube state;
+        std::size_t corners = index / 8;
+        std::size_t edges = index % 8;
+        int twist_sum = 0;
+        int flip_sum = 0;
+        for (std::size_t i = 3; i-- > 0;) {
+            state.co[i] = static_cast<std::uint8_t>(corners % 3);
+            twist_sum += static_cast<int>(corners % 3);
+            corners /= 3;
+            state.eo[i] = static_cast<std::uint8_t>(edges % 2);
+            flip_sum += static_cast<int>(edges % 2);
+            edges /= 2;
+        }
+        state.co[3] = static_cast<std::uint8_t>((3 - twist_sum % 3) % 3);
+        state.eo[3] = static_cast<std::uint8_t>(flip_sum % 2);
+        REQUIRE(cube::solver::detail::oll_case(state) == index);
+        same(oll_algorithm(state), generated_words::kOllWords[index]);
+    }
+
+    // A PLL slot is the corners' rank * 24 + the edges' rank; only slots
+    // whose two parities agree occur on a real cube, and the lookup refuses
+    // the rest.
+    std::array<std::uint8_t, 4> corner_order = {0, 1, 2, 3};
+    std::size_t used = 0;
+    do {
+        std::array<std::uint8_t, 4> edge_order = {0, 1, 2, 3};
+        do {
+            CubieCube state;
+            for (std::size_t i = 0; i < 4; ++i) {
+                state.cp[i] = corner_order[i];
+                state.ep[i] = edge_order[i];
+            }
+            const std::size_t slot = cube::solver::detail::pll_slot(state);
+            if (cube::solver::detail::parity_of_four(corner_order.data()) !=
+                cube::solver::detail::parity_of_four(edge_order.data())) {
+                CHECK_FALSE(pll_algorithm(state).has_value());
+                continue;
+            }
+            same(pll_algorithm(state), generated_words::kPllWords[slot]);
+            ++used;
+        } while (std::ranges::next_permutation(edge_order).found);
+    } while (std::ranges::next_permutation(corner_order).found);
+    CHECK(used == 288);
 }
 
 // ---------------------------------------------------------------------------

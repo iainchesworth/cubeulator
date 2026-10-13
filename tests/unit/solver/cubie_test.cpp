@@ -19,6 +19,8 @@ using cube::solver::random_scramble;
 using cube::solver::detail::CubieCube;
 using cube::solver::detail::is_identity;
 using cube::solver::detail::kMoveCount;
+using cube::solver::detail::kMoveCubies;
+using cube::solver::detail::kQuarterTurns;
 using cube::solver::detail::move_cubie;
 using cube::solver::detail::move_from_index;
 using cube::solver::detail::move_index;
@@ -29,6 +31,58 @@ TEST_CASE("a solved cube is the identity cubie", "[cubie]") {
     const auto cubie = to_cubie(Cube::solved());
     REQUIRE(cubie.has_value());
     CHECK(is_identity(*cubie));
+}
+
+// The moves are plain data and composition is constexpr, so the properties
+// that make them a group action are checked by the compiler as well as by the
+// tests below. (Failing here is a build error, not a test failure.)
+namespace {
+
+constexpr bool four_quarter_turns_are_identity() {
+    for (const CubieCube& quarter : kQuarterTurns) {
+        CubieCube state;
+        for (int i = 0; i < 4; ++i) {
+            state = multiply(state, quarter);
+        }
+        if (!is_identity(state)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+constexpr bool every_turn_undoes_its_inverse() {
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t turn = 0; turn < 3; ++turn) {
+            const CubieCube& move = kMoveCubies[face * 3 + turn];
+            const CubieCube& inverse = kMoveCubies[face * 3 + (2 - turn)];
+            if (!is_identity(multiply(move, inverse))) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+}  // namespace
+
+static_assert(four_quarter_turns_are_identity());
+static_assert(every_turn_undoes_its_inverse());
+static_assert(move_cubie(0).cp[0] == cube::solver::detail::kUBR);  // U: UBR takes URF's place
+
+TEST_CASE("every one of the 18 move cubies is what the facelet model does to a solved cube",
+          "[cubie]") {
+    // The quarter turns are written down as data (so the solvers' tables can be
+    // generated at compile time) and the half and counter-clockwise turns are
+    // computed from them. This ties all 18 to Cube::apply - the geometry the
+    // rest of the app trusts - so a typo in a quarter turn, or a wrong
+    // orientation convention, fails here and nowhere subtler.
+    for (std::size_t m = 0; m < kMoveCount; ++m) {
+        const auto decoded = to_cubie(Cube::solved().apply(move_from_index(m)));
+        REQUIRE(decoded.has_value());
+        CHECK(*decoded == move_cubie(m));
+        CHECK(kMoveCubies[m] == move_cubie(m));
+    }
 }
 
 TEST_CASE("move indices round-trip and cover each face's three turns", "[cubie]") {
@@ -91,7 +145,8 @@ TEST_CASE("the cubie model agrees with the facelet model on every move from rand
     // a wrong orientation convention, fails here.
     std::mt19937 rng(20261013);
     for (int trial = 0; trial < 150; ++trial) {
-        const Cube cube = random_scramble(rng(), 5 + static_cast<int>(rng() % 40));
+        const Cube cube =
+            random_scramble(static_cast<unsigned>(rng()), 5 + static_cast<int>(rng() % 40));
         const auto before = to_cubie(cube);
         REQUIRE(before.has_value());
         for (std::size_t m = 0; m < kMoveCount; ++m) {

@@ -2,14 +2,19 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <string_view>
-#include <utility>
-
-#include <cube/solver/notation.hpp>
 
 #include "cfop_case_index.hpp"
 
 namespace cube::solver::detail {
+
+// Deliberately not constexpr and never defined: a malformed word makes
+// parse_word() reach it, which is not a constant expression, so the build
+// stops at the offending table instead of shipping a guess - and without
+// needing exceptions. (It sits outside the anonymous namespace because an
+// undefined function with internal linkage is a warning in its own right.)
+void malformed_last_layer_word();
 
 namespace {
 
@@ -17,62 +22,102 @@ namespace {
 // kPllWords (576 slots, 288 used).
 #include "cfop_case_words.inc"
 
-struct LastLayerWords {
-    std::array<std::vector<Move>, kOllCaseCount> oll;
-    std::array<std::vector<Move>, kPllSlotCount> pll;
-    bool valid = true;
+// The longest entry is 16 moves (PLL); a longer one fails to compile.
+constexpr std::size_t kMaxWordMoves = 16;
+
+struct Word {
+    std::array<Move, kMaxWordMoves> moves{};
+    std::uint8_t length = 0;
 };
 
-LastLayerWords parse_words() {
-    LastLayerWords words;
-    auto fill = [&words](std::string_view text, std::vector<Move>& out) {
-        Result<std::vector<Move>> parsed = parse_algorithm(text);
-        if (!parsed.has_value()) {
-            words.valid = false;  // a malformed table: reported as no entry, never guessed at
-            return;
+// Standard cubing notation, single-space separated: a face letter, then
+// optionally ' (counter-clockwise) or 2. The same grammar as parse_algorithm().
+consteval Word parse_word(std::string_view text) {
+    Word word;
+    std::size_t pos = 0;
+    while (pos < text.size()) {
+        if (text[pos] == ' ') {
+            ++pos;
+            continue;
         }
-        out = std::move(*parsed);
-    };
-    for (std::size_t i = 0; i < kOllWords.size(); ++i) {
-        fill(kOllWords[i], words.oll[i]);
+        Face face{};
+        switch (text[pos]) {
+            case 'U':
+                face = Face::U;
+                break;
+            case 'D':
+                face = Face::D;
+                break;
+            case 'L':
+                face = Face::L;
+                break;
+            case 'R':
+                face = Face::R;
+                break;
+            case 'F':
+                face = Face::F;
+                break;
+            case 'B':
+                face = Face::B;
+                break;
+            default:
+                malformed_last_layer_word();
+        }
+        ++pos;
+        int turns = 1;
+        if (pos < text.size() && text[pos] == '\'') {
+            turns = 3;
+            ++pos;
+        } else if (pos < text.size() && text[pos] == '2') {
+            turns = 2;
+            ++pos;
+        }
+        if (pos < text.size() && text[pos] != ' ') {
+            malformed_last_layer_word();  // e.g. "R'2" or "R3"
+        }
+        if (word.length == kMaxWordMoves) {
+            malformed_last_layer_word();  // too long to store
+        }
+        word.moves[word.length++] = Move{face, turns};
     }
-    for (std::size_t i = 0; i < kPllWords.size(); ++i) {
-        fill(kPllWords[i], words.pll[i]);
+    return word;
+}
+
+template <std::size_t N>
+consteval std::array<Word, N> parse_words(const std::array<std::string_view, N>& texts) {
+    std::array<Word, N> words{};
+    for (std::size_t i = 0; i < N; ++i) {
+        words[i] = parse_word(texts[i]);
     }
     return words;
 }
 
-const LastLayerWords& words() {
-    // Initialised once, thread-safely, on first use. Parsing 504 short
-    // strings is microseconds; the table itself is constexpr.
-    static const LastLayerWords kWords = parse_words();
-    return kWords;
+constexpr std::array<Word, kOllCaseCount> kOll = parse_words(kOllWords);
+constexpr std::array<Word, kPllSlotCount> kPll = parse_words(kPllWords);
+
+static_assert(kOllWords.size() == kOllCaseCount && kPllWords.size() == kPllSlotCount,
+              "cfop_case_words.inc is out of step with cfop_case_index.hpp");
+
+std::span<const Move> moves_of(const Word& word) noexcept {
+    return {word.moves.data(), word.length};
 }
 
 }  // namespace
 
-const std::vector<Move>* oll_algorithm(const CubieCube& cube) noexcept {
-    const LastLayerWords& table = words();
-    if (!table.valid) {
-        return nullptr;
-    }
-    return &table.oll[oll_case(cube)];
+std::optional<std::span<const Move>> oll_algorithm(const CubieCube& cube) noexcept {
+    return moves_of(kOll[oll_case(cube)]);
 }
 
-const std::vector<Move>* pll_algorithm(const CubieCube& cube) noexcept {
-    const LastLayerWords& table = words();
-    if (!table.valid) {
-        return nullptr;
-    }
+std::optional<std::span<const Move>> pll_algorithm(const CubieCube& cube) noexcept {
     for (std::size_t pos = 0; pos < 4; ++pos) {
         if (cube.co[pos] != 0 || cube.eo[pos] != 0) {
-            return nullptr;
+            return std::nullopt;
         }
     }
     if (parity_of_four(cube.cp.data()) != parity_of_four(cube.ep.data())) {
-        return nullptr;
+        return std::nullopt;
     }
-    return &table.pll[pll_slot(cube)];
+    return moves_of(kPll[pll_slot(cube)]);
 }
 
 }  // namespace cube::solver::detail

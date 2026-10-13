@@ -85,10 +85,14 @@ Two stages (`Stage::Reduce`, `Stage::Finish`):
 Each phase is an iterative-deepening search over small integer coordinates
 (corner twist, edge flip, middle-edge positions; then corner, U/D-edge and
 middle-edge permutations), pruned by four tables holding the exact distance
-to the goal in a pair of coordinates. About 6 MB of tables are built on first
-use in roughly 150 ms; `prepare(SolveMethod::Advanced)` does that ahead of
-time, from any thread, so the solve screen can build them while the person is
-still scanning.
+to the goal in a pair of coordinates. The small tables are made by the
+compiler; the 5.6 MB that remain (the phase 2 move tables and the four
+pruning tables) are built on first use, in about 30 ms with the four pruning
+tables on four threads (70 to 100 ms on one; 160 ms before they were made
+faster).
+`prepare(SolveMethod::Advanced)` does that ahead of time, from any thread, so
+the solve screen can build them while the person is still scanning. The next
+section is why not all of them are made by the compiler.
 
 The first solution takes about 160 thousand nodes at the median and never
 more than 5.5 million in 8,000 cubes, and the search then spends a fixed
@@ -100,6 +104,68 @@ is a known quantity. A 60 million node backstop turns a bug into
 A boundary between the two phases is a real checkpoint (the cube is in the
 group the second phase works in), but unlike a CFOP stage it is not something
 a person can see: the person is following arrows, not building a structure.
+
+## Where the lookup tables come from
+
+Every table a solver reads is data written in the source, produced by the
+compiler, or built on first use. What goes where was decided by measuring,
+because the compilers this project builds with differ by well over an order of
+magnitude in what they can evaluate at compile time.
+
+| table | size | made by |
+|---|---|---|
+| the 18 move cubies | 0.7 KB | compiler: the six quarter turns are written down (`kQuarterTurns`), the other twelve are composed from them; `cubie_test.cpp` checks all 18 against `Cube::apply` |
+| `Intermediate`'s piece transitions | 0.9 KB | compiler, from the move cubies |
+| `Intermediate`'s 504 last-layer algorithms | 100 KB | compiler: `cfop_case_words.inc` is parsed in `cfop_last_layer.cpp`, and a malformed entry is a build error, not a guess |
+| `Advanced`'s slice numbering and phase 1 move tables | 180 KB | compiler (`two_phase_tables.cpp`, the only file that evaluates them) |
+| `Advanced`'s phase 2 move tables | 1.6 MB | first use, 8 ms |
+| `Advanced`'s four pruning tables | 4.0 MB | first use, about 22 ms each, concurrently |
+
+What the compiler *was* asked to do, for the last two rows (same generators,
+each tuned for the evaluator - raw arrays, few calls and, for the pruning
+tables, a breadth-first search that expands the frontier while it is small and
+asks each unfilled pair for a neighbour once it is large, which does less than
+half the expansions of the plain search). CPU time of the compile and peak
+memory of the compiler:
+
+| compiler | phase 1 move tables (shipped) | phase 2 move tables (1.6 MB) | one pruning table (1 M entries) |
+|---|---|---|---|
+| GCC 15.2 | 2 to 5 s, 300 MB | 41 s, 900 MB | 130 to 140 s, 3.8 to 4.8 GB |
+| Clang 21 | 3 to 6 s, 180 MB | 33 s, 310 MB | 188 to 193 s, 3.1 to 3.9 GB |
+| Clang 22 (Windows) | 4 to 5 s, 160 MB | 22 s, 320 MB | 144 s, 3.1 GB |
+| MSVC 19.51 (VS 2026) | 6 to 8 s, 670 MB | not finished: killed at 324 s, 3.8 GB | not finished: killed at 6.5 GB after 124 s |
+
+The rule of thumb for one translation unit is 30 s and 2 GB on the slowest
+compiler. The phase 1 move tables are inside it everywhere (and inside every
+compiler's default constant-evaluation budget, though Clang's and MSVC's only
+by a factor of 1.5 to 2, which is why `src/lib/CMakeLists.txt` raises it for
+the two files that evaluate tables). The phase 2 move tables are not: GCC is
+past 30 s and MSVC past anything usable. Each pruning table is four to six
+times past the time limit and two to three times past the memory limit on the
+compilers that finish at all, and MSVC would need tens of gigabytes. Splitting
+them across more translation units does not help: the rule is per unit and each
+table is already one unit's worth.
+
+The reason is that a constant evaluator is an interpreter. GCC and Clang take
+about 5 microseconds per simple loop iteration (the pruning tables need some
+25 million expansions in all), and MSVC about 16 microseconds *and about 300
+bytes kept for every array access and every call* until the evaluation ends,
+so its limit is a few million array accesses in total.
+
+So the phase 2 and pruning tables are built at run time, by generators of the
+same shape. A binary carries 0.2 MB of read-only data rather than the 5.8 MB it
+would take to hold them all, and the cost at run time is something
+`prepare(SolveMethod::Advanced)` takes off the person's path.
+
+Options that were looked at and not taken: a generated `.inc` of the pruning
+tables checked in like the last-layer words (about 3 MB of source at two bits
+an entry and 8 MB as bytes, for a public repository; the search would also
+have to recover exact distances from distances modulo 3), a host tool that
+writes them at build time (cross-builds for Android would need a second,
+native build of it), and `#embed` or `.incbin` (not available on MSVC or in
+the Android NDK's Clang). Nothing here measured the search with 4-bit or 2-bit
+tables: it would only pay if the tables were embedded in the binary, and they
+are not.
 
 ## Why not Korf's optimal solver, or Thistlethwaite's
 
@@ -118,10 +184,15 @@ gives 30 to 40 moves; two-phase is strictly better for the same machinery.
 - `Intermediate` and `Advanced` check reachability up front
   (`Cube::is_solvable`) and report a valid-but-unreachable cube as
   `CubeError::unsolvable_state`.
-- The cubie model (`src/lib/src/solver/cubie.hpp`) is derived from
-  `Cube::apply` and decoded through `Cube`'s own `locate_corner`/`locate_edge`,
-  so it cannot drift from the facelet geometry; `cubie_test.cpp` proves the
-  two agree on random cubes for all 18 moves.
+- The cubie model (`src/lib/src/solver/cubie.hpp`) has its six quarter turns
+  written down as data and is decoded through `Cube`'s own
+  `locate_corner`/`locate_edge`; `cubie_test.cpp` proves all 18 moves equal
+  what `Cube::apply` does to a solved cube, and that the two models agree on
+  random cubes, so it cannot drift from the facelet geometry.
+- The tables the compiler makes and the ones built on first use are exactly
+  what the obvious construction gives (`two_phase_test.cpp` rebuilds every
+  entry the slow, plain way and compares), and the compiler's parse of the
+  last-layer words is `parse_algorithm`'s (`cfop_test.cpp`).
 - The stage boundaries are exact for `Intermediate` before merging (cross
   solved, first two layers solved, top oriented, solved), and the end of
   `Advanced`'s `Reduce` is exactly in the second phase's group.
