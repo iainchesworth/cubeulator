@@ -17,6 +17,26 @@ See [Branch protection and the merge queue](branch-protection.md) for which
 checks are required on `develop` and `main`, how the queue is configured, and
 the `merge_group` rule a workflow has to follow to be part of it.
 
+### Running some legs by hand
+
+A push, pull request or queue entry always runs every leg of `ci.yml`. A
+manual dispatch can name just the ones it needs, which matters because the
+whole matrix is hours of hosted runners and the pool is shared:
+
+```sh
+gh workflow run ci.yml --ref <branch> -f legs=macos
+gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
+```
+
+`legs` is a comma-separated list (no spaces) of `clang-format`, `clang-tidy`,
+`linux`, `macos`, `windows`, `coverage`, `android`, `ios`, or `all` (the
+default). An unknown name fails the run rather than running nothing.
+
+Jobs of a dispatched run are named `dispatch - <leg>`, deliberately not the
+names of the required checks: a run that skips legs would otherwise report
+"skipped" (which counts as a pass) under a required check's name on the
+branch's head commit.
+
 ## Dependencies
 
 vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
