@@ -65,12 +65,14 @@ class HeldCube : public QObject {
 
 public:
     // A side has to be seen the same way in this many frames running before
-    // it changes the hold: a few frames at camera rate, about a sixth of a
-    // second, so a blurred frame on the way to a side never counts.
-    static constexpr int kFramesToTrust = 5;
+    // it is acted on: about a quarter of a second at camera rate, the same
+    // as a side has to be held to count in a scan. Long enough that a side
+    // glimpsed square-on while the cube is being handled changes nothing;
+    // short enough that showing one on purpose feels immediate.
+    static constexpr int kFramesToTrust = 8;
     // A side that fits nothing is only called unknown after this long: a
     // cube being turned in the hands passes through such frames all the time.
-    static constexpr int kFramesToDoubt = 12;
+    static constexpr int kFramesToDoubt = 15;
 
     HeldCube(DirectScan& scan, SolveController& solve, QObject* parent = nullptr);
 

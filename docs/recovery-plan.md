@@ -108,6 +108,44 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   review screen and hand entry, the solve screen's own UX, and R4's live
   gate has not been run.
 
+**2026-10-13, the solve screen** (branch `feature/solve-guidance`, on top of
+`feature/direct-scan`).
+
+- **Moves are shown, not spelt.** The solve screen draws the whole cube in
+  3D as it stands. The layer the next move turns nudges a little way in the
+  direction it has to go and back - twice for a half turn - and stepping
+  turns it all the way before the solution moves on. A move on the back
+  swings the view round behind the cube first and says that it is the view
+  that has turned; the left and bottom layers are shown from the usual
+  viewpoint, where two of their three rows of stickers are in view.
+- **The cube on screen is the cube in the hand.** The camera stays on after
+  the scan. A side held square to it is matched against the cube as it
+  should stand, which gives the hold - one of 24 - and the 3D cube turns to
+  it; until a side has been seen, the stated hold stands (yellow up, green
+  towards you). This is `read_side` again, not tracking: nothing is
+  estimated between reads and nothing is read at an angle (that is R5). The
+  same read steps the solution on when it shows the move has been made.
+- **Measured.** `cube_scan holds` replays a recorded scan against its own
+  cube. On the five sessions that read, a steady read sits a median of 1.3
+  to 1.7 from the hold it shows and nine in ten within 3.5; the nearest
+  hold that would look different is never less than 4.9 further off. Red
+  against orange is the narrowest pair: 7.8 apart by tungsten light, 14.5
+  to 17.9 by daylight.
+- **Proved on what is drawn.** `cube_qml_tests` loads the real
+  `Cube3DView.qml` and `SolveScreen.qml` and reads every sticker's place
+  back out of the 3D scene: all 18 moves land where `Cube::apply` puts
+  them, the nudge leans towards the move and not away, a whole solution
+  steps to solved and back, and under all 24 holds the layer about to move
+  is in view. Reversing a turn or dropping a side's flip fails it.
+- **Not yet done.** Nobody has followed it through a real solve: the nudge's
+  feel, the back view and the camera match are untried on a real cube. The
+  matcher has only ever seen an unmoved cube in the recordings; none of
+  them has a move made in view.
+- **Found on the way.** The solver can ask for the same side twice in a row
+  across a stage boundary (`F2 F2`), which undoes itself. Grabbing a window
+  with the 3D cube in it a second time brings the process down (Qt 6.8.3,
+  Direct3D); only the hidden gallery test grabs at all.
+
 ## Why it does not work today
 
 1. **The read path depends on a tracker that cannot know which face is
