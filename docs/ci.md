@@ -37,6 +37,25 @@ names of the required checks: a run that skips legs would otherwise report
 "skipped" (which counts as a pass) under a required check's name on the
 branch's head commit.
 
+## Toolchain versions
+
+What CI builds with, and why anything is not simply "the newest". The pins that
+are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
+
+| Component | In use | Newer exists? |
+| --- | --- | --- |
+| Qt | 6.12.0 (LTS; every fourth minor, 6.8 before it) | No - 6.12.0 is the newest release. The Windows kit is `msvc2022_64`; Qt ships no MSVC 2026 x64 kit, and it works with the VS 2026 toolset. Installing the Windows kit needs an unreleased aqtinstall (the pinned commit in `ci.yml` and `ci/install-qt.ps1`): the last release predates Qt 6.11's per-architecture repository layout. |
+| MSVC | Visual Studio 2026, via `windows-2025-vs2026` | No. |
+| GCC | 15.2 (`g++-15`, `gcov-15`) | Yes: GCC 16 is released upstream, but ubuntu-26.04's `gcc-16` is a March 2026 snapshot (`16-20260322`), not a release. The `Linux (GCC 15)` check name is also required on `main`. |
+| clang-format | 23.1.3, pinned PyPI wheel (`ci/requirements-lint.txt`) | No. |
+| clang-tidy and its compiler | Clang 23.x from apt.llvm.org | No, but it is a snapshot of `release/23.x` rebuilt as the branch moves, not a frozen version; there is no clang-tidy 23 wheel on PyPI yet. |
+| AppleClang | Xcode 26 on `macos-26` (desktop); `macos-15` (iOS) | iOS stays on `macos-15` for the open vcpkg pkg-config issue [microsoft/vcpkg#50681](https://github.com/microsoft/vcpkg/issues/50681). |
+| Android | NDK r27c (27.2.12479018), JDK 21, platform 36, build-tools 36.0.0 | Yes: NDK r30 exists, but Qt 6.12's libraries are built against r27c and Qt asks apps to use the same NDK. |
+| CMake | newest 4.x (`lukka/get-cmake`, `cmakeVersion: latest`); policies to 4.4 | No. |
+| mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
+| vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, bgfx, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
+| iOS deployment target | 16.3 (`CMakePresets.json`) | Qt 6.12's minimum iOS is 18. iOS CI is build-only without Qt, so this is not exercised; raise it with the first Qt-for-iOS build. |
+
 ## Dependencies
 
 vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, OpenCV, ONNX
