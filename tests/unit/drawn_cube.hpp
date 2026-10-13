@@ -5,7 +5,10 @@
 // the person holding the cube and stay out of the repository; the scoreboard
 // tool (tools/scan) is what runs the reader over those.
 
+#include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/scan_assembly.hpp>
+#include <cube/solver/solver.hpp>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -147,6 +150,58 @@ inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
         }
     }
     return stickers;
+}
+
+// Whether six sides, each seen square-on and in any roll, make exactly one
+// cube. Reading cannot change the answer: it is about the sides themselves.
+[[nodiscard]] inline bool sides_make_one_cube(const solver::Cube& cube) {
+    const auto facet = [](solver::Color colour) {
+        switch (colour) {
+            case solver::Color::White:
+                return model::FacetColor::white;
+            case solver::Color::Yellow:
+                return model::FacetColor::yellow;
+            case solver::Color::Green:
+                return model::FacetColor::green;
+            case solver::Color::Blue:
+                return model::FacetColor::blue;
+            case solver::Color::Orange:
+                return model::FacetColor::orange;
+            case solver::Color::Red:
+                return model::FacetColor::red;
+        }
+        return model::FacetColor::unknown;
+    };
+    std::array<std::array<model::Facelet, 9>, 6> faces{};
+    std::size_t index = 0;
+    for (const solver::Face face : solver::kAllFaces) {
+        const std::array<solver::Color, 9> side = cube::test::outside_view(cube, face);
+        for (std::size_t i = 0; i < 9; ++i) {
+            faces[index][i] = model::Facelet{.color = facet(side[i]), .confidence = 1.0F};
+        }
+        ++index;
+    }
+    return solver::assemble_scanned_faces(faces).has_value();
+}
+
+// A scrambled cube whose six sides, shown square-on, make exactly one cube.
+//
+// About one scramble in eighty does not: the sides can be put together in
+// more than one valid way, and nothing in six flat views says which, however
+// well they are read (measured: 12 of 1000 25-move scrambles). The scan
+// reports those as sides that do not make a cube. Which seeds are such cubes
+// differs by platform, because random_scramble draws through
+// std::uniform_int_distribution, whose algorithm is the standard library's
+// own - seed 14 is an ordinary cube on libstdc++ and MSVC and an ambiguous one
+// on libc++. A test of the scan wants a cube the scan can read, so it takes
+// the first one from `seed` upwards.
+[[nodiscard]] inline solver::Cube scramble(unsigned seed) {
+    for (unsigned s = seed;; ++s) {
+        const solver::Cube cube = solver::random_scramble(s);
+        if (sides_make_one_cube(cube)) {
+            return cube;
+        }
+    }
 }
 
 }  // namespace cube::test

@@ -212,7 +212,7 @@ TEST_CASE("the same side shown again in another orientation is still one side", 
 
 TEST_CASE("six sides shown in any order and orientation give the cube", "[direct-scan]") {
     for (const unsigned seed : {1U, 2U, 3U, 4U, 5U}) {
-        const Cube cube = cube::solver::random_scramble(seed);
+        const Cube cube = cube::test::scramble(seed);
         SideScan scan;
         show_cube(scan, cube, seed);
 
@@ -221,6 +221,25 @@ TEST_CASE("six sides shown in any order and orientation give the cube", "[direct
         REQUIRE(read.has_value());
         CHECK(*read == cube);
     }
+}
+
+TEST_CASE("sides that put together two ways are reported, not guessed", "[direct-scan]") {
+    // What libc++'s random_scramble(14) draws. Read perfectly, its six sides
+    // are still two valid cubes: each is seen square-on and in a roll the
+    // reader cannot know, and nothing in the flat views says which roll goes
+    // with which. About one scramble in eighty is like this (see
+    // cube::test::scramble). Naming one would be a coin toss, so the scan
+    // says the sides do not make a cube.
+    const Cube cube = after("R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2");
+    REQUIRE_FALSE(cube::test::sides_make_one_cube(cube));
+
+    SideScan scan;
+    show_cube(scan, cube, 14);
+
+    CHECK(scan.sides().size() == 6);
+    const auto read = scan.cube();
+    REQUIRE_FALSE(read.has_value());
+    CHECK(read.error() == cube::CubeError::invalid_cube_state);
 }
 
 TEST_CASE("a side of one solid colour does not hold up the read", "[direct-scan]") {
@@ -267,7 +286,7 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
     }};
 
     for (const unsigned seed : {21U, 22U, 23U}) {
-        const Cube cube = cube::solver::random_scramble(seed);
+        const Cube cube = cube::test::scramble(seed);
         SideScan scan;
         show_cube(scan, cube, seed, lamp_lit);
         REQUIRE(scan.sides().size() == 6);
@@ -288,7 +307,7 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
 }
 
 TEST_CASE("a stray capture gives way to a side that is shown for longer", "[direct-scan]") {
-    const Cube cube = cube::solver::random_scramble(31);
+    const Cube cube = cube::test::scramble(31);
     SideScan scan;
     // Something that looked like a side for just long enough to be captured.
     show(scan, kMixed, Pose{}, {}, static_cast<int>(SideScan::kMinReads) + 1);
@@ -310,7 +329,7 @@ TEST_CASE("a stray capture gives way to a side that is shown for longer", "[dire
 
 TEST_CASE("a scan can be started over", "[direct-scan]") {
     SideScan scan;
-    show_cube(scan, cube::solver::random_scramble(11), 11);
+    show_cube(scan, cube::test::scramble(11), 11);
     REQUIRE(scan.cube().has_value());
 
     scan.reset();
