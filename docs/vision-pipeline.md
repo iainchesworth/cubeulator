@@ -338,8 +338,18 @@ DirectShow and OpenCV 4.12:
 
 A platform that cannot control photometry says so in the report rather than
 claiming a lock. Only the Windows backend (DirectShow) has been measured and
-tries; Linux (V4L2), macOS (AVFoundation) and the browser report that they
-cannot, and the scan runs on the camera's own automatics.
+tries; Linux (V4L2) and macOS (AVFoundation) report that they cannot, and the
+scan runs on the camera's own automatics.
+
+The browser asks the camera itself, and only where the camera offers it: a
+track that lists a manual exposure or white balance is asked
+(`MediaStreamTrack.applyConstraints()`) to hold the values its automatics
+settled on, and the lock is claimed for what `getSettings()` then reads back as
+manual at those values - a constraint the browser skipped, or a camera that
+took manual at a value of its own, is reported `rejected` and put back. A
+browser or camera with no such control (Firefox and Safari offer a page none)
+reports `unsupported`. Either way the scan goes on
+([Differences from the desktop apps](web.md#differences-from-the-desktop-apps)).
 
 ## While the cube is being solved: `HeldCube`
 

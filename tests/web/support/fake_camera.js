@@ -68,6 +68,11 @@
   // Every getUserMedia() call, refused or not: what the page asked for.
   let attempts = 0;
   let stream = null;
+  // The camera's own controls (see `controls` below). None, as a canvas stream
+  // and a Safari webcam have none, until a test gives it some.
+  let controlsConfig = null;
+  let controlsState = {};
+  const applied = [];
 
   function drawRoom() {
     context.fillStyle = 'rgb(110,104,96)';
@@ -140,6 +145,83 @@
     return e;
   }
 
+  // The four settings a camera's driver can offer the page, as Chromium names
+  // them: what an exposure and white balance lock reads and writes.
+  const PHOTO = ['exposureMode', 'exposureTime', 'whiteBalanceMode', 'colorTemperature'];
+  const copy = (value) => JSON.parse(JSON.stringify(value));
+
+  // What applyConstraints() does with a constraint set, by how the camera was
+  // configured (see `controls`): the compliant camera takes it and moves, and
+  // the others are the ways a real one lets a lock down.
+  async function applyConstraints(constraints) {
+    const sets = (constraints && constraints.advanced) || [];
+    applied.push(copy(sets));
+    const config = controlsConfig;
+    if (config.hang) {
+      return new Promise(() => {});
+    }
+    if (config.delay) {
+      await new Promise((resolve) => setTimeout(resolve, config.delay));
+    }
+    for (const set of sets) {
+      const named = Object.keys(set);
+      if (named.some((name) => (config.refuse || []).includes(name))) {
+        throw error('OverconstrainedError', 'the camera cannot do that');
+      }
+      if (named.some((name) => (config.ignore || []).includes(name))) {
+        // Resolved, and nothing changed: an advanced set the browser could not
+        // satisfy is skipped, and the promise says yes all the same.
+        continue;
+      }
+      for (const name of named) {
+        if (PHOTO.includes(name)) {
+          controlsState[name] = set[name];
+        }
+      }
+      // Takes manual, and then holds some other value: the driver's stored one.
+      for (const [name, value] of Object.entries(config.jump || {})) {
+        if (name in set) {
+          controlsState[name] = value;
+        }
+      }
+    }
+  }
+
+  // Gives the track the controls a webcam driver has: what it lists, what it is
+  // doing, and the way it takes a constraint.
+  function equip(track) {
+    const config = controlsConfig;
+    if (!config) {
+      return;
+    }
+    if (config.where !== 'imageCapture') {
+      const native = track.getCapabilities.bind(track);
+      track.getCapabilities = () => ({ ...native(), ...copy(config.capabilities) });
+      track.getSettings = () => ({ width: WIDTH, height: HEIGHT, frameRate: 30, ...controlsState });
+    }
+    track.applyConstraints = applyConstraints;
+  }
+
+  // The older route to the same controls: an ImageCapture that has them, and a
+  // track that has not.
+  class FakeImageCapture {
+    constructor(track) {
+      if (!track) {
+        throw new TypeError('no track');
+      }
+    }
+    getPhotoCapabilities() {
+      return controlsConfig && controlsConfig.where === 'imageCapture'
+        ? Promise.resolve(copy(controlsConfig.capabilities))
+        : Promise.reject(error('OperationError', 'no photo capabilities'));
+    }
+    getPhotoSettings() {
+      return controlsConfig && controlsConfig.where === 'imageCapture'
+        ? Promise.resolve(copy(controlsState))
+        : Promise.reject(error('OperationError', 'no photo settings'));
+    }
+  }
+
   const mediaDevices = navigator.mediaDevices || {};
   const fake = {
     enumerateDevices: async () => devices,
@@ -154,6 +236,7 @@
       opened++;
       draw();
       stream = canvas.captureStream(30);
+      equip(stream.getVideoTracks()[0]);
       return stream;
     },
   };
@@ -193,5 +276,38 @@
     opened: () => opened,
     attempts: () => attempts,
     live: () => !!stream && stream.getTracks().some((t) => t.readyState === 'live'),
+
+    // The camera's own exposure and white balance, for the next camera the page
+    // opens: what a driver offers, as Chromium lists it on the track. `null`,
+    // the default, is a camera with none.
+    //   capabilities  what it lists: exposureMode and whiteBalanceMode (arrays
+    //                 of modes), exposureTime and colorTemperature ({min, max,
+    //                 step})
+    //   settings      what it is doing now, for the same four
+    //   refuse        names a constraint set may not contain: a set that has one
+    //                 is rejected (OverconstrainedError)
+    //   ignore        names a set may not contain and still be applied: it is
+    //                 skipped, and the promise resolves
+    //   jump          { exposureTime, colorTemperature }: a camera that goes to
+    //                 manual and then holds a stored value of its own
+    //   hang          applyConstraints() never answers
+    //   delay         milliseconds it takes before it does what it was asked
+    //   where         'track' (the default) or 'imageCapture': where the page
+    //                 has to look for the controls
+    controls(config) {
+      controlsConfig = config ? copy(config) : null;
+      controlsState = config ? copy(config.settings || {}) : {};
+      applied.length = 0;
+      if (config && config.where === 'imageCapture') {
+        window.ImageCapture = FakeImageCapture;
+      }
+    },
+    // What the camera is doing now, and how the automatics are moved.
+    settings: () => copy(controlsState),
+    automatics(patch) {
+      Object.assign(controlsState, patch);
+    },
+    // Every advanced constraint set the page has applied, in order.
+    applied: () => copy(applied),
   };
 })();

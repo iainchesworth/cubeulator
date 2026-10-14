@@ -48,7 +48,7 @@ local storage for this site, and nowhere else.
 | | Desktop apps | In the browser |
 |---|---|---|
 | **Camera permission** | The OS asks the first time a camera is opened | The browser asks the same way. It also hides the cameras' names until you have allowed one, so the list says *Back camera* and *Front camera* until then |
-| **Exposure and white balance** | Locked for a scan where the camera allows it (Windows) | Not locked: the camera's own automatics run. Colours can drift between sides under changing light, so scan under steady, even light |
+| **Exposure and white balance** | Locked for a scan where the camera allows it (Windows) | Locked for a scan where the browser and the camera both allow it, and not otherwise. Chrome and Edge ask the camera to hold them when it lists a manual exposure or white balance, and check that it did; Firefox and Safari do not offer a page these controls, and whether a given webcam or phone camera does is up to its driver. Where it is not held the camera's own automatics run and colours can drift between sides under changing light, so scan under steady, even light. What the camera allowed is in the [diagnostics](diagnostics.md) record |
 | **Settings** | Kept between launches | Kept in the browser's local storage for this site: they survive a reload and are lost with the site's data |
 | **Text** | The system's fonts | A browser has no system fonts, so the app carries its own Japanese and Simplified Chinese faces (Noto Sans JP and SC, cut down to the characters of the Japanese and Chinese translations and the language names: about 350 and 270 kilobytes). Everything else is drawn with the face Qt bundles |
 | **Speed** | Native | The solver and the reader are WebAssembly. Expect the same results, somewhat slower |

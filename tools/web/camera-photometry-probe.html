@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Camera photometry probe</title>
+<style>
+  :root { color-scheme: light dark; --edge: #8886; --accent: #1b7f5c; }
+  body { font: 15px/1.45 system-ui, sans-serif; margin: 0 auto; max-width: 62rem; padding: 1rem; }
+  h1 { font-size: 1.3rem; margin: 0 0 .25rem; }
+  h2 { font-size: 1.05rem; margin: 1.4rem 0 .4rem; }
+  p, li { margin: .3rem 0; }
+  .note { opacity: .75; }
+  fieldset { border: 1px solid var(--edge); border-radius: 6px; margin: .8rem 0; padding: .6rem .8rem; }
+  button, select, input { font: inherit; padding: .3rem .6rem; }
+  button.primary { background: var(--accent); color: #fff; border: 0; border-radius: 4px; }
+  button:disabled { opacity: .45; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; margin: .35rem 0; }
+  #stage { position: relative; display: inline-block; max-width: 100%; line-height: 0; background: #000; }
+  #video { max-width: 100%; max-height: 24rem; cursor: crosshair; }
+  #roi { position: absolute; border: 2px solid #ff0; box-shadow: 0 0 0 1px #000; pointer-events: none; box-sizing: border-box; }
+  #banner { font-size: 1.6rem; font-weight: 700; min-height: 2.2rem; margin: .5rem 0; }
+  pre { background: #8881; padding: .6rem; border-radius: 4px; overflow: auto; max-height: 14rem; margin: .3rem 0; }
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { border-bottom: 1px solid var(--edge); padding: .25rem .5rem; text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  .overflow { overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Camera photometry probe</h1>
+<p class="note">Measures how a held cube's colours drift under the camera's own exposure and white
+balance, and what holding them does about it. It samples the mean colour of one small square and
+writes numbers only: no frame is kept, saved or sent anywhere. Run it from <code>localhost</code> or
+<code>https</code>; the browser asks for the camera as it does for any page.
+See <code>docs/testing.md</code>, "Measuring the camera's drift".</p>
+
+<fieldset>
+  <legend>1. Camera</legend>
+  <div class="row">
+    <select id="device" aria-label="Camera"><option value="">Default camera</option></select>
+    <button id="open" class="primary">Open camera</button>
+    <button id="close" disabled>Close</button>
+    <span id="status" class="note"></span>
+  </div>
+  <div id="stage">
+    <video id="video" playsinline muted></video>
+    <div id="roi" hidden></div>
+  </div>
+  <div class="row">
+    <span>Click the picture to put the square on a <strong>white sticker</strong> (or any one sticker; the same one for every run).</span>
+  </div>
+  <div class="row">
+    <label>Square (video pixels) <input id="roiSize" type="number" min="4" max="120" value="24" style="width:5em"></label>
+    <span id="live" class="note"></span>
+  </div>
+</fieldset>
+
+<fieldset>
+  <legend>2. Record</legend>
+  <p>Hold the cube with that sticker in the square. Each run is <span id="seconds">15</span>&nbsp;s,
+  with a beep at the start and the end. Do them in this order; a run is labelled by the button.</p>
+  <div class="row">
+    <label>Seconds <input id="length" type="number" min="3" max="120" value="15" style="width:5em"></label>
+    <button data-run="still" data-mode="automatic" disabled>A. Still, automatics on</button>
+    <button data-run="turning" data-mode="automatic" disabled>B. Turning, automatics on</button>
+  </div>
+  <div class="row">
+    <button id="lock" disabled>Lock exposure and white balance</button>
+    <button id="release" disabled>Give them back</button>
+    <span id="lockStatus" class="note">not locked</span>
+  </div>
+  <div class="row">
+    <button data-run="still" data-mode="locked" disabled>C. Still, locked</button>
+    <button data-run="turning" data-mode="locked" disabled>D. Turning, locked</button>
+    <button id="stop" disabled>Stop the run</button>
+  </div>
+  <div id="banner" aria-live="polite"></div>
+  <p class="note">Turning: rotate the cube slowly (about a quarter turn a second) so the sticker
+  leaves the square and comes back, as it does in a scan; the numbers that matter are the ones
+  taken while it is in the square, so the run keeps only frames where the square is brighter than
+  <input id="floor" type="number" min="0" max="255" value="60" style="width:4.5em"> (8-bit Y').</p>
+</fieldset>
+
+<fieldset>
+  <legend>3. Results</legend>
+  <div class="overflow">
+    <table id="results">
+      <thead><tr>
+        <th>Run</th><th>Frames</th><th>Hz</th><th>Y' mean</th><th>Y' range %</th><th>Y' trend %</th>
+        <th>R/G range %</th><th>B/G range %</th><th>B/G trend %</th><th>exposureTime seen</th><th>colorTemp seen</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+  <p class="note">Range is (max&minus;min)/mean. Trend is (last 2&nbsp;s mean &minus; first 2&nbsp;s mean)/mean:
+  a slow drift, which is what one side's reads suffer while the cube is held.</p>
+  <div class="row">
+    <button id="copy" disabled>Copy results (JSON)</button>
+    <button id="csv" disabled>Download per-frame CSV</button>
+  </div>
+  <h2>What the camera lists and is doing</h2>
+  <pre id="caps">(open the camera)</pre>
+  <h2>What the lock said</h2>
+  <pre id="lockAnswer">(not asked)</pre>
+</fieldset>
+
+<script>
+// The page's own copy of nothing: the lock below is the app's. camera_web.js is an
+// Emscripten library (mergeInto into LibraryManager.library), so it is given the
+// two names it expects and its $CubeCamera object is used as it is. A change to
+// the lock changes what this measures.
+var LibraryManager = { library: {} };
+function mergeInto(into, from) { Object.assign(into, from); }
+</script>
+<script src="../../src/app/platform/web/camera_web.js"></script>
+<script>
+(function () {
+  'use strict';
+  var CubeCamera = window.CubeCamera = LibraryManager.library.$CubeCamera;
+  var $ = function (id) { return document.getElementById(id); };
+
+  var stream = null;
+  var track = null;
+  var session = null;
+  var roi = { x: 0.5, y: 0.5 };            // centre, as a fraction of the picture
+  var running = null;                       // the run in progress
+  var runs = [];                            // finished runs
+  var sample = document.createElement('canvas');
+  var context = sample.getContext('2d', { willReadFrequently: true });
+  var latest = null;                        // last sample, for the live read-out
+  var recent = [];                          // the last few seconds of samples, always
+  var audio = null;
+
+  function settingsNow() {
+    var s = track && typeof track.getSettings === 'function' ? track.getSettings() : {};
+    return {
+      exposureMode: s.exposureMode, exposureTime: s.exposureTime,
+      whiteBalanceMode: s.whiteBalanceMode, colorTemperature: s.colorTemperature,
+    };
+  }
+
+  function beep(frequency) {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      var oscillator = audio.createOscillator();
+      oscillator.frequency.value = frequency;
+      oscillator.connect(audio.destination);
+      oscillator.start();
+      oscillator.stop(audio.currentTime + 0.18);
+    } catch (e) { /* silence is fine */ }
+  }
+
+  // ---- camera -----------------------------------------------------------
+  function listDevices() {
+    return navigator.mediaDevices.enumerateDevices().then(function (devices) {
+      var select = $('device');
+      var keep = select.value;
+      select.innerHTML = '<option value="">Default camera</option>';
+      devices.filter(function (d) { return d.kind === 'videoinput'; }).forEach(function (d, i) {
+        var option = document.createElement('option');
+        option.value = d.deviceId;
+        option.textContent = d.label || ('Camera ' + (i + 1));
+        select.appendChild(option);
+      });
+      select.value = keep;
+    });
+  }
+
+  function describe() {
+    var out = { userAgent: navigator.userAgent, label: track ? track.label : null };
+    if (track) {
+      out.capabilities = typeof track.getCapabilities === 'function' ? track.getCapabilities() : null;
+      out.settings = typeof track.getSettings === 'function' ? track.getSettings() : null;
+      out.imageCapture = typeof ImageCapture === 'function';
+    }
+    return out;
+  }
+
+  function open() {
+    // The same request the app makes (camera_web.js constraintsFor).
+    var video = { width: { ideal: CubeCamera.IDEAL_WIDTH }, height: { ideal: CubeCamera.IDEAL_HEIGHT } };
+    if ($('device').value) { video.deviceId = { exact: $('device').value }; }
+    $('status').textContent = 'asking the browser...';
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: video }).then(function (s) {
+      stream = s;
+      track = s.getVideoTracks()[0];
+      $('video').srcObject = s;
+      session = { request: 1, track: track, stream: s, active: true, frames: 0, held: null };
+      CubeCamera.current = session;
+      return $('video').play();
+    }).then(function () {
+      return listDevices();
+    }).then(function () {
+      $('status').textContent = track.label + ', ' + $('video').videoWidth + 'x' + $('video').videoHeight;
+      $('open').disabled = true;
+      $('close').disabled = false;
+      document.querySelectorAll('[data-run]').forEach(function (b) { b.disabled = false; });
+      $('lock').disabled = false;
+      placeRoi();
+      refreshCaps();
+      track.addEventListener('ended', function () { $('status').textContent = 'camera ended'; });
+      watch();
+    }).catch(function (error) {
+      $('status').textContent = String(error && error.name || error) + ': ' + (error && error.message || '');
+    });
+  }
+
+  function close() {
+    var done = function () {
+      if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); }
+      stream = track = null;
+      if (session) { session.active = false; }
+      $('video').srcObject = null;
+      $('open').disabled = false;
+      $('close').disabled = true;
+      $('lock').disabled = true;
+      $('release').disabled = true;
+      document.querySelectorAll('[data-run]').forEach(function (b) { b.disabled = true; });
+      $('roi').hidden = true;
+      $('status').textContent = 'closed';
+    };
+    // Put the camera's own modes back before letting go, as the app does.
+    var restoring = session ? CubeCamera.unlock(session) : null;
+    if (restoring) { restoring.then(done, done); } else { done(); }
+  }
+
+  function refreshCaps() {
+    $('caps').textContent = JSON.stringify({ ...describe(), settingsNow: settingsNow() }, null, 2);
+  }
+
+  // ---- square -----------------------------------------------------------
+  function placeRoi() {
+    var video = $('video');
+    var size = Math.max(4, Number($('roiSize').value) || 24);
+    var box = $('roi');
+    var scale = video.clientWidth / (video.videoWidth || 1);
+    box.hidden = false;
+    box.style.width = (size * scale) + 'px';
+    box.style.height = (size * scale) + 'px';
+    box.style.left = (roi.x * video.clientWidth - size * scale / 2) + 'px';
+    box.style.top = (roi.y * video.clientHeight - size * scale / 2) + 'px';
+  }
+
+  $('video').addEventListener('click', function (event) {
+    var rect = this.getBoundingClientRect();
+    roi.x = (event.clientX - rect.left) / rect.width;
+    roi.y = (event.clientY - rect.top) / rect.height;
+    placeRoi();
+  });
+  $('roiSize').addEventListener('input', placeRoi);
+  window.addEventListener('resize', placeRoi);
+
+  // ---- sampling ---------------------------------------------------------
+  // One sample per decoded frame: the mean colour of the square.
+  function take(now) {
+    var video = $('video');
+    if (!video.videoWidth) { return null; }
+    var size = Math.max(4, Math.min(120, Number($('roiSize').value) || 24));
+    var cx = Math.round(roi.x * video.videoWidth);
+    var cy = Math.round(roi.y * video.videoHeight);
+    var sx = Math.max(0, Math.min(video.videoWidth - size, cx - size / 2));
+    var sy = Math.max(0, Math.min(video.videoHeight - size, cy - size / 2));
+    sample.width = size;
+    sample.height = size;
+    context.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+    var data = context.getImageData(0, 0, size, size).data;
+    var r = 0, g = 0, b = 0;
+    var n = size * size;
+    for (var i = 0; i < data.length; i += 4) { r += data[i]; g += data[i + 1]; b += data[i + 2]; }
+    r /= n; g /= n; b /= n;
+    var s = settingsNow();
+    return {
+      t: now, r: r, g: g, b: b,
+      y: 0.2126 * r + 0.7152 * g + 0.0722 * b,
+      rg: g > 0 ? r / g : 0, bg: g > 0 ? b / g : 0,
+      exposureMode: s.exposureMode, exposureTime: s.exposureTime,
+      whiteBalanceMode: s.whiteBalanceMode, colorTemperature: s.colorTemperature,
+    };
+  }
+
+  function onFrame(now) {
+    var s = take(now);
+    if (s) {
+      latest = s;
+      recent.push(s);
+      while (recent.length && s.t - recent[0].t > 4000) { recent.shift(); }
+      if (session) { session.frames++; }
+      if (running) {
+        var floor = Number($('floor').value) || 0;
+        if (s.y >= floor) { running.samples.push(s); } else { running.dropped++; }
+      }
+    }
+  }
+
+  function watch() {
+    var video = $('video');
+    var tick = function (now) {
+      if (!stream) { return; }
+      onFrame(now);
+      if (typeof video.requestVideoFrameCallback === 'function') {
+        video.requestVideoFrameCallback(tick);
+      }
+    };
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      video.requestVideoFrameCallback(tick);
+    } else {
+      setInterval(function () { if (stream) { onFrame(performance.now()); } }, 33);
+    }
+    setInterval(function () {
+      if (!latest) { return; }
+      $('live').textContent = "Y' " + latest.y.toFixed(1) + '   R/G ' + latest.rg.toFixed(3) +
+        '   B/G ' + latest.bg.toFixed(3) + '   ' + (latest.exposureMode || '-') + ' ' +
+        (latest.exposureTime === undefined ? '-' : latest.exposureTime) + '   ' +
+        (latest.whiteBalanceMode || '-') + ' ' +
+        (latest.colorTemperature === undefined ? '-' : latest.colorTemperature);
+    }, 250);
+  }
+
+  // ---- runs -------------------------------------------------------------
+  function stats(values) {
+    var n = values.length;
+    if (!n) { return { mean: 0, range: 0 }; }
+    var sum = 0, min = Infinity, max = -Infinity;
+    values.forEach(function (v) { sum += v; min = Math.min(min, v); max = Math.max(max, v); });
+    var mean = sum / n;
+    return { mean: mean, min: min, max: max, range: mean ? (max - min) / mean : 0 };
+  }
+
+  // (mean of the last two seconds - mean of the first two) / overall mean
+  function trend(samples, key) {
+    if (samples.length < 4) { return 0; }
+    var t0 = samples[0].t, t1 = samples[samples.length - 1].t;
+    var head = samples.filter(function (s) { return s.t - t0 <= 2000; }).map(function (s) { return s[key]; });
+    var tail = samples.filter(function (s) { return t1 - s.t <= 2000; }).map(function (s) { return s[key]; });
+    var all = stats(samples.map(function (s) { return s[key]; })).mean;
+    return all ? (stats(tail).mean - stats(head).mean) / all : 0;
+  }
+
+  function distinct(samples, key) {
+    var seen = {};
+    samples.forEach(function (s) { if (s[key] !== undefined) { seen[s[key]] = 1; } });
+    var list = Object.keys(seen).map(Number).sort(function (a, b) { return a - b; });
+    return list.length === 0 ? 'n/a' : list.length === 1 ? String(list[0]) :
+      list.length + ' (' + list[0] + '..' + list[list.length - 1] + ')';
+  }
+
+  function summarise(run) {
+    var s = run.samples;
+    var seconds = s.length > 1 ? (s[s.length - 1].t - s[0].t) / 1000 : 0;
+    var y = stats(s.map(function (x) { return x.y; }));
+    var rg = stats(s.map(function (x) { return x.rg; }));
+    var bg = stats(s.map(function (x) { return x.bg; }));
+    return {
+      label: run.label, mode: run.mode, kind: run.kind,
+      frames: s.length, droppedBelowFloor: run.dropped,
+      hz: seconds ? s.length / seconds : 0,
+      yMean: y.mean, yRangePct: y.range * 100, yTrendPct: trend(s, 'y') * 100,
+      rgRangePct: rg.range * 100, bgRangePct: bg.range * 100, bgTrendPct: trend(s, 'bg') * 100,
+      exposureTimeSeen: distinct(s, 'exposureTime'), colorTemperatureSeen: distinct(s, 'colorTemperature'),
+      exposureModeSeen: Array.from(new Set(s.map(function (x) { return x.exposureMode; }))).join(','),
+      whiteBalanceModeSeen: Array.from(new Set(s.map(function (x) { return x.whiteBalanceMode; }))).join(','),
+    };
+  }
+
+  function addRow(summary) {
+    var row = document.createElement('tr');
+    var cells = [
+      summary.label, summary.frames, summary.hz.toFixed(1), summary.yMean.toFixed(1),
+      summary.yRangePct.toFixed(2), summary.yTrendPct.toFixed(2),
+      summary.rgRangePct.toFixed(2), summary.bgRangePct.toFixed(2), summary.bgTrendPct.toFixed(2),
+      summary.exposureTimeSeen, summary.colorTemperatureSeen,
+    ];
+    cells.forEach(function (text) {
+      var cell = document.createElement('td');
+      cell.textContent = text;
+      row.appendChild(cell);
+    });
+    $('results').querySelector('tbody').appendChild(row);
+  }
+
+  function finish() {
+    if (!running) { return; }
+    var run = running;
+    running = null;
+    clearInterval(run.timer);
+    beep(440);
+    $('banner').textContent = '';
+    document.querySelectorAll('[data-run], #stop').forEach(function (b) { b.disabled = !stream || b.id === 'stop'; });
+    $('stop').disabled = true;
+    $('lock').disabled = !stream;
+    $('release').disabled = !session || !session.held || Object.keys(session.held).length === 0;
+    run.summary = summarise(run);
+    runs.push(run);
+    addRow(run.summary);
+    $('copy').disabled = false;
+    $('csv').disabled = false;
+    refreshCaps();
+  }
+
+  function start(kind, mode) {
+    if (running || !stream) { return; }
+    var length = Math.max(3, Number($('length').value) || 15);
+    var letter = { 'still/automatic': 'A', 'turning/automatic': 'B', 'still/locked': 'C', 'turning/locked': 'D' };
+    running = {
+      kind: kind, mode: mode, samples: [], dropped: 0, began: performance.now(),
+      label: (letter[kind + '/' + mode] || '?') + '. ' + kind + ', ' + mode,
+      settingsAtStart: settingsNow(),
+    };
+    $('seconds').textContent = String(length);
+    document.querySelectorAll('[data-run], #lock, #release').forEach(function (b) { b.disabled = true; });
+    $('stop').disabled = false;
+    beep(880);
+    var remaining = length;
+    var show = function () {
+      $('banner').textContent = (kind === 'still' ? 'HOLD THE CUBE STILL' : 'TURN THE CUBE SLOWLY') + '  ' + remaining + ' s';
+    };
+    show();
+    running.timer = setInterval(function () {
+      remaining--;
+      if (remaining <= 0) { finish(); } else { show(); }
+    }, 1000);
+  }
+
+  document.querySelectorAll('[data-run]').forEach(function (button) {
+    button.addEventListener('click', function () { start(button.dataset.run, button.dataset.mode); });
+  });
+  $('stop').addEventListener('click', finish);
+  $('open').addEventListener('click', open);
+  $('close').addEventListener('click', close);
+
+  // ---- the lock: the app's own ---------------------------------------------
+  // The mean of the last `ms` of samples, for how far the picture moved when the
+  // lock took the camera out of its automatics. A control held at a value the
+  // camera did not really have (a stale reading, a unit it does not use) shows up
+  // here and nowhere in the lock's own answer: that checks the camera against
+  // what it said, not the picture.
+  function meanOf(ms) {
+    var now = performance.now();
+    var taken = recent.filter(function (s) { return now - s.t <= ms; });
+    if (!taken.length) { return null; }
+    var sum = { y: 0, rg: 0, bg: 0 };
+    taken.forEach(function (s) { sum.y += s.y; sum.rg += s.rg; sum.bg += s.bg; });
+    return { y: sum.y / taken.length, rg: sum.rg / taken.length, bg: sum.bg / taken.length, n: taken.length };
+  }
+
+  $('lock').addEventListener('click', function () {
+    if (!session) { return; }
+    $('lock').disabled = true;
+    $('lockStatus').textContent = 'settling and asking the camera...';
+    var asked = performance.now();
+    var before = meanOf(1000);
+    CubeCamera.lock(session, { exposure: true, whiteBalance: true }, function (answer) {
+      var names = ['not requested', 'unsupported', 'rejected', 'applied'];
+      var text = {
+        tookMs: Math.round(performance.now() - asked),
+        controlsOffered: answer.offered,
+        exposure: { outcome: names[answer.exposure.outcome], requested: answer.exposure.requested,
+                    readback: answer.exposure.readback },
+        whiteBalance: { outcome: names[answer.whiteBalance.outcome],
+                        requested: answer.whiteBalance.requested, readback: answer.whiteBalance.readback },
+        settingsNow: settingsNow(),
+      };
+      $('lockAnswer').textContent = JSON.stringify(text, null, 2);
+      var held = text.exposure.outcome === 'applied' || text.whiteBalance.outcome === 'applied';
+      $('lockStatus').textContent = held ?
+        'locked: exposure ' + text.exposure.outcome + ', white balance ' + text.whiteBalance.outcome :
+        'not locked: exposure ' + text.exposure.outcome + ', white balance ' + text.whiteBalance.outcome;
+      $('lock').disabled = false;
+      $('release').disabled = !held;
+      refreshCaps();
+      // And a second later: did the picture move?
+      setTimeout(function () {
+        var after = meanOf(1000);
+        if (before && after) {
+          var change = function (a, b) { return a ? Math.round((b - a) / a * 1000) / 10 : 0; };
+          text.picture = {
+            yBefore: Math.round(before.y * 10) / 10, yAfter: Math.round(after.y * 10) / 10,
+            yChangePct: change(before.y, after.y),
+            rgChangePct: change(before.rg, after.rg), bgChangePct: change(before.bg, after.bg),
+            note: 'the square, one second before the lock and one second after it settled; ' +
+                  'a hand moving in the square shows here too',
+          };
+          $('lockAnswer').textContent = JSON.stringify(text, null, 2);
+        }
+      }, 1500);
+    });
+  });
+  $('release').addEventListener('click', function () {
+    var restoring = session ? CubeCamera.unlock(session) : null;
+    var done = function () {
+      $('lockStatus').textContent = 'given back';
+      $('release').disabled = true;
+      refreshCaps();
+    };
+    if (restoring) { restoring.then(done, done); } else { done(); }
+  });
+
+  // ---- output -----------------------------------------------------------
+  $('copy').addEventListener('click', function () {
+    var text = JSON.stringify({
+      when: new Date().toISOString(),
+      camera: describe(),
+      lock: $('lockAnswer').textContent,
+      runs: runs.map(function (r) { return r.summary; }),
+    }, null, 2);
+    navigator.clipboard.writeText(text).then(function () {
+      $('status').textContent = 'results copied';
+    }, function () {
+      $('caps').textContent = text;
+    });
+  });
+
+  $('csv').addEventListener('click', function () {
+    var lines = ['run,t_ms,y,r,g,b,rg,bg,exposureMode,exposureTime,whiteBalanceMode,colorTemperature'];
+    runs.forEach(function (run) {
+      var t0 = run.samples.length ? run.samples[0].t : 0;
+      run.samples.forEach(function (s) {
+        lines.push([JSON.stringify(run.label), (s.t - t0).toFixed(1), s.y.toFixed(3), s.r.toFixed(2),
+          s.g.toFixed(2), s.b.toFixed(2), s.rg.toFixed(4), s.bg.toFixed(4), s.exposureMode || '',
+          s.exposureTime === undefined ? '' : s.exposureTime, s.whiteBalanceMode || '',
+          s.colorTemperature === undefined ? '' : s.colorTemperature].join(','));
+      });
+    });
+    var link = document.createElement('a');
+    link.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/csv' }));
+    link.download = 'camera-photometry-probe.csv';
+    link.click();
+  });
+
+  // What a test (or a person with the console open) can read.
+  window.cameraProbe = {
+    runs: function () { return runs.map(function (r) { return r.summary; }); },
+    start: start,
+    lock: function () { $('lock').click(); },
+    describe: describe,
+    lockAnswer: function () { return $('lockAnswer').textContent; },
+  };
+
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    $('status').textContent = 'getUserMedia is not available: open this page from localhost or https';
+    $('open').disabled = true;
+  } else {
+    navigator.mediaDevices.enumerateDevices().then(listDevices, function () {});
+  }
+})();
+</script>
+</body>
+</html>

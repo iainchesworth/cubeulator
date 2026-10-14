@@ -1005,8 +1005,8 @@ the two cross-origin-isolation headers the app's threads need.
 | `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic, and that each of the five drafts shows its own script |
 | `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off; the launch and settings screens again in Hebrew, Arabic and Yiddish, mirrored |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
-| `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
-| `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
+| `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of; the exposure and white balance lock: held and given back, a camera or browser without the controls, one that refuses, one that is silently skipped, one that takes manual at a value of its own, one that never answers |
+| `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes, and the lock the real track makes of its controls |
 | `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
 | `tumble.spec.mjs` | a cube turned about one axis and then another, drawn by `cube_tumble_sim` and played to the camera at its recorded frame times; skipped unless `TUMBLE_SESSION` names the session (see [the investigation](investigations/2026-10-14-scan-tumble.md)) |
 | `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
@@ -1059,6 +1059,63 @@ renderer string and the heap), `<journey>.trace.json` (open it in the DevTools
 Performance panel or Perfetto) and `<journey>.csv` (`tracy-csvexport`'s
 columns), which CI uploads.
 
+### The camera's exposure and white balance
+
+The scan holds the camera's exposure and white balance where its automatics
+settled (`camera_web.js`; [Differences from the desktop apps](web.md#differences-from-the-desktop-apps)),
+and says only what it read back: `applied` when `getSettings()` shows `manual`
+at the value asked for, `rejected` when the camera was asked and did not hold,
+`unsupported` when the browser or the camera has no such control. The cases for
+it are in `camera.spec.mjs`, and read the report as the app has it
+(`DirectScan.lock`, which is what the diagnostics channel's `camera` record
+carries as `lock`). The fake camera's controls are the test's to set
+(`window.__fakeCamera.controls({...})`): what it lists, what it is doing, and
+the ways a real driver lets a lock down.
+
+The camera cases under `tests/integration` are not built for the web (see the
+table above), so the claim that `photometry_control_supported()` is made only
+where it was measured has a counterpart here, not there: in
+`camera.spec.mjs` `DirectScan.lock.supported` is true only after a lock was read
+back as holding, and false for a camera with no controls, one that refused, one
+that was skipped and one that went to manual at its own value.
+`tests/platform/web/photometry_web_test.cpp` holds the half after the page: what
+a number from the page may become in the report, run under Node with the rest of
+the suite.
+
+**Measuring a real camera.** How much a real webcam's exposure and white balance
+move while a cube is held and turned is not something a drawn camera can say.
+`tools/web/camera-photometry-probe.html` is the measurement: it samples the mean
+colour of one small square on a held cube, writes numbers only (no frame is
+kept or sent), and runs the app's own lock (it loads `camera_web.js` itself, so
+a change to the lock changes what is measured) for the comparison.
+
+```sh
+node tests/web/support/serve.mjs . 8130
+# open http://localhost:8130/tools/web/camera-photometry-probe.html
+```
+
+Open the camera, click the picture to put the square on a white sticker, and
+make the four runs in order: still with the automatics, turning with the
+automatics, **Lock exposure and white balance**, still locked, turning locked.
+The table gives, per run, the range and the trend of the square's luminance and
+of its R/G and B/G ratios, and which exposure and white balance values the
+camera reported while it ran; *Copy results* and the CSV are what to keep. The
+lock's own answer is shown beside it (what the camera listed and what it read
+back), with how far the square's picture moved when it was applied.
+
+What to read from it. The bar is the synthetic drift of the scan-tumble
+investigation: a swing of 15% in exposure over seven seconds broke the naming of
+colours in 3 of 12 tumbles even with the reader fixed, so a Y' range or trend of
+that order in run A or B is what the lock is for, and a few percent is noise.
+Run C against A, and D against B, says whether holding the camera removed it.
+Two things in the table say the numbers are not what they seem: *exposureTime
+seen* a single value in an automatic run while Y' moves means the camera is not
+reporting what its automatics chose (the lock would hold a stale value: look at
+the picture's change when the lock is applied), and a *Hz* far under what the
+camera is rated for means the page is not being painted. A phone is measured the
+same way: the page needs `localhost` or `https`, so use the browser's
+remote-debugging port forwarding or an `https` host.
+
 ### What this does not cover
 
 - **Other browsers.** Chromium only. The app needs threads and WebGL 2; Firefox
@@ -1067,7 +1124,8 @@ columns), which CI uploads.
 - **A real camera and a real GPU.** The page's `getUserMedia()` path is
   exercised, with a stream the test draws and with Chromium's built-in fake
   device; neither is a lens. Colour under a real webcam is the corpus tools'
-  (`tools/scan`).
+  (`tools/scan`), and whether a real webcam's exposure and white balance can be
+  held, and what they do when they are not, is the probe's (above).
 - **The published site.** These test the diagnostics build, which differs from
   `web-emscripten-release` by the recorder and the driver only; whether the
   deployed copy is served with the right headers is the docs workflow's check.

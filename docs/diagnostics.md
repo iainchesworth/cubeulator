@@ -159,6 +159,19 @@ and `lock`: what the driver accepted, or `null` before it reported.
 `outcome` is `applied` (read back and confirmed), `rejected` (the driver took
 the write and kept its old value), `unsupported` or `not_requested`.
 
+In the browser the two controls are exposure and white balance
+(`brightness` and `saturation` are `not_requested`: the page does not touch
+them), and `photometry_control_supported` is true only for a camera on which a
+lock was read back as holding something, so it is `false` in `opened_lock_requested`
+and `true` from `lock_reported` on where it held. `unsupported` there means the
+browser or the camera has no manual exposure or white balance to ask for
+(Firefox and Safari offer a page none), and then `platform_supported` is
+`false`;
+`rejected` means the camera was asked and would not hold, or took the setting and
+read back something else, in which case the page put the camera's own mode back.
+`requested` and `readback` are the values the browser reported, in its own
+units (`exposureTime`, `colorTemperature`), not the desktop driver's.
+
 **`held`** - the solve screen's camera, each time what it makes of a frame
 *changes* (this is what `CUBE_HELD_LOG` used to write): `verdict` (`nothing`,
 `held`, `moved`, `unsure`, `wrong`, `unknown`), `move_index`, `asked` (the move
