@@ -8,8 +8,13 @@ PlatformInfo current() {
         .graphics_backends = {{.key = "vulkan", .label = "Vulkan"},
                               {.key = "opengl", .label = "GLES"}},
         .japanese_faces = {"Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans JP"},
-        .chinese_faces = {"Noto Sans CJK SC", "Noto Sans SC", "Source Han Sans SC",
-                          "WenQuanYi Micro Hei"},
+        .chinese_faces =
+            {
+                "Noto Sans CJK SC",
+                "Noto Sans SC",
+                "Source Han Sans SC",
+                "WenQuanYi Micro Hei",
+            },
     };
 }
 
