@@ -34,6 +34,9 @@ target_compile_definitions(cube_test_platform INTERFACE ${CUBEULATOR_PLATFORM_CO
 target_include_directories(cube_test_platform INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
+if(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS)
+    target_link_options(cube_test_platform INTERFACE ${CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS})
+endif()
 
 # --- Every platform fragment satisfies the platform contract -----------------
 # Includes each src/app/platform/*/platform.cmake in turn and holds it to
@@ -48,6 +51,7 @@ add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
     unit/profiling_test.cpp
+    unit/profile_recorder_test.cpp
     unit/color_resolution_test.cpp
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
@@ -85,7 +89,8 @@ target_link_libraries(cube_unit_tests
 # (src/lib/CMakeLists.txt) and checks it against the option that drove the
 # choice, so a wrong directory on the include path cannot go unnoticed.
 set_source_files_properties(unit/profiling_test.cpp PROPERTIES
-    COMPILE_DEFINITIONS "CUBE_EXPECT_TRACY=$<BOOL:${CUBEULATOR_ENABLE_TRACY}>")
+    COMPILE_DEFINITIONS
+        "CUBE_EXPECT_TRACY=$<BOOL:${CUBEULATOR_ENABLE_TRACY}>;CUBE_EXPECT_RECORDER=$<BOOL:${CUBEULATOR_ENABLE_PROFILE_RECORDER}>")
 
 # White-box include path for last_layer_test.cpp only: it includes
 # cube::lib's private last_layer.hpp directly, because the F2L-preservation

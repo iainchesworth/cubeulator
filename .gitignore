@@ -247,3 +247,9 @@ compile_commands.json
 .ninja_deps
 .ninja_log
 CMakeUserPresets.json
+
+# Browser tests (tests/web)
+tests/web/node_modules/
+tests/web/reports/
+tests/web/test-results/
+tests/web/playwright-report/
