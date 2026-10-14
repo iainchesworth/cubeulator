@@ -264,6 +264,7 @@ if(CUBEULATOR_BUILD_APP)
 
     add_executable(cube_qml_tests
         qml_test_main.cpp
+        unit/complete_screen_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp
