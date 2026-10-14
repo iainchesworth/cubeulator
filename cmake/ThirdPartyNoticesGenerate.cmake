@@ -368,6 +368,59 @@ function(cn_qt_lookup out key)
     set(${out} "${found}" PARENT_SCOPE)
 endfunction()
 
+# stem of a Qt object file (.o/.obj) on the link line -> component id, or "".
+#
+# A static Qt (the browser build is one) links the QML plugins' registration
+# objects, their resource bundles and the platform plugin in as objects, not as
+# libraries, so there is no library file for an SBOM to list and the file's own
+# name keys nothing. An object says what it belongs to by where it sits under
+# the Qt prefix, in the layout Qt's own build writes:
+#
+#   <qml/QtQuick/Controls>/objects-<config>/<name>_init/<name>_init.cpp.o
+#       the registration of the QML plugin <name>: looked up as the plugin's
+#       library is (path-qualified key, then the plain name)
+#   <lib or qml/..>/objects-<config>/<Target>_resources_<n>/.qt/rcc/qrc_*.cpp.o
+#       a resource bundle of <Target>, a module or a plugin: the module's
+#       library (qt6<target>) first, then the plugin's names
+#
+# Every candidate is looked up in qt-modules.json, which holds what the SBOMs
+# list; an object whose path follows neither pattern, or whose candidates the
+# snapshot does not know, stays unresolved, so a Qt layout change is a failure
+# to be looked at and not a quiet miss. token is a forward-slash path.
+function(cn_qt_object_key out token)
+    set(found "")
+    string(TOLOWER "${token}" _o)
+    string(LENGTH "${_lc_qt}/" _n)
+    string(SUBSTRING "${_o}" ${_n} -1 _rel)
+    if(_rel MATCHES "^(.*)/objects-[^/]+/([^/]+)/")
+        set(_reldir "${CMAKE_MATCH_1}")
+        set(_target "${CMAKE_MATCH_2}")
+        string(REPLACE "/" "_" _reldir_key "${_reldir}")
+        get_filename_component(_name "${_o}" NAME)
+        set(_candidates "")
+        # (a second MATCHES clears CMAKE_MATCH_n, so the stem is taken first)
+        if(_name MATCHES "^(.+)_init\\.cpp\\.(o|obj)$")
+            set(_base "${CMAKE_MATCH_1}")
+            if(NOT _name MATCHES "^qrc_")
+                list(APPEND _candidates "${_reldir_key}_${_base}" "${_base}")
+            endif()
+        endif()
+        if(_target MATCHES "^(.+)_resources_[0-9]+$")
+            set(_t "${CMAKE_MATCH_1}")
+            list(APPEND _candidates "qt6${_t}" "${_t}" "qt${_t}"
+                "${_reldir_key}_${_t}plugin" "${_t}plugin" "${_reldir_key}_${_t}")
+        endif()
+        foreach(c IN LISTS _candidates)
+            cn_qt_lookup(_v "${c}")
+            if(_v)
+                set(found "${_v}")
+                break()
+            endif()
+        endforeach()
+    endif()
+    set(${out} "${found}" PARENT_SCOPE)
+endfunction()
+
 # --- 4. classify link inputs ---------------------------------------------------
 string(TOLOWER "${CUBE_NOTICES_BINARY_DIR}" _lc_bin)
 string(TOLOWER "${CUBE_NOTICES_SOURCE_DIR}" _lc_src)
@@ -514,6 +567,9 @@ foreach(tok IN LISTS _link_tokens)
     if(_lc_qt AND _p_qt EQUAL 0)
         cn_qt_file_key(_k "${tok}")
         cn_qt_lookup(_qid "${_k}")
+        if(NOT _qid AND _lt MATCHES "\\.(o|obj)$")
+            cn_qt_object_key(_qid "${tok}")
+        endif()
         if(_qid)
             list(APPEND _qt_roots "${_qid}")
             cn_record_link("${tok}" "qt" "${_qid}")
@@ -569,7 +625,11 @@ cn_json_string_list(_deployed_roots "${_manifest}" qt deployedRoots "${_platform
 foreach(r IN LISTS _deployed_roots)
     list(APPEND _qt_roots "${r}")
 endforeach()
-if(NOT _deployed_roots)
+# An empty list is an answer ("nothing is deployed that the link line does not
+# name": the browser build has no deployment tool); only a platform with no
+# list at all is the warning.
+string(JSON _deployed_type ERROR_VARIABLE _deployed_err TYPE "${_manifest}" qt deployedRoots "${_platform}")
+if(_deployed_err OR NOT _deployed_type STREQUAL "ARRAY")
     cn_warning("manifest.json qt.deployedRoots has no list for '${_platform}': Qt plugins that the deployment tool adds on its own will be missing until the notices test is run against a ${_platform} deployment and the list is filled in")
 endif()
 

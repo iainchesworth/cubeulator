@@ -12,6 +12,8 @@ PlatformInfo current() {
                 {.key = "vulkan", .label = "Vulkan"},
                 {.key = "opengl", .label = "GL"},
             },
+        .japanese_faces = {"Yu Gothic UI", "Meiryo UI", "MS UI Gothic"},
+        .chinese_faces = {"Microsoft YaHei UI", "Microsoft YaHei"},
     };
 }
 

@@ -511,6 +511,16 @@ conclusion.
   Nothing is added by hand for a vcpkg port: when R6 removed onnxruntime,
   M3T, GLEW and GLFW, and bgfx went with the render scaffolding, they and
   their dependency chains disappeared.
+- **A static Qt links objects, not libraries.** The browser build (Qt for
+  WebAssembly) puts every QML plugin's registration object and every module's
+  resource bundle on the link line as a `.o` file, which no SBOM lists by
+  name. They are attributed by where they sit under the Qt prefix
+  (`cn_qt_object_key` in `cmake/ThirdPartyNoticesGenerate.cmake`:
+  `qml/<module path>/objects-<config>/<plugin>_init/` is that plugin,
+  `<Target>_resources_<n>/` is that module's library), against the library
+  keys `qt-modules.json` lists. An object that matches no pattern is
+  *unresolved*, so a change in Qt's layout is a failure to look at.
+  `notices_static_qt_selftest` runs the generator over such a link line.
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists vendored code, models, icons and fonts, the licence
   elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
@@ -541,7 +551,7 @@ Maintaining it:
 | a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
 | add the bundled fonts | add the files under `assets/fonts/`; the planned manifest entries start emitting; verify their copyright lines against the fonts |
-| add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
+| add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install (the browser build's kit, `wasm_multithread`, carries its SBOMs too, and `web` is verified since 2026-10-14) and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
 
 Known gaps, so nobody mistakes them for done:
 

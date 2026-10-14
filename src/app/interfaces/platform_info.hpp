@@ -30,6 +30,16 @@ struct PlatformInfo {
     // Apple-only, Vulkan/OpenGL are available wherever Qt ships a backend for
     // them.
     std::vector<GraphicsBackend> graphics_backends;
+
+    // The families, in preference order, that this platform's own interface
+    // text is set in when the app's language is Japanese or Simplified
+    // Chinese. The two share code points and not shapes, so Theme.qml names a
+    // family for them and does not leave it to glyph fallback; the first one
+    // that is installed wins. Each platform lists what its OS ships; the
+    // browser lists the faces the app bundles and registers (it has no system
+    // fonts). Empty means "the default face".
+    std::vector<std::string> japanese_faces;
+    std::vector<std::string> chinese_faces;
 };
 
 // There is exactly one definition of `current()` per platform, living in
