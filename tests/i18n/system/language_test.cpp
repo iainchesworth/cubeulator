@@ -371,9 +371,10 @@ TEST_CASE("the pseudo-locale cuts nothing off on the converted screens",
     }
 }
 
-TEST_CASE("the real Japanese, Chinese, Hebrew, Arabic and Yiddish cut nothing off on the "
-          "converted screens",
-          "[system][language][cjk]") {
+TEST_CASE(
+    "the real Japanese, Chinese, Hebrew, Arabic and Yiddish cut nothing off on the "
+    "converted screens",
+    "[system][language][cjk]") {
     // The drafts, not their proxy. The three right-to-left ones are mirrored
     // as well, which the pseudo-locale (left to right) never is.
     const char* language = GENERATE("ja", "zh-CN", "he", "ar", "yi");

@@ -252,8 +252,7 @@ namespace {
 // letters in Arabic, Hebrew presentation forms (the generator writes letter
 // and point instead), a Cyrillic lookalike.
 [[nodiscard]] bool allowed_in_rtl_catalogue(const QString& code, char32_t c) {
-    if (c == U'
-' || (c >= 0x20 && c < 0x7F)) {
+    if (c == U'\n' || (c >= 0x20 && c < 0x7F)) {
         return true;  // layout, Latin, digits, ASCII punctuation
     }
     if (c == 0x00B7 || c == 0x2026 || c == 0x200E || c == 0x200F) {
@@ -261,7 +260,8 @@ namespace {
     }
     if (code == QLatin1String("ar")) {
         return (c >= 0x0621 && c <= 0x063A) || (c >= 0x0640 && c <= 0x064A) ||  // letters, tatweel
-               (c >= 0x064B && c <= 0x0652) ||                                    // tashkeel
+               (c >= 0x064B && c <= 0x0652) ||                                  // tashkeel
+               (c >= 0x0660 && c <= 0x0669) ||  // Arabic-Indic digits, as `%Ln` shows counts
                c == 0x060C || c == 0x061B || c == 0x061F;  // comma, semicolon, question mark
     }
     // Hebrew and Yiddish: letters, the points, maqaf, geresh and gershayim,
@@ -285,9 +285,10 @@ TEST_CASE("a right-to-left catalogue uses characters of its own script and the a
             }
             for (const QString& form : e.forms) {
                 for (const char32_t ch : form.toUcs4()) {
-                    INFO(str(l.code) << " / " << str(e.id) << ": U+"
-                                     << QString::number(static_cast<uint>(ch), 16).toUpper().toStdString()
-                                     << " in " << str(form));
+                    INFO(str(l.code)
+                         << " / " << str(e.id) << ": U+"
+                         << QString::number(static_cast<uint>(ch), 16).toUpper().toStdString()
+                         << " in " << str(form));
                     CHECK(allowed_in_rtl_catalogue(l.code, ch));
                 }
             }

@@ -663,7 +663,7 @@ In your hands.</source>
     <message id="scan.title.progress">
         <source>%1 of 6 sides read</source>
         <extracomment>Headline. %1 is 0 to 5.</extracomment>
-        <translation>تمت قراءة %1 من 6 جوانب</translation>
+        <translation>تمت قراءة %1 من ٦ جوانب</translation>
     </message>
     <message id="scan.title.complete">
         <source>Cube read</source>
@@ -875,7 +875,7 @@ In your hands.</source>
     <message id="scan.a11y.sideRead">
         <source>Side %1 of 6 read.</source>
         <extracomment>Announced by a screen reader each time a side is read.</extracomment>
-        <translation>تمت قراءة الجانب %1 من 6.</translation>
+        <translation>تمت قراءة الجانب %1 من ٦.</translation>
     </message>
     <message id="scan.a11y.chipEmpty">
         <source>Side %1: not read yet</source>
@@ -935,7 +935,7 @@ In your hands.</source>
     <message id="review.status.empty">
         <source>48 stickers to fill in</source>
         <extracomment>Status line before anything is entered. A cube has 54 stickers; the six centres are already set.</extracomment>
-        <translation>يلزم ملء 48 ملصقًا</translation>
+        <translation>يلزم ملء ٤٨ ملصقًا</translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>
@@ -1289,17 +1289,17 @@ In your hands.</source>
     <message id="solve.method.beginner.note">
         <source>Layer by layer, in steps you can learn. About 100 turns.</source>
         <extracomment>One line under the three method buttons, shown while Beginner is chosen. 'About 100' is an average; keep it approximate.</extracomment>
-        <translation>طبقة بعد طبقة، في خطوات يمكن تعلّمها. نحو 100 دورة.</translation>
+        <translation>طبقة بعد طبقة، في خطوات يمكن تعلّمها. نحو ١٠٠ دورة.</translation>
     </message>
     <message id="solve.method.intermediate.note">
         <source>The way fast solvers do it, in four stages. About 50 turns.</source>
         <extracomment>One line under the three method buttons, shown while Intermediate is chosen. 'About 50' is an average; keep it approximate.</extracomment>
-        <translation>الطريقة التي يتبعها السريعون، في أربع مراحل. نحو 50 دورة.</translation>
+        <translation>الطريقة التي يتبعها السريعون، في أربع مراحل. نحو ٥٠ دورة.</translation>
     </message>
     <message id="solve.method.advanced.note">
         <source>The fewest turns there are, with no stages to learn. About 20 turns.</source>
         <extracomment>One line under the three method buttons, shown while Advanced is chosen. 'About 20' is an average; keep it approximate.</extracomment>
-        <translation>أقل عدد ممكن من الدورات، دون مراحل لتعلّمها. نحو 20 دورة.</translation>
+        <translation>أقل عدد ممكن من الدورات، دون مراحل لتعلّمها. نحو ٢٠ دورة.</translation>
     </message>
     <message id="complete.eyebrow">
         <source>Solve complete</source>

@@ -332,8 +332,8 @@ TEST_CASE("a draft language shows its translation through the manager",
         bool rtl;
     };
     const Draft drafts[] = {
-        {"ja", 0x3000, 0xFFFF, false},   {"zh-CN", 0x3000, 0xFFFF, false},
-        {"he", 0x0590, 0x05FF, true},    {"yi", 0x0590, 0x05FF, true},
+        {"ja", 0x3000, 0xFFFF, false}, {"zh-CN", 0x3000, 0xFFFF, false},
+        {"he", 0x0590, 0x05FF, true},  {"yi", 0x0590, 0x05FF, true},
         {"ar", 0x0600, 0x06FF, true},
     };
     for (const Draft& draft : drafts) {

@@ -482,11 +482,13 @@ What an app in the suite has, so a new one starts from it:
 
 - Whether ICL Forge's published design canvas still opens.
 - Which of the machine translations have had a fluent reader. ICL Forge and
-  Countdown Solver say in the app that theirs have not. Cubeulator's Japanese
-  and Simplified Chinese (2026-10-14) are drafts that no one has read; they
-  say so in `languages.json` (`draft`) and `i18n.md`, and not yet in the app.
+  Countdown Solver say in the app that theirs have not. Cubeulator's Japanese,
+  Simplified Chinese, Hebrew, Arabic and Yiddish (2026-10-14) are drafts that
+  no one has read; they say so in `languages.json` (`draft`) and `i18n.md`, and
+  not yet in the app.
 - When the suite wants one component kit (D8: not before V1.0 ships).
-- Who reads the Yiddish, Hebrew and Arabic drafts before release.
+- Who reads the Yiddish, Hebrew and Arabic drafts before release (they are
+  written, 2026-10-14; `i18n.md` lists the words to check first).
 - Whether Qt draws weight 800 from Noto's variable axis on all five
   platforms (E2a checks; F4).
 - How the publisher is written in the other apps. Cubeulator's is decided
