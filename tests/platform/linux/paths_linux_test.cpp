@@ -74,3 +74,29 @@ TEST_CASE("paths::current falls back to an empty path when neither XDG nor HOME 
     REQUIRE(paths.data_dir.empty());
     REQUIRE(paths.cache_dir.empty());
 }
+
+TEST_CASE("paths::current puts the diagnostics under XDG_STATE_HOME when set",
+          "[integration][platform][linux]") {
+    ScopedEnvVar state_home("XDG_STATE_HOME", "/tmp/cubeulator-test-state");
+
+    const auto paths = cube::platform::paths::current();
+    CHECK(paths.diagnostics_dir == "/tmp/cubeulator-test-state/cubeulator/diagnostics");
+}
+
+TEST_CASE("paths::current puts the diagnostics under ~/.local/state otherwise",
+          "[integration][platform][linux]") {
+    ScopedEnvVar state_home("XDG_STATE_HOME", nullptr);
+    ScopedEnvVar home("HOME", "/tmp/cubeulator-test-home");
+
+    const auto paths = cube::platform::paths::current();
+    CHECK(paths.diagnostics_dir == "/tmp/cubeulator-test-home/.local/state/cubeulator/diagnostics");
+}
+
+TEST_CASE("paths::current has no diagnostics directory when neither XDG nor HOME is set",
+          "[integration][platform][linux]") {
+    ScopedEnvVar state_home("XDG_STATE_HOME", nullptr);
+    ScopedEnvVar home("HOME", nullptr);
+
+    const auto paths = cube::platform::paths::current();
+    CHECK(paths.diagnostics_dir.empty());
+}

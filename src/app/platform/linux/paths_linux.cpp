@@ -18,6 +18,14 @@ AppPaths current() {
     } else if (const char* home = std::getenv("HOME")) {
         paths.cache_dir = std::filesystem::path(home) / ".cache" / "cubeulator";
     }
+    // The XDG state directory is where a program's logs belong.
+    if (const char* xdg_state = std::getenv("XDG_STATE_HOME");
+        xdg_state != nullptr && *xdg_state != '\0') {
+        paths.diagnostics_dir = std::filesystem::path(xdg_state) / "cubeulator" / "diagnostics";
+    } else if (const char* home = std::getenv("HOME")) {
+        paths.diagnostics_dir =
+            std::filesystem::path(home) / ".local" / "state" / "cubeulator" / "diagnostics";
+    }
     return paths;
 }
 

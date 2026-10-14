@@ -72,6 +72,10 @@ target_sources(cube_lib
         src/vision/direct_scan.cpp
         src/vision/corner_view.cpp
         src/vision/held_cube.cpp
+        src/diagnostics/json.cpp
+        src/diagnostics/describe.cpp
+        src/diagnostics/record.cpp
+        src/diagnostics/jsonl_file.cpp
         src/profile/recorder.cpp
         src/i18n/i18n.cpp)
 

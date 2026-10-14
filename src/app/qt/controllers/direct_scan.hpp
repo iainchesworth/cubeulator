@@ -1,5 +1,8 @@
 #pragma once
 
+#include "interfaces/camera.hpp"
+
+#include <cube/diagnostics/json.hpp>
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/direct_scan.hpp>
@@ -16,8 +19,12 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <string>
+#include <string_view>
 
 namespace cube::app {
+
+class Diagnostics;
 
 // The scan screen's controller: camera frames in, the cube out.
 //
@@ -144,6 +151,15 @@ public:
     // The most recent camera frame (BGR). Safe from any thread.
     [[nodiscard]] cv::Mat latestFrame() const;
 
+    // The developer diagnostics channel (docs/diagnostics.md), or none. While
+    // it is on, each new evaluation of the scan, and what the camera did with
+    // the photometry lock, are written to it; while it is off nothing here
+    // does any more than test a pointer and a bool.
+    void setDiagnostics(Diagnostics* diagnostics) noexcept { diagnostics_ = diagnostics; }
+    // Everything this controller knows, for a snapshot record: the scan as it
+    // stands (SideScan::diagnose), the cube it made, the camera and its lock.
+    [[nodiscard]] cube::diagnostics::Json diagnosticState() const;
+
     // Feeds one frame through the reader. poll() calls this for every camera
     // frame; it is public so the scan logic can be driven without a camera.
     // `t_ms` is when the frame was captured, kept with a recorded frame.
@@ -179,6 +195,12 @@ private:
     void record(const cv::Mat& bgr, std::int64_t t_ms);
     void finishRecording();
     void openCamera(const QString& deviceId);
+    // Evaluates the scan as scanned() does, and - the channel being on - writes
+    // what the evaluation did, once for each distinct outcome.
+    [[nodiscard]] cube::Result<cube::vision::ScannedCube> evaluateScan(std::string_view trigger);
+    // One `camera` record: `event`, the device, the frame size, the lock.
+    void noteCamera(std::string_view event) const;
+    [[nodiscard]] bool diagnosing() const noexcept;
 
     QTimer poll_timer_;
     QFutureWatcher<cube::Result<void>> start_watcher_;
@@ -210,6 +232,16 @@ private:
     cube::vision::recording::AsyncRecorder recorder_;
     // A scan whose folder could not be created is not retried frame by frame.
     bool recording_refused_ = false;
+
+    Diagnostics* diagnostics_ = nullptr;
+    // The device the camera was last opened on, and what its lock last
+    // reported, kept so that a snapshot can say them whenever it is asked.
+    QString device_id_;
+    std::optional<cube::platform::camera::PhotometryLockReport> lock_report_;
+    // What the last written `scan` record said, and how many evaluations
+    // since agreed with it: a scan that has not changed is not written again.
+    std::string last_scan_digest_;
+    int scans_unchanged_ = 0;
 };
 
 }  // namespace cube::app

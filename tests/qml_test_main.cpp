@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QGuiApplication>
 #include <QQmlEngine>
+#include <QTemporaryDir>
 #include <QtGlobal>
 
 namespace {
@@ -36,6 +37,13 @@ int main(int argc, char* argv[]) {
     // tests away from the store the real app writes.
     QCoreApplication::setOrganizationName("Cubeulator");
     QCoreApplication::setApplicationName("Cubeulator-qml-tests");
+    // The history of solves is a file in the app's own data folder, which the
+    // controllers open when they are made and a solve stepped through writes.
+    // A directory of this process's own, so that it is not a person's.
+    QTemporaryDir data_dir;
+    if (!qEnvironmentVariableIsSet("CUBEULATOR_DATA_DIR")) {
+        qputenv("CUBEULATOR_DATA_DIR", data_dir.path().toLocal8Bit());
+    }
 
     QGuiApplication app(argc, argv);
 

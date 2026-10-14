@@ -22,6 +22,7 @@
 #include <QtTest/QTest>
 
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 
 namespace cube::systest {
@@ -109,7 +110,8 @@ App::~App() {
 }
 
 void App::boot() {
-    runtime_ = std::make_unique<cube::app::AppRuntime>();
+    runtime_ = std::make_unique<cube::app::AppRuntime>(
+        std::filesystem::path(diagnostics_dir_.filePath("diagnostics").toStdU16String()));
     // Main.qml says `visible: true`, so the window is shown by load() itself:
     // what it is to look like has to be said before then, the way the real app
     // hands the engine the position it was last at (main.cpp).
@@ -221,6 +223,10 @@ void App::reset(Start start, Scene3D scene) {
 
     reset_language();
     mark("language");
+    // Nothing kept, and keeping: the history is a file in the process's data
+    // folder, which every case shares.
+    runtime_->history().clear();
+    runtime_->history().setKeep(true);
     settings_state_->setProperty("themeMode", "light");
     settings_state_->setProperty("shaderStyleIndex", 0);
     // Still, not spinning: a spinning cube is a scene that changes every
@@ -229,6 +235,10 @@ void App::reset(Start start, Scene3D scene) {
     settings_state_->setProperty("cubeAutoRotate", false);
     settings_state_->setProperty("rotateSpeedIndex", 1);
     settings_state_->setProperty("statsForNerds", false);
+    // The diagnostics channel is off at every start; a case that pressed its
+    // switches leaves it as it found it.
+    runtime_->controllers().diagnostics.setFramesEnabled(false);
+    runtime_->controllers().diagnostics.setEnabled(false);
     mark("settings");
     // Putting the method back solves on from the cube in hand; let that land
     // here, not part-way through the next case.

@@ -118,6 +118,38 @@ void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& d
     }
 }
 
+// The six centre colours measured on a real scan by tungsten light
+// (live-demo-p6-retry, 2026-08-07). Red and orange sit three degrees of hue
+// apart there and differ mostly in lightness - not enough to say which is
+// which, and colour naming alone gets them backwards. Only one of the two
+// namings is a cube that can exist.
+Drawing tungsten_lamp() {
+    return Drawing{
+        .paint =
+            [](Color colour) {
+                const auto measured = [colour] -> cv::Vec3f {
+                    switch (colour) {
+                        case Color::White:
+                            return {46.2F, 16.6F, 5.9F};
+                        case Color::Yellow:
+                            return {49.8F, 19.9F, 53.7F};
+                        case Color::Red:
+                            return {25.6F, 48.1F, 36.3F};
+                        case Color::Orange:
+                            return {34.3F, 53.5F, 45.4F};
+                        case Color::Green:
+                            return {17.4F, -12.5F, 15.0F};
+                        case Color::Blue:
+                            return {11.3F, 12.1F, -25.8F};
+                    }
+                    return {};
+                }();
+                const cv::Vec3b bgr = cube::vision::lab_to_bgr(measured);
+                return cv::Scalar(bgr(0), bgr(1), bgr(2));
+            },
+    };
+}
+
 }  // namespace
 
 TEST_CASE("a side held square to the camera is read row-major as the camera sees it",
@@ -185,8 +217,8 @@ TEST_CASE("a logo on a white centre does not tint it by lamplight", "[direct-sca
     const cv::Vec3f centre = side.lab.at(4);
     const cv::Vec3f beside = side.lab.at(8);
     CHECK(cv::norm(centre - beside) < 3.0);
-    CHECK(std::abs(centre(1) - beside(1)) < 2.0);
-    CHECK(std::abs(centre(2) - beside(2)) < 2.0);
+    CHECK(std::abs(centre(1) - beside(1)) < 2.0F);
+    CHECK(std::abs(centre(2) - beside(2)) < 2.0F);
 }
 
 TEST_CASE("a logo on a centre does not stop six sides making the cube", "[direct-scan]") {
@@ -343,35 +375,7 @@ TEST_CASE("a side of one solid colour does not hold up the read", "[direct-scan]
 
 TEST_CASE("two colours that trade names under a colour cast are told apart by the cube itself",
           "[direct-scan]") {
-    // The six centre colours measured on a real scan by tungsten light
-    // (live-demo-p6-retry, 2026-08-07). Red and orange sit three degrees of
-    // hue apart there and differ mostly in lightness - not enough to say
-    // which is which, and colour naming alone gets them backwards. Only one
-    // of the two namings is a cube that can exist.
-    const Drawing lamp_lit{
-        .paint =
-            [](Color colour) {
-                const auto measured = [colour] -> cv::Vec3f {
-                    switch (colour) {
-                        case Color::White:
-                            return {46.2F, 16.6F, 5.9F};
-                        case Color::Yellow:
-                            return {49.8F, 19.9F, 53.7F};
-                        case Color::Red:
-                            return {25.6F, 48.1F, 36.3F};
-                        case Color::Orange:
-                            return {34.3F, 53.5F, 45.4F};
-                        case Color::Green:
-                            return {17.4F, -12.5F, 15.0F};
-                        case Color::Blue:
-                            return {11.3F, 12.1F, -25.8F};
-                    }
-                    return {};
-                }();
-                const cv::Vec3b bgr = cube::vision::lab_to_bgr(measured);
-                return cv::Scalar(bgr(0), bgr(1), bgr(2));
-            },
-    };
+    const Drawing lamp_lit = tungsten_lamp();
 
     for (const unsigned seed : {21U, 22U, 23U}) {
         const Cube cube = cube::test::scramble(seed);
@@ -750,4 +754,170 @@ TEST_CASE("a frame is prepared once, at the working width, for every reader", "[
             CHECK(shared.lab.at(i) == direct.lab.at(i));
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// SideScan::diagnose: the evaluation scanned() makes, with its working kept
+// (docs/diagnostics.md).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[direct-scan]") {
+    const Cube cube = cube::test::scramble(3);
+    SideScan scan;
+    show_cube(scan, cube, 3);
+
+    const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+    const auto scanned = scan.scanned();
+    REQUIRE(scanned.has_value());
+    REQUIRE(diagnosis.result.has_value());
+    CHECK(diagnosis.result->cube == scanned->cube);
+    CHECK(diagnosis.result->cube == cube);
+
+    // The six sides, each with the reads that made it.
+    CHECK(diagnosis.captured >= 6);
+    REQUIRE(diagnosis.sides.size() == 6);
+    for (const auto& side : diagnosis.sides) {
+        CHECK(side.reads >= SideScan::kMinReads);
+        CHECK(side.roll >= 0);
+        CHECK(side.roll < 4);
+    }
+
+    // How the colours were named, and how the cube was put together.
+    REQUIRE(diagnosis.naming.has_value());
+    CHECK(diagnosis.naming->iterations >= 1);
+    REQUIRE(diagnosis.assembly.has_value());
+    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::single_candidate);
+    CHECK(diagnosis.assembly->candidates == 1);
+    CHECK_FALSE(diagnosis.assembly->error.has_value());
+
+    // The same colour naming the assembly was given.
+    std::array<cube::vision::CapturedFace, 6> faces{};
+    for (std::size_t i = 0; i < 6; ++i) {
+        faces.at(i).lab = diagnosis.sides.at(i).lab;
+    }
+    const auto named = cube::vision::resolve_colors(faces);
+    REQUIRE(named.has_value());
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            CHECK(diagnosis.naming->faces.at(side).at(cell).color ==
+                  named->at(side).at(cell).color);
+        }
+    }
+
+    // What SideScan::sides shows the person is these sides, turned to how
+    // they were last held.
+    const auto shown = scan.sides();
+    REQUIRE(shown.size() == 6);
+    // Same reads, same count, in the order they were first shown.
+    for (std::size_t i = 0; i < shown.size(); ++i) {
+        std::size_t reads_here = 0;
+        for (const auto& side : diagnosis.sides) {
+            if (side.reads == shown.at(i).reads) {
+                ++reads_here;
+            }
+        }
+        CHECK(reads_here >= 1);
+    }
+}
+
+TEST_CASE("diagnose lists the sides captured so far when there are fewer than six",
+          "[direct-scan]") {
+    const Cube cube = cube::test::scramble(4);
+    SideScan scan;
+    show(scan, outside_view(cube, Face::U), Pose{.centre = {320.0F, 180.0F}});
+    scan.add(std::nullopt);
+    show(scan, outside_view(cube, Face::F), Pose{.centre = {320.0F, 180.0F}});
+    scan.add(std::nullopt);
+
+    const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+    CHECK(diagnosis.captured == 2);
+    CHECK(diagnosis.sides.size() == 2);
+    CHECK_FALSE(diagnosis.naming.has_value());
+    CHECK_FALSE(diagnosis.assembly.has_value());
+    REQUIRE_FALSE(diagnosis.result.has_value());
+    CHECK(diagnosis.result.error() == CubeError::face_capture_incomplete);
+}
+
+TEST_CASE("diagnose names the pair of colours that were exchanged to make the cube",
+          "[direct-scan]") {
+    const Drawing lamp_lit = tungsten_lamp();
+    for (const unsigned seed : {21U, 22U, 23U}) {
+        const Cube cube = cube::test::scramble(seed);
+        SideScan scan;
+        show_cube(scan, cube, seed, lamp_lit);
+
+        const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+        REQUIRE(diagnosis.result.has_value());
+        CHECK(diagnosis.result->cube == cube);
+
+        // Naming by colour made no cube; trading two names did.
+        REQUIRE(diagnosis.assembly.has_value());
+        const cube::vision::AssemblyTrace& trace = *diagnosis.assembly;
+        CHECK(trace.path == cube::vision::AssemblyPath::names_exchanged);
+        CHECK(trace.candidates == 0);
+        REQUIRE(trace.direct_error.has_value());
+        CHECK(*trace.direct_error == CubeError::invalid_cube_state);
+        REQUIRE(trace.exchange.has_value());
+
+        // The two colours that look alike by tungsten light: red and orange.
+        const cube::model::FacetColor first = trace.exchange->first_name;
+        const cube::model::FacetColor second = trace.exchange->second_name;
+        const bool red_and_orange =
+            (first == cube::model::FacetColor::red && second == cube::model::FacetColor::orange) ||
+            (first == cube::model::FacetColor::orange && second == cube::model::FacetColor::red);
+        CHECK(red_and_orange);
+        CHECK(trace.exchange->first_side != trace.exchange->second_side);
+        CHECK(trace.exchange->first_side < 6);
+        CHECK(trace.exchange->second_side < 6);
+        CHECK(trace.exchange->centre_distance >= 0.0F);
+    }
+}
+
+TEST_CASE("diagnose reports the candidates when the sides make the cube two ways",
+          "[direct-scan]") {
+    // The scramble of "sides that put together two ways are reported".
+    const Cube cube = after("R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2");
+    REQUIRE_FALSE(cube::test::sides_make_one_cube(cube));
+
+    SideScan scan;
+    show_cube(scan, cube, 14);
+
+    const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+    REQUIRE_FALSE(diagnosis.result.has_value());
+    CHECK(diagnosis.result.error() == CubeError::ambiguous_scan);
+    REQUIRE(diagnosis.assembly.has_value());
+    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::ambiguous);
+    CHECK(diagnosis.assembly->candidates >= 2);
+    CHECK(diagnosis.assembly->corner_fits.size() == diagnosis.assembly->candidates);
+    CHECK_FALSE(diagnosis.assembly->chosen.has_value());
+    REQUIRE(diagnosis.assembly->error.has_value());
+    CHECK(*diagnosis.assembly->error == CubeError::ambiguous_scan);
+}
+
+TEST_CASE("a scan that does not make a cube is reported with the cause", "[direct-scan]") {
+    // A fixed scramble, so that the sides stay distinct from one another
+    // once the colours are traded on every platform.
+    const Cube cube = after("R2 D' B2 U2 L2 F2 D' R2 U R2 B' F L' D2 R F' L B' D U2");
+    REQUIRE(cube::test::sides_make_one_cube(cube));
+    SideScan scan;
+    show_cube(scan, cube, 9);
+    REQUIRE(scan.diagnose().result.has_value());
+
+    // The same cube lit so that orange reads as red: two of the six centres
+    // are one colour, which no cube has, and the naming refuses it.
+    SideScan broken;
+    const Drawing both_red{
+        .paint =
+            [](Color colour) {
+                return colour == Color::Orange ? cube::test::paint(Color::Red)
+                                               : cube::test::paint(colour);
+            },
+    };
+    show_cube(broken, cube, 9, both_red);
+    const cube::vision::ScanDiagnosis diagnosis = broken.diagnose();
+    REQUIRE_FALSE(diagnosis.result.has_value());
+    CHECK(diagnosis.result.error() == CubeError::no_valid_cube_detected);
+    CHECK_FALSE(diagnosis.naming.has_value());
+    CHECK_FALSE(diagnosis.assembly.has_value());
+    CHECK(diagnosis.captured >= 6);
 }

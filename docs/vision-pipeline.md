@@ -224,6 +224,27 @@ watching.
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
 
+## Seeing what the app is reading, live
+
+A scan that misnames a colour, a cube that will not assemble: the running app
+can be asked what it is reading and deciding without being restarted. The
+[live diagnostics channel](diagnostics.md) writes, as the scan happens, each
+captured side's fused nine Lab values with its read count and roll; the six
+cluster seeds and means, every sticker's cluster and assignment confidence, the
+palette matching, whether the hue names overrode it or fell back on a
+collision, and `classify_lab`'s hue and chroma for each mean; which path of the
+assembly step was taken (one candidate, several and how the corner reads
+chose, a direct failure, or the closest-centre name exchange and which pair);
+the camera's photometry lock as the driver accepted it; and the solve and the
+held-cube verdicts. It is off by default, switched live from Settings or with
+`Ctrl+Shift+D`, and costs a boolean test while off.
+
+The reading code is not logged into. `resolve_colors_explained` and
+`SideScan::diagnose` return the working the algorithms already hold as plain
+structs (`ColorResolution`, `AssemblyTrace`, `ScanDiagnosis`); `resolve_colors`
+and `scanned()` are those with the rest dropped, so the diagnostic and the live
+path cannot disagree.
+
 ## Scoring and replay
 
 `cube_scan` (`tools/scan`) replays recorded sessions through the same reader:
