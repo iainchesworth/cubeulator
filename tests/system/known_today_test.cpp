@@ -6,9 +6,10 @@
 // docs/app-experience-plan.md it comes from. None of them is fixed by this
 // workstream: the experience lane owns them, each in its own phase.
 //
-// Two cases that used to be here are gone: the solve lane's Finish step now
+// Three cases that used to be here are gone: the solve lane's Finish step now
 // reaches the complete screen, and its Rescan is the way out of the solve
-// screen. Both are journey steps now (journey_test.cpp).
+// screen (both journey steps, journey_test.cpp), and the History button on Home
+// opens the list of solves kept (history_test.cpp).
 //
 // Tagged [known-today] so `cube_system_tests "[known-today]"` lists them.
 
@@ -27,17 +28,15 @@ using cube::systest::App;
 TEST_CASE("known today: buttons that do nothing", "[system][known-today]") {
     // EXPECTED TO CHANGE - plan, Journey: "'Solve history', 'Review
     // solution' and the 'English' button do nothing or the wrong thing".
-    // Owner: experience lane, E1 decides what stays (decision 6).
+    // Solve history is built (history_test.cpp); Review the solution is the
+    // solution-review branch's. Owner: experience lane, E1 decides what stays
+    // (decision 6).
     const cube::systest::Layout layout =
         GENERATE(cube::systest::Layout::wide, cube::systest::Layout::narrow);
     INFO("in the " << cube::systest::to_string(layout) << " layout");
     App& app = App::fresh();
     app.resize(layout == cube::systest::Layout::wide ? cube::systest::kDesktop
                                                      : cube::systest::kPhone);
-
-    app.click("launch.solveHistory");
-    app.pump(200);
-    CHECK(app.screen() == "launch");
 
     // "English" is a language picker with one language; it opens settings.
     app.click("launch.language");

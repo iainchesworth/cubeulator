@@ -27,6 +27,7 @@ const std::vector<ScreenDef>& screen_inventory() {
         {"scan", "DirectScanScreen.qml", ""},
         {"solve", "SolveScreen.qml", ""},
         {"settings", "SettingsScreen.qml", ""},
+        {"history", "HistoryScreen.qml", ""},
         {"complete", "CompleteScreen.qml", ""},
     };
     return screens;
@@ -46,6 +47,21 @@ const std::map<QString, QString>& unpressable_controls() {
     static const std::map<QString, QString> controls = {};
     return controls;
 }
+
+namespace {
+
+// Some item of this name is on show (a name can match in both layouts, one
+// hidden). Not App::find, which fails the test it is called from when two are.
+[[nodiscard]] bool on_show(App& a, const char* object_name) {
+    for (QQuickItem* item : a.find_all(object_name)) {
+        if (item->isVisible()) {
+            return true;
+        }
+    }
+    return false;
+}
+
+}  // namespace
 
 const std::vector<StateDef>& state_inventory() {
     static const std::vector<StateDef> states = {
@@ -151,6 +167,23 @@ const std::vector<StateDef>& state_inventory() {
                     a.find_text(qtTrId("settings.dev.restart")) != nullptr;
          },
          ""},
+        {"settings", "confirm-clear",
+         [](App& a) { return a.screen() == "settings" && on_show(a, "settings.clearDialog"); }, ""},
+
+        {"history", "empty",
+         [](App& a) {
+             auto& history = a.runtime().history();
+             return a.screen() == "history" && history.count() == 0 && history.keep();
+         },
+         ""},
+        {"history", "list",
+         [](App& a) { return a.screen() == "history" && a.runtime().history().count() > 0; }, ""},
+        {"history", "off",
+         [](App& a) { return a.screen() == "history" && !a.runtime().history().keep(); }, ""},
+        {"history", "confirm-delete",
+         [](App& a) { return a.screen() == "history" && on_show(a, "history.deleteDialog"); }, ""},
+        {"history", "confirm-clear",
+         [](App& a) { return a.screen() == "history" && on_show(a, "history.clearDialog"); }, ""},
 
         {"complete", "shown", [](App& a) { return a.screen() == "complete"; }, ""},
     };

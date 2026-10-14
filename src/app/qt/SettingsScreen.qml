@@ -16,6 +16,9 @@ Rectangle {
         color: Theme.accent
     }
 
+    // settings.confirm-clear: the same question History asks.
+    property bool confirmingClear: false
+
     // The theme choices by their key, so that each is a plain qsTrId() call
     // the extractor can see; SettingsState owns the keys, not the words.
     readonly property var themeLabels: ({
@@ -188,6 +191,34 @@ Rectangle {
                     else
                         LanguageManager.setLanguage(languages[index - 1].code);
                 }
+            }
+        }
+
+        // Solves kept on this device (history.md). Off stops adding; it does
+        // not delete - Clear history does, after asking.
+        Column {
+            width: parent.width
+            spacing: Theme.space2
+            SectionLabel { text: qsTrId("settings.section.history") }
+            Toggle {
+                objectName: "settings.keepHistory"
+                checked: SolveHistory.keep
+                label: qsTrId("settings.history.keep")
+                onToggled: SolveHistory.keep = !SolveHistory.keep
+            }
+            Text {
+                text: qsTrId("settings.history.note")
+                font.family: Theme.fontHeading; font.pixelSize: 12
+                color: Theme.inkMuted(0.6)
+                width: parent.width; wrapMode: Text.WordWrap
+            }
+            AppButton {
+                objectName: "settings.clearHistory"
+                variant: "secondary"
+                maxWidth: parent.width
+                text: qsTrId("history.clear")
+                enabled: SolveHistory.count > 0
+                onClicked: root.confirmingClear = true
             }
         }
 
@@ -372,6 +403,22 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    // settings.confirm-clear: over whichever layout is on show.
+    ConfirmDialog {
+        objectName: "settings.clearDialog"
+        open: root.confirmingClear
+        restoreFocusTo: root
+        title: qsTrId("history.clear.title")
+        body: qsTrId("history.clear.body", SolveHistory.count)
+        keepText: qsTrId("history.clear.keep")
+        confirmText: qsTrId("history.clear.confirm")
+        onKept: root.confirmingClear = false
+        onConfirmed: {
+            SolveHistory.clear();
+            root.confirmingClear = false;
         }
     }
 }

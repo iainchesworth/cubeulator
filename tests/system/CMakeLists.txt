@@ -30,6 +30,7 @@ add_executable(cube_system_tests
     render_test.cpp
     tour_test.cpp
     known_today_test.cpp
+    history_test.cpp
     progress_listener.cpp)
 
 target_include_directories(cube_system_tests PRIVATE

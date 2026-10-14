@@ -43,6 +43,7 @@ public:
     [[nodiscard]] DirectScan& directScan() noexcept { return controllers_.directScan; }
     [[nodiscard]] SolveController& solve() noexcept { return controllers_.solve; }
     [[nodiscard]] HeldCube& held() noexcept { return controllers_.held; }
+    [[nodiscard]] SolveHistory& history() noexcept { return controllers_.history; }
 
 private:
     // Declared after the controllers, and so destroyed before them: the

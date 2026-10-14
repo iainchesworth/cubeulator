@@ -3,6 +3,16 @@
 Lane: experience. New. In the first release by Iain's decision of
 2026-10-13; the "Solve history" button on Home did nothing before.
 
+**Status: built** (`HistoryScreen.qml`, `SolveHistory`). What is not yet:
+the **thumbnail has no marks** (the marks are the kit's, and the app has no
+kit yet); a **finished row has no chevron and no handler**, because
+`solution.overview` is not in the app (the solution-review branch), and an
+older unfinished row is the same, as below; and **`solve.hold-resume`** is
+not there either, so carrying on goes straight to `solve.move` on the turn
+that was reached, with the camera off (nothing was scanned this session to
+match it against). Each of those is one line in `HistoryScreen.qml` when its
+screen lands.
+
 The cubes solved on this device, newest first, and a way back into an
 unfinished one.
 
@@ -13,11 +23,20 @@ Entered from: **History** on Home.
 For each solve: when it started, the cube as scanned (54 colours), the
 turn reached, the number of turns, and the time taken. The solution is
 not stored; it is worked out again from the cube, which gives the same
-answer.
+answer. So that it does, the **method** it was solved with is kept too, and
+when the method was changed part-way (which solves on from the cube in
+hand), the cube that solution starts from; neither is more than a number
+and 54 colours.
 
 - **No picture is ever kept.** That is why the privacy statement can say
   so.
-- Kept in the app's own data folder on this device. Never sent anywhere.
+- Kept in the app's own data folder on this device (`solve-history.json`;
+  `cube::platform::paths`, with `CUBEULATOR_DATA_DIR` as the tests' way of
+  keeping out of a real one). Never sent anywhere. A file that cannot be
+  read is set aside (`.unreadable`) and the history starts empty. Where a
+  platform has not said where its data folder is (Android and iOS today) Qt's
+  own application-data location is used; in the browser build the folder is
+  the page's in-memory file system, so the history lasts for the session.
 - The newest 100 are kept; older ones drop off the end.
 - A solve is added when its first turn is advanced, marked unfinished,
   and marked finished when Complete opens. Only the newest unfinished
@@ -50,9 +69,11 @@ itself, and a 56 x 56 delete button at its trailing end.
 | Delete dialog | dialog | `history.delete.title`, `history.delete.keep`, `history.delete` | `history.deleteDialog` |
 | Clear dialog | dialog | `history.clear.title`, `history.clear.body`, `history.clear.keep`, `history.clear.confirm` | `history.clearDialog` |
 
-A row's accessible name is the date followed by the summary. The delete
-button's is "Delete" followed by the date, so that a list of them can be
-told apart.
+A row's accessible name is the date followed by the summary
+(`history.a11y.row`). The delete button's is "Delete" followed by the date
+(`history.a11y.delete`), so that a list of them can be told apart. Deleting
+one is announced (`history.a11y.deleted`), and so is clearing
+(`history.a11y.cleared`).
 
 The thumbnail is nine stickers with marks. It is a way to recognise a
 scramble at a glance, not information.
@@ -75,6 +96,9 @@ One or more solves.
   (`history.item.unfinished`). Tapping it: to `solve.hold-resume`.
 - **Delete** on a row: to `history.confirm-delete`.
 - **Clear history**: to `history.confirm-clear`.
+- Only the newest unfinished row can be carried on. An older unfinished row
+  is listed and can be deleted; it opens `solution.overview` as a finished
+  one does, once that screen exists.
 
 ### `history.off`
 

@@ -379,7 +379,8 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
 
     const std::vector<QSize> sizes = {{375, 667}, {390, 844}, {719, 640},
                                       {720, 640}, {900, 640}, {1280, 800}};
-    const char* screens[] = {"launch", "permission", "scan", "solve", "settings", "complete"};
+    const char* screens[] = {"launch",   "permission", "scan",    "solve",
+                             "settings", "history",    "complete"};
 
     std::set<std::string> overflowing;
     std::set<std::string> on_show;

@@ -167,6 +167,23 @@ void tour_layout(const std::string& layout) {
         app.go("launch");
         REQUIRE(app.wait_for([&]() { return !scan.running() && !scan.starting(); }));
 
+        // The history: the solve just finished, and another left part-way
+        // (scanned, solved on its worker, three turns taken); then nothing.
+        solve.solveCube(cube::systest::scramble(5));
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        for (int i = 0; i < 3; ++i) {
+            solve.nextMove();
+        }
+        app.click("launch.solveHistory");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "history"; }));
+        app.pump(120);
+        tour.shoot("history");
+        app.runtime().history().clear();
+        app.pump(120);
+        tour.shoot("history-empty");
+        app.click("history.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
+
         for (const QString& path : tour.written) {
             INFO("picture " << path.toStdString());
             REQUIRE(QFileInfo::exists(path));
@@ -184,9 +201,9 @@ void tour_layout(const std::string& layout) {
         }
     }
 
-    // Twelve pictures a variant, two variants a layout.
+    // Fourteen pictures a variant, two variants a layout.
     CHECK(variants == 2);
-    CHECK(all.size() == 12 * variants);
+    CHECK(all.size() == 14 * variants);
 }
 
 }  // namespace
