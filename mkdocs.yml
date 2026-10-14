@@ -71,3 +71,4 @@ nav:
       - Packaging the desktop app: packaging.md
       - Cutting a release: releasing.md
       - Branch protection: branch-protection.md
+      - Investigations: investigations/README.md
