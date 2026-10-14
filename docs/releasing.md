@@ -48,11 +48,18 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop
 | `SHA512SUMS` | one line per package and for the SBOM |
 | `SHA512SUMS.asc`, `<file>.asc` | detached GPG signatures, from the project key, on the manifest, every package and the SBOM |
 | `cubeulator-signing-key.asc` | the public key, so that a download can be verified offline |
-| `Cubeulator-<version>.spdx.json` | an SPDX SBOM of the packages, checksummed and signed like them |
+| `Cubeulator-<version>.spdx.json` | an SPDX 2.3 SBOM: for each package, every component that ships in it, with version and licence, from the build's own third-party inventory; checksummed and signed like the packages |
 
 Every package also carries a **build-provenance attestation** (Sigstore, from
 the workflow's own identity) and an SBOM attestation, held by GitHub, not as
-files. [Verifying a download](#verifying-a-download) says how to check each.
+files.
+
+The SBOM is made by `tools/release/make_sbom.py` from the
+`third-party-notices.json` each build writes (the same inventory behind
+`THIRD-PARTY-NOTICES.txt`; see [Licensing](licensing.md)), not by scanning the
+installers, which would list an installer and nothing in it. It refuses an
+inventory with anything unresolved and a package whose platform has no
+inventory. [Verifying a download](#verifying-a-download) says how to check each.
 
 **The packages are not OS code-signed** (no Authenticode certificate, no Apple
 Developer ID). The notes say so and say what a person will see: SmartScreen on

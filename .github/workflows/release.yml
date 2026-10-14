@@ -283,6 +283,16 @@ jobs:
         shell: bash
         run: packaging/check-package.sh .
 
+      # What the package holds, for the SBOM (tools/release/make_sbom.py): the
+      # build's own inventory of what it linked and deployed, which it refuses
+      # to package without resolving (docs/licensing.md).
+      - name: Keep the third-party inventory
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: notices-${{ matrix.artifact }}
+          path: build/${{ matrix.preset }}/third_party_notices/third-party-notices.json
+          if-no-files-found: error
+
       - name: Upload the package
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -346,15 +356,25 @@ jobs:
             exit 1
           fi
 
-      # The SBOM is made first, from the four packages alone, so that it is in
-      # the checksum manifest and under the same GPG signature as they are.
-      - name: Generate the SBOM (SPDX)
-        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      # The SBOM is made first, so that it is a line of the checksum manifest and
+      # under the same GPG signature as the packages are. It says what is
+      # INSIDE them, per platform, from the build's own inventory
+      # (tools/release/make_sbom.py), not what a scan of an installer sees.
+      - name: Download the third-party inventories
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          path: dist/files
-          format: spdx-json
-          output-file: dist/files/Cubeulator-${{ needs.verify.outputs.version }}.spdx.json
-          upload-artifact: false
+          pattern: notices-*
+          path: inventory
+
+      - name: Make the SBOM (SPDX)
+        shell: bash
+        run: |
+          python3 tools/release/make_sbom.py \
+            --version "$VERSION" --tag "$TAG" --repo "$REPO" --files dist/files \
+            --notices windows=inventory/notices-windows-x64/third-party-notices.json \
+            --notices macos=inventory/notices-macos-arm64/third-party-notices.json \
+            --notices linux=inventory/notices-linux-x64/third-party-notices.json \
+            --output "dist/files/Cubeulator-${VERSION}.spdx.json"
 
       # What a downloader checks against, whether or not the signing key exists.
       - name: Write SHA512SUMS

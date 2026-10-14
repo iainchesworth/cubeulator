@@ -18,6 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
 import check_release  # noqa: E402
+import make_sbom  # noqa: E402
 import prepare_release  # noqa: E402
 import render_release_notes as notes  # noqa: E402
 
@@ -307,6 +308,116 @@ class Prepare(unittest.TestCase):
         self.assertIsNotNone(prepare_release.project_prerelease(cmake))
         log = (prepare_release.ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
         self.assertEqual(changelog.validate(log), [])
+
+
+class Sbom(unittest.TestCase):
+    INVENTORY = {
+        "components": [
+            {"id": "vcpkg/opencv4", "name": "opencv4", "version": "4.12.0#5", "license": "Apache-2.0",
+             "distributedUnder": "Apache-2.0", "copyright": "", "homepage": "https://opencv.org/",
+             "kind": "vcpkg", "via": []},
+            {"id": "qt/qtbase", "name": "Qt Base", "version": "6.12.0",
+             "license": "LicenseRef-Qt-Commercial OR LGPL-3.0-only OR GPL-3.0-only",
+             "distributedUnder": "GPL-3.0-only", "copyright": "The Qt Company", "homepage": "",
+             "kind": "qt", "via": ["linked"]},
+            {"id": "design/font", "name": "A font", "version": "", "license": "see the font's own page",
+             "distributedUnder": "", "copyright": "", "homepage": "", "kind": "design", "via": []},
+        ],
+        "licenseTexts": {},
+        "unresolved": [],
+    }
+    NAMES = {
+        "windows": "Cubeulator-0.1.0-beta.1-windows-x64.exe",
+        "macos": "Cubeulator-0.1.0-beta.1-macos-arm64.dmg",
+        "deb": "Cubeulator-0.1.0-beta.1-linux-x64.deb",
+        "rpm": "Cubeulator-0.1.0-beta.1-linux-x64.rpm",
+    }
+
+    def files(self, *keys: str):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        out = []
+        for key in keys or self.NAMES:
+            path = Path(tmp.name) / self.NAMES[key]
+            path.write_bytes(b"bytes of " + key.encode())
+            out.append(path)
+        return out
+
+    def make(self, files=None, notices=None):
+        return make_sbom.build(
+            version="0.1.0-beta.1",
+            tag="v0.1.0-beta.1",
+            repo="owner/repo",
+            files=files if files is not None else self.files(),
+            notices=notices
+            if notices is not None
+            else {p: self.INVENTORY for p in ("windows", "macos", "linux")},
+            created=make_sbom.datetime(2026, 10, 14, tzinfo=make_sbom.timezone.utc),
+        )
+
+    def test_it_is_an_spdx_document_that_holds_together(self):
+        doc = self.make()
+        self.assertEqual(doc["spdxVersion"], "SPDX-2.3")
+        ids = [p["SPDXID"] for p in doc["packages"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        for rel in doc["relationships"]:
+            self.assertIn(rel["spdxElementId"], ids)
+            self.assertIn(rel["relatedSpdxElement"], ids)
+        for pid in ids:
+            self.assertRegex(pid, r"^SPDXRef-[A-Za-z0-9.\-]+$")
+
+    def test_each_file_is_described_and_holds_its_platforms_components(self):
+        doc = self.make()
+        self.assertEqual(len(doc["documentDescribes"]), 4)
+        for file_pkg in (p for p in doc["packages"] if "packageFileName" in p):
+            held = [r for r in doc["relationships"] if r["spdxElementId"] == file_pkg["SPDXID"]]
+            self.assertEqual(len(held), 3, file_pkg["name"])
+            self.assertEqual({r["relationshipType"] for r in held}, {"CONTAINS"})
+
+    def test_files_carry_their_hashes_and_where_they_are_downloaded_from(self):
+        import hashlib
+        doc = self.make()
+        pkg = next(p for p in doc["packages"] if p.get("packageFileName", "").endswith(".exe"))
+        sums = {c["algorithm"]: c["checksumValue"] for c in pkg["checksums"]}
+        self.assertEqual(sums["SHA512"], hashlib.sha512(b"bytes of windows").hexdigest())
+        self.assertEqual(sums["SHA256"], hashlib.sha256(b"bytes of windows").hexdigest())
+        self.assertEqual(
+            pkg["downloadLocation"],
+            "https://github.com/owner/repo/releases/download/v0.1.0-beta.1/" + self.NAMES["windows"],
+        )
+
+    def test_components_keep_their_version_and_licence(self):
+        doc = self.make()
+        cv = next(p for p in doc["packages"] if p["name"] == "opencv4" and p["SPDXID"].startswith("SPDXRef-linux-"))
+        self.assertEqual(cv["versionInfo"], "4.12.0#5")
+        self.assertEqual(cv["licenseDeclared"], "Apache-2.0")
+        qt = next(p for p in doc["packages"] if p["name"] == "Qt Base")
+        self.assertEqual(qt["licenseConcluded"], "GPL-3.0-only")
+
+    def test_a_licence_reference_is_defined_and_prose_is_not_pretended_to_be_spdx(self):
+        doc = self.make()
+        self.assertEqual(
+            [e["licenseId"] for e in doc["hasExtractedLicensingInfos"]], ["LicenseRef-Qt-Commercial"]
+        )
+        font = next(p for p in doc["packages"] if p["name"] == "A font")
+        self.assertEqual(font["licenseDeclared"], "NOASSERTION")
+        self.assertNotIn("versionInfo", font)
+
+    def test_an_unresolved_inventory_is_refused(self):
+        bad = dict(self.INVENTORY, unresolved=["Qt is not the Qt the notices were written for"])
+        with self.assertRaises(make_sbom.SbomError):
+            self.make(notices={"windows": bad, "macos": bad, "linux": bad})
+
+    def test_a_platform_with_no_inventory_is_refused_rather_than_left_thin(self):
+        with self.assertRaises(make_sbom.SbomError):
+            self.make(notices={"windows": self.INVENTORY, "linux": self.INVENTORY})
+
+    def test_files_that_are_not_packages_are_left_out(self):
+        files = self.files("windows")
+        extra = files[0].parent / "SHA512SUMS"
+        extra.write_text("x")
+        doc = self.make(files=files + [extra])
+        self.assertEqual(len(doc["documentDescribes"]), 1)
 
 
 class Check(unittest.TestCase):
