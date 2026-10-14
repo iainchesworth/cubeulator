@@ -414,6 +414,27 @@ float lightness_of(const cv::Vec3f& lab) {
     return lab(0);
 }
 
+// Each side's centre, read back as the colour of that face's centre. The
+// sides are shown in the order of kAllFaces, so side i is face i.
+void expect_centres_of(const SideScan& scan, const Cube& cube) {
+    REQUIRE(scan.sides().size() == 6);
+    for (std::size_t i = 0; i < 6; ++i) {
+        const Color centre = cube.face(kAllFaces.at(i)).at(4);
+        const cv::Vec3f& measured = scan.sides().at(i).lab.at(4);
+        Color nearest = Color::White;
+        float best = std::numeric_limits<float>::max();
+        for (const Color colour : kColours) {
+            const float gap =
+                static_cast<float>(cv::norm(measured - cube::test::warm_lamp_lab(colour)));
+            if (gap < best) {
+                best = gap;
+                nearest = colour;
+            }
+        }
+        CHECK(nearest == centre);
+    }
+}
+
 }  // namespace
 
 TEST_CASE("two sides that differ only in where red and orange sit are two sides", "[direct-scan]") {
@@ -501,6 +522,74 @@ TEST_CASE("a flood of lattices that are no side does not cost the side being hel
     CHECK(scan.sides().at(0).reads == 22);
 }
 
+TEST_CASE("a side that is wholly red and a side that is wholly orange are two sides",
+          "[direct-scan]") {
+    // The two closest colours of a cube, each filling a side - the shape of a
+    // cube solved on two sides and muddled between. Judged by colour_distance
+    // under 12 a solid red against a solid orange scores 9.5 a sticker, so
+    // the two were one side.
+    Lab9 red;
+    red.fill(kLampRed);
+    Lab9 orange;
+    orange.fill(kLampOrange);
+
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 3; ++round) {
+        hold_lab(scan, hand, red, 12);
+        hold_lab(scan, hand, orange, 12);
+    }
+    REQUIRE(scan.sides().size() == 2);
+    CHECK(lightness_of(scan.sides().at(0).lab.at(4)) ==
+          Catch::Approx(lightness_of(kLampRed)).margin(3.0));
+    CHECK(lightness_of(scan.sides().at(1).lab.at(4)) ==
+          Catch::Approx(lightness_of(kLampOrange)).margin(3.0));
+}
+
+TEST_CASE("solid red and solid orange sides stay two sides as the lamp closes the gap",
+          "[direct-scan]") {
+    // The centre is the side's identity down to the least two centres can be
+    // apart and still be two colours at all (kMinCentreSeedSeparationLab:
+    // closer than that, resolve_colors calls them one colour and refuses the
+    // scan). Orange is slid towards red along the line between them.
+    for (const float gap : {16.4F, 15.0F, 14.0F, 13.0F}) {
+        const float whole = static_cast<float>(cv::norm(kLampOrange - kLampRed));
+        const cv::Vec3f closer = kLampRed + ((kLampOrange - kLampRed) * (gap / whole));
+        Lab9 red;
+        red.fill(kLampRed);
+        Lab9 orange;
+        orange.fill(closer);
+
+        SideScan scan;
+        Hand hand{.glare_and_thumbs = false};
+        for (int round = 0; round < 3; ++round) {
+            hold_lab(scan, hand, red, 12);
+            hold_lab(scan, hand, orange, 12);
+        }
+        INFO("centres " << gap << " Lab apart");
+        CHECK(scan.sides().size() == 2);
+    }
+}
+
+TEST_CASE("a cube with a whole red side and a whole orange side is read as six sides",
+          "[direct-scan]") {
+    // Turning only the right and left leaves those two sides whole and
+    // stripes the four between them. Drawn through the reader in the colours
+    // of the warm lamp. A whole side and four striped ones put together more
+    // than one way, which is the scan's honest answer from flat views.
+    const Cube cube = after("R2 L");
+    REQUIRE(cube.face(Face::R) == Cube::solved().face(Face::R));
+    REQUIRE(cube.face(Face::L) == Cube::solved().face(Face::L));
+    REQUIRE_FALSE(cube.face(Face::F) == Cube::solved().face(Face::F));
+
+    SideScan scan;
+    show_cube(scan, cube, 5, kLamp);
+    expect_centres_of(scan, cube);
+    const auto flat = scan.cube();
+    REQUIRE_FALSE(flat.has_value());
+    CHECK(flat.error() == cube::CubeError::ambiguous_scan);
+}
+
 TEST_CASE("a cube whose red and orange sides are each the other's colours is read as six sides",
           "[direct-scan]") {
     // Half-turns of the top, bottom and front leave only red and orange on
@@ -512,24 +601,7 @@ TEST_CASE("a cube whose red and orange sides are each the other's colours is rea
     SideScan scan;
     show_cube(scan, cube, 3, kLamp);
 
-    REQUIRE(scan.sides().size() == 6);
-    // Shown in the order of kAllFaces, so side i is face i; each side's
-    // centre is the colour of its face's centre under the lamp.
-    for (std::size_t i = 0; i < 6; ++i) {
-        const Color centre = cube.face(kAllFaces.at(i)).at(4);
-        const cv::Vec3f& measured = scan.sides().at(i).lab.at(4);
-        Color nearest = Color::White;
-        float best = std::numeric_limits<float>::max();
-        for (const Color colour : kColours) {
-            const float gap =
-                static_cast<float>(cv::norm(measured - cube::test::warm_lamp_lab(colour)));
-            if (gap < best) {
-                best = gap;
-                nearest = colour;
-            }
-        }
-        CHECK(nearest == centre);
-    }
+    expect_centres_of(scan, cube);
 }
 
 TEST_CASE("a stray capture gives way to a side that is shown for longer", "[direct-scan]") {
