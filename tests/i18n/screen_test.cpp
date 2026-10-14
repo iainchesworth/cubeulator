@@ -277,11 +277,12 @@ TEST_CASE("a screen that is up changes language without being made again",
     }
     CHECK_FALSE(screen.texts().contains(english_title));
 
-    // German has no translation yet: the English shows, and the direction
-    // stays what it was.
+    // German is a draft: its own words show, and the direction stays what it
+    // was.
     in_language("de");
     CHECK_FALSE(t::language().rtl());
-    CHECK(screen.texts().contains(english_title));
+    CHECK_FALSE(screen.texts().contains(english_title));
+    CHECK(screen.texts().contains(words.title()));
 
     // Hebrew is a draft: its own words show, and the direction flips.
     in_language("he");
@@ -410,6 +411,17 @@ TEST_CASE(
     }
 }
 
+TEST_CASE(
+    "every converted screen holds the real German, French and Spanish without cutting a string off",
+    "[i18n][screen][latin]") {
+    // The drafts, not their proxy. German is the long one: its compounds
+    // ("Vierteldrehung", "Geräteeinstellungen") have no place to break, so a
+    // box measured for the English is the likeliest to be cut here.
+    for (const char* language : {"de", "fr", "es"}) {
+        holds_the_layout_in(language);
+    }
+}
+
 TEST_CASE("the face follows the app's language for Japanese and Chinese, and back",
           "[i18n][screen][face]") {
     // Japanese and Chinese share code points and not shapes. A family left to
@@ -491,6 +503,9 @@ TEST_CASE("right to left mirrors the layout, and left to right puts it back",
         CHECK(screen.left_of(act) > screen.item()->width() / 2);
     }
 
+    // A left-to-right language that is not English. German is translated (a
+    // draft), so the button is found by the words the language gives it, not
+    // by the English the right-to-left three still show.
     in_language("de");
     screen.settle();
     act = screen.button(words.act());

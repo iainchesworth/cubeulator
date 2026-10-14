@@ -191,11 +191,12 @@ TEST_CASE("the language switches live: English, the pseudo-locale, Hebrew, and b
     CHECK(QGuiApplication::layoutDirection() == Qt::LeftToRight);
     app.shot("language_launch_pseudo");
 
-    // German has no translation yet, so the English; the layout stays.
+    // German is a draft: its own words, and the layout stays.
     switch_to(app, "de");
     scan = app.find("launch.startScan");
     REQUIRE(scan != nullptr);
-    CHECK(scan->property("text").toString() == english);
+    CHECK(scan->property("text").toString() != english);
+    CHECK_FALSE(scan->property("text").toString().isEmpty());
     CHECK(QGuiApplication::layoutDirection() == Qt::LeftToRight);
 
     // Hebrew is a draft: its own words, in its own script; and the layout
@@ -335,9 +336,11 @@ namespace {
 
 // The converted screens of the real window, in `language` at one layout:
 // nothing cut off, off the window or out of its pane. The pseudo-locale is the
-// proxy for a real translation; the real drafts (Japanese, Chinese, Hebrew,
-// Arabic, Yiddish) run the same.
-void nothing_is_cut_off_in(const char* language, Layout layout) {
+// proxy for a real translation; the real drafts (Japanese, Chinese, German, French,
+// Spanish, Hebrew, Arabic, Yiddish) run the same. `more` names screens to visit after
+// the usual three.
+void nothing_is_cut_off_in(const char* language, Layout layout,
+                           std::vector<const char*> more = {}) {
     App& app = App::fresh();
     LanguageGuard guard(app);
     app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
@@ -351,24 +354,32 @@ void nothing_is_cut_off_in(const char* language, Layout layout) {
         }
     };
 
+    const QString which = QLatin1String(language) == QLatin1String("xx")
+                              ? QStringLiteral("pseudo")
+                              : QString::fromLatin1(language);
+    const auto shoot = [&](const char* screen) {
+        app.shot(QStringLiteral("language_%1_%2_%3")
+                     .arg(QString::fromLatin1(screen), which,
+                          QString::fromLatin1(cube::systest::to_string(layout))));
+    };
+
     check_screen("launch");
+    shoot("launch");
     app.click("launch.settings");
     REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
     app.settle();
     check_screen("settings");
+    shoot("settings");
     app.click("settings.back");
     REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
-    const QString which = QLatin1String(language) == QLatin1String("xx")
-                              ? QStringLiteral("pseudo")
-                              : QString::fromLatin1(language);
     have_a_solution(app);
-    for (const char* screen : {"permission", "complete", "solution"}) {
+    std::vector<const char*> screens = {"permission", "complete", "solution"};
+    screens.insert(screens.end(), more.begin(), more.end());
+    for (const char* screen : screens) {
         app.go(QString::fromLatin1(screen));
         app.settle();
         check_screen(screen);
-        app.shot(QStringLiteral("language_%1_%2_%3")
-                     .arg(QString::fromLatin1(screen), which,
-                          QString::fromLatin1(cube::systest::to_string(layout))));
+        shoot(screen);
     }
     app.go("launch");
 }
@@ -529,5 +540,18 @@ TEST_CASE(
                 "on all of them: "
                 << key);
         }
+    }
+}
+
+TEST_CASE("the real German, French and Spanish cut nothing off on the converted screens",
+          "[system][language][latin]") {
+    // German is the long one ("Vierteldrehung", "Geräteeinstellungen",
+    // "Fortgeschritten" in a row of three method buttons): the solve screen is
+    // visited as well, where those buttons are, and the history, whose rows
+    // and dialogs carry the longest of the new strings.
+    const char* language = GENERATE("de", "fr", "es");
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION(language << " in the " << cube::systest::to_string(layout) << " layout") {
+        nothing_is_cut_off_in(language, layout, {"solve", "history"});
     }
 }

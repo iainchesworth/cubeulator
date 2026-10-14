@@ -1039,6 +1039,16 @@ reaches no control and Escape leaves nothing on most screens, and a chosen
 language still shows English where its catalogue's entries are unfinished. They fail
 when the app is fixed, which is the prompt to update them.
 
+`settings.spec.mjs` attaches a picture of the settings and launch screens in
+each of German, French and Spanish to its report. A passing test's attachments
+are not kept, so `CUBEULATOR_WEB_SHOTS=<dir>` also writes them there:
+
+```sh
+CUBEULATOR_WEB_DIR=../../build/web-emscripten-diagnostics/bin \
+CUBEULATOR_WEB_SHOTS=shots \
+  npx playwright test --project=app specs/settings.spec.mjs -g accents
+```
+
 ### Performance in the browser
 
 `perf.spec.mjs` is its own project (`--project=perf`, one worker: a stopwatch

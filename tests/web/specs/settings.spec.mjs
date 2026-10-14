@@ -1,10 +1,27 @@
 // Settings, as a person changes them: through the controls, and read back from
 // the app's own state and from what it shows.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { test, expect } from '../support/fixtures.mjs';
 
 async function openSettings(app) {
   await app.click('launch.settings');
   await app.waitForScreen('settings');
+}
+
+// A picture of the page for a person to read: attached to the report, and, when
+// CUBEULATOR_WEB_SHOTS names a directory, written there as <name>.png (a
+// passing test's attachments are not kept, and this is how a translation is
+// looked at in the browser build).
+async function picture(app, testInfo, name) {
+  const body = await app.page.screenshot();
+  await testInfo.attach(name, { body, contentType: 'image/png' });
+  const dir = process.env.CUBEULATOR_WEB_SHOTS;
+  if (dir) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${name}.png`), body);
+  }
 }
 
 test.describe('settings', () => {
@@ -240,18 +257,61 @@ test.describe('language', () => {
     });
   }
 
-  test('shows a string no catalogue has translated in English, never as its id', async ({ app }) => {
-    // German, French and Spanish have no translation yet, so a chosen one shows
-    // English. When translations land the text changes and this still holds:
-    // what is on screen is words.
+  test('shows no string as its raw id, in any language', async ({ app }) => {
+    // Every language has a draft, so a string missing from one (one added
+    // since) shows its English and never its id. What is on screen is words,
+    // in each of the eight.
     await openSettings(app);
-    await app.click('settings.language.2');
-    await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('de');
-    await app.settle();
-    for (const text of await app.texts()) {
-      expect(text, 'a raw string id on screen').not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+    for (const [chip, code] of [[2, 'de'], [3, 'fr'], [4, 'es'], [5, 'ja'], [6, 'zh-CN'],
+                                [7, 'he'], [8, 'ar'], [9, 'yi']]) {
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.settle();
+      for (const text of await app.texts()) {
+        expect(text, `a raw string id on screen in ${code}`)
+          .not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+      }
     }
   });
+
+  // German, French and Spanish are complete drafts: what the person reads is
+  // their text, with its accents, and never the English or an id. The words
+  // are not asserted (a reviewer will change some). What is: the English is
+  // not what shows, the letters each language needs reach the page, and a
+  // picture of the screen is attached to the report, because whether the
+  // browser build draws them (it carries no system font; Qt's own face is what
+  // the Latin text is set in) is a thing to look at.
+  for (const [chip, code, name, accents] of [
+    [2, 'de', 'Deutsch', /[äöüß]/],
+    [3, 'fr', 'Français', /[éèêàç]/],
+    [4, 'es', 'Español', /[áéíóúñ]/],
+  ]) {
+    test(`${name} shows its own text with its accents, not the English`, async ({ app }, testInfo) => {
+      await openSettings(app);
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.settle();
+
+      const texts = await app.texts();
+      expect(texts, 'the English, under a translated language').not.toContain('Camera');
+      expect(texts, 'the English, under a translated language').not.toContain('Settings');
+      expect(texts.join(' '), `accented letters of ${name}`).toMatch(accents);
+      for (const text of texts) {
+        expect(text, 'a raw string id on screen').not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+        // A face with no glyph for a letter draws U+FFFD or a box in its place.
+        expect(text, 'a replacement character').not.toContain('\uFFFD');
+      }
+      await picture(app, testInfo, `settings-${code}`);
+
+      // The launch screen, with the language's name on its button.
+      await app.click('settings.back');
+      await app.waitForScreen('launch');
+      await app.settle();
+      expect((await app.find('launch.startScan')).text).not.toBe('Scan a cube');
+      expect((await app.find('launch.language')).text).toBe(name);
+      await picture(app, testInfo, `launch-${code}`);
+    });
+  }
 
   test('is kept through a reload', async ({ app }) => {
     await openSettings(app);
