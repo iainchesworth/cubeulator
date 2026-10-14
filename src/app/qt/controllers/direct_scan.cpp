@@ -168,7 +168,13 @@ void DirectScan::record(const cv::Mat& bgr, std::int64_t t_ms) {
 
 void DirectScan::finishRecording() {
     if (recorder_.running()) {
-        (void)recorder_.stop();
+        // A recording the writer could not finish says so in its stats file,
+        // which nobody opens unless they know to: tell the developer who
+        // turned recording on.
+        if (const auto stats = recorder_.stop(); stats.failed > 0) {
+            qWarning("DirectScan: the recording is incomplete, %d frame(s) were not written: %s",
+                     stats.failed, stats.error.c_str());
+        }
     }
     recording_refused_ = false;
 }

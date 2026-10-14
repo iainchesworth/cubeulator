@@ -235,10 +235,10 @@ value.
 | | value | status |
 |---|---|---|
 | Display name | Cubeulator | Fixed |
-| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `com.iainchesworthlabs.cubeulator` | *(Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`.)* The GitHub account and the repository name in lower case, with `com.` as on ICL Forge's macOS apps. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
+| Identifier (Android package, iOS and macOS bundle id, Linux app id and desktop file name) | `com.iainchesworthlabs.cubeulator` | *(the maintainer, 2026-10-13, after the repository moved to `iainchesworthlabs`.)* The GitHub account and the repository name in lower case, with `com.` as on ICL Forge's macOS apps. One id on every platform. It replaces `org.qtproject.example` and must not change after the first store release |
 | Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Follows the publisher. Set by the app at start-up and stamped on the installer's Start menu shortcut (E4a), so that the taskbar groups the button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | In the Windows resource, `Info.plist`, the AppStream release and every desktop package's name (E4a). Not yet in the Android manifest (E4b) |
-| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1). One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, read by the version resource, the AppStream developer and CPack |
+| Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line stays in the person's name (`family.md` D1). One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, read by the version resource, the AppStream developer and CPack |
 | Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Game;LogicGame;` | macOS and Linux are built; on Linux `Utility` was dropped, because two main categories list the app twice in a menu. The rest are proposed |
 | Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written in English and set in the macOS `Info.plist`; the other languages' `InfoPlist.strings` are E5's |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |

@@ -18,7 +18,8 @@
 //    and appends the index row. The producer never blocks
 //    and never writes: a full queue drops the frame and COUNTS it - the
 //    zero-dropped-frames exit gate is checked, not assumed
-//    (check_recording below).
+//    (check_recording below). A frame the writer cannot write is counted
+//    too, and ends the recording rather than being retried.
 
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
@@ -29,6 +30,8 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <functional>
+#include <iosfwd>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -88,23 +91,38 @@ struct Manifest {
 // Post-hoc recording integrity: index parses, passes are contiguous from
 // the first row, t_ms is non-decreasing, every non-overwritten row's
 // analysis frame exists (and fullres/ file too when the stream was
-// recorded), no recorder-side drops were flagged. Returns nullopt when
-// sound, else the first problem.
+// recorded), the recorder dropped no frames and did not fail to write one.
+// Returns nullopt when sound, else the first problem; a writer failure is
+// reported first, because it is the cause of an empty index or a missing frame.
 [[nodiscard]] std::optional<std::string> check_recording(const std::string& dir);
+
+// How a frame becomes a file: whether it was written. cv::imwrite is the
+// default, which returns false for a path it cannot write and THROWS for an
+// extension no encoder is built for (the browser's OpenCV has no JPEG codec).
+// A recorder takes another so that a test can make either happen on any build.
+using FrameEncoder =
+    std::function<bool(const std::string& path, const cv::Mat& frame, int jpeg_quality)>;
 
 // Single-producer bounded-queue recorder. push() clones the frame and
 // returns immediately; the writer thread does the downscale, both encodes
 // and the index append. stop() drains what was accepted, then joins.
+//
+// A frame that cannot be written (the disk is full, the directory is gone, no
+// encoder for the format) stops the writer at once: it is not retried, no index
+// row is appended for it, and it and every frame after it are counted as
+// `failed`. After stop(), pushed == written + dropped + failed.
 class AsyncRecorder {
 public:
     struct Stats {
         int pushed = 0;
         int written = 0;
         int dropped = 0;     // producer-side: queue full
+        int failed = 0;      // accepted but not written: the writer hit an error
         int queue_peak = 0;  // high-water mark, for the throughput bench
+        std::string error;   // the first error, empty when there was none
     };
 
-    AsyncRecorder() = default;
+    explicit AsyncRecorder(FrameEncoder encoder = {});
     ~AsyncRecorder();
     AsyncRecorder(const AsyncRecorder&) = delete;
     AsyncRecorder& operator=(const AsyncRecorder&) = delete;
@@ -130,9 +148,16 @@ private:
     };
 
     void writer_loop();
+    // Writes one job's files and index row, or says why it could not. Never
+    // throws: the writer is a thread, and an exception leaving it terminates.
+    [[nodiscard]] std::optional<std::string> write_job(const Job& job, std::ostream& index) const;
+    // The writer gives up: records `problem`, counts the job in hand and every
+    // queued one as failed, and makes push() count rather than queue.
+    void fail_writer(const std::string& problem);
 
     static constexpr std::size_t kQueueCapacity = 256;  // ~8.5 s at 30 Hz
 
+    FrameEncoder encoder_;
     std::string dir_;
     bool record_full_res_ = true;
     bool running_ = false;
@@ -143,6 +168,7 @@ private:
     std::condition_variable cv_;
     std::deque<Job> queue_;
     bool stopping_ = false;
+    bool writer_failed_ = false;
     std::thread writer_;
 };
 

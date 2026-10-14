@@ -388,6 +388,18 @@ jobs:
               Start-Sleep -Seconds (15 * $attempt)
             }
           }
+          # CPack finds makensis on PATH, and failing that in the registry
+          # value NSIS's own installer writes. A restored directory brings
+          # neither, so say where it is for the steps that follow (a cache hit
+          # without this failed every Windows leg at "Cannot find NSIS
+          # compiler makensis", at the Package step, after the build had
+          # passed).
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            $dir = Split-Path $makensis
+            Add-Content -Path $env:GITHUB_PATH -Value $dir
+            $env:PATH = "$dir;$env:PATH"
+          }
+          makensis /VERSION
 
       - name: Install packaging tools (Linux)
         if: runner.os == 'Linux'
@@ -551,7 +563,7 @@ jobs:
       # name and its libraries were built with. Qt only *recommends* building
       # an app with the same NDK "to avoid missing symbol errors"; it does not
       # call a newer one unsupported, and its CMake does not check. That is a
-      # departure from Qt's tested configuration, taken on purpose (Iain,
+      # departure from Qt's tested configuration, taken on purpose (the maintainer,
       # 2026-10-13): r28c's libc++ has std::expected::transform/and_then,
       # std::format and std::print, ranges::contains/fold_left and mdspan,
       # which r26b lacks (compile-probed), and it carries libc++'s fix for

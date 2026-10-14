@@ -352,6 +352,85 @@ TEST_CASE("a camera that will not start is explained, and can be left", "[system
     CHECK(app.find_text("Camera unavailable") == nullptr);
 }
 
+TEST_CASE("a camera that will not start can be asked for again from the scan screen",
+          "[system][scan][error]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    INFO("in the " << cube::systest::to_string(layout) << " layout");
+    App& app = App::fresh();
+    app.resize(size_for(layout));
+    auto& scan = app.runtime().directScan();
+    FakeCamera& camera = FakeCamera::instance();
+
+    camera.fail_next_start(cube::CubeError::camera_not_found);
+    app.click("launch.startScan");
+    REQUIRE(app.wait_for([&]() { return app.screen() == "scan"; }));
+    REQUIRE(app.wait_for([&]() { return !scan.cameraError().isEmpty() && !scan.starting(); }));
+    REQUIRE(app.wait_for([&]() { return app.find("scan.retry") != nullptr; }));
+
+    // The way on is on the screen, in the place Start over has when there is a
+    // camera - nothing is running to start over from - and it fits: inside the
+    // window and clear of Cancel.
+    QQuickItem* retry = app.find("scan.retry");
+    REQUIRE(retry != nullptr);
+    CHECK(retry->property("text").toString() == qtTrId("common.tryAgain"));
+    CHECK(app.find_button("Start over") == nullptr);
+    QQuickItem* cancel = app.find_button("Cancel");
+    REQUIRE(cancel != nullptr);
+    // A button just made visible is at the row's origin until the row has laid
+    // itself out, which is the next frame: where things are is read after one.
+    app.pump(80);
+    const auto box = [](QQuickItem* item) {
+        return item->mapRectToScene(item->boundingRect()).toAlignedRect();
+    };
+    const QRect window(QPoint(0, 0), app.window().size());
+    const QRect retry_box = box(retry);
+    const QRect cancel_box = box(cancel);
+    INFO("Try again at " << retry_box.x() << "," << retry_box.y() << " " << retry_box.width() << "x"
+                         << retry_box.height() << ", Cancel at " << cancel_box.x() << ","
+                         << cancel_box.y() << " " << cancel_box.width() << "x"
+                         << cancel_box.height() << ", in a " << window.width() << "x"
+                         << window.height() << " window");
+    CHECK(window.contains(retry_box));
+    CHECK(window.contains(cancel_box));
+    CHECK_FALSE(retry_box.intersects(cancel_box));
+
+    // Asked again while it is still refused: back to the same screen, and
+    // the button is not on offer while the camera is being opened.
+    camera.fail_next_start(cube::CubeError::camera_start_failed);
+    camera.set_start_delay(1500);
+    app.click("scan.retry");
+    CHECK(scan.starting());
+    CHECK(scan.cameraError().isEmpty());
+    CHECK(app.find("scan.retry") == nullptr);
+    CHECK(app.find_text(QStringLiteral("Starting the camera") + QChar(0x2026)) != nullptr);
+    CHECK(app.find_text("Camera unavailable") == nullptr);
+    REQUIRE(app.wait_for([&]() { return !scan.cameraError().isEmpty() && !scan.starting(); }));
+    REQUIRE(app.wait_for([&]() { return app.find("scan.retry") != nullptr; }));
+    CHECK(scan.cameraError() == "the camera could not be started");
+    CHECK(app.screen() == "scan");
+
+    // The camera is there this time: the same screen carries on into a scan,
+    // from nothing.
+    camera.set_start_delay(150);
+    app.click("scan.retry");
+    REQUIRE(app.wait_for([&]() { return scan.running(); }));
+    CHECK(scan.cameraError().isEmpty());
+    CHECK(scan.sidesRead() == 0);
+    CHECK(app.screen() == "scan");
+    CHECK(camera.capturing());
+    CHECK(camera.starts() == 1);
+    CHECK(app.find("scan.retry") == nullptr);
+    CHECK(app.find_text("Camera unavailable") == nullptr);
+    QQuickItem* start_over = app.find_button("Start over");
+    REQUIRE(start_over != nullptr);
+    CHECK_FALSE(start_over->property("enabled").toBool());
+    // And it is a working scan: a side is read.
+    cube::systest::show_side(
+        cube::test::outside_view(cube::systest::scramble(7), cube::solver::kAllFaces[0]));
+    REQUIRE(app.wait_for([&]() { return scan.sidesRead() == 1; }, kScanTimeoutMs));
+    CHECK(start_over->property("enabled").toBool());
+}
+
 TEST_CASE("with no camera plugged in the settings say so, and refreshing finds one",
           "[system][settings][error]") {
     App& app = App::fresh();
