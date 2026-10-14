@@ -19,12 +19,6 @@
     <p>@CUBEULATOR_ABOUT_WHAT@</p>
   </description>
 
-  <!-- Required by AppStream, and the same categories as the desktop entry. -->
-  <categories>
-    <category>Game</category>
-    <category>LogicGame</category>
-  </categories>
-
   <developer id="@CUBEULATOR_DEVELOPER_ID@">
     <name>@CUBEULATOR_PUBLISHER@</name>
   </developer>
@@ -35,10 +29,10 @@
   <url type="bugtracker">@PROJECT_HOMEPAGE_URL@/issues</url>
 
   <!-- The same categories as Categories= in the desktop entry
-       (cubeulator.desktop.in). appstreamcli validates this file on its own, so
-       it asks for them here as an error (app-categories-missing). -->
+       (cubeulator.desktop.in): one main category, Game, with LogicGame under
+       it. appstreamcli validates this file on its own, so it asks for them
+       here as an error (app-categories-missing). -->
   <categories>
-    <category>Utility</category>
     <category>Game</category>
     <category>LogicGame</category>
   </categories>
