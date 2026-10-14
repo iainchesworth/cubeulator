@@ -39,17 +39,17 @@ void append_code_point(std::string& out, char32_t code_point) {
     if (code_point < 0x80) {
         out += static_cast<char>(code_point);
     } else if (code_point < 0x800) {
-        out += static_cast<char>(0xC0 | (code_point >> 6));
-        out += static_cast<char>(0x80 | (code_point & 0x3F));
+        out += static_cast<char>(0xC0U | (code_point >> 6U));
+        out += static_cast<char>(0x80U | (code_point & 0x3FU));
     } else if (code_point < 0x10000) {
-        out += static_cast<char>(0xE0 | (code_point >> 12));
-        out += static_cast<char>(0x80 | ((code_point >> 6) & 0x3F));
-        out += static_cast<char>(0x80 | (code_point & 0x3F));
+        out += static_cast<char>(0xE0U | (code_point >> 12U));
+        out += static_cast<char>(0x80U | ((code_point >> 6U) & 0x3FU));
+        out += static_cast<char>(0x80U | (code_point & 0x3FU));
     } else {
-        out += static_cast<char>(0xF0 | (code_point >> 18));
-        out += static_cast<char>(0x80 | ((code_point >> 12) & 0x3F));
-        out += static_cast<char>(0x80 | ((code_point >> 6) & 0x3F));
-        out += static_cast<char>(0x80 | (code_point & 0x3F));
+        out += static_cast<char>(0xF0U | (code_point >> 18U));
+        out += static_cast<char>(0x80U | ((code_point >> 12U) & 0x3FU));
+        out += static_cast<char>(0x80U | ((code_point >> 6U) & 0x3FU));
+        out += static_cast<char>(0x80U | (code_point & 0x3FU));
     }
 }
 
@@ -62,7 +62,7 @@ void append_string(std::string& out, std::string_view text) {
     out += '"';
     std::size_t i = 0;
     while (i < text.size()) {
-        const auto lead = static_cast<unsigned char>(text[i]);
+        const auto lead = static_cast<unsigned char>(text.at(i));
         std::size_t length = 1;
         char32_t code_point = lead;
         char32_t smallest = 0;
@@ -85,9 +85,9 @@ void append_string(std::string& out, std::string_view text) {
         }
         bool well_formed = i + length <= text.size();
         for (std::size_t k = 1; well_formed && k < length; ++k) {
-            const auto next = static_cast<unsigned char>(text[i + k]);
+            const auto next = static_cast<unsigned char>(text.at(i + k));
             well_formed = (next & 0xC0U) == 0x80U;
-            code_point = (code_point << 6) | (next & 0x3FU);
+            code_point = (code_point << 6U) | (next & 0x3FU);
         }
         const bool surrogate = code_point >= 0xD800 && code_point <= 0xDFFF;
         if (!well_formed || code_point < smallest || code_point > 0x10FFFF || surrogate) {
