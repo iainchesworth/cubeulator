@@ -7,6 +7,10 @@
   NSCameraUsageDescription is the string `permission.system.camera` from
   docs/design/strings.json, so the wording lives in one place. Translations
   of it go in InfoPlist.strings with the other languages (E5).
+
+  LSMinimumSystemVersion is the floor of the Qt the app is built against
+  (Qt 6.12: macOS 14.4). Raise it with Qt; the docs say the same
+  (README.md, docs/releasing.md, tools/release/render_release_notes.py).
 -->
 <plist version="1.0">
 <dict>
@@ -33,7 +37,7 @@
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
     <key>LSMinimumSystemVersion</key>
-    <string>12.0</string>
+    <string>14.4</string>
     <key>NSCameraUsageDescription</key>
     <string>@CUBEULATOR_CAMERA_USAGE_DESCRIPTION@</string>
     <key>NSHumanReadableCopyright</key>
