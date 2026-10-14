@@ -930,14 +930,17 @@ const std::array<FacetColor, 6> kCentreOrder = {
 const MeasuredCube& daylight_cube() {
     static const MeasuredCube cube{
         .light = "daylight",
-        .centres = {{
-            {66.1F, 4.5F, -0.6F},
-            {67.6F, 3.4F, 28.0F},
-            {42.9F, 37.4F, 3.1F},
-            {53.2F, 34.2F, 16.8F},
-            {44.6F, -16.4F, 0.6F},
-            {39.8F, 7.0F, -28.8F},
-        }},
+        .centres =
+            {
+                {
+                    {66.1F, 4.5F, -0.6F},
+                    {67.6F, 3.4F, 28.0F},
+                    {42.9F, 37.4F, 3.1F},
+                    {53.2F, 34.2F, 16.8F},
+                    {44.6F, -16.4F, 0.6F},
+                    {39.8F, 7.0F, -28.8F},
+                },
+            },
         .cast = 4.6F,
     };
     return cube;
@@ -947,14 +950,17 @@ const MeasuredCube& daylight_cube() {
 const MeasuredCube& tungsten_cube() {
     static const MeasuredCube cube{
         .light = "tungsten",
-        .centres = {{
-            {46.2F, 16.6F, 5.9F},
-            {49.8F, 19.9F, 53.7F},
-            {25.6F, 48.1F, 36.3F},
-            {34.3F, 53.5F, 45.4F},
-            {17.4F, -12.5F, 15.0F},
-            {11.3F, 12.1F, -25.8F},
-        }},
+        .centres =
+            {
+                {
+                    {46.2F, 16.6F, 5.9F},
+                    {49.8F, 19.9F, 53.7F},
+                    {25.6F, 48.1F, 36.3F},
+                    {34.3F, 53.5F, 45.4F},
+                    {17.4F, -12.5F, 15.0F},
+                    {11.3F, 12.1F, -25.8F},
+                },
+            },
         .cast = 17.7F,
     };
     return cube;
@@ -964,14 +970,17 @@ const MeasuredCube& tungsten_cube() {
 const MeasuredCube& evening_led_cube() {
     static const MeasuredCube cube{
         .light = "warm-white LED",
-        .centres = {{
-            {64.9F, 21.8F, 18.6F},
-            {54.1F, 25.8F, 52.9F},
-            {27.7F, 48.0F, 32.6F},
-            {40.5F, 55.8F, 46.4F},
-            {16.8F, -12.6F, 14.8F},
-            {8.9F, 5.2F, -15.0F},
-        }},
+        .centres =
+            {
+                {
+                    {64.9F, 21.8F, 18.6F},
+                    {54.1F, 25.8F, 52.9F},
+                    {27.7F, 48.0F, 32.6F},
+                    {40.5F, 55.8F, 46.4F},
+                    {16.8F, -12.6F, 14.8F},
+                    {8.9F, 5.2F, -15.0F},
+                },
+            },
         .cast = 28.7F,
     };
     return cube;
