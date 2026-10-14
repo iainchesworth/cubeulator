@@ -118,7 +118,12 @@
   }
 
   function draw() {
-    if (view.kind === 'side') {
+    if (view.kind === 'image') {
+      // A recorded frame, 640 wide: the middle rows of it, which is where a
+      // cube drawn by cube_tumble_sim is.
+      const rows = Math.min(HEIGHT, view.image.naturalHeight);
+      context.drawImage(view.image, 0, (view.image.naturalHeight - rows) / 2, WIDTH, rows, 0, 0, WIDTH, rows);
+    } else if (view.kind === 'side') {
       drawSide(view.stickers, { x: WIDTH / 2, y: HEIGHT / 2, pitch: 40, degrees: 0, ...view.pose });
     } else {
       drawRoom();
@@ -168,6 +173,16 @@
     // What the lens sees from now on.
     room() { view = { kind: 'room' }; },
     side(stickers, pose) { view = { kind: 'side', stickers, pose }; },
+    // A picture (a data: URL) for the lens to see, from the moment it has
+    // loaded; until then the lens keeps what it had, and is never a room for a
+    // frame in between.
+    image(url) {
+      const image = new Image();
+      image.onload = () => {
+        view = { kind: 'image', image };
+      };
+      image.src = url;
+    },
     // The next getUserMedia() fails the way a browser's does: 'NotAllowedError'
     // (denied), 'NotFoundError', 'NotReadableError' (busy).
     deny(name, message) { denied = name ? { name, message: message || name } : null; },

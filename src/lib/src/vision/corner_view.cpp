@@ -12,7 +12,11 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <cstdint>
+#include <initializer_list>
 #include <limits>
+#include <ranges>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -243,22 +247,6 @@ struct Window {
     return window;
 }
 
-// The window of the grid holding the most blobs.
-[[nodiscard]] std::optional<Window> fullest_window(const std::vector<Placed>& placed) {
-    std::optional<Window> best;
-    int best_count = 0;
-    for (int offset_a = -2; offset_a <= 0; ++offset_a) {
-        for (int offset_b = -2; offset_b <= 0; ++offset_b) {
-            const std::optional<Window> window = window_at(placed, offset_a, offset_b);
-            if (window.has_value() && window->count > best_count) {
-                best_count = window->count;
-                best = window;
-            }
-        }
-    }
-    return best;
-}
-
 // The lattice a window's blobs fit by least squares, with its steps as the
 // map from cell to pixels gives them.
 [[nodiscard]] std::optional<Lattice> lattice_of_window(const std::vector<Blob>& blobs,
@@ -321,34 +309,68 @@ void turn_clockwise(Lattice& lattice) {
     lattice.blob_at = transposed;
 }
 
+// A 3x3 window that some hypothesis made, and the lattice fitted through it.
+// `blobs_on` is the set of blobs it holds as a bit per blob (a frame is never
+// read with more than kMaxBlobs, which fits a 64-bit word), so two windows
+// that are the same blobs are known without comparing their fits.
+struct Found {
+    Lattice lattice;
+    std::uint64_t blobs_on = 0;
+};
+
+[[nodiscard]] std::uint64_t blob_set(const std::array<int, 9>& cells) {
+    std::uint64_t set = 0;
+    for (const int blob : cells) {
+        if (blob >= 0) {
+            set |= std::uint64_t{1} << static_cast<unsigned>(blob);
+        }
+    }
+    return set;
+}
+
 // The hypothesis that blob i, its neighbour j and the neighbour k on its other
-// axis are one cell and the next two along: the 3x3 window holding the most
-// blobs, fitted by least squares.
-[[nodiscard]] std::optional<Lattice> lattice_through(const std::vector<Blob>& blobs,
-                                                     const std::vector<int>& pool, int i, int j,
-                                                     int k) {
+// axis are one cell and the next two along: every 3x3 window of that grid with
+// at least six blobs and a tight fit, not only the fullest. Two sides seen at
+// much the same angle make one continuous grid, in which a window across their
+// shared edge holds as many blobs as either side and can fit as well; the
+// fullest window is then not a side, and taking it leaves the rest of both
+// sides with no lattice. Every window is offered and the choice is made across
+// them (find_lattices).
+void windows_through(const std::vector<Blob>& blobs, const std::vector<int>& pool, int i, int j,
+                     int k, std::vector<Found>& windows) {
     Hypothesis grid;
     grid.origin = blobs.at(static_cast<std::size_t>(i)).centre;
     grid.u = blobs.at(static_cast<std::size_t>(j)).centre - grid.origin;
     grid.v = blobs.at(static_cast<std::size_t>(k)).centre - grid.origin;
     grid.det = cross(grid.u, grid.v);
     if (std::abs(grid.det) < kMinSkew * length(grid.u) * length(grid.v)) {
-        return std::nullopt;  // the three are nearly in a line
+        return;  // the three are nearly in a line
     }
 
     const std::vector<Placed> placed = place_on_grid(blobs, pool, grid);
     if (placed.size() < kMinLatticeBlobs) {
-        return std::nullopt;
+        return;
     }
-    const std::optional<Window> window = fullest_window(placed);
-    if (!window.has_value() || std::cmp_less(window->count, kMinLatticeBlobs)) {
-        return std::nullopt;
+    for (int offset_a = -2; offset_a <= 0; ++offset_a) {
+        for (int offset_b = -2; offset_b <= 0; ++offset_b) {
+            const std::optional<Window> window = window_at(placed, offset_a, offset_b);
+            if (!window.has_value() || std::cmp_less(window->count, kMinLatticeBlobs)) {
+                continue;
+            }
+            const std::uint64_t set = blob_set(window->cells);
+            const bool known = std::ranges::any_of(
+                windows, [set](const Found& other) { return other.blobs_on == set; });
+            if (known) {
+                continue;
+            }
+            std::optional<Lattice> lattice = lattice_of_window(blobs, *window);
+            if (!lattice.has_value() || lattice->rms > kMaxLatticeRms) {
+                continue;
+            }
+            turn_clockwise(*lattice);
+            windows.push_back(Found{.lattice = *lattice, .blobs_on = set});
+        }
     }
-    std::optional<Lattice> lattice = lattice_of_window(blobs, *window);
-    if (lattice.has_value()) {
-        turn_clockwise(*lattice);
-    }
-    return lattice;
 }
 
 // The pool's blobs within reach of the seed, the nearest `kMaxNeighbours` of
@@ -372,58 +394,6 @@ void turn_clockwise(Lattice& lattice) {
         near.resize(kMaxNeighbours);
     }
     return near;
-}
-
-// More blobs on the lattice wins, and for as many, the tighter fit.
-[[nodiscard]] bool fits_better(const Lattice& candidate, const std::optional<Lattice>& best) {
-    return !best.has_value() || candidate.count > best->count ||
-           (candidate.count == best->count && candidate.rms < best->rms);
-}
-
-// The best lattice through the pool's blobs, tried from every blob as origin
-// and every pair of its neighbours as the two axes.
-[[nodiscard]] std::optional<Lattice> best_lattice(const std::vector<Blob>& blobs,
-                                                  const std::vector<int>& pool) {
-    std::optional<Lattice> best;
-    for (const int i : pool) {
-        const std::vector<int> near = neighbours_in_reach(blobs, pool, i);
-        for (const int j : near) {
-            for (const int k : near) {
-                if (j == k) {
-                    continue;
-                }
-                const std::optional<Lattice> candidate = lattice_through(blobs, pool, i, j, k);
-                if (!candidate.has_value() || candidate->rms > kMaxLatticeRms) {
-                    continue;
-                }
-                if (fits_better(*candidate, best)) {
-                    best = candidate;
-                }
-            }
-        }
-    }
-    return best;
-}
-
-[[nodiscard]] std::vector<Lattice> find_lattices(const std::vector<Blob>& blobs) {
-    std::vector<int> pool(blobs.size());
-    for (std::size_t n = 0; n < blobs.size(); ++n) {
-        pool.at(n) = static_cast<int>(n);
-    }
-    std::vector<Lattice> found;
-    while (found.size() < kMaxSides && pool.size() >= kMinLatticeBlobs) {
-        const std::optional<Lattice> best = best_lattice(blobs, pool);
-        if (!best.has_value()) {
-            break;
-        }
-        for (const int used : best->blob_at) {
-            if (used >= 0) {
-                std::erase(pool, used);
-            }
-        }
-        found.push_back(*best);
-    }
-    return found;
 }
 
 // A lattice's four outer corners in reading order: top-left, top-right,
@@ -466,6 +436,153 @@ void turn_clockwise(Lattice& lattice) {
     return edges;
 }
 
+// The windows weighed against one another: the best by blobs, then by fit. The
+// choice is quadratic (a pair of sides) to cubic (three) in this, and a frame
+// with a cube in it has far fewer distinct windows than that.
+constexpr std::size_t kMaxWindows = 24;
+
+// Every distinct window that some hypothesis makes - from every blob as origin
+// and every pair of its neighbours as the two axes - best first, and no more
+// than kMaxWindows of them. `seen` is how many there were before that.
+[[nodiscard]] std::vector<Found> candidate_windows(const std::vector<Blob>& blobs,
+                                                   std::size_t* seen) {
+    std::vector<int> pool(blobs.size());
+    for (std::size_t n = 0; n < blobs.size(); ++n) {
+        pool.at(n) = static_cast<int>(n);
+    }
+    std::vector<Found> windows;
+    for (const int i : pool) {
+        const std::vector<int> near = neighbours_in_reach(blobs, pool, i);
+        for (const int j : near) {
+            for (const int k : near) {
+                if (j != k) {
+                    windows_through(blobs, pool, i, j, k, windows);
+                }
+            }
+        }
+    }
+    if (seen != nullptr) {
+        *seen = windows.size();
+    }
+    std::ranges::sort(windows, [](const Found& l, const Found& r) {
+        return std::tuple(l.lattice.count, -l.lattice.rms) >
+               std::tuple(r.lattice.count, -r.lattice.rms);
+    });
+    if (windows.size() > kMaxWindows) {
+        windows.resize(kMaxWindows);
+    }
+    return windows;
+}
+
+// Which pairs of windows meet along an edge. Windows that share a blob are the
+// same side seen twice, or one across the edge of another, and never meet.
+using Meetings = std::vector<std::vector<bool>>;
+
+[[nodiscard]] Meetings meetings_of(const std::vector<Found>& windows) {
+    Meetings meets(windows.size(), std::vector<bool>(windows.size(), false));
+    for (std::size_t a = 0; a < windows.size(); ++a) {
+        for (std::size_t b = a + 1; b < windows.size(); ++b) {
+            if ((windows.at(a).blobs_on & windows.at(b).blobs_on) != 0) {
+                continue;
+            }
+            const std::vector<Lattice> pair = {windows.at(a).lattice, windows.at(b).lattice};
+            const bool touch = !shared_edges(pair).empty();
+            meets.at(a).at(b) = touch;
+            meets.at(b).at(a) = touch;
+        }
+    }
+    return meets;
+}
+
+// Two or three disjoint windows, as indices into the list, and how well they
+// make a corner.
+struct Partition {
+    std::array<std::size_t, kMaxSides> picks{};
+    std::size_t size = 0;
+    // How many of them meet another, and the blobs and fit of those that do.
+    std::size_t touching = 0;
+    std::size_t blobs = 0;
+    float rms = 0.0F;
+
+    [[nodiscard]] bool better_than(const Partition& other) const {
+        return std::tuple(touching, blobs, -rms) >
+               std::tuple(other.touching, other.blobs, -other.rms);
+    }
+};
+
+[[nodiscard]] Partition partition_of(const std::vector<Found>& windows, const Meetings& meets,
+                                     std::initializer_list<std::size_t> picks) {
+    Partition partition;
+    for (const std::size_t pick : picks) {
+        partition.picks.at(partition.size++) = pick;
+    }
+    for (std::size_t x = 0; x < partition.size; ++x) {
+        const std::size_t window = partition.picks.at(x);
+        const bool touches = std::ranges::any_of(
+            std::views::iota(std::size_t{0}, partition.size),
+            [&](std::size_t y) { return y != x && meets.at(window).at(partition.picks.at(y)); });
+        if (touches) {
+            ++partition.touching;
+            partition.blobs += windows.at(window).lattice.count;
+            partition.rms += windows.at(window).lattice.rms;
+        }
+    }
+    return partition;
+}
+
+// The two or three sides of a corner view: the set of disjoint windows that
+// most of them touch, then that has the most blobs on those that do, then
+// that fits tightest.
+//
+// This was greedy - the window with the most blobs, its blobs set aside, then
+// the best of those left - and two sides at much the same angle (a cube turned
+// so that neither is more than 60 degrees from the camera, the middle of every
+// quarter-turn of a tumble) read as one continuous grid, so that a window
+// across their shared edge, nine blobs and as tight as either side, was taken
+// first and left six blobs and three, which make no lattice: 18 blobs, one
+// lattice, no read. Disjoint windows are the cube's two sides; a window across
+// the edge overlaps both.
+[[nodiscard]] std::vector<Lattice> find_lattices(const std::vector<Blob>& blobs,
+                                                 std::size_t* windows_seen = nullptr) {
+    const std::vector<Found> windows = candidate_windows(blobs, windows_seen);
+    if (windows.size() < 2) {
+        return {};
+    }
+    const Meetings meets = meetings_of(windows);
+
+    const auto disjoint = [&](std::size_t a, std::size_t b) {
+        return (windows.at(a).blobs_on & windows.at(b).blobs_on) == 0;
+    };
+    std::optional<Partition> best;
+    const auto consider = [&](std::initializer_list<std::size_t> picks) {
+        const Partition partition = partition_of(windows, meets, picks);
+        if (partition.touching >= 2 && (!best.has_value() || partition.better_than(*best))) {
+            best = partition;
+        }
+    };
+    for (std::size_t a = 0; a < windows.size(); ++a) {
+        for (std::size_t b = a + 1; b < windows.size(); ++b) {
+            if (!disjoint(a, b)) {
+                continue;
+            }
+            consider({a, b});
+            for (std::size_t c = b + 1; c < windows.size(); ++c) {
+                if (disjoint(a, c) && disjoint(b, c)) {
+                    consider({a, b, c});
+                }
+            }
+        }
+    }
+
+    std::vector<Lattice> found;
+    if (best.has_value()) {
+        for (std::size_t n = 0; n < best->size; ++n) {
+            found.push_back(windows.at(best->picks.at(n)).lattice);
+        }
+    }
+    return found;
+}
+
 }  // namespace
 
 std::optional<CornerRead> read_corner(const cv::Mat& bgr) {
@@ -474,21 +591,34 @@ std::optional<CornerRead> read_corner(const cv::Mat& bgr) {
 }
 
 std::optional<CornerRead> read_corner(const PreparedFrame& frame) {
+    return read_corner_explained(frame).read;
+}
+
+CornerExplained read_corner_explained(const PreparedFrame& frame) {
     CUBE_ZONE_SCOPED_N("vision.corner_view.read_corner");
     const cv::Mat& working = frame.working;
     const float scale = frame.scale;
 
+    CornerExplained explained;
     const std::vector<Blob> blobs = oblique_blobs(frame);
-    if (blobs.size() < 2 * kMinLatticeBlobs || blobs.size() > kMaxBlobs) {
-        return std::nullopt;
+    explained.blobs = blobs.size();
+    if (blobs.size() < 2 * kMinLatticeBlobs) {
+        explained.stage = CornerStage::too_few_blobs;
+        return explained;
     }
-    const std::vector<Lattice> lattices = find_lattices(blobs);
+    if (blobs.size() > kMaxBlobs) {
+        explained.stage = CornerStage::too_many_blobs;
+        return explained;
+    }
+    const std::vector<Lattice> lattices = find_lattices(blobs, &explained.windows);
     if (lattices.size() < 2) {
-        return std::nullopt;
+        explained.stage = CornerStage::no_pair_of_lattices;
+        return explained;
     }
     const std::vector<SharedEdge> edges = shared_edges(lattices);
     if (edges.empty()) {
-        return std::nullopt;
+        explained.stage = CornerStage::no_shared_edge;
+        return explained;
     }
 
     // Keep the lattices that touch another, renumbering the edges.
@@ -517,7 +647,8 @@ std::optional<CornerRead> read_corner(const PreparedFrame& frame) {
             const cv::Point2f centre = lattice.at(position.column, position.row);
             const std::optional<cv::Vec3f> lab = sticker_lab(working, centre, half_width);
             if (!lab.has_value()) {
-                return std::nullopt;
+                explained.stage = CornerStage::off_the_frame;
+                return explained;
             }
             side.centres.at(cell) = centre * scale;
             side.lab.at(cell) = *lab;
@@ -533,7 +664,9 @@ std::optional<CornerRead> read_corner(const PreparedFrame& frame) {
             .on_second = edge.on_second,
         });
     }
-    return read;
+    explained.stage = CornerStage::read;
+    explained.read = std::move(read);
+    return explained;
 }
 
 // --- fit_corner --------------------------------------------------------------

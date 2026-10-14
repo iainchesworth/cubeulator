@@ -1002,6 +1002,7 @@ the two cross-origin-isolation headers the app's threads need.
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
 | `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
 | `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
+| `tumble.spec.mjs` | a cube turned about one axis and then another, drawn by `cube_tumble_sim` and played to the camera at its recorded frame times; skipped unless `TUMBLE_SESSION` names the session (see [the investigation](investigations/2026-10-14-scan-tumble.md)) |
 | `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
 | `package.spec.mjs` | the `package` project: any built copy of the site, the release zip unzipped included, starts, is isolated, draws and is quiet (it needs nothing the diagnostics build adds) |
 | `perf.spec.mjs` | the journeys again, read from the recorder; see below |

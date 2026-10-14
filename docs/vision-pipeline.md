@@ -82,6 +82,13 @@ Nothing in the reader names a colour. It returns measured Lab.
 - A read **counts** only if the lattice has held still: the centre sticker
   moved less than `kSteadyFraction` (0.12) of a sticker spacing since the
   previous frame. A moving side is blurred and its colours are not trusted.
+  That is a distance per frame, and what it guards against is a speed: a side
+  turned about the cube's middle has its centre 1.5 spacings from the axis, so
+  0.12 is 4.6 degrees a frame - 137 degrees a second at 30 frames a second, 100
+  at 22 (what the recorded lamplight sessions ran at), 46 at 10. `add` is
+  therefore told how long it was since the frame before (the capture time the
+  controller has), and the allowance grows with it, to four times
+  (`interval_scale`); with no time given it is the nominal 33 ms.
 - A counting read joins the **group** it belongs to, or starts a new one.
   The deciding sticker is the **centre**, which never moves, and a cube's six
   centres are six distinct colours: a read whose centre is within
@@ -150,13 +157,21 @@ the flat reads lack.
    contour, not a square), and finds up to three 3x3 lattices. It tries each
    blob as the origin with every pair of its near neighbours (at most eight)
    as the two axes - a hypothesis-and-test search over blob triples, not
-   random sampling - and the lattice with the most blobs wins, then the
-   tightest fit. Each is fitted by least squares with its steps turning
-   clockwise so the side reads unmirrored. Two lattices share an edge when two
-   corners of each coincide; read as seen from outside, they walk that edge in
-   opposite directions, which is also a check. It runs only on frames that
-   have no square-on read, and gives up on a scene with fewer than 12 or more
-   than 48 blobs.
+   random sampling. Every distinct 3x3 window of six or more blobs that a
+   hypothesis makes is a candidate (the best 24 by blobs, then fit), and the
+   sides are the set of two or three **disjoint** windows of which most meet
+   another, then with the most blobs, then the tightest fit. It was greedy -
+   the window with the most blobs, then the best of what was left - and two
+   sides at much the same angle, which is the middle of every quarter-turn of
+   a tumble, look like one grid: a window across their shared edge holds as
+   many blobs as either side and fits as well, and taking it first left six
+   blobs and three, no lattice and no read. Each lattice is fitted by least
+   squares with its steps turning clockwise so the side reads unmirrored. Two
+   lattices share an edge when two corners of each coincide; read as seen from
+   outside, they walk that edge in opposite directions, which is also a check.
+   It runs only on frames that have no square-on read, and gives up on a scene
+   with fewer than 12 or more than 48 blobs. `read_corner_explained` says how
+   far a frame got (`CornerStage`), which is what `cube_scan funnel` prints.
 2. **`fit_corner`** asks whether a candidate cube could have produced the
    read, in the session's own colours: each lattice's centre names the cube
    side it is; each side's nine colours must match that side under some
@@ -164,10 +179,19 @@ the flat reads lack.
    turn that matched, must be the other lattice's side, with the stickers
    along it paired as the cube has them (checked on 3D sticker positions
    from the solver's own layout, not drawn by hand).
-3. **`SideScan`** keeps the newest 48 corner reads. When six sides make
-   several cubes it takes the one that most corner reads fit and more than
-   any other; a read that fits all of them says nothing and one that fits
-   none is a blurred frame. No pose is estimated anywhere in this.
+3. **`SideScan`** keeps one corner read of each view - the same sides seen
+   again from a neighbouring angle replace it only if they are better (more
+   stickers found, then the less foreshortened) - up to 64. A slow tumble shows
+   one pair for a second, and the newest 48 reads were the last pair
+   repeated, with the views that told the cubes apart pushed out. Six sides
+   make up to 256 cubes weighed (more than that is not chosen among: the true
+   one may be one not weighed; two real cubes make 20 and 32, and a cube
+   one turn from solved up to 20, two half-turns 112). A cube is chosen when
+   it misses at most one edge's worth of the views that fit any cube and the
+   next misses at least two more: a read that fits none is a blurred frame and
+   counts for no one, one that fits them all says nothing, and a three-sided
+   read weighs its three edges. A winner on a count of three views of seven was
+   not the cube. No pose is estimated anywhere in this.
 4. **Counting.** A cube held on a corner shows two or three sides in one
    frame, so each side of a corner read is also a read of that side, counted
    the way a square-on read is (`SideScan::add_corner`): the side must have
@@ -179,14 +203,20 @@ the flat reads lack.
    one across from it - are all six. This is in addition to the square-on
    scan, not instead of it: the same side read both ways is one side, and once
    a side has `kMinReads` square-on reads of its own its colours come from
-   those alone, because a side at an angle is lit a little differently.
+   those alone, because a side at an angle is lit a little differently. A
+   side at an angle that fits no side, but is one of them lit differently
+   (`shaded_view_of`: nine colours within `kCornerFitDistance` of it under
+   `colour_distance`, the loose measure), starts none: it was a second group
+   of its own, reached `kMinReads`, took one of the six places, and made the
+   scan "six sides that make no cube" - a verdict that costs up to 150 ms on
+   every frame.
    `reads_in_view()` is the fewest among the sides in view, which is the one
    the capture is waiting for.
 
 5. **Asking for the corner that settles it.** When six sides make several
    cubes and the corner reads so far cannot choose, the scan names the corner
    to show (`AssemblyTrace::settling_corner`). Among the candidates the corner
-   reads fit best, it takes the corner of the eight whose three sides differ
+   reads miss least, it takes the corner of the eight whose three sides differ
    between the most pairs of them - a corner view shows every sticker of its
    three sides, so two cubes are told apart there when any of them differs -
    and says it by the colours of the three centres. The scan screen asks for
@@ -195,6 +225,19 @@ the flat reads lack.
    back to "two sides at once" when no corner would help. Following it one
    corner at a time settles the recorded patterned cube (twenty cubes from six
    sides) in at most three views, in the tests.
+
+A cube tumbled in front of the camera, which no recording is, is what
+`cube_tumble_sim` draws, and `cube_scan funnel` replays: a cube turned about
+the vertical and then the horizontal shows two sides between every two
+square-on views, where neither is within 30 degrees of square and neither is
+more than 63 - a third of each quarter-turn, ten frames a pair at 60 degrees a
+second and 30 frames a second. Drawn, the two recorded patterned cubes are
+read exactly at 30 to 120 degrees a second at 30 frames a second and at 30 to
+60 at 10, and 63 more, whose six flat sides make 2 to 112 cubes, at 60 and 30
+([the tumble investigation](investigations/2026-10-14-scan-tumble.md)).
+Neither reader reads for about ten degrees either side of that window, where
+a near side is within the square-on gate but the far side's stickers are
+beside it.
 
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
@@ -298,13 +341,14 @@ the scan while watching.
   step in poor light.
 - **A cube that six flat sides put together two ways** (about one in eighty,
   and any cube one turn from solved) needs a corner view to settle, and the
-  corner reader is validated on six real frames and drawn ones only. A side
-  seen at a steep angle, or with a finger across it, may not fit; the scan
-  keeps asking for more until a read does. A scan that is ambiguous is only
-  settled by corner views that include a side the candidate cubes differ on:
-  the screen asks for two sides at once but not which two (recorded: 20 cubes
-  fit six sides of a patterned cube, and the one view that told them apart
-  was never shown).
+  corner reader is validated on real frames only when two sides were held
+  still, and on drawn tumbles. A side seen at a steep angle, or with a finger
+  across it, may not fit; the scan keeps asking for more until a read does. A
+  scan that is ambiguous is only settled by corner views that include a side
+  the candidate cubes differ on, which the screen asks for by colour
+  (recorded: 20 cubes fit six sides of a patterned cube, and the views that
+  told them apart were never shown). No recorded scan is a tumble; what is
+  missing is listed on the investigation page.
 - **Light.** Hard backlit or glare conditions are not proven; the measured
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
@@ -342,6 +386,11 @@ path cannot disagree.
 | `cube_scan corners <session-dir> [max-distance]` | Frames showing two sides at once, and whether they fit the true cube (at the distance a side may sit from the cube's, the app's own unless given) |
 | `cube_scan corner-colours <session-dir>` | How the sides of corner reads compare with the sides read square-on |
 | `cube_scan ambiguity <session-dir>` | The cubes six sides make, and how the session's corner reads vote among them at several distances |
+| `cube_scan funnel <session-dir> [-v]` | Every frame with no square-on side, and how far it got in the corner reader; which gate stopped each side of a read; and what the scan decided, as the app's own loop would (`-v` per frame) |
+
+`cube_scan` reads each frame's capture time from the session's `index.csv`, so
+a replay of a recording made at 22 frames a second holds a side still as the
+app did. `cube_tumble_sim` draws a tumble as a session of this kind.
 
 The only gate is a real recorded session ending in the exact true cube.
 `truth.txt` is six words of nine letters from `WYROGB`, one per side, each side
