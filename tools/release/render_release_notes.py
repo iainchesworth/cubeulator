@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import fragments  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -231,7 +232,8 @@ def main(argv: list[str] | None = None) -> int:
     template = args.install_notes.read_text(encoding="utf-8") if args.install_notes.exists() else ""
     try:
         if args.from_unreleased and changelog.get(text, args.version) is None:
-            text = changelog.cut(text, args.version, date.today())
+            found, _ = fragments.read(args.changelog.parent / fragments.DIRECTORY)
+            text = changelog.cut(fragments.merge(text, found), args.version, date.today())
         notes = render(
             text,
             version=args.version,

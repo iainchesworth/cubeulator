@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import fragments  # noqa: E402
 import prepare_release  # noqa: E402
 
 
@@ -74,6 +75,22 @@ def check(root: Path, tag: str | None = None, dry_run: bool = False) -> Result:
         )
 
     text = changelog.normalise((root / "CHANGELOG.md").read_text(encoding="utf-8"))
+
+    # Fragments (changelog.d/) are part of [Unreleased] until a release is
+    # prepared. A dry run reads them as if they were merged; a release must not
+    # have any left, or they are silently missing from its notes.
+    found, frag_problems = fragments.read(root / fragments.DIRECTORY)
+    result.problems.extend(f"{fragments.DIRECTORY}/{p}" for p in frag_problems)
+    if found and dry_run:
+        text = fragments.merge(text, found)
+    elif found:
+        names = ", ".join(f.name for f in found[:3]) + (", ..." if len(found) > 3 else "")
+        result.problems.append(
+            f"{len(found)} changelog fragment(s) in {fragments.DIRECTORY}/ are not in "
+            f"CHANGELOG.md, so the release notes would miss them ({names}). "
+            "Run tools/release/prepare_release.py."
+        )
+
     if dry_run and changelog.get(text, version) is None:
         try:
             text = changelog.cut(text, version, date.today())
