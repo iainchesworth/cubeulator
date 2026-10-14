@@ -932,7 +932,7 @@ ScanDiagnosis SideScan::diagnose() const {
             .reads = group.reads.size(),
             .lab = group.fused,
             .roll = group.roll,
-            .in_view = in_view_ == captured.at(i),
+            .in_view = std::ranges::find(in_view_, captured.at(i)) != in_view_.end(),
         });
     }
     if (captured.size() < 6) {
