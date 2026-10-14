@@ -21,6 +21,10 @@ Item {
     // seen arriving and all six are seen confirmed; AppState moves on once
     // the solution is ready.
     readonly property bool complete: DirectScan.complete
+    // The camera could not be started (refused, absent, in use) and nothing is
+    // starting it again. Nothing is running to start over from; the way on is
+    // to ask for the camera again.
+    readonly property bool cameraFailed: DirectScan.cameraError !== "" && !DirectScan.starting
 
     readonly property color good: "#3FE05A"
 
@@ -292,10 +296,21 @@ Item {
         }
         AppButton {
             height: 42
-            visible: !root.complete
+            visible: !root.complete && !root.cameraFailed
             variant: "secondary"; text: "Start over"
             enabled: DirectScan.sidesRead > 0
             onClicked: DirectScan.restart()
+        }
+        // In place of Start over when the camera would not start: the same
+        // start the screen made on entry (AppState.onScreenChanged), so a
+        // permission now granted or a camera now free works without going
+        // back to the launch screen.
+        AppButton {
+            objectName: "scan.retry"
+            height: 42
+            visible: root.cameraFailed
+            variant: "primary"; text: qsTrId("common.tryAgain")
+            onClicked: DirectScan.start(CameraController.selectedDeviceId)
         }
     }
 }
