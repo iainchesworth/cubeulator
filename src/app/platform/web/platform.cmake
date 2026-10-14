@@ -81,7 +81,8 @@ set(CUBEULATOR_PLATFORM_SOURCES
 # to the main thread. As a link flag of the static library it reaches the app's
 # link line. profile_web.js is the page's half of the profiling export
 # (profile_web.cpp, compiled into the app itself: see
-# cube_platform_deploy_qt_runtime).
+# cube_platform_deploy_qt_runtime), and settings_web.js the page's half of
+# keeping settings across a reload (settings_web.cpp, likewise).
 #
 # A diagnostics build (docs/profiling.md, docs/testing.md) adds to that:
 #   - with the recorder behind the zone macros (CUBEULATOR_ENABLE_PROFILE_RECORDER)
@@ -94,7 +95,8 @@ set(CUBEULATOR_PLATFORM_SOURCES
 set(CUBEULATOR_PLATFORM_LINK_LIBRARIES
     -fexceptions
     "--js-library=${CUBEULATOR_PLATFORM_DIR}/camera_web.js"
-    "--js-library=${CUBEULATOR_PLATFORM_DIR}/profile_web.js")
+    "--js-library=${CUBEULATOR_PLATFORM_DIR}/profile_web.js"
+    "--js-library=${CUBEULATOR_PLATFORM_DIR}/settings_web.js")
 if(CUBEULATOR_ENABLE_PROFILE_RECORDER)
     list(APPEND CUBEULATOR_PLATFORM_LINK_LIBRARIES "--profiling-funcs")
 endif()
@@ -144,13 +146,25 @@ endfunction()
 # characters the catalogues use; tools/fonts/subset_cjk.py) are compiled in
 # under :/fonts, where main.cpp registers every font it finds.
 #
-# And the profiling export (window.cubeulatorProfile, docs/profiling.md). It
-# goes straight onto the application target rather than into the platform
-# library: nothing in the app refers to it, and an object file in a static
-# library that nothing refers to is not linked.
+# And the profiling export (window.cubeulatorProfile, docs/profiling.md) and
+# the settings flush. Both go straight onto the application target rather than
+# into the platform library: nothing in the app refers to them, and an object
+# file in a static library that nothing refers to is not linked.
+#
+# The settings flush (settings_web.cpp) is a contract with shared code, not an
+# interface: QML `Settings` objects write a change half a second after it is
+# made, and a page that is closed or reloaded inside that half second would
+# lose it, because it has no quit at which they are destroyed (which is when
+# they write on the desktops). When the page is hidden or being left,
+# settings_web.js calls cube_web_settings_flush(), which writes every value
+# of every Settings object that is a child of the SettingsState singleton or
+# of the window. A Settings object made anywhere else is not covered, nor is a
+# preference held back by some other mechanism. The test is
+# tests/web/specs/settings.spec.mjs: a reload straight after a click.
 function(cube_platform_deploy_qt_runtime target qml_dir)
     target_sources(${target} PRIVATE
-        "${PROJECT_SOURCE_DIR}/src/app/platform/web/profile_web.cpp")
+        "${PROJECT_SOURCE_DIR}/src/app/platform/web/profile_web.cpp"
+        "${PROJECT_SOURCE_DIR}/src/app/platform/web/settings_web.cpp")
     if(CUBEULATOR_WEB_TEST_DRIVER)
         target_sources(${target} PRIVATE
             "${PROJECT_SOURCE_DIR}/src/app/platform/web/driver_web.cpp")
@@ -177,6 +191,7 @@ function(cube_platform_deploy_qt_runtime target qml_dir)
     set_property(TARGET ${target} APPEND PROPERTY LINK_DEPENDS
         "${CUBEULATOR_PLATFORM_DIR}/camera_web.js"
         "${CUBEULATOR_PLATFORM_DIR}/profile_web.js"
+        "${CUBEULATOR_PLATFORM_DIR}/settings_web.js"
         "${CUBEULATOR_PLATFORM_DIR}/driver_web.js")
 endfunction()
 

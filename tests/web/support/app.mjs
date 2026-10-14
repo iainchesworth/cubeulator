@@ -50,7 +50,10 @@ export class CubeulatorApp {
    * @param {import('@playwright/test').Browser} browser
    * @param {{viewport?: {width:number,height:number}, camera?: 'fake'|'browser', query?: string,
    *          touch?: boolean, permissions?: string[], lightProbe?: boolean,
-   *          screen?: string}} [options] `screen` is the one to wait for (launch)
+   *          screen?: string, storage?: Record<string,string>}} [options]
+   *          `screen` is the one to wait for (launch); `storage` is what the
+   *          browser's localStorage holds when the app starts, as an earlier
+   *          visit would have left it
    */
   static async open(browser, options = {}, contexts = new Map()) {
     // One browser context per worker and option set, and a page per test. A
@@ -102,10 +105,11 @@ export class CubeulatorApp {
     });
 
     // A clean origin: nothing a previous test of this context kept (the app
-    // keeps its settings in the browser's storage).
+    // keeps its settings in the browser's storage), and then only what the
+    // test says an earlier visit left.
     await context.clearCookies();
     await page.goto('/icon.svg');
-    await page.evaluate(async () => {
+    await page.evaluate(async (seed) => {
       localStorage.clear();
       sessionStorage.clear();
       if (indexedDB.databases) {
@@ -115,7 +119,10 @@ export class CubeulatorApp {
           }
         }
       }
-    });
+      for (const [key, value] of Object.entries(seed)) {
+        localStorage.setItem(key, value);
+      }
+    }, options.storage ?? {});
 
     const began = Date.now();
     await page.goto(`/index.html${options.query ?? ''}`);
@@ -313,14 +320,36 @@ export class CubeulatorApp {
   }
 
   /**
-   * Waits until the browser's storage holds `value`: the app writes its
-   * settings lazily, a moment after they change, and a reload before that
-   * would lose them.
+   * What the browser's localStorage holds for the page, key to value: where
+   * the app keeps its settings (`qt-v0-<organisation>-<application>-<group>/<name>`).
    */
-  async waitUntilStored(value, timeout = 10_000) {
-    await expect.poll(() => this.page.evaluate(
-      (v) => Object.values(localStorage).includes(v), value),
-    { timeout, message: `waiting for '${value}' to reach localStorage` }).toBe(true);
+  stored() {
+    return this.page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  }
+
+  /**
+   * Does to the page what the browser does when it is put away, and returns
+   * once the page's handlers have run (they are synchronous: it is the last a
+   * page that is being closed ever runs).
+   *   'visibilitychange'  the tab goes to the background: the page is hidden
+   *                       for the length of the event, then shown again
+   *   'pagehide'          the page is being left
+   * A real reload sends both; this is for the case a reload cannot show,
+   * a page that is hidden and stays.
+   */
+  async putAway(kind = 'visibilitychange') {
+    await this.page.evaluate((what) => {
+      if (what === 'pagehide') {
+        window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+        return;
+      }
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+      } finally {
+        delete document.visibilityState;
+      }
+    }, kind);
   }
 
   /** Reloads the page and waits for the first screen again. */
