@@ -1,7 +1,10 @@
 #include "controllers/direct_scan.hpp"
 
+#include "controllers/diagnostic_records.hpp"
+#include "controllers/diagnostics.hpp"
 #include "interfaces/camera.hpp"
 
+#include <cube/diagnostics/describe.hpp>
 #include <cube/profiling.hpp>
 
 #include <QColor>
@@ -42,6 +45,42 @@ constexpr int kLockWaitFrames = 240;
         }
     }
     return true;
+}
+
+// What an evaluation came to, in a few dozen characters: how many sides, how
+// the 54 stickers were named, how the cube was put together, and the verdict.
+// Two evaluations with the same digest tell a reader nothing new - the fused
+// colours drift a little with every read of a side held in view - so only a
+// change is written.
+[[nodiscard]] std::string digest_of(const cube::vision::ScanDiagnosis& diagnosis) {
+    using cube::diagnostics::code_of;
+    std::string digest = std::to_string(diagnosis.sides.size());
+    digest += '/';
+    digest += std::to_string(diagnosis.captured);
+    if (diagnosis.naming.has_value()) {
+        digest += '|';
+        digest += std::to_string(static_cast<int>(diagnosis.naming->hue_override));
+        for (const auto& side : diagnosis.naming->faces) {
+            for (const cube::model::Facelet& facelet : side) {
+                digest += static_cast<char>('a' + static_cast<int>(facelet.color));
+            }
+        }
+    }
+    if (diagnosis.assembly.has_value()) {
+        const cube::vision::AssemblyTrace& trace = *diagnosis.assembly;
+        digest += '|';
+        digest += std::to_string(static_cast<int>(trace.path));
+        digest += ',' + std::to_string(trace.candidates);
+        digest += ',' + std::to_string(trace.chosen.value_or(99));
+        if (trace.exchange.has_value()) {
+            digest += ',' + std::to_string(trace.exchange->first_side);
+            digest += ',' + std::to_string(trace.exchange->second_side);
+        }
+    }
+    digest += '|';
+    digest += diagnosis.result.has_value() ? std::string("ok")
+                                           : std::string(code_of(diagnosis.result.error()));
+    return digest;
 }
 
 }  // namespace
@@ -129,6 +168,78 @@ cv::Mat DirectScan::latestFrame() const {
     return latest_frame_;
 }
 
+bool DirectScan::diagnosing() const noexcept {
+    return diagnostics_ != nullptr && diagnostics_->enabled();
+}
+
+void DirectScan::noteCamera(std::string_view event) const {
+    if (!diagnosing()) {
+        return;
+    }
+    using cube::diagnostics::Json;
+    Json data = Json::object();
+    data.set("event", event);
+    data.set("device", device_id_.toStdString());
+    data.set("running", running_);
+    data.set("watching", watching_);
+    data.set("awaiting_lock", awaiting_lock_);
+    data.set("frame_width", frame_width_);
+    data.set("frame_height", frame_height_);
+    data.set("photometry_control_supported",
+             cube::platform::camera::photometry_control_supported());
+    data.set("lock",
+             lock_report_.has_value() ? cube::app::records::photometry(*lock_report_) : Json());
+    if (!camera_error_.isEmpty()) {
+        data.set("error", camera_error_.toStdString());
+    }
+    diagnostics_->write("camera", std::move(data));
+}
+
+cube::diagnostics::Json DirectScan::diagnosticState() const {
+    using cube::diagnostics::Json;
+    Json state = Json::object();
+    state.set("running", running_);
+    state.set("watching", watching_);
+    state.set("awaiting_lock", awaiting_lock_);
+    state.set("complete", scanned_.has_value());
+    state.set("conflicted", conflicted_);
+    state.set("ambiguous", ambiguous_);
+    state.set("sides_read", sides_.size());
+    state.set("frame_width", frame_width_);
+    state.set("frame_height", frame_height_);
+    state.set("frames_seen", frame_seq_);
+    state.set("device", device_id_.toStdString());
+    state.set("recording_root", recording_root_.toStdString());
+    state.set("lock",
+              lock_report_.has_value() ? cube::app::records::photometry(*lock_report_) : Json());
+    state.set("scan", cube::diagnostics::to_json(scan_.diagnose()));
+    if (scanned_.has_value()) {
+        state.set("scanned_state", cube::diagnostics::cube_json(scanned_->cube));
+        state.set("session_colours", cube::diagnostics::to_json(scanned_->colours));
+    }
+    return state;
+}
+
+cube::Result<cube::vision::ScannedCube> DirectScan::evaluateScan(std::string_view trigger) {
+    if (!diagnosing()) {
+        return scan_.scanned();
+    }
+    cube::vision::ScanDiagnosis diagnosis = scan_.diagnose();
+    std::string digest = digest_of(diagnosis);
+    if (digest == last_scan_digest_) {
+        ++scans_unchanged_;
+        return std::move(diagnosis.result);
+    }
+    cube::diagnostics::Json data = cube::diagnostics::to_json(diagnosis);
+    data.set("trigger", trigger);
+    // How many evaluations since the last record said the same.
+    data.set("unchanged_since_previous", scans_unchanged_);
+    diagnostics_->write("scan", std::move(data));
+    last_scan_digest_ = std::move(digest);
+    scans_unchanged_ = 0;
+    return std::move(diagnosis.result);
+}
+
 void DirectScan::start(const QString& deviceId) {
     setWatching(false);
     if (start_watcher_.isRunning()) {
@@ -176,6 +287,8 @@ void DirectScan::setWatching(bool watching) {
 void DirectScan::openCamera(const QString& deviceId) {
     camera_error_.clear();
 
+    device_id_ = deviceId;
+    lock_report_.reset();
     // Opening a camera takes seconds on some drivers; keep the GUI alive.
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
                                                     .display_name = ""};
@@ -189,6 +302,7 @@ void DirectScan::handleStartFinished() {
     const bool stop_requested = std::exchange(stop_requested_while_starting_, false);
     if (!result.has_value()) {
         camera_error_ = QString::fromStdString(std::string(cube::to_string(result.error())));
+        noteCamera("open_failed");
         emit runningChanged();
         return;
     }
@@ -208,6 +322,7 @@ void DirectScan::handleStartFinished() {
     frames_awaiting_lock_ = 0;
 
     running_ = true;
+    noteCamera(awaiting_lock_ ? "opened_lock_requested" : "opened_lock_refused");
     poll_timer_.start();
     emit runningChanged();
 }
@@ -224,6 +339,7 @@ void DirectScan::stop() {
     // Also puts the camera's exposure and white balance back as found.
     cube::platform::camera::stop();
     running_ = false;
+    noteCamera("stopped");
     watching_ = false;
     awaiting_lock_ = false;
     finishRecording();
@@ -250,6 +366,11 @@ void DirectScan::restart() {
     conflicted_ = false;
     ambiguous_ = false;
     scanned_.reset();
+    if (diagnosing()) {
+        diagnostics_->write("scan", cube::diagnostics::Json::object().set("trigger", "restart"));
+    }
+    last_scan_digest_.clear();
+    scans_unchanged_ = 0;
     emit frameUpdated();
     emit sidesChanged();
 }
@@ -262,8 +383,15 @@ void DirectScan::poll() {
     CUBE_ZONE_SCOPED_N("direct_scan.poll_frame");
     // The lock reports once, when it has been applied or refused. Either
     // way the camera is as steady as it is going to get.
-    if (cube::platform::camera::take_photometry_report().has_value() ||
-        ++frames_awaiting_lock_ > kLockWaitFrames) {
+    auto lock_report = cube::platform::camera::take_photometry_report();
+    const bool reported = lock_report.has_value();
+    if (reported) {
+        lock_report_ = std::move(lock_report);
+    }
+    if (reported || ++frames_awaiting_lock_ > kLockWaitFrames) {
+        if (awaiting_lock_) {
+            noteCamera(reported ? "lock_reported" : "lock_timed_out");
+        }
         awaiting_lock_ = false;
     }
     processFrame(frame->frame, frame->t_ms);
@@ -336,7 +464,7 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     }
     sides_ = std::move(sides);
 
-    auto cube = scan_.scanned();
+    auto cube = evaluateScan(corner_added ? "corner_added" : "sides_changed");
     conflicted_ = !cube.has_value() && cube.error() != cube::CubeError::face_capture_incomplete;
     ambiguous_ = !cube.has_value() && cube.error() == cube::CubeError::ambiguous_scan;
     if (cube.has_value()) {

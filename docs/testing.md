@@ -128,12 +128,14 @@ To *use* the solve screen without scanning a cube first, start the app with
 from that seed, camera off. `CUBE_SOLVE_DEMO_MOVE=<n>` opens it `n` moves in,
 and the solution is logged (run with `QT_FORCE_STDERR_LOGGING=1` to see it).
 
-To find out why the solve screen's camera took a move the way it did, start
-the app with `CUBE_HELD_LOG=<file>`. Each time what it makes of the cube
-changes, one line is appended: the move asked for, the verdict, how many of
-the nine stickers were found, and how far the side in view sits from the cube
-as it stood and from the cube after the move. Numbers only - no picture is
-kept.
+To find out why the solve screen's camera took a move the way it did, switch
+the diagnostics channel on (Settings > Developer, or `Ctrl+Shift+D`; see
+[Live diagnostics](diagnostics.md)). Each time what it makes of the cube
+changes, a `held` record is written: the move asked for, the verdict, how many
+of the nine stickers were found and their colours, and how far the side in view
+sits from the cube as it stood and from the cube after the move. Numbers
+only - no picture is kept. (This replaces the `CUBE_HELD_LOG` environment
+variable, which is no longer read.)
 
 ## Hardware tests (camera)
 
@@ -274,6 +276,22 @@ somewhere to draw.
   with no test change, and what it does is for a case of its own.
 - **QML warnings are failures.** `diagnostics.cpp` collects what the app's own
   QML printed; the journey cases assert it is nothing.
+- **Nothing of a person's is read or written.** The settings store is a
+  temporary directory (`QSettings::setPath`), and so is the app's data folder,
+  where the history of solves is kept: `system_test_main.cpp` points
+  `CUBEULATOR_DATA_DIR` at a directory that goes away with the process, as
+  `cube_qml_tests` and `cube_i18n_screen_tests` do in their own mains. The
+  controllers open the history when they are made and any case that steps a
+  solve writes to it, so a binary that makes them must do the same. `App::fresh`
+  empties it and switches it back on.
+- **A solve is kept the way the app keeps one.** `history_test.cpp` makes the
+  entries by scanning a cube into the solve controller and stepping it (and
+  opening the complete screen), not by writing the history's file, so what is
+  asserted is that a person's solve reaches the list and that what the list
+  offers works: carrying on, deleting and clearing after asking, and the two
+  switches in Settings. The store and the controller behind it are covered
+  without a window by `tests/unit/solve_history_test.cpp` (round trip, the
+  cap of 100, a file that cannot be read, the off switch, resuming).
 
 ### Time budget
 
@@ -432,14 +450,16 @@ solve screens - narrow (390x844) and wide (900x640), light and dark:
 `launch`, `settings`, `permission`, `complete`, `scan-camera-unavailable`,
 `scan-looking`, `scan-reading`, `scan-three-sides`, `scan-cube-read`,
 `solve-start`, `solve-middle`, `solve-end`, `complete`, and the solution
-reviewed from it: `solution-start`, `solution-middle`, `solution-end`. Names are
+reviewed from it: `solution-start`, `solution-middle`, `solution-end`; then the
+history: `history` (a finished solve and one left part-way) and `history-empty`.
+Names are
 `<screen>-<layout>-<theme>.png`. Frames are drawn; the launch cube's idle
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
 
 It is two ctest entries of its own (`system.tour.narrow` and `.wide`, writing
 to `<build>/system-test-output/tour/<layout>`) because it is the slowest part
-by far - 48 grabs of a window that is being rendered in software on Linux CI
+by far - 68 grabs of a window that is being rendered in software on Linux CI
 - and a picture that cannot be taken should not hide what the walk found, nor
 spend the walk's time budget. Each layout is a half of the pictures and can
 run beside the other. The solution is stepped to its middle and its end
@@ -490,12 +510,27 @@ platform reports camera access as denied), and on the complete screen both
 buttons are below a 1280x800 window. They are listed in the test as they
 are; a new overflow fails it, and so does the day one of these is fixed.
 
+A control inside the window can still sit on another, which that check cannot
+see. On the solve screen the camera's preview (`solve.frame`), its words
+(`solve.words`), the move label (`solve.move`) and the cube (`solve.cube`) share
+the stage, and the cube was sized without them: on a phone the words ran across
+its edge and its top was under the move label. A case of its own scans a cube,
+goes to the solve screen and holds those four boxes clear of one another and
+inside the window at the smallest window, the phones, either side of the
+breakpoint and the desktop sizes - with the words as they are and as long as they
+get, and then at the smallest window through every move of the solution, since
+the label's width changes with the move and the cube must not answer to it. It
+compares boxes, not pixels: a cube's box has air round the cube, which it needs
+to turn a layer in, so a box that is clear is a cube that is clear at any angle.
+
 ### Known today
 
 `known_today_test.cpp` asserts, as they are, the behaviours the
-[experience plan](app-experience-plan.md) lists as defects: three buttons do
-nothing, there is no back or keyboard focus on the settings screen, and two
-settings drive a controller no screen uses. Each is tagged `[known-today]`,
+[experience plan](app-experience-plan.md) lists as defects: a button does
+nothing (**Review the solution**, which the solution-review branch builds),
+there is no back or keyboard focus on the settings screen, and two settings
+drive a controller no screen uses. (**Solve history** did nothing until the
+history screen was built; it is a journey step now, `history_test.cpp`.) Each is tagged `[known-today]`,
 cites its plan line and owner, and is written to **fail the day it is
 fixed** - that is the prompt to turn it into a journey step. Nothing in the
 suite fixes them.

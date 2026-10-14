@@ -16,6 +16,9 @@ Rectangle {
         color: Theme.accent
     }
 
+    // settings.confirm-clear: the same question History asks.
+    property bool confirmingClear: false
+
     // The theme choices by their key, so that each is a plain qsTrId() call
     // the extractor can see; SettingsState owns the keys, not the words.
     readonly property var themeLabels: ({
@@ -192,6 +195,34 @@ Rectangle {
             }
         }
 
+        // Solves kept on this device (history.md). Off stops adding; it does
+        // not delete - Clear history does, after asking.
+        Column {
+            width: parent.width
+            spacing: Theme.space2
+            SectionLabel { text: qsTrId("settings.section.history") }
+            Toggle {
+                objectName: "settings.keepHistory"
+                checked: SolveHistory.keep
+                label: qsTrId("settings.history.keep")
+                onToggled: SolveHistory.keep = !SolveHistory.keep
+            }
+            Text {
+                text: qsTrId("settings.history.note")
+                font.family: Theme.fontHeading; font.pixelSize: 12
+                color: Theme.inkMuted(0.6)
+                width: parent.width; wrapMode: Text.WordWrap
+            }
+            AppButton {
+                objectName: "settings.clearHistory"
+                variant: "secondary"
+                maxWidth: parent.width
+                text: qsTrId("history.clear")
+                enabled: SolveHistory.count > 0
+                onClicked: root.confirmingClear = true
+            }
+        }
+
         Column {
             width: parent.width
             spacing: Theme.space2
@@ -283,6 +314,52 @@ Rectangle {
                 label: qsTrId("settings.dev.stats")
                 onToggled: SettingsState.statsForNerds = !SettingsState.statsForNerds
             }
+
+            // The diagnostics channel (docs/diagnostics.md): what the scan
+            // read and how it was named, written as it happens to a file a
+            // person or another program can read. Developer-only, off at every
+            // start unless CUBE_DIAGNOSTICS says otherwise, and switched here
+            // without a restart. Ctrl+Shift+D and Ctrl+Shift+S do the same
+            // from any screen (DesktopShell.qml).
+            Toggle {
+                objectName: "settings.diagnostics"
+                visible: Diagnostics.available
+                checked: Diagnostics.enabled
+                label: qsTrId("settings.dev.diagnostics")
+                onToggled: Diagnostics.enabled = !Diagnostics.enabled
+            }
+            // A separate switch: frames show whatever the camera sees. It only
+            // takes effect while the one above is on.
+            Toggle {
+                objectName: "settings.diagnosticsFrames"
+                visible: Diagnostics.available
+                checked: Diagnostics.framesEnabled
+                label: qsTrId("settings.dev.diagnosticsFrames")
+                onToggled: Diagnostics.framesEnabled = !Diagnostics.framesEnabled
+            }
+            AppButton {
+                objectName: "settings.diagnosticsSnapshot"
+                visible: Diagnostics.available
+                variant: "secondary"
+                text: qsTrId("settings.dev.diagnosticsSnapshot")
+                onClicked: Diagnostics.snapshot()
+            }
+            Text {
+                objectName: "settings.diagnosticsPath"
+                visible: Diagnostics.available
+                text: Diagnostics.enabled ? Diagnostics.path : Diagnostics.directory
+                font.family: Theme.fontMono; font.pixelSize: 11
+                color: Theme.inkMuted(0.6)
+                width: parent.width; wrapMode: Text.WrapAnywhere
+            }
+            Text {
+                objectName: "settings.diagnosticsError"
+                visible: Diagnostics.error !== ""
+                text: Diagnostics.error
+                font.family: Theme.fontHeading; font.pixelSize: 12
+                color: Theme.warning
+                width: parent.width; wrapMode: Text.WordWrap
+            }
         }
     }
 
@@ -373,6 +450,22 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    // settings.confirm-clear: over whichever layout is on show.
+    ConfirmDialog {
+        objectName: "settings.clearDialog"
+        open: root.confirmingClear
+        restoreFocusTo: root
+        title: qsTrId("history.clear.title")
+        body: qsTrId("history.clear.body", SolveHistory.count)
+        keepText: qsTrId("history.clear.keep")
+        confirmText: qsTrId("history.clear.confirm")
+        onKept: root.confirmingClear = false
+        onConfirmed: {
+            SolveHistory.clear();
+            root.confirmingClear = false;
         }
     }
 }

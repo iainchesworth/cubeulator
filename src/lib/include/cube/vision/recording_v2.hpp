@@ -21,6 +21,7 @@
 //    (check_recording below).
 
 #include <cube/error.hpp>
+#include <cube/solver/cube.hpp>
 #include <cube/vision/frame_recording.hpp>
 
 #include <opencv2/core.hpp>
@@ -70,6 +71,11 @@ struct Manifest {
 // is_solvable(). Returns a specific human-readable reason on failure so
 // the recorder can refuse loudly.
 [[nodiscard]] std::optional<std::string> state_string_problem(const std::string& state);
+
+// The state string of a cube: what state_string_problem accepts, for the cube
+// the solver holds. The developer diagnostics channel writes it so that a
+// cube on screen can be pasted into a manifest.
+[[nodiscard]] std::string state_string(const cube::solver::Cube& cube);
 
 // Serialise / parse. read_manifest tolerates unknown keys (the spec says
 // consumers must) and returns nullopt only for unreadable/unparseable

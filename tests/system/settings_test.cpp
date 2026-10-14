@@ -9,6 +9,7 @@
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QFile>
 #include <QGuiApplication>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -119,4 +120,51 @@ TEST_CASE("a second launch comes up with the theme the first one left",
     CHECK(app.window().color() == QColor("#1A1918"));
     app.settle();
     CHECK(app.grab().pixelColor(2, 2).lightness() < 80);
+}
+
+TEST_CASE("the diagnostics switches work from Settings, and every screen says while it writes",
+          "[system][settings][diagnostics]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
+        auto& diagnostics = app.runtime().controllers().diagnostics;
+
+        // Off at start, and the app shows nothing of it.
+        REQUIRE_FALSE(diagnostics.enabled());
+        CHECK(app.find("diagnostics.marker") == nullptr);
+
+        open_settings(app);
+        CHECK(app.find("settings.diagnostics") != nullptr);
+        CHECK(app.find("settings.diagnosticsSnapshot") != nullptr);
+
+        // Switched on while the app runs: the strip says so, and where.
+        app.click("settings.diagnostics");
+        REQUIRE(app.wait_for([&]() { return diagnostics.enabled(); }));
+        app.settle();
+        REQUIRE(app.find("diagnostics.marker") != nullptr);
+        CHECK(app.find_text(qtTrId("diagnostics.marker").arg(diagnostics.path())) != nullptr);
+        app.shot(QString("diagnostics-on-%1").arg(cube::systest::to_string(layout)));
+
+        // A snapshot is in the file as soon as it is asked for.
+        app.click("settings.diagnosticsSnapshot");
+        QFile file(diagnostics.path());
+        REQUIRE(file.open(QIODevice::ReadOnly));
+        CHECK(file.readAll().contains("\"kind\":\"snapshot\""));
+
+        // Frames are a switch of their own, and the strip says when they are.
+        app.click("settings.diagnosticsFrames");
+        REQUIRE(app.wait_for([&]() { return diagnostics.framesEnabled(); }));
+        app.settle();
+        CHECK(app.find_text(qtTrId("diagnostics.markerFrames").arg(diagnostics.directory())) !=
+              nullptr);
+        app.click("settings.diagnosticsFrames");
+        REQUIRE(app.wait_for([&]() { return !diagnostics.framesEnabled(); }));
+
+        // And off again, with no restart: the strip goes.
+        app.click("settings.diagnostics");
+        REQUIRE(app.wait_for([&]() { return !diagnostics.enabled(); }));
+        app.settle();
+        CHECK(app.find("diagnostics.marker") == nullptr);
+    }
 }

@@ -105,6 +105,24 @@ Item {
         onTriggered: Qt.quit()
     }
 
+    // ---- developer diagnostics (docs/diagnostics.md): no menu entry, no text ----
+    //
+    // Ctrl+Shift+D switches the channel on and off, live; Ctrl+Shift+S writes
+    // a snapshot of the scan and the solve as they stand, to catch a bad
+    // result while it is on screen. Settings > Developer has the same two.
+
+    Shortcut {
+        sequence: "Ctrl+Shift+D"
+        enabled: Diagnostics.available
+        onActivated: Diagnostics.toggle()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+S"
+        enabled: Diagnostics.available
+        onActivated: Diagnostics.snapshot()
+    }
+
     // ---- macOS only: Window menu items, which exist nowhere else ----
 
     Action {

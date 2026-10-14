@@ -55,6 +55,7 @@ add_executable(cube_unit_tests
     unit/color_resolution_test.cpp
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
+    unit/diagnostics_test.cpp
     unit/direct_scan_test.cpp
     unit/sticker_colour_test.cpp
     unit/corner_view_test.cpp
@@ -249,11 +250,13 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qt_controller_tests
         qt_test_main.cpp
         unit/camera_controller_test.cpp
+        unit/diagnostics_controller_test.cpp
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
         unit/platform_facts_test.cpp
-        unit/solve_controller_test.cpp)
+        unit/solve_controller_test.cpp
+        unit/solve_history_test.cpp)
 
     target_link_libraries(cube_qt_controller_tests
         PRIVATE
