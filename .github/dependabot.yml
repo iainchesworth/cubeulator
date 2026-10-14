@@ -14,8 +14,9 @@ version: 2
 #                         build jobs are not yet required checks on develop
 #                         (docs/branch-protection.md).
 #
-# Dependabot cannot see Qt, the Android NDK/SDK, the Clang/GCC packages the
-# jobs apt-install, or the runner image labels; docs/ci.md lists those pins.
+# Dependabot cannot see Qt, the Android NDK/SDK, the Emscripten version, the
+# Clang/GCC packages the jobs apt-install, or the runner image labels;
+# docs/ci.md lists those pins.
 #
 # Every PR targets develop: gitflow only lets release/hotfix/support branches
 # (or develop itself) open a PR against main. branch-name-check.yml allows the
@@ -42,7 +43,11 @@ multi-ecosystem-groups:
 
 updates:
   - package-ecosystem: "github-actions"
-    directory: "/"
+    # The workflows, and the composite action that builds the web app for both
+    # ci.yml and docs.yml (its action pins must move with the workflows').
+    directories:
+      - "/"
+      - "/.github/actions/web-build"
     target-branch: "develop"
     schedule:
       interval: "weekly"
