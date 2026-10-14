@@ -150,6 +150,8 @@ private:
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
     // Joins groups that have turned out to be one side.
     void merge_alike_groups();
+    // Bounds the groups kept, dropping the least-supported stray.
+    void drop_weakest_stray();
 
     std::vector<Group> groups_;
     std::vector<CornerRead> corners_;

@@ -53,12 +53,12 @@ constexpr float kPatchHalfWidth = 0.22F;
 // 12. Two sides of one cube can differ in nothing but which of red and
 // orange sits where - a partly solved cube has that - and under a warm cast
 // red and orange differ almost only in lightness, the axis colour_distance
-// counts for a quarter. A whole side with red and orange traded scored 9.5 a
-// sticker and about 3 to 6 over the nine, so the two sides were fused into
-// one: its medians were a blend of both, the colours seemed to flip as
-// either was shown, and the scan waited for a sixth side it had already
-// swallowed. The centre of the other side was 16 Lab units away in plain
-// lightness-and-all Lab.
+// counts for a quarter. Each sticker with red and orange traded scored 9.5;
+// the two sides of the cube this was found on differed in three, 3 to 6 over
+// the nine, so they were fused into one: its medians were a blend of both,
+// the colours seemed to flip as either was shown, and the scan waited for a
+// sixth side it had already swallowed. Their centres were 16 Lab units apart
+// in plain Lab.
 
 // Two stickers further apart than this are two colours: the floor
 // resolve_colors holds centres to.
@@ -92,6 +92,13 @@ constexpr float kRollCostCap = 2.0F * kDifferentColourLab;
 // the same from frame to frame; without this its turn flapped between
 // nearly-tied choices and the median fused them.
 constexpr float kRollPriorMargin = kDifferentColourLab;
+
+// Groups kept. A read that is no side seen so far starts a group of its own,
+// and every read is compared with every group, so a scene full of lattices
+// that are not a cube (a chessboard, a patterned shirt) must not grow them
+// without bound. Six are sides; the rest are strays that rarely reach two
+// reads. When there are more than this the least-supported stray goes.
+constexpr std::size_t kMaxGroups = 24;
 
 // Lightness and chroma carry shading; hue does not. Down-weighting the
 // first two keeps a shaded sticker close to its own colour.
@@ -777,6 +784,32 @@ void SideScan::add(const std::optional<SideRead>& read) {
         in_view_ = groups_.size() - 1;
     }
     merge_alike_groups();
+    drop_weakest_stray();
+}
+
+// Keeps the groups to kMaxGroups by dropping the one with the fewest reads,
+// the oldest of them, but never the side in view.
+void SideScan::drop_weakest_stray() {
+    if (groups_.size() <= kMaxGroups) {
+        return;
+    }
+    std::optional<std::size_t> weakest;
+    for (std::size_t i = 0; i < groups_.size(); ++i) {
+        if (in_view_ == i) {
+            continue;
+        }
+        if (!weakest.has_value() ||
+            groups_.at(i).reads.size() < groups_.at(*weakest).reads.size()) {
+            weakest = i;
+        }
+    }
+    if (!weakest.has_value()) {
+        return;
+    }
+    groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(*weakest));
+    if (in_view_.has_value() && *in_view_ > *weakest) {
+        --*in_view_;
+    }
 }
 
 // A group begun while its side was only a read or two old is judged on a

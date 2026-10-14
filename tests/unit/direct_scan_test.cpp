@@ -327,42 +327,9 @@ namespace {
 
 using Lab9 = std::array<cv::Vec3f, 9>;
 
-// The six colours of a real cube under a warm lamp, measured on 2026-10-14
-// from the scan in which two sides were fused into one. Red and orange are
-// 16 Lab apart and almost all of that is lightness - the one axis the
-// colour distance counts for a quarter.
-const cv::Vec3f kLampWhite{65.5F, 22.5F, 16.5F};
-const cv::Vec3f kLampYellow{54.3F, 25.9F, 53.0F};
-const cv::Vec3f kLampRed{28.4F, 50.4F, 36.5F};
-const cv::Vec3f kLampOrange{41.0F, 56.1F, 46.7F};
-const cv::Vec3f kLampGreen{16.8F, -12.7F, 14.8F};
-const cv::Vec3f kLampBlue{11.0F, 5.5F, -15.5F};
-
-cv::Vec3f lamp_colour(Color colour) {
-    switch (colour) {
-        case Color::White:
-            return kLampWhite;
-        case Color::Yellow:
-            return kLampYellow;
-        case Color::Red:
-            return kLampRed;
-        case Color::Orange:
-            return kLampOrange;
-        case Color::Green:
-            return kLampGreen;
-        case Color::Blue:
-            return kLampBlue;
-    }
-    return {};
-}
-
-const Drawing kLamp{
-    .paint =
-        [](Color colour) {
-            const cv::Vec3b bgr = cube::vision::lab_to_bgr(lamp_colour(colour));
-            return cv::Scalar(bgr(0), bgr(1), bgr(2));
-        },
-};
+const cv::Vec3f kLampRed = cube::test::warm_lamp_lab(Color::Red);
+const cv::Vec3f kLampOrange = cube::test::warm_lamp_lab(Color::Orange);
+const Drawing kLamp = cube::test::warm_lamp_drawing();
 
 // A read as the reader gives it, from nine measured colours: the lattice
 // stays where it is, so every read after the first of a hold is steady.
@@ -508,6 +475,32 @@ TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are c
     }
 }
 
+TEST_CASE("a flood of lattices that are no side does not cost the side being held",
+          "[direct-scan]") {
+    // A chessboard or a patterned shirt gives steady reads of colours no side
+    // has. Each starts a group of its own; they are bounded, and a side that
+    // has been held is not among those dropped.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    hold_lab(scan, hand, kOrangeCentred, 12);
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<float> lightness(5.0F, 95.0F);
+    std::uniform_real_distribution<float> chroma(-60.0F, 60.0F);
+    for (int stray = 0; stray < 80; ++stray) {
+        Lab9 junk;
+        for (cv::Vec3f& sticker : junk) {
+            sticker = cv::Vec3f(lightness(rng), chroma(rng), chroma(rng));
+        }
+        scan.add(read_of(junk));
+        scan.add(read_of(junk));
+        scan.add(std::nullopt);
+    }
+    hold_lab(scan, hand, kOrangeCentred, 12);
+
+    REQUIRE(scan.sides().size() == 1);
+    CHECK(scan.sides().at(0).reads == 22);
+}
+
 TEST_CASE("a cube whose red and orange sides are each the other's colours is read as six sides",
           "[direct-scan]") {
     // Half-turns of the top, bottom and front leave only red and orange on
@@ -528,7 +521,8 @@ TEST_CASE("a cube whose red and orange sides are each the other's colours is rea
         Color nearest = Color::White;
         float best = std::numeric_limits<float>::max();
         for (const Color colour : kColours) {
-            const float gap = static_cast<float>(cv::norm(measured - lamp_colour(colour)));
+            const float gap =
+                static_cast<float>(cv::norm(measured - cube::test::warm_lamp_lab(colour)));
             if (gap < best) {
                 best = gap;
                 nearest = colour;
