@@ -605,8 +605,17 @@ Item {
             // stays Transparent, so it's never actually painted as a visible
             // sky) - a real photographed HDRI would look better but there
             // isn't one in the repo's assets yet.
+            //
+            // The sky is Qt's ProceduralSkyTextureData, defaults and all, but
+            // as a file, already prefiltered. Given the sky as an image Qt
+            // Quick 3D prefilters it itself, on the first frame of every
+            // View3D - seconds of CPU on a software renderer (a virtual
+            // machine, a browser without a GPU) every time a screen with the
+            // cube comes up. This file is that prefiltering's result, which
+            // Qt uses as it is (docs/performance.md, "The light probe";
+            // tools/lightprobe makes it).
             lightProbe: Texture {
-                textureData: ProceduralSkyTextureData {}
+                source: "lightprobe/sky.ktx"
             }
             // The sky lights from above only; evenLight leans on its own
             // lights instead.
