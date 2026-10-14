@@ -56,5 +56,16 @@ Check the key's fingerprint against the one published here before trusting it:
 the key in a release proves nothing about who made the release if it is the only
 place the fingerprint appears.
 
+| | |
+|---|---|
+| Key | `Cubeulator Release Signing Key`, RSA 4096, signing only |
+| Fingerprint | `0CF2 A242 440A 7AF0 18A2  BFF3 03E2 D330 B299 EB46` |
+| Created | 2026-10-14 |
+| Expires | 2031-10-13 |
+
+```sh
+gpg --show-keys --fingerprint cubeulator-signing-key.asc
+```
+
 The two answer different questions. Provenance ties the bytes to *this
 repository and build*; the signature ties them to *the maintainer's key*.
