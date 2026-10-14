@@ -88,8 +88,7 @@ inline QStringList press_every_control(App& app, const QString& screen,
         // place before the scroll says nothing.
         bool scrolls = false;
         for (QQuickItem* up = control->parentItem(); up != nullptr; up = up->parentItem()) {
-            scrolls =
-                scrolls || QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
+            scrolls = scrolls || up->inherits("QQuickFlickable");
         }
         const QPointF centre =
             control->mapToScene(QPointF(control->width() / 2, control->height() / 2));

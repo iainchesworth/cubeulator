@@ -28,6 +28,7 @@ ApplicationWindow {
             case "solve": return solveScreen;
             case "settings": return settingsScreen;
             case "complete": return completeScreen;
+            case "solution": return solutionScreen;
             default: return launchScreen;
             }
         }
@@ -53,4 +54,11 @@ ApplicationWindow {
     Component { id: solveScreen; SolveScreen {} }
     Component { id: settingsScreen; SettingsScreen {} }
     Component { id: completeScreen; CompleteScreen {} }
+    Component {
+        id: solutionScreen
+        SolutionScreen {
+            source: AppState.solutionSource
+            subtitle: AppState.solutionSubtitle
+        }
+    }
 }

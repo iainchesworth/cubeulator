@@ -79,6 +79,17 @@ void switch_to(App& app, const char* code) {
     app.settle();
 }
 
+// A solution in the controller, for the screens that have one to show: the
+// solve screen and the solution. One serves every case; the controller keeps
+// it.
+void have_a_solution(App& app) {
+    auto& solve = app.runtime().solve();
+    if (solve.totalMoves() == 0) {
+        solve.solveCube(cube::solver::random_scramble(21));
+    }
+    REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+}
+
 void visit(QQuickItem* item, const std::function<void(QQuickItem*)>& fn) {
     fn(item);
     for (QQuickItem* child : item->childItems()) {
@@ -256,6 +267,58 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
     CHECK(difference(in_english, in_hebrew) < 0.02);
 }
 
+TEST_CASE(
+    "the solution screen follows the layout's direction: forward is the other arrow, "
+    "the cube's pane the other side",
+    "[system][language][solution]") {
+    App& app = App::fresh(App::Start::elsewhere);
+    LanguageGuard guard(app);
+    app.resize(cube::systest::kDesktop);
+    have_a_solution(app);
+    switch_to(app, "en");
+    app.go("solution");
+    app.settle();
+
+    const auto position = [&]() { return app.screen_item()->property("position").toInt(); };
+    const auto cube_x = [&]() {
+        QQuickItem* cube = app.find("solution.cube");
+        REQUIRE(cube != nullptr);
+        return cube->mapToScene(QPointF(cube->width() / 2, 0)).x();
+    };
+    const auto list_x = [&]() {
+        QQuickItem* list = app.find("solution.list");
+        REQUIRE(list != nullptr);
+        return list->mapToScene(QPointF(list->width() / 2, 0)).x();
+    };
+
+    // English: the cube's pane leads, which is the left; the right arrow is
+    // forward.
+    CHECK(cube_x() < app.window().width() / 2);
+    CHECK(list_x() > app.window().width() / 2);
+    app.key(Qt::Key_Right);
+    REQUIRE(app.wait_for([&]() { return position() == 1; }, 15'000));
+    app.key(Qt::Key_Left);
+    REQUIRE(app.wait_for([&]() { return position() == 0; }, 15'000));
+
+    // Hebrew: the panes change sides, and so does forward. (That the cube in
+    // its pane is not a reflection is cube_i18n_screen_tests's.)
+    switch_to(app, "he");
+    app.settle();
+    CHECK(cube_x() > app.window().width() / 2);
+    CHECK(list_x() < app.window().width() / 2);
+    app.key(Qt::Key_Left);
+    REQUIRE(app.wait_for([&]() { return position() == 1; }, 15'000));
+    app.key(Qt::Key_Right);
+    REQUIRE(app.wait_for([&]() { return position() == 0; }, 15'000));
+    CHECK(app.screen_item()->property("mirrored").toBool());
+
+    // Home and End are the ends, in either direction.
+    app.key(Qt::Key_End);
+    CHECK(position() == app.screen_item()->property("total").toInt());
+    app.key(Qt::Key_Home);
+    CHECK(position() == 0);
+}
+
 namespace {
 
 // The converted screens of the real window, in `language` at one layout:
@@ -285,7 +348,8 @@ void nothing_is_cut_off_in(const char* language, Layout layout) {
     const QString which = QLatin1String(language) == QLatin1String("xx")
                               ? QStringLiteral("pseudo")
                               : QString::fromLatin1(language);
-    for (const char* screen : {"permission", "complete"}) {
+    have_a_solution(app);
+    for (const char* screen : {"permission", "complete", "solution"}) {
         app.go(QString::fromLatin1(screen));
         app.settle();
         check_screen(screen);
@@ -379,7 +443,8 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
 
     const std::vector<QSize> sizes = {{375, 667}, {390, 844}, {719, 640},
                                       {720, 640}, {900, 640}, {1280, 800}};
-    const char* screens[] = {"launch", "permission", "scan", "solve", "settings", "complete"};
+    const char* screens[] = {"launch",   "permission", "scan",    "solve",
+                             "settings", "complete",   "solution"};
 
     std::set<std::string> overflowing;
     std::set<std::string> on_show;
@@ -394,12 +459,9 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
                                   : App::Start::elsewhere);
         LanguageGuard guard(app);
         switch_to(app, "he");
-        if (QString::fromLatin1(name) == QLatin1String("solve")) {
-            auto& solve = app.runtime().solve();
-            if (solve.totalMoves() == 0) {
-                solve.solveCube(cube::solver::random_scramble(21));
-            }
-            REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        if (QString::fromLatin1(name) == QLatin1String("solve") ||
+            QString::fromLatin1(name) == QLatin1String("solution")) {
+            have_a_solution(app);
         }
         app.go(QString::fromLatin1(name));
         REQUIRE(app.screen() == QString::fromLatin1(name));

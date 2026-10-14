@@ -1,0 +1,13 @@
+{
+  "name": "cubeulator-web-tests",
+  "private": true,
+  "description": "Browser tests of Cubeulator's WebAssembly build: the app driven through its own page with Playwright.",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:perf": "playwright test --project=perf"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.61.1"
+  }
+}

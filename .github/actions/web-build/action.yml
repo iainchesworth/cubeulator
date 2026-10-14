@@ -1,15 +1,26 @@
 name: Build the web app
 description: >-
-  Builds Cubeulator for the browser (preset web-emscripten-release): installs
-  Emscripten and Qt's WebAssembly kit, configures and builds. The result is a
-  directory of static files at build/web-emscripten-release/bin - see
-  docs/web.md. One definition for the CI leg (ci.yml) and for the documentation
-  publish (docs.yml), so the toolchain versions below are stated once.
+  Builds Cubeulator for the browser: installs Emscripten and Qt's WebAssembly
+  kit, then configures and builds each of the presets asked for (by default
+  web-emscripten-release, whose result is a directory of static files at
+  build/web-emscripten-release/bin - see docs/web.md). One definition for the
+  CI legs (ci.yml) and for the documentation publish (docs.yml), so the
+  toolchain versions below are stated once.
 
   Not included, on purpose: the checkout (it needs the vcpkg submodule with
   full history, and the caller's own settings) and the vcpkg binary cache
   (restore before this, save after it with if: always(), as the other legs
   do - triplet wasm32-emscripten-threads).
+
+inputs:
+  presets:
+    description: >-
+      Space-separated configure presets to configure and build, in order
+      (web-emscripten-release, web-emscripten-diagnostics,
+      web-emscripten-tests). Each is a build tree of its own under
+      build/<preset>; they share the vcpkg tree.
+    required: false
+    default: web-emscripten-release
 
 runs:
   using: composite
@@ -53,13 +64,35 @@ runs:
     # cmake dir are normally supplied by Qt's own qt-cmake wrapper, which this
     # project does not use - the same four-variable story as Android
     # (docs/building.md).
-    - name: Configure
+    # Configuring is where vcpkg builds the dependencies, so it is where a
+    # download from github.com that answers 500 fails a job that has otherwise
+    # done nothing wrong (it did, once, on the macOS leg of a release dry run).
+    # What a failed attempt built is in vcpkg's binary cache and buildtrees, so
+    # a second attempt resumes rather than starts again. The desktop legs of
+    # release.yml do the same.
+    - name: Configure and build
       shell: bash
-      run: >
-        cmake --preset web-emscripten-release
-        -DQT_HOST_PATH="$QT_HOST_PATH"
-        -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"
-
-    - name: Build
-      shell: bash
-      run: cmake --build --preset web-emscripten-release
+      env:
+        PRESETS: ${{ inputs.presets }}
+      run: |
+        set -uo pipefail
+        for preset in $PRESETS; do
+          echo "::group::$preset"
+          configured=false
+          for attempt in 1 2 3; do
+            if cmake --preset "$preset" \
+                -DQT_HOST_PATH="$QT_HOST_PATH" \
+                -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"; then
+              configured=true
+              break
+            fi
+            echo "::warning::configuring $preset failed (attempt $attempt of 3)"
+            sleep 30
+          done
+          if [ "$configured" != true ]; then
+            echo "::error::configuring $preset failed three times"
+            exit 1
+          fi
+          cmake --build --preset "$preset" || exit 1
+          echo "::endgroup::"
+        done

@@ -10,6 +10,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "jpeg_codec.hpp"
+
 #include <cube/vision/frame_recording.hpp>
 
 #include <opencv2/core.hpp>
@@ -173,6 +175,7 @@ TEST_CASE("read_index keeps every parseable row and drops the rest", "[replay]")
 }
 
 TEST_CASE("a synthetic recording round-trips from disk via the shared format", "[replay]") {
+    CUBE_SKIP_WITHOUT_JPEG_CODEC();
     const FixtureDir fixture("cube_frame_recording_test");
     const std::filesystem::path& dir = fixture.path();
     REQUIRE_FALSE(dir.empty());

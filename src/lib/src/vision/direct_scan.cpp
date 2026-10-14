@@ -6,6 +6,7 @@
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_fit.hpp>
+#include <cube/vision/sticker_colour.hpp>
 
 #include <opencv2/imgproc.hpp>
 
@@ -40,8 +41,15 @@ constexpr float kMaxAxisRatio = 1.18F;
 constexpr float kMaxAxisCosine = 0.17F;
 constexpr float kMaxLatticeRms = 0.12F;
 
-// Half-width of the sampled patch, in sticker spacings.
-constexpr float kPatchHalfWidth = 0.22F;
+// Half-width of the sampled patch, in sticker spacings: 0.6 of a spacing
+// across, three quarters of a sticker, which keeps well inside its edge for a
+// side up to 15% off square-on. It is wide on purpose. A logo is printed on
+// the middle of a centre sticker (a Rubik's cube's white centre has a
+// wordmark in four colours across it), and a patch of 0.44 spacings had
+// little else in it: measured over 84 reads of such a side, the centre read
+// 13 Lab units from the white stickers beside it, almost all of it
+// lightness, where this patch and sticker_lab's robust estimate read 2.
+constexpr float kPatchHalfWidth = 0.30F;
 
 // Which side a read belongs to is decided by its CENTRE sticker, because the
 // centre never moves and a cube's six centres are six distinct colours:
@@ -68,19 +76,22 @@ constexpr float kDifferentColourLab = kMinCentreSeedSeparationLab;
 // that no other side's centre can be there. Plain Lab with lightness at
 // full weight - it is the lightness that separates the closest pair.
 // Replayed over every recorded session the grouping is identical for any
-// value from 7 to 16. The closest two centres on a real cube read 13.6 apart
-// under tungsten light (live-demo-p6-retry) and 16.4 apart under the lamp
+// value from 10 to 16. The closest two centres on a real cube read 13.6 apart
+// under tungsten light (live-demo-p6-retry) and 16 to 20 apart under the lamp
 // of the cube this was found on.
 constexpr float kSameCentreLab = 10.0F;
 static_assert(kSameCentreLab < kDifferentColourLab,
               "a centre that could be another side's must not be taken for this one");
 
-// Beyond that the centre cannot vouch, and the other eight stickers must:
-// all but this many still match the side. One, because a finger over a
-// sticker is common and a second differing sticker is not. Replayed, 0
-// starts a stray group whenever a centre is read through glare, and 2
-// joins the two look-alike sides above.
-constexpr int kStickersMayDiffer = 1;
+// Beyond that the centre cannot vouch - it may be glare on this side's
+// centre or another side's - and the other eight stickers must: every one
+// still within kDifferentColourLab of the side's. Two look-alike sides can
+// differ in nothing but the centre and one sticker, and allowing a sticker to
+// differ joins them; replayed on the pair this was found on that left a
+// margin of 1.3 Lab, against 7.7 holding all eight to the match. The cost is
+// a stray group now and then when a finger covers a sticker while the centre
+// is read through glare, and a stray is not a side until it is held for
+// kMinReads.
 
 // Cost of laying a read on a side is the summed distance of the eight
 // stickers other than the centre, each capped so one finger cannot decide a
@@ -390,36 +401,6 @@ struct Upright {
     return best;
 }
 
-// Median Lab over a square patch. Nothing if the patch falls off the frame.
-[[nodiscard]] std::optional<cv::Vec3f> patch_lab(const cv::Mat& bgr, const cv::Point2f& centre,
-                                                 int half_width) {
-    const int x = static_cast<int>(std::lround(centre.x));
-    const int y = static_cast<int>(std::lround(centre.y));
-    const cv::Rect patch =
-        cv::Rect(x - half_width, y - half_width, (2 * half_width) + 1, (2 * half_width) + 1) &
-        cv::Rect(0, 0, bgr.cols, bgr.rows);
-    if (patch.area() < 9) {
-        return std::nullopt;
-    }
-    cv::Mat as_float;
-    bgr(patch).convertTo(as_float, CV_32FC3, 1.0 / 255.0);
-    cv::Mat lab;
-    cv::cvtColor(as_float, lab, cv::COLOR_BGR2Lab);
-
-    cv::Vec3f median;
-    for (int channel = 0; channel < 3; ++channel) {
-        std::vector<float> values;
-        values.reserve(static_cast<std::size_t>(patch.area()));
-        for (int row = 0; row < lab.rows; ++row) {
-            for (int col = 0; col < lab.cols; ++col) {
-                values.push_back(lab.at<cv::Vec3f>(row, col)(channel));
-            }
-        }
-        median(channel) = median_of(std::move(values));
-    }
-    return median;
-}
-
 [[nodiscard]] std::array<cv::Vec3f, 9> rolled(const std::array<cv::Vec3f, 9>& read, int roll) {
     std::array<cv::Vec3f, 9> out{};
     for (std::size_t i = 0; i < 9; ++i) {
@@ -489,13 +470,12 @@ struct SideFit {
         fit.same = true;
         return fit;
     }
-    int differing = 0;
+    fit.same = true;
     for (std::size_t i = 0; i < 9; ++i) {
         if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kDifferentColourLab) {
-            ++differing;
+            fit.same = false;
         }
     }
-    fit.same = differing <= kStickersMayDiffer;
     return fit;
 }
 
@@ -708,7 +688,7 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
     read.stickers_found = static_cast<int>(lattice->blobs);
     read.found = upright.found;
     for (std::size_t i = 0; i < 9; ++i) {
-        const std::optional<cv::Vec3f> lab = patch_lab(working, centres.at(i), half_width);
+        const std::optional<cv::Vec3f> lab = sticker_lab(working, centres.at(i), half_width);
         if (!lab.has_value()) {
             return std::nullopt;
         }

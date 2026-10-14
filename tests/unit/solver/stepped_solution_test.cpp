@@ -133,6 +133,41 @@ TEST_CASE("current_move applied to current_cube reproduces the next cube in sequ
     REQUIRE(stepped.current_cube() == before.apply(move));
 }
 
+TEST_CASE("cube_at gives the cube after any number of moves without moving the position",
+          "[stepped_solution][slow]") {
+    SteppedSolution stepped = stepped_for(3);
+    const int total = stepped.move_count();
+    REQUIRE(total > 0);
+
+    // The position is somewhere in the middle and stays there.
+    stepped.next();
+    stepped.next();
+    const int where = stepped.current_index();
+    const Cube here = stepped.current_cube();
+
+    Cube expected = stepped.cube_at(0);
+    for (int index = 0; index <= total; ++index) {
+        CAPTURE(index);
+        if (index > 0) {
+            expected = expected.apply(stepped.moves().at(static_cast<std::size_t>(index - 1)));
+        }
+        REQUIRE(stepped.cube_at(index) == expected);
+    }
+    REQUIRE(stepped.cube_at(total).is_solved());
+    REQUIRE(stepped.cube_at(where) == here);
+    REQUIRE(stepped.current_index() == where);
+    REQUIRE(stepped.current_cube() == here);
+}
+
+TEST_CASE("cube_at clamps an index outside the solution to its ends", "[stepped_solution][slow]") {
+    const SteppedSolution stepped = stepped_for(4);
+    const int total = stepped.move_count();
+    REQUIRE(stepped.cube_at(-1) == stepped.cube_at(0));
+    REQUIRE(stepped.cube_at(-100) == stepped.cube_at(0));
+    REQUIRE(stepped.cube_at(total + 1) == stepped.cube_at(total));
+    REQUIRE(stepped.cube_at(total + 100).is_solved());
+}
+
 TEST_CASE("stage_ranges cover every move exactly once, in order, with no gaps",
           "[stepped_solution][slow]") {
     const SteppedSolution stepped = stepped_for(0);
