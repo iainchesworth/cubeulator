@@ -347,9 +347,22 @@ QList<QQuickItem*> App::visible_controls() const {
 }
 
 QString App::control_key(QQuickItem* item) const {
+    QQuickItem* const root = screen_item();
+    // A row of a named list is "<list>.row", whichever row: a list scrolls,
+    // so the rows that exist depend on where it has got to, and a key for
+    // each would make a gap of every row some case happened to scroll past.
+    // What the gate asks - that a row can be pressed, in each layout - is the
+    // same question for all of them.
+    for (QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
+        if (up->inherits("QQuickListView") && !up->objectName().isEmpty()) {
+            return up->objectName() + ".row";
+        }
+        if (up == root) {
+            break;
+        }
+    }
     // The nearest name up the tree: a toggle's pointer area is anonymous but
     // the toggle that holds it is not.
-    QQuickItem* const root = screen_item();
     for (QQuickItem* up = item; up != nullptr; up = up->parentItem()) {
         if (!up->objectName().isEmpty()) {
             return up->objectName();
@@ -384,11 +397,12 @@ QQuickItem* click_target(QQuickItem* item) {
     return inner != nullptr ? inner : item;
 }
 
-// A control inside a Flickable (the narrow settings list) may be scrolled out
-// of the viewport; scroll it in, as a person's finger would.
+// A control inside a Flickable (the narrow settings list, the solution's
+// list: a ListView is one) may be scrolled out of the viewport; scroll it in,
+// as a person's finger would.
 void scroll_into_view(QQuickItem* item) {
     for (QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
-        if (!class_is(up, "QQuickFlickable")) {
+        if (!up->inherits("QQuickFlickable")) {
             continue;
         }
         QQuickItem* content = qvariant_cast<QQuickItem*>(up->property("contentItem"));

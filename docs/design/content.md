@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-405 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+408 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -386,6 +386,7 @@ Review the solution.
 | `scan.guide.next` | Turn to a side that is not filled in below, square to the camera | Guidance between sides. 'Below' refers to the row of six small squares at the bottom of the screen. |
 | `scan.guide.seenBefore` | This side is already read. Turn to another one | Guidance when the side shown has been read before. |
 | `scan.guide.conflict` | These six sides do not make a valid cube yet. Show each side again, square to the camera. | Guidance when six sides are read but something is wrong. |
+| `scan.guide.ambiguous` | These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once. | Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which. |
 | `scan.guide.complete` | All six sides make a valid cube. Working out the solution… | Guidance when the scan has finished. |
 | `scan.guide.resuming` | Starting the camera again. The sides already read are kept. | Guidance when the app comes back after being in the background. |
 | `scan.stuck.title` | Not reading? | Heading of a hint that appears after ten seconds without progress. |
@@ -529,8 +530,10 @@ Review the solution.
 | key | English | note for translators |
 |---|---|---|
 | `solution.title` | The solution | Screen title. |
-| `solution.summary` | *one:* %n turn in 5 stages<br>*other:* %n turns in 5 stages | Line under the title. |
-| `solution.method` | Method: layer by layer, the one most people learn first. | One line for learners. |
+| `solution.summary` | *one:* %n turn in %1 stages<br>*other:* %n turns in %1 stages | Line under the title: how many turns the whole solution has, and how many stages. %1 is the number of stages, which depends on the method: five, four or two. Write it so that it reads for any of them. |
+| `solution.method.beginner` | Method: layer by layer, the one most people learn first. | One line for learners under the summary, shown when the solution is the Beginner method's. |
+| `solution.method.intermediate` | Method: the way fast solvers do it. | See solution.method.beginner. Shown for the Intermediate method. |
+| `solution.method.advanced` | Method: the fewest turns there are, found by search rather than learnt. | See solution.method.beginner. Shown for the Advanced method. |
 | `solution.play` | Play | Button. Plays the turns one after another. |
 | `solution.pause` | Pause | Button. |
 | `solution.next` | Next | Button. Next turn. |

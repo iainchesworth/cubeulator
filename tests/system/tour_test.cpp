@@ -21,7 +21,10 @@
 
 #include <QFileInfo>
 #include <QImage>
+#include <QMetaObject>
+#include <QQuickItem>
 #include <QQuickWindow>
+#include <QVariant>
 
 #include <set>
 #include <string>
@@ -164,6 +167,22 @@ void tour_layout(const std::string& layout) {
         REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
         tour.shoot("complete");
 
+        // And Review the solution opens the solution: as it was scanned, part
+        // way (put there, as the solve is above: the journey presses the
+        // rows) and solved (the End key). Its position is its own, so the
+        // solve's stays at its end.
+        app.click("complete.review");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        tour.shoot("solution-start");
+        REQUIRE(QMetaObject::invokeMethod(app.screen_item(), "jumpTo", Q_ARG(QVariant, total / 2)));
+        app.pump(80);
+        tour.shoot("solution-middle");
+        app.key(Qt::Key_End);
+        tour.shoot("solution-end");
+        REQUIRE(solve.atEnd());
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+
         app.go("launch");
         REQUIRE(app.wait_for([&]() { return !scan.running() && !scan.starting(); }));
 
@@ -184,9 +203,9 @@ void tour_layout(const std::string& layout) {
         }
     }
 
-    // Twelve pictures a variant, two variants a layout.
+    // Fifteen pictures a variant, two variants a layout.
     CHECK(variants == 2);
-    CHECK(all.size() == 12 * variants);
+    CHECK(all.size() == 15 * variants);
 }
 
 }  // namespace

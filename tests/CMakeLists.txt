@@ -267,7 +267,8 @@ if(CUBEULATOR_BUILD_APP)
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp
         unit/solve_screen_gallery_test.cpp
-        unit/solve_screen_test.cpp)
+        unit/solve_screen_test.cpp
+        unit/solution_screen_test.cpp)
 
     target_link_libraries(cube_qml_tests
         PRIVATE
