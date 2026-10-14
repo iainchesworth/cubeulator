@@ -14,6 +14,7 @@
 #include "bfs_search.hpp"
 #include "last_layer.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -391,6 +392,107 @@ std::vector<Metric> scan_metrics() {
         .budget = number(b::kScannedBuffers),
         .unit = "Mat buffers",
     });
+    return out;
+}
+
+// --- the verdict ---------------------------------------------------------------
+
+namespace {
+
+// What a scan's judgements cost over a whole scan of one cube, counted in the
+// times the named sides were put together into a cube (SideScan::assemblies()):
+// the costly half of a judgement, which a scan whose sides make no cube answers
+// again without, while what the attempt rested on is as it was.
+struct Judgements {
+    // Judgements made with six sides in; a cube ends the scan, as it does in
+    // the app.
+    std::size_t made = 0;
+    // How many of them put the sides together afresh, and how many of the
+    // hundred judgements of the finished scan did.
+    std::size_t assembled = 0;
+    std::size_t again = 0;
+    // What the last one came to.
+    std::optional<vision::AssemblyPath> path;
+};
+
+[[nodiscard]] Judgements judge_a_scan(const solver::Cube& cube) {
+    Judgements out;
+    vision::SideScan scan;
+    // The controller judges whenever a side's fused colours moved, which a read
+    // of a side held in view does; judging after every read is that, bounded.
+    // Says whether the scan made a cube.
+    const auto judge = [&scan, &out](bool finished) {
+        const std::size_t before = scan.assemblies();
+        const vision::ScanDiagnosis diagnosis = scan.diagnose();
+        if (!diagnosis.assembly.has_value()) {
+            return false;  // fewer than six sides yet
+        }
+        const std::size_t assembled = scan.assemblies() - before;
+        ++out.made;
+        out.assembled += assembled;
+        out.again += finished ? assembled : 0U;
+        out.path = diagnosis.assembly->path;
+        return diagnosis.result.has_value();
+    };
+    for (const std::optional<vision::SideRead>& read : scan_reads(cube, 12)) {
+        scan.add(read);
+        if (judge(false)) {
+            return out;
+        }
+    }
+    // And the cube held in view a few seconds more, which is what it is.
+    for (int i = 0; i < 100; ++i) {
+        judge(true);
+    }
+    return out;
+}
+
+void add_judgement(std::vector<Metric>& out, const std::string& base, const Judgements& work,
+                   std::uint64_t assembled_budget) {
+    out.push_back({
+        .name = base + ".assembled",
+        .measured = number(work.assembled),
+        .budget = number(assembled_budget),
+        .unit = "assemblies",
+        .note = std::format("of {} judgements with six sides in", work.made),
+    });
+    out.push_back({
+        .name = base + ".judged_again.assembled",
+        .measured = number(work.again),
+        .budget = 0.0,
+        .unit = "assemblies",
+        .note = "judging a scan again, nothing it rests on moved, must not put the sides "
+                "together again",
+    });
+}
+
+}  // namespace
+
+std::vector<Metric> judgement_metrics() {
+    std::vector<Metric> out;
+
+    // Sides that make a cube end the scan at the first judgement that says so:
+    // one assembly.
+    const Judgements settled = judge_a_scan(test::scramble(1));
+    out.push_back(expected_read("judge.settled.path",
+                                settled.path == vision::AssemblyPath::single_candidate, true));
+    add_judgement(out, "judge.settled", settled, b::kSettledAssemblies);
+
+    const Judgements several = judge_a_scan(cube_of_several_ways());
+    out.push_back(expected_read("judge.several_ways.path",
+                                several.path == vision::AssemblyPath::ambiguous, true));
+    add_judgement(out, "judge.several_ways", several, b::kSeveralWaysAssemblies);
+
+    // Six sides that make no cube: the dearest, where the listing finds none and
+    // each of the fifteen pairs of centres is asked whether trading their names
+    // would.
+    const Judgements none = judge_a_scan(
+        with_edge_flipped(test::scramble(1), solver::Color::White, solver::Color::Green));
+    out.push_back(expected_read("judge.no_cube.path",
+                                none.path == vision::AssemblyPath::failed ||
+                                    none.path == vision::AssemblyPath::names_exchanged,
+                                true));
+    add_judgement(out, "judge.no_cube", none, b::kNoCubeAssemblies);
     return out;
 }
 

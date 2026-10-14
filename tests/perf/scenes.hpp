@@ -8,6 +8,7 @@
 #include "drawn_cube.hpp"
 
 #include <cube/solver/cube.hpp>
+#include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
 #include <cube/vision/direct_scan.hpp>
 
@@ -16,6 +17,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <utility>
 #include <vector>
 
 namespace cube::perf {
@@ -87,6 +89,39 @@ inline constexpr std::array<SceneSize, 3> kSceneSizes = {{{640, 360}, {1280, 720
     };
     return test::draw_cube_corner(cube, solver::Face::F, pose,
                                   test::Drawing{.size = {size.width, size.height}});
+}
+
+// A cube with one edge flipped in place: every piece is there and every pair of
+// stickers is a pair a cube has, so it can be drawn and read, and it is no cube
+// that can be turned from solved. Six sides that make no cube is the scan's
+// worst judgement: no cube is listed, and each of the fifteen pairs of centres
+// is asked whether trading their names makes one.
+[[nodiscard]] inline solver::Cube with_edge_flipped(const solver::Cube& cube, solver::Color a,
+                                                    solver::Color b) {
+    std::array<std::array<solver::Color, 9>, 6> facelets{};
+    for (const solver::Face face : solver::kAllFaces) {
+        facelets.at(static_cast<std::size_t>(face)) = cube.face(face);
+    }
+    const solver::Cube::EdgeLocation at = cube.locate_edge(a, b);
+    std::swap(
+        facelets.at(static_cast<std::size_t>(at.face_a)).at(static_cast<std::size_t>(at.index_a)),
+        facelets.at(static_cast<std::size_t>(at.face_b)).at(static_cast<std::size_t>(at.index_b)));
+    const auto flipped = solver::Cube::from_facelets(facelets);
+    return flipped.value_or(cube);
+}
+
+// A scramble whose six sides, shown square-on, put together two ways or more
+// (the unit tests' "sides that put together two ways are reported").
+[[nodiscard]] inline solver::Cube cube_of_several_ways() {
+    solver::Cube cube = solver::Cube::solved();
+    const auto algorithm = solver::parse_algorithm(
+        "R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2");
+    if (algorithm.has_value()) {
+        for (const solver::Move move : *algorithm) {
+            cube = cube.apply(move);
+        }
+    }
+    return cube;
 }
 
 // A frame with no cube in it: the read that finds nothing, which is most of

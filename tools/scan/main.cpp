@@ -14,6 +14,10 @@
 //   cube_scan funnel <dir> [-v]      how far each frame with no square-on side got
 //                                    in the corner reader, and what the scan
 //                                    decided, as the app's own loop would
+//   cube_scan cost <dir> [runs] [-v] what each frame costs, by stage, in the
+//                                    app's own loop, and what the scan's
+//                                    verdicts came to (and cost) - the number
+//                                    to hold against the camera's 33 ms
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -40,6 +44,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -49,7 +54,9 @@
 #include <iterator>
 #include <limits>
 #include <map>
+#include <numeric>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -1096,6 +1103,213 @@ int run_holds(const fs::path& session) {
     return 0;
 }
 
+[[nodiscard]] std::string_view path_name(cube::vision::AssemblyPath path) {
+    switch (path) {
+        case cube::vision::AssemblyPath::single_candidate:
+            return "one cube";
+        case cube::vision::AssemblyPath::chosen_by_corners:
+            return "chosen by corners";
+        case cube::vision::AssemblyPath::ambiguous:
+            return "ambiguous";
+        case cube::vision::AssemblyPath::direct:
+            return "direct";
+        case cube::vision::AssemblyPath::names_exchanged:
+            return "names exchanged";
+        case cube::vision::AssemblyPath::failed:
+            return "no cube";
+    }
+    return "";
+}
+
+// What a frame costs, stage by stage, with the loop of DirectScan::processFrame:
+// one preparation, the square-on read, the corner read only for a frame with no
+// square-on side, the scan fed both, and the scan judged when its sides changed
+// or, being ambiguous, when a corner was added. The wall time of each stage is
+// taken with the frame's JPEG already decoded (the page's camera hands the app
+// pixels, not a file), so what is summed is what the application does between
+// two frames of the camera, and the number to hold against its 33 ms.
+//
+// A page's main thread is that thread, in WebAssembly: a frame that takes
+// longer than the camera's interval is a frame the page does not draw, and one
+// that takes a tenth of a second is a page that does not answer. The browser
+// numbers of the same sessions are tests/web's (docs/profiling.md).
+int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
+    using Clock = std::chrono::steady_clock;
+    const auto since = [](Clock::time_point from) {
+        return std::chrono::duration<float, std::milli>(Clock::now() - from).count();
+    };
+
+    const std::vector<fs::path> paths = frames_of(session);
+    const std::vector<float> intervals = frame_intervals(session, paths);
+    std::vector<cv::Mat> pictures;
+    pictures.reserve(paths.size());
+    for (const fs::path& path : paths) {
+        pictures.push_back(cv::imread(path.string(), cv::IMREAD_COLOR));
+    }
+
+    struct Stage {
+        std::string name;
+        std::vector<float> ms;
+    };
+    std::array<Stage, 6> stages = {{{"prepare_frame", {}},
+                                    {"read_side", {}},
+                                    {"read_corner", {}},
+                                    {"scan add + add_corner + sides", {}},
+                                    {"verdict (diagnose)", {}},
+                                    {"the frame, all of it", {}}}};
+    struct Verdict {
+        std::string kind;
+        std::vector<float> ms;
+        // The search over the 4^6 turns of the named sides, timed apart from
+        // the rest of the judgement it is part of.
+        std::vector<float> assemble_all_ms;
+        // How many of the judgements put the sides together afresh
+        // (SideScan::assemblies()): the rest were answered as the last one was.
+        std::size_t assemblies = 0;
+    };
+    std::map<std::string, Verdict> verdicts;
+    // The namings the judgements were made on, as 54 bytes: how many there were
+    // is the least number of times the sides had to be put together, and how
+    // many times the naming changed is what a scan that keeps only the last
+    // assembly has to.
+    std::set<std::array<std::uint8_t, 54>> namings;
+    std::size_t naming_changes = 0;
+    std::size_t judged = 0;
+    std::size_t completed = 0;
+
+    for (std::size_t run = 0; run < runs; ++run) {
+        cube::vision::SideScan scan;
+        std::vector<cube::vision::SideScan::Side> previous_sides;
+        bool ambiguous = false;
+        bool done = false;
+        std::optional<std::array<std::uint8_t, 54>> last_naming;
+        for (std::size_t i = 0; i < pictures.size() && !done; ++i) {
+            const Clock::time_point began = Clock::now();
+            Clock::time_point mark = began;
+            const auto prepared = cube::vision::prepare_frame(pictures[i]);
+            const float t_prepare = since(mark);
+            mark = Clock::now();
+            const auto read =
+                prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+            const float t_side = since(mark);
+            mark = Clock::now();
+            scan.add(read, intervals[i]);
+            float t_scan = since(mark);
+            float t_corner = 0.0F;
+            std::optional<cube::vision::CornerRead> corner;
+            if (!read.has_value()) {
+                mark = Clock::now();
+                corner = prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt;
+                t_corner = since(mark);
+                mark = Clock::now();
+                scan.add_corner(corner, intervals[i]);
+                t_scan += since(mark);
+            }
+            mark = Clock::now();
+            auto sides = scan.sides();
+            t_scan += since(mark);
+
+            float t_verdict = 0.0F;
+            if (!(same_sides(sides, previous_sides) && !(ambiguous && corner.has_value()))) {
+                previous_sides = std::move(sides);
+                mark = Clock::now();
+                const std::size_t assembled_before = scan.assemblies();
+                const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+                t_verdict = since(mark);
+                ++judged;
+                ambiguous = !diagnosis.result.has_value() &&
+                            diagnosis.result.error() == cube::CubeError::ambiguous_scan;
+                std::string kind = "fewer than six sides";
+                if (diagnosis.assembly.has_value()) {
+                    kind = fmt::format("{}, {} candidate(s), {} corner read(s)",
+                                       path_name(diagnosis.assembly->path),
+                                       diagnosis.assembly->candidates,
+                                       diagnosis.assembly->corner_reads);
+                }
+                Verdict& entry = verdicts[kind];
+                entry.kind = kind;
+                entry.ms.push_back(t_verdict);
+                entry.assemblies += scan.assemblies() - assembled_before;
+                if (diagnosis.naming.has_value()) {
+                    std::array<std::uint8_t, 54> naming{};
+                    for (std::size_t side = 0; side < 6; ++side) {
+                        for (std::size_t cell = 0; cell < 9; ++cell) {
+                            naming.at((side * 9) + cell) = static_cast<std::uint8_t>(
+                                diagnosis.naming->faces.at(side).at(cell).color);
+                        }
+                    }
+                    namings.insert(naming);
+                    naming_changes += last_naming.has_value() && *last_naming != naming ? 1U : 0U;
+                    last_naming = naming;
+                    mark = Clock::now();
+                    const auto all =
+                        cube::solver::assemble_all_scanned_faces(diagnosis.naming->faces, 257);
+                    entry.assemble_all_ms.push_back(since(mark));
+                    (void)all;
+                }
+                done = diagnosis.result.has_value();
+                completed += done ? 1U : 0U;
+            }
+            const float total = since(began);
+            stages[0].ms.push_back(t_prepare);
+            stages[1].ms.push_back(t_side);
+            if (!read.has_value()) {
+                stages[2].ms.push_back(t_corner);
+            }
+            stages[3].ms.push_back(t_scan);
+            if (t_verdict > 0.0F) {
+                stages[4].ms.push_back(t_verdict);
+            }
+            stages[5].ms.push_back(total);
+            if (every_frame && run == 0) {
+                fmt::print("{:5} {:7.2f} ms  verdict {:7.2f}\n", i, total, t_verdict);
+            }
+        }
+    }
+
+    const auto over = [](const std::vector<float>& values, float limit) {
+        return static_cast<std::size_t>(
+            std::count_if(values.begin(), values.end(), [&](float v) { return v > limit; }));
+    };
+    const auto mean = [](const std::vector<float>& values) {
+        return values.empty() ? 0.0F
+                              : std::accumulate(values.begin(), values.end(), 0.0F) /
+                                    static_cast<float>(values.size());
+    };
+    fmt::print("{}: {} frames x {} runs; the scan judged {} times, {} ended in a cube\n",
+               session.filename().string(), pictures.size(), runs, judged, completed);
+    fmt::print("  {:32} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8} {:>5} {:>5} {:>5}\n", "stage (ms)", "n",
+               "mean", "p50", "p90", "p99", "max", ">33", ">50", ">100");
+    for (const Stage& stage : stages) {
+        fmt::print("  {:32} {:>6} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:8.2f} {:>5} {:>5} {:>5}\n",
+                   stage.name, stage.ms.size(), static_cast<double>(mean(stage.ms)),
+                   static_cast<double>(percentile(stage.ms, 0.5)),
+                   static_cast<double>(percentile(stage.ms, 0.9)),
+                   static_cast<double>(percentile(stage.ms, 0.99)),
+                   static_cast<double>(percentile(stage.ms, 1.0)), over(stage.ms, 33.0F),
+                   over(stage.ms, 50.0F), over(stage.ms, 100.0F));
+    }
+    fmt::print(
+        "  the sides were named {} different ways, and the naming changed {} times, over "
+        "{} runs:\n"
+        "  the fewest times they had to be put together, and what a scan that keeps only "
+        "the\n  last assembly has to\n",
+        namings.size(), naming_changes, runs);
+    fmt::print("  verdicts by what they came to:\n");
+    for (const auto& [kind, entry] : verdicts) {
+        fmt::print("    {:56} {:>5} x   mean {:7.2f}  p90 {:7.2f}  max {:7.2f} ms", kind,
+                   entry.ms.size(), static_cast<double>(mean(entry.ms)),
+                   static_cast<double>(percentile(entry.ms, 0.9)),
+                   static_cast<double>(percentile(entry.ms, 1.0)));
+        if (!entry.assemble_all_ms.empty()) {
+            fmt::print("   (assemble_all alone: mean {:.2f}; {} assembled afresh)",
+                       static_cast<double>(mean(entry.assemble_all_ms)), entry.assemblies);
+        }
+        fmt::print("\n");
+    }
+    return 0;
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -1124,10 +1338,23 @@ int main(int argc, char** argv) {
     if ((args.size() == 2 || args.size() == 3) && args[0] == "funnel") {
         return run_funnel(fs::path(args[1]), args.size() == 3 && args[2] == "-v");
     }
+    if ((args.size() == 2 || args.size() == 3 || args.size() == 4) && args[0] == "cost") {
+        std::size_t runs = 3;
+        bool every_frame = false;
+        for (std::size_t i = 2; i < args.size(); ++i) {
+            if (args[i] == "-v") {
+                every_frame = true;
+            } else {
+                runs = static_cast<std::size_t>(std::max(1, std::stoi(std::string(args[i]))));
+            }
+        }
+        return run_cost(fs::path(args[1]), runs, every_frame);
+    }
     fmt::print(
         "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
         "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir> [max-distance]\n"
         "  cube_scan corner-colours <session-dir>\n  cube_scan ambiguity <session-dir>\n"
-        "  cube_scan funnel <session-dir> [-v]\n");
+        "  cube_scan funnel <session-dir> [-v]\n"
+        "  cube_scan cost <session-dir> [runs] [-v]\n");
     return 2;
 }

@@ -123,6 +123,7 @@ TEST_CASE("report: what the solver's work and the reader's buffers measure now",
     print_metrics("intermediate", cube::perf::intermediate_metrics());
     print_metrics("advanced", cube::perf::advanced_metrics());
     print_metrics("scan", cube::perf::scan_metrics());
+    print_metrics("judgement", cube::perf::judgement_metrics());
     print_timing();
 }
 

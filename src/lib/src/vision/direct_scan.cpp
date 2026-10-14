@@ -1780,6 +1780,10 @@ ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
     }
 
     ++assemblies_;
+    // A zone of its own, so that how often the sides are put together shows
+    // beside what each time costs (a judgement answered as the last was has no
+    // zone here): the browser's trace and Tracy both count them.
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.assemble");
     Assembled assembled = assemble(named, faces, corners_);
     // Only a failure is kept: a cube ends the scan.
     if (assembled.result.has_value()) {

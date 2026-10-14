@@ -76,6 +76,14 @@ desktops is small:
 - **Nothing else** is platform code: the solver, the vision pipeline and the
   QML are the shared ones.
 
+One consequence is worth knowing: the scan's reader runs on the page's **main
+thread** (the app's GUI thread is the browser's), so a frame that takes longer
+than the camera's 33 ms is one the page does not draw, and the longest ones
+freeze it. What a frame costs there, measured, is on
+[the investigation page](investigations/2026-10-15-web-scan-frame-cost.md); it
+is held by a ceiling in the browser performance tests
+([Performance in the browser](testing.md#performance-in-the-browser)).
+
 ## Hosting it yourself
 
 Each release carries the same site as `Cubeulator-<version>-web.zip`: the

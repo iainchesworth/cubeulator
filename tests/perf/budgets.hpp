@@ -170,6 +170,31 @@ inline constexpr std::uint64_t kScanAddBuffers = 0;
 inline constexpr std::uint64_t kScannedBuffers = 16;
 
 // ---------------------------------------------------------------------------
+// The scan's judgement, counted in assemblies
+// ---------------------------------------------------------------------------
+
+// Putting six named sides together into a cube tries every quarter-turn of each
+// (4^6 = 4,096 combinations: cube::solver::assemble_*), and where no cube can
+// be made it tries each of fifteen pairs of centres whose names might be traded
+// as well: ten to twenty-five milliseconds in WebAssembly, on the page's main
+// thread, and the scan is judged again whenever a read of a held side moves a
+// fused colour, which is nearly every frame. A scan whose sides make no cube
+// does not put them together again while what the attempt rested on is as it
+// was (SideScan::assemblies(), kRejudgeLabDistance); what is counted here is how
+// many times it did, over a scan of drawn sides judged after every read and a
+// hundred times more once finished, so that it is exact on every machine and
+// does not move with the compiler.
+//
+// The drawn sides hold one naming and one set of colours from the first
+// judgement to the last: one assembly for each. A scan whose sides make a cube
+// is over at the first judgement that says so (one), and the budgets allow a
+// second assembly for the room a platform's rounding might need - not one for
+// every judgement, which is 105.
+inline constexpr std::uint64_t kSettledAssemblies = 1;
+inline constexpr std::uint64_t kSeveralWaysAssemblies = 2;
+inline constexpr std::uint64_t kNoCubeAssemblies = 2;
+
+// ---------------------------------------------------------------------------
 // Time, as a multiple of the calibration workload (perf/measure.hpp)
 // ---------------------------------------------------------------------------
 

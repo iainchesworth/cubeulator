@@ -12,6 +12,26 @@ import { baseURL } from './env.mjs';
 
 const fakeCameraScript = fileURLToPath(new URL('./fake_camera.js', import.meta.url));
 
+/**
+ * The sides of a cube with one edge flipped in place: the stickers of the edge
+ * between the top and the front sides traded, so that every piece is there and
+ * every pair of stickers is a pair a cube has - six sides that can be drawn and
+ * read, and that make no cube. It is the scan's dearest judgement: the listing
+ * of the cubes the sides make finds none, and each pair of centres is asked
+ * whether trading their names would. The top side's bottom-middle sticker and
+ * the front side's top-middle one are that edge in the camera's view of both
+ * (the driver's sides are the solver's layout, mirrored on D, R and B, and these
+ * two are not).
+ * @param {{faces: {face: string, stickers: string[]}[]}} sides
+ */
+export function withEdgeFlipped(sides) {
+  const faces = sides.faces.map((entry) => ({ ...entry, stickers: [...entry.stickers] }));
+  const top = faces.find((entry) => entry.face === 'U');
+  const front = faces.find((entry) => entry.face === 'F');
+  [top.stickers[7], front.stickers[1]] = [front.stickers[1], top.stickers[7]];
+  return { ...sides, faces };
+}
+
 export const DESKTOP = { width: 900, height: 640 };
 export const PHONE = { width: 390, height: 844 };
 
@@ -367,8 +387,9 @@ export class CubeulatorApp {
   // ---- the camera ----------------------------------------------------------
 
   /** What the fake camera shows next: one side's stickers, or the room. */
-  showSide(stickers, pose) {
-    return this.page.evaluate(([s, p]) => window.__fakeCamera.side(s, p), [stickers, pose]);
+  showSide(stickers, pose, noise = 0) {
+    return this.page.evaluate(([s, p, n]) => window.__fakeCamera.side(s, p, n),
+      [stickers, pose, noise]);
   }
   showRoom() {
     return this.page.evaluate(() => window.__fakeCamera.room());
@@ -379,10 +400,10 @@ export class CubeulatorApp {
    * the scan has taken it, then the empty room while the cube is turned.
    * Event-driven, not timed: the app reads at its own pace.
    */
-  async showCube(sides, { timeout = 90_000 } = {}) {
+  async showCube(sides, { timeout = 90_000, noise = 0 } = {}) {
     let taken = (await this.singleton('DirectScan')).sidesRead;
     for (const { stickers } of sides.faces) {
-      await this.showSide(stickers);
+      await this.showSide(stickers, undefined, noise);
       await expect.poll(async () => (await this.singleton('DirectScan')).sidesRead,
         { timeout, message: `waiting for side ${taken + 1} to be read` }).toBeGreaterThan(taken);
       taken = (await this.singleton('DirectScan')).sidesRead;

@@ -13,11 +13,11 @@
       "ratio": 7.383e-05
     },
     "solver.assemble_all": {
-      "count": 17,
+      "count": 20,
       "ratio": 0.07252
     },
     "solver.assemble_scan": {
-      "count": 5,
+      "count": 21,
       "ratio": 0.0775
     },
     "solver.cfop": {
@@ -69,11 +69,11 @@
       "ratio": 0.01218
     },
     "vision.direct_scan.add": {
-      "count": 1754,
+      "count": 1988,
       "ratio": 2.546e-07
     },
     "vision.direct_scan.read_side": {
-      "count": 67,
+      "count": 85,
       "ratio": 0.005344
     },
     "vision.direct_scan.scanned": {
@@ -81,11 +81,11 @@
       "ratio": 0.1225
     },
     "vision.prepare_frame": {
-      "count": 118,
+      "count": 136,
       "ratio": 0.1737
     },
     "vision.resolve_colors": {
-      "count": 17,
+      "count": 228,
       "ratio": 0.04745
     }
   }

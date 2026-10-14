@@ -40,6 +40,12 @@ struct Metric {
 // The reader's pixel buffers over synthetic frames.
 [[nodiscard]] std::vector<Metric> scan_metrics();
 
+// What judging a scan costs, counted in the exhaustive searches over the 4^6
+// turns of its six sides (AssemblyTrace::searches): a cube the sides make one
+// way, several ways, and no way; judged after every read, as the app judges it,
+// and then again as a held cube is.
+[[nodiscard]] std::vector<Metric> judgement_metrics();
+
 // --- time: a ratio to the calibration workload, opt-in -----------------------
 
 // Solving by each method, reading frames, and feeding and finishing a scan.
