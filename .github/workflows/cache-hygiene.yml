@@ -34,7 +34,12 @@ on:
   # branch name and code never reach it.
   # zizmor: ignore[dangerous-triggers] main's own script, nothing taken from the event
   workflow_run:
-    workflows: [CI, "CodeQL (C++)"]
+    # The names are the workflows' `name:` fields. GitHub could not parse
+    # "CodeQL (C++)" here (a run on main failed at startup with "Encountered an
+    # issue parsing workflow trigger(s)" for every completed CI or CodeQL run,
+    # and left a failed check suite on main's head), so codeql.yml is named
+    # plain CodeQL; its job, "Analyze (C++)", is what branch protection names.
+    workflows: [CI, CodeQL]
     types: [completed]
     branches: [main, develop]
   workflow_dispatch:

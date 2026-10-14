@@ -1,4 +1,4 @@
-name: CodeQL (C++)
+name: CodeQL
 
 on:
   push:
