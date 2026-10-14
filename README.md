@@ -33,7 +33,7 @@ You need a camera; a webcam is enough.
 | Windows 10 and later, 64-bit | `Cubeulator-<version>-windows-x64.exe` | SmartScreen may say "Windows protected your PC": *More info*, then *Run anyway* |
 | macOS 14.4 and later, Apple Silicon | `Cubeulator-<version>-macos-arm64.dmg` | Drag it to Applications; right-click it and choose *Open* (it is not notarised) |
 | Debian, Ubuntu | `Cubeulator-<version>-linux-x64.deb` | `sudo apt install ./Cubeulator-<version>-linux-x64.deb` |
-| Fedora, openSUSE | `Cubeulator-<version>-linux-x64.rpm` | `sudo dnf install ./Cubeulator-<version>-linux-x64.rpm` |
+| Fedora | `Cubeulator-<version>-linux-x64.rpm` | `sudo dnf install ./Cubeulator-<version>-linux-x64.rpm` |
 
 The packages are not yet signed by Microsoft or Apple, which is why Windows and
 macOS ask. What each release does carry is a SHA-512 manifest, GPG signatures,

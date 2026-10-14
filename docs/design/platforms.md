@@ -235,7 +235,9 @@ value.
 - AppStream metadata with a summary, description, screenshots from the
   system-test tour and a content rating. Software centres will not list
   it otherwise.
-- Wayland and X11 both; the window's app id matches the desktop file name.
+- X11, and Wayland through XWayland (the package carries Qt's `xcb` platform
+  plugin only; native Wayland is not packaged yet, `packaging.md`). The window's
+  app id matches the desktop file name.
 
 **Android**
 

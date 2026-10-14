@@ -19,6 +19,12 @@
     <p>@CUBEULATOR_ABOUT_WHAT@</p>
   </description>
 
+  <!-- Required by AppStream, and the same categories as the desktop entry. -->
+  <categories>
+    <category>Game</category>
+    <category>LogicGame</category>
+  </categories>
+
   <developer id="@CUBEULATOR_DEVELOPER_ID@">
     <name>@CUBEULATOR_PUBLISHER@</name>
   </developer>
@@ -46,6 +52,6 @@
   <content_rating type="oars-1.1" />
 
   <releases>
-    <release version="@CUBEULATOR_APPSTREAM_VERSION@" date="@CUBEULATOR_RELEASE_DATE@" />
+    <release version="@CUBEULATOR_APPSTREAM_VERSION@" type="@CUBEULATOR_APPSTREAM_RELEASE_TYPE@" date="@CUBEULATOR_RELEASE_DATE@" />
   </releases>
 </component>

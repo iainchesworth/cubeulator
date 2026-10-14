@@ -60,9 +60,45 @@ Linux)
     require "the 256 px icon is named for the identifier"           grep -q "icons/hicolor/256x256/apps/${app_id}\.png" "$contents"
     require "the licence is installed"                              grep -q 'usr/share/doc/cubeulator/LICENSE\.txt' "$contents"
     require "the third-party notices are installed"                 grep -q 'usr/share/doc/cubeulator/THIRD-PARTY-NOTICES\.txt' "$contents"
-    require "nothing is dropped in /usr itself"                     bash -c "! grep -E ' \./usr/[^/]+\$' '$contents' | grep -v -E ' \./usr/(bin|lib|share)/?\$'"
+    # Files or directories directly in /usr that are not bin, lib or share: Qt's
+    # deployment puts its translations in <prefix>/translations unless told
+    # otherwise, which is /usr/translations.
+    require "nothing is dropped in /usr itself"                     bash -c "! grep -E ' \./usr/[^/]+/?\$' '$contents' | grep -v -E ' \./usr/(bin|lib|share)/?\$'"
+    require "Qt's translations are in the private directory"        grep -q 'usr/lib/cubeulator/translations/qt_de\.qm' "$contents"
+    require "qt.conf points Qt at them"                             bash -c "dpkg-deb --fsys-tarfile '$deb' | tar -xO ./usr/lib/cubeulator/bin/qt.conf | grep -qx 'Translations = lib/cubeulator/translations'"
+    # What the package cannot give honest dependencies for, or does not carry.
+    require "the GTK 3 theme plugin is not bundled"                 bash -c "! grep -q 'libqgtk3\.so' '$contents'"
+    require "no Wayland client libraries or integrations (xcb only)" bash -c "! grep -q -E 'libQt6Wayland|libQt6WlShell|plugins/wayland-' '$contents'"
+    require "no QML debugger or profiler plugins"                   bash -c "! grep -q 'plugins/qmltooling' '$contents'"
     require "the .deb recommends a CJK font"                        bash -c "dpkg-deb -f '$deb' Recommends | grep -q fonts-noto-cjk"
     require "the .deb names its maintainer"                         bash -c "dpkg-deb -f '$deb' Maintainer | grep -q ."
+
+    # The metadata a software centre and a menu read.
+    unpacked="$(mktemp -d)"
+    dpkg-deb -x "$deb" "$unpacked"
+    if command -v desktop-file-validate >/dev/null; then
+        require "the desktop entry validates"                       desktop-file-validate "$unpacked/usr/share/applications/${app_id}.desktop"
+    else
+        echo "::warning::desktop-file-validate is not installed: the desktop entry was not validated"
+    fi
+    if command -v appstreamcli >/dev/null; then
+        require "the AppStream metadata validates"                  appstreamcli validate --no-net "$unpacked/usr/share/metainfo/${app_id}.metainfo.xml"
+    else
+        echo "::warning::appstreamcli is not installed: the AppStream metadata was not validated"
+    fi
+
+    # Every system library the files link against is one the .deb's Depends
+    # provides (packaging/linux/check-depends.sh says why a list written by hand
+    # needs this). Runs ldd over every ELF, so it needs a Linux with the
+    # libraries the build used, which this is.
+    # Run in the open, not through require(): when it fails, which libraries
+    # are missing is the whole message.
+    if bash "$root/packaging/linux/check-depends.sh" "$deb"; then
+        echo "ok      the .deb's Depends covers every system library it links"
+    else
+        echo "::error::package check failed: the .deb's Depends does not cover every system library it links"
+        failures=$((failures + 1))
+    fi
     ;;
 
 Darwin)
@@ -83,6 +119,7 @@ Darwin)
     require "the camera usage string is set"                        bash -c "/usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' '$plist' | grep -q ."
     require "the version is set"                                    bash -c "/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' '$plist' | grep -q ."
     require "the app carries a signature (ad-hoc or better)"        codesign --verify --deep "$app"
+    require "no QML debugger or profiler plugins"                   test ! -d "$app/Contents/PlugIns/qmltooling"
     require "the licence is on the disk image"                      test -f "$mount/LICENSE.txt"
     require "the third-party notices are on the disk image"         test -f "$mount/THIRD-PARTY-NOTICES.txt"
     /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$plist"
@@ -105,6 +142,7 @@ MINGW* | MSYS* | CYGWIN*)
     require "OpenCV and its codecs came along (transitive DLLs)"    grep -q 'bin[\\/]libpng16\.dll' "$contents"
     require "the C++ runtime is installed app-locally"              grep -q 'bin[\\/]vcruntime140\.dll' "$contents"
     require "no 25 MB runtime installer is bundled"                 bash -c "! grep -q 'vc_redist' '$contents'"
+    require "no QML debugger or profiler plugins"                   bash -c "! grep -q 'qmltooling' '$contents'"
     require "the licence is installed"                              grep -q 'LICENSE\.txt' "$contents"
     require "the third-party notices are installed"                 grep -q 'THIRD-PARTY-NOTICES\.txt' "$contents"
     ;;

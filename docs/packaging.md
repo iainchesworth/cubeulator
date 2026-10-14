@@ -11,9 +11,11 @@ what each platform is supposed to do is specified in
 |---|---|---|---|
 | Windows | `Cubeulator-<version>-windows-x64.exe`, an NSIS installer | CPack `NSIS` | `C:\Program Files\Cubeulator` (`bin\Cubeulator.exe`), with a Start menu entry and an uninstaller |
 | macOS | `Cubeulator-<version>-macos-arm64.dmg` | CPack `DragNDrop` | `Cubeulator.app`, dragged to Applications |
-| Linux | `Cubeulator-<version>-linux-x64.deb` and `.rpm` | CPack `DEB`, `RPM` | `/usr/lib/cubeulator` (the app and the Qt it carries), `/usr/bin/cubeulator`, and the desktop entry, AppStream metadata and icons under `/usr/share` |
+| Linux | `Cubeulator-<version>-linux-x64.deb` and `.rpm` | CPack `DEB`, `RPM` | `/usr/lib/cubeulator` (the app, the Qt it carries, and Qt's translations), `/usr/bin/cubeulator`, and the desktop entry, AppStream metadata, icons and licence under `/usr/share` |
 
-A `.zip` (and, on Linux, a `.tar.gz`) is always produced as well.
+A plain `cpack` with no `-G` also writes a `.zip` (and, on Linux, a `.tar.gz`);
+CI and the release name the generators they want, and only the packages in the
+table are published.
 
 CI builds each one on its own runner and uploads it as a build artifact
 (`.github/workflows/ci.yml`, job `build-and-test`). CI publishes nothing: a
@@ -145,11 +147,41 @@ icons follow.
 - The `.deb` recommends `fonts-noto-cjk`, and the `.rpm` suggests
   `google-noto-sans-cjk-fonts`, for Japanese and Chinese text on a minimal
   install (`platforms.md`, "Fonts").
-- Qt and OpenCV are inside the package, so its dependencies
-  are the system libraries Qt's xcb and OpenGL plumbing loads. The list is in
+- Qt and OpenCV are inside the package, so its dependencies are the system
+  libraries Qt's xcb and OpenGL plumbing loads, and a few its own libraries
+  link (GLVND's `libOpenGL`, GSSAPI through Qt6Network). The list is in
   `packaging/linux/Packaging.cmake`; it is written down, not discovered,
   because dpkg-shlibdeps and rpm's scan would try to resolve the bundled
-  libraries.
+  libraries. A list written by hand drifts, so
+  `packaging/linux/check-depends.sh` (run by `check-package.sh`, so by CI and by
+  the release) unpacks the `.deb`, runs `ldd` over every ELF in it and fails for
+  any system library whose package the `Depends` neither names nor pulls in.
+  It found two the first dry run's package lacked: `libopengl0` and
+  `libgssapi-krb5-2`. The `.rpm` list is written to match, with Fedora's names
+  (`libglvnd-opengl`, `krb5-libs`); it is not checked the same way, and it has
+  only been named for Fedora: another RPM distribution calls these packages
+  something else.
+- **X11, and Wayland through XWayland.** The only platform plugin carried is
+  `xcb`. A native Wayland session runs the app as an X client, which every
+  mainstream desktop provides; a Wayland-only session without XWayland does not
+  start it. Qt's Wayland client libraries and shell integrations, which
+  deployment copies by default, are removed so that the package does not carry
+  libraries nothing loads. Native Wayland is a plugin and its dependencies to
+  add, not a switch.
+- **Qt's translations are in `/usr/lib/cubeulator/translations`**, and the
+  `qt.conf` beside the executable says so (Qt's deployment writes the file
+  without a `Translations` entry, which would have put them in
+  `/usr/translations`, a directory in `/usr` that is nobody's and that any other
+  Qt application packaged the same way would collide with).
+- **Left out on purpose**, by `packaging/linux/ConfigureApp.cmake`: the GTK 3
+  platform theme (it links GTK, Cairo, Pango and ATK, which a KDE or minimal
+  desktop lacks and the package should not require; Qt uses the desktop-portal
+  theme, which is carried), and the QML debugger and profiler servers
+  (`plugins/qmltooling`; also left out on Windows and macOS).
+- The desktop entry has one main category, `Game`, with `LogicGame`; the
+  AppStream metadata names the same, which AppStream requires, and marks a
+  pre-release `type="development"`. `check-package.sh` validates both
+  (`desktop-file-validate`, `appstreamcli validate`).
 
 ## Window manners
 
@@ -232,6 +264,21 @@ fee, and neither can be tried without one). It plugs in at two places:
 Linux packages are unsigned; repository signing is the repository's.
 
 ## Not yet
+
+- **An elevated Windows install.** The installer's contents are checked
+  (`check-package.sh`, and the extracted tree was read for the version
+  resource, the licence and the notices), and the extracted tree runs; the
+  install itself, the Start menu shortcut with its AppUserModelID, and the
+  uninstaller have not been run on a machine from a release's installer.
+- **A macOS package opened on a Mac by a person.** The bundle's structure, its
+  identifier, its camera usage string, its version and its ad-hoc signature are
+  checked in CI on a Mac runner; nobody has launched the `.dmg`'s app on
+  hardware.
+- **A Linux package installed on a clean machine.** Its dependencies are checked
+  (above) and the unpacked tree starts under Xvfb with Qt's xcb plugin; a real
+  `apt install` on a minimal system has not been done.
+- **Native Wayland**, as above.
+- **RPM distributions other than Fedora.**
 
 - **Screenshots in the AppStream metadata** come from the system tests'
   screenshot tour (E0a, E6).

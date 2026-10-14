@@ -44,7 +44,7 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop
 | `Cubeulator-<version>-windows-x64.exe` | Windows 10 and later, 64-bit: the NSIS installer |
 | `Cubeulator-<version>-macos-arm64.dmg` | macOS 14.4 and later, Apple Silicon |
 | `Cubeulator-<version>-linux-x64.deb` | Debian and Ubuntu |
-| `Cubeulator-<version>-linux-x64.rpm` | Fedora and openSUSE |
+| `Cubeulator-<version>-linux-x64.rpm` | Fedora |
 | `SHA512SUMS` | one line per package and for the SBOM |
 | `SHA512SUMS.asc`, `<file>.asc` | detached GPG signatures, from the project key, on the manifest, every package and the SBOM |
 | `cubeulator-signing-key.asc` | the public key, so that a download can be verified offline |

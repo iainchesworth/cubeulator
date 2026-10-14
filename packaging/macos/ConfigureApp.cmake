@@ -42,6 +42,13 @@ cube_install_desktop_executable(${target} "${CMAKE_INSTALL_BINDIR}")
 # the bundle.
 cube_deploy_qt_on_install(${target})
 
+# macdeployqt copies the QML debugger and profiler servers (PlugIns/qmltooling).
+# A release does not carry them, and they go before the bundle is signed, which
+# seals what is in it. packaging/check-package.sh holds it.
+install(CODE "
+    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/Cubeulator.app/Contents/PlugIns/qmltooling\")
+")
+
 # Sign the bundle after Qt has been deployed into it. Apple Silicon kills a
 # process whose code carries no signature at all, so an ad-hoc one ("-") is the
 # floor and the unsigned build still opens (from the Finder's right-click >
