@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
 # Platform.cmake - the ONE place the target operating system is decided.
 #
-# This file maps the toolchain's own flags (ANDROID, IOS, WIN32, APPLE, UNIX)
-# to a platform name, then includes that platform's fragment:
+# This file maps the toolchain's own flags (EMSCRIPTEN, ANDROID, IOS, WIN32,
+# APPLE, UNIX) to a platform name, then includes that platform's fragment:
 #
 #     src/app/platform/<name>/platform.cmake
 #
@@ -24,7 +24,8 @@
 #                                      version block ("Windows", "macOS").
 #   CUBEULATOR_PLATFORM_DESKTOP        ON where the developer tools, CPack
 #                                      packaging and the installed notices
-#                                      exist; OFF on phones.
+#                                      exist; OFF on phones and in the
+#                                      browser.
 #   CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM
 #                                      The Qt platform plugin the test
 #                                      binaries default to when
@@ -106,9 +107,14 @@
 # ---------------------------------------------------------------------------
 include_guard(GLOBAL)
 
-# ANDROID/IOS must be checked before WIN32/APPLE/UNIX: CMake sets ANDROID
-# alongside UNIX, and IOS alongside APPLE, when cross-compiling.
-if(ANDROID)
+# EMSCRIPTEN/ANDROID/IOS must be checked before WIN32/APPLE/UNIX: CMake sets
+# ANDROID alongside UNIX, and IOS alongside APPLE, when cross-compiling, and
+# Emscripten's toolchain presents a Unix-like system too (it is the browser,
+# not a Unix: there is no process, no filesystem of its own, no camera device
+# node - the fragment says what stands in for each).
+if(EMSCRIPTEN)
+    set(CUBEULATOR_PLATFORM web)
+elseif(ANDROID)
     set(CUBEULATOR_PLATFORM android)
 elseif(IOS)
     set(CUBEULATOR_PLATFORM ios)
