@@ -290,7 +290,12 @@ the scan while watching.
 - **Light-bodied and stickerless cubes** read as nothing: the blob step needs
   dark plastic between stickers. The July 2026 corpus is such a cube and reads
   0 of 14.
-- **Square-on only.** A side seen at an angle returns nothing, by design.
+- **One side square-on, or a corner.** `read_side` returns nothing for a side
+  seen at an angle, by design. A cube held on a corner is read by
+  `read_corner`, two or three sides at a time (Counting, above), but a side
+  with fewer than seven of its nine stickers found, or seen too edge-on, is
+  not counted, and the third side of a corner is mostly lost in the blob
+  step in poor light.
 - **A cube that six flat sides put together two ways** (about one in eighty,
   and any cube one turn from solved) needs a corner view to settle, and the
   corner reader is validated on six real frames and drawn ones only. A side

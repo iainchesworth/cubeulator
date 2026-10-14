@@ -34,7 +34,9 @@ If no dots appear on the cube's stickers, the camera cannot find nine stickers
 on a side. Check, in this order:
 
 1. **Square on.** Hold the side flat towards the lens, not tilted. A side seen
-   at an angle is not read, by design.
+   at an angle is not read, by design. (A cube held on a corner, so that two or
+   three sides show at once, is read differently: see
+   [Scanning a cube](scan.md#holding-a-corner-to-the-camera).)
 2. **Light.** Even light on the side, with no bright window or lamp behind the
    cube, and no hard reflection on the stickers. Move the cube a little.
 3. **The whole side in view**, close enough that the stickers are clear, and
@@ -66,7 +68,8 @@ it is almost always one sticker read as the wrong colour:
 
 ## "…fit together in more than one way"
 
-*These six sides fit together in more than one way. Turn the cube slowly so
+*Turn the cube slowly to show the corner where Yellow, Green and Red meet.*
+or *These six sides fit together in more than one way. Turn the cube slowly so
 that two sides show at once.*
 
 About one scrambled cube in eighty looks the same from six flat sides in two

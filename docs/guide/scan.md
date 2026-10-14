@@ -14,7 +14,8 @@ you do not type anything: each side is recognised by the colour of its centre.
 - Put the cube where the light falls on the side you are holding, and avoid a
   bright window or lamp behind it.
 - Hold it **square to the camera**, as if you were showing it to someone: the
-  side flat towards the lens, not tilted. A side seen at an angle is not read.
+  side flat towards the lens, not tilted. On its own, a side seen at an angle
+  is not read; the exception is a cube held on a corner, below.
 - Keep your fingers off the stickers. A thumb on the edge of the cube is fine;
   a finger across a sticker makes its colour unreliable.
 - Hold it close enough that the stickers are clearly visible, with the whole
@@ -69,7 +70,8 @@ The words at the top left are the guide. In the order you will meet them:
 | *Reading this side — hold it there* | It is reading. Keep still until the chip fills. |
 | *Turn to a side that is not filled in below, square to the camera* | That side is done; show it another one. |
 | *These six sides do not make a valid cube yet. Show each side again, square to the camera.* | One or more stickers were read wrongly, or a side was counted twice. Show each side again; if it keeps saying this, use **Start over** and improve the light. |
-| *These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.* | About one scrambled cube in eighty looks the same from six flat sides in two different ways. Turn the cube slowly, so that the camera sees two sides at the same moment; that settles it. |
+| *Turn the cube slowly to show the corner where Yellow, Green and Red meet.* | The six sides fit together in more than one way (about one scrambled cube in eighty, and more often a patterned one). Colours named are the centres of the three sides that meet at one corner of your cube: hold that corner towards the camera, with all three sides in view, and keep it still. Seeing it settles which cube yours is. |
+| *These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.* | The same, when no one corner would help more than another. Turn the cube slowly so that the camera sees two sides at the same moment. |
 | *All six sides make a valid cube. Working out the solution…* | Done. |
 
 ## The buttons
@@ -89,6 +91,21 @@ may be using the camera, or the system may be blocking it. See
   ![The scan screen reading Camera unavailable: no camera device was found.](img/scan-camera-unavailable-wide-light.webp){ loading=lazy }
   <figcaption>Camera unavailable.</figcaption>
 </figure>
+
+## Holding a corner to the camera
+
+A cube held on a corner shows two or three sides in one picture, and the scan
+uses that. A side of such a view counts as a read of that side when it has
+held still, most of its nine stickers are in view, and it is not seen too
+edge-on. Holding one corner and then the corner across from it can read all
+six sides, and it is how a cube that six flat sides leave in doubt is
+settled.
+
+It is the newer of the two ways and the less proven: showing one side square
+to the camera at a time is still the reliable one. No dots are drawn on a
+corner view, and the screen's words still say *this side*; watch the chips
+fill. In poor light the third side of a corner is often missed, and the scan
+carries on with the sides it did read.
 
 ## How it tells the sides apart
 
