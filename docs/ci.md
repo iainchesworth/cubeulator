@@ -8,13 +8,13 @@
 | `release.yml` | Builds the desktop packages (an installer for Windows, a disk image for macOS, a `.deb` and an `.rpm` for Linux) and the web build's zip on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run unless `dry_run` is unticked. A PR that changes it, `packaging/check-package.sh` or `tools/release/` runs only the release tools' self-test | N/A (tags and manual runs) | No |
 | `changelog-check.yml` | On a PR into `develop`: does a change a person using the app can see carry a `changelog.d/` fragment (or the `no-changelog` label), and is every fragment it adds well formed | No (advisory) | No |
 | `spike-sweep.yml` | Mondays: a `spike/*` branch whose tip is 30 days old is tagged `archive/spike-<name>` and deleted ([Investigations](investigations/README.md)). Run by hand it is a dry run unless `dry_run` is unticked | N/A (schedule and manual runs) | No |
-| `release-check.yml` | On a PR into `main`: is this a release the Release workflow will accept, and what would its notes say (in the job summary) | No (advisory) | No |
+| `release-check.yml` | On a PR into `main`, two jobs: `Release readiness` (is this a release the Release workflow will accept, and what would its notes say, in the job summary) and `Commit is green` (is the PR's head green on every workflow the README has a badge for: CI, CodeQL, OSV-Scanner, Zizmor; red while CI is still running) | No (advisory) | No |
 | `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes | Yes (skipped, a pass) |
 | `dependency-review.yml` | Fails on a moderate+ vulnerability newly introduced in a PR | Yes | Yes |
 | `osv-scanner.yml` | Scans `vcpkg.json` against the OSV database | No (visible only) | No |
 | `zizmor.yml` | Lints the workflow YAML itself | No (visible only) | No |
-| `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) | No |
+| `scorecard.yml` | OpenSSF Scorecard supply-chain health score. Publishes only from a run on `main` (push, weekly, or a branch-protection change), so the README badge reads "invalid repo path" until the first release has merged ([Cutting a release](releasing.md#preparing-the-release), step 10) | No (badge/score) | No |
 | `docs.yml` | Builds the mkdocs site and the web app (`.github/actions/web-build`, the same one `ci.yml`'s Web leg uses), and publishes both to GitHub Pages - the app under `/app/` | N/A (push to `main`, and manual runs) | No |
 | `docs-check.yml` | On a PR that touches `docs/` or `mkdocs.yml`: builds the documentation (not the web app) with `mkdocs build --strict`, so a broken link shows on the PR and not on the push to `main` that publishes the site | No (advisory) | No |
 | `dependabot-auto-merge.yml` | Enables auto-merge on Dependabot's minor/patch PRs for GitHub Actions and pip | No (acts on Dependabot PRs only) | No |

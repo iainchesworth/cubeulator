@@ -172,13 +172,30 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
 
 ## Preparing the release
 
-1. **Be ready.** CI is green on `develop` for the commit you mean to release, and
-   `python tools/release/check_release.py --dry-run` is clean (it reads
-   `[Unreleased]` as if it were cut and applies the same rules). The
-   [user guide](guide/index.md) still describes the app: its pictures are from
-   the [screenshot tour](testing.md#the-screenshot-tour) and are refreshed with
-   `tools/docs/update_guide_screenshots.py`, and it names what does not work
-   yet, so read the "What this release is" box against the changelog.
+1. **Be ready.** Every workflow the README has a badge for (CI, CodeQL,
+   OSV-Scanner and Zizmor) is green on the `develop` commit you mean to
+   release, and `python tools/release/check_release.py --dry-run` is clean (it
+   reads `[Unreleased]` as if it were cut and applies the same rules).
+
+   ```sh
+   python tools/release/check_health.py        # develop's tip; needs an authenticated gh
+   ```
+
+   names the workflow that is red, still running or has not run. The badges on
+   `main` are those workflows' latest runs there, so a release that arrives with
+   one red is a red front page. Two things make "green" take longer than the
+   pull request's checks suggest. `ci.yml`'s push run on `develop` is hours, and
+   a push that arrives while an earlier push's run is still *waiting* replaces
+   it (the replaced run reads `cancelled`), so once the PR that prepares the
+   release (step 3) has merged, let nothing else merge into `develop` until this
+   says green; ask whoever runs the merge queue to hold it. And a `cancelled`
+   run is not a pass: re-run it (`gh run rerun <id>`).
+
+   The [user guide](guide/index.md) still describes the app: its pictures are
+   from the [screenshot tour](testing.md#the-screenshot-tour) and are
+   refreshed with `tools/docs/update_guide_screenshots.py`, and it names what
+   does not work yet, so read its "What this release is" box against the
+   changelog.
 2. **Rehearse.** Run the pipeline as a [dry run](#the-dry-run) from `develop`
    and read what it produced. Do this before the *first* release, and again after
    any change to the packaging or to this workflow.
@@ -197,6 +214,10 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
    any other.
 4. **Open the release PR**: `develop` → `main`, merge commit. The `Release
    readiness` check puts the rendered notes in its summary: read them there.
+   `Commit is green` asks step 1's question of the PR's head commit and puts the
+   table in its summary. It is red while CI is still running on that commit
+   (re-run it when CI has finished) and it is advisory, so it is the
+   maintainer's decision, not the ruleset's, not to merge with it red.
    `main`'s ruleset is in [Branch protection](branch-protection.md). It asks
    for "up to date", so anything that reaches `main` after the release PR's
    last green run (a hotfix, a back-merge) starts every check again, and the
@@ -212,7 +233,9 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
 
    or run the workflow by hand from `main` with `dry_run` unticked: it makes the
    tag itself, at the end, once everything has passed, so a failed run leaves
-   no tag behind.
+   no tag behind. The workflow asks step 1's question again before it builds:
+   of the `develop` tip the merge commit merged (its second parent: that is what
+   was tested, and the merge commit's own runs have only just started).
 6. **Watch the `Release` workflow.** `Verify the release` is quick; the three
    desktop `Build` jobs and `Build the web app` are the long ones (a cold vcpkg
    cache is hours on Windows and macOS and for WebAssembly; the cache CI keeps
@@ -223,6 +246,22 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
 8. **Publish it.**
 9. **Back-merge**: a PR from a `support/back-merge-<version>` branch cut from
    `main`, into `develop`, so `develop` has the release.
+10. **Look at the front page.** The README's badges on `main` show the runs the
+    merge started, which are hours from done; the OpenSSF Scorecard badge reads
+    "invalid repo path" (red) until Scorecard has published a result, and it
+    publishes only from a run on the default branch, so the merge into `main`
+    is what produces the first one: `scorecard.yml` runs on that push and the
+    badge turns to a score within minutes. Check:
+
+    ```sh
+    python tools/release/check_health.py --scorecard
+    ```
+
+    If it still reports no result a quarter of an hour after the merge, open
+    the `OSSF Scorecard` run on `main`: a rejected result is a warning
+    annotation on the *Run Scorecard analysis* step, with the API's reason
+    (usually a step or setting added to `scorecard.yml` that its publishing
+    rules do not allow; they are listed in that file).
 
 ## The dry run
 
@@ -238,6 +277,7 @@ minus the two things that cannot be undone:
 | the provisioned key | proven to import and sign, in a keyring that is thrown away | used |
 | SBOM, provenance and SBOM attestations, `gh attestation verify` | yes | yes |
 | notes rendered from the changelog | yes | yes |
+| the commit is green on CI, CodeQL, OSV-Scanner and Zizmor | reported, not enforced (a rehearsal branch is rarely green) | enforced |
 | the tag, the release | **no** | yes |
 
 What it leaves is the `release-<version>` artifact of the run: the exact files
@@ -321,6 +361,7 @@ The workflow refuses, with the reason in the log, when:
 | The section has no summary, an item without a bold lead-in, or (pre-release) no closing caveat | the same rules `check_release.py` states |
 | `changelog.d/` still holds fragments | they are not in the section, so the notes would miss them: run `prepare_release.py` |
 | A final release is not on `main` | it is tagged on `main`, after the release PR; a pre-release may be cut from a `release/*` branch to be tried first |
+| The commit (for a merge commit on `main`, the `develop` tip it merged) is not green on CI, CodeQL, OSV-Scanner and Zizmor, or has a red check run | [step 1](#preparing-the-release); a dry run reports it and goes on |
 | A dispatched release names a tag that exists | |
 | A package fails `packaging/check-package.sh` | Qt, the executable, the icon, the identifier, the camera string, the notices: the same checks `ci.yml` makes on every push |
 | A platform produces no package, or two | |
@@ -348,6 +389,14 @@ release page was wrong and the files were right, edit the notes in place.
 - **The signing job and the publishing job are different jobs.** `sign` holds
   the key and the OIDC identity and can write nothing to the repository;
   `publish` can write releases and holds neither.
+- **The gate reads the README.** The workflows it holds to green are the ones
+  the README has a badge for, so a badge added there is held to the same rule
+  without anyone remembering to edit the gate, and a badge cannot be red on the
+  first release's front page without the release having said so first.
+- **A cancelled run is not green.** `ci.yml` on `develop` lets a waiting push
+  run be replaced by a newer one, so a commit can be passed over and never
+  tested. The gate would rather say "re-run it" than treat the silence as a
+  pass.
 - **The build reads the vcpkg cache and never writes it**, so nothing a release
   run does can end up in what the other workflows trust.
 - **Everything it uses is pinned** (see [CI & dependencies](ci.md)).
