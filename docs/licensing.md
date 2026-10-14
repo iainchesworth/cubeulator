@@ -152,7 +152,8 @@ depends on QtDBus on macOS but not on Windows [V]. Edges that exist on only
 some platforms are kept per platform (`platformDepends`) so a macOS-only
 dependency is not applied to Windows. **Linux and iOS have not been read**,
 so on those platforms the snapshot over-includes rather than guesses (the
-WebAssembly kit has not been read either; see the known gaps in
+WebAssembly kit has been read: `web` is in `verifiedPlatforms` since
+2026-10-14; see the known gaps in
 [section 6](#6-how-the-notices-are-produced));
 `tools/licences/qt_sbom_manifest.py` re-derives it from any Qt install's
 `sbom/` directory, and maps each library file name (`libqcocoa.a`,
@@ -537,6 +538,16 @@ conclusion.
   Nothing is added by hand for a vcpkg port: when R6 removed onnxruntime,
   M3T, GLEW and GLFW, and bgfx went with the render scaffolding, they and
   their dependency chains disappeared.
+- **A static Qt links objects, not libraries.** The browser build (Qt for
+  WebAssembly) puts every QML plugin's registration object and every module's
+  resource bundle on the link line as a `.o` file, which no SBOM lists by
+  name. They are attributed by where they sit under the Qt prefix
+  (`cn_qt_object_key` in `cmake/ThirdPartyNoticesGenerate.cmake`:
+  `qml/<module path>/objects-<config>/<plugin>_init/` is that plugin,
+  `<Target>_resources_<n>/` is that module's library), against the library
+  keys `qt-modules.json` lists. An object that matches no pattern is
+  *unresolved*, so a change in Qt's layout is a failure to look at.
+  `notices_static_qt_selftest` runs the generator over such a link line.
 - **What is checked by hand** is only what the build cannot know:
   `manifest.json` lists icons and fonts (and is where vendored code or a model
   would be listed; there is none now), the licence elections (Qt taken under
@@ -575,7 +586,7 @@ Maintaining it:
 | a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
 | add the bundled fonts | add the files at the paths the planned manifest entries name (`src/app/qt/fonts/`; the web build's faces are in `src/app/platform/web/fonts/`); the entries start emitting; verify their copyright lines against the fonts |
-| add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
+| add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install (the browser build's kit, `wasm_multithread`, carries its SBOMs too, and `web` is verified since 2026-10-14) and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
 
 Known gaps, so nobody mistakes them for done:
 
@@ -616,14 +627,15 @@ Known gaps, so nobody mistakes them for done:
    of review: any new vector or glyph data in QML gets a manifest entry.
 5. **QML-only dependencies are by import name.** A QML module that is only
    loaded by string at run time would be missed; there are none today.
-6. **The browser build is not checked.** `qt-modules.json` was not read from
-   the WebAssembly kit (`verifiedPlatforms` is Android, macOS and Windows), and
-   the test is not built for the browser (`CUBEULATOR_BUILD_TESTS=OFF`), so
-   the notices embedded in that build are produced but nothing holds them to
-   the standard above. The kit's own SBOM names at least one bundled component
-   the snapshot does not have: DejaVu Fonts 2.37, Bitstream-Vera, under the
-   WebAssembly platform plugin. The browser's two Noto subsets are in the
-   manifest and do reach its notices (2.3).
+6. **The browser build is not held to the standard above by a test.** Its
+   kit's SBOMs have been read (`verifiedPlatforms` includes `web`, and the
+   snapshot has the WebAssembly platform plugin's DejaVu attribution), and
+   the generator attributes a static Qt's plugin and resource objects
+   (`notices_static_qt_selftest` runs it over such a link line). But the test
+   is not built for the browser (`CUBEULATOR_BUILD_TESTS=OFF`), so the notices
+   embedded in that build are produced and nothing fails if one is
+   unresolved. The browser's two Noto subsets are in the manifest and do
+   reach its notices (2.3).
 7. **A font outside `assets/` and `src/app/qt/` is not looked for.** The scan
    that fails on an unclaimed font covers those two trees only; the web
    build's faces under `src/app/platform/web/fonts/` are claimed by manifest
