@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include <cube/solver/solver.hpp>
@@ -58,9 +60,7 @@ public:
     // (the screen that reviews it) without stepping the first. `index` is
     // clamped to [0, move_count()].
     [[nodiscard]] const Cube& cube_at(int index) const noexcept {
-        const int last = move_count();
-        const int clamped = index < 0 ? 0 : (index > last ? last : index);
-        return cubes_.at(static_cast<std::size_t>(clamped));
+        return cubes_.at(static_cast<std::size_t>(std::clamp(index, 0, move_count())));
     }
 
     // Applies current_move() and advances; a no-op at_end().
