@@ -40,6 +40,10 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
+`ctest --preset <preset>` leaves out the system tests, which draw the real app
+in a window; `ctest --preset <preset>-system` runs them
+([testing.md](testing.md#system-tests)).
+
 Just want the core library, no Qt/GUI?
 
 ```sh
@@ -49,5 +53,8 @@ ctest --preset linux-gcc-debug
 ```
 
 See [Building & packaging](building.md) for every preset (including Android,
-which builds the same Qt/QML app, and iOS, which is currently build-only)
+which builds the same Qt/QML app, iOS, which is currently build-only, and
+[WebAssembly](building.md#webassembly-browser), which builds it for a browser)
 and packaging options.
+
+Just want to try it? [Open it in your browser](web.md).

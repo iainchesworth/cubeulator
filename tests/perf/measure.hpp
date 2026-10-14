@@ -41,7 +41,7 @@ namespace cube::perf {
 //
 // 25 moves, the length the solver tests use.
 inline constexpr int kScrambleMoves = 25;
-[[nodiscard]] solver::Cube corpus_scramble(unsigned seed, int moves = kScrambleMoves);
+[[nodiscard]] solver::Cube corpus_scramble(unsigned seed);
 
 // ---------------------------------------------------------------------------
 // Solver work

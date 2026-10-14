@@ -18,11 +18,6 @@ namespace cube::vision {
 
 namespace {
 
-// The reader works at this width: blob filters and the blur are sized for
-// it, and a side read at a quarter of this still resolves (measured on
-// recorded scans down to 320 wide).
-constexpr int kWorkingWidth = 640;
-
 // Sticker blob limits, as fractions of the frame area. At the working width
 // they admit stickers from about 9 to 65 pixels across.
 constexpr double kMinBlobArea = 0.0006;
@@ -82,25 +77,13 @@ template <typename T>
     return (lower + *mid) / T{2};
 }
 
-// Bright, compact, squarish regions bounded by darker plastic. Value (the
-// brightest channel) is used so a saturated blue or red sticker still
-// stands clear of black plastic.
-[[nodiscard]] std::vector<Blob> sticker_blobs(const cv::Mat& bgr) {
-    std::array<cv::Mat, 3> channels;
-    cv::split(bgr, channels.data());
-    cv::Mat value = cv::max(cv::max(channels.at(0), channels.at(1)), channels.at(2));
-    cv::GaussianBlur(value, value, cv::Size(5, 5), 0.0);
+// Bright, compact, squarish regions bounded by darker plastic: the outlines
+// prepare_frame found, kept when they are the size and shape of a sticker.
+[[nodiscard]] std::vector<Blob> sticker_blobs(const PreparedFrame& frame) {
+    const std::vector<std::vector<cv::Point>>& contours = frame.contours;
 
-    const int block = static_cast<int>(std::min(bgr.rows, bgr.cols) * 0.12) | 1;
-    cv::Mat binary;
-    cv::adaptiveThreshold(value, binary, 255.0, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY,
-                          std::max(block, 3), 8.0);
-    cv::morphologyEx(binary, binary, cv::MORPH_OPEN, cv::Mat::ones(3, 3, CV_8U));
-
-    std::vector<std::vector<cv::Point>> contours;
-    cv::findContours(binary, contours, cv::RETR_LIST, cv::CHAIN_APPROX_SIMPLE);
-
-    const double frame_area = static_cast<double>(bgr.rows) * bgr.cols;
+    const double frame_area =
+        static_cast<double>(frame.working.rows) * static_cast<double>(frame.working.cols);
     std::vector<Blob> blobs;
     for (const auto& contour : contours) {
         const double area = cv::contourArea(contour);
@@ -532,19 +515,16 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 }  // namespace
 
 std::optional<SideRead> read_side(const cv::Mat& bgr) {
-    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
-    if (bgr.empty() || bgr.type() != CV_8UC3) {
-        return std::nullopt;
-    }
-    cv::Mat working = bgr;
-    float scale = 1.0F;
-    if (bgr.cols > kWorkingWidth) {
-        scale = static_cast<float>(bgr.cols) / static_cast<float>(kWorkingWidth);
-        const int height = static_cast<int>(std::lround(static_cast<float>(bgr.rows) / scale));
-        cv::resize(bgr, working, cv::Size(kWorkingWidth, height), 0.0, 0.0, cv::INTER_AREA);
-    }
+    const std::optional<PreparedFrame> frame = prepare_frame(bgr);
+    return frame.has_value() ? read_side(*frame) : std::nullopt;
+}
 
-    const std::vector<Blob> blobs = sticker_blobs(working);
+std::optional<SideRead> read_side(const PreparedFrame& frame) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
+    const cv::Mat& working = frame.working;
+    const float scale = frame.scale;
+
+    const std::vector<Blob> blobs = sticker_blobs(frame);
     if (blobs.size() < kMinLatticeBlobs) {
         return std::nullopt;
     }

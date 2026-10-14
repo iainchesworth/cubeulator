@@ -69,7 +69,8 @@
       "_comment": [
         "Qt components windeployqt puts beside the exe although the app names none of them directly.",
         "Windows list: taken from the deployment scan of a real build on 2026-10-13 (Qt 6.8.3, RelWithDebInfo).",
-        "macOS, Linux and Android: fill in by running the notices test on a deployment of that platform (E4)."
+        "macOS, Linux and Android: fill in by running the notices test on a deployment of that platform (E4).",
+        "web: there is no deployment tool - Qt is linked into the one .wasm module - so nothing is deployed beside the app that its link line does not already name."
       ],
       "windows": [
         "qtbase/Core",
@@ -147,7 +148,8 @@
         "qtsvg/QSvgIconPlugin",
         "qtsvg/QSvgPlugin",
         "qtsvg/Svg"
-      ]
+      ],
+      "web": []
     },
     "testOnlyModules": {
       "_comment": [

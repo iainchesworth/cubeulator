@@ -1,8 +1,8 @@
 # ---------------------------------------------------------------------------
 # Platform.cmake - the ONE place the target operating system is decided.
 #
-# This file maps the toolchain's own flags (ANDROID, IOS, WIN32, APPLE, UNIX)
-# to a platform name, then includes that platform's fragment:
+# This file maps the toolchain's own flags (EMSCRIPTEN, ANDROID, IOS, WIN32,
+# APPLE, UNIX) to a platform name, then includes that platform's fragment:
 #
 #     src/app/platform/<name>/platform.cmake
 #
@@ -24,7 +24,8 @@
 #                                      version block ("Windows", "macOS").
 #   CUBEULATOR_PLATFORM_DESKTOP        ON where the developer tools, CPack
 #                                      packaging and the installed notices
-#                                      exist; OFF on phones.
+#                                      exist; OFF on phones and in the
+#                                      browser.
 #   CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM
 #                                      The Qt platform plugin the test
 #                                      binaries default to when
@@ -41,6 +42,16 @@
 #                                      One line of advice for when none is
 #                                      set ("" when the above is). The word
 #                                      PROGRAM stands for the test binary.
+#   CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW
+#                                      ON where a test that draws the real app
+#                                      can make its window invisible to the
+#                                      developer - fully transparent, click-
+#                                      through, never activated - and still
+#                                      have it exposed and rendered, so a run
+#                                      does not flick windows across their
+#                                      desktop or take the keyboard from them.
+#                                      OFF where that is not known to work (a
+#                                      virtual display has nobody to bother).
 #   CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS, CUBEULATOR_PLATFORM_QT_ARCH_DIRS
 #                                      Where cmake/FindQt6.cmake looks for an
 #                                      aqtinstall-style Qt when none is on
@@ -96,9 +107,14 @@
 # ---------------------------------------------------------------------------
 include_guard(GLOBAL)
 
-# ANDROID/IOS must be checked before WIN32/APPLE/UNIX: CMake sets ANDROID
-# alongside UNIX, and IOS alongside APPLE, when cross-compiling.
-if(ANDROID)
+# EMSCRIPTEN/ANDROID/IOS must be checked before WIN32/APPLE/UNIX: CMake sets
+# ANDROID alongside UNIX, and IOS alongside APPLE, when cross-compiling, and
+# Emscripten's toolchain presents a Unix-like system too (it is the browser,
+# not a Unix: there is no process, no filesystem of its own, no camera device
+# node - the fragment says what stands in for each).
+if(EMSCRIPTEN)
+    set(CUBEULATOR_PLATFORM web)
+elseif(ANDROID)
     set(CUBEULATOR_PLATFORM android)
 elseif(IOS)
     set(CUBEULATOR_PLATFORM ios)

@@ -12,6 +12,16 @@ set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 
+# The system tests draw the real app in a real window, and on a developer's
+# desktop that window would otherwise flick through every screen in front of
+# whatever they are doing, and hold the foreground (the developer's keystrokes
+# go to it) for as long as the run lasts. A fully transparent, click-through,
+# non-activating tool window is still exposed and rendered by Qt, so that is
+# what the suite creates. Neither of the other ways of getting a window out of
+# the way works: minimised, it never gets its size, and positioned outside
+# every monitor, Windows sends it no expose event and the test cannot start.
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW ON)
+
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "C:/Qt" "$ENV{USERPROFILE}/Qt")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS msvc2022_64 msvc2019_64 mingw_64)
 

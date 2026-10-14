@@ -15,7 +15,12 @@
 #include "measure.hpp"
 #include "metrics.hpp"
 
+#include <cube/solver/search_work.hpp>
 #include <cube/solver/solver.hpp>
+
+#include <array>
+#include <cstddef>
+#include <cstdint>
 
 namespace {
 
@@ -23,6 +28,12 @@ using cube::perf::check_within_budget;
 using cube::perf::corpus_scramble;
 using cube::perf::skip_unless_optimised;
 using cube::solver::SolveMethod;
+
+// A search's cost and the solution's length as one comparable value.
+std::array<std::uint64_t, 4> what_was_spent(const cube::solver::SearchWork& work,
+                                            std::size_t moves) {
+    return {work.searches, work.nodes, work.largest, static_cast<std::uint64_t>(moves)};
+}
 
 }  // namespace
 
@@ -49,7 +60,7 @@ TEST_CASE("the stages measured one at a time are the solve that solve() runs", "
     // between them, those figures would go on being exact about something
     // that is no longer the solve: this is what notices.
     for (const unsigned seed : {4U, 23U}) {
-        INFO("corpus seed " << seed);
+        INFO("corpus seed " << seed << "; searches, nodes, largest search, moves");
         const cube::solver::Cube scrambled = corpus_scramble(seed);
 
         const cube::perf::BeginnerWork staged = cube::perf::measure_beginner(scrambled);
@@ -58,9 +69,7 @@ TEST_CASE("the stages measured one at a time are the solve that solve() runs", "
 
         REQUIRE(staged.solved);
         REQUIRE(whole.solved);
-        CHECK(staged.total.searches == whole.work.searches);
-        CHECK(staged.total.nodes == whole.work.nodes);
-        CHECK(staged.total.largest == whole.work.largest);
-        CHECK(staged.moves == whole.moves);
+        CHECK(what_was_spent(staged.total, staged.moves) ==
+              what_was_spent(whole.work, whole.moves));
     }
 }

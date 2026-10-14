@@ -26,13 +26,13 @@ using solver::Move;
 using solver::SearchWork;
 using solver::Stage;
 
-Cube corpus_scramble(unsigned seed, int moves) {
+Cube corpus_scramble(unsigned seed) {
     std::mt19937 rng{seed};
     Cube cube = Cube::solved();
-    for (int i = 0; i < moves; ++i) {
-        const Face face = solver::kAllFaces[rng() % solver::kAllFaces.size()];
+    for (int i = 0; i < kScrambleMoves; ++i) {
+        const Face face = solver::kAllFaces.at(rng() % solver::kAllFaces.size());
         const int turns = static_cast<int>(rng() % 3U) + 1;
-        cube = cube.apply(Move{face, turns});
+        cube = cube.apply(Move{.face = face, .turns = turns});
     }
     return cube;
 }
@@ -46,13 +46,14 @@ struct BeginnerStage {
     StageFunction run;
 };
 
-constexpr std::array<BeginnerStage, kBeginnerStages> kBeginnerChain = {{
-    {Stage::Cross, &solver::solve_cross},
-    {Stage::WhiteCorners, &solver::solve_corners},
-    {Stage::MiddleEdges, &solver::solve_middle_edges},
-    {Stage::Oll, &solver::solve_oll},
-    {Stage::Pll, &solver::solve_pll},
-}};
+constexpr auto kBeginnerChain = std::to_array<BeginnerStage>({
+    {.stage = Stage::Cross, .run = &solver::solve_cross},
+    {.stage = Stage::WhiteCorners, .run = &solver::solve_corners},
+    {.stage = Stage::MiddleEdges, .run = &solver::solve_middle_edges},
+    {.stage = Stage::Oll, .run = &solver::solve_oll},
+    {.stage = Stage::Pll, .run = &solver::solve_pll},
+});
+static_assert(kBeginnerChain.size() == kBeginnerStages);
 
 [[nodiscard]] std::size_t length_of(const solver::Solution& solution) {
     std::size_t moves = 0;
@@ -69,11 +70,12 @@ BeginnerWork measure_beginner(const Cube& scrambled) {
     solver::Solution solution;
     Cube cube = scrambled;
     bool complete = true;
-    for (std::size_t i = 0; i < kBeginnerChain.size(); ++i) {
+    std::size_t index = 0;
+    for (const BeginnerStage& link : kBeginnerChain) {
         solver::reset_search_work();
-        auto moves = kBeginnerChain[i].run(cube);
-        StageWork& stage = out.stages[i];
-        stage.stage = kBeginnerChain[i].stage;
+        auto moves = link.run(cube);
+        StageWork& stage = out.stages.at(index++);
+        stage.stage = link.stage;
         stage.work = solver::search_work();
         out.total.searches += stage.work.searches;
         out.total.nodes += stage.work.nodes;
@@ -86,7 +88,8 @@ BeginnerWork measure_beginner(const Cube& scrambled) {
         for (const Move& move : *moves) {
             cube = cube.apply(move);
         }
-        solution.steps.push_back(solver::SolveStep{kBeginnerChain[i].stage, std::move(*moves)});
+        solution.steps.push_back(
+            solver::SolveStep{.stage = link.stage, .moves = std::move(*moves)});
     }
     out.solved = complete && cube.is_solved();
     // solve() merges adjacent moves across stage boundaries; so does this.
@@ -137,8 +140,10 @@ public:
     void deallocate(cv::UMatData* data) const override { inner_->deallocate(data); }
 
     [[nodiscard]] BufferWork total() const {
-        return BufferWork{allocations_.load(std::memory_order_relaxed),
-                          bytes_.load(std::memory_order_relaxed)};
+        return BufferWork{
+            .allocations = allocations_.load(std::memory_order_relaxed),
+            .bytes = bytes_.load(std::memory_order_relaxed),
+        };
     }
 
 private:
@@ -147,25 +152,35 @@ private:
     mutable std::atomic<std::uint64_t> bytes_{0};
 };
 
-// Counting is one measurement at a time: the allocator is process-wide.
-std::unique_ptr<CountingAllocator> g_counting;
-cv::MatAllocator* g_previous = nullptr;
+// Counting is one measurement at a time: the allocator is process-wide, so the
+// one in use and the one it replaced are too.
+struct Counting {
+    std::unique_ptr<CountingAllocator> counter;
+    cv::MatAllocator* previous = nullptr;
+};
+
+Counting& counting() {
+    static Counting state;
+    return state;
+}
 
 }  // namespace
 
 namespace detail {
 
 void begin_counting() {
-    g_previous = cv::Mat::getDefaultAllocator();
-    g_counting = std::make_unique<CountingAllocator>(g_previous);
-    cv::Mat::setDefaultAllocator(g_counting.get());
+    Counting& state = counting();
+    state.previous = cv::Mat::getDefaultAllocator();
+    state.counter = std::make_unique<CountingAllocator>(state.previous);
+    cv::Mat::setDefaultAllocator(state.counter.get());
 }
 
 BufferWork end_counting() {
-    cv::Mat::setDefaultAllocator(g_previous);
-    const BufferWork work = g_counting->total();
-    g_counting.reset();
-    g_previous = nullptr;
+    Counting& state = counting();
+    cv::Mat::setDefaultAllocator(state.previous);
+    const BufferWork work = state.counter->total();
+    state.counter.reset();
+    state.previous = nullptr;
     return work;
 }
 
@@ -177,7 +192,11 @@ BufferWork end_counting() {
 
 bool timing_requested() {
     const char* value = std::getenv("CUBE_PERF_TIMING");
-    return value != nullptr && value[0] != '\0' && std::string_view(value) != "0";
+    if (value == nullptr) {
+        return false;
+    }
+    const std::string_view text = value;
+    return !text.empty() && text != "0";
 }
 
 std::uint64_t calibration_workload(Weight weight) {
@@ -199,17 +218,17 @@ std::uint64_t calibration_workload(Weight weight) {
     std::unordered_set<std::uint64_t> seen;
     std::vector<Record> arena;
     for (std::size_t i = 0; i < steps; ++i) {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
+        x ^= x << 13U;
+        x ^= x >> 7U;
+        x ^= x << 17U;
         const std::uint64_t key = x & 0xFFFFFFFULL;
         if (seen.insert(key).second) {
             Record record{};
             record.bytes.fill(static_cast<std::uint8_t>(key));
             arena.push_back(record);
         }
-        const Record& back = arena[(x >> 20) % arena.size()];
-        sum += back.bytes[(x >> 40) % back.bytes.size()];
+        const Record& back = arena.at((x >> 20U) % arena.size());
+        sum += back.bytes.at((x >> 40U) % back.bytes.size());
     }
     return sum + seen.size() + arena.size();
 }
@@ -221,9 +240,9 @@ double median(std::vector<double> values) {
     std::ranges::sort(values);
     const std::size_t middle = values.size() / 2;
     if (values.size() % 2 == 1) {
-        return values[middle];
+        return values.at(middle);
     }
-    return (values[middle - 1] + values[middle]) / 2.0;
+    return (values.at(middle - 1) + values.at(middle)) / 2.0;
 }
 
 }  // namespace cube::perf

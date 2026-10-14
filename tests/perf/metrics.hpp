@@ -23,10 +23,10 @@ struct Metric {
     // can be reproduced with the report.
     unsigned seed = kNoSeed;
     // What the numbers are counted in, for the line that prints them.
-    std::string unit;
+    std::string unit{};
     // Anything else worth reading beside a failure: the raw times behind a
     // ratio, say.
-    std::string note;
+    std::string note{};
 };
 
 // --- work: counted, exact on every machine -----------------------------------

@@ -66,7 +66,21 @@ public:
     // puts it back at a known baseline - launch screen, light theme, desktop
     // size, camera idle and plugged in - so each test starts from the same
     // place however the last one ended.
-    static App& fresh();
+    //
+    // Start::elsewhere leaves the app on the permission screen instead of the
+    // launch screen, for a case that is going to another screen at once. The
+    // launch screen is the one with the 3D cube: on a software renderer
+    // bringing it up costs seconds (and is where Qt has crashed on the screen
+    // change), and a case that is about to leave it should not pay that to
+    // have been there. Nothing is drawn or opened on the permission screen.
+    enum class Start { launch, elsewhere };
+    //
+    // Scene3D::cheap (the default) draws 3D views without the light probe:
+    // the cube is lit by its lights alone, and a view's first frame is not
+    // eight seconds on a software renderer (see boot()). A case that is about
+    // how the cube looks - the tour, the render checks - asks for ::full.
+    enum class Scene3D { cheap, full };
+    static App& fresh(Start start = Start::launch, Scene3D scene = Scene3D::cheap);
     // Boots the application and leaves it exactly as start-up made it: no
     // reset. For what only a launch can show (what was read from the store).
     static App& launched();
@@ -143,6 +157,9 @@ public:
     void settle();
 
     // ---- window ------------------------------------------------------------
+    // Waits for the scene to have the size, not only the window: where the
+    // geometry change arrives as an event (X11) the window reports the new
+    // size before the items have it.
     void resize(QSize size);
     void set_theme(const QString& mode);  // "system" | "light" | "dark"
     // English, left to right, and no saved choice: the baseline a test starts
@@ -159,9 +176,10 @@ public:
 private:
     App();
     void boot();
-    void reset();
+    void reset(Start start, Scene3D scene);
 
     std::unique_ptr<cube::app::AppRuntime> runtime_;
+    bool full_3d_ = false;
     QQuickWindow* window_ = nullptr;
     QObject* app_state_ = nullptr;
     QObject* settings_state_ = nullptr;

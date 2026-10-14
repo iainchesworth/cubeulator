@@ -29,12 +29,12 @@ namespace cube::perf::budget {
 // ---------------------------------------------------------------------------
 
 // The solver budgets are measured on corpus_scramble(0) .. (kSolverSeeds - 1).
-// Sixteen is about the heaviest set that is still seconds in an optimised
-// build, and it holds the heaviest middle-edge and corner searches of the
-// first 28 seeds, which is what a ceiling has to be set on. The report prints
-// 28 so that anyone can see the corpus is not a lucky one.
-inline constexpr unsigned kSolverSeeds = 12;
-inline constexpr unsigned kReportSeeds = 28;
+// It was twelve while a beginner solve was most of a second and the tier had to
+// stay inside a minute; with the piece search (src/lib/src/solver/
+// piece_search.hpp) the whole tier is seconds, and 28 includes the heaviest
+// middle-edge and corner searches of the seeds looked at, which is what a
+// ceiling has to be set on.
+inline constexpr unsigned kSolverSeeds = 28;
 
 // ---------------------------------------------------------------------------
 // The solver, counted in search nodes
@@ -57,26 +57,26 @@ struct StageBudget {
 // cap, so that the cap stays a backstop and is never near.
 //
 // Measured (max / mean over the corpus, largest single search):
-//   cross          188,657 /  67,834 / 188,657
-//   white corners  347,925 / 112,732 / 194,409
-//   middle edges 1,270,904 / 803,425 / 599,850   (four slots, eject + insert)
-//   oll                 90 /      60 /      90
+//   cross          188,657 /  70,310 / 188,657
+//   white corners  347,925 / 115,409 / 194,409
+//   middle edges 1,270,904 / 712,247 / 599,850   (four slots, eject + insert)
+//   oll                105 /      61 /      90
 //   pll                 72 /      41 /      44
 inline constexpr std::array<StageBudget, 5> kBeginnerStages = {{
     /* cross         */ {240'000, 85'000, 240'000},
     /* white corners */ {440'000, 140'000, 245'000},
-    /* middle edges  */ {1'600'000, 1'000'000, 750'000},
-    /* oll           */ {120, 80, 120},
+    /* middle edges  */ {1'600'000, 900'000, 750'000},
+    /* oll           */ {130, 80, 120},
     /* pll           */ {90, 55, 60},
 }};
 
-// A whole solve, all five stages (measured 1,587,822 / 984,092), and the
+// A whole solve, all five stages (measured 1,587,822 / 898,067), and the
 // largest single search of any stage (measured 599,850).
 inline constexpr std::uint64_t kBeginnerSolveMaxNodes = 2'000'000;
-inline constexpr std::uint64_t kBeginnerSolveMeanNodes = 1'250'000;
+inline constexpr std::uint64_t kBeginnerSolveMeanNodes = 1'130'000;
 inline constexpr std::uint64_t kBeginnerMaxSearch = 750'000;
 // Moves in the solution the app shows, after adjacent moves are merged
-// (measured 132 / 103.5).
+// (measured 132 / 101.4).
 inline constexpr std::uint64_t kBeginnerMaxMoves = 165;
 inline constexpr double kBeginnerMeanMoves = 130.0;
 
@@ -93,11 +93,11 @@ struct MethodBudget {
 
 // Intermediate (CFOP): the cross and the four pairs are each a search from
 // both ends; the last layer is a table lookup and visits no nodes at all.
-// Measured 25,667 / 15,559, largest search 11,069, moves 59 / 51.6.
+// Measured 32,453 / 17,023, largest search 15,090, moves 59 / 51.4.
 inline constexpr MethodBudget kIntermediate = {
-    .max_nodes = 32'000,
-    .mean_nodes = 19'500,
-    .max_search = 14'000,
+    .max_nodes = 41'000,
+    .mean_nodes = 21'500,
+    .max_search = 19'000,
     .max_moves = 74,
     .mean_moves = 65.0,
 };
@@ -106,8 +106,8 @@ inline constexpr MethodBudget kIntermediate = {
 // first solution the search keeps looking for a shorter one for up to five
 // million more nodes (kImprovementNodes in two_phase.cpp), so a solve costs
 // about that and is cheaper only when the search is exhausted first - which is
-// why the mean sits just above five million. Measured 7,431,634 / 5,568,978
-// (one search a solve), moves 21 / 19.7.
+// why the mean sits just above five million. Measured 7,431,634 / 5,298,998
+// (one search a solve), moves 22 / 19.5.
 inline constexpr MethodBudget kAdvanced = {
     .max_nodes = 9'300'000,
     .mean_nodes = 7'000'000,
@@ -158,8 +158,8 @@ inline constexpr std::uint64_t kScannedBuffers = 16;
 // workload's fastest run, measured in the same process and run alternately
 // with it, so that the machine's speed and a stretch of load cancel out. The
 // comment above each is what that ratio measured on a 32-core Windows desktop
-// in RelWithDebInfo while other builds, and then fourteen other solvers, were
-// running on it; the budget is a good deal more than that. What is left over
+// in RelWithDebInfo while other builds, and then fourteen other processes
+// solving, were running on it; the budget is a good deal more than that. What is left over
 // for the noise that does not cancel (frequency steps, a neighbour's cache, a
 // compiler that is not the one the number was taken with) is the room between
 // the two, and a copy or an allocation per node is a factor of several, not a
@@ -169,9 +169,11 @@ struct TimeBudget {
     double ratio;
 };
 
-// 8.7 to 12.6 (seed 0, 0.9 million nodes: 0.8 s quiet, 2 to 6 s on that
-// machine), against the heavy calibration, whose working set is a search's.
-inline constexpr TimeBudget kBeginnerSolveTime = {40.0};
+// 0.65 to 0.82 (seed 0, 0.9 million nodes, about 80 ms), against the heavy
+// calibration, whose working set is a search's. The facelet search the piece
+// search replaced read 8.7 to 12.6 here, so a return to it, or to anything
+// like its cost per node, is over this budget with room to spare.
+inline constexpr TimeBudget kBeginnerSolveTime = {6.0};
 // 0.3 to 0.5 (a solve is 4 ms).
 inline constexpr TimeBudget kIntermediateSolveTime = {5.0};
 // 5.7 to 7.4 (a solve is 60 to 100 ms; the tables are already built).

@@ -24,7 +24,7 @@ src/app/
     camera.hpp  paths.hpp
     platform_info.hpp  crash_handler.hpp  desktop_shell.hpp
   platform/
-    windows/ macos/ linux/ android/ ios/
+    windows/ macos/ linux/ android/ ios/ web/
                      one implementation per interface, plus platform.cmake
     posix/           implementations shared by every non-Windows platform
     detail/          helpers every platform links (an OpenCV capture loop, ...)
@@ -39,7 +39,7 @@ platform's own directory when the implementations genuinely differ.
 ## How CMake selects
 
 `cmake/Platform.cmake` is the **only** file that tests `WIN32`, `APPLE`,
-`ANDROID`, `IOS` or `UNIX`. It maps them to a platform name and includes that
+`ANDROID`, `IOS`, `EMSCRIPTEN` or `UNIX`. It maps them to a platform name and includes that
 platform's fragment. Every other CMake file reads what the fragment declared:
 
 | What | Where it is declared | Who reads it |
@@ -49,10 +49,11 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | Qt libraries a platform file needs | `CUBEULATOR_PLATFORM_QT_LINK_LIBRARIES` | `src/app/CMakeLists.txt` |
 | C-runtime defines (`_CRT_SECURE_NO_WARNINGS`) | `CUBEULATOR_PLATFORM_COMPILE_DEFINITIONS` | `cube_platform`, every test target |
 | `cube_app` target properties (Android's manifest) | `CUBEULATOR_PLATFORM_APP_PROPERTIES` | `cube_app` |
-| Is this a desktop (dev tools, CPack, installed notices) | `CUBEULATOR_PLATFORM_DESKTOP` | `tools`, packaging, third-party notices |
+| Is this a desktop (dev tools, CPack, installed notices; OFF on phones and in the browser) | `CUBEULATOR_PLATFORM_DESKTOP` | `tools`, packaging, third-party notices |
 | Where an installed Qt lives | `CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS` / `_QT_ARCH_DIRS` | `cmake/FindQt6.cmake` |
 | The name in the version block | `CUBEULATOR_PLATFORM_DISPLAY_NAME` | `src/lib` (`build_target`) |
 | Default Qt plugin for the test binaries | `CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM` | `tests/` |
+| Whether the system tests' window is made invisible (transparent, click-through, never activated) | `CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` | `tests/system/app.cpp`, through `cube_test_platform_facts.hpp` |
 | Work before packages are found | `cube_platform_prepare_dependencies()` | `cmake/MobileDependencies.cmake` |
 | Qt runtime next to the app (windeployqt) | `cube_platform_deploy_qt_runtime()` | `src/app/CMakeLists.txt` |
 | Installers (NSIS, DragNDrop, DEB/RPM) | `cube_platform_configure_packaging()` | `cmake/Packaging.cmake` |
@@ -79,10 +80,12 @@ axis and stay in `cmake/CompilerWarnings.cmake`, `Sanitizers.cmake` and
    case only it can run (optional: a platform with none simply has no
    directory).
 
-That is the source tree. Three things outside it still carry platform names,
+That is the source tree. Four things outside it still carry platform names,
 because their formats cannot read a CMake variable: the `platform` expressions
 on dependencies in `vcpkg.json` (they mirror `CUBEULATOR_PLATFORM_DESKTOP`),
-the configure/build/test presets in `CMakePresets.json`, and the CI legs in
+the configure/build/test presets in `CMakePresets.json`, the vcpkg triplets in
+`cmake/triplets/` (a triplet *is* a platform's name and flags; only a platform
+that needs one of its own has one) and the CI legs in
 `.github/workflows/ci.yml`. Add the platform to those as a build target would.
 
 `tools/checks/check_platform_isolation.ps1` will tell you if a file in the
@@ -132,10 +135,11 @@ this?"* The cases already in the tree:
   first-party source - `src/`, `tests/` and `tools/`, platform directories
   included. They are already selected by CMake.
 - Include an OS header (`<windows.h>`, `<unistd.h>`, `<sys/...>`, Android or
-  Apple frameworks) outside `src/app/platform/` and `tests/platform/`.
+  Apple frameworks, `<emscripten.h>`) outside `src/app/platform/` and
+  `tests/platform/`.
 - Ask the OS what it is at run time (`QSysInfo`, `QOperatingSystemVersion`,
   `Q_OS_*`, `Qt.platform.os`) outside the platform section.
-- Test `WIN32`/`APPLE`/`ANDROID`/`IOS`/`UNIX` in any CMake file but
+- Test `WIN32`/`APPLE`/`ANDROID`/`IOS`/`EMSCRIPTEN`/`UNIX` in any CMake file but
   `cmake/Platform.cmake`.
 
 ## Enforcement
@@ -149,9 +153,9 @@ even while a porting leg is red). It fails on:
    `Qt.platform`, ...), outside the platform section;
 3. a platform directory without a `platform.cmake`, or a translation unit in
    one that no `platform.cmake` names (outside a comment);
-4. a test of the OS (`WIN32`, `APPLE`, `ANDROID`, `IOS`, `UNIX`,
+4. a test of the OS (`WIN32`, `APPLE`, `ANDROID`, `IOS`, `EMSCRIPTEN`, `UNIX`,
    `CMAKE_SYSTEM_NAME`, `$<PLATFORM_ID:...>`) in any CMake file but
-   `cmake/Platform.cmake` and the fragments.
+   `cmake/Platform.cmake`, the fragments and the triplets.
 
 Run it locally from the repository root:
 

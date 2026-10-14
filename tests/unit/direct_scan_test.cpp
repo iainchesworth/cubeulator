@@ -9,6 +9,7 @@
 #include <cube/solver/solver.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/direct_scan.hpp>
+#include <cube/vision/prepared_frame.hpp>
 
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
@@ -35,6 +36,7 @@ using cube::test::place;
 using cube::test::Pose;
 using cube::test::room;
 using cube::test::turned_clockwise;
+using cube::vision::prepare_frame;
 using cube::vision::read_side;
 using cube::vision::SideRead;
 using cube::vision::SideScan;
@@ -336,4 +338,48 @@ TEST_CASE("a scan can be started over", "[direct-scan]") {
     scan.reset();
     CHECK(scan.sides().empty());
     CHECK(scan.cube().error() == CubeError::face_capture_incomplete);
+}
+
+TEST_CASE("a frame is prepared once, at the working width, for every reader", "[direct-scan]") {
+    const Pose pose{.centre = {960.0F, 520.0F}, .pitch = 120.0F, .degrees = 6.0F};
+
+    SECTION("a wide frame comes down to the working width and remembers the factor") {
+        const auto prepared = prepare_frame(draw_side(kMixed, pose, Drawing{.size = {1920, 1080}}));
+
+        REQUIRE(prepared.has_value());
+        CHECK(prepared->working.cols == 640);
+        CHECK(prepared->working.rows == 360);
+        CHECK(std::abs(prepared->scale - 3.0F) < 1e-4F);
+        // Nine stickers and whatever else the drawing has bright and bounded.
+        CHECK(prepared->contours.size() >= 9);
+    }
+    SECTION("a frame no wider than that is used as it is") {
+        const cv::Mat frame = draw_side(kMixed, Pose{.centre = {300.0F, 170.0F}, .pitch = 42.0F});
+        const auto prepared = prepare_frame(frame);
+
+        REQUIRE(prepared.has_value());
+        CHECK(prepared->working.data == frame.data);
+        CHECK(prepared->scale == 1.0F);
+    }
+    SECTION("nothing is made of a frame that is not 8-bit BGR") {
+        CHECK_FALSE(prepare_frame(cv::Mat()).has_value());
+        CHECK_FALSE(prepare_frame(cv::Mat(360, 640, CV_8UC1, cv::Scalar(0))).has_value());
+    }
+    SECTION("a read from the preparation is the read of the frame") {
+        const cv::Mat frame = draw_side(kMixed, pose, Drawing{.size = {1920, 1080}});
+        const auto prepared = prepare_frame(frame);
+        REQUIRE(prepared.has_value());
+
+        const std::optional<SideRead> direct = read_side(frame);
+        const std::optional<SideRead> shared = read_side(*prepared);
+        REQUIRE(direct.has_value());
+        REQUIRE(shared.has_value());
+        CHECK(shared->pitch == direct->pitch);
+        CHECK(shared->stickers_found == direct->stickers_found);
+        CHECK(shared->found == direct->found);
+        for (std::size_t i = 0; i < 9; ++i) {
+            CHECK(shared->centres.at(i) == direct->centres.at(i));
+            CHECK(shared->lab.at(i) == direct->lab.at(i));
+        }
+    }
 }

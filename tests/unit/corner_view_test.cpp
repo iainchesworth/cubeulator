@@ -11,6 +11,7 @@
 #include <cube/vision/corner_fit.hpp>
 #include <cube/vision/corner_view.hpp>
 #include <cube/vision/direct_scan.hpp>
+#include <cube/vision/prepared_frame.hpp>
 
 #include <opencv2/imgproc.hpp>
 
@@ -30,6 +31,7 @@ using cube::test::room;
 using cube::vision::CornerRead;
 using cube::vision::fit_corner;
 using cube::vision::GridEdge;
+using cube::vision::prepare_frame;
 using cube::vision::read_corner;
 using cube::vision::SessionColours;
 using cube::vision::SideScan;
@@ -121,6 +123,34 @@ TEST_CASE("two sides turned corner-on are two lattices that share an edge", "[co
         CHECK(side.pitch > 15.0F);
         for (const bool found : side.found) {
             CHECK(found);
+        }
+    }
+}
+
+TEST_CASE("a frame no side is square in goes from one preparation to both readers", "[corner]") {
+    // What the app does with a frame: prepare it once, ask for a side, and only
+    // when there is none ask for the corner - the same reads as asking each
+    // reader of the frame itself.
+    const Cube cube = cube::test::scramble(2);
+    const cv::Mat frame = corner_frame(cube, Face::F);
+    const auto prepared = prepare_frame(frame);
+    REQUIRE(prepared.has_value());
+
+    CHECK_FALSE(cube::vision::read_side(*prepared).has_value());
+    CHECK_FALSE(cube::vision::read_side(frame).has_value());
+
+    const auto shared = read_corner(*prepared);
+    const auto direct = read_corner(frame);
+    REQUIRE(shared.has_value());
+    REQUIRE(direct.has_value());
+    REQUIRE(shared->sides.size() == direct->sides.size());
+    REQUIRE(shared->edges.size() == direct->edges.size());
+    for (std::size_t i = 0; i < shared->sides.size(); ++i) {
+        CHECK(shared->sides.at(i).pitch == direct->sides.at(i).pitch);
+        CHECK(shared->sides.at(i).found == direct->sides.at(i).found);
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            CHECK(shared->sides.at(i).centres.at(cell) == direct->sides.at(i).centres.at(cell));
+            CHECK(shared->sides.at(i).lab.at(cell) == direct->sides.at(i).lab.at(cell));
         }
     }
 }

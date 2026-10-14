@@ -31,6 +31,7 @@ body:
         - Linux
         - Android (build-only, unofficial)
         - iOS (build-only, unofficial)
+        - Web (in a browser)
         - Building from source / library only
     validations:
       required: true

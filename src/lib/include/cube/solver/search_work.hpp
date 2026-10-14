@@ -13,11 +13,11 @@ namespace cube::solver {
 // change that loses a signature reduction costs seconds long before anyone
 // notices it in a profile.
 //
-// Written by the searches themselves (bfs_search, the last-layer search, the
-// CFOP pair search and the two-phase search), once per search as it ends, so it
-// costs a thread-local add per search and nothing per node. The performance
-// tests (tests/perf, docs/testing.md "Performance tests") reset it, make a
-// call and read it; nothing in the application does.
+// Written by the searches themselves (piece_search and bfs_search, the
+// last-layer search, the CFOP pair search and the two-phase search), once per
+// search as it ends, so it costs a thread-local add per search and nothing per
+// node. The performance tests (tests/perf, docs/testing.md "Performance
+// tests") reset it, make a call and read it; nothing in the application does.
 struct SearchWork {
     // Searches that ran far enough to visit a node. A search whose start
     // already met its goal is not one.
@@ -30,12 +30,18 @@ struct SearchWork {
 
 namespace detail {
 
-inline thread_local SearchWork g_search_work;
+// One tally per thread. A function's static and not a namespace-scope variable:
+// the same thing, without being a non-const global that anything can reach.
+[[nodiscard]] inline SearchWork& tally() noexcept {
+    static thread_local SearchWork work;
+    return work;
+}
 
 inline void note_search(std::uint64_t nodes) noexcept {
-    ++g_search_work.searches;
-    g_search_work.nodes += nodes;
-    g_search_work.largest = std::max(g_search_work.largest, nodes);
+    SearchWork& work = tally();
+    ++work.searches;
+    work.nodes += nodes;
+    work.largest = std::max(work.largest, nodes);
 }
 
 // Reports a search's node count when the scope it is in ends, by whichever
@@ -60,13 +66,13 @@ private:
 
 // This thread's running total since the last reset.
 [[nodiscard]] inline SearchWork search_work() noexcept {
-    return detail::g_search_work;
+    return detail::tally();
 }
 
 // Starts this thread's total from zero: reset, make the call, read. (Not a
 // before-and-after subtraction, because `largest` is a maximum.)
 inline void reset_search_work() noexcept {
-    detail::g_search_work = {};
+    detail::tally() = {};
 }
 
 }  // namespace cube::solver

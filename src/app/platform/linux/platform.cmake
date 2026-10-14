@@ -15,6 +15,12 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "DISPLAY WAYLAND_DISPLAY")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
     "run it under a virtual display: xvfb-run -a PROGRAM (software GL: LIBGL_ALWAYS_SOFTWARE=1)")
 
+# Not hidden: CI's display is virtual, so there is nobody to bother. Whether a
+# transparent window is composited and exposed on a real X11 or Wayland desktop
+# has not been measured; if the walk is ever run on one and the flicker
+# matters, this is where to try it.
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
+
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/lib/qt6" "/usr/lib/x86_64-linux-gnu/qt6")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS gcc_64)

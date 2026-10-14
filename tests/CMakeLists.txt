@@ -11,13 +11,20 @@ include(Catch)
 #     (std::getenv is flagged "unsafe" by the MSVC CRT, and this build
 #     treats warnings as errors);
 #   - cube_test_platform_facts.hpp, generated from platform_facts.hpp.in: the
-#     Qt platform plugin the Qt test binaries fall back to, and how a
-#     platform's desktop session reaches a program (see test_platform.hpp);
+#     Qt platform plugin the Qt test binaries fall back to, how a platform's
+#     desktop session reaches a program (see test_platform.hpp), and whether
+#     the system tests' window is made invisible;
 #   - tests/ and that header's directory on the include path.
 # A fragment may write its variables as a CMake list; the header wants them
 # space-separated.
 string(REPLACE ";" " " CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES
     "${CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES}")
+# ON/OFF in the fragment, a C++ literal in the header.
+if(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW)
+    set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW_CXX "true")
+else()
+    set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW_CXX "false")
+endif()
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/platform_facts.hpp.in"
     "${CMAKE_CURRENT_BINARY_DIR}/generated/cube_test_platform_facts.hpp" @ONLY)
@@ -62,7 +69,8 @@ add_executable(cube_unit_tests
     unit/solver/cubie_test.cpp
     unit/solver/two_phase_test.cpp
     unit/solver/cfop_test.cpp
-    unit/solver/stepped_solution_test.cpp)
+    unit/solver/stepped_solution_test.cpp
+    unit/solver/piece_search_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
@@ -446,8 +454,8 @@ if(TARGET cube_app)
 endif()
 
 # --- System tests: the whole application driven from its UI (tests/system) ---
-# Needs a platform that can draw; labelled `system` so CI's plain ctest legs
-# can exclude it. See docs/testing.md.
+# Needs a platform that can draw; labelled `system`, which the committed test
+# presets exclude (run it with `<preset>-system`). See docs/testing.md.
 if(CUBEULATOR_BUILD_APP)
     add_subdirectory(system)
 endif()

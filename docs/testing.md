@@ -31,16 +31,22 @@ independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
 machine-specific tuning belongs; the committed presets leave it unset so
 CI's 4-core runners aren't oversubscribed).
 
+That leaves out the **system tests**, which draw the real app in a window (see
+[System tests](#system-tests)): every committed test preset excludes the
+`system` label, so a plain `ctest` never opens a window. They are run with the
+matching `<preset>-system` preset.
+
 ## Debug is slow - use `fastdebug` for local iteration
 
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
 compiles unoptimized *and* enables ASan/UBSan (see
 [Sanitizers.cmake](https://github.com/iainchesworthlabs/cubeulator/blob/main/cmake/Sanitizers.cmake)). The solver's first-two-layer
-searches (`cube::solver::detail::bfs_search`, see
-[bfs_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/bfs_search.hpp)) visit up to millions
-of nodes per stage, and an unoptimized build alone - independent of the
-sanitizers - is well over an order of magnitude slower there than Release,
-turning a fast Release corpus run into many Debug minutes.
+searches (`cube::solver::detail::piece_search`, see
+[piece_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/piece_search.hpp)) visit up to
+hundreds of thousands of nodes per stage, and an unoptimized build alone -
+independent of the sanitizers - is well over an order of magnitude slower
+there than Release, turning a fast Release corpus run into many Debug
+minutes.
 
 For local dev/test iteration, prefer the `fastdebug` preset
 (`windows-msvc-fastdebug`/`linux-gcc-fastdebug`/`macos-clang-fastdebug`):
@@ -148,16 +154,23 @@ the way a person would. One command runs it:
 
 ```
 cmake --build --preset <preset> --target cube_system_tests
-ctest --preset <preset> -L system --output-on-failure
+ctest --preset <preset>-system --output-on-failure
 ```
+
+`<preset>-system` is the test preset that selects only the `system` label;
+`<preset>` itself excludes it, and a command-line `-L system` cannot widen a
+preset that excludes the label (ctest applies both and finds nothing). A
+personal `CMakeUserPresets.json` test preset that wants the suite inherits
+`base-system` instead of `base`.
 
 That is a handful of ctest entries: `system.walk.<n>of<count>` (the suite bar
 the tour, cut into shards, five by default - a run of the app each),
-`system.tour` (the screenshot tour, below, a run of its own), `system.reach`
-(the reach gate, below; merges what the shards saw, needs no display) and
-`system.relaunch` (a second launch with a setting already in the store).
-`ctest -R system.walk` runs the shards; `-j` runs them side by side where
-there is a CPU to spare.
+`system.tour.narrow` and `system.tour.wide` (the screenshot tour, below, one
+run of its own per layout), `system.reach` (the reach gate, below; merges what
+the shards saw, needs no display) and `system.relaunch` (a second launch with
+a setting already in the store). `ctest --preset <preset>-system -R
+system.walk` runs the shards; `-j` runs entries side by side, which on four
+cores took the whole set from 8.7 to 4.4 minutes (below).
 
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
@@ -165,11 +178,36 @@ it a display and software GL (this is what CI does):
 ```
 QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 \
   xvfb-run -a -s "-screen 0 1280x1024x24" \
-  ctest --preset linux-gcc-coverage -L system --output-on-failure
+  ctest --preset linux-gcc-coverage-system --output-on-failure
 ```
 
+**The window you do not see.** The window is shown, exposed and rendered for
+real - that is the point - but on a platform where that works (Windows today;
+`CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` in the platform's `platform.cmake`) it is
+created fully transparent, click-through, without a taskbar button and never
+activated. A run therefore does not flick screens across the desktop it is
+started from, and does not take the keyboard from whatever is being typed in
+(a shown window is the foreground window for the whole run). Clicks, key
+presses and `grab()` are sent to the window object, not to the screen, so none
+of it matters to them. To watch a case, set `CUBE_SYSTEM_TEST_VISIBLE=1`:
+
+```
+set CUBE_SYSTEM_TEST_VISIBLE=1
+cube_system_tests "[journey]"
+```
+
+A hidden window is never the active window, so a case about keyboard focus or a
+window-scoped shortcut should be looked at once with `CUBE_SYSTEM_TEST_VISIBLE=1`
+before it is trusted: nothing in the suite depends on activation today, but
+that is the one thing the OS no longer gives it.
+
+Do not minimise the window, or move it off every screen, to the same end: a
+minimised window never gets its size (every click lands outside it), and a
+window outside every monitor is never sent an expose, so the app never counts
+as shown.
+
 It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
-`tour/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
+`tour/<layout>/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
 with `.txt` beside each (what that shard visited; a whole walk run by hand
 writes `reach.json`). CI uploads that directory as the `system-test-output`
 artifact.
@@ -184,8 +222,9 @@ the time went on. Each case also prints what its reset cost (`[system]   reset:
 a software renderer neither is small, and nothing else says how much of a
 case's time they are.
 
-The `system` label keeps it out of the plain `ctest` runs of the build legs
-(`-LE system`): it needs somewhere to draw.
+The `system` label keeps it out of the plain `ctest` runs - the committed
+presets exclude it, and CI's build legs say `-LE system` as well: it needs
+somewhere to draw.
 
 ### How it works
 
@@ -220,28 +259,65 @@ The `system` label keeps it out of the plain `ctest` runs of the build legs
 ### Time budget
 
 Under Xvfb with Mesa's llvmpipe the cube is drawn on the CPU, so what costs
-time there is frames, not logic: the whole walk is around half an hour on a
-CI runner, against a few minutes on a desktop GPU. One ctest entry for that
-either hits its timeout or hides which case was slow, so the walk is cut into
+time there is frames, not logic: the whole walk was around an hour on a CI
+runner, against a few minutes on a desktop GPU, and is now under ten minutes
+(measured below). One ctest entry for that hit its timeout and hid which
+case was slow, so the walk is cut into
 **shards** - Catch2's `--shard-count`/`--shard-index` split the
 declaration-order list into contiguous runs, `CUBE_SYSTEM_WALK_SHARDS` of them
 (5). Every case is in exactly one, a case added tomorrow is in one without
-being told, and each shard's `TIMEOUT` (1500 s) is a safety net, not a budget.
+being told, and each shard's `TIMEOUT` (1200 s) is a safety net, not a budget.
 Cases are independent - each begins with `App::fresh()` - so a shard needs
 nothing from the one before.
+
+What a case costs there is mostly **the first frame of a 3D cube**: the
+launch and solve screens (and the settings preview) are a `View3D` with MSAA, a
+procedural light probe and six lights, and the first frame of each one - which
+is every return to a screen that has it - spends eight seconds on llvmpipe
+prefiltering the probe. Measured with `QSG_RENDER_TIMING` on the CI preset
+(`linux-gcc-coverage`, Qt 6.8.3, four cores): in the cube-drag case eight such
+frames were 66 of its 82 seconds and the other 147 frames were 0.7 s in all;
+the same case with the probe left out is 16 s. (Antialiasing off changed
+nothing; a never-removed 3D view to keep Qt's caches alive changed nothing.)
+Two loops did it 36 times each (every control inside the window; the same in
+Hebrew), and were 555 s and 1349 s of a 55-minute walk.
 
 The reach gate is the reason the shards write reports of their own: it merges
 the `reach-shard-*` files and judges the union, and fails if one of them is
 missing, so a shard that did not run cannot pass as a smaller suite.
 
-Four choices keep each shard short, and each is worth keeping when a case is
+All entries of `-L system` with the CI preset, Qt 6.8.3, pinned to four cores
+(a hosted runner's four vCPUs): 55 minutes, five shards and a tour, before the
+changes below; 8.7 minutes one entry at a time and 4.4 minutes three at a time
+after them (the shards 26-79 s each, the tour halves 120 and 133 s). A runner
+is slower than that machine by something like a third to a half.
+
+Seven choices keep each entry short, and each is worth keeping when a case is
 added:
+
+- **Start where the case is going.** `App::fresh(App::Start::elsewhere)` leaves
+  the app on the permission screen (nothing drawn, no camera) instead of the
+  launch screen; a case that is about to go to another screen uses it, so it
+  does not pay to bring the launch cube up and tear it down. A loop over
+  screens and sizes does one reset per screen and takes the window through the
+  sizes by resizing, which is also a thing a person does.
 
 - **Short scrambles.** The cases that need a solved cube to come back from a
   scan use `cube::systest::scramble(seed)` (`app.hpp`, `kScrambleMoves`),
   ten moves, not the 25 of a full random scramble: what they check is that the
   scan reads the cube and the solution is shown and stepped through, not how
   hard the cube is, and the solver's own tests cover its time on a hard one.
+- **No light probe unless the case is about how the cube looks.** Before a
+  view's first frame is synchronised the harness takes the probe off its
+  environment, so the cube is lit by its six lights alone and the first frame
+  is not eight seconds. `App::fresh(Start, Scene3D::full)` keeps it, and the
+  screenshot tour and the render checks ask for that. A pixel comparison
+  between two runs of the cheap cube is still a comparison of the same thing.
+- **A press for each kind of move, not for each move.** The journey presses
+  Next for the first and last few moves and for the first of every kind of turn
+  (`R`, `U'`, `F2`...), and steps the rest through the controller; the tour
+  steps through the controller throughout. Ninety turns played out on a
+  software renderer, per layout, was a third of the walk.
 - **A still cube by default.** `App::fresh()` turns the cube's auto-rotate
   off. A spinning `View3D` is a scene that is re-rendered every frame whether
   or not anything has changed, which on a software renderer is the CPU the
@@ -256,7 +332,27 @@ added:
   looks every 50 ms, not every 25.
 
 If a shard still times out, the progress lines above say which case it was in
-and the reset lines how much of each case was before it began.
+and the reset lines (`reset: 12.0s (launch 0.5 cameras 0.0 language 11.3 ...)`)
+how much of each case was before it began and in which phase; a phase that
+shows the seconds is usually the first one that ran the event loop long enough
+for a frame, not the one that did the work.
+
+Two things the Linux runs showed about the harness, kept here because they
+look like test bugs and are not:
+
+- **The window reports its new size before the scene has it** (X11: the
+  geometry change arrives as an event). `App::resize` waits for the content
+  item, and `App::layout()` reads the scene's width, not the window's; before
+  that the sampler credited the wide layout's controls to `@narrow` for the
+  moments between the two, and the solve screen's `wide` read stale after a
+  resize.
+- **Qt crashed twice on the launch-to-other-screen change** that is the cost
+  above: under the threaded loop with Qt 6.12 on Windows (render thread), and
+  with the basic loop on Qt 6.8.3 under llvmpipe (main thread, inside the batch
+  renderer's RHI call, `QSGBatchRenderer::Renderer::prepareRenderPass`, a
+  frame after the old `View3D` was destroyed). Both are in Qt, and the app
+  makes the same screen change at "Start scanning". Fewer of these in the
+  walk makes both rarer; it does not make them go away.
 
 ### Decisions
 
@@ -321,11 +417,14 @@ solve screens - narrow (390x844) and wide (900x640), light and dark:
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
 
-It is its own ctest entry (`system.tour`, writing to
-`<build>/system-test-output/tour`) because it is the slowest part by far -
-48 grabs of a window that is being rendered in software on Linux CI - and a
-picture that cannot be taken should not hide what the walk found, nor spend
-the walk's time budget.
+It is two ctest entries of its own (`system.tour.narrow` and `.wide`, writing
+to `<build>/system-test-output/tour/<layout>`) because it is the slowest part
+by far - 48 grabs of a window that is being rendered in software on Linux CI
+- and a picture that cannot be taken should not hide what the walk found, nor
+spend the walk's time budget. Each layout is a half of the pictures and can
+run beside the other. The solution is stepped to its middle and its end
+through the controller, not by pressing Next ninety times: the pictures want
+the cube there, and the journey presses the control.
 
 ### Reach: the stand-in for QML coverage
 
@@ -451,7 +550,7 @@ cube_perf_tests "[.perf-report-timing]"          # just the wall-time metrics
 
 ### What is measured
 
-Corpus: `corpus_scramble(seed)` for seeds 0-11, 25 moves each - the same
+Corpus: `corpus_scramble(seed)` for seeds 0-27, 25 moves each - the same
 convention the solver tests use. It draws from
 `std::mt19937` modulo the number of choices, **not** through
 `cube::solver::random_scramble`: that goes through
@@ -459,7 +558,9 @@ convention the solver tests use. It draws from
 so the same seed is a different cube on MSVC, libstdc++ and libc++ and a node
 budget would be a budget for one of them. With this one the counts are the same
 on every platform (checked: MSVC 14.51 and GCC 15 on libstdc++ give identical
-counts, to the node, for all twelve seeds and for all three methods).
+counts, to the node, for the first twelve seeds and for all three methods, on
+the facelet search the piece search has since replaced; the replacement visits the
+same signatures, and the budgets held across it unchanged).
 
 | Group | Metrics (each as `max` over the corpus, `mean`, and where it applies the largest single search) | Hard cap it stays under |
 |---|---|---|
@@ -473,8 +574,9 @@ counts, to the node, for all twelve seeds and for all three methods).
 | `timing.*` | the fastest run of a seed-0 beginner / intermediate / advanced solve, of a 640x360 and a 1920x1080 read, of 100 `SideScan::add`s and of one `scanned()`, and of `read_corner` at both sizes, each as a ratio to the calibration workload | |
 
 The node counts come from `cube/solver/search_work.hpp`, a thread-local tally
-the searches add to once as each ends (`bfs_search`, the last-layer search, the
-CFOP pair search, the two-phase search). It costs one add per search and nothing
+the searches add to once as each ends (`piece_search` and its fallback
+`bfs_search`, the last-layer search, the CFOP pair search, the two-phase
+search). It costs one add per search and nothing
 per node, and nothing in the application reads it. The beginner figures are
 taken stage by stage through the public stage functions, and one case holds that
 chain equal to what `solve()` itself spends, so the numbers cannot go on being
@@ -500,7 +602,7 @@ loose part.
 
 | Build | Work budgets | Wall time |
 |---|---|---|
-| Release / RelWithDebInfo / MinSizeRel (every CI build leg, `*-fastdebug`) | run, with the plain `ctest`: 20 to 25 s here, on a 32-core desktop with other builds running, nearly all of it the beginner corpus | skipped, unless `CUBE_PERF_TIMING` is set |
+| Release / RelWithDebInfo / MinSizeRel (every CI build leg, `*-fastdebug`) | run, with the plain `ctest`: about 3 s here, now that the first-two-layers searches run on piece positions (it was 20 to 25 s on the facelet search) | skipped, unless `CUBE_PERF_TIMING` is set |
 | Debug (ASan/UBSan), and `linux-gcc-coverage` | **skipped, not failed**: the same counts are held by the optimised legs, and the corpus is minutes there | skipped |
 | An optimised build with coverage compiled in (`CUBEULATOR_ENABLE_COVERAGE`) | run | skipped: a clock reading is not about the program |
 
@@ -591,12 +693,13 @@ make a red run green:
   a loaded machine.) The medians are printed beside it.
 - **A calibration that is like the task.** A beginner solve keeps tens of
   megabytes of nodes and hash entries, which a busy neighbour costs several
-  times what it costs a task that fits in cache: measured, the same solve read
-  2.5 times its ratio with fourteen other solvers running, against a light
-  calibration that did not move. The solve is calibrated against a heavy
-  workload of the same footprint (about 0.1 s) and its ratio stayed between 8.7
-  and 12.6 across that load and the machine as it was. Reads, scan steps and
-  the two faster methods use the light one.
+  times what it costs a task that fits in cache: measured on the facelet
+  search, the same solve read 2.5 times its ratio with fourteen other solvers
+  running, against a light calibration that did not move. The solve is
+  calibrated against a heavy workload of the same footprint (about 0.1 s); its
+  ratio then stayed between 8.7 and 12.6 across that load and the machine as it
+  was, and on the piece search between 0.65 and 0.82. Reads, scan steps and the
+  two faster methods use the light one.
 - **One thread.** OpenCV is held to one thread while timing: its pool waits on
   cores another process may hold, which measures that process and not the code.
   The same read, with its default pool, went from 4 ms to 83 ms under load.
@@ -673,9 +776,12 @@ no calibration workload in a process can stand in for.
   zones; they are not budgeted, because they sit behind a QCoreApplication and
   a device the perf binary deliberately does not have.
 - **A search that does not report its work.** `search_work.hpp` is called by the
-  four searches that exist; a fifth (a faster replacement for one of them, say)
-  must call it too, or its nodes are never counted and every node budget would
-  pass on a zero. The `*.uncounted_*` metrics are what refuse that: a solve or a
+  five searches that exist; a sixth (a faster replacement for one of them, as
+  `piece_search` was for `bfs_search`) must call it too, or its nodes are never
+  counted and every node budget would pass on a zero. This is not hypothetical:
+  the first run of this tier against the merged piece search failed
+  `beginner.uncounted_stages` with 28 of 28 solves flagged, which is how the one
+  hook it needed was found. The `*.uncounted_*` metrics are what refuse that: a solve or a
   stage that found moves and visited no nodes fails them, by name, with the
   header to read. (`the stages measured one at a time are the solve that solve()
   runs` is the other half: it notices the chain `solve()` runs changing.)

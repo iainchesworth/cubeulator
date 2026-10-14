@@ -94,6 +94,12 @@ inline QStringList press_every_control(App& app, const QString& screen,
         const QPointF centre =
             control->mapToScene(QPointF(control->width() / 2, control->height() / 2));
         if (!scrolls && !QRectF(QPointF(0, 0), QSizeF(app.window().size())).contains(centre)) {
+            // Said, not only skipped: a control the sweep could not reach is
+            // a control a person on this window could not either.
+            WARN("not pressed, outside the window: "
+                 << key.toStdString() << " on " << screen.toStdString() << " at " << centre.x()
+                 << "," << centre.y() << " in " << app.window().width() << "x"
+                 << app.window().height());
             return false;
         }
         INFO("pressing " << key.toStdString() << " on " << screen.toStdString());

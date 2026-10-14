@@ -95,6 +95,15 @@ Result<Solution> solve_beginner(const Cube& scrambled) {
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
+    // A cube no turning of the sides makes can never end solved, so the
+    // answer below is already known: say it now. Left to the stages, the
+    // first-two-layers searches go on until their node budgets run out - one
+    // per stage, seconds on a desktop - to arrive at the same no_solution.
+    // (The other two methods answer unsolvable_state here; this one has always
+    // said no_solution, and still does.)
+    if (!scrambled.is_solvable()) {
+        return std::unexpected(CubeError::no_solution);
+    }
 
     Solution solution;
     Cube cube = scrambled;

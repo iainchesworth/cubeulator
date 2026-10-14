@@ -20,9 +20,11 @@ flowchart TD
     CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV)"] --> LOCK["PhotometryLock<br/>exposure + white balance held"]
     LOCK --> LOOP["OpenCvCaptureLoop<br/>capture thread, mailbox of 1"]
     LOOP -->|BGR frame| CTRL["DirectScan::processFrame<br/>GUI thread, poll timer"]
-    CTRL --> READ["read_side<br/>blobs -> lattice -> nine Lab samples"]
+    CTRL --> PREP["prepare_frame<br/>working width, threshold, outlines - once"]
+    PREP --> READ["read_side<br/>blobs -> lattice -> nine Lab samples"]
     READ -->|"std::optional&lt;SideRead&gt;"| SCAN["SideScan::add<br/>group reads into sides"]
     READ -.->|"no square-on side"| CORNER["read_corner<br/>two or three lattices that touch"]
+    PREP -.-> CORNER
     CORNER -.-> SCAN2["SideScan::add_corner"]
     SCAN --> SIX{"six captured sides?"}
     SIX -->|no| CTRL
@@ -46,9 +48,12 @@ It needs a side held roughly square to the camera and relies on darker plastic
 between and around the stickers; a side seen at an angle, a lattice that does
 not span three rows and three columns, or no cube all return nothing.
 
-1. **Sticker blobs.** The frame is reduced to the working width, the maximum
-   channel is taken as the value image, blurred, and thresholded adaptively;
-   contours that are roughly square and roughly sticker-sized survive.
+1. **Sticker blobs.** `prepare_frame` (`cube/vision/prepared_frame.hpp`)
+   reduces the frame to the working width, takes the maximum channel as the
+   value image, blurs it, thresholds it adaptively and traces the outlines.
+   It is done once per frame and handed to both readers, because it is most
+   of what a read costs; contours that are roughly square and roughly
+   sticker-sized survive `read_side`'s shape test.
 2. **Lattice.** The sticker pitch comes from nearest-neighbour distances and
    the direction from the folded angles. An affine least-squares fit places a
    3x3 lattice through the blobs, and the fit must span all three rows and
@@ -109,7 +114,7 @@ A cube turned between sides, or held corner-on, shows two sides at once, and
 where they meet the stickers along the shared edge are neighbours - the fact
 the flat reads lack.
 
-1. **`read_corner`** takes the sticker blobs with a looser shape test (a side
+1. **`read_corner`** takes the same prepared outlines with a looser shape test (a side
    at an angle is a parallelogram: a compact four-cornered contour, not a
    square), and finds up to three 3x3 lattices by RANSAC over blob triples,
    each fitted by least squares with its steps turning clockwise so the side
