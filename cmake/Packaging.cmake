@@ -23,7 +23,7 @@
 # None of this applies to mobile: real packaging there is androiddeployqt's
 # generated APK/AAB and Xcode's archive+export, not CPack.
 #
-# SIGNING is deliberately not configured (Iain has not decided; no
+# SIGNING is deliberately not configured (the maintainer has not decided; no
 # certificate is bought, requested or referenced). It plugs in at:
 #   * Windows - packaging/windows/Packaging.cmake: sign the installer after
 #     CPack writes it.

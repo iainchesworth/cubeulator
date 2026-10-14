@@ -21,7 +21,7 @@ The permission screen says "No picture is saved, uploaded or shared."
 The recovery plan's R4 wanted every failed scan recorded automatically,
 which would have made that false.
 
-**Decided by Iain, 2026-10-13: recording failed scans is for developer
+**Decided by the maintainer, 2026-10-13: recording failed scans is for developer
 builds only.** So there is one statement, and it holds in every released
 build:
 
