@@ -24,6 +24,12 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop ──release
   diverge and the next release PR re-lists every commit). Hotfixes go to
   `main` from a `hotfix/*` branch and are merged back into `develop`
   through a PR from a `bugfix/*` or `support/*` branch.
+- **`spike/*` is the one prefix that is never merged.** It is for
+  investigations ([Investigations](investigations/README.md)): the branch is
+  pushed, CI legs are dispatched at it by hand, and a pull request from it fails
+  `Validate gitflow branch name` on purpose, which is a required check, so it can
+  neither be queued nor merged. `spike-sweep.yml` tags and deletes one that has
+  been untouched for 30 days.
 - **Head branches are deleted** when their PR merges. A stacked PR whose base
   was the merged branch is retargeted to `develop` automatically.
 
