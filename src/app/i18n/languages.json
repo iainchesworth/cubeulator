@@ -12,9 +12,9 @@
   "source": "en",
   "languages": [
     { "code": "en",    "file": "en",    "tag": "en_GB", "name": "English",  "plurals": 2, "rtl": false, "translated": true  },
-    { "code": "de",    "file": "de",    "tag": "de",    "name": "Deutsch",  "plurals": 2, "rtl": false, "translated": false },
-    { "code": "fr",    "file": "fr",    "tag": "fr",    "name": "Français", "plurals": 2, "rtl": false, "translated": false },
-    { "code": "es",    "file": "es",    "tag": "es",    "name": "Español",  "plurals": 2, "rtl": false, "translated": false },
+    { "code": "de",    "file": "de",    "tag": "de",    "name": "Deutsch",  "plurals": 2, "rtl": false, "translated": false, "draft": true },
+    { "code": "fr",    "file": "fr",    "tag": "fr",    "name": "Français", "plurals": 2, "rtl": false, "translated": false, "draft": true },
+    { "code": "es",    "file": "es",    "tag": "es",    "name": "Español",  "plurals": 2, "rtl": false, "translated": false, "draft": true },
     { "code": "ja",    "file": "ja",    "tag": "ja",    "name": "日本語",     "plurals": 1, "rtl": false, "translated": false, "draft": true },
     { "code": "zh-CN", "file": "zh_CN", "tag": "zh_CN", "name": "简体中文",   "plurals": 1, "rtl": false, "translated": false, "draft": true },
     { "code": "he",    "file": "he",    "tag": "he",    "name": "עברית",    "plurals": 2, "rtl": true,  "translated": false },

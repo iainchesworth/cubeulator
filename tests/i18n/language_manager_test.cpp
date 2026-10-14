@@ -306,12 +306,43 @@ TEST_CASE("a string with no translation shows its English through the manager",
     LanguageManager manager(*qGuiApp, engine);
     manager.applyInitialLanguage();
 
-    // None of these six is translated yet (E5): each must show the English.
-    for (const char* code : {"de", "fr", "es", "he", "ar", "yi"}) {
+    // None of these three is translated yet (E5): each must show the English.
+    for (const char* code : {"he", "ar", "yi"}) {
         INFO(code);
         REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
         CHECK(qtTrId("home.scan") == QLatin1String("Scan a cube"));
         CHECK(qtTrId("common.back") == QLatin1String("Back"));
+    }
+}
+
+TEST_CASE("a Latin-script draft shows its translation through the manager",
+          "[i18n][manager][translated]") {
+    Fresh fresh;
+    QQmlEngine engine;
+    LanguageManager manager(*qGuiApp, engine);
+    manager.applyInitialLanguage();
+
+    // German, French and Spanish are complete drafts: the person sees them
+    // and not the English under them. No word is asserted (a reviewer will
+    // change some); that it is not the English, and that the product name and
+    // the count survive, is what the manager owes.
+    for (const char* code : {"de", "fr", "es"}) {
+        INFO(code);
+        REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
+        for (const char* id : {"home.scan", "common.back", "settings.section.camera"}) {
+            INFO(id);
+            const QString shown = qtTrId(id);
+            CHECK_FALSE(shown.isEmpty());
+            CHECK(shown != QLatin1String(id));
+        }
+        CHECK(qtTrId("home.scan") != QLatin1String("Scan a cube"));
+        CHECK(qtTrId("common.back") != QLatin1String("Back"));
+        CHECK(qtTrId("app.name") == QLatin1String("Cubeulator"));
+        // The count is written in the language's own number format, and the
+        // singular is not the plural.
+        const QString three = qtTrId("scan.leave.body", 3);
+        CHECK(three.contains(QLocale().toString(3)));
+        CHECK(qtTrId("scan.leave.body", 1) != three);
     }
 }
 

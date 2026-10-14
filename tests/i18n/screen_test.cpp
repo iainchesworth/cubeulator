@@ -245,10 +245,14 @@ void in_language(const char* code) {
 struct PermissionWords {
     QString title;
     QString act;
+    // The id of the same button, for a language that is no longer English
+    // under the screen: the words it shows there are what the catalogue says.
+    const char* act_id = nullptr;
     explicit PermissionWords(const Screen& screen) {
         const bool denied = screen.item()->property("denied").toBool();
         title = denied ? QStringLiteral("Camera access is off") : QStringLiteral("Camera access");
         act = denied ? QStringLiteral("Try again") : QStringLiteral("Allow camera");
+        act_id = denied ? "common.tryAgain" : "permission.allow";
     }
 };
 
@@ -386,6 +390,17 @@ TEST_CASE("every converted screen holds the real Japanese and Chinese without cu
     }
 }
 
+TEST_CASE(
+    "every converted screen holds the real German, French and Spanish without cutting a string off",
+    "[i18n][screen][latin]") {
+    // The drafts, not their proxy. German is the long one: its compounds
+    // ("Vierteldrehung", "Geräteeinstellungen") have no place to break, so a
+    // box measured for the English is the likeliest to be cut here.
+    for (const char* language : {"de", "fr", "es"}) {
+        holds_the_layout_in(language);
+    }
+}
+
 TEST_CASE("the face follows the app's language for Japanese and Chinese, and back",
           "[i18n][screen][face]") {
     // Japanese and Chinese share code points and not shapes. A family left to
@@ -465,9 +480,14 @@ TEST_CASE("right to left mirrors the layout, and left to right puts it back",
         CHECK(screen.left_of(act) > screen.item()->width() / 2);
     }
 
+    // A left-to-right language that is not English. German is translated (a
+    // draft), so the button is found by the words the language gives it, not
+    // by the English the right-to-left three still show.
     in_language("de");
     screen.settle();
-    act = screen.button(words.act);
+    const QString german = qtTrId(words.act_id);
+    REQUIRE(german != words.act);
+    act = screen.button(german);
     REQUIRE(act != nullptr);
     CHECK(screen.left_of(act) < screen.item()->width() / 2);
 }

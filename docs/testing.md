@@ -930,9 +930,21 @@ raises it on a machine with cores to spare.
 **Known today.** A few cases say what is true now and are marked "EXPECTED TO
 CHANGE", as in `tests/system/known_today_test.cpp`: "Review the solution" does
 nothing, a toggle's label does not answer a press (only its box does), Tab
-reaches no control and Escape leaves nothing, and a chosen language still
-shows English because the catalogues' entries are all unfinished. They fail
-when the app is fixed, which is the prompt to update them.
+reaches no control and Escape leaves nothing, and a chosen Hebrew, Arabic or
+Yiddish still shows English because those catalogues' entries are all
+unfinished (German, French, Spanish, Japanese and Chinese are drafts and show
+their own text). They fail when the app is fixed, which is the prompt to update
+them.
+
+`settings.spec.mjs` attaches a picture of the settings and launch screens in
+each of German, French and Spanish to its report. A passing test's attachments
+are not kept, so `CUBEULATOR_WEB_SHOTS=<dir>` also writes them there:
+
+```sh
+CUBEULATOR_WEB_DIR=../../build/web-emscripten-diagnostics/bin \
+CUBEULATOR_WEB_SHOTS=shots \
+  npx playwright test --project=app specs/settings.spec.mjs -g accents
+```
 
 ### Performance in the browser
 
