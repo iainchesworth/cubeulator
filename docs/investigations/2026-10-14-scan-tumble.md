@@ -212,8 +212,12 @@ Open, not decided here:
   take in the browser build with the diagnostics channel on (`Ctrl+Shift+D`),
   to put numbers on the exposure drift.
 - **The cost of a verdict of "six sides, no cube"** (up to 150 ms, every frame)
-  is still there for a scan that really has a misread side; a guard that
-  re-judges only when the colours have moved is a separate change.
+  was still there for a scan that really has a misread side. Closed afterwards,
+  in a change of its own: a failed assembly is kept and made again only when
+  the names given to the stickers change (or, for sides that make several
+  cubes, the corner reads or the colours they are fitted in); see
+  [the vision pipeline](../vision-pipeline.md). A guard on how far the colours
+  had moved was tried first and changed two verdicts, which names did not.
 
 ## Where the code is
 

@@ -196,6 +196,67 @@ against. These stay as measured, not neutralised: a corner or a held read
 later is measured the same way. `ScannedCube::cast` is the white centre's
 chroma, how far from neutral the light was; 0 when no white could be told.
 
+### A failed assembly is not made again until what it rested on changes
+
+The scan screen judges the scan whenever the fused colours of a side have
+changed, and the median of a side held in view moves by a fraction of a unit
+with every read: a scan whose six sides make no cube was assembled afresh for
+every frame that counted. Naming (the white reference, neutralising the 54
+stickers, clustering) costs about 0.3 ms and is done every time. Assembling
+does not: on the tumbles measured, 15 name exchanges of 4,096 rolls each cost
+55 ms on average and up to 104 ms where no cube can be made, and 6 ms on average
+where the sides make several cubes. WebAssembly was not measured.
+
+`SideScan` keeps the last assembly that failed, and answers from it while what
+it rested on is as it was (`kRejudgeLabDistance`, one Lab unit):
+
+- **Where no cube can be made** - assembling and trading the names of two
+  centres look at the names of the 54 stickers and nothing else. A colour that
+  moved without changing a name changes nothing, however far it moved (a lamp
+  that dims, a camera that settles); a name changing on one sticker is a new
+  assembly.
+- **Where the sides make several cubes** - the choice among them also rests on
+  the corner reads and on what each colour measured, the colours the reads are
+  fitted in. A corner read added or replaced (a worse read of a view already
+  kept is neither), or a colour more than one Lab unit from where it was at the
+  last assembly, is a new assembly.
+
+A cube ends the scan, so only a failure is kept. `scanned()`, `cube()` and
+`diagnose()` share the one memory, so asking all three costs one assembly, and
+`SideScan::assemblies()` counts the assemblies made. The consequence is that a
+`SideScan` is not safe to share between threads, `const` calls included.
+
+Measured by replaying 94 sessions through the app's own loop (the 24 drawn
+tumbles and 63 drawn cubes of `docs/investigations/2026-10-14-scan-tumble.md`,
+two real recordings and the five sessions of the scoreboard), judging as
+`DirectScan::processFrame` does:
+
+| | unguarded | guarded |
+| --- | ---: | ---: |
+| judgements, 94 sessions | 17,567 | 17,567 |
+| reaching naming (six sides captured) | 1,070 | 1,070 |
+| assemblies made, of which cubes | 1,023, of which 85 | 183, of which 85 |
+| failed assemblies made | 938 | 98 |
+| time judging | 25.0 s | 2.1 s |
+| judgements of 5 ms or more | 810 | 108 |
+| slowest judgement | 104 ms | 63 ms |
+
+Every judgement came out the same, at the same frame, in all 94 sessions (its
+verdict, the assembly trace's path, candidates, chosen cube and settling corner,
+and the frame the cube was known at). The costliest tumble (30 degrees a second
+at 30 frames a second, +-15% exposure drift) went from 10.4 s of judging to
+0.46 s. The times are one interleaved run on a machine other builds were
+running on.
+
+A first version kept the answer while every sticker stayed within one Lab unit
+of where it was at the last assembly, which is the obvious guard. Measured on
+the tumbles before the white-reference naming landed it made a quarter of the
+assemblies and changed two verdicts: a sticker moved less than a unit and a
+fresh naming made no cube where the kept answer said "more than one way", for
+two frames. At 0.25 units it changed none and still made 56%: a held side's
+colours drift continuously, and what an assembly rests on is not the colours
+but the names they are given.
+
 ## Two sides in one view: `read_corner` and `fit_corner`
 
 Six square-on reads say what is on each side but not which way up each is
@@ -264,8 +325,8 @@ the flat reads lack.
    (`shaded_view_of`: nine colours within `kCornerFitDistance` of it under
    `colour_distance`, the loose measure), starts none: it was a second group
    of its own, reached `kMinReads`, took one of the six places, and made the
-   scan "six sides that make no cube" - a verdict that costs up to 150 ms on
-   every frame.
+   scan "six sides that make no cube" - a verdict whose assembly costs up to
+   100 ms (kept, not repeated: see above).
    `reads_in_view()` is the fewest among the sides in view, which is the one
    the capture is waiting for.
 

@@ -250,6 +250,41 @@ TEST_CASE("a corner view of the wrong cube does not settle it", "[corner]") {
     CHECK(read.error() == cube::CubeError::ambiguous_scan);
 }
 
+TEST_CASE("a scan that is ambiguous is judged again when a corner read arrives, and not before",
+          "[corner]") {
+    const Cube cube = after(kAmbiguous);
+    // Corner views of another cube leave it open (see above), so each read
+    // that arrives is a new input to the choice and none ends the scan.
+    const Cube elsewhere = cube::test::scramble(5);
+
+    SideScan scan;
+    show_sides(scan, cube);
+    REQUIRE(scan.sides().size() == 6);
+    REQUIRE(scan.cube().error() == cube::CubeError::ambiguous_scan);
+    REQUIRE(scan.assemblies() == 1);
+
+    // Asked again with nothing new, by either call: the answer is the last.
+    CHECK(scan.diagnose().result.error() == cube::CubeError::ambiguous_scan);
+    CHECK(scan.scanned().error() == cube::CubeError::ambiguous_scan);
+    CHECK(scan.assemblies() == 1);
+
+    for (std::size_t i = 0; i < 3; ++i) {
+        const auto corner = read_corner(corner_frame(elsewhere, kAllFaces.at(i)));
+        REQUIRE(corner.has_value());
+        scan.add_corner(corner);
+        CHECK(scan.cube().error() == cube::CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 2 + i);
+        // And only once for it.
+        CHECK(scan.diagnose().result.error() == cube::CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 2 + i);
+    }
+    const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+    const auto& trace = ::cube::test::must_have(diagnosis.assembly);
+    CHECK(trace.path == cube::vision::AssemblyPath::ambiguous);
+    CHECK(trace.corner_reads == 3);
+    CHECK(trace.corner_fits.size() == trace.candidates);
+}
+
 namespace {
 
 // The three sides of `cube` that meet at one corner, as arrays drawn

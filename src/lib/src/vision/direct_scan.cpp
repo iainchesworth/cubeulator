@@ -1170,45 +1170,28 @@ struct Assembled {
     return out;
 }
 
-// Naming and assembly of six sides, with the working of both.
-struct Evaluation {
-    std::optional<WhiteReference> white;
-    Result<ColorResolution> naming = std::unexpected(CubeError::face_capture_incomplete);
-    std::optional<AssemblyTrace> assembly;
-    Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
-};
-
-[[nodiscard]] Evaluation evaluate(const std::array<CapturedFace, 6>& faces,
-                                  const std::vector<CornerRead>& corners) {
-    Evaluation evaluation;
-    // Named in the colours the light would have given under neutral light,
-    // once the cube's own white says what the light did. The sides are only
-    // ever named here, after all six are in, so nothing seen earlier has to
-    // be taken back. The session's colours stay as measured (assemble gets
-    // `faces`, not `seen`): a corner or a held read later is measured the
-    // same way.
-    evaluation.white = find_white_reference(faces);
-    std::array<CapturedFace, 6> seen = faces;
-    if (evaluation.white.has_value()) {
-        for (CapturedFace& face : seen) {
-            for (cv::Vec3f& lab : face.lab) {
-                lab = neutralised(*evaluation.white, lab);
-            }
+// The name each of the 54 stickers was given, side by side.
+[[nodiscard]] std::array<std::array<model::FacetColor, 9>, 6> names_of(const NamedSides& named) {
+    std::array<std::array<model::FacetColor, 9>, 6> names{};
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            names.at(side).at(cell) = named.at(side).at(cell).color;
         }
     }
-    evaluation.naming = resolve_colors_explained(
-        seen, evaluation.white.has_value() ? std::optional(evaluation.white->side) : std::nullopt);
-    if (!evaluation.naming) {
-        evaluation.result = std::unexpected(evaluation.naming.error());
-        return evaluation;
+    return names;
+}
+
+// Whether any of the six colours measures further than kRejudgeLabDistance from
+// where it did.
+[[nodiscard]] bool colours_moved(const SessionColours& now, const SessionColours& before) {
+    constexpr float kLimitSquared = kRejudgeLabDistance * kRejudgeLabDistance;
+    for (std::size_t colour = 0; colour < 6; ++colour) {
+        const cv::Vec3f gap = now.at(colour) - before.at(colour);
+        if (gap.dot(gap) > kLimitSquared) {
+            return true;
+        }
     }
-    Assembled assembled = assemble(evaluation.naming->faces, faces, corners);
-    evaluation.result = std::move(assembled.result);
-    evaluation.assembly = std::move(assembled.trace);
-    if (evaluation.result.has_value() && evaluation.white.has_value()) {
-        evaluation.result->cast = evaluation.white->cast;
-    }
-    return evaluation;
+    return false;
 }
 
 // Which of read_side's two looks a set of blobs came from.
@@ -1357,6 +1340,9 @@ cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
 void SideScan::reset() {
     groups_.clear();
     corners_.clear();
+    ++corner_revision_;
+    failed_.reset();
+    assemblies_ = 0;
     previous_centre_.reset();
     previous_corner_centres_.clear();
     in_view_.clear();
@@ -1630,12 +1616,14 @@ void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_
     if (same != corners_.end()) {
         if (view_quality(*read) > view_quality(*same)) {
             *same = *read;
+            ++corner_revision_;
         }
     } else {
         if (corners_.size() >= kKeptCornerReads) {
             corners_.erase(corners_.begin());
         }
         corners_.push_back(*read);
+        ++corner_revision_;
     }
 
     // Each side that was seen whole and held still is a read of its side.
@@ -1738,7 +1726,78 @@ Result<ScannedCube> SideScan::scanned() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces.at(i).lab = groups_.at(captured.at(i)).fused;
     }
-    return evaluate(faces, corners_).result;
+    return judge(faces).result;
+}
+
+ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
+    ScanDiagnosis judged;
+    // Named in the colours the light would have given under neutral light,
+    // once the cube's own white says what the light did. The sides are only
+    // ever named here, after all six are in, so nothing seen earlier has to
+    // be taken back. The session's colours stay as measured (assemble gets
+    // `faces`, not `seen`): a corner or a held read later is measured the
+    // same way.
+    //
+    // Naming is done every time; what costs is putting the names together
+    // (kRejudgeLabDistance).
+    judged.white = find_white_reference(faces);
+    std::array<CapturedFace, 6> seen = faces;
+    if (judged.white.has_value()) {
+        for (CapturedFace& face : seen) {
+            for (cv::Vec3f& lab : face.lab) {
+                lab = neutralised(*judged.white, lab);
+            }
+        }
+    }
+    Result<ColorResolution> naming = resolve_colors_explained(
+        seen, judged.white.has_value() ? std::optional(judged.white->side) : std::nullopt);
+    if (!naming) {
+        judged.result = std::unexpected(naming.error());
+        return judged;
+    }
+    const NamedSides& named = naming->faces;
+    const auto names = names_of(named);
+
+    // The assembly that failed is the answer again when what it rested on is as
+    // it was. Where no cube can be made that is the names alone: assembling,
+    // and trading the names of two centres, look at nothing else. Choosing
+    // among several cubes rests on the corner reads and on what each colour
+    // measured, the colours the reads are fitted in - and a hand showing the
+    // cube about adds a corner read a frame.
+    if (failed_.has_value() && failed_->names == names) {
+        const bool several = failed_->trace.candidates > 1;
+        if (!several || (failed_->corner_revision == corner_revision_ &&
+                         !colours_moved(colours_of(named, faces), failed_->colours))) {
+            judged.assembly = failed_->trace;
+            // What the trace says it was given, as of now.
+            judged.assembly->corner_reads = corners_.size();
+            judged.result = std::unexpected(failed_->error);
+            judged.naming = std::move(*naming);
+            return judged;
+        }
+    }
+
+    ++assemblies_;
+    Assembled assembled = assemble(named, faces, corners_);
+    // Only a failure is kept: a cube ends the scan.
+    if (assembled.result.has_value()) {
+        failed_.reset();
+    } else {
+        failed_ = FailedAssembly{
+            .names = names,
+            .colours = colours_of(named, faces),
+            .corner_revision = corner_revision_,
+            .trace = assembled.trace,
+            .error = assembled.result.error(),
+        };
+    }
+    judged.assembly = std::move(assembled.trace);
+    judged.result = std::move(assembled.result);
+    if (judged.result.has_value() && judged.white.has_value()) {
+        judged.result->cast = judged.white->cast;
+    }
+    judged.naming = std::move(*naming);
+    return judged;
 }
 
 ScanDiagnosis SideScan::diagnose() const {
@@ -1767,13 +1826,11 @@ ScanDiagnosis SideScan::diagnose() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces.at(i).lab = diagnosis.sides.at(i).lab;
     }
-    Evaluation evaluation = evaluate(faces, corners_);
-    diagnosis.white = evaluation.white;
-    if (evaluation.naming.has_value()) {
-        diagnosis.naming = std::move(*evaluation.naming);
-    }
-    diagnosis.assembly = std::move(evaluation.assembly);
-    diagnosis.result = std::move(evaluation.result);
+    ScanDiagnosis judged = judge(faces);
+    diagnosis.white = judged.white;
+    diagnosis.naming = std::move(judged.naming);
+    diagnosis.assembly = std::move(judged.assembly);
+    diagnosis.result = std::move(judged.result);
     return diagnosis;
 }
 

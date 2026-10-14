@@ -16,6 +16,7 @@
 #include <opencv2/core.hpp>
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -25,6 +26,7 @@
 #include <optional>
 #include <random>
 #include <string_view>
+#include <utility>
 #include <vector>
 #include "must_have.hpp"
 
@@ -1082,4 +1084,278 @@ TEST_CASE("a scan that does not make a cube is reported with the cause", "[direc
     CHECK_FALSE(diagnosis.naming.has_value());
     CHECK_FALSE(diagnosis.assembly.has_value());
     CHECK(diagnosis.captured >= 6);
+}
+
+// ---------------------------------------------------------------------------
+// Six sides that make no cube are not put together again while nothing the
+// attempt rested on has changed (kRejudgeLabDistance): a naming that makes no
+// cube costs up to 150 ms to assemble, and the colours of the side in view move
+// a little with every read of it.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The six sides of `cube` as `colour_of` measures them, in the order of kAllFaces.
+template <typename ColourOf>
+std::array<Lab9, 6> sides_measured(const Cube& cube, ColourOf colour_of) {
+    std::array<Lab9, 6> sides{};
+    for (std::size_t i = 0; i < 6; ++i) {
+        const std::array<Color, 9> stickers = outside_view(cube, kAllFaces.at(i));
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            sides.at(i).at(cell) = colour_of(stickers.at(cell));
+        }
+    }
+    return sides;
+}
+
+// As the warm lamp measures them: red and orange are close, as in a room.
+std::array<Lab9, 6> measured_sides(const Cube& cube) {
+    return sides_measured(cube, [](Color colour) { return cube::test::warm_lamp_lab(colour); });
+}
+
+// As the drawings' paint measures them: six colours well apart, so that the
+// names of what is read are not in question.
+std::array<Lab9, 6> painted_sides(const Cube& cube) {
+    return sides_measured(cube, [](Color colour) { return lab_of(paint(colour)); });
+}
+
+// One side held still for `reads` frames exactly as it measures, then the cube
+// turns to the next.
+void hold_exact(SideScan& scan, const Lab9& side, int reads) {
+    for (int i = 0; i < reads; ++i) {
+        scan.add(read_of(side));
+    }
+    scan.add(std::nullopt);
+}
+
+void hold_all(SideScan& scan, const std::array<Lab9, 6>& sides, int reads = kHeldFrames) {
+    for (const Lab9& side : sides) {
+        hold_exact(scan, side, reads);
+    }
+}
+
+Lab9 lighter(Lab9 side, float by) {
+    for (cv::Vec3f& sticker : side) {
+        sticker(0) += by;
+    }
+    return side;
+}
+
+// The edge sticker above the centre of two sides, each read as the other's
+// colour: nine stickers of each colour still, so the colours name themselves,
+// and no cube that exists.
+std::array<Lab9, 6> misread_sides(const Cube& cube) {
+    std::array<Lab9, 6> sides = measured_sides(cube);
+    std::swap(sides.at(0).at(1), sides.at(1).at(1));
+    return sides;
+}
+
+float largest_move(const std::vector<SideScan::Side>& before,
+                   const std::vector<SideScan::Side>& after_it) {
+    REQUIRE(before.size() == after_it.size());
+    float most = 0.0F;
+    for (std::size_t side = 0; side < before.size(); ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            most = std::max(most, static_cast<float>(cv::norm(after_it.at(side).lab.at(cell) -
+                                                              before.at(side).lab.at(cell))));
+        }
+    }
+    return most;
+}
+
+// A corner view of two sides with no sticker found in either: kept, and
+// counted towards no side.
+cube::vision::CornerRead blank_corner() {
+    cube::vision::CornerRead read;
+    read.sides.resize(2);
+    return read;
+}
+
+// Whether two namings gave every one of the 54 stickers the same name.
+bool same_names(const cube::vision::ColorResolution& a, const cube::vision::ColorResolution& b) {
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            if (a.faces.at(side).at(cell).color != b.faces.at(side).at(cell).color) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+constexpr std::string_view kAmbiguousCube =
+    "R F' D' L L B B' D' R F2 L' U' F2 B B2 U B2 R D' U2 R2 L' L2 F L2";
+
+}  // namespace
+
+TEST_CASE("sides that make no cube are put together once, not for every frame", "[direct-scan]") {
+    const Cube cube = cube::test::scramble(3);
+    const std::array<Lab9, 6> sides = misread_sides(cube);
+    SideScan scan;
+    hold_all(scan, sides);
+
+    const cube::vision::ScanDiagnosis first = scan.diagnose();
+    REQUIRE_FALSE(first.result.has_value());
+    CHECK(first.result.error() == CubeError::invalid_cube_state);
+    // The costly way to fail: naming made no cube and no pair of names did.
+    const auto& trace = ::cube::test::must_have(first.assembly);
+    REQUIRE(trace.path == cube::vision::AssemblyPath::failed);
+    CHECK(trace.candidates == 0);
+    REQUIRE(scan.assemblies() == 1);
+
+    SECTION("whichever call asks, and however often") {
+        for (int i = 0; i < 5; ++i) {
+            REQUIRE_FALSE(scan.scanned().has_value());
+            CHECK(scan.cube().error() == CubeError::invalid_cube_state);
+            const cube::vision::ScanDiagnosis again = scan.diagnose();
+            CHECK(again.result.error() == CubeError::invalid_cube_state);
+            // The same working, not a new one.
+            CHECK(same_names(::cube::test::must_have(again.naming),
+                             ::cube::test::must_have(first.naming)));
+            CHECK(::cube::test::must_have(again.assembly).path == trace.path);
+            CHECK(again.sides.size() == 6);
+        }
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("while the side in view is read again and drifts by under a unit") {
+        const std::vector<SideScan::Side> before = scan.sides();
+        // Reads of the first side a little lighter than the eleven it has:
+        // the median moves to them once they are the majority.
+        for (int i = 0; i < 40; ++i) {
+            scan.add(read_of(lighter(sides.at(0), 0.4F)));
+            REQUIRE_FALSE(scan.scanned().has_value());
+        }
+        scan.add(std::nullopt);
+        const float moved = largest_move(before, scan.sides());
+        REQUIRE(moved > 0.2F);
+        REQUIRE(moved < cube::vision::kRejudgeLabDistance);
+
+        CHECK_FALSE(scan.scanned().has_value());
+        CHECK_FALSE(scan.diagnose().result.has_value());
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("while a colour moves by several units and keeps its name") {
+        // A lamp that dims or a camera that settles: no sticker changes name,
+        // and the names are all that a failure of this kind rests on.
+        const std::vector<SideScan::Side> before = scan.sides();
+        hold_exact(scan, lighter(sides.at(0), 4.0F), 40);
+        REQUIRE(largest_move(before, scan.sides()) > cube::vision::kRejudgeLabDistance);
+
+        const cube::vision::ScanDiagnosis again = scan.diagnose();
+        REQUIRE_FALSE(again.result.has_value());
+        REQUIRE(same_names(::cube::test::must_have(again.naming),
+                           ::cube::test::must_have(first.naming)));
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("when corner reads arrive that the failure does not depend on") {
+        // Sides that make no cube at all: corner reads decide only among
+        // several cubes, and a hand showing the cube about makes one a frame.
+        scan.add_corner(blank_corner());
+        scan.add_corner(blank_corner());
+        REQUIRE(scan.corner_reads() >= 1);
+
+        const cube::vision::ScanDiagnosis again = scan.diagnose();
+        CHECK(again.result.error() == CubeError::invalid_cube_state);
+        // What the working says it was given is what it is given now.
+        CHECK(::cube::test::must_have(again.assembly).corner_reads == scan.corner_reads());
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("and again when the scan is started over") {
+        scan.reset();
+        CHECK(scan.assemblies() == 0);
+        hold_all(scan, sides);
+        CHECK_FALSE(scan.scanned().has_value());
+        CHECK(scan.assemblies() == 1);
+    }
+}
+
+TEST_CASE("sides that made no cube are put together again when a sticker is named otherwise",
+          "[direct-scan]") {
+    const Cube cube = cube::test::scramble(3);
+    const std::array<Lab9, 6> right = measured_sides(cube);
+    SideScan scan;
+    hold_all(scan, misread_sides(cube));
+    REQUIRE_FALSE(scan.scanned().has_value());
+    REQUIRE(scan.assemblies() == 1);
+
+    // The two sides are shown again, read right this time and for longer than
+    // they were read wrong: the medians cross over, and two stickers change
+    // name.
+    hold_exact(scan, right.at(0), 30);
+    hold_exact(scan, right.at(1), 30);
+    const auto read = scan.scanned();
+    REQUIRE(read.has_value());
+    CHECK(read->cube == cube);
+    CHECK(scan.assemblies() == 2);
+}
+
+TEST_CASE("sides that make several cubes are put together again when what they are chosen by moves",
+          "[direct-scan]") {
+    const Cube cube = after(kAmbiguousCube);
+    REQUIRE_FALSE(cube::test::sides_make_one_cube(cube));
+    const std::array<Lab9, 6> sides = painted_sides(cube);
+    SideScan scan;
+    hold_all(scan, sides);
+
+    const cube::vision::ScanDiagnosis first = scan.diagnose();
+    REQUIRE_FALSE(first.result.has_value());
+    REQUIRE(first.result.error() == CubeError::ambiguous_scan);
+    REQUIRE(::cube::test::must_have(first.assembly).candidates >= 2);
+    REQUIRE(scan.assemblies() == 1);
+
+    SECTION("not for the same sides asked again") {
+        CHECK(scan.scanned().error() == CubeError::ambiguous_scan);
+        CHECK(scan.diagnose().result.error() == CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("not when what each colour measures drifts by under a unit") {
+        const SideScan::Side before = scan.sides().front();
+        for (const Lab9& side : sides) {
+            hold_exact(scan, lighter(side, 0.4F), 40);
+        }
+        const float moved =
+            static_cast<float>(cv::norm(scan.sides().front().lab.at(0) - before.lab.at(0)));
+        REQUIRE(moved > 0.2F);
+        REQUIRE(moved < cube::vision::kRejudgeLabDistance);
+
+        CHECK(scan.scanned().error() == CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 1);
+    }
+
+    SECTION("when what each colour measures moves by several units") {
+        // Every side lit more brightly: the colours the corner reads are fitted
+        // in are not the colours they were fitted in.
+        for (const Lab9& side : sides) {
+            hold_exact(scan, lighter(side, 4.0F), 40);
+        }
+        CHECK(scan.scanned().error() == CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 2);
+        // And that is the answer until they move again.
+        CHECK(scan.diagnose().result.error() == CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 2);
+    }
+
+    SECTION("when a corner read arrives") {
+        scan.add_corner(blank_corner());
+        CHECK(scan.scanned().error() == CubeError::ambiguous_scan);
+        CHECK(scan.assemblies() == 2);
+        CHECK(::cube::test::must_have(scan.diagnose().assembly).corner_reads == 1);
+        CHECK(scan.assemblies() == 2);
+    }
+}
+
+TEST_CASE("fewer than six sides are not put together", "[direct-scan]") {
+    const std::array<Lab9, 6> sides = measured_sides(cube::test::scramble(3));
+    SideScan scan;
+    for (std::size_t i = 0; i < 5; ++i) {
+        hold_exact(scan, sides.at(i), kHeldFrames);
+        REQUIRE_FALSE(scan.scanned().has_value());
+    }
+    CHECK(scan.scanned().error() == CubeError::face_capture_incomplete);
+    CHECK(scan.assemblies() == 0);
 }

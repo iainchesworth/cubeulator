@@ -218,8 +218,28 @@ struct ScanDiagnosis {
     Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
 };
 
+// Six sides that make no cube are not put together again while nothing the
+// attempt rested on has changed. Naming the 54 stickers costs about 0.3 ms and
+// is done every time; assembling the names costs 55 ms on average where no cube
+// can be made (15 pairs of name exchanges of 4,096 roll combinations each, up
+// to 104 ms native on the tumbles measured) and 6 ms where there are several.
+// The colours of the side in view move a little with every read, so a failure
+// that persisted was assembled afresh for every frame that counted.
+//
+// What assembling rests on, by how the naming came out:
+//   - no cube to be made: the names alone. A new name on any sticker is a new
+//     assembly; colours that moved without changing a name are not.
+//   - several cubes: the names, the corner reads (any added or replaced), and
+//     what each of the six colours measured, which the corner reads are
+//     fitted in. Those must be within this many Lab units (plain Euclidean) of
+//     what they were at the last assembly.
+inline constexpr float kRejudgeLabDistance = 1.0F;
+
 // Accumulates reads over one scan and reports the sides seen so far and,
 // once six are in, the cube.
+//
+// Not safe to share between threads, const calls included: scanned(), cube()
+// and diagnose() keep the last failed assembly (kRejudgeLabDistance).
 class SideScan {
 public:
     // Reads a side needs before it counts as captured. One read is a single
@@ -258,6 +278,12 @@ public:
     void add_corner(const std::optional<CornerRead>& read, float interval_ms = 0.0F);
     // Corner reads kept so far; the newest few dozen.
     [[nodiscard]] std::size_t corner_reads() const noexcept { return corners_.size(); }
+    // How many times named sides have been put together into a cube since the
+    // scan began: the costly half of judging them. scanned(), cube() and
+    // diagnose() ask for the same judgement, and an assembly that failed is not
+    // made again while what it rested on is as it was (kRejudgeLabDistance):
+    // that answer is the last one, and is not counted here.
+    [[nodiscard]] std::size_t assemblies() const noexcept { return assemblies_; }
 
     // True when the frame just added counted as a read of some side, whether
     // or not that side has enough reads to be captured yet.
@@ -303,7 +329,24 @@ private:
         int roll = 0;
     };
 
+    // The last assembly that failed, with what it rested on.
+    struct FailedAssembly {
+        // The name each sticker was given, side by side in the order the sides
+        // were named in.
+        std::array<std::array<model::FacetColor, 9>, 6> names{};
+        // What each colour measured, and the corner reads there were: what
+        // choosing among several cubes rests on.
+        SessionColours colours{};
+        std::uint64_t corner_revision = 0;
+        AssemblyTrace trace;
+        CubeError error = CubeError::invalid_cube_state;
+    };
+
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
+    // Names six sides and puts them together, or answers as the last failed
+    // assembly did when nothing it rested on has changed
+    // (kRejudgeLabDistance). Only naming, assembly and result are filled.
+    [[nodiscard]] ScanDiagnosis judge(const std::array<CapturedFace, 6>& faces) const;
     // Counts one read of nine colours towards the side it is, or starts a
     // side with it, and puts that side among those in view. A read from a
     // corner view that could be either of two sides is not counted, and
@@ -328,6 +371,13 @@ private:
 
     std::vector<Group> groups_;
     std::vector<CornerRead> corners_;
+    // Counts every change to corners_ (a read added, an old one dropped), so
+    // that "the same corner reads" is one comparison.
+    std::uint64_t corner_revision_ = 0;
+    // Kept by const calls: what they answer is a function of the scan, and
+    // this is only how often it is worked out.
+    mutable std::optional<FailedAssembly> failed_;
+    mutable std::size_t assemblies_ = 0;
     std::optional<cv::Point2f> previous_centre_;
     // Where each side's centre was in the previous corner frame, for the rule
     // that a side counts only if it has held still.
