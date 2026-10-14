@@ -6,6 +6,7 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_view.hpp>
 #include <cube/vision/prepared_frame.hpp>
+#include <cube/vision/read_set.hpp>
 
 #include <opencv2/core.hpp>
 
@@ -322,10 +323,10 @@ private:
     struct Group {
         std::array<cv::Vec3f, 9> fused{};
         // Every read of the side, square-on or from a corner view.
-        std::vector<std::array<cv::Vec3f, 9>> reads;
+        ReadSet reads;
         // The square-on ones among them, which the colours come from once
         // there are enough.
-        std::vector<std::array<cv::Vec3f, 9>> flat_reads;
+        ReadSet flat_reads;
         int roll = 0;
     };
 

@@ -687,7 +687,7 @@ same signatures, and the budgets held across it unchanged).
 | `read.<w>x<h>.*` | `cv::Mat` buffers and bytes one `read_side()` allocates, at 640x360, 1280x720 and 1920x1080, with the side in view and with an empty room; and that a bigger frame costs no more than the working-width one (the documented contract: wide frames are reduced first) | |
 | `corner.<w>x<h>.*` | the same for `read_corner()`, which runs on every frame beside `read_side()`: two sides meeting at an edge at 640x360 and 1920x1080, and a room. About a thousand small buffers a frame, which is the number to look at first in a profile of the scan | |
 | `scan.add`, `scan.scanned` | pixel buffers fed through `SideScan::add` (none) and `scanned()` (the handful of single-colour conversions) | |
-| `judge.<scene>.*` | how many times a scan put its six sides together into a cube (`SideScan::assemblies()`) over a drawn scan judged after every read and a hundred times more once finished, as a held cube is, and over those hundred: none. Scenes: sides that make one cube (the scan is over at the first judgement), several, and none (one edge flipped in place: the dearest, fifteen trades of two names as well) | 1, 2, 2; none again |
+| `judge.<scene>.*` | how many times a scan put its six sides together into a cube (`SideScan::assemblies()`) over a drawn scan judged after every read and a hundred times more once finished, as a held cube is, and over those hundred: none; and what the assemblies cost in the search's nodes (`.assembly.nodes`: 388, 776 and 7,720 where trying every combination is 5,460 an assembly). Scenes: sides that make one cube (the scan is over at the first judgement), several, and none (one edge flipped in place: the dearest, fifteen trades of two names as well) | 1, 2, 2; none again |
 | `timing.*` | the fastest run of a seed-0 beginner / intermediate / advanced solve, of a 640x360 and a 1920x1080 read, of 100 `SideScan::add`s and of one `scanned()`, and of `read_corner` at both sizes, each as a ratio to the calibration workload | |
 
 The node counts come from `cube/solver/search_work.hpp`, a thread-local tally
@@ -1141,10 +1141,11 @@ camera's 33 ms is one the page does not draw:
   frame of the scan inside the camera's interval, the 95th percentile inside
   two, and the longest inside a quarter of a second.
 - **`a tumbled scan`**: the same figures for a session `cube_tumble_sim` drew
-  (`tools/scan`), named by `TUMBLE_SESSION`, with the dearest of its first ten
-  frames reported apart as the cold one (the first read of a real picture costs
-  the page a quarter to a half of a second, once); skipped without one, because
-  a recording shows a person and a drawing is made by running the tool.
+  (`tools/scan`), named by `TUMBLE_SESSION`; skipped without one, because a
+  recording shows a person and a drawing is made by running the tool. Its
+  longest frame is held with the rest: the first frame of a scan was a quarter
+  of a second of the page's main thread until the colour conversion was
+  warmed up on the worker that opens the camera.
   `cube_scan cost <session>` prints the same figures natively, stage by stage.
 
 ### What this does not cover

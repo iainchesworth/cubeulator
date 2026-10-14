@@ -431,6 +431,17 @@ export class CubeulatorApp {
   profile() {
     return this.page.evaluate(() => window.cubeulatorProfile.summary());
   }
+
+  /**
+   * Slows the page's main thread by `rate` (Chromium's CPU throttling, through
+   * the DevTools protocol): 4 is about what a mid-range phone is to a desktop,
+   * which is the machine the numbers are otherwise taken on. Work on the
+   * workers is not slowed; the scan, which this is for, is on the main thread.
+   */
+  async throttleCpu(rate) {
+    const session = await this.context.newCDPSession(this.page);
+    await session.send('Emulation.setCPUThrottlingRate', { rate });
+  }
   clearProfile() {
     return this.page.evaluate(() => window.cubeulatorProfile.clear());
   }

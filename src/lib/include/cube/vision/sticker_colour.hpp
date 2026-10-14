@@ -31,4 +31,15 @@ namespace cube::vision {
 [[nodiscard]] std::optional<cv::Vec3f> sticker_lab(const cv::Mat& bgr, const cv::Point2f& centre,
                                                    int half_width);
 
+// Builds, once, what OpenCV builds on the first float conversion between BGR
+// and CIELAB: its lookup tables, which take 90 ms natively and 250 to 330 ms in
+// a browser's WebAssembly - the first frame of a scan, on the page's main
+// thread, would otherwise be the one that pays. Asked for by sticker_lab and
+// lab_to_bgr themselves, and safe to ask for from any thread (the call that
+// builds them holds the others up until they are built), so that a caller with
+// a moment to spare - while a camera is opening, on a worker - can spend it
+// here. The colours it makes are the colours it would have made: nothing about
+// a result depends on whether it was called.
+void warm_up_colour_conversion();
+
 }  // namespace cube::vision

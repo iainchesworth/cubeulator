@@ -1083,3 +1083,44 @@ TEST_CASE("a side past the square-on gate is not read however it is placed", "[c
             cube::vision::read_side(cube::test::draw_cube_corner(cube, Face::F, pose)).has_value());
     }
 }
+
+TEST_CASE("a read is fitted to many cubes with the answers it gives one by one", "[corner]") {
+    // The cubes six flat sides make differ in a few stickers, and a read is
+    // fitted through the faces it shows, so fit_corner_each fits it once for each
+    // set of faces. The answers must be fit_corner's, field for field.
+    const Cube drawn = patterned_cube();
+    SideScan probe;
+    show_sides(probe, drawn);
+    const auto diagnosis = probe.diagnose();
+    const auto& naming = ::cube::test::must_have(diagnosis.naming);
+    const std::vector<Cube> candidates = cube::solver::assemble_all_scanned_faces(naming.faces, 64);
+    REQUIRE(candidates.size() > 16);
+    const SessionColours colours = drawn_colours();
+
+    std::size_t reads = 0;
+    std::size_t fitting = 0;
+    // Corner views of the true cube, and of every candidate: the reads that fit
+    // some and not others are what the votes are of.
+    for (const Cube& shown : candidates) {
+        for (const Face left : kAllFaces) {
+            const auto read = read_corner(corner_frame(shown, left));
+            if (!read.has_value()) {
+                continue;
+            }
+            ++reads;
+            const std::vector<cube::vision::CornerFit> each =
+                cube::vision::fit_corner_each(*read, candidates, colours);
+            REQUIRE(each.size() == candidates.size());
+            for (std::size_t i = 0; i < candidates.size(); ++i) {
+                const cube::vision::CornerFit one = fit_corner(*read, candidates.at(i), colours);
+                REQUIRE(each.at(i).fits == one.fits);
+                REQUIRE(each.at(i).distance == one.distance);
+                fitting += one.fits ? 1U : 0U;
+            }
+        }
+    }
+    CHECK(reads > 20);
+    // Some fit and some do not: the test is of both.
+    CHECK(fitting > 0);
+    CHECK(fitting < reads * candidates.size());
+}

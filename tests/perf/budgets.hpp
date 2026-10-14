@@ -193,6 +193,16 @@ inline constexpr std::uint64_t kScannedBuffers = 16;
 inline constexpr std::uint64_t kSettledAssemblies = 1;
 inline constexpr std::uint64_t kSeveralWaysAssemblies = 2;
 inline constexpr std::uint64_t kNoCubeAssemblies = 2;
+// And what those assemblies cost, in the search's own nodes (each look at the
+// faces turned so far; search_work.hpp). The search turns the faces from the
+// sixth to the first and gives a combination up as soon as an edge or a corner
+// is impossible, and a face that looks the same turned is tried once. Trying all
+// 4,096 combinations is 5,460 nodes an assembly (4 + 16 + ... + 4,096), and
+// sides that make no cube cost 482 of them on average, over the sixteen
+// searches of the one assembly (measured 388, 776 and 7,720).
+inline constexpr std::uint64_t kSettledNodes = 490;
+inline constexpr std::uint64_t kSeveralWaysNodes = 970;
+inline constexpr std::uint64_t kNoCubeNodes = 9'700;
 
 // ---------------------------------------------------------------------------
 // Time, as a multiple of the calibration workload (perf/measure.hpp)

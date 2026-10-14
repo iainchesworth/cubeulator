@@ -148,6 +148,15 @@ Nothing in the reader names a colour. It returns measured Lab.
   does, so red and orange, which differ almost only in lightness under a warm
   lamp, scored under 10 a sticker even with every one of them traded, and two
   sides of a partly solved cube were fused into one (2026-10-14).
+- A group's colours are the **median** of every read of it, per cell and per
+  channel (of the square-on reads alone once there are `kMinReads` of them).
+  They are kept as two heaps for each of the 27 numbers (`ReadSet`,
+  `RunningMedian`, `cube/vision/read_set.hpp`): a read costs 27 heap
+  insertions and the median is a value or two at the tops, to the bit what
+  sorting every read gave. The reads themselves are not kept. With the sort, a
+  read cost as many numbers as there were reads, and a cube held in view for ten
+  minutes cost the scan 5 ms of every frame more at the end than at the start
+  (0.07 to 0.59 ms in the first minute, in the browser).
 - A group is **captured** once it has `kMinReads` (8) reads, about a third of a
   second of holding still.
 - When more than six groups are captured (a stray lattice, a side re-captured
@@ -182,8 +191,19 @@ Once six sides are captured:
    which is yellower, which the light cannot change. Any other collision keeps
    the global-distance matching.
 2. `assemble_scanned_faces` finds the slot for each side from its centre and
-   tries the 4,096 roll combinations against `Cube::from_facelets` and
-   `is_solvable`. Physical validity is the arbiter, not a score.
+   walks the 4,096 roll combinations of the six sides, building each that is
+   left against `Cube::from_facelets` and `is_solvable`. Physical validity is
+   the arbiter, not a score. The walk turns the faces from the sixth to the
+   first and gives a combination up as soon as the faces turned so far put two
+   stickers of one axis pair on an edge or a corner (which `from_facelets`
+   would refuse it for), and tries a face that looks the same turned once: the
+   cubes found, and the order they are found in, are those of trying all 4,096,
+   and the unit tests hold it to that against the exhaustive search on a few
+   hundred inputs. Sides that make no cube cost about a tenth of the 5,460 looks
+   at the faces that trying every combination is (482 on average over the
+   sixteen searches of the dearest scan: `judge.no_cube.assembly.nodes`); sides
+   that make cubes pay for each combination left, which for a patterned cube
+   whose faces are mostly one colour is few.
 3. If the naming does not assemble, the pairs of names are exchanged one pair
    at a time; among the exchanges that do assemble the one whose two centres
    look most alike is taken. With the light neutralised this is now rarely
@@ -260,13 +280,15 @@ but the names they are given.
 **What an assembly costs in the browser.** Measured there, where the reader
 runs on the page's main thread (the investigation is
 [what a frame of the scan costs](investigations/2026-10-15-web-scan-frame-cost.md)):
-a naming that makes one cube or several is one search of the 4,096 turns, 4 to
-5 ms; one that makes none is that and fifteen trades of two names, 12 ms on a
-quiet desktop and 25 ms on a busy one. Natively, on an optimised build, the
-same are 10 ms and 47 ms - the 150 ms the tumble investigation quoted was a
-sanitizer build. `cube_scan cost` prints them, and the assemblies the guard
-above leaves, for a session; the performance tests hold the count
-(`judge.*`, [Performance tests](testing.md#performance-tests)).
+a naming that makes one cube or several is one walk of the 4,096 turns, 4 to
+5 ms in the page and 10 ms natively; one that makes none is that and fifteen
+trades of two names, which was 12 ms on a quiet desktop and 25 on a busy one
+and 47 natively before the walk gave up combinations that are no cube, and is
+1 to 2 ms in the page (2 natively) now. The 150 ms the tumble investigation
+quoted was a sanitizer build. `cube_scan cost` prints them, and the
+assemblies the guard above leaves, for a session; the performance tests hold
+the count and the nodes (`judge.*`,
+[Performance tests](testing.md#performance-tests)).
 
 ## Two sides in one view: `read_corner` and `fit_corner`
 
@@ -468,9 +490,14 @@ the scan while watching.
   state to hand between threads. Only `latestFrame()` is called from elsewhere
   (the preview image provider). In the browser that thread is the page's main
   thread, so a frame that takes longer than the camera's interval is a frame the
-  page does not draw: a frame there costs a mean of 5 to 8 ms (an assembly, when one is
-  made, 4 to 25 ms more: see "What an assembly costs in the browser" above, and
-  [the measurement](investigations/2026-10-15-web-scan-frame-cost.md)).
+  page does not draw: a frame there costs a mean of 3.5 to 8 ms (an assembly,
+  when one is made, 4 to 25 ms more: see "What an assembly costs in the browser"
+  above, and [the measurement](investigations/2026-10-15-web-scan-frame-cost.md)).
+  The first float colour conversion in the process builds OpenCV's tables, 90 ms
+  natively and 250 to 330 in a page, which would be the first frame's; the
+  controller does it on the worker that opens the camera
+  (`warm_up_colour_conversion`, `DirectScan::openCamera`), where it is hidden
+  behind the camera opening.
 - **Solve** runs once per scan on a `QtConcurrent` worker so the seconds it can
   take never reach the UI thread.
 

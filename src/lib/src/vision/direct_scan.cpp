@@ -791,19 +791,14 @@ struct FitInputs {
     return fit;
 }
 
-// Per-cell, per-channel median over every read of a side.
-[[nodiscard]] std::array<cv::Vec3f, 9> fuse(const std::vector<std::array<cv::Vec3f, 9>>& reads) {
-    std::array<cv::Vec3f, 9> fused{};
-    std::vector<float> values(reads.size());
-    for (std::size_t cell = 0; cell < 9; ++cell) {
-        for (int channel = 0; channel < 3; ++channel) {
-            for (std::size_t i = 0; i < reads.size(); ++i) {
-                values.at(i) = reads.at(i).at(cell)(channel);
-            }
-            fused.at(cell)(channel) = median_of(values);
-        }
-    }
-    return fused;
+// A side's colours: the per-cell, per-channel median over every read of it, or,
+// once it has been read square-on as often as it takes to count, over those
+// alone (a side seen at an angle is lit a little differently). A template, for
+// the group type is the scan's own and private.
+template <typename Group>
+[[nodiscard]] std::array<cv::Vec3f, 9> fused_of(const Group& group) {
+    return (group.flat_reads.size() >= SideScan::kMinReads ? group.flat_reads : group.reads)
+        .median();
 }
 
 // Whether a read taken at an angle is one of `groups` lit differently: its nine
@@ -907,8 +902,10 @@ struct CornerVotes {
     std::vector<bool> fitted(candidates.size(), false);
     for (const CornerRead& read : corners) {
         std::size_t any = 0;
+        // One fit for each set of faces the read shows, not for each cube.
+        const std::vector<CornerFit> fits = fit_corner_each(read, candidates, colours);
         for (std::size_t i = 0; i < candidates.size(); ++i) {
-            fitted.at(i) = fit_corner(read, candidates.at(i), colours).fits;
+            fitted.at(i) = fits.at(i).fits;
             any += fitted.at(i) ? 1U : 0U;
             votes.fits.at(i) += fitted.at(i) ? 1U : 0U;
         }
@@ -1328,6 +1325,7 @@ float interval_scale(float interval_ms) {
 }
 
 cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
+    warm_up_colour_conversion();
     const cv::Mat3f source(1, 1, lab);
     cv::Mat3f bgr;
     cv::cvtColor(source, bgr, cv::COLOR_Lab2BGR);
@@ -1395,19 +1393,21 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
         index = *nearest;
         Group& group = groups_.at(index);
         const std::array<cv::Vec3f, 9> aligned = rolled(lab, nearest_fit.roll);
-        group.reads.push_back(aligned);
+        group.reads.add(aligned);
         if (square_on) {
-            group.flat_reads.push_back(aligned);
+            group.flat_reads.add(aligned);
         }
         // A side seen at an angle is lit a little differently, so once a side
         // has been read square-on as often as it takes to count, those reads
         // alone give its colours.
-        group.fused = fuse(group.flat_reads.size() >= kMinReads ? group.flat_reads : group.reads);
+        group.fused = fused_of(group);
         group.roll = nearest_fit.roll;
     } else {
-        Group group{.fused = lab, .reads = {lab}, .flat_reads = {}, .roll = 0};
+        Group group;
+        group.fused = lab;
+        group.reads.add(lab);
         if (square_on) {
-            group.flat_reads.push_back(lab);
+            group.flat_reads.add(lab);
         }
         groups_.push_back(std::move(group));
         index = groups_.size() - 1;
@@ -1489,13 +1489,10 @@ std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
 
 void SideScan::absorb(const AlikePair& pair) {
     Group& kept = groups_.at(pair.keep);
-    for (const auto& read : groups_.at(pair.other).reads) {
-        kept.reads.push_back(rolled(read, pair.roll));
-    }
-    for (const auto& read : groups_.at(pair.other).flat_reads) {
-        kept.flat_reads.push_back(rolled(read, pair.roll));
-    }
-    kept.fused = fuse(kept.flat_reads.size() >= kMinReads ? kept.flat_reads : kept.reads);
+    const std::array<int, 9>& source = kRoll.at(static_cast<std::size_t>(pair.roll));
+    kept.reads.absorb(groups_.at(pair.other).reads, source);
+    kept.flat_reads.absorb(groups_.at(pair.other).flat_reads, source);
+    kept.fused = fused_of(kept);
     groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(pair.other));
     for (std::size_t& viewed : in_view_) {
         if (viewed == pair.other) {

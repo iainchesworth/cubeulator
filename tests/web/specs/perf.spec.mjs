@@ -25,6 +25,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const TIMING = process.env.CUBEULATOR_WEB_PERF_TIMING === '1';
+// How many times slower than this machine the page's main thread is made for
+// the journeys about a frame of the scan: 4 is about a phone. 1 is as it is.
+const CPU_THROTTLE = Number(process.env.CUBEULATOR_WEB_CPU_THROTTLE ?? 1);
 const REPORTS = resolve('reports', 'perf');
 
 // A wall-time budget: always recorded, enforced only when timing is on.
@@ -65,34 +68,18 @@ const zone = (summary, name) => {
   return entry;
 };
 
-
 // What each frame of the scan cost, from the recorder's trace: the summary has
 // a zone's mean and its longest, and a ceiling wants the tail as well.
-//
-// With `cold`, the dearest of the first ten frames is reported apart (`cold`)
-// and left out of the rest: the first read of a real picture costs the page
-// a quarter to a half of a second, once, wherever it falls among the frames
-// before it (docs/investigations/2026-10-15-web-scan-frame-cost.md), and what a
-// ceiling is for is the frames that follow it.
-async function frameCosts(app, { cold = false } = {}) {
-  return app.page.evaluate((withCold) => {
+async function frameCosts(app) {
+  return app.page.evaluate(() => {
     const trace = JSON.parse(window.cubeulatorProfile.trace());
     const all = trace.traceEvents.filter((e) => e.ph === 'X' && e.name === 'direct_scan.process_frame')
-      .sort((a, b) => a.ts - b.ts).map((e) => e.dur / 1000);
-    let coldMs = 0;
-    let kept = all;
-    if (withCold && all.length > 0) {
-      const head = all.slice(0, 10);
-      const slowest = head.indexOf(Math.max(...head));
-      coldMs = head[slowest];
-      kept = all.filter((_, i) => i !== slowest);
-    }
-    const rest = [...kept].sort((a, b) => a - b);
+      .map((e) => e.dur / 1000);
+    const rest = [...all].sort((a, b) => a - b);
     const at = (p) => (rest.length > 0 ? rest[Math.min(rest.length - 1, Math.floor(p * rest.length))] : 0);
     return {
       count: all.length,
       dropped: trace.otherData.dropped,
-      cold: coldMs,
       mean: rest.length > 0 ? rest.reduce((a, b) => a + b, 0) / rest.length : 0,
       p50: at(0.5),
       p95: at(0.95),
@@ -101,7 +88,7 @@ async function frameCosts(app, { cold = false } = {}) {
       over50: rest.filter((v) => v > 50).length,
       over100: rest.filter((v) => v > 100).length,
     };
-  }, cold);
+  });
 }
 
 // How many times the scan put its six named sides together into a cube while it
@@ -137,17 +124,11 @@ async function assembliesRun(app) {
 const FRAME_MEAN_MS = 33;
 const FRAME_P95_MS = 66;
 const FRAME_MAX_MS = 250;
-// The page's one cold frame, the first read of a real picture (see frameCosts).
-const COLD_FRAME_MS = 1_500;
-
 function leaveFrameBudgets(frames, report) {
   report.frames = frames;
   withinBudget('mean frame of the scan (ms)', frames.mean, FRAME_MEAN_MS, report);
   withinBudget('95th percentile frame of the scan (ms)', frames.p95, FRAME_P95_MS, report);
   withinBudget('longest frame of the scan (ms)', frames.max, FRAME_MAX_MS, report);
-  if (frames.cold > 0) {
-    withinBudget('cold frame of the scan (ms)', frames.cold, COLD_FRAME_MS, report);
-  }
 }
 
 test.describe('performance', () => {
@@ -224,8 +205,11 @@ test.describe('performance', () => {
   test('six sides that make no cube, held in view: they are put together once, not on every frame',
     async ({ app }) => {
       test.setTimeout(300_000);
-      const report = { journey: 'no-cube-held', budgets: [] };
+      const report = { journey: 'no-cube-held', cpuThrottle: CPU_THROTTLE, budgets: [] };
       await app.waitForFrames();
+      if (CPU_THROTTLE > 1) {
+        await app.throttleCpu(CPU_THROTTLE);
+      }
 
       await app.click('launch.startScan');
       await app.waitForScreen('scan');
@@ -284,7 +268,7 @@ test.describe('performance', () => {
     test.skip(!process.env.TUMBLE_SESSION, 'set TUMBLE_SESSION to a directory cube_tumble_sim wrote');
     test.setTimeout(600_000);
     const session = process.env.TUMBLE_SESSION;
-    const report = { journey: 'tumble', session, budgets: [] };
+    const report = { journey: 'tumble', session, cpuThrottle: CPU_THROTTLE, budgets: [] };
     const names = readdirSync(session).filter((n) => /^rec_\d+\.jpg$/.test(n)).sort();
     const stamped = readFileSync(`${session}/index.csv`, 'utf8').trim().split('\n').slice(1)
       .map((row) => Number(row.split(',')[1]));
@@ -292,6 +276,9 @@ test.describe('performance', () => {
     const times = stamped.map((t) => t - stamped[0]);
     expect(names.length).toBeGreaterThan(0);
     await app.waitForFrames();
+    if (CPU_THROTTLE > 1) {
+      await app.throttleCpu(CPU_THROTTLE);
+    }
 
     await app.click('launch.startScan');
     await app.waitForScreen('scan');
@@ -311,7 +298,7 @@ test.describe('performance', () => {
       const picture = readFileSync(`${session}/${names[i]}`).toString('base64');
       await app.page.evaluate((data) => window.__fakeCamera.image(`data:image/jpeg;base64,${data}`), picture);
       if (i % 60 === 59 || i === names.length - 1) {
-        costs.push(await frameCosts(app, { cold: costs.length === 0 }));
+        costs.push(await frameCosts(app));
         assembled += (await assembliesRun(app)).count;
         await app.clearProfile();
         if ((await app.singleton('DirectScan')).complete) {
@@ -326,7 +313,6 @@ test.describe('performance', () => {
     const frames = {
       count,
       dropped: costs.reduce((n, c) => n + c.dropped, 0),
-      cold: costs.length > 0 ? costs[0].cold : 0,
       mean: count > 0 ? costs.reduce((s, c) => s + c.mean * c.count, 0) / count : 0,
       p50: Math.max(0, ...costs.map((c) => c.p50)),
       p95: Math.max(0, ...costs.map((c) => c.p95)),

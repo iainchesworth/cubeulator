@@ -4,6 +4,8 @@
 #include <cube/vision/corner_view.hpp>
 #include <cube/vision/direct_scan.hpp>
 
+#include <vector>
+
 namespace cube::vision {
 
 // How well a candidate cube explains a corner read.
@@ -42,5 +44,16 @@ inline constexpr float kCornerTurnTolerance = 1.5F;
 [[nodiscard]] CornerFit fit_corner(const CornerRead& read, const solver::Cube& cube,
                                    const SessionColours& colours,
                                    float max_distance = kCornerFitDistance);
+
+// fit_corner of one read against each of `cubes`, in their order: the same
+// answers, to the field, for much less work when the cubes are many. A read is
+// fitted to a cube through the sides it shows - the colours of the three or two
+// faces of the cube that its centres name - and nothing else of the cube, and
+// the cubes six flat sides make differ from each other in a few stickers, so
+// most of them show a read the same faces. Those are fitted once.
+[[nodiscard]] std::vector<CornerFit> fit_corner_each(const CornerRead& read,
+                                                     const std::vector<solver::Cube>& cubes,
+                                                     const SessionColours& colours,
+                                                     float max_distance = kCornerFitDistance);
 
 }  // namespace cube::vision
