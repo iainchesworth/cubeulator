@@ -163,7 +163,7 @@ screens.solution = {
       return head + rows;
     }).join('');
     return `<div class="screen">${topbar(t('solution.title'))}<div class="sol"><div class="sol-left">
-      <div class="pad" style="padding:12px 16px 0;gap:2px"><strong>${t('solution.summary', N)}</strong><span class="note">${t('solution.method')}</span></div>
+      <div class="pad" style="padding:12px 16px 0;gap:2px"><strong>${t('solution.summary', N, SOL.stages.length)}</strong><span class="note">${t('solution.method.beginner')}</span></div>
       <div class="sol-cube"><canvas data-scene="solve" role="img" aria-label="${cap}"></canvas></div><div class="sol-cap mono t-sec">${cap}</div>
       <div class="sol-ctl">${btn(t('solution.previous'), 'solPrev', {cls: 'thumb', dis: S.turn === 0})}${SV.playing ? btn(t('solution.pause'), 'solPause', {v: 'primary', cls: 'thumb', icon: 'pause'}) : S.turn >= N ? btn(t('solution.startAgain'), 'solJump', {v: 'primary', cls: 'thumb', arg: '0'}) : btn(t('solution.play'), 'solPlay', {v: 'primary', cls: 'thumb'})}${btn(t('solution.next'), 'solNext', {cls: 'thumb', dis: S.turn >= N})}</div></div>
       <div class="sol-list" data-scroll="sol">${list}</div></div></div>`;

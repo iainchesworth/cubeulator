@@ -86,6 +86,13 @@ against `Cube::apply` on what is actually drawn. No window is shown and
 nothing is rendered; it runs headless (offscreen platform off Windows) and
 is part of `ctest`.
 
+`solution_screen_test.cpp` does the same for `SolutionScreen.qml`, the review
+of a finished solve: the cube it draws is the solver's cube at every position,
+stepped forward to solved and back, while the solve's own position - which it
+must not move - stays where the test left it. It has no translations installed,
+so it asserts structure and ids; what the screen says, and the direction words
+against the turn sentences, are the system tests'.
+
 Camera frames in these and the controller tests are drawn
 ([drawn_cube.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/drawn_cube.hpp)), never recorded: a
 recording shows whoever was holding the cube.
@@ -421,7 +428,8 @@ loop is not known.
 solve screens - narrow (390x844) and wide (900x640), light and dark:
 `launch`, `settings`, `permission`, `complete`, `scan-camera-unavailable`,
 `scan-looking`, `scan-reading`, `scan-three-sides`, `scan-cube-read`,
-`solve-start`, `solve-middle`, `solve-end`. Names are
+`solve-start`, `solve-middle`, `solve-end`, `complete`, and the solution
+reviewed from it: `solution-start`, `solution-middle`, `solution-end`. Names are
 `<screen>-<layout>-<theme>.png`. Frames are drawn; the launch cube's idle
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
@@ -458,7 +466,12 @@ from the live item tree.
 
 A new button therefore fails the gate until a test presses it - and the
 sweeps press it without being told - which is the property line coverage
-would have given. It measures *what was exercised*, not which lines ran: a
+would have given. The rows of a scrolling list (`ListView`) are one control
+between them, keyed `<list's objectName>.row` (`App::control_key`): the rows
+that exist depend on where the list has scrolled to, so a key for each would
+turn every row some case happened to scroll past into a gap. A row of the
+solution's list, pressed in each layout, is what the gate asks; which row is
+the case's own (`journey_test.cpp`). It measures *what was exercised*, not which lines ran: a
 screen can be reached and half its handlers never fire.
 
 State ids are `screen.state`, the form `docs/design/journey.md` uses, so the
@@ -484,10 +497,10 @@ cites its plan line and owner, and is written to **fail the day it is
 fixed** - that is the prompt to turn it into a journey step. Nothing in the
 suite fixes them.
 
-Two used to be here and are journey steps now, because the solve lane fixed
-them: the last step of the solution is **Finish** and leads to the complete
-screen, and **Rescan** is the way out of the solve screen
-(`journey_test.cpp`). The solve screen keeps the camera running to watch how
+Three used to be here and are journey steps now: the last step of the solution
+is **Finish** and leads to the complete screen, **Rescan** is the way out of the
+solve screen, and **Review the solution** on the complete screen opens the
+solution, which is stepped through and left again (`journey_test.cpp`). The solve screen keeps the camera running to watch how
 the cube is held; the fake camera serves it too, so the journey asserts the
 camera is still on there and let go of when the screen is left.
 

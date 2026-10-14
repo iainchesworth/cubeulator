@@ -25,6 +25,7 @@
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QRegularExpression>
 
 namespace {
 
@@ -369,4 +370,221 @@ TEST_CASE("with no camera plugged in the settings say so, and refreshing finds o
     REQUIRE(app.wait_for([&]() { return !camera.busy() && camera.devices().size() == 1; }));
     CHECK(app.find_text(qtTrId("settings.camera.choose")) != nullptr);
     CHECK(app.find("settings.camera.0") != nullptr);
+}
+
+namespace {
+
+// The solution screen's own state, as its main button and caption are bound to
+// it: overview, stepping, playing or end.
+[[nodiscard]] QString review_state(App& app) {
+    QQuickItem* screen = app.screen_item();
+    return screen == nullptr ? QString() : screen->property("reviewState").toString();
+}
+
+[[nodiscard]] int review_position(App& app) {
+    QQuickItem* screen = app.screen_item();
+    return screen == nullptr ? -1 : screen->property("position").toInt();
+}
+
+[[nodiscard]] QString text_of(App& app, const char* name) {
+    QQuickItem* item = app.find(QString::fromLatin1(name));
+    return item == nullptr ? QString() : item->property("text").toString();
+}
+
+// What is under test in a play is that it steps on, that it stops, and where
+// it ends - not how long 700 ms is - so the screen's one Timer is quickened.
+void quicken_play(App& app) {
+    QQuickItem* screen = app.screen_item();
+    REQUIRE(screen != nullptr);
+    bool found = false;
+    for (QObject* child : screen->children()) {
+        if (child->inherits("QQmlTimer")) {
+            REQUIRE(child->setProperty("interval", 20));
+            found = true;
+        }
+    }
+    REQUIRE(found);
+}
+
+}  // namespace
+
+TEST_CASE("the solution is reviewed from the complete screen, stepped through and left",
+          "[system][journey][solution]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh(App::Start::elsewhere);
+        static_cast<void>(cube::systest::take_qml_warnings());
+        app.resize(size_for(layout));
+        auto& solve = app.runtime().solve();
+
+        // A longer scramble than the walk has: a list long enough to scroll,
+        // and every kind of turn in it.
+        solve.solveCube(cube::solver::random_scramble(31, cube::solver::MoveCount{25}));
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, kSolveTimeoutMs));
+        const int total = solve.totalMoves();
+        REQUIRE(total > 12);
+        // As the last step of the solve leaves it.
+        while (!solve.atEnd()) {
+            solve.nextMove();
+        }
+        const cube::solver::Cube solved = solve.currentCube();
+        REQUIRE(solved.is_solved());
+
+        app.go("complete");
+        app.settle();
+        app.click("complete.review");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        app.settle();
+
+        // What it opens on: the cube as it was scanned, every stage listed.
+        CHECK(text_of(app, "solution.title") == qtTrId("solution.title"));
+        CHECK(text_of(app, "solution.summary") ==
+              qtTrId("solution.summary", total).arg(QStringLiteral("5")));
+        CHECK(text_of(app, "solution.method") == qtTrId("solution.method.beginner"));
+        CHECK(text_of(app, "solution.caption") == qtTrId("solution.atStart"));
+        CHECK(app.find("solution.stage1") != nullptr);
+        CHECK(app.find("solution.cube") != nullptr);
+        CHECK(review_state(app) == "overview");
+        CHECK_FALSE(app.find("solution.previous")->property("enabled").toBool());
+        CHECK(app.find("solution.next")->property("enabled").toBool());
+        CHECK(text_of(app, "solution.play") == qtTrId("solution.play"));
+        QQuickItem* first = app.find("solution.turn1");
+        REQUIRE(first != nullptr);
+        CHECK(first->property("selected").toBool());
+
+        // Next and Previous move one turn, and the review's position is not
+        // the solve's.
+        app.click("solution.next");
+        REQUIRE(app.wait_for([&]() { return review_position(app) == 1; }, 15'000));
+        CHECK(review_state(app) == "stepping");
+        CHECK(text_of(app, "solution.caption") ==
+              qtTrId("solve.progress").arg(QStringLiteral("2")).arg(QString::number(total)));
+        CHECK(app.find("solution.previous")->property("enabled").toBool());
+        CHECK(solve.atEnd());
+        CHECK(solve.currentCube() == solved);
+        app.click("solution.previous");
+        REQUIRE(app.wait_for([&]() { return review_position(app) == 0; }, 15'000));
+        CHECK(review_state(app) == "overview");
+
+        // A row is a place to jump to; the selected one says so.
+        app.click("solution.turn4");
+        REQUIRE(app.wait_for([&]() { return review_position(app) == 3; }));
+        CHECK(app.find("solution.turn4")->property("selected").toBool());
+        CHECK_FALSE(app.find("solution.turn1")->property("selected").toBool());
+
+        // Play steps on by itself to the end, which is the solved cube, and
+        // the same button offers to start again.
+        quicken_play(app);
+        app.click("solution.play");
+        CHECK(review_state(app) == "playing");
+        CHECK(text_of(app, "solution.play") == qtTrId("solution.pause"));
+        REQUIRE(app.wait_for([&]() { return review_state(app) == "end"; }, 60'000));
+        app.settle();
+        CHECK(review_position(app) == total);
+        CHECK(text_of(app, "solution.caption") == qtTrId("solution.atEnd"));
+        CHECK(text_of(app, "solution.play") == qtTrId("solution.startAgain"));
+        CHECK_FALSE(app.find("solution.next")->property("enabled").toBool());
+        // At the end no row is selected, and the last is in view.
+        QQuickItem* last = app.find(QStringLiteral("solution.turn%1").arg(total));
+        REQUIRE(last != nullptr);
+        CHECK_FALSE(last->property("selected").toBool());
+
+        app.click("solution.play");
+        CHECK(review_state(app) == "overview");
+        CHECK(review_position(app) == 0);
+
+        // The keys: arrows step, Space plays and pauses, Home and End go to
+        // the ends.
+        app.key(Qt::Key_Right);
+        REQUIRE(app.wait_for([&]() { return review_position(app) == 1; }, 15'000));
+        app.key(Qt::Key_Left);
+        REQUIRE(app.wait_for([&]() { return review_position(app) == 0; }, 15'000));
+        app.key(Qt::Key_End);
+        CHECK(review_position(app) == total);
+        CHECK(review_state(app) == "end");
+        // A row near the end is on screen now, and can be pressed.
+        app.settle();
+        app.click(QStringLiteral("solution.turn%1").arg(total - 2));
+        REQUIRE(app.wait_for([&]() { return review_position(app) == total - 3; }));
+        app.key(Qt::Key_Home);
+        CHECK(review_position(app) == 0);
+        app.key(Qt::Key_Space);
+        CHECK(review_state(app) == "playing");
+        app.key(Qt::Key_Space);
+        CHECK(review_state(app) != "playing");
+        app.settle();
+
+        // Through all of it the solve stayed where it was left.
+        CHECK(solve.atEnd());
+        CHECK(solve.currentCube() == solved);
+
+        // Back is the way it came, by the button and by Escape.
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+        CHECK(app.find("complete.review") != nullptr);
+        app.click("complete.review");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        app.settle();
+        app.key(Qt::Key_Escape);
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+
+        const auto warnings = cube::systest::take_qml_warnings();
+        for (const auto& warning : warnings) {
+            UNSCOPED_INFO(warning.where.toStdString() << ": " << warning.message.toStdString());
+        }
+        CHECK(warnings.empty());
+    }
+}
+
+TEST_CASE("every turn of the solution is worded by the way the cube goes", "[system][solution]") {
+    // The row's arrow and direction word are worked out from the turn; the
+    // sentence a screen reader reads is the catalogue's. They have to agree,
+    // for each of the 18, or a row says one thing to the eye and another to
+    // the ear.
+    App& app = App::fresh(App::Start::elsewhere);
+    static_cast<void>(cube::systest::take_qml_warnings());
+    app.go("solution");
+    app.settle();
+    QQuickItem* screen = app.screen_item();
+    REQUIRE(screen != nullptr);
+
+    const QRegularExpression clockwise(QStringLiteral("\\bclockwise\\b"));
+    for (const char* side : {"U", "D", "L", "R", "F", "B"}) {
+        for (const int turns : {1, 2, 3}) {
+            INFO(side << turns);
+            QVariant direction;
+            QVariant sentence;
+            REQUIRE(QMetaObject::invokeMethod(
+                screen, "directionOf", Q_RETURN_ARG(QVariant, direction),
+                Q_ARG(QVariant, QString::fromLatin1(side)), Q_ARG(QVariant, turns)));
+            REQUIRE(QMetaObject::invokeMethod(
+                screen, "turnSentence", Q_RETURN_ARG(QVariant, sentence),
+                Q_ARG(QVariant, QString::fromLatin1(side)), Q_ARG(QVariant, turns)));
+            const QString kind = direction.toString();
+            const QString said = sentence.toString();
+            const QByteArray id =
+                ("turn." + QString::fromLatin1(side) + QString::number(turns)).toUtf8();
+            REQUIRE_FALSE(said.isEmpty());
+            CHECK(said == qtTrId(id.constData()));
+            if (turns == 2) {
+                CHECK(kind == "either");
+                continue;
+            }
+            if (kind == "cw") {
+                CHECK(said.contains(clockwise));
+            } else if (kind == "ccw") {
+                CHECK(said.contains(qtTrId("dir.ccw")));
+            } else {
+                REQUIRE((kind == "left" || kind == "right" || kind == "up" || kind == "down"));
+                const QByteArray word = ("dir." + kind).toUtf8();
+                CHECK(said.contains(qtTrId(word.constData())));
+            }
+        }
+    }
+
+    const auto warnings = cube::systest::take_qml_warnings();
+    for (const auto& warning : warnings) {
+        UNSCOPED_INFO(warning.where.toStdString() << ": " << warning.message.toStdString());
+    }
+    CHECK(warnings.empty());
 }
