@@ -227,6 +227,37 @@ appears. `NCube::to_cube3()` reads through it (renaming colours to the
 canonical scheme) to build the `Cube` the 3x3 solvers take. For a reduced
 cube this *is* the cube's 3x3; before reduction it is a sample of stickers.
 
+## The app's 3x3
+
+The app solves through this library at size 3: `cube::nxn::solve_3x3()` and
+`cube::nxn::prepare()` (`cube/nxn/cube3.hpp`) are the two calls the solve
+controller and the startup path make, in place of `cube::solver::solve()` and
+`cube::solver::prepare()`. They take and return the 3x3 types the app is
+written in (`Cube`, `Solution`), so nothing above them - the stepped solution,
+the history, the review - changed.
+
+What they promise is the 3x3 solver's contract exactly: the same stages in the
+same order with the same moves, or the same error. Three details make that
+true rather than approximately true:
+
+* **The cube is read as held** (`CoreView::AsHeld`, `NCube::to_cube3_as_held`).
+  The orientation-free reading every other size needs renames colours so that
+  each centre shows its face's colour, which would turn "a scan assembled into
+  the wrong slots" into "a cube held another way" and solve it. The app has
+  always refused that cube, and still does, with the same error per method.
+* **Nothing is merged twice.** The 3x3 solver merges adjacent turns of a face
+  in its own stages' terms; the library's merge also looks past turns of other
+  layers of an axis (R L R' is L). A solution made only of the 3x3 solver's
+  steps is returned as it was made.
+* **The solve is replayed**, as at every size, so a solution that does not
+  solve the cube it was made for is an error and not a result.
+
+`tests/unit/nxn/cube3_test.cpp` holds all of that equal against the 3x3 solver,
+per method: a corpus of scrambles, the solved cube and every single turn of it,
+a cube of real pieces that no turns produce, and a cube with its centres out of
+order - and, for that last one, that the library's own orientation-free entry
+point does solve it, which is the difference the wrapper keeps out of the app.
+
 ## Results
 
 Seeded scrambles of 60 + 10 N random layer turns, Advanced core, MSVC

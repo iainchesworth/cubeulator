@@ -317,6 +317,20 @@ Result<solver::Cube> NCube::to_cube3() const {
     return solver::Cube::from_facelets(facelets3);
 }
 
+Result<solver::Cube> NCube::to_cube3_as_held() const {
+    if (size() != 3) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    std::array<std::array<Color, 9>, 6> facelets3{};
+    for (const Face face : kAllFaces) {
+        for (std::size_t i = 0; i < 9; ++i) {
+            facelets3.at(static_cast<std::size_t>(face)).at(i) =
+                facelets_.at((static_cast<std::size_t>(face) * 9) + i);
+        }
+    }
+    return solver::Cube::from_facelets(facelets3);
+}
+
 NCube random_scramble(ScrambleSpec spec) {
     // The engine's output is specified exactly; the standard distributions'
     // is not, so the draws are made by remainder to be the same everywhere.

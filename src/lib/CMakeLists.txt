@@ -67,6 +67,7 @@ target_sources(cube_lib
         src/nxn/geometry.cpp
         src/nxn/cube.cpp
         src/nxn/commutator.cpp
+        src/nxn/cube3.cpp
         src/nxn/centres.cpp
         src/nxn/solution.cpp
         src/nxn/stages.cpp

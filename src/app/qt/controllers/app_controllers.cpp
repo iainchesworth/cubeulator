@@ -10,6 +10,7 @@
 #include <utility>
 
 #include <cube/diagnostics/json.hpp>
+#include <cube/nxn/cube3.hpp>
 #include <cube/solver/solver.hpp>
 
 namespace cube::app {
@@ -28,7 +29,7 @@ void AppControllers::wire() {
     // build. Do it now, off the UI thread, so that choosing it - on the
     // settings screen, or in the middle of a solve - does not wait for them.
     // Idempotent and thread-safe, and nothing here waits for it.
-    (void)QtConcurrent::run([] { cube::solver::prepare(cube::solver::SolveMethod::Advanced); });
+    (void)QtConcurrent::run([] { cube::nxn::prepare(3, cube::solver::SolveMethod::Advanced); });
 
     // A finished scan goes straight to the solver; the scan screen stays up
     // meanwhile (see AppState.qml).

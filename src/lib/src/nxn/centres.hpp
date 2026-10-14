@@ -31,4 +31,7 @@ namespace cube::nxn::detail {
 // `scheme` at all (their colours are not the multiset the scheme needs).
 [[nodiscard]] Result<Word> solve_centre_stickers(NCube& cube, const std::array<Color, 6>& scheme);
 
+// Builds the action set for `size` now instead of on the first solve.
+void prepare_centre_search(int size);
+
 }  // namespace cube::nxn::detail

@@ -108,6 +108,15 @@ public:
     // says about the result.
     [[nodiscard]] Result<solver::Cube> to_cube3() const;
 
+    // The 3x3 a size-3 cube is, exactly as it is held: no colour is renamed,
+    // so a cube whose centres are not where the 3x3 solvers' scheme puts them
+    // (canonical_color) stays a cube they refuse as unsolvable, as it always
+    // was for a scan assembled into the wrong slots. to_cube3() would read it
+    // as the same cube held in another orientation and solve it. Fails with
+    // invalid_cube_state if the size is not 3, and with whatever
+    // Cube::from_facelets says about the stickers.
+    [[nodiscard]] Result<solver::Cube> to_cube3_as_held() const;
+
     friend bool operator==(const NCube&, const NCube&) = default;
 
 private:
