@@ -1,10 +1,11 @@
 # Cutting a release
 
-How a version of Cubeulator becomes three downloadable packages on a GitHub
-Release, with the notes, the checksums and the signatures that go with them.
-The workflow is `.github/workflows/release.yml`; the tools are in
-`tools/release/`; what is in the packages is
-[Packaging the desktop app](packaging.md).
+How a version of Cubeulator becomes downloadable packages on a GitHub Release
+(an installer for Windows, a disk image for macOS, a `.deb` and an `.rpm` for
+Linux, and the browser build's site as a zip), with the
+notes, the checksums and the signatures that go with them. The workflow is
+`.github/workflows/release.yml`; the tools are in `tools/release/`; what is in
+the packages is [Packaging the desktop app](packaging.md).
 
 A release is a deliberate human step (see [Branch protection](branch-protection.md)).
 The workflow does everything up to a **draft** release; making it public is the
@@ -45,6 +46,7 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop
 | `Cubeulator-<version>-macos-arm64.dmg` | macOS 14.4 and later, Apple Silicon |
 | `Cubeulator-<version>-linux-x64.deb` | Debian and Ubuntu |
 | `Cubeulator-<version>-linux-x64.rpm` | Fedora |
+| `Cubeulator-<version>-web.zip` | The browser build: the static site that [Try it in your browser](web.md) serves under `/app/`, with `LICENSE.txt`, `THIRD-PARTY-NOTICES.txt` and `HOSTING.txt`, to be hosted over https. Not an installer; held by `packaging/web/check-package.sh` |
 | `SHA512SUMS` | one line per package and for the SBOM |
 | `SHA512SUMS.asc`, `<file>.asc` | detached GPG signatures, from the project key, on the manifest, every package and the SBOM |
 | `cubeulator-signing-key.asc` | the public key, so that a download can be verified offline |
@@ -228,10 +230,11 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
    of the `develop` tip the merge commit merged (its second parent: that is what
    was tested, and the merge commit's own runs have only just started).
 6. **Watch the `Release` workflow.** `Verify the release` is quick; the three
-   `Build` jobs are the long ones (a cold vcpkg cache is hours on Windows and
-   macOS; the cache CI keeps makes it much less). If a platform fails, fix it
-   and tag again, or re-run the failed jobs.
-7. **Review the draft** under Releases: the notes, the four packages, the
+   desktop `Build` jobs and `Build the web app` are the long ones (a cold vcpkg
+   cache is hours on Windows and macOS and for WebAssembly; the cache CI keeps
+   makes it much less: the web leg's is `wasm32-emscripten-threads`). If a
+   platform fails, fix it and tag again, or re-run the failed jobs.
+7. **Review the draft** under Releases: the notes, the five packages, the
    checksums and signatures. Edit the notes if you want to.
 8. **Publish it.**
 9. **Back-merge**: a PR from a `support/back-merge-<version>` branch cut from
@@ -262,7 +265,7 @@ minus the two things that cannot be undone:
 | | dry run | release |
 |---|---|---|
 | version, changelog and tag checks | yes (`[Unreleased]` stands in for a section not cut yet) | yes |
-| build, package, `check-package.sh`, three platforms | yes | yes |
+| build, package, `check-package.sh` (`packaging/web/check-package.sh` for the zip), four platforms | yes | yes |
 | `SHA512SUMS`, GPG signatures | yes, with a key made for the run | yes, the project key |
 | the provisioned key | proven to import and sign, in a keyring that is thrown away | used |
 | SBOM, provenance and SBOM attestations, `gh attestation verify` | yes | yes |
