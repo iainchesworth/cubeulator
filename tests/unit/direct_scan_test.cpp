@@ -25,6 +25,7 @@
 #include <random>
 #include <string_view>
 #include <vector>
+#include "deterministic_rng.hpp"
 #include "must_have.hpp"
 
 using cube::CubeError;
@@ -416,9 +417,15 @@ namespace {
 
 using Lab9 = std::array<cv::Vec3f, 9>;
 
-const cv::Vec3f kLampRed = cube::test::warm_lamp_lab(Color::Red);
-const cv::Vec3f kLampOrange = cube::test::warm_lamp_lab(Color::Orange);
-const Drawing kLamp = cube::test::warm_lamp_drawing();
+cv::Vec3f lamp_red() {
+    return cube::test::warm_lamp_lab(Color::Red);
+}
+cv::Vec3f lamp_orange() {
+    return cube::test::warm_lamp_lab(Color::Orange);
+}
+Drawing lamp_drawing() {
+    return cube::test::warm_lamp_drawing();
+}
 
 // A read as the reader gives it, from nine measured colours: the lattice
 // stays where it is, so every read after the first of a hold is steady.
@@ -429,17 +436,19 @@ SideRead read_of(const Lab9& lab) {
     read.stickers_found = 9;
     read.found.fill(true);
     for (std::size_t i = 0; i < 9; ++i) {
-        read.centres.at(i) = {100.0F + (40.0F * static_cast<float>(i % 3)),
-                              100.0F + (40.0F * static_cast<float>(i / 3))};
+        const std::size_t column = i % 3;
+        const std::size_t row = i / 3;
+        read.centres.at(i) = {100.0F + (40.0F * static_cast<float>(column)),
+                              100.0F + (40.0F * static_cast<float>(row))};
     }
     return read;
 }
 
 Lab9 red_orange_side(std::initializer_list<std::size_t> orange_cells) {
     Lab9 lab;
-    lab.fill(kLampRed);
+    lab.fill(lamp_red());
     for (const std::size_t cell : orange_cells) {
-        lab.at(cell) = kLampOrange;
+        lab.at(cell) = lamp_orange();
     }
     return lab;
 }
@@ -448,8 +457,12 @@ Lab9 red_orange_side(std::initializer_list<std::size_t> orange_cells) {
 // red and orange sits where: the orange-centred one has orange on a P of
 // five stickers and red on an L of four; the red-centred one has them the
 // other way about. They differ in three stickers, the centre one of them.
-const Lab9 kOrangeCentred = red_orange_side({1, 2, 4, 5, 8});
-const Lab9 kRedCentred = red_orange_side({0, 1, 2, 5});
+Lab9 orange_centred() {
+    return red_orange_side({1, 2, 4, 5, 8});
+}
+Lab9 red_centred() {
+    return red_orange_side({0, 1, 2, 5});
+}
 
 Lab9 turned_once(const Lab9& side) {
     constexpr std::array<std::size_t, 9> kSource = {6, 3, 0, 7, 4, 1, 8, 5, 2};
@@ -464,7 +477,7 @@ Lab9 turned_once(const Lab9& side) {
 // drifts darker, a thumb over a sticker now and then, a glare across the
 // centre now and then.
 struct Hand {
-    std::mt19937 rng{7};
+    std::mt19937 rng = cube::test::deterministic_rng(7);
     float drift = 1.0F;
     bool glare_and_thumbs = true;
 
@@ -474,7 +487,7 @@ struct Hand {
         std::uniform_int_distribution<int> cell(0, 8);
         Lab9 lab = side;
         for (cv::Vec3f& sticker : lab) {
-            sticker = cv::Vec3f(sticker(0) * drift + noise(rng), sticker(1) + noise(rng),
+            sticker = cv::Vec3f((sticker(0) * drift) + noise(rng), sticker(1) + noise(rng),
                                 sticker(2) + noise(rng));
         }
         if (glare_and_thumbs) {
@@ -537,8 +550,8 @@ TEST_CASE("two sides that differ only in where red and orange sit are two sides"
     SideScan scan;
     Hand hand{.glare_and_thumbs = false};
     for (int round = 0; round < 4; ++round) {
-        hold_lab(scan, hand, kOrangeCentred, 14);
-        hold_lab(scan, hand, kRedCentred, 14);
+        hold_lab(scan, hand, orange_centred(), 14);
+        hold_lab(scan, hand, red_centred(), 14);
     }
 
     const std::vector<SideScan::Side> sides = scan.sides();
@@ -550,9 +563,9 @@ TEST_CASE("two sides that differ only in where red and orange sit are two sides"
     // Each keeps the layout it was shown in, not a blend of the two.
     for (std::size_t i = 0; i < 9; ++i) {
         CHECK(lightness_of(orange_side.lab.at(i)) ==
-              Catch::Approx(lightness_of(kOrangeCentred.at(i))).margin(3.0));
+              Catch::Approx(lightness_of(orange_centred().at(i))).margin(3.0));
         CHECK(lightness_of(red_side.lab.at(i)) ==
-              Catch::Approx(lightness_of(kRedCentred.at(i))).margin(3.0));
+              Catch::Approx(lightness_of(red_centred().at(i))).margin(3.0));
     }
 }
 
@@ -562,8 +575,8 @@ TEST_CASE("a side held under noise, a thumb and a drifting lamp stays the one si
     Hand hand;
     for (int round = 0; round < 8; ++round) {
         hand.drift = 1.0F - (0.015F * static_cast<float>(round));
-        hold_lab(scan, hand, kOrangeCentred, 16);
-        hold_lab(scan, hand, kRedCentred, 16);
+        hold_lab(scan, hand, orange_centred(), 16);
+        hold_lab(scan, hand, red_centred(), 16);
     }
     CHECK(scan.sides().size() == 2);
 }
@@ -575,10 +588,10 @@ TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are c
     // preferred and the fused side was a smear of all four.
     SideScan scan;
     Hand hand{.glare_and_thumbs = false};
-    Lab9 shown = kOrangeCentred;
+    Lab9 shown = orange_centred();
     for (int turns = 0; turns < 4; ++turns) {
         hold_lab(scan, hand, shown, 12);
-        hold_lab(scan, hand, kRedCentred, 12);
+        hold_lab(scan, hand, red_centred(), 12);
         REQUIRE(scan.sides().size() == 2);
         // Reported the way it was last shown.
         const Lab9 side = scan.sides().at(0).lab;
@@ -597,12 +610,12 @@ TEST_CASE("two sides whose centres read as one colour are still two sides", "[di
     const cv::Vec3f green = cube::test::warm_lamp_lab(Color::Green);
     Lab9 other;
     other.fill(green);
-    other.at(4) = kLampOrange;
+    other.at(4) = lamp_orange();
 
     SideScan scan;
     Hand hand{.glare_and_thumbs = false};
     for (int round = 0; round < 3; ++round) {
-        hold_lab(scan, hand, kOrangeCentred, 12);
+        hold_lab(scan, hand, orange_centred(), 12);
         hold_lab(scan, hand, other, 12);
     }
     CHECK(scan.sides().size() == 2);
@@ -615,8 +628,8 @@ TEST_CASE("a flood of lattices that are no side does not cost the side being hel
     // has been held is not among those dropped.
     SideScan scan;
     Hand hand{.glare_and_thumbs = false};
-    hold_lab(scan, hand, kOrangeCentred, 12);
-    std::mt19937 rng(11);
+    hold_lab(scan, hand, orange_centred(), 12);
+    std::mt19937 rng = cube::test::deterministic_rng(11);
     std::uniform_real_distribution<float> lightness(5.0F, 95.0F);
     std::uniform_real_distribution<float> chroma(-60.0F, 60.0F);
     for (int stray = 0; stray < 80; ++stray) {
@@ -628,7 +641,7 @@ TEST_CASE("a flood of lattices that are no side does not cost the side being hel
         scan.add(read_of(junk));
         scan.add(std::nullopt);
     }
-    hold_lab(scan, hand, kOrangeCentred, 12);
+    hold_lab(scan, hand, orange_centred(), 12);
 
     REQUIRE(scan.sides().size() == 1);
     CHECK(scan.sides().at(0).reads == 22);
@@ -641,9 +654,9 @@ TEST_CASE("a side that is wholly red and a side that is wholly orange are two si
     // under 12 a solid red against a solid orange scores 9.5 a sticker, so
     // the two were one side.
     Lab9 red;
-    red.fill(kLampRed);
+    red.fill(lamp_red());
     Lab9 orange;
-    orange.fill(kLampOrange);
+    orange.fill(lamp_orange());
 
     SideScan scan;
     Hand hand{.glare_and_thumbs = false};
@@ -653,9 +666,9 @@ TEST_CASE("a side that is wholly red and a side that is wholly orange are two si
     }
     REQUIRE(scan.sides().size() == 2);
     CHECK(lightness_of(scan.sides().at(0).lab.at(4)) ==
-          Catch::Approx(lightness_of(kLampRed)).margin(3.0));
+          Catch::Approx(lightness_of(lamp_red())).margin(3.0));
     CHECK(lightness_of(scan.sides().at(1).lab.at(4)) ==
-          Catch::Approx(lightness_of(kLampOrange)).margin(3.0));
+          Catch::Approx(lightness_of(lamp_orange())).margin(3.0));
 }
 
 TEST_CASE("solid red and solid orange sides stay two sides as the lamp closes the gap",
@@ -665,10 +678,10 @@ TEST_CASE("solid red and solid orange sides stay two sides as the lamp closes th
     // closer than that, resolve_colors calls them one colour and refuses the
     // scan). Orange is slid towards red along the line between them.
     for (const float gap : {16.4F, 15.0F, 14.0F, 13.0F}) {
-        const float whole = static_cast<float>(cv::norm(kLampOrange - kLampRed));
-        const cv::Vec3f closer = kLampRed + ((kLampOrange - kLampRed) * (gap / whole));
+        const float whole = static_cast<float>(cv::norm(lamp_orange() - lamp_red()));
+        const cv::Vec3f closer = lamp_red() + ((lamp_orange() - lamp_red()) * (gap / whole));
         Lab9 red;
-        red.fill(kLampRed);
+        red.fill(lamp_red());
         Lab9 orange;
         orange.fill(closer);
 
@@ -695,7 +708,7 @@ TEST_CASE("a cube with a whole red side and a whole orange side is read as six s
     REQUIRE_FALSE(cube.face(Face::F) == Cube::solved().face(Face::F));
 
     SideScan scan;
-    show_cube(scan, cube, 5, kLamp);
+    show_cube(scan, cube, 5, lamp_drawing());
     expect_centres_of(scan, cube);
     const auto flat = scan.cube();
     REQUIRE_FALSE(flat.has_value());
@@ -711,7 +724,7 @@ TEST_CASE("a cube whose red and orange sides are each the other's colours is rea
     REQUIRE(cube.face(Face::R).at(4) != cube.face(Face::L).at(4));
 
     SideScan scan;
-    show_cube(scan, cube, 3, kLamp);
+    show_cube(scan, cube, 3, lamp_drawing());
 
     expect_centres_of(scan, cube);
 }
@@ -820,12 +833,12 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     }
 
     // How the colours were named, and how the cube was put together.
-    REQUIRE(diagnosis.naming.has_value());
-    CHECK(diagnosis.naming->iterations >= 1);
-    REQUIRE(diagnosis.assembly.has_value());
-    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::single_candidate);
-    CHECK(diagnosis.assembly->candidates == 1);
-    CHECK_FALSE(diagnosis.assembly->error.has_value());
+    const auto& naming = ::cube::test::must_have(diagnosis.naming);
+    CHECK(naming.iterations >= 1);
+    const auto& assembly = ::cube::test::must_have(diagnosis.assembly);
+    CHECK(assembly.path == cube::vision::AssemblyPath::single_candidate);
+    CHECK(assembly.candidates == 1);
+    CHECK_FALSE(assembly.error.has_value());
 
     // The same colour naming the assembly was given.
     std::array<cube::vision::CapturedFace, 6> faces{};
@@ -836,8 +849,7 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     REQUIRE(named.has_value());
     for (std::size_t side = 0; side < 6; ++side) {
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            CHECK(diagnosis.naming->faces.at(side).at(cell).color ==
-                  named->at(side).at(cell).color);
+            CHECK(naming.faces.at(side).at(cell).color == named->at(side).at(cell).color);
         }
     }
 
@@ -846,10 +858,10 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     const auto shown = scan.sides();
     REQUIRE(shown.size() == 6);
     // Same reads, same count, in the order they were first shown.
-    for (std::size_t i = 0; i < shown.size(); ++i) {
+    for (const auto& shown_side : shown) {
         std::size_t reads_here = 0;
         for (const auto& side : diagnosis.sides) {
-            if (side.reads == shown.at(i).reads) {
+            if (side.reads == shown_side.reads) {
                 ++reads_here;
             }
         }
@@ -888,25 +900,23 @@ TEST_CASE("diagnose names the pair of colours that were exchanged to make the cu
         CHECK(diagnosis.result->cube == cube);
 
         // Naming by colour made no cube; trading two names did.
-        REQUIRE(diagnosis.assembly.has_value());
-        const cube::vision::AssemblyTrace& trace = *diagnosis.assembly;
+        const cube::vision::AssemblyTrace& trace = ::cube::test::must_have(diagnosis.assembly);
         CHECK(trace.path == cube::vision::AssemblyPath::names_exchanged);
         CHECK(trace.candidates == 0);
-        REQUIRE(trace.direct_error.has_value());
-        CHECK(*trace.direct_error == CubeError::invalid_cube_state);
-        REQUIRE(trace.exchange.has_value());
+        CHECK(::cube::test::must_have(trace.direct_error) == CubeError::invalid_cube_state);
+        const auto& exchange = ::cube::test::must_have(trace.exchange);
 
         // The two colours that look alike by tungsten light: red and orange.
-        const cube::model::FacetColor first = trace.exchange->first_name;
-        const cube::model::FacetColor second = trace.exchange->second_name;
+        const cube::model::FacetColor first = exchange.first_name;
+        const cube::model::FacetColor second = exchange.second_name;
         const bool red_and_orange =
             (first == cube::model::FacetColor::red && second == cube::model::FacetColor::orange) ||
             (first == cube::model::FacetColor::orange && second == cube::model::FacetColor::red);
         CHECK(red_and_orange);
-        CHECK(trace.exchange->first_side != trace.exchange->second_side);
-        CHECK(trace.exchange->first_side < 6);
-        CHECK(trace.exchange->second_side < 6);
-        CHECK(trace.exchange->centre_distance >= 0.0F);
+        CHECK(exchange.first_side != exchange.second_side);
+        CHECK(exchange.first_side < 6);
+        CHECK(exchange.second_side < 6);
+        CHECK(exchange.centre_distance >= 0.0F);
     }
 }
 
@@ -922,13 +932,12 @@ TEST_CASE("diagnose reports the candidates when the sides make the cube two ways
     const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
     REQUIRE_FALSE(diagnosis.result.has_value());
     CHECK(diagnosis.result.error() == CubeError::ambiguous_scan);
-    REQUIRE(diagnosis.assembly.has_value());
-    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::ambiguous);
-    CHECK(diagnosis.assembly->candidates >= 2);
-    CHECK(diagnosis.assembly->corner_fits.size() == diagnosis.assembly->candidates);
-    CHECK_FALSE(diagnosis.assembly->chosen.has_value());
-    REQUIRE(diagnosis.assembly->error.has_value());
-    CHECK(*diagnosis.assembly->error == CubeError::ambiguous_scan);
+    const auto& assembly = ::cube::test::must_have(diagnosis.assembly);
+    CHECK(assembly.path == cube::vision::AssemblyPath::ambiguous);
+    CHECK(assembly.candidates >= 2);
+    CHECK(assembly.corner_fits.size() == assembly.candidates);
+    CHECK_FALSE(assembly.chosen.has_value());
+    CHECK(::cube::test::must_have(assembly.error) == CubeError::ambiguous_scan);
 }
 
 TEST_CASE("a scan that does not make a cube is reported with the cause", "[direct-scan]") {
