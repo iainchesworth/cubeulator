@@ -977,8 +977,9 @@ void check_left_side_read(const cv::Mat& frame, const Cube& cube,
         INFO("sticker " << i);
         CHECK(cv::norm(side.lab.at(i) - colours.at(static_cast<std::size_t>(drawn.at(i)))) < 3.0);
     }
-    CHECK(side.centres.at(4).x == Catch::Approx(pose.edge_x - 1.5F * pose.left_width).margin(1.5));
-    CHECK(side.centres.at(4).y == Catch::Approx(pose.edge_y - 1.5F * pose.tilt).margin(1.5));
+    CHECK(side.centres.at(4).x ==
+          Catch::Approx(pose.edge_x - (1.5F * pose.left_width)).margin(1.5));
+    CHECK(side.centres.at(4).y == Catch::Approx(pose.edge_y - (1.5F * pose.tilt)).margin(1.5));
 }
 
 }  // namespace
@@ -1009,10 +1010,12 @@ TEST_CASE("a side at the edge of the square-on gate is read beside a much thinne
          }) {
         INFO("pitch " << shape.pitch << ", left step " << shape.left_width << ", right step "
                       << shape.right_width << ", tilt " << shape.tilt);
-        const cube::test::CornerPose pose{.pitch = shape.pitch,
-                                          .left_width = shape.left_width,
-                                          .right_width = shape.right_width,
-                                          .tilt = shape.tilt};
+        const cube::test::CornerPose pose{
+            .pitch = shape.pitch,
+            .left_width = shape.left_width,
+            .right_width = shape.right_width,
+            .tilt = shape.tilt,
+        };
         check_left_side_read(cube::test::draw_cube_corner(cube, Face::F, pose), cube, pose);
     }
 }
@@ -1026,11 +1029,15 @@ TEST_CASE("a side at the edge of the square-on gate with one sticker covered is 
     const Cube cube = cube::test::scramble(2);
     const cube::test::CornerPose pose{.left_width = 34.5F, .right_width = 16.0F, .tilt = 0.0F};
     constexpr std::size_t kCovered = 2;  // top right of the left side
+    // Its column and row among the nine, as integers: the row is a whole number
+    // of rows down, not a fraction of one.
+    constexpr std::size_t kCoveredColumn = kCovered % 3;
+    constexpr std::size_t kCoveredRow = kCovered / 3;
     cv::Mat frame = cube::test::draw_cube_corner(cube, Face::F, pose);
     const float left = pose.edge_x - (3.0F * pose.left_width) +
-                       (static_cast<float>(kCovered % 3) * pose.left_width);
+                       (static_cast<float>(kCoveredColumn) * pose.left_width);
     const float top =
-        pose.edge_y - (1.5F * pose.pitch) + (static_cast<float>(kCovered / 3) * pose.pitch);
+        pose.edge_y - (1.5F * pose.pitch) + (static_cast<float>(kCoveredRow) * pose.pitch);
     cv::rectangle(frame, cv::Point2f(left - 1.0F, top - 1.0F),
                   cv::Point2f(left + pose.left_width + 1.0F, top + pose.pitch + 1.0F),
                   cv::Scalar(16, 16, 16), cv::FILLED);
