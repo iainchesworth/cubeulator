@@ -214,6 +214,32 @@
       "name": "ios-clang-release",
       "displayName": "iOS (device, Release)",
       "inherits": ["ios-clang-base", "release"]
+    },
+    {
+      "name": "web-emscripten-base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "toolchainFile": "${sourceDir}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-threads",
+        "VCPKG_OVERLAY_TRIPLETS": "${sourceDir}/cmake/triplets",
+        "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": "$env{QT_ROOT_DIR}/lib/cmake/Qt6/qt.toolchain.cmake",
+        "CUBEULATOR_BUILD_TESTS": "OFF",
+        "CUBEULATOR_ENABLE_SANITIZERS": "OFF",
+        "CMAKE_CXX_SCAN_FOR_MODULES": "OFF"
+      }
+    },
+    {
+      "name": "web-emscripten-debug",
+      "displayName": "Web (WebAssembly, Debug)",
+      "inherits": ["web-emscripten-base", "debug"]
+    },
+    {
+      "name": "web-emscripten-release",
+      "displayName": "Web (WebAssembly, Release)",
+      "inherits": ["web-emscripten-base", "release"]
     }
   ],
   "buildPresets": [
@@ -233,7 +259,9 @@
     { "name": "android-clang-debug", "configurePreset": "android-clang-debug" },
     { "name": "android-clang-release", "configurePreset": "android-clang-release" },
     { "name": "ios-clang-debug", "configurePreset": "ios-clang-debug" },
-    { "name": "ios-clang-release", "configurePreset": "ios-clang-release" }
+    { "name": "ios-clang-release", "configurePreset": "ios-clang-release" },
+    { "name": "web-emscripten-debug", "configurePreset": "web-emscripten-debug" },
+    { "name": "web-emscripten-release", "configurePreset": "web-emscripten-release" }
   ],
   "testPresets": [
     {
