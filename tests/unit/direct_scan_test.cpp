@@ -18,6 +18,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <initializer_list>
 #include <limits>
 #include <optional>
@@ -99,14 +100,24 @@ void show(SideScan& scan, const std::array<Color, 9>& stickers, const Pose& pose
 }
 
 // Show all six sides in turn, each in an arbitrary orientation and position.
+//
+// The quarter-turns are the top two bits of the engine's word. std::mt19937's
+// output is specified exactly; what std::uniform_int_distribution(0, 3) does
+// with it is not - MSVC and libstdc++ take the two high bits and libc++ the
+// two low ones - so the same seed turned every side differently on
+// WebAssembly. A side drawn at one turn is a frame the reader can find and at
+// another it is not (a dark green column against the lamp's white), and the
+// case that was written against the high bits was given a turn on which the
+// white side was not read, and found five sides. The tilt and shift are
+// uniform_real_distribution: one draw of the engine and a formula the standard
+// gives, and the libraries agree on them to the last pixel.
 void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& drawing = {}) {
     std::mt19937 rng(seed);
-    std::uniform_int_distribution<int> turns(0, 3);
     std::uniform_real_distribution<float> tilt(-9.0F, 9.0F);
     std::uniform_real_distribution<float> shift(-40.0F, 40.0F);
     for (const Face face : kAllFaces) {
         std::array<Color, 9> stickers = outside_view(cube, face);
-        for (int i = turns(rng); i > 0; --i) {
+        for (std::uint32_t turns = rng() >> 30U; turns > 0; --turns) {
             stickers = turned_clockwise(stickers);
         }
         show(scan, stickers,
