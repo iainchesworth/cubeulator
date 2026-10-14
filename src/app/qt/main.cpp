@@ -21,8 +21,8 @@ namespace {
 // QGuiApplication/QQuickWindow exists), so the "stats for nerds" backend
 // picker in SettingsScreen can only persist a preference for next launch,
 // not hot-swap it. This reads that preference from the same QSettings store
-// Qt.labs.settings' Settings QML type writes to (same organization/
-// application name), applied here before anything else runs.
+// the Settings QML type (QtCore's, in SettingsState.qml) writes to (same
+// organization/application name), applied here before anything else runs.
 void applyPersistedGraphicsBackend() {
     QCoreApplication::setOrganizationName("Cubeulator");
     QCoreApplication::setApplicationName("Cubeulator");

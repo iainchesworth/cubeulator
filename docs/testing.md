@@ -979,7 +979,7 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload; every language, the CJK scripts, mirroring for Hebrew and Arabic |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic |
 | `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
@@ -991,8 +991,10 @@ the two cross-origin-isolation headers the app's threads need.
 
 A page per test, with the browser's storage cleared first: the module compiles
 in about a second and the first screen is up in two, so nothing a test leaves
-in the browser's storage reaches the next. A failure attaches the page's
-console and a screenshot (and a Playwright trace on the retry).
+in the browser's storage reaches the next. (A test that needs an earlier visit's
+settings says what the storage holds when the app starts: `appOptions.storage`.)
+A failure attaches the page's console and a screenshot (and a Playwright trace
+on the retry).
 
 **The light probe.** On a headless runner the page draws in software
 (SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first
