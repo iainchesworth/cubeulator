@@ -248,6 +248,12 @@ compile_commands.json
 .ninja_log
 CMakeUserPresets.json
 
+# Browser tests (tests/web)
+tests/web/node_modules/
+tests/web/reports/
+tests/web/test-results/
+tests/web/playwright-report/
+
 # Python bytecode (the release and licence tools are run in place)
 __pycache__/
 *.pyc

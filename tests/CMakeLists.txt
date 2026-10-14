@@ -34,6 +34,9 @@ target_compile_definitions(cube_test_platform INTERFACE ${CUBEULATOR_PLATFORM_CO
 target_include_directories(cube_test_platform INTERFACE
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_BINARY_DIR}/generated")
+if(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS)
+    target_link_options(cube_test_platform INTERFACE ${CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS})
+endif()
 
 # --- Every platform fragment satisfies the platform contract -----------------
 # Includes each src/app/platform/*/platform.cmake in turn and holds it to
@@ -48,10 +51,12 @@ add_executable(cube_unit_tests
     unit/error_test.cpp
     unit/version_test.cpp
     unit/profiling_test.cpp
+    unit/profile_recorder_test.cpp
     unit/color_resolution_test.cpp
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
     unit/direct_scan_test.cpp
+    unit/sticker_colour_test.cpp
     unit/corner_view_test.cpp
     unit/held_cube_test.cpp
     unit/lib_stub_functions_test.cpp
@@ -85,7 +90,8 @@ target_link_libraries(cube_unit_tests
 # (src/lib/CMakeLists.txt) and checks it against the option that drove the
 # choice, so a wrong directory on the include path cannot go unnoticed.
 set_source_files_properties(unit/profiling_test.cpp PROPERTIES
-    COMPILE_DEFINITIONS "CUBE_EXPECT_TRACY=$<BOOL:${CUBEULATOR_ENABLE_TRACY}>")
+    COMPILE_DEFINITIONS
+        "CUBE_EXPECT_TRACY=$<BOOL:${CUBEULATOR_ENABLE_TRACY}>;CUBE_EXPECT_RECORDER=$<BOOL:${CUBEULATOR_ENABLE_PROFILE_RECORDER}>")
 
 # White-box include path for last_layer_test.cpp only: it includes
 # cube::lib's private last_layer.hpp directly, because the F2L-preservation
@@ -184,19 +190,30 @@ endif()
 
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
-    integration/platform_integration_test.cpp
-    # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
-    # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
-    # camera-less machine) try to open a device. See the file header.
-    integration/camera_property_probe_test.cpp
-    # Runs everywhere, CI included: the lock's reporting/bookkeeping, with
-    # no device involved. Its one "no capture is running" case deliberately
-    # calls the real platform API to prove it fails without opening one.
-    integration/camera_photometry_test.cpp
-    # Hardware verification of the lock's effect on real pixels: hidden
-    # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
-    # double fence as the probe above.
-    integration/camera_lock_verification_test.cpp)
+    integration/platform_integration_test.cpp)
+
+# The camera cases go through the OpenCV capture loop's backend
+# (detail::capture_backend()) and call the interface from the test's own thread,
+# which only the platforms with a native camera device allow; the rest have a
+# camera of their own to be tested through their own means (the browser's is
+# tests/web's, on a real getUserMedia).
+if(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA)
+    target_sources(cube_integration_tests PRIVATE
+        # The interface with no device behind it.
+        integration/platform_camera_test.cpp
+        # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
+        # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
+        # camera-less machine) try to open a device. See the file header.
+        integration/camera_property_probe_test.cpp
+        # Runs everywhere, CI included: the lock's reporting/bookkeeping, with
+        # no device involved. Its one "no capture is running" case deliberately
+        # calls the real platform API to prove it fails without opening one.
+        integration/camera_photometry_test.cpp
+        # Hardware verification of the lock's effect on real pixels: hidden
+        # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
+        # double fence as the probe above.
+        integration/camera_lock_verification_test.cpp)
+endif()
 
 target_link_libraries(cube_integration_tests
     PRIVATE
@@ -265,11 +282,13 @@ if(CUBEULATOR_BUILD_APP)
 
     add_executable(cube_qml_tests
         qml_test_main.cpp
+        unit/complete_screen_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp
         unit/solve_screen_gallery_test.cpp
-        unit/solve_screen_test.cpp)
+        unit/solve_screen_test.cpp
+        unit/solution_screen_test.cpp)
 
     target_link_libraries(cube_qml_tests
         PRIVATE

@@ -3,6 +3,8 @@
 
 set(CUBEULATOR_PLATFORM_DISPLAY_NAME "Windows")
 set(CUBEULATOR_PLATFORM_DESKTOP ON)
+# A native camera device, opened from the calling thread? (cmake/Platform.cmake)
+set(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA ON)
 
 # Windows keeps its own platform plugin: it is the only one deployed beside
 # the binaries here, and it needs no display for the test binaries either.
@@ -21,6 +23,7 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 # the way works: minimised, it never gets its size, and positioned outside
 # every monitor, Windows sends it no expose event and the test cannot start.
 set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW ON)
+set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS "")
 
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "C:/Qt" "$ENV{USERPROFILE}/Qt")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS msvc2022_64 msvc2019_64 mingw_64)

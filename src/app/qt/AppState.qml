@@ -9,7 +9,7 @@ import Cubeulator
 QtObject {
     id: state
 
-    property string screen: "launch" // launch | permission | scan | solve | settings | history | complete
+    property string screen: "launch" // launch | permission | scan | solve | settings | history | complete | solution
 
     // Camera-access screens exist only for mobile platforms, where the OS
     // requires an explicit in-app permission prompt. Desktop platforms grant
@@ -200,6 +200,29 @@ QtObject {
     function scanAnother() {
         elapsedSeconds = 0;
         screen = "scan";
+    }
+
+    // The solution screen reviews a solve turn by turn. It is opened for the
+    // solve just finished (SolveController), or for any object shaped like it
+    // (SolutionScreen.qml lists the shape) - the history's entry for a solve
+    // from another day. `subtitle` is a second line under its title, the
+    // date. Back goes to the screen it was opened from.
+    property var solutionSource: SolveController
+    property string solutionSubtitle: ""
+    property string solutionBack: "complete"
+
+    function openSolution(source, subtitle) {
+        solutionSource = source === undefined ? SolveController : source;
+        solutionSubtitle = subtitle === undefined ? "" : subtitle;
+        // Settings opened from the review comes back to it, and a review
+        // opened from there must not make itself the way back.
+        if (screen !== "settings")
+            solutionBack = screen;
+        screen = "solution";
+    }
+
+    function closeSolution() {
+        screen = solutionBack;
     }
 
     // Part-way through a solve the cube and the solution no longer agree:

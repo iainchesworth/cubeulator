@@ -7,16 +7,22 @@
 // software GL on Linux) is one the app can be tested in at all.
 
 #include "app.hpp"
+#include "contrast.hpp"
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <QColor>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSize>
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <map>
 #include <set>
+#include <string>
 #include <vector>
 
 namespace {
@@ -84,6 +90,21 @@ struct Content {
     return content;
 }
 
+// The colour most of `box` is. What is written in a card and the rules between
+// its figures are a small share of its area, so the commonest pixel is its fill.
+[[nodiscard]] QColor dominant_colour(const QImage& image, const QRect& box) {
+    std::map<QRgb, long> counts;
+    for (int y = box.top(); y <= box.bottom(); ++y) {
+        for (int x = box.left(); x <= box.right(); ++x) {
+            ++counts[image.pixel(x, y)];
+        }
+    }
+    const auto commonest =
+        std::max_element(counts.begin(), counts.end(),
+                         [](const auto& a, const auto& b) { return a.second < b.second; });
+    return commonest == counts.end() ? QColor() : QColor(commonest->first);
+}
+
 }  // namespace
 
 TEST_CASE("the 3D cube on the launch screen is drawn, in colour, and moves", "[system][render]") {
@@ -141,4 +162,35 @@ TEST_CASE("the 3D cube is drawn in the narrow layout and in the dark theme too",
     const Content content = measure(image, device_box(image, cube));
     CHECK(content.non_background > 0.05);
     CHECK(content.distinct > 12);
+}
+
+// A Rectangle with no `color` is opaque white. The complete screen's stats
+// card was one: ink on it was fine in the light theme and near-white on white
+// in the dark one (complete-wide-dark.png in the tour). The cheap check of the
+// same thing, from the items' properties, is tests/unit/complete_screen_test.cpp;
+// this is the pixels - what is on the screen, whatever way it got there.
+TEST_CASE("the complete screen's stats card is drawn readable, in both themes and layouts",
+          "[system][render]") {
+    const std::string mode = GENERATE(as<std::string>{}, "light", "dark");
+    const QSize size = GENERATE(cube::systest::kPhone, cube::systest::kDesktop);
+    CAPTURE(mode, size.width());
+
+    App& app = App::fresh(App::Start::elsewhere);
+    app.resize(size);
+    app.set_theme(QString::fromStdString(mode));
+    app.go("complete");
+    app.settle();
+
+    QQuickItem* card = app.find("complete.stats");
+    REQUIRE(card != nullptr);
+    const QImage image = app.grab();
+    // Inside the card's 2 px rule, in device pixels.
+    const QRect box = device_box(image, card).adjusted(8, 8, -8, -8);
+    REQUIRE(box.width() > 40);
+    REQUIRE(box.height() > 20);
+
+    const QColor ink = app.theme().property("ink").value<QColor>();
+    const QColor fill = dominant_colour(image, box);
+    INFO("ink " << ink.name().toStdString() << " on a card drawn " << fill.name().toStdString());
+    CHECK(cube::test::contrast_ratio(ink, fill) >= cube::test::kTextContrast);
 }

@@ -128,6 +128,36 @@ TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]")
     }
 }
 
+TEST_CASE("every control on the solution screen can be pressed", "[system][sweep][solution]") {
+    const Layout layout = GENERATE(Layout::narrow, Layout::wide);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh(App::Start::elsewhere);
+        auto& solve = app.runtime().solve();
+        if (solve.totalMoves() == 0) {
+            solve.solveCube(cube::systest::scramble(41));
+        }
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        app.resize(size_for(layout));
+        app.go("solution");
+        app.pump(120);
+
+        // Back leaves, and has its case of its own (journey_test.cpp); Play
+        // is pressed, and the Next pressed after it stops what it started.
+        // Previous is disabled until Next has been pressed: a second pass.
+        cube::systest::SweepOptions options;
+        options.skip.insert("solution.back");
+        const QStringList pressed = press_every_control(app, "solution", options);
+        INFO("pressed " << pressed.join(", ").toStdString());
+        CHECK(pressed.contains("solution.next"));
+        CHECK(pressed.contains("solution.previous"));
+        CHECK(pressed.contains("solution.play"));
+        // A row of the list: one key for all of them (App::control_key).
+        CHECK(pressed.contains("solution.list.row"));
+        CHECK(app.screen() == "solution");
+        CHECK_FALSE(app.grab().isNull());
+    }
+}
+
 TEST_CASE("every control on the settings screen can be pressed", "[system][sweep][settings]") {
     const Layout layout = GENERATE(Layout::narrow, Layout::wide);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {

@@ -30,8 +30,8 @@ struct Screen {
 };
 
 constexpr Screen kScreens[] = {
-    {"launch", false},   {"permission", false}, {"scan", false},     {"solve", true},
-    {"settings", false}, {"history", false},    {"complete", false},
+    {"launch", false},   {"permission", false}, {"scan", false},    {"solve", true},
+    {"settings", false}, {"history", false},    {"complete", false}, {"solution", true},
 };
 
 // Puts `screen` up the way the tests that cannot walk to it do.
@@ -152,9 +152,7 @@ TEST_CASE("every control on every screen is inside the window, bar the known few
                 // not by the window being the wrong size.
                 bool in_flickable = false;
                 for (QQuickItem* up = control->parentItem(); up != nullptr; up = up->parentItem()) {
-                    in_flickable =
-                        in_flickable ||
-                        QByteArray(up->metaObject()->className()).startsWith("QQuickFlickable");
+                    in_flickable = in_flickable || up->inherits("QQuickFlickable");
                 }
                 if (in_flickable) {
                     continue;

@@ -18,6 +18,8 @@ set(CUBE_PLATFORM_CONTRACT_VARIABLES
     CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES
     CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
     CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW
+    CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS
+    CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA
     CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     CUBEULATOR_PLATFORM_QT_ARCH_DIRS
     CUBEULATOR_PLATFORM_NOTICES_DIR
@@ -48,8 +50,8 @@ endmacro()
 # Checks the fragment that was just included (in the caller's scope):
 #   - every contract variable is defined (an empty string is a definition);
 #   - every hook exists;
-#   - CUBEULATOR_PLATFORM_DESKTOP and CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW are
-#     ON or OFF;
+#   - CUBEULATOR_PLATFORM_DESKTOP, CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW and
+#     CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA are ON or OFF;
 #   - every file the fragment compiles exists under <app_dir> (src/app).
 # `fragment` only names it in the message.
 function(cube_platform_check_contract fragment app_dir)
@@ -70,7 +72,8 @@ function(cube_platform_check_contract fragment app_dir)
         endif()
     endforeach()
 
-    foreach(_flag CUBEULATOR_PLATFORM_DESKTOP CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW)
+    foreach(_flag CUBEULATOR_PLATFORM_DESKTOP CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW
+                  CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA)
         if(NOT ${_flag} STREQUAL "ON" AND NOT ${_flag} STREQUAL "OFF")
             message(FATAL_ERROR
                 "${fragment}: ${_flag} must be ON or OFF, not '${${_flag}}'.")

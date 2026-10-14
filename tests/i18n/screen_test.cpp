@@ -294,7 +294,19 @@ namespace {
 // off the window or out of its pane, and no label out of its button. The
 // pseudo-locale is the proxy for a real translation (40% longer than the
 // English); the same checks run on the real Japanese and Chinese below.
+// A solution in the controller, for the screen that lists one: its rows are
+// the longest strings it has. Made once; the controller keeps it.
+void have_a_solution() {
+    SolveController& solve = t::controllers().solve;
+    if (solve.totalMoves() == 0) {
+        solve.solveCube(cube::solver::random_scramble(21));
+    }
+    REQUIRE(wait_for([&]() { return !solve.isSolving(); }, 60'000));
+    REQUIRE(solve.totalMoves() > 0);
+}
+
 void holds_the_layout_in(const char* language) {
+    have_a_solution();
     struct Size {
         int w;
         int h;
@@ -302,7 +314,7 @@ void holds_the_layout_in(const char* language) {
     };
     const Size sizes[] = {{900, 640, "wide"}, {390, 780, "narrow"}};
     for (const char* type : {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen",
-                             "HistoryScreen"}) {
+                             "HistoryScreen", "SolutionScreen"}) {
         for (const Size& size : sizes) {
             in_language(language);
             Screen screen(type, size.w, size.h);
@@ -479,6 +491,34 @@ TEST_CASE("the cube view is not mirrored, however the screen around it is",
     }
     REQUIRE_FALSE(cubes.isEmpty());
     for (QQuickItem* cube : cubes) {
+        CHECK_FALSE(screen.mirrored_under(cube));
+    }
+    in_language("en");
+}
+
+TEST_CASE("the solution screen mirrors for a right-to-left language, and its cube does not",
+          "[i18n][screen][rtl][solution]") {
+    have_a_solution();
+    in_language("he");
+    Screen screen("SolutionScreen", 900, 640);
+    CHECK(screen.mirrored_under(screen.item()));
+    // The list is in the pane the layout trails to: on the left.
+    QQuickItem* list = nullptr;
+    QList<QQuickItem*> cubes;
+    for (QQuickItem* item : screen.find_all("QQuickItem")) {
+        if (item->objectName() == QLatin1String("solution.list")) {
+            list = item;
+        }
+        if (QString::fromLatin1(item->metaObject()->className())
+                .startsWith(QLatin1String("Cube3DView"))) {
+            cubes.append(item);
+        }
+    }
+    REQUIRE(list != nullptr);
+    REQUIRE_FALSE(cubes.isEmpty());
+    CHECK(screen.left_of(list) < screen.item()->width() / 2);
+    for (QQuickItem* cube : cubes) {
+        CHECK(screen.left_of(cube) > screen.item()->width() / 2 - 1);
         CHECK_FALSE(screen.mirrored_under(cube));
     }
     in_language("en");

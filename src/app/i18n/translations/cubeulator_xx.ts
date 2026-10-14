@@ -1335,17 +1335,27 @@ In your hands.</source>
         <translation>[Thé sõlûtîõn ~~~~~]</translation>
     </message>
     <message id="solution.summary" numerus="yes">
-        <source>%Ln turns in 5 stages</source>
-        <extracomment>Line under the title.</extracomment>
+        <source>%Ln turns in %1 stages</source>
+        <extracomment>Line under the title: how many turns the whole solution has, and how many stages. %1 is the number of stages, which depends on the method: five, four or two. Write it so that it reads for any of them.</extracomment>
         <translation>
-            <numerusform>[%Ln tûrn în 5 stàgés ~~~~~ ~~~]</numerusform>
-            <numerusform>[%Ln tûrns în 5 stàgés ~~~~~ ~~~]</numerusform>
+            <numerusform>[%Ln tûrn în %1 stàgés ~~~~~ ~~~]</numerusform>
+            <numerusform>[%Ln tûrns în %1 stàgés ~~~~~ ~~~~]</numerusform>
         </translation>
     </message>
-    <message id="solution.method">
+    <message id="solution.method.beginner">
         <source>Method: layer by layer, the one most people learn first.</source>
-        <extracomment>One line for learners.</extracomment>
+        <extracomment>One line for learners under the summary, shown when the solution is the Beginner method's.</extracomment>
         <translation>[Méthõd: làyér by làyér, thé õné mõst péõplé léàrn fîrst. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
+    </message>
+    <message id="solution.method.intermediate">
+        <source>Method: the way fast solvers do it.</source>
+        <extracomment>See solution.method.beginner. Shown for the Intermediate method.</extracomment>
+        <translation>[Méthõd: thé wày fàst sõlvérs dõ ît. ~~~~~ ~~~~~ ~~~~]</translation>
+    </message>
+    <message id="solution.method.advanced">
+        <source>Method: the fewest turns there are, found by search rather than learnt.</source>
+        <extracomment>See solution.method.beginner. Shown for the Advanced method.</extracomment>
+        <translation>[Méthõd: thé féwést tûrns théré àré, fõûnd by séàrch ràthér thàn léàrnt. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
     <message id="solution.play">
         <source>Play</source>

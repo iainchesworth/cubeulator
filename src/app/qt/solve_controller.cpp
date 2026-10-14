@@ -48,6 +48,21 @@ QVariantList face_colors(const Cube& cube, Face face) {
     return colors;
 }
 
+// Every sticker of `cube`: side letter -> nine colour names, each side as
+// seen from outside it.
+QVariantMap stickers_of(const Cube& cube) {
+    QVariantMap sides;
+    for (const Face face : cube::solver::kAllFaces) {
+        QVariantList colors;
+        colors.reserve(9);
+        for (const cube::solver::Color color : cube::solver::outside_view(cube, face)) {
+            colors.append(colour_name(color));
+        }
+        sides.insert(face_letter(face), colors);
+    }
+    return sides;
+}
+
 SolveMethod to_solver_method(SolveController::Method method) {
     switch (method) {
         case SolveController::Beginner:
@@ -171,17 +186,11 @@ QVariantList SolveController::leftColors() const {
 }
 
 QVariantMap SolveController::stickers() const {
-    QVariantMap sides;
-    for (const Face face : cube::solver::kAllFaces) {
-        QVariantList colors;
-        colors.reserve(9);
-        for (const cube::solver::Color color :
-             cube::solver::outside_view(stepped_.current_cube(), face)) {
-            colors.append(colour_name(color));
-        }
-        sides.insert(face_letter(face), colors);
-    }
-    return sides;
+    return stickers_of(stepped_.current_cube());
+}
+
+QVariantMap SolveController::stickersAt(int turn) const {
+    return stickers_of(stepped_.cube_at(turn));
 }
 
 QVariantList SolveController::moves() const {

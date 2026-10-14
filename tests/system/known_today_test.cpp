@@ -6,10 +6,11 @@
 // docs/app-experience-plan.md it comes from. None of them is fixed by this
 // workstream: the experience lane owns them, each in its own phase.
 //
-// Three cases that used to be here are gone: the solve lane's Finish step now
-// reaches the complete screen, and its Rescan is the way out of the solve
-// screen (both journey steps, journey_test.cpp), and the History button on Home
-// opens the list of solves kept (history_test.cpp).
+// Four things that used to be here are gone: the solve lane's Finish step now
+// reaches the complete screen, its Rescan is the way out of the solve screen,
+// Review the solution on the complete screen opens the solution (all three
+// journey steps, journey_test.cpp), and the History button on Home opens the
+// list of solves kept (history_test.cpp).
 //
 // Tagged [known-today] so `cube_system_tests "[known-today]"` lists them.
 
@@ -28,9 +29,9 @@ using cube::systest::App;
 TEST_CASE("known today: buttons that do nothing", "[system][known-today]") {
     // EXPECTED TO CHANGE - plan, Journey: "'Solve history', 'Review
     // solution' and the 'English' button do nothing or the wrong thing".
-    // Solve history is built (history_test.cpp); Review the solution is the
-    // solution-review branch's. Owner: experience lane, E1 decides what stays
-    // (decision 6).
+    // 'Review solution' opens the solution now (journey_test.cpp) and 'Solve
+    // history' opens the list (history_test.cpp); the English button is the
+    // experience lane's, E1 decides what stays (decision 6).
     const cube::systest::Layout layout =
         GENERATE(cube::systest::Layout::wide, cube::systest::Layout::narrow);
     INFO("in the " << cube::systest::to_string(layout) << " layout");
@@ -42,11 +43,6 @@ TEST_CASE("known today: buttons that do nothing", "[system][known-today]") {
     app.click("launch.language");
     REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
     app.go("launch");
-
-    app.go("complete");
-    app.click("complete.review");
-    app.pump(200);
-    CHECK(app.screen() == "complete");
 }
 
 TEST_CASE("known today: there is no back, and nothing takes keyboard focus",
