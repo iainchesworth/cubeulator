@@ -92,6 +92,16 @@ same resize, threshold and contours again, which is why it cost about what
 0.007 ms; assembling a cube (`vision.direct_scan.scanned`) 1 to 3 ms but only
 when the sides change, with 0.5 ms for each of up to 16 assembly attempts.
 
+A frame with six or more sticker-sized outlines that make no side takes a
+second look (`read_side`: the threshold and the contours again against a
+narrower block, `narrow_contours`). In the 1449-frame warm-lamp session that is
+173 frames (12%): those frames' `read_side` went from 0.15 ms to 1.4 to 1.6 ms
+at p50 (2.0 to 2.4 ms at p90), and the session's mean `read_side` from 0.38 to
+0.57 ms (the shared `prepare_frame` before it is 1.7 ms), at 640 wide with
+nothing else on the machine. A frame with no cube in a room with that many
+outlines (the 1080p `empty_frame` of `tests/perf`) allocates 113 buffers where
+it did 36.
+
 In the application, with the fake camera's 640x360 frames
 (`direct_scan.process_frame`, 2085 frames): p50 2.2 ms, p99 2.9 ms. About 0.4 ms
 of that is not the vision pass: the signals to the screen, the preview, the

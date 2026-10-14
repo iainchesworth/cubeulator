@@ -55,6 +55,23 @@ not span three rows and three columns, or no cube all return nothing.
    the outlines. It is done once per frame and handed to both readers,
    because it is most of what a read costs; contours that are roughly square
    and roughly sticker-sized survive `read_side`'s shape test.
+
+   A frame with six or more such outlines that make no side is looked at a
+   **second time**, with the same threshold taken against a narrower block
+   (`narrow_contours`: 6% of the frame height, against 12%). A dark sticker
+   beside a bright one is clipped by the wide block, whose mean climbs towards
+   the bright neighbour; under a warm lamp a real cube's green and blue read
+   nearly black (L 16.8 and 11) and a side with a column of them beside white
+   is not a lattice at all to the first look. The narrower block keeps them. It
+   is only a second look, because over every frame it is the noisier outline:
+   400 recorded daylight frames read 222 with it where the first look reads
+   269. And a lattice only it found is kept only if it sits on plastic: the
+   twelve gaps between its stickers, at their 75th percentile (a finger or a
+   glint may cover two), no brighter than 0.8 of its darkest sticker. Every
+   lattice the second look made out of curtains, hands and shirts in six
+   paper-cube sessions failed that (421 of 421); 137 of the 143 it found on
+   cubes in black plastic passed. A side the first look reads is read exactly
+   as it was.
 2. **Lattice.** The sticker pitch comes from nearest-neighbour distances and
    the direction from the folded angles. An affine least-squares fit places a
    3x3 lattice through the blobs, and the fit must span all three rows and
@@ -228,9 +245,11 @@ foreshortened and in its own shadow. Tried on that scan alone with a finer
 threshold (window 3% of the frame height, offset 3, against 12% and 8), 29 of
 79 corner frames are three-sided, the board stays 4 of 4 exact, and square-on
 reads fall by about 4% on the tungsten session (625 to 600) - so the change
-is not made to the threshold the square-on reader shares. A corner reader with
-its own scale-aware preparation is the next step, and it needs recordings in
-more than one light before it is tuned.
+is not made to the threshold the square-on reader shares. (The square-on reader
+does now take a second look at a frame its first found no side in, with a
+narrower block - see the reader above; the corner reader does not.) A corner
+reader with its own scale-aware preparation is the next step, and it needs
+recordings in more than one light before it is tuned.
 
 ## Camera photometry
 
