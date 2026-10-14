@@ -157,12 +157,12 @@ its dependencies' versions, the triplet, the compiler - and every archive holds
 both the debug and the release variant of the library (`Building x64-windows-dbg`
 and `-rel` happen in one pass). The project's own `CMAKE_BUILD_TYPE` and the
 compiler it is built with are not in that hash: `fmt:x64-linux` has ABI
-`51a55f9e...` in the Coverage (g++-15), Linux (g++-15) and clang-tidy
-(clang++-21) jobs of one run. So the triplet is the whole cache identity:
+`51a55f9e...` in the Coverage (g++-16), Linux (g++-16) and clang-tidy
+(clang++-23) jobs of one run. So the triplet is the whole cache identity:
 
 | Triplet | Legs that share it |
 | --- | --- |
-| `x64-linux` | Linux (GCC 15), Coverage, System tests, clang-tidy, CodeQL |
+| `x64-linux` | Linux (GCC 16), Coverage, System tests, clang-tidy, CodeQL |
 | `x64-windows` | Windows (MSVC) |
 | `arm64-osx` | macOS (AppleClang) |
 | `arm64-ios` | iOS (also holds the `arm64-osx` host tools it builds) |
@@ -278,7 +278,7 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | --- | --- | --- |
 | Qt | 6.12.0 (LTS; every fourth minor, 6.8 before it) | No - 6.12.0 is the newest release. The Windows kit is `msvc2022_64`; Qt ships no MSVC 2026 x64 kit, and it works with the VS 2026 toolset. Installing the Windows kit, and the WebAssembly kit, needs an unreleased aqtinstall (the pinned commit in `ci.yml`, `release.yml`, `.github/actions/web-build/action.yml` and `ci/install-qt.ps1`): the last release predates Qt 6.11's per-architecture repository layout. |
 | MSVC | Visual Studio 2026, via `windows-2025-vs2026` | No. |
-| GCC | 15.2 (`g++-15`, `gcov-15`) | Yes: GCC 16 is released upstream, but ubuntu-26.04's `gcc-16` is a March 2026 snapshot (`16-20260322`), not a release. The `Linux (GCC 15)` check name is also required on `main`. |
+| GCC | 16 (`g++-16`, `gcov-16`): ubuntu-26.04's archive `gcc-16`, `16-20260322`, installed by `.github/actions/install-gcc` (the runner image ships 13 to 15) | Yes: that package is a March 2026 snapshot of trunk (it reports `16.0.1 20260322 (experimental)`), not a release, so it is frozen by the archive and not by a version number. 16 is used because `std::mdspan` needs libstdc++ 16, and the N x N library reads cubes through it (`docs/nxn-solver.md`). The clang-tidy job installs it too, for the libstdc++ Clang then finds. The `Linux (GCC 16)` check name is required on `main`. |
 | clang-format | 23.1.3, pinned PyPI wheel (`ci/requirements-lint.txt`) | No. |
 | clang-tidy and its compiler | Clang 23.x from apt.llvm.org | No, but it is a snapshot of `release/23.x` rebuilt as the branch moves, not a frozen version; there is no clang-tidy 23 wheel on PyPI yet. |
 | AppleClang | Xcode 26 on `macos-26` (desktop); `macos-15` (iOS) | iOS stays on `macos-15` for the open vcpkg pkg-config issue [microsoft/vcpkg#50681](https://github.com/microsoft/vcpkg/issues/50681). |
@@ -375,7 +375,7 @@ the latest?":
   `.github/actions/web-build/action.yml`, with the Qt version in the same file
   and the `emsdk` version in `docs/building.md`. Qt names the one Emscripten
   each release is built with; follow Qt's *Qt for WebAssembly* page.
-- **Compilers** — `g++-15`/`gcov-15` in `ci.yml`, `codeql.yml` and
+- **Compilers** — `g++-16`/`gcov-16` in `ci.yml`, `codeql.yml` and
   `release.yml`, and the Clang packages the `clang-tidy` job installs.
 - **Runner images** — every `runs-on:` label, and the `matrix.os` values (in
   `ci.yml` and `release.yml`).

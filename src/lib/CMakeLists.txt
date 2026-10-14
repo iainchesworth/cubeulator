@@ -64,6 +64,14 @@ target_sources(cube_lib
         src/solver/cfop.cpp
         src/solver/solver.cpp
         src/solver/stepped_solution.cpp
+        src/nxn/geometry.cpp
+        src/nxn/cube.cpp
+        src/nxn/commutator.cpp
+        src/nxn/centres.cpp
+        src/nxn/solution.cpp
+        src/nxn/stages.cpp
+        src/nxn/strategy.cpp
+        src/nxn/two_by_two.cpp
         src/vision/color_resolution.cpp
         src/vision/color_classification.cpp
         src/vision/recording_v2.cpp

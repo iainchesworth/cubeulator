@@ -33,7 +33,7 @@ whenever you actually need an unoptimized/more-debuggable build, or define
 your own combination in a personal `CMakeUserPresets.json` — CI just doesn't
 babysit them on every push.
 
-On Linux, CI compiles with GCC 15 (`-DCMAKE_CXX_COMPILER=g++-15`; the presets
+On Linux, CI compiles with GCC 16 (`-DCMAKE_CXX_COMPILER=g++-16`; the presets
 say plain `g++`, so pass it if yours is older) and installs the X11 and OpenGL
 development packages before the vcpkg build: `libx11-dev libgl1-mesa-dev
 libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.

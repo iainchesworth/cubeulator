@@ -5,7 +5,7 @@ This page is for building Cubeulator from source. To use it, see the
 
 ## Requirements
 
-- A C++23 compiler: GCC 15+, Clang 21+, MSVC 14.51+, or AppleClang 17+.
+- A C++23 compiler with `<mdspan>`: GCC 16+, Clang 23+, MSVC 14.51+, or AppleClang 17+.
 - CMake 4+ and Ninja.
 - Qt 6.12.x, the current LTS (prebuilt, via [aqtinstall](https://github.com/miurahr/aqtinstall))
   — only needed if you're building the desktop GUI shell (the default).

@@ -74,6 +74,7 @@ nav:
       - Architecture: architecture.md
       - Vision pipeline: vision-pipeline.md
       - Solve methods: solver-methods.md
+      - Cubes of any size: nxn-solver.md
       - Recording format: recording-format.md
       - Live diagnostics: diagnostics.md
       - Platform isolation: platform-isolation.md

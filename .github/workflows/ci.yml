@@ -131,6 +131,12 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
+      # Clang parses with the newest libstdc++ it can find, and <mdspan> is in
+      # 16, not the 15 the image ships. g++-16 brings that library; see
+      # .github/actions/install-gcc.
+      - name: Install GCC 16 (for its libstdc++)
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11/GL headers).
       - name: Install vcpkg build dependencies
@@ -227,7 +233,7 @@ jobs:
           # regresses on the SDK, macos-15 is the known-good fallback. The iOS
           # job stays on macos-15 for an unrelated vcpkg reason (see ios-build).
           all='[
-            {"leg": "linux",   "name": "Linux (GCC 15)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux",   "package_generators": "DEB;RPM",    "package_artifact": "cubeulator-linux-x64"},
+            {"leg": "linux",   "name": "Linux (GCC 16)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux",   "package_generators": "DEB;RPM",    "package_artifact": "cubeulator-linux-x64"},
             {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx",  "package_generators": "DragNDrop", "package_artifact": "cubeulator-macos-arm64"},
             {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows", "package_generators": "NSIS",      "package_artifact": "cubeulator-windows-x64"}
           ]'
@@ -319,11 +325,16 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # No separate GCC 15 install step needed here: ubuntu-26.04 ships
-      # GCC 13/14/15 side by side out of the box (unlike ubuntu-24.04, which
-      # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
-      # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
-      #
+      # GCC 16 has a step of its own: the ubuntu-26.04 image ships GCC 13 to
+      # 15 side by side, and 16 is in the archive but not on the image. 16
+      # rather than 15 because the library uses std::mdspan, which libstdc++
+      # only has from 16. The archive's gcc-16 is a snapshot of trunk
+      # (16-20260322), not a release - see docs/ci.md. The
+      # -DCMAKE_CXX_COMPILER=g++-16 reference below resolves to it.
+      - name: Install GCC 16 (Linux)
+        if: runner.os == 'Linux'
+        uses: $/.github/actions/install-gcc
+
       # The X11/GL development headers were added when bgfx's port
       # unconditionally find_package(X11)d even with examples/tools disabled
       # ("Could NOT find X11"). bgfx has since been removed from the
@@ -432,7 +443,7 @@ jobs:
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
-          EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-15' || '' }}
+          EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-16' || '' }}
         run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER
 
       - name: Build
@@ -994,6 +1005,9 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # The vcpkg build dependencies (see build-and-test), then what a Qt
       # window needs to open on Xvfb and render in software: the xcb platform
       # plugin's libraries, Mesa's software rasteriser, and xauth for
@@ -1021,7 +1035,7 @@ jobs:
       - name: Configure
         run: >
           cmake --preset linux-gcc-coverage
-          -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_CXX_COMPILER=g++-16
           -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
 
       - name: Build
@@ -1063,7 +1077,7 @@ jobs:
         if: always()
         run: >
           gcovr --root . --filter 'src/app/qt/.*'
-          --gcov-executable gcov-15
+          --gcov-executable gcov-16
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
           --gcov-ignore-parse-errors negative_hits.warn_once_per_file
@@ -1127,9 +1141,10 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # No separate GCC 15 install step needed here: ubuntu-26.04 ships it
-      # out of the box - see the equivalent comment on build-and-test above.
-      #
+      # GCC 16 is installed, not shipped: see the comment on build-and-test.
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test above (X11/GL headers).
       - name: Install vcpkg build dependencies
@@ -1143,7 +1158,7 @@ jobs:
       - name: Configure
         run: >
           cmake --preset linux-gcc-coverage
-          -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_CXX_COMPILER=g++-16
           -DCUBEULATOR_BUILD_APP=OFF
 
       - name: Build
@@ -1169,7 +1184,7 @@ jobs:
       - name: Coverage report + gate
         run: >
           gcovr --root . --filter 'src/.*'
-          --gcov-executable gcov-15
+          --gcov-executable gcov-16
           --exclude-throw-branches --exclude-unreachable-branches
           --gcov-ignore-errors=no_working_dir_found
           --gcov-suspicious-hits-threshold 1000000000000
@@ -1236,6 +1251,9 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test.
       - name: Install vcpkg build dependencies
@@ -1244,7 +1262,7 @@ jobs:
       - name: Configure
         run: >
           cmake --preset linux-gcc-release
-          -DCMAKE_CXX_COMPILER=g++-15
+          -DCMAKE_CXX_COMPILER=g++-16
           -DCUBEULATOR_BUILD_APP=OFF
 
       - name: Build
