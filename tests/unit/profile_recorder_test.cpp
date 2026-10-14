@@ -118,8 +118,8 @@ private:
 
     std::optional<Json> number() {
         const std::size_t begin = pos_;
-        while (pos_ < text_.size() && (std::string_view("+-.eE0123456789").find(text_[pos_]) !=
-                                       std::string_view::npos)) {
+        while (pos_ < text_.size() &&
+               (std::string_view("+-.eE0123456789").find(text_[pos_]) != std::string_view::npos)) {
             ++pos_;
         }
         if (begin == pos_) {
@@ -150,14 +150,30 @@ private:
             }
             const char escape = text_[pos_++];
             switch (escape) {
-                case '"': out += '"'; break;
-                case '\\': out += '\\'; break;
-                case '/': out += '/'; break;
-                case 'n': out += '\n'; break;
-                case 'r': out += '\r'; break;
-                case 't': out += '\t'; break;
-                case 'b': out += '\b'; break;
-                case 'f': out += '\f'; break;
+                case '"':
+                    out += '"';
+                    break;
+                case '\\':
+                    out += '\\';
+                    break;
+                case '/':
+                    out += '/';
+                    break;
+                case 'n':
+                    out += '\n';
+                    break;
+                case 'r':
+                    out += '\r';
+                    break;
+                case 't':
+                    out += '\t';
+                    break;
+                case 'b':
+                    out += '\b';
+                    break;
+                case 'f':
+                    out += '\f';
+                    break;
                 case 'u': {
                     if (pos_ + 4 > text_.size()) {
                         return std::nullopt;
@@ -167,7 +183,8 @@ private:
                     pos_ += 4;
                     break;
                 }
-                default: return std::nullopt;
+                default:
+                    return std::nullopt;
             }
         }
         return std::nullopt;
@@ -349,8 +366,8 @@ TEST_CASE("clear forgets everything and recording carries on", "[profile]") {
 
 TEST_CASE("when the ring is full the oldest events go and are counted", "[profile]") {
     Recorder recorder(8);
-    static const char* const names[] = {"z0", "z1", "z2", "z3", "z4", "z5", "z6", "z7",
-                                        "z8", "z9", "za", "zb", "zc"};
+    static const char* const names[] = {"z0", "z1", "z2", "z3", "z4", "z5", "z6",
+                                        "z7", "z8", "z9", "za", "zb", "zc"};
     for (std::size_t i = 0; i < std::size(names); ++i) {
         recorder.zone(names[i], static_cast<double>(i), static_cast<double>(i) + 0.5);
     }
@@ -473,19 +490,20 @@ TEST_CASE("the CSV has tracy-csvexport's columns and one row per zone", "[profil
 
     const auto lines = split(recorder.zones_csv(), '\n');
     REQUIRE(lines.size() == 3);
-    CHECK(lines[0] == "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns");
+    CHECK(lines[0] ==
+          "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns");
 
     const auto solve = split(lines[1], ',');
     REQUIRE(solve.size() == 10);
     CHECK(solve[0] == "solver.solve");
     CHECK(solve[1].empty());
     CHECK(solve[2] == "0");
-    CHECK(solve[3] == "30000");   // 30 us in nanoseconds
-    CHECK(solve[5] == "2");       // counts
-    CHECK(solve[6] == "15000");   // mean
-    CHECK(solve[7] == "10000");   // min
-    CHECK(solve[8] == "20000");   // max
-    CHECK(solve[9] == "5000");    // std
+    CHECK(solve[3] == "30000");  // 30 us in nanoseconds
+    CHECK(solve[5] == "2");      // counts
+    CHECK(solve[6] == "15000");  // mean
+    CHECK(solve[7] == "10000");  // min
+    CHECK(solve[8] == "20000");  // max
+    CHECK(solve[9] == "5000");   // std
 
     CHECK(split(lines[2], ',')[0] == "vision.analyse");
 }
@@ -576,7 +594,8 @@ TEST_CASE("an empty recorder exports valid, empty documents", "[profile]") {
     CHECK(split(recorder.zones_csv(), '\n').size() == 1);  // the header
 }
 
-TEST_CASE("the summary holds zone statistics in milliseconds and the counts of marks", "[profile]") {
+TEST_CASE("the summary holds zone statistics in milliseconds and the counts of marks",
+          "[profile]") {
     Recorder recorder(64);
     recorder.set_app_info("test app");
     recorder.zone("test.zone", 0.0, 2000.0);
@@ -682,8 +701,7 @@ TEST_CASE("the macros of the recorder variant write to the global recorder", "[p
     REQUIRE(plot.size() == 1);
     CHECK(plot[0].value == 4.0);
 
-    CHECK_THAT(recorder.chrome_trace_json(),
-               Catch::Matchers::ContainsSubstring("\"macro-test\""));
+    CHECK_THAT(recorder.chrome_trace_json(), Catch::Matchers::ContainsSubstring("\"macro-test\""));
     CHECK_THAT(recorder.chrome_trace_json(), Catch::Matchers::ContainsSubstring("macro test"));
     recorder.clear();
 }

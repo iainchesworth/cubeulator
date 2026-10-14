@@ -289,14 +289,15 @@ std::string Recorder::zones_csv() const {
     // tracy-csvexport's header and units (nanoseconds), so that a script
     // written against a Tracy export reads this unchanged. There is no source
     // location here, so the two columns are empty and zero.
-    std::string out = "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns\n";
+    std::string out =
+        "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns\n";
     for (const ZoneStats& zone : zone_stats()) {
         const double percent = span > 0.0 ? zone.total_us / span * 100.0 : 0.0;
         char row[256];
         std::snprintf(row, sizeof row, ",0,%.0f,%.2f,%llu,%.0f,%.0f,%.0f,%.0f\n",
-                      zone.total_us * 1000.0, percent,
-                      static_cast<unsigned long long>(zone.count), zone.mean_us * 1000.0,
-                      zone.min_us * 1000.0, zone.max_us * 1000.0, zone.stddev_us * 1000.0);
+                      zone.total_us * 1000.0, percent, static_cast<unsigned long long>(zone.count),
+                      zone.mean_us * 1000.0, zone.min_us * 1000.0, zone.max_us * 1000.0,
+                      zone.stddev_us * 1000.0);
         // name, then an empty src_file, then the numbers above
         out += csv_field(zone.name);
         out += ',';
@@ -335,8 +336,8 @@ std::string Recorder::chrome_trace_json() const {
                                    R"(,"ts":)" + number(event.start_us);
         switch (event.kind) {
             case Kind::zone:
-                out += ",{\"name\":" + name + R"(,"cat":"cube","ph":"X",)" + common +
-                       R"(,"dur":)" + number(event.duration_us);
+                out += ",{\"name\":" + name + R"(,"cat":"cube","ph":"X",)" + common + R"(,"dur":)" +
+                       number(event.duration_us);
                 if (event.has_value) {
                     out += R"(,"args":{"value":)" + number(event.value) + "}";
                 }
@@ -346,8 +347,8 @@ std::string Recorder::chrome_trace_json() const {
                 out += ",{\"name\":" + name + R"(,"cat":"frame","ph":"i","s":"p",)" + common + "}";
                 break;
             case Kind::message:
-                out += ",{\"name\":" + name + R"(,"cat":"message","ph":"i","s":"p",)" + common +
-                       "}";
+                out +=
+                    ",{\"name\":" + name + R"(,"cat":"message","ph":"i","s":"p",)" + common + "}";
                 break;
             case Kind::plot:
                 out += ",{\"name\":" + name + R"(,"cat":"plot","ph":"C",)" + common +
@@ -381,8 +382,9 @@ std::string Recorder::summary_json() const {
         }
     }
 
-    std::string out = R"({"app":)" + json_string(app) + R"(,"recorded":)" + std::to_string(recorded()) +
-                      R"(,"dropped":)" + std::to_string(dropped()) + R"(,"zones":{)";
+    std::string out = R"({"app":)" + json_string(app) + R"(,"recorded":)" +
+                      std::to_string(recorded()) + R"(,"dropped":)" + std::to_string(dropped()) +
+                      R"(,"zones":{)";
     bool first = true;
     for (const ZoneStats& zone : zone_stats()) {
         out += (first ? "" : ",") + json_string(zone.name) + R"(:{"count":)" +

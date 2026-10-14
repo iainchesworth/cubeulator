@@ -149,9 +149,11 @@ endfunction()
 # library: nothing in the app refers to it, and an object file in a static
 # library that nothing refers to is not linked.
 function(cube_platform_deploy_qt_runtime target qml_dir)
-    target_sources(${target} PRIVATE "${CUBEULATOR_PLATFORM_DIR}/profile_web.cpp")
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/app/platform/web/profile_web.cpp")
     if(CUBEULATOR_WEB_TEST_DRIVER)
-        target_sources(${target} PRIVATE "${CUBEULATOR_PLATFORM_DIR}/driver_web.cpp")
+        target_sources(${target} PRIVATE
+            "${PROJECT_SOURCE_DIR}/src/app/platform/web/driver_web.cpp")
     endif()
 
     qt_add_resources(${target} "web_cjk_fonts"

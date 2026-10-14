@@ -12,10 +12,10 @@
 
 // A macro because SKIP ends the test case it is called from.
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
-#define CUBE_SKIP_WITHOUT_JPEG_CODEC()                                    \
-    do {                                                                  \
+#define CUBE_SKIP_WITHOUT_JPEG_CODEC()                                       \
+    do {                                                                     \
         if (!cv::haveImageWriter(".jpg") || !cv::haveImageReader("x.jpg")) { \
-            SKIP("this build of OpenCV has no JPEG codec");               \
-        }                                                                 \
+            SKIP("this build of OpenCV has no JPEG codec");                  \
+        }                                                                    \
     } while (false)
 // NOLINTEND(cppcoreguidelines-macro-usage)

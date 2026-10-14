@@ -115,7 +115,8 @@ EMSCRIPTEN_KEEPALIVE int cube_web_profile_label_capacity() {
 // A test marks where a journey's steps begin and end this way, so that a trace
 // can be read against them.
 EMSCRIPTEN_KEEPALIVE void cube_web_profile_mark(int length) {
-    const auto size = static_cast<std::size_t>(std::clamp(length, 0, static_cast<int>(kLabelBytes) - 1));
+    const auto size =
+        static_cast<std::size_t>(std::clamp(length, 0, static_cast<int>(kLabelBytes) - 1));
     g_label_buffer[size] = '\0';
     Recorder::global().message(intern(std::string_view(g_label_buffer, size)));
 }

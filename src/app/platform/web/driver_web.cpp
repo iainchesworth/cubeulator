@@ -143,8 +143,8 @@ QJsonObject properties_of(const QObject* object) {
 // What the app's own screen items expose that a test asserts on. Only those a
 // given item has are read.
 constexpr std::array<const char*, 11> kItemProperties = {
-    "text", "checked", "value", "currentIndex", "currentText", "from",
-    "to",   "activeFocus", "source", "selected", "state"};
+    "text", "checked",     "value",  "currentIndex", "currentText", "from",
+    "to",   "activeFocus", "source", "selected",     "state"};
 
 struct Chain {
     bool visible = true;
@@ -160,8 +160,8 @@ void walk(const QQuickItem* item, const Chain& parent, QJsonArray& out) {
 
     const QString name = item->objectName();
     const QVariant text = item->property("text");
-    const bool has_text = text.isValid() && text.typeId() == QMetaType::QString &&
-                          !text.toString().isEmpty();
+    const bool has_text =
+        text.isValid() && text.typeId() == QMetaType::QString && !text.toString().isEmpty();
     if (!name.isEmpty() || has_text) {
         const QPointF origin = item->mapToScene(QPointF(0, 0));
         QJsonObject entry;

@@ -137,11 +137,12 @@ inline void scoped_zone_value(std::uint64_t number) noexcept {
 // function.
 #define CUBE_ZONE_SCOPED() CUBE_ZONE_SCOPED_N(__func__)
 // The same, with an explicit name.
-#define CUBE_ZONE_SCOPED_N(name)                                           \
+#define CUBE_ZONE_SCOPED_N(name)                                              \
     const ::cube::profiling::Zone CUBE_PROFILING_PASTE(cube_zone_, __LINE__)( \
         name, ::cube::profiling::Zone::scoped)
 // A manual begin/end pair; see the Tracy variant for when to use one.
-#define CUBE_ZONE_BEGIN(var, name) ::cube::profiling::Zone var(name, ::cube::profiling::Zone::manual)
+#define CUBE_ZONE_BEGIN(var, name) \
+    ::cube::profiling::Zone var(name, ::cube::profiling::Zone::manual)
 #define CUBE_ZONE_END(var) var.end()
 // Attach an unsigned number to a zone. The first form names a manual zone's
 // variable; the second is for the innermost zone CUBE_ZONE_SCOPED*() opened on
