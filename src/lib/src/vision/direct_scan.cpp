@@ -131,7 +131,6 @@ constexpr float kShadingWeight = 0.25F;
 constexpr int kMinCornerFound = 7;
 constexpr float kMinCornerAspect = 0.45F;
 
-
 struct Blob {
     cv::Point2f centre;
     float side = 0.0F;
