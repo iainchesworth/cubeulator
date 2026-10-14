@@ -1,5 +1,17 @@
 # Platforms
 
+> **Status in 0.1.0-beta.1:** Desktop is built (E4a, see
+> [packaging.md](../packaging.md)): the identity, the icon and version
+> resource, the installers, the remembered window (default 960 x 680,
+> minimum 360 x 560), the shortcuts for Settings, a new scan, full screen and
+> quit, and a macOS menu bar that has not been run on a Mac. Not built: back
+> handling (Esc, Alt+Left, the Android key), keep-awake (the helper exists
+> and nothing calls it), sound and haptics, safe areas, the text-size and
+> reduced-motion helpers, the mobile shells (the Android and iOS camera
+> backends are stubs, and the Android package is still
+> `org.qtproject.example`) and the bundled Archivo, Plex Mono and Noto
+> faces. The browser build is built; it is described under Web.
+
 One shared QML shell; each platform's manners. This says what a person on
 each platform expects and what the shell does about it. E4a (desktop) and
 E4b (mobile) build it.
@@ -196,10 +208,10 @@ value.
 
 | script | font | shipped |
 |---|---|---|
-| Latin | Archivo; IBM Plex Mono | In the app. About 400 KB |
-| Hebrew | Noto Sans Hebrew (variable, weights 100-900) | In the app. About 110 KB |
-| Yiddish | Noto Sans Hebrew, the same file | In the app |
-| Arabic | Noto Sans Arabic (variable, weights 100-900) | In the app. About 825 KB |
+| Latin | Archivo; IBM Plex Mono | To be bundled (E2a); not in the app yet. About 400 KB |
+| Hebrew | Noto Sans Hebrew (variable, weights 100-900) | To be bundled (E2a); not in the app yet. About 110 KB |
+| Yiddish | Noto Sans Hebrew, the same file | To be bundled (E2a); not in the app yet |
+| Arabic | Noto Sans Arabic (variable, weights 100-900) | To be bundled (E2a); not in the app yet. About 825 KB |
 | Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No. The browser build has no system fonts and bundles a Noto Sans JP subset |
 | Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No. The browser build bundles a Noto Sans SC subset |
 
@@ -227,8 +239,8 @@ value.
 | Windows AppUserModelID | `IainChesworthLabs.Cubeulator` | Follows the publisher. Set by the app at start-up and stamped on the installer's Start menu shortcut (E4a), so that the taskbar groups the button with its shortcut |
 | Version | From the build (`GenerateVersion.cmake`), shown in About and in every package | In the Windows resource, `Info.plist`, the AppStream release and every desktop package's name (E4a). Not yet in the Android manifest (E4b) |
 | Publisher | Iain Chesworth Labs | From `Packaging.cmake`. The copyright line is "Copyright © 2026 Iain Chesworth" (`family.md` D1). One variable, `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`, read by the version resource, the AppStream developer and CPack |
-| Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Utility;Game;LogicGame;` | Proposed |
-| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written |
+| Category | Windows, macOS, iOS: Utilities. Android: Tools. Linux: `Game;LogicGame;` | macOS and Linux are built; on Linux `Utility` was dropped, because two main categories list the app twice in a menu. The rest are proposed |
+| Camera usage string (iOS, macOS) | `permission.system.camera` in `strings.json`, in all nine languages | Written in English and set in the macOS `Info.plist`; the other languages' `InfoPlist.strings` are E5's |
 | Code signing | Windows: unsigned installers trip SmartScreen. macOS: unsigned apps will not open without a workaround. Both need a certificate | **Open**, for E4a and E6 |
 
 ## Per platform, the things that are easy to miss

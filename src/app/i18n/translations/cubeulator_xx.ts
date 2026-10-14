@@ -710,6 +710,11 @@ In your hands.</source>
         <extracomment>Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which.</extracomment>
         <translation>[Thésé sîx sîdés fît tõgéthér în mõré thàn õné wày. Tûrn thé cûbé slõwly sõ thàt twõ sîdés shõw àt õncé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
     </message>
+    <message id="scan.guide.ambiguousCorner">
+        <source>Turn the cube slowly to show the corner where %1, %2 and %3 meet.</source>
+        <extracomment>Guidance when six sides are read and fit together in more than one way, and showing one particular corner (two or three sides in one view) would tell the cubes they make apart. %1, %2 and %3 are the colours of the centres of the three sides that meet there - colour.white and the like, in no particular order. Shown in place of scan.guide.ambiguous, which says only that two sides should show at once.</extracomment>
+        <translation>[Tûrn thé cûbé slõwly tõ shõw thé cõrnér whéré %1, %2 ànd %3 méét. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
+    </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>

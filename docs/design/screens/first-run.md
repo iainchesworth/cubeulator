@@ -1,5 +1,8 @@
 # First run
 
+> **Status in 0.1.0-beta.1:** Not built. There is no first-run screen and no
+> setting that remembers one was shown: the app opens on Home every time.
+
 Lane: experience. New.
 
 Shown once, on the first launch, before Home. It says what will happen in

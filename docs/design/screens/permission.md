@@ -1,5 +1,15 @@
 # Permission
 
+> **Status in 0.1.0-beta.1:** Partly built, as `PermissionScreen.qml`, and
+> shown on phones only: the title, the body and the three reassurances
+> (`permission.point1` to `permission.point3`), **Allow camera** (**Try
+> again** after a refusal), **Open device settings** and **Not now**, named
+> `permission.enable`, `permission.openSettings` and `permission.notNow`. Not
+> built: the back control, **Enter colours by hand**, a separate **Ask
+> again**, the caution icon, and macOS: `AppState.beginScan()` skips this
+> screen on every desktop system, macOS included, and a phone cannot reach a
+> scan anyway because its camera backend is a stub.
+
 Lane: experience. Replaces `PermissionScreen.qml`.
 
 Explains why the camera is wanted before the operating system asks, and

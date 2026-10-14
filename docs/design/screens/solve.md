@@ -1,5 +1,18 @@
 # Solve
 
+> **Status in 0.1.0-beta.1:** Partly built, as `SolveScreen.qml`: the cube in
+> 3D with the layer to turn nudging the way it goes, the hold line, the three
+> solve methods (`solve.method`), the stage list on the wide layout,
+> **Previous** and **Next** (Right arrow, Space and Enter also step), **Finish**
+> to Complete, **Out of step? Rescan**, and a camera view that steps the
+> solution on by itself and says when the cube and the picture part. Not
+> built: the hold step, the pause menu and its sheets, the stage check, timer
+> mode, the 96-high buttons, the three-line instruction block, notation,
+> sound, carrying on after leaving, and keeping the screen awake. Where it
+> differs from this page: the cube can be dragged, and the camera follows the
+> turns, which the spec lists as later. Most of its words are English
+> literals.
+
 Lane: **solve** (`feature/solve-guidance`). This is a proposal for the
 chrome round the cube view and for the states of `SolveScreen.qml`. The
 cube view, its animation and what a turn means are theirs.
@@ -301,7 +314,8 @@ visibly, and they can still press it themselves. Nothing else moves.
 ## Needs from the solve lane
 
 1. **No input on the cube view** on this screen, so that a tap on it is
-   the screen's main action. (`interactive: false` is already set.)
+   the screen's main action. (As built, `SolveScreen.qml` sets
+   `interactive: true`: the cube can be dragged to look round it.)
 2. **Never mirrored.** The view sets `LayoutMirroring.enabled: false` on
    itself.
 3. **A still form of the lean** for reduced motion, and a turn that snaps
@@ -321,7 +335,7 @@ visibly, and they can still press it themselves. Nothing else moves.
    (`stageRanges`, already there).
 9. **A text description of the cube** for screen readers
    (`SolveController.stickers` already carries what is needed).
-10. **Where it navigates.** Today nothing goes to Complete and nothing
-    leaves. After the last turn the shell needs one signal; it does the
-    rest.
-11. The mock "AUTO" box and the "orthographic" captions go.
+10. **Where it navigates.** *(Written when nothing went to Complete and
+    nothing left; both are done: Finish goes to Complete and Rescan leaves.)*
+    After the last turn the shell needs one signal; it does the rest.
+11. The mock "AUTO" box and the "orthographic" captions go. *(Done.)*

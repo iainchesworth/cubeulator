@@ -14,8 +14,9 @@ of their own do not conflict.
 changelog.d/<slug>.<type>.md
 ```
 
-- `<slug>`: anything that names the change and is not another change's, such
-  as the branch name without its prefix (`scan-review`, `camera-follows-solve`).
+- `<slug>`: letters, digits, `.`, `_` and `-` (starting with a letter or
+  digit) that name the change and are not another change's, such as the branch
+  name without its prefix (`scan-review`, `camera-follows-solve`).
 - `<type>`: one of `added`, `changed`, `deprecated`, `removed`, `fixed`,
   `security`. They are the `###` subsections of the release's section.
 
@@ -44,7 +45,9 @@ the changelog would want to hear about (a refactor, a test, a build detail),
 label the pull request **`no-changelog`**.
 
 The `Changelog fragment` check says which; it is advisory (it is not one of the
-required checks), so it never blocks a merge, but it marks the pull request.
+required checks), so it never blocks a merge, but it marks the pull request. It
+looks only at pull requests into `develop`, and skips those from `release/*`,
+`dependabot/*` and `support/back-merge-*` branches.
 
 ## At release time
 

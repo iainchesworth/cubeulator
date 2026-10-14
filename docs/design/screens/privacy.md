@@ -1,5 +1,12 @@
 # Privacy
 
+> **Status in 0.1.0-beta.1:** Not built; the only privacy wording in the app
+> is the permission screen's reassurances, which phones show. One claim in the
+> table below does not match the code: recording is not compiled out of
+> release builds. `DirectScan` records a scan when `CUBE_SCAN_RECORD_DIR`
+> names a folder, nothing records by default, and the scan screen shows a
+> banner while it does.
+
 Lane: experience. New (E3b).
 
 What the app does with the camera, what it keeps, and what it sends:
