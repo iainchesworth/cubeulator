@@ -3,6 +3,8 @@
 
 set(CUBEULATOR_PLATFORM_DISPLAY_NAME "iOS")
 set(CUBEULATOR_PLATFORM_DESKTOP OFF)
+# A native camera device, opened from the calling thread? (cmake/Platform.cmake)
+set(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA OFF)
 
 # The test suites are not built for iOS (CUBEULATOR_BUILD_TESTS is OFF in the
 # preset); this is the value they would use if they were.

@@ -189,19 +189,30 @@ endif()
 
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
-    integration/platform_integration_test.cpp
-    # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
-    # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
-    # camera-less machine) try to open a device. See the file header.
-    integration/camera_property_probe_test.cpp
-    # Runs everywhere, CI included: the lock's reporting/bookkeeping, with
-    # no device involved. Its one "no capture is running" case deliberately
-    # calls the real platform API to prove it fails without opening one.
-    integration/camera_photometry_test.cpp
-    # Hardware verification of the lock's effect on real pixels: hidden
-    # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
-    # double fence as the probe above.
-    integration/camera_lock_verification_test.cpp)
+    integration/platform_integration_test.cpp)
+
+# The camera cases go through the OpenCV capture loop's backend
+# (detail::capture_backend()) and call the interface from the test's own thread,
+# which only the platforms with a native camera device allow; the rest have a
+# camera of their own to be tested through their own means (the browser's is
+# tests/web's, on a real getUserMedia).
+if(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA)
+    target_sources(cube_integration_tests PRIVATE
+        # The interface with no device behind it.
+        integration/platform_camera_test.cpp
+        # Hardware probe: hidden behind the "[.camera-probe]" tag AND gated on
+        # CUBE_CAMERA_PROBE, so linking it here can never make CI (or a
+        # camera-less machine) try to open a device. See the file header.
+        integration/camera_property_probe_test.cpp
+        # Runs everywhere, CI included: the lock's reporting/bookkeeping, with
+        # no device involved. Its one "no capture is running" case deliberately
+        # calls the real platform API to prove it fails without opening one.
+        integration/camera_photometry_test.cpp
+        # Hardware verification of the lock's effect on real pixels: hidden
+        # behind "[.camera-lock]" AND gated on CUBE_CAMERA_LOCK_TEST, same
+        # double fence as the probe above.
+        integration/camera_lock_verification_test.cpp)
+endif()
 
 target_link_libraries(cube_integration_tests
     PRIVATE

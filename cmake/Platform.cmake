@@ -59,6 +59,21 @@
 #                                      to be told how many threads it may start
 #                                      and how much stack and memory it has,
 #                                      and runs under Node).
+#   CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA
+#                                      ON where the camera is a device the
+#                                      host's libraries open from the calling
+#                                      thread, through
+#                                      detail::OpenCvCaptureLoop (the three
+#                                      desktops): the camera cases under
+#                                      tests/integration - the interface with
+#                                      no device behind it, the photometry
+#                                      bookkeeping, the hardware probes - are
+#                                      built there. OFF where the camera is the
+#                                      platform's own asynchronous API (a
+#                                      phone's, a browser's getUserMedia),
+#                                      which a test program cannot call from
+#                                      its thread and has no capture backend to
+#                                      ask about; the browser's is tests/web's.
 #   CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS, CUBEULATOR_PLATFORM_QT_ARCH_DIRS
 #                                      Where cmake/FindQt6.cmake looks for an
 #                                      aqtinstall-style Qt when none is on

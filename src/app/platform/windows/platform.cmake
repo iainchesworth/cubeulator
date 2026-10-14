@@ -3,6 +3,8 @@
 
 set(CUBEULATOR_PLATFORM_DISPLAY_NAME "Windows")
 set(CUBEULATOR_PLATFORM_DESKTOP ON)
+# A native camera device, opened from the calling thread? (cmake/Platform.cmake)
+set(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA ON)
 
 # Windows keeps its own platform plugin: it is the only one deployed beside
 # the binaries here, and it needs no display for the test binaries either.

@@ -15,6 +15,8 @@
 
 set(CUBEULATOR_PLATFORM_DISPLAY_NAME "Web")
 set(CUBEULATOR_PLATFORM_DESKTOP OFF)
+# A native camera device, opened from the calling thread? (cmake/Platform.cmake)
+set(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA OFF)
 
 # The test suites that need no window - the unit, integration and performance
 # binaries, which link the library and the platform layer and no Qt - are built
@@ -40,9 +42,13 @@ set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
 #   - how much memory, and that it may grow: the two-phase tables and the
 #     breadth-first searches' arenas are tens of megabytes;
 #   - that it is run by node and its exit status is the test's (without
-#     EXIT_RUNTIME the process is left to its workers and ctest hangs).
+#     EXIT_RUNTIME the process is left to its workers and ctest hangs);
+#   - that its files are the host's (NODERAWFS): ctest has Catch2 write the
+#     list of test cases to a file of its own and read it back, and a program
+#     on Emscripten's in-memory file system writes to somewhere only it can see.
 set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS
     -pthread
+    -fexceptions
     -sPTHREAD_POOL_SIZE=16
     -sSTACK_SIZE=4MB
     -sDEFAULT_PTHREAD_STACK_SIZE=2MB
@@ -50,6 +56,7 @@ set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS
     -sALLOW_MEMORY_GROWTH=1
     -sMAXIMUM_MEMORY=2GB
     -sENVIRONMENT=node
+    -sNODERAWFS=1
     -sEXIT_RUNTIME=1)
 
 # Qt is a cross-compiled kit here and always comes from CMAKE_PREFIX_PATH (its
@@ -85,6 +92,7 @@ set(CUBEULATOR_PLATFORM_SOURCES
 #     uses (driver_web.cpp, driver_web.js), which the published page does not
 #     carry.
 set(CUBEULATOR_PLATFORM_LINK_LIBRARIES
+    -fexceptions
     "--js-library=${CUBEULATOR_PLATFORM_DIR}/camera_web.js"
     "--js-library=${CUBEULATOR_PLATFORM_DIR}/profile_web.js")
 if(CUBEULATOR_ENABLE_PROFILE_RECORDER)
@@ -118,8 +126,12 @@ set(CUBEULATOR_PLATFORM_APP_PROPERTIES
 # it from the triplet; this is the project's own - the library and the platform
 # layer link no Qt and had none. A directory property, set here because this
 # runs before any of the project's targets exist.
+#
+# -fexceptions likewise (the triplet says why): the compiler's default is to
+# compile `throw` to an abort and `catch` to nothing, and the same flag has to
+# be on the link line, which selects the C++ runtime that has them.
 function(cube_platform_prepare_dependencies)
-    add_compile_options(-pthread)
+    add_compile_options(-pthread -fexceptions)
 endfunction()
 
 # What puts the app in a page: the page itself, the worker that makes the page
