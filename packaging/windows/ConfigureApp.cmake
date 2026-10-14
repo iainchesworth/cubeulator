@@ -92,6 +92,12 @@ include(InstallRequiredSystemLibraries)
 # Qt's runtime, plugins and the QML modules the app imports: windeployqt.
 cube_deploy_qt_on_install(${target} NO_COMPILER_RUNTIME)
 
+# windeployqt copies the QML debugger and profiler servers (plugins/qmltooling:
+# ten DLLs). A release does not carry them; packaging/check-package.sh holds it.
+install(CODE "
+    file(REMOVE_RECURSE \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/plugins/qmltooling\")
+")
+
 # The licence and the third-party notices are installed by
 # cube_add_third_party_notices() (cmake/ThirdPartyNotices.cmake), to the root of
 # the install.

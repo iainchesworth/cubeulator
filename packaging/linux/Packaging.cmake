@@ -13,6 +13,9 @@ set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
 
 # Qt and OpenCV ship inside the package, so the dependencies named here are
 # only the system libraries Qt's xcb and OpenGL plumbing loads.
+# Plus libOpenGL (the executable links GLVND's OpenGL dispatcher directly) and
+# GSSAPI (the bundled Qt6Network, which QtQml needs, links it). packaging/linux/
+# check-depends.sh fails the build when this list and the files disagree.
 # They are listed rather than discovered because dpkg-shlibdeps and rpm's own
 # scan would also try to resolve the bundled libraries, and would either fail
 # or ask the distribution for libQt6*.so it does not have.
@@ -40,7 +43,7 @@ if(CUBEULATOR_DPKG_DEB_EXECUTABLE)
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "${CPACK_PACKAGE_VENDOR}")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS OFF)
     set(CPACK_DEBIAN_PACKAGE_DEPENDS
-        "libc6, libstdc++6, libgcc-s1, libgl1, libegl1, libfontconfig1, libfreetype6, libglib2.0-0, libdbus-1-3, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libxcb-cursor0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-render0, libxcb-shape0, libxcb-shm0, libxcb-sync1, libxcb-xfixes0, libxcb-xkb1, libxcb-xinerama0")
+        "libc6, libstdc++6, libgcc-s1, libgl1, libegl1, libfontconfig1, libfreetype6, libglib2.0-0, libdbus-1-3, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libxcb-cursor0, libxcb-icccm4, libxcb-image0, libxcb-keysyms1, libxcb-randr0, libxcb-render-util0, libxcb-render0, libxcb-shape0, libxcb-shm0, libxcb-sync1, libxcb-xfixes0, libxcb-xkb1, libxcb-xinerama0, libopengl0, libgssapi-krb5-2")
     # Japanese and Chinese text is drawn with the system's font
     # (docs/design/platforms.md, "Fonts"); a minimal install has none.
     set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "fonts-noto-cjk")
@@ -55,7 +58,7 @@ if(CUBEULATOR_RPMBUILD_EXECUTABLE)
     # no automatic requires or provides, and an explicit list instead.
     set(CPACK_RPM_PACKAGE_AUTOREQPROV OFF)
     set(CPACK_RPM_PACKAGE_REQUIRES
-        "libxcb, libxkbcommon, libxkbcommon-x11, mesa-libGL, mesa-libEGL, fontconfig, freetype, dbus-libs, glib2, libX11, libX11-xcb, xcb-util-cursor, xcb-util-image, xcb-util-keysyms, xcb-util-renderutil, xcb-util-wm")
+        "libxcb, libxkbcommon, libxkbcommon-x11, mesa-libGL, mesa-libEGL, fontconfig, freetype, dbus-libs, glib2, libX11, libX11-xcb, xcb-util-cursor, xcb-util-image, xcb-util-keysyms, xcb-util-renderutil, xcb-util-wm, libglvnd-opengl, krb5-libs")
     # RPM has no "recommends" field in CPack; a soft suggestion.
     set(CPACK_RPM_PACKAGE_SUGGESTS "google-noto-sans-cjk-fonts")
     set(CPACK_RPM_DEBUGINFO_PACKAGE OFF)

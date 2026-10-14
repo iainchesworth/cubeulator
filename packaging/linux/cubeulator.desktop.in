@@ -10,7 +10,10 @@ Comment=@CUBEULATOR_STORE_SUMMARY@
 Exec=cubeulator
 Icon=@CUBEULATOR_APP_ID@
 Terminal=false
-Categories=Utility;Game;LogicGame;
+# One main category (Game), with LogicGame under it: two main categories
+# (Utility and Game) is what desktop-file-validate hints at, and the
+# application would appear twice in a menu.
+Categories=Game;LogicGame;
 Keywords=cube;rubik;solver;puzzle;
 StartupNotify=true
 # The class X11 windows carry: Qt uses the application name.
