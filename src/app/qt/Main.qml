@@ -27,6 +27,7 @@ ApplicationWindow {
             case "scan": return scanScreen;
             case "solve": return solveScreen;
             case "settings": return settingsScreen;
+            case "history": return historyScreen;
             case "complete": return completeScreen;
             case "solution": return solutionScreen;
             default: return launchScreen;
@@ -83,6 +84,7 @@ ApplicationWindow {
     Component { id: scanScreen; DirectScanScreen {} }
     Component { id: solveScreen; SolveScreen {} }
     Component { id: settingsScreen; SettingsScreen {} }
+    Component { id: historyScreen; HistoryScreen {} }
     Component { id: completeScreen; CompleteScreen {} }
     Component {
         id: solutionScreen

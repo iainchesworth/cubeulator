@@ -318,7 +318,7 @@ void holds_the_layout_in(const char* language) {
     };
     const Size sizes[] = {{900, 640, "wide"}, {390, 780, "narrow"}};
     for (const char* type : {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen",
-                             "SolutionScreen"}) {
+                             "HistoryScreen", "SolutionScreen"}) {
         for (const Size& size : sizes) {
             in_language(language);
             Screen screen(type, size.w, size.h);

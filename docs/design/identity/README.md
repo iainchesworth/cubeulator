@@ -1,5 +1,11 @@
 # Identity
 
+> **Status in 0.1.0-beta.1:** The icon is in use: `packaging/make_platform_icons.py`
+> turns `icon.svg` and `icon-small.svg` into the `.ico`, `.icns`, PNG and
+> `hicolor` files the desktop packages carry, and the browser build uses
+> `icon.svg`. The name treatment (wordmark and lock-up) has no screen to sit
+> on, and the store screenshots and listings are not made.
+
 A proposal for the app icon, the name treatment and the store screenshots.
 E4a and E4b turn it into the per-platform files listed in
 [`../platforms.md`](../platforms.md).
@@ -19,7 +25,7 @@ one red thing on every screen.
 | [`icon-mono.svg`](icon-mono.svg) | One colour, no background | Android themed icons; the iOS tinted variant; a notification or tray glyph if one is ever needed |
 | [`icon-android-foreground.svg`](icon-android-foreground.svg) | The drawing at 72% on a transparent ground | The Android adaptive icon's foreground layer. Its background layer is flat `paper` |
 
-All five are drawn by `tools/make_icon.py` from the colours in
+All five are drawn by `docs/design/tools/make_icon.py` from the colours in
 `tokens.json` and the isometric projection `CubeView.qml` uses, so the
 icon and the app cannot drift apart.
 

@@ -623,11 +623,11 @@ struct SideMatch {
     Face face = Face::U;
     std::array<bool, 4> possible{};  // which quarter-turns the side may be in
     float distance = 0.0F;           // of the best
-    bool close_enough = false;       // the best is within kCornerFitDistance
+    bool close_enough = false;       // the best is within the distance allowed
 };
 
 [[nodiscard]] SideMatch match_side(const ObliqueSide& side, const solver::Cube& cube,
-                                   const SessionColours& colours) {
+                                   const SessionColours& colours, float max_distance) {
     // The centre names the side.
     std::size_t nearest = 0;
     float nearest_distance = std::numeric_limits<float>::max();
@@ -656,10 +656,10 @@ struct SideMatch {
         best = std::min(best, sum / 9.0F);
     }
     match.distance = best;
-    match.close_enough = best <= kCornerFitDistance;
+    match.close_enough = best <= max_distance;
     for (std::size_t turns = 0; turns < 4; ++turns) {
         match.possible.at(turns) = distances.at(turns) <= best + kCornerTurnTolerance &&
-                                   distances.at(turns) <= kCornerFitDistance;
+                                   distances.at(turns) <= max_distance;
     }
     return match;
 }
@@ -699,7 +699,7 @@ struct SideMatch {
 }  // namespace
 
 CornerFit fit_corner(const CornerRead& read, const solver::Cube& cube,
-                     const SessionColours& colours) {
+                     const SessionColours& colours, float max_distance) {
     CUBE_ZONE_SCOPED_N("vision.corner_view.fit_corner");
     CornerFit fit;
     if (read.sides.size() < 2 || read.edges.empty()) {
@@ -709,7 +709,7 @@ CornerFit fit_corner(const CornerRead& read, const solver::Cube& cube,
     float total = 0.0F;
     bool all_close = true;
     for (const ObliqueSide& side : read.sides) {
-        const SideMatch match = match_side(side, cube, colours);
+        const SideMatch match = match_side(side, cube, colours, max_distance);
         total += match.distance;
         all_close = all_close && match.close_enough;
         matches.push_back(match);

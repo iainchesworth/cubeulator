@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "drawn_cube.hpp"
@@ -17,10 +18,12 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <random>
 #include <string_view>
+#include <vector>
 #include "must_have.hpp"
 
 using cube::CubeError;
@@ -394,6 +397,310 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
         REQUIRE(read.has_value());
         CHECK(*read == cube);
     }
+}
+
+namespace {
+
+using Lab9 = std::array<cv::Vec3f, 9>;
+
+const cv::Vec3f kLampRed = cube::test::warm_lamp_lab(Color::Red);
+const cv::Vec3f kLampOrange = cube::test::warm_lamp_lab(Color::Orange);
+const Drawing kLamp = cube::test::warm_lamp_drawing();
+
+// A read as the reader gives it, from nine measured colours: the lattice
+// stays where it is, so every read after the first of a hold is steady.
+SideRead read_of(const Lab9& lab) {
+    SideRead read;
+    read.lab = lab;
+    read.pitch = 40.0F;
+    read.stickers_found = 9;
+    read.found.fill(true);
+    for (std::size_t i = 0; i < 9; ++i) {
+        read.centres.at(i) = {100.0F + (40.0F * static_cast<float>(i % 3)),
+                              100.0F + (40.0F * static_cast<float>(i / 3))};
+    }
+    return read;
+}
+
+Lab9 red_orange_side(std::initializer_list<std::size_t> orange_cells) {
+    Lab9 lab;
+    lab.fill(kLampRed);
+    for (const std::size_t cell : orange_cells) {
+        lab.at(cell) = kLampOrange;
+    }
+    return lab;
+}
+
+// The two sides of a partly solved cube that look the same but for which of
+// red and orange sits where: the orange-centred one has orange on a P of
+// five stickers and red on an L of four; the red-centred one has them the
+// other way about. They differ in three stickers, the centre one of them.
+const Lab9 kOrangeCentred = red_orange_side({1, 2, 4, 5, 8});
+const Lab9 kRedCentred = red_orange_side({0, 1, 2, 5});
+
+Lab9 turned_once(const Lab9& side) {
+    constexpr std::array<std::size_t, 9> kSource = {6, 3, 0, 7, 4, 1, 8, 5, 2};
+    Lab9 out{};
+    for (std::size_t i = 0; i < 9; ++i) {
+        out.at(i) = side.at(kSource.at(i));
+    }
+    return out;
+}
+
+// What a camera does to a held side: noise on every sticker, a lamp that
+// drifts darker, a thumb over a sticker now and then, a glare across the
+// centre now and then.
+struct Hand {
+    std::mt19937 rng{7};
+    float drift = 1.0F;
+    bool glare_and_thumbs = true;
+
+    Lab9 look(const Lab9& side) {
+        std::normal_distribution<float> noise(0.0F, 1.6F);
+        std::uniform_real_distribution<float> chance(0.0F, 1.0F);
+        std::uniform_int_distribution<int> cell(0, 8);
+        Lab9 lab = side;
+        for (cv::Vec3f& sticker : lab) {
+            sticker = cv::Vec3f(sticker(0) * drift + noise(rng), sticker(1) + noise(rng),
+                                sticker(2) + noise(rng));
+        }
+        if (glare_and_thumbs) {
+            if (chance(rng) < 0.15F) {
+                const auto at = static_cast<std::size_t>(cell(rng));
+                if (at != 4) {
+                    lab.at(at) = cv::Vec3f(62.0F, 18.0F, 22.0F);  // skin
+                }
+            }
+            if (chance(rng) < 0.06F) {
+                lab.at(4) += cv::Vec3f(8.0F, -6.0F, 14.0F);
+            }
+        }
+        return lab;
+    }
+};
+
+void hold_lab(SideScan& scan, Hand& hand, const Lab9& side, int reads) {
+    for (int i = 0; i < reads; ++i) {
+        scan.add(read_of(hand.look(side)));
+    }
+    scan.add(std::nullopt);
+}
+
+float lightness_of(const cv::Vec3f& lab) {
+    return lab(0);
+}
+
+// Each side's centre, read back as the colour of that face's centre. The
+// sides are shown in the order of kAllFaces, so side i is face i.
+void expect_centres_of(const SideScan& scan, const Cube& cube) {
+    // A copy: sides() returns its vector by value, and what is taken from
+    // it below must outlive the call.
+    const std::vector<SideScan::Side> sides = scan.sides();
+    REQUIRE(sides.size() == 6);
+    for (std::size_t i = 0; i < 6; ++i) {
+        const Color centre = cube.face(kAllFaces.at(i)).at(4);
+        const cv::Vec3f& measured = sides.at(i).lab.at(4);
+        Color nearest = Color::White;
+        float best = std::numeric_limits<float>::max();
+        for (const Color colour : kColours) {
+            const float gap =
+                static_cast<float>(cv::norm(measured - cube::test::warm_lamp_lab(colour)));
+            if (gap < best) {
+                best = gap;
+                nearest = colour;
+            }
+        }
+        CHECK(nearest == centre);
+    }
+}
+
+}  // namespace
+
+TEST_CASE("two sides that differ only in where red and orange sit are two sides", "[direct-scan]") {
+    // Shown alternately, as a hand turns a partly solved cube over. Judged by
+    // the mean of colour_distance under 12 they were one side - a whole side
+    // of red and orange traded scores under 10 a sticker - and the scan's
+    // medians were a blend of both.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 4; ++round) {
+        hold_lab(scan, hand, kOrangeCentred, 14);
+        hold_lab(scan, hand, kRedCentred, 14);
+    }
+
+    const std::vector<SideScan::Side> sides = scan.sides();
+    REQUIRE(sides.size() == 2);
+    const SideScan::Side& orange_side = sides.at(0);
+    const SideScan::Side& red_side = sides.at(1);
+    CHECK(orange_side.reads == 52);
+    CHECK(red_side.reads == 52);
+    // Each keeps the layout it was shown in, not a blend of the two.
+    for (std::size_t i = 0; i < 9; ++i) {
+        CHECK(lightness_of(orange_side.lab.at(i)) ==
+              Catch::Approx(lightness_of(kOrangeCentred.at(i))).margin(3.0));
+        CHECK(lightness_of(red_side.lab.at(i)) ==
+              Catch::Approx(lightness_of(kRedCentred.at(i))).margin(3.0));
+    }
+}
+
+TEST_CASE("a side held under noise, a thumb and a drifting lamp stays the one side",
+          "[direct-scan]") {
+    SideScan scan;
+    Hand hand;
+    for (int round = 0; round < 8; ++round) {
+        hand.drift = 1.0F - (0.015F * static_cast<float>(round));
+        hold_lab(scan, hand, kOrangeCentred, 16);
+        hold_lab(scan, hand, kRedCentred, 16);
+    }
+    CHECK(scan.sides().size() == 2);
+}
+
+TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are close in colour",
+          "[direct-scan]") {
+    // The turn was picked by a metric that barely sees red against orange,
+    // so a red and orange side was laid down at whichever turn the noise
+    // preferred and the fused side was a smear of all four.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    Lab9 shown = kOrangeCentred;
+    for (int turns = 0; turns < 4; ++turns) {
+        hold_lab(scan, hand, shown, 12);
+        hold_lab(scan, hand, kRedCentred, 12);
+        REQUIRE(scan.sides().size() == 2);
+        // Reported the way it was last shown.
+        const Lab9 side = scan.sides().at(0).lab;
+        for (std::size_t i = 0; i < 9; ++i) {
+            CHECK(lightness_of(side.at(i)) == Catch::Approx(lightness_of(shown.at(i))).margin(4.0));
+        }
+        shown = turned_once(shown);
+    }
+}
+
+TEST_CASE("two sides whose centres read as one colour are still two sides", "[direct-scan]") {
+    // Orange lit to read as red: the centre of one side is the colour of the
+    // centre of another, and only the rest says they are two. A hand covers
+    // at most three stickers of a read the lattice found; these differ in
+    // all eight.
+    const cv::Vec3f green = cube::test::warm_lamp_lab(Color::Green);
+    Lab9 other;
+    other.fill(green);
+    other.at(4) = kLampOrange;
+
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 3; ++round) {
+        hold_lab(scan, hand, kOrangeCentred, 12);
+        hold_lab(scan, hand, other, 12);
+    }
+    CHECK(scan.sides().size() == 2);
+}
+
+TEST_CASE("a flood of lattices that are no side does not cost the side being held",
+          "[direct-scan]") {
+    // A chessboard or a patterned shirt gives steady reads of colours no side
+    // has. Each starts a group of its own; they are bounded, and a side that
+    // has been held is not among those dropped.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    hold_lab(scan, hand, kOrangeCentred, 12);
+    std::mt19937 rng(11);
+    std::uniform_real_distribution<float> lightness(5.0F, 95.0F);
+    std::uniform_real_distribution<float> chroma(-60.0F, 60.0F);
+    for (int stray = 0; stray < 80; ++stray) {
+        Lab9 junk;
+        for (cv::Vec3f& sticker : junk) {
+            sticker = cv::Vec3f(lightness(rng), chroma(rng), chroma(rng));
+        }
+        scan.add(read_of(junk));
+        scan.add(read_of(junk));
+        scan.add(std::nullopt);
+    }
+    hold_lab(scan, hand, kOrangeCentred, 12);
+
+    REQUIRE(scan.sides().size() == 1);
+    CHECK(scan.sides().at(0).reads == 22);
+}
+
+TEST_CASE("a side that is wholly red and a side that is wholly orange are two sides",
+          "[direct-scan]") {
+    // The two closest colours of a cube, each filling a side - the shape of a
+    // cube solved on two sides and muddled between. Judged by colour_distance
+    // under 12 a solid red against a solid orange scores 9.5 a sticker, so
+    // the two were one side.
+    Lab9 red;
+    red.fill(kLampRed);
+    Lab9 orange;
+    orange.fill(kLampOrange);
+
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 3; ++round) {
+        hold_lab(scan, hand, red, 12);
+        hold_lab(scan, hand, orange, 12);
+    }
+    REQUIRE(scan.sides().size() == 2);
+    CHECK(lightness_of(scan.sides().at(0).lab.at(4)) ==
+          Catch::Approx(lightness_of(kLampRed)).margin(3.0));
+    CHECK(lightness_of(scan.sides().at(1).lab.at(4)) ==
+          Catch::Approx(lightness_of(kLampOrange)).margin(3.0));
+}
+
+TEST_CASE("solid red and solid orange sides stay two sides as the lamp closes the gap",
+          "[direct-scan]") {
+    // The centre is the side's identity down to the least two centres can be
+    // apart and still be two colours at all (kMinCentreSeedSeparationLab:
+    // closer than that, resolve_colors calls them one colour and refuses the
+    // scan). Orange is slid towards red along the line between them.
+    for (const float gap : {16.4F, 15.0F, 14.0F, 13.0F}) {
+        const float whole = static_cast<float>(cv::norm(kLampOrange - kLampRed));
+        const cv::Vec3f closer = kLampRed + ((kLampOrange - kLampRed) * (gap / whole));
+        Lab9 red;
+        red.fill(kLampRed);
+        Lab9 orange;
+        orange.fill(closer);
+
+        SideScan scan;
+        Hand hand{.glare_and_thumbs = false};
+        for (int round = 0; round < 3; ++round) {
+            hold_lab(scan, hand, red, 12);
+            hold_lab(scan, hand, orange, 12);
+        }
+        INFO("centres " << gap << " Lab apart");
+        CHECK(scan.sides().size() == 2);
+    }
+}
+
+TEST_CASE("a cube with a whole red side and a whole orange side is read as six sides",
+          "[direct-scan]") {
+    // Turning only the right and left leaves those two sides whole and
+    // stripes the four between them. Drawn through the reader in the colours
+    // of the warm lamp. A whole side and four striped ones put together more
+    // than one way, which is the scan's honest answer from flat views.
+    const Cube cube = after("R2 L");
+    REQUIRE(cube.face(Face::R) == Cube::solved().face(Face::R));
+    REQUIRE(cube.face(Face::L) == Cube::solved().face(Face::L));
+    REQUIRE_FALSE(cube.face(Face::F) == Cube::solved().face(Face::F));
+
+    SideScan scan;
+    show_cube(scan, cube, 5, kLamp);
+    expect_centres_of(scan, cube);
+    const auto flat = scan.cube();
+    REQUIRE_FALSE(flat.has_value());
+    CHECK(flat.error() == cube::CubeError::ambiguous_scan);
+}
+
+TEST_CASE("a cube whose red and orange sides are each the other's colours is read as six sides",
+          "[direct-scan]") {
+    // Half-turns of the top, bottom and front leave only red and orange on
+    // the left and right and make each exactly the other's colours.
+    const Cube cube = after("F2 D2 U2");
+    REQUIRE(cube.face(Face::R) != Cube::solved().face(Face::R));
+    REQUIRE(cube.face(Face::R).at(4) != cube.face(Face::L).at(4));
+
+    SideScan scan;
+    show_cube(scan, cube, 3, kLamp);
+
+    expect_centres_of(scan, cube);
 }
 
 TEST_CASE("a stray capture gives way to a side that is shown for longer", "[direct-scan]") {

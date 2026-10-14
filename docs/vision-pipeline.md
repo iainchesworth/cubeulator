@@ -10,14 +10,15 @@ tracked the cube's six-degree-of-freedom pose before reading a single sticker,
 and a cube looks identical under 24 rotations, so pose alone never says which
 side is which. A side is identified here by what is on it.
 
-Source: `src/lib/src/vision/` (platform-free, Qt-free), driven by
+Source: `src/lib/src/vision/` (platform-free, Qt-free; the cube assembly it
+calls is `src/lib/src/solver/scan_assembly.cpp`), driven by
 `src/app/qt/controllers/direct_scan.cpp` (Qt, GUI thread).
 
 ## End-to-end flow
 
 ```mermaid
 flowchart TD
-    CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV)"] --> LOCK["PhotometryLock<br/>exposure + white balance held"]
+    CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV;<br/>getUserMedia in the browser)"] --> LOCK["PhotometryLock<br/>exposure + white balance held<br/>(Windows only)"]
     LOCK --> LOOP["OpenCvCaptureLoop<br/>capture thread, mailbox of 1"]
     LOOP -->|BGR frame| CTRL["DirectScan::processFrame<br/>GUI thread, poll timer"]
     CTRL --> PREP["prepare_frame<br/>working width, threshold, outlines - once"]
@@ -25,7 +26,7 @@ flowchart TD
     READ -->|"std::optional&lt;SideRead&gt;"| SCAN["SideScan::add<br/>group reads into sides"]
     READ -.->|"no square-on side"| CORNER["read_corner<br/>two or three lattices that touch"]
     PREP -.-> CORNER
-    CORNER -.-> SCAN2["SideScan::add_corner"]
+    CORNER -.-> SCAN2["SideScan::add_corner<br/>counts each side held still; keeps the read"]
     SCAN --> SIX{"six captured sides?"}
     SIX -->|no| CTRL
     SIX -->|yes| NAME["resolve_colors<br/>54 stickers -> 6 groups of 9"]
@@ -49,16 +50,17 @@ between and around the stickers; a side seen at an angle, a lattice that does
 not span three rows and three columns, or no cube all return nothing.
 
 1. **Sticker blobs.** `prepare_frame` (`cube/vision/prepared_frame.hpp`)
-   reduces the frame to the working width, takes the maximum channel as the
-   value image, blurs it, thresholds it adaptively and traces the outlines.
-   It is done once per frame and handed to both readers, because it is most
-   of what a read costs; contours that are roughly square and roughly
-   sticker-sized survive `read_side`'s shape test.
+   reduces the frame to the working width (640 pixels), takes the maximum
+   channel as the value image, blurs it, thresholds it adaptively and traces
+   the outlines. It is done once per frame and handed to both readers,
+   because it is most of what a read costs; contours that are roughly square
+   and roughly sticker-sized survive `read_side`'s shape test.
 2. **Lattice.** The sticker pitch comes from nearest-neighbour distances and
    the direction from the folded angles. An affine least-squares fit places a
    3x3 lattice through the blobs, and the fit must span all three rows and
-   columns. Stickers that were not found as blobs (a finger across one) are
-   placed by the fit and flagged in `SideRead::found`.
+   columns, with at least six of the nine stickers found as blobs. Stickers
+   that were not found as blobs (a finger across one) are placed by the fit
+   and flagged in `SideRead::found`.
 3. **Colour.** Each of the nine places is sampled from a square patch 0.6 of
    a sticker spacing across, in float CIELAB, by `sticker_lab`
    (`cube/vision/sticker_colour.hpp`, shared with `read_corner`). The colour is
@@ -80,11 +82,31 @@ Nothing in the reader names a colour. It returns measured Lab.
 - A read **counts** only if the lattice has held still: the centre sticker
   moved less than `kSteadyFraction` (0.12) of a sticker spacing since the
   previous frame. A moving side is blurred and its colours are not trusted.
-- A counting read joins the **group** whose fused colours are closest under
-  the best quarter-turn roll, if that distance is under the same-side threshold;
-  otherwise it starts a new group (`kSameSideDistance`, 12 Lab units; file-local to `direct_scan.cpp`). The distance is `colour_distance`: lightness
-  and chroma count for a quarter of what hue does, because shading moves the
-  first two and leaves hue alone.
+- A counting read joins the **group** it belongs to, or starts a new one.
+  The deciding sticker is the **centre**, which never moves, and a cube's six
+  centres are six distinct colours: a read whose centre is within
+  `kSameColourLab` (10 Lab units, plain Lab with lightness at full weight) of
+  a group's centre belongs to it, whatever a hand covers - up to
+  `kMostStickersAHandCovers` (4) of the other eight differing; more than that
+  is another side whose centre happens to read the same. Where the centre
+  cannot vouch, the other eight stickers must: every one within
+  `kSameColourLab` of the group's. Of the groups a read could join, the one
+  it fits best takes it. Groups that turn out to be one side, a side that was
+  begun on a noisy read or lit differently for a moment, are merged after each
+  read, the earlier surviving. `kSameColourLab` sits just under
+  `kMinCentreSeedSeparationLab` (12) on purpose: two centres `resolve_colors`
+  refuses as one colour are still two sides here, so the refusal is reported
+  instead of the scan waiting for a sixth side.
+- The **quarter-turn** that lays a read on a group is the one that fits the
+  eight stickers other than the centre best, each distance capped so a finger
+  over one sticker cannot decide it, and a group keeps the turn it last had
+  unless another beats it by `kRollPriorMargin` (one differing sticker's
+  worth).
+- This replaced a mean of `colour_distance` over all nine stickers under 12.
+  `colour_distance` counts lightness and chroma for a quarter of what hue
+  does, so red and orange, which differ almost only in lightness under a warm
+  lamp, scored under 10 a sticker even with every one of them traded, and two
+  sides of a partly solved cube were fused into one (2026-10-14).
 - A group is **captured** once it has `kMinReads` (8) reads, about a third of a
   second of holding still.
 - When more than six groups are captured (a stray lattice, a side re-captured
@@ -123,14 +145,18 @@ A cube turned between sides, or held corner-on, shows two sides at once, and
 where they meet the stickers along the shared edge are neighbours - the fact
 the flat reads lack.
 
-1. **`read_corner`** takes the same prepared outlines with a looser shape test (a side
-   at an angle is a parallelogram: a compact four-cornered contour, not a
-   square), and finds up to three 3x3 lattices by RANSAC over blob triples,
-   each fitted by least squares with its steps turning clockwise so the side
-   reads unmirrored. Two lattices share an edge when two corners of each
-   coincide; read as seen from outside, they walk that edge in opposite
-   directions, which is also a check. It runs only on frames that have no
-   square-on read, and gives up on a scene with more than 48 blobs.
+1. **`read_corner`** takes the same prepared outlines with a looser shape
+   test (a side at an angle is a parallelogram: a compact four-cornered
+   contour, not a square), and finds up to three 3x3 lattices. It tries each
+   blob as the origin with every pair of its near neighbours (at most eight)
+   as the two axes - a hypothesis-and-test search over blob triples, not
+   random sampling - and the lattice with the most blobs wins, then the
+   tightest fit. Each is fitted by least squares with its steps turning
+   clockwise so the side reads unmirrored. Two lattices share an edge when two
+   corners of each coincide; read as seen from outside, they walk that edge in
+   opposite directions, which is also a check. It runs only on frames that
+   have no square-on read, and gives up on a scene with fewer than 12 or more
+   than 48 blobs.
 2. **`fit_corner`** asks whether a candidate cube could have produced the
    read, in the session's own colours: each lattice's centre names the cube
    side it is; each side's nine colours must match that side under some
@@ -142,6 +168,33 @@ the flat reads lack.
    several cubes it takes the one that most corner reads fit and more than
    any other; a read that fits all of them says nothing and one that fits
    none is a blurred frame. No pose is estimated anywhere in this.
+4. **Counting.** A cube held on a corner shows two or three sides in one
+   frame, so each side of a corner read is also a read of that side, counted
+   the way a square-on read is (`SideScan::add_corner`): the side must have
+   held still since the previous frame, have 7 or more of its 9 stickers
+   found (not placed by the fit) and not be a strip (one step at least 0.45 of
+   the other). It joins the side whose nine colours are nearest under some
+   quarter-turn, within the same-side distance, or starts one. Three sides
+   are captured in the time it takes one, and two corners - a corner and the
+   one across from it - are all six. This is in addition to the square-on
+   scan, not instead of it: the same side read both ways is one side, and once
+   a side has `kMinReads` square-on reads of its own its colours come from
+   those alone, because a side at an angle is lit a little differently.
+   `reads_in_view()` is the fewest among the sides in view, which is the one
+   the capture is waiting for.
+
+5. **Asking for the corner that settles it.** When six sides make several
+   cubes and the corner reads so far cannot choose, the scan names the corner
+   to show (`AssemblyTrace::settling_corner`). Among the candidates the corner
+   reads fit best, it takes the corner of the eight whose three sides differ
+   between the most pairs of them - a corner view shows every sticker of its
+   three sides, so two cubes are told apart there when any of them differs -
+   and says it by the colours of the three centres. The scan screen asks for
+   that (`DirectScan.settlingCorner`, `scan.guide.ambiguousCorner`: "Turn the
+   cube slowly to show the corner where Yellow, Green and Red meet") and falls
+   back to "two sides at once" when no corner would help. Following it one
+   corner at a time settles the recorded patterned cube (twenty cubes from six
+   sides) in at most three views, in the tests.
 
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
@@ -152,13 +205,41 @@ with its corner views is settled to the true cube. Whether a real person
 turning a real ambiguous cube produces a read that fits is not measured yet:
 no recorded session is one.
 
+`cube_scan corner-colours` measures what counting rests on: for every side of
+every corner read, how near it sits to the side the square-on reads of the same
+session captured. On the ten sides the recordings hold (all in two-side views;
+no recorded frame shows three) the distance is a median of 5.8 and at most
+12.0, and the next-nearest side is never closer than 11.8 more. The one at
+12.0 was a strip with six of its nine stickers found, which is where the
+gates came from; another six-of-nine strip sat at 6.1, so they are a margin
+and not a measured edge.
+
+The first corner-held scan recorded (480 frames by an evening lamp, the cube
+held tilted in one hand, two to three sides in view) is the harder case. Its
+35 corner reads are all two-sided and none is three. The sides the reader did
+find sit a median of 8.2 from their side (90% within 11.0, one at 15.5), and
+one frame had a side within 2.3 of two sides, which is why a corner side must
+be 4 clearer of the next side to count. The third side is missed before any
+lattice is fitted, in the blob step: the shared threshold compares each pixel
+with the mean of a 43 pixel window, and beside the bright white face the dark
+green, blue and red stickers fall below it and come out as shrunken, uneven
+blobs, which the size filter then drops; the third side is also seen steeply,
+foreshortened and in its own shadow. Tried on that scan alone with a finer
+threshold (window 3% of the frame height, offset 3, against 12% and 8), 29 of
+79 corner frames are three-sided, the board stays 4 of 4 exact, and square-on
+reads fall by about 4% on the tungsten session (625 to 600) - so the change
+is not made to the threshold the square-on reader shares. A corner reader with
+its own scale-aware preparation is the next step, and it needs recordings in
+more than one light before it is tuned.
+
 ## Camera photometry
 
 Colour is only comparable across frames if the camera stops adjusting itself.
-`PhotometryLock` (`src/app/platform/detail/photometry_lock.cpp`) holds exposure
-and white balance once the camera has settled, and reports what it did; the
-scan waits for that report (`kLockWaitFrames`) before counting reads. Notes
-from the workstation webcam under DirectShow and OpenCV 4.12:
+`PhotometryLock` (`src/app/platform/detail/photometry_lock.cpp`) holds white
+balance, exposure, brightness and saturation once the camera has settled, and
+reports what it did; the scan waits for that report (at most `kLockWaitFrames`,
+240 frames) before counting reads. Notes from the workstation webcam under
+DirectShow and OpenCV 4.12:
 
 - White balance in kelvin is `CAP_PROP_WHITE_BALANCE_BLUE_U`;
   `CAP_PROP_WB_TEMPERATURE` does nothing.
@@ -166,11 +247,15 @@ from the workstation webcam under DirectShow and OpenCV 4.12:
   lock reads the auto temperature first, clears auto, writes it back, and checks
   the blue/green ratio, bisecting 2800-6500 K if it did not take.
 - A temperature write takes more than twelve frames to show.
-- Writing exposure leaves auto exposure; `CAP_PROP_AUTO_EXPOSURE = 1` restores
-  it.
+- Writing exposure leaves auto exposure as a side effect, so the lock writes
+  back the value the automatics chose; `CAP_PROP_AUTO_EXPOSURE` is not
+  implemented by this backend (it reads -1 and refuses writes). When the scan
+  ends the values the lock found are written back.
 
 A platform that cannot control photometry says so in the report rather than
-claiming a lock.
+claiming a lock. Only the Windows backend (DirectShow) has been measured and
+tries; Linux (V4L2), macOS (AVFoundation) and the browser report that they
+cannot, and the scan runs on the camera's own automatics.
 
 ## While the cube is being solved: `HeldCube`
 
@@ -178,14 +263,21 @@ The camera keeps running on the solve screen and is only asked which side is
 in view. `fit_holds` compares a read against what each of the 24 ways of
 holding the (now known) cube would show, in the session's own colours; the
 hold that fits, and that no differently-looking hold fits nearly as well, turns
-the on-screen cube to match. This is not tracking: nothing is estimated between
-reads and nothing is read at an angle. Nothing is added to the scan while
-watching.
+the on-screen cube to match. The same read can show that the move asked for has
+been made (the side in view fits the cube after the move and clearly not
+before it), and the solve screen steps on by itself, or that some other side
+was turned, which the screen names (`HeldCube`,
+`src/app/qt/controllers/held_cube.hpp`). This is not tracking: nothing is
+estimated between reads and nothing is read at an angle. Nothing is added to
+the scan while watching.
 
 ## Threading
 
-- **Capture thread** (`OpenCvCaptureLoop`) owns the device and publishes the
-  newest frame into a one-deep mailbox. Old frames are dropped, never queued.
+- **Capture thread** (`OpenCvCaptureLoop`, on Windows, Linux and macOS) owns
+  the device and publishes the newest frame into a one-deep mailbox. Old
+  frames are dropped, never queued. The browser build's camera is the page's
+  `getUserMedia` (`src/app/platform/web/camera_web.cpp`); Android and iOS have
+  no capture backend yet, so `start()` fails with `camera_not_found` there.
 - **GUI thread** runs `DirectScan::processFrame`. A read is a few milliseconds,
   well inside the poll interval, so there is no analysis worker and no scan
   state to hand between threads. Only `latestFrame()` is called from elsewhere
@@ -198,12 +290,21 @@ watching.
 - **Light-bodied and stickerless cubes** read as nothing: the blob step needs
   dark plastic between stickers. The July 2026 corpus is such a cube and reads
   0 of 14.
-- **Square-on only.** A side seen at an angle returns nothing, by design.
+- **One side square-on, or a corner.** `read_side` returns nothing for a side
+  seen at an angle, by design. A cube held on a corner is read by
+  `read_corner`, two or three sides at a time (Counting, above), but a side
+  with fewer than seven of its nine stickers found, or seen too edge-on, is
+  not counted, and the third side of a corner is mostly lost in the blob
+  step in poor light.
 - **A cube that six flat sides put together two ways** (about one in eighty,
   and any cube one turn from solved) needs a corner view to settle, and the
   corner reader is validated on six real frames and drawn ones only. A side
   seen at a steep angle, or with a finger across it, may not fit; the scan
-  keeps asking for more until a read does.
+  keeps asking for more until a read does. A scan that is ambiguous is only
+  settled by corner views that include a side the candidate cubes differ on:
+  the screen asks for two sides at once but not which two (recorded: 20 cubes
+  fit six sides of a patterned cube, and the one view that told them apart
+  was never shown).
 - **Light.** Hard backlit or glare conditions are not proven; the measured
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
@@ -238,7 +339,9 @@ path cannot disagree.
 | `cube_scan replay <session-dir>` | One session: the cube and its solution |
 | `cube_scan board <root-dir>` | Every session under the root, against its `truth.txt` |
 | `cube_scan holds <session-dir>` | How the cube was held, frame by frame |
-| `cube_scan corners <session-dir>` | Frames showing two sides at once, and whether they fit the true cube |
+| `cube_scan corners <session-dir> [max-distance]` | Frames showing two sides at once, and whether they fit the true cube (at the distance a side may sit from the cube's, the app's own unless given) |
+| `cube_scan corner-colours <session-dir>` | How the sides of corner reads compare with the sides read square-on |
+| `cube_scan ambiguity <session-dir>` | The cubes six sides make, and how the session's corner reads vote among them at several distances |
 
 The only gate is a real recorded session ending in the exact true cube.
 `truth.txt` is six words of nine letters from `WYROGB`, one per side, each side

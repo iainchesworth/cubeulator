@@ -39,7 +39,8 @@ Each stage is already the shortest it can be *given* the stages before it, so
 no tuning of its search removes moves; changing the last layer's search to
 minimise moves instead of algorithm count saved 0.8 of them. The cost is in
 the shape of the method: pieces are solved one at a time, and the last layer
-is composed from a single orientation of each of Sune, A-perm and U-perm.
+is composed from a single orientation of each of the edge flip, Sune (and its
+mirror, Anti-Sune), A-perm and U-perm, joined by turns of the top.
 Getting fewer moves means a different method, which is what the other two are.
 
 ## `Intermediate`: CFOP
@@ -52,8 +53,9 @@ Four stages (`Stage::Cross`, `F2l`, `Oll`, `Pll`):
   whichever remaining pair is cheapest. Each pair is the shortest sequence
   that finishes it and leaves the cross and the pairs already built exactly
   where they were, turning only the top, the pair's own slot, and the slot a
-  piece of the pair is stuck in. That is the "get it out, then put it in" a
-  person does, and it averages 23 moves (a person is nearer 30). The same
+  piece of the pair is stuck in (if no pair can be done that way, the search
+  widens to every side but the bottom). That is the "get it out, then put it
+  in" a person does, and it averages 23 moves (a person is nearer 30). The same
   both-ends search runs over only the pieces that matter, so a pair takes
   about a millisecond.
 - **OLL** and **PLL** are each one table lookup. The tables
@@ -96,9 +98,10 @@ compiler; the 5.6 MB that remain (the phase 2 move tables and the four
 pruning tables) are built on first use, in about 30 ms with the four pruning
 tables on four threads (70 to 100 ms on one; 160 ms before they were made
 faster).
-`prepare(SolveMethod::Advanced)` does that ahead of time, from any thread, so
-the solve screen can build them while the person is still scanning. The next
-section is why not all of them are made by the compiler.
+`prepare(SolveMethod::Advanced)` does that ahead of time, from any thread; the
+app calls it on a worker at start-up, so the tables are built long before the
+person has finished scanning. The next section is why not all of them are made
+by the compiler.
 
 The first solution takes about 160 thousand nodes at the median and never
 more than 5.5 million in 8,000 cubes, and the search then spends a fixed
@@ -178,7 +181,8 @@ are not.
 Korf's IDA* with pattern databases finds the provably shortest solution
 (about 18 moves). It needs roughly 80 MB of tables and takes minutes to hours
 per cube, which is not a thing a phone does in seconds; and the shortest
-solution is only one or two moves better than the two-phase one. Thistlethwaite's
+solution is only two or three moves better than the two-phase one (about 18
+against 20.3). Thistlethwaite's
 four-group method is the same idea as two-phase with a coarser reduction, and
 gives 30 to 40 moves; two-phase is strictly better for the same machinery.
 
@@ -189,7 +193,8 @@ gives 30 to 40 moves; two-phase is strictly better for the same machinery.
   always gets the same moves.
 - `Intermediate` and `Advanced` check reachability up front
   (`Cube::is_solvable`) and report a valid-but-unreachable cube as
-  `CubeError::unsolvable_state`.
+  `CubeError::unsolvable_state`; `Beginner` checks it up front too but, as it
+  always has, reports `CubeError::no_solution`.
 - The cubie model (`src/lib/src/solver/cubie.hpp`) has its six quarter turns
   written down as data and is decoded through `Cube`'s own
   `locate_corner`/`locate_edge`; `cubie_test.cpp` proves all 18 moves equal

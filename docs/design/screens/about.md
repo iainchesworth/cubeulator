@@ -1,6 +1,13 @@
 # About
 
-Lane: experience. New (E3b). The app has no about box today.
+> **Status in 0.1.0-beta.1:** A placeholder only. The desktop shell
+> (`DesktopShell.qml`) opens a small dialog with the name and the version and
+> a **Close** button, from the **About Cubeulator** row in Settings and from
+> the macOS Help menu. The screen below (icon, what and who, the build line
+> with **Copy**, Licences, Privacy, Source code, **Copy details**) is not
+> built, and there is no About at all on phones.
+
+Lane: experience. New (E3b). When this was written the app had no about box.
 
 What the app is, which version, who made it, under what licence, and the
 way to the notices and the privacy statement.

@@ -244,6 +244,15 @@ Json to_json(const cube::vision::AssemblyTrace& trace) {
     }
     out.set("corner_fits", std::move(fits));
     out.set("chosen", trace.chosen.has_value() ? Json(*trace.chosen) : Json());
+    if (trace.settling_corner.has_value()) {
+        Json corner = Json::array();
+        for (const cube::solver::Color colour : *trace.settling_corner) {
+            corner.push(name_of(colour));
+        }
+        out.set("settling_corner", std::move(corner));
+    } else {
+        out.set("settling_corner", Json());
+    }
     out.set("direct_error", optional_error(trace.direct_error));
     if (trace.exchange.has_value()) {
         Json exchange = Json::object();

@@ -375,6 +375,17 @@ export class CubeulatorApp {
 
   // ---- the recorder --------------------------------------------------------
 
+  /**
+   * Waits until the app has presented `count` frames (the recorder's "UI"
+   * set). With its light probe on, the first frames of a page take seconds
+   * each on a software renderer; whatever is measured is measured after them.
+   */
+  async waitForFrames(count = 5, timeout = 180_000) {
+    await expect.poll(async () => (await this.profile()).frames.UI ?? 0,
+      { timeout, message: `waiting for ${count} presented frames` }).toBeGreaterThan(count);
+    await this.settle();
+  }
+
   profile() {
     return this.page.evaluate(() => window.cubeulatorProfile.summary());
   }

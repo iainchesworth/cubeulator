@@ -21,6 +21,10 @@ Item {
     // seen arriving and all six are seen confirmed; AppState moves on once
     // the solution is ready.
     readonly property bool complete: DirectScan.complete
+    // The camera could not be started (refused, absent, in use) and nothing is
+    // starting it again. Nothing is running to start over from; the way on is
+    // to ask for the camera again.
+    readonly property bool cameraFailed: DirectScan.cameraError !== "" && !DirectScan.starting
 
     readonly property color good: "#3FE05A"
 
@@ -36,6 +40,29 @@ Item {
         ? Math.max(width / DirectScan.frameWidth, height / DirectScan.frameHeight) : 1
     readonly property real frameLeft: (width - DirectScan.frameWidth * frameScale) / 2
     readonly property real frameTop: (height - DirectScan.frameHeight * frameScale) / 2
+
+    // A cube colour, from the name the controller gives it.
+    function colourName(name) {
+        switch (name) {
+        case "white": return qsTrId("colour.white");
+        case "yellow": return qsTrId("colour.yellow");
+        case "green": return qsTrId("colour.green");
+        case "blue": return qsTrId("colour.blue");
+        case "orange": return qsTrId("colour.orange");
+        case "red": return qsTrId("colour.red");
+        }
+        return "";
+    }
+
+    // The corner to show, by the colours of its three sides, when the scan
+    // knows one; empty otherwise.
+    readonly property string settlingText: {
+        const corner = DirectScan.settlingCorner;
+        if (corner.length !== 3)
+            return "";
+        return qsTrId("scan.guide.ambiguousCorner")
+            .arg(colourName(corner[0])).arg(colourName(corner[1])).arg(colourName(corner[2]));
+    }
 
     readonly property string headline: {
         if (DirectScan.cameraError !== "")
@@ -55,8 +82,13 @@ Item {
             return "";
         if (DirectScan.settingUp)
             return "Setting the camera's exposure and colour balance…";
-        if (DirectScan.ambiguous)
+        if (DirectScan.ambiguous) {
+            // Said by colour when the cubes the six sides make differ at one
+            // corner more than another: showing that corner settles it.
+            if (settlingText !== "")
+                return settlingText;
             return "These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.";
+        }
         if (DirectScan.conflicted)
             return "These six sides do not make a valid cube yet. Show each side again, square to the camera.";
         if (DirectScan.reading)
@@ -264,10 +296,21 @@ Item {
         }
         AppButton {
             height: 42
-            visible: !root.complete
+            visible: !root.complete && !root.cameraFailed
             variant: "secondary"; text: "Start over"
             enabled: DirectScan.sidesRead > 0
             onClicked: DirectScan.restart()
+        }
+        // In place of Start over when the camera would not start: the same
+        // start the screen made on entry (AppState.onScreenChanged), so a
+        // permission now granted or a camera now free works without going
+        // back to the launch screen.
+        AppButton {
+            objectName: "scan.retry"
+            height: 42
+            visible: root.cameraFailed
+            variant: "primary"; text: qsTrId("common.tryAgain")
+            onClicked: DirectScan.start(CameraController.selectedDeviceId)
         }
     }
 }

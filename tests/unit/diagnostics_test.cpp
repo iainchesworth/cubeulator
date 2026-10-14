@@ -529,7 +529,8 @@ TEST_CASE("an assembly trace says which path was taken and why it failed", "[dia
     CHECK(is_json(line));
     CHECK(line ==
           R"({"path":"names_exchanged","candidates":0,"corner_reads":4,"corner_fits":[],)"
-          R"("chosen":null,"direct_error":"invalid_cube_state","exchange":{"first_side":2,)"
+          R"("chosen":null,"settling_corner":null,"direct_error":"invalid_cube_state",)"
+          R"("exchange":{"first_side":2,)"
           R"("second_side":5,"first_name":"red","second_name":"orange","centre_distance":9.5},)"
           R"("error":null})");
 
@@ -538,9 +539,12 @@ TEST_CASE("an assembly trace says which path was taken and why it failed", "[dia
     ambiguous.candidates = 2;
     ambiguous.corner_fits = {3, 3};
     ambiguous.error = cube::CubeError::ambiguous_scan;
+    ambiguous.settling_corner = std::array<cube::solver::Color, 3>{
+        cube::solver::Color::Yellow, cube::solver::Color::Green, cube::solver::Color::Red};
     const std::string ambiguous_line = cube::diagnostics::to_json(ambiguous).dump();
     CHECK(is_json(ambiguous_line));
     CHECK_THAT(ambiguous_line, ContainsSubstring(R"("corner_fits":[3,3])"));
+    CHECK_THAT(ambiguous_line, ContainsSubstring(R"("settling_corner":["yellow","green","red"])"));
     CHECK_THAT(ambiguous_line, ContainsSubstring(R"("error":"ambiguous_scan")"));
 }
 

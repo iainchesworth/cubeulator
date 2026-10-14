@@ -453,8 +453,8 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
 
     const std::vector<QSize> sizes = {{375, 667}, {390, 844}, {719, 640},
                                       {720, 640}, {900, 640}, {1280, 800}};
-    const char* screens[] = {"launch",   "permission", "scan",    "solve",
-                             "settings", "complete",   "solution"};
+    const char* screens[] = {"launch",   "permission", "scan",     "solve",
+                             "settings", "history",    "complete", "solution"};
 
     std::set<std::string> overflowing;
     std::set<std::string> on_show;
@@ -524,10 +524,11 @@ TEST_CASE("the real German, French and Spanish cut nothing off on the converted 
           "[system][language][latin]") {
     // German is the long one ("Vierteldrehung", "Geräteeinstellungen",
     // "Fortgeschritten" in a row of three method buttons): the solve screen is
-    // visited as well, where those buttons are.
+    // visited as well, where those buttons are, and the history, whose rows
+    // and dialogs carry the longest of the new strings.
     const char* language = GENERATE("de", "fr", "es");
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION(language << " in the " << cube::systest::to_string(layout) << " layout") {
-        nothing_is_cut_off_in(language, layout, {"solve"});
+        nothing_is_cut_off_in(language, layout, {"solve", "history"});
     }
 }

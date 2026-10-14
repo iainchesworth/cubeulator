@@ -9,7 +9,10 @@ from the code.
 For anything more than a typo fix, it's worth
 [opening an issue](https://github.com/iainchesworthlabs/cubeulator/issues) first
 to say what you're thinking — it avoids duplicated effort and lets us agree
-on the approach before you sink time into it.
+on the approach before you sink time into it. A security problem is the
+exception: report it privately, as the [security policy](SECURITY.md) says,
+not in an issue. Everyone taking part is held to the
+[code of conduct](CODE_OF_CONDUCT.md).
 
 ## Branching model
 
@@ -21,8 +24,9 @@ This project follows [gitflow](https://nvie.com/posts/a-successful-git-branching
 - **`main`** only receives tagged releases (a `develop` → `main` release PR,
   or a `hotfix/*`); day-to-day work never targets it directly.
 - Branch names must start with `feature/`, `bugfix/`, `release/`,
-  `hotfix/`, or `support/` — a required CI check
-  (`Validate gitflow branch name`) enforces this on every PR.
+  `hotfix/`, or `support/`, followed by letters, digits, `.`, `_` or `-` (no
+  second `/`) — a required CI check (`Validate gitflow branch name`) enforces
+  this on every PR.
 - **`spike/<name>`** is for finding something out. It is pushed, tried (CI legs
   are dispatched at it by hand) and shown, and it is **never merged**: a pull
   request from one fails that same check, deliberately. What it found goes in
@@ -43,7 +47,7 @@ existing behaviour that changes gets its test updated in the same PR. See
 
 CI enforces an **80% line and branch coverage** floor
 (`Coverage (Linux, GCC)`) — a PR that drops coverage below that will fail
-the required check.
+that check.
 
 ## Code style
 
@@ -56,11 +60,13 @@ the required check.
   same one). A 21, 22 or 23 formats the tree the same way, so any is fine
   locally.
 - [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
-  runs as part of the build; compiler warnings are treated as errors, so fix
-  them rather than silencing them where you reasonably can.
+  is what the `clang-tidy` CI check runs, over a Clang build of everything
+  but the Qt app; a build on your machine does not run it. Compiler warnings
+  are treated as errors in every build, so fix them rather than silencing
+  them where you reasonably can.
 - Modern C++23 is encouraged over older idioms — see
   [Architecture](architecture.md) for the patterns already in use
-  (`std::expected`, deducing `this`, etc.) and follow their lead.
+  (`Result<T>` over `std::expected`, for one) and follow their lead.
 
 ## Opening a pull request
 

@@ -1,5 +1,11 @@
 # Content
 
+> **Status in 0.1.0-beta.1:** The voice, the glossary and the strings are the
+> app's as far as they are used: the QML asks for 74 of the 406 strings in
+> the inventory, and the rest belong to screens that are not built. The scan
+> and solve screens still show English literals of their own, most of which
+> follow the wording here.
+
 How Cubeulator talks, the words it uses, and every string it shows.
 
 The strings live in [`strings.json`](strings.json), with a stable key and
@@ -174,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-413 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+418 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -387,6 +393,7 @@ Review the solution.
 | `scan.guide.seenBefore` | This side is already read. Turn to another one | Guidance when the side shown has been read before. |
 | `scan.guide.conflict` | These six sides do not make a valid cube yet. Show each side again, square to the camera. | Guidance when six sides are read but something is wrong. |
 | `scan.guide.ambiguous` | These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once. | Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which. |
+| `scan.guide.ambiguousCorner` | Turn the cube slowly to show the corner where %1, %2 and %3 meet. | Guidance when six sides are read and fit together in more than one way, and showing one particular corner (two or three sides in one view) would tell the cubes they make apart. %1, %2 and %3 are the colours of the centres of the three sides that meet there - colour.white and the like, in no particular order. Shown in place of scan.guide.ambiguous, which says only that two sides should show at once. |
 | `scan.guide.complete` | All six sides make a valid cube. Working out the solution… | Guidance when the scan has finished. |
 | `scan.guide.resuming` | Starting the camera again. The sides already read are kept. | Guidance when the app comes back after being in the background. |
 | `scan.stuck.title` | Not reading? | Heading of a hint that appears after ten seconds without progress. |
@@ -564,6 +571,10 @@ Review the solution.
 | `history.clear.body` | *one:* %n solve will be deleted from this device.<br>*other:* %n solves will be deleted from this device. | Dialog body. |
 | `history.clear.keep` | Keep them | Dialog button: the safe choice. |
 | `history.clear.confirm` | Clear | Dialog button. |
+| `history.a11y.row` | %1. %2 | Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary. |
+| `history.a11y.delete` | Delete, %1 | Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart. |
+| `history.a11y.deleted` | Solve deleted. | Announced by a screen reader after one solve is deleted from the list. |
+| `history.a11y.cleared` | History cleared. | Announced by a screen reader after every solve is deleted from the list. |
 
 #### `settings`
 

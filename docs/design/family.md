@@ -1,5 +1,12 @@
 # The family
 
+> **Status in 0.1.0-beta.1:** A survey and a set of decisions, not behaviour.
+> Built: the publisher and identifier (`cmake/AppIdentity.cmake`), the
+> nine-language set, ids and the ported language manager with its gates
+> ([i18n.md](../i18n.md)). Not built: the Noto faces, the build line with
+> **Copy**, **Copy details** and the named setting keys (D3, D6, F2, F4, F5,
+> F7). The sibling apps were read on 2026-10-13 and may have moved on since.
+
 Written 2026-10-13. Status: **decisions D1 to D9 taken the same day**
 *(Iain)*, recorded in section 5; everything else here is survey or
 proposal. It is not legal advice.
@@ -224,8 +231,9 @@ today, and the proposal. Lane and timing are in section 6.
 - **Authoring.** Whole sentences, `%1` placeholders, `//:` extracomments on
   short strings, a glossary, brand terms never translated
   (`docs/crucible/localisation.md`, `docs/translations.md` in Countdown).
-- **Cubeulator.** E2b is not started. `strings.json` has stable keys and a
-  note per string.
+- **Cubeulator.** E2b is not started *(on 2026-10-13; it has landed: see
+  [i18n.md](../i18n.md))*. `strings.json` has stable keys and a note per
+  string.
 - **Proposal.**
   1. E2b **ports** the family `LanguageManager` and its gates rather than
      writing a third. It adds what the family lacks and `system.md` already
@@ -254,7 +262,8 @@ today, and the proposal. Lane and timing are in section 6.
   Noto Sans Hebrew for Yiddish too. Cubeulator's `Theme.qml` names IBM Plex
   Sans Hebrew and Arabic in `headingFamily`, with a 700-weight ceiling
   (`maxWeight`) because Plex has no ExtraBold in those scripts; no font file
-  is in the tree yet.
+  is in the tree yet. *(`develop`'s `Theme.qml` has no `headingFamily` or
+  `maxWeight` and names no Hebrew or Arabic face.)*
 - **Decided (D3, D4).** Noto Sans Hebrew and Noto Sans Arabic: the same
   files and the same OFL notices as the other three.
   - Both ICL Forge files are variable fonts with a weight axis of 100 to 900
@@ -392,7 +401,7 @@ used as text is 3.76:1.
   change. Automate's docs skin (`docs/stylesheets/aqualink.css`) repeats the
   app's tokens, so docs and app cannot drift. Countdown's are by hand.
 - **Cubeulator.** E0a's tour. The docs site is stock Material teal; the
-  `CHANGELOG.md` still says "repository skeleton".
+  `CHANGELOG.md` said "repository skeleton" (it no longer does).
 - **Proposal.**
   1. Give the tour a **manifest** and a check that a documentation picture
      is in it (the ICL Forge pattern). Pictures are generated, never taken
@@ -438,7 +447,7 @@ waits for the sessions in flight to finish.
 |---|---|---|
 | F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0; already what E4a writes |
 | F2 setting keys | E2a ("settings that persist"), E3a | before V1.0 |
-| F3 language manager, ids and gates | E2b, which has not started: its brief says "port" and "ids" | before V1.0 |
+| F3 language manager, ids and gates | E2b, which had not started when this was written (it has landed, see [i18n.md](../i18n.md)): its brief says "port" and "ids" | before V1.0 |
 | F4 Noto faces | E2a, before it bundles fonts | before V1.0 |
 | F4 Yiddish | E5, with E2b's list | before V1.0 |
 | F5 build line and Copy | E3b | before V1.0 |
