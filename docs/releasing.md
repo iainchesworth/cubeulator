@@ -1,7 +1,8 @@
 # Cutting a release
 
 How a version of Cubeulator becomes downloadable packages on a GitHub Release
-(three desktop installers and the browser build's site as a zip), with the
+(an installer for Windows, a disk image for macOS, a `.deb` and an `.rpm` for
+Linux, and the browser build's site as a zip), with the
 notes, the checksums and the signatures that go with them. The workflow is
 `.github/workflows/release.yml`; the tools are in `tools/release/`; what is in
 the packages is [Packaging the desktop app](packaging.md).

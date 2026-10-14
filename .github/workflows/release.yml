@@ -1,6 +1,7 @@
 name: Release
 
-# Builds the three desktop packages and the web build's zip, signs and attests
+# Builds the desktop packages (an installer for Windows, a disk image for macOS,
+# a .deb and an .rpm for Linux) and the web build's zip, signs and attests
 # them, renders the release notes from CHANGELOG.md and, for a real release,
 # creates a DRAFT GitHub Release. How to cut one is docs/releasing.md.
 #
