@@ -46,12 +46,12 @@ public:
 
     // The cycles of the stickers of one centre orbit: `index` counts along
     // Geometry::centre_orbits().
-    [[nodiscard]] std::span<const ThreeCycle> centres(std::size_t index) const noexcept {
+    [[nodiscard]] const std::vector<ThreeCycle>& centres(std::size_t index) const noexcept {
         return centres_.at(index);
     }
     // The cycles of the wings of one wing orbit: `index` counts along
     // Geometry::wing_orbits().
-    [[nodiscard]] std::span<const ThreeCycle> wings(std::size_t index) const noexcept {
+    [[nodiscard]] const std::vector<ThreeCycle>& wings(std::size_t index) const noexcept {
         return wings_.at(index);
     }
 
@@ -77,8 +77,8 @@ using Labels = std::vector<int>;
 // not the fewest moves overall. Fails with no_solution when the cells cannot
 // be arranged by these cycles (for example when `target` is an odd
 // permutation of `current`, which no 3-cycle can reach).
-[[nodiscard]] Result<Word> arrange(std::span<const std::uint16_t> cells,
-                                   std::span<const ThreeCycle> cycles, Labels& current,
-                                   std::span<const int> target);
+[[nodiscard]] Result<Word> arrange(const std::vector<std::uint16_t>& cells,
+                                   const std::vector<ThreeCycle>& cycles, Labels& current,
+                                   const Labels& target);
 
 }  // namespace cube::nxn

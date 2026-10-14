@@ -328,7 +328,7 @@ jobs:
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
-          EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-15' || '' }}
+          EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-16' || '' }}
         run: |
           for attempt in 1 2 3; do
             if cmake --preset "$CMAKE_PRESET" -DCUBEULATOR_BUILD_TESTS=OFF -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER; then

@@ -68,7 +68,7 @@ void NCube::apply(const Permutation& permutation) {
     assert(permutation.size() == facelets_.size());
     std::vector<Color> next(facelets_.size());
     std::ranges::transform(permutation, next.begin(),
-                           [this](std::uint16_t from) { return facelets_[from]; });
+                           [this](std::uint16_t from) { return facelets_.at(from); });
     facelets_ = std::move(next);
 }
 
@@ -114,9 +114,8 @@ struct Display {
 
 [[nodiscard]] Display display_of(const NCube& cube, const EdgeLocation& location,
                                  std::array<std::uint16_t, 2> stickers) {
-    const auto facelets = cube.facelets();
-    const Color of_first = facelets[stickers.at(0)];
-    const Color of_second = facelets[stickers.at(1)];
+    const Color of_first = cube.facelet(stickers.at(0));
+    const Color of_second = cube.facelet(stickers.at(1));
     if (cube.geometry().face_of(stickers.at(0)) == location.a) {
         return Display{.on_a = of_first, .on_b = of_second};
     }
@@ -175,8 +174,7 @@ struct Display {
 [[nodiscard]] std::array<Color, 6> scheme_from_face_centres(const NCube& cube) {
     std::array<Color, 6> scheme{};
     for (const Face face : kAllFaces) {
-        scheme.at(static_cast<std::size_t>(face)) =
-            cube.facelets()[cube.geometry().face_centre(face)];
+        scheme.at(static_cast<std::size_t>(face)) = cube.facelet(cube.geometry().face_centre(face));
     }
     return scheme;
 }
@@ -190,8 +188,8 @@ using Adjacency = std::array<std::array<bool, kColorCount>, kColorCount>;
         for (std::size_t a = 0; a < 3; ++a) {
             for (std::size_t b = 0; b < 3; ++b) {
                 if (a != b) {
-                    adjacent.at(slot_of(cube.facelets()[corner.at(a)]))
-                        .at(slot_of(cube.facelets()[corner.at(b)])) = true;
+                    adjacent.at(slot_of(cube.facelet(corner.at(a))))
+                        .at(slot_of(cube.facelet(corner.at(b)))) = true;
                 }
             }
         }
@@ -205,7 +203,7 @@ using Adjacency = std::array<std::array<bool, kColorCount>, kColorCount>;
     for (const auto& corner : geometry.corners()) {
         std::array<std::optional<Color>, 6> on_face{};
         for (const std::uint16_t f : corner) {
-            on_face.at(static_cast<std::size_t>(geometry.face_of(f))) = cube.facelets()[f];
+            on_face.at(static_cast<std::size_t>(geometry.face_of(f))) = cube.facelet(f);
         }
         const auto d = on_face.at(static_cast<std::size_t>(Face::D));
         const auto l = on_face.at(static_cast<std::size_t>(Face::L));

@@ -115,7 +115,10 @@ struct LayerMove {
     const int from_positive = size - 1 - turn.layer;
     if (from_negative < from_positive) {
         return LayerMove{
-            .face = face_on(turn.axis, false), .depth = from_negative, .turns = 4 - turn.turns};
+            .face = face_on(turn.axis, false),
+            .depth = from_negative,
+            .turns = 4 - turn.turns,
+        };
     }
     return LayerMove{.face = face_on(turn.axis, true), .depth = from_positive, .turns = turn.turns};
 }
@@ -189,7 +192,7 @@ public:
     [[nodiscard]] const Permutation& turn(SliceTurn turn) const noexcept;
 
     // All 24 orientations of the whole cube, identity first.
-    [[nodiscard]] std::span<const Rotation> rotations() const noexcept { return rotations_; }
+    [[nodiscard]] const std::vector<Rotation>& rotations() const noexcept { return rotations_; }
     [[nodiscard]] const Permutation& rotation_permutation(std::size_t rotation) const noexcept {
         return rotation_perms_.at(rotation);
     }
@@ -206,15 +209,15 @@ public:
     // cube, so it only ever moves a sticker within its orbit.
     [[nodiscard]] int orbit(std::size_t facelet) const noexcept { return orbits_.at(facelet); }
     [[nodiscard]] std::size_t orbit_count() const noexcept { return orbit_facelets_.size(); }
-    [[nodiscard]] std::span<const std::uint16_t> orbit_facelets(int orbit) const noexcept {
+    [[nodiscard]] const std::vector<std::uint16_t>& orbit_facelets(int orbit) const noexcept {
         return orbit_facelets_.at(static_cast<std::size_t>(orbit));
     }
     // The orbits of Centre stickers, in ascending orbit order.
-    [[nodiscard]] std::span<const int> centre_orbits() const noexcept { return centre_orbits_; }
+    [[nodiscard]] const std::vector<int>& centre_orbits() const noexcept { return centre_orbits_; }
 
     // The wing slots, grouped by orbit of the primary sticker: every group is
     // one set of interchangeable places (24 of them for any size from 4).
-    [[nodiscard]] std::span<const std::vector<WingSlot>> wing_orbits() const noexcept {
+    [[nodiscard]] const std::vector<std::vector<WingSlot>>& wing_orbits() const noexcept {
         return wing_orbits_;
     }
     // Where a wing slot's edge is, and which two faces it is between.
@@ -223,7 +226,7 @@ public:
         return edge_locations_.at(location);
     }
     // The stickers of the corner cubies: eight cubies, three stickers each.
-    [[nodiscard]] std::span<const std::array<std::uint16_t, 3>> corners() const noexcept {
+    [[nodiscard]] const std::vector<std::array<std::uint16_t, 3>>& corners() const noexcept {
         return corners_;
     }
     // The two stickers of the middle cubie of an edge location (odd sizes).

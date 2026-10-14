@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <mdspan>
 #include <span>
 #include <vector>
 
@@ -12,34 +13,11 @@
 namespace cube::nxn {
 
 // A read-only (face, row, col) view of an N x N x N cube's stickers, over the
-// storage they are already in: six N x N matrices, indexed face-major.
-//
-// This is std::mdspan<const Color, extents<size_t, 6, N, N>> with the one
-// layout it needs. It is written out because the toolchains this project
-// builds with do not all have <mdspan> (libstdc++ 15 does not), and because
-// the part of it that matters - the subscript and the extents - is the same
-// in both; swapping this for the standard type later changes nothing a caller
-// writes.
-class FaceletGrid {
-public:
-    constexpr FaceletGrid(std::span<const Color> data, std::size_t size) noexcept
-        : data_(data), size_(size) {}
-
-    // Extent 0 is the six faces; extents 1 and 2 are the rows and columns.
-    [[nodiscard]] constexpr std::size_t extent(std::size_t rank) const noexcept {
-        return rank == 0 ? 6 : size_;
-    }
-    [[nodiscard]] static constexpr std::size_t rank() noexcept { return 3; }
-
-    [[nodiscard]] constexpr const Color& operator[](std::size_t face, std::size_t row,
-                                                    std::size_t col) const noexcept {
-        return data_[(face * size_ * size_) + (row * size_) + col];
-    }
-
-private:
-    std::span<const Color> data_;
-    std::size_t size_;
-};
+// storage they are already in: six N x N matrices, indexed face-major. The
+// face extent is static (a cube has six); the rows and columns are N.
+using FaceletView =
+    std::mdspan<const Color,
+                std::extents<std::size_t, 6, std::dynamic_extent, std::dynamic_extent>>;
 
 // An N x N x N cube's 6 * N * N stickers.
 //
@@ -71,14 +49,17 @@ public:
     [[nodiscard]] int size() const noexcept { return geometry_->size(); }
     [[nodiscard]] const Geometry& geometry() const noexcept { return *geometry_; }
     [[nodiscard]] std::span<const Color> facelets() const noexcept { return facelets_; }
+    // One sticker by its facelet number.
+    [[nodiscard]] Color facelet(std::size_t index) const { return facelets_.at(index); }
 
     [[nodiscard]] Color at(Face face, int row, int col) const noexcept {
         return facelets_.at(geometry_->index(face, row, col));
     }
 
     // The stickers as six N x N matrices: view()[face, row, col].
-    [[nodiscard]] FaceletGrid view() const noexcept {
-        return FaceletGrid{facelets_, static_cast<std::size_t>(size())};
+    [[nodiscard]] FaceletView view() const noexcept {
+        const auto n = static_cast<std::size_t>(size());
+        return FaceletView{facelets_.data(), n, n};
     }
 
     // --- Turning -----------------------------------------------------------

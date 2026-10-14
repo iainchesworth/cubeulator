@@ -104,6 +104,7 @@ TEST_CASE("the virtual 3x3 of a cube is its corners, edges and centres, uncopied
 TEST_CASE("at size 3 the virtual 3x3 is the cube itself", "[nxn][state]") {
     const NCube cube = cube::nxn::random_scramble({.size = 3, .seed = 4U, .moves = 30});
     const auto view = cube::nxn::virtual_3x3(cube);
+    CHECK(view.mapping().is_exhaustive());
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
             CHECK(view[face, i / 3, i % 3] == cube.facelets()[(face * 9) + i]);

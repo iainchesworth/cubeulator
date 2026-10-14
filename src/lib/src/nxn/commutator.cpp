@@ -53,9 +53,20 @@ constexpr std::size_t kMostMoved = 6;
 
 // Folds the commutator c z c' z' into the facelets it moves, stopping as soon
 // as more than kMostMoved are seen to. Returns false in that case.
+//
+// This is the one loop that is hot: it runs once per candidate commutator, a
+// few hundred thousand times to build the library of a 7x7, and every value it
+// indexes with is a facelet number read out of one of these four tables, all of
+// them the same length. Checked indexing here made the whole library build
+// about 1.8x slower (measured), so the check is made once, up front.
 [[nodiscard]] bool fold_commutator(const Prefix& prefix, const Permutation& z,
                                    const Permutation& z_back, std::vector<std::uint16_t>& moved) {
     moved.clear();
+    if (prefix.forward.size() != z.size() || prefix.back.size() != z.size() ||
+        z_back.size() != z.size()) {
+        return false;
+    }
+    // NOLINTBEGIN(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     // The cube after c, z, c', z' shows at i what it showed at
     // c[z[c'[z'[i]]]] before.
     for (std::size_t i = 0; i < z.size(); ++i) {
@@ -68,6 +79,7 @@ constexpr std::size_t kMostMoved = 6;
         }
         moved.push_back(static_cast<std::uint16_t>(i));
     }
+    // NOLINTEND(cppcoreguidelines-pro-bounds-avoid-unchecked-container-access)
     return true;
 }
 
@@ -140,21 +152,21 @@ private:
     }
 
     void index_centres() {
-        const auto orbits = geometry_->centre_orbits();
+        const auto& orbits = geometry_->centre_orbits();
         centre_groups_.resize(orbits.size());
         for (std::size_t k = 0; k < orbits.size(); ++k) {
-            for (const std::uint16_t f : geometry_->orbit_facelets(orbits[k])) {
+            for (const std::uint16_t f : geometry_->orbit_facelets(orbits.at(k))) {
                 centre_of_.at(f) = static_cast<int>(k);
             }
         }
     }
 
     void index_wings() {
-        const auto orbits = geometry_->wing_orbits();
+        const auto& orbits = geometry_->wing_orbits();
         wing_groups_.resize(orbits.size());
         for (std::size_t g = 0; g < orbits.size(); ++g) {
-            for (std::size_t s = 0; s < orbits[g].size(); ++s) {
-                const WingSlot& slot = orbits[g][s];
+            for (std::size_t s = 0; s < orbits.at(g).size(); ++s) {
+                const WingSlot& slot = orbits.at(g).at(s);
                 for (const std::uint16_t f : {slot.primary, slot.secondary}) {
                     wing_group_of_.at(f) = static_cast<int>(g);
                     wing_slot_of_.at(f) = static_cast<int>(s);
@@ -167,7 +179,8 @@ private:
         std::vector<Prefix> prefixes;
         prefixes.reserve(moves_.size() + (moves_.size() * moves_.size()));
         for (const SliceTurn x : moves_) {
-            prefixes.push_back({geometry_->turn(x), geometry_->turn(x.inverse()), {x}});
+            prefixes.push_back(
+                {.forward = geometry_->turn(x), .back = geometry_->turn(x.inverse()), .word = {x}});
         }
         for (const SliceTurn x : moves_) {
             for (const SliceTurn y : moves_) {
@@ -177,7 +190,11 @@ private:
                 Permutation forward = then(then(geometry_->turn(x), geometry_->turn(y)),
                                            geometry_->turn(x.inverse()));
                 Permutation back = inverse(forward);
-                prefixes.push_back({std::move(forward), std::move(back), {x, y, x.inverse()}});
+                prefixes.push_back({
+                    .forward = std::move(forward),
+                    .back = std::move(back),
+                    .word = {x, y, x.inverse()},
+                });
             }
         }
         return prefixes;
@@ -200,7 +217,7 @@ private:
                 }
                 // gather(i): where the content now at i came from.
                 const auto gather = [&](std::uint16_t i) {
-                    return prefix.forward[forward[prefix.back[back[i]]]];
+                    return prefix.forward.at(forward.at(prefix.back.at(back.at(i))));
                 };
                 Word word = prefix.word;
                 word.push_back(z);
@@ -239,13 +256,13 @@ private:
         if (group < 0) {
             return;
         }
-        const auto& orbit = geometry_->wing_orbits()[static_cast<std::size_t>(group)];
+        const auto& orbit = geometry_->wing_orbits().at(static_cast<std::size_t>(group));
         std::vector<std::uint16_t> primaries;
         for (const std::uint16_t f : moved) {
             if (wing_group_of_.at(f) != group) {
                 return;
             }
-            const WingSlot& slot = orbit[static_cast<std::size_t>(wing_slot_of_.at(f))];
+            const WingSlot& slot = orbit.at(static_cast<std::size_t>(wing_slot_of_.at(f)));
             if (f != slot.primary) {
                 continue;
             }
@@ -264,7 +281,7 @@ private:
         // The secondaries must go the same way round (they do, by orbit
         // invariance; this guards the assumption rather than relying on it).
         const auto secondary_of = [&](std::uint16_t primary) {
-            return orbit[static_cast<std::size_t>(wing_slot_of_.at(primary))].secondary;
+            return orbit.at(static_cast<std::size_t>(wing_slot_of_.at(primary))).secondary;
         };
         if (gather(secondary_of(cells->at(1))) != secondary_of(cells->at(0))) {
             return;
@@ -289,7 +306,7 @@ private:
                     const Permutation& gather = geometry_->turn(h);
                     std::array<std::uint16_t, 3> cells{};
                     std::ranges::transform(cycle.cells, cells.begin(),
-                                           [&gather](std::uint16_t f) { return gather[f]; });
+                                           [&gather](std::uint16_t f) { return gather.at(f); });
                     if (wings && !same_wing_group(cells)) {
                         continue;
                     }
@@ -305,17 +322,15 @@ private:
     // whether some turn undoes it into one that is known: the answer is a
     // lookup per turn, and it leaves every group with all of its cycles.
     void complete() {
-        const auto centre_orbits = geometry_->centre_orbits();
+        const auto& centre_orbits = geometry_->centre_orbits();
         for (std::size_t k = 0; k < centre_groups_.size(); ++k) {
-            const auto facelets = geometry_->orbit_facelets(centre_orbits[k]);
-            complete_group(centre_groups_.at(k),
-                           std::vector<std::uint16_t>(facelets.begin(), facelets.end()));
+            complete_group(centre_groups_.at(k), geometry_->orbit_facelets(centre_orbits.at(k)));
         }
-        const auto wing_orbits = geometry_->wing_orbits();
+        const auto& wing_orbits = geometry_->wing_orbits();
         for (std::size_t g = 0; g < wing_groups_.size(); ++g) {
             std::vector<std::uint16_t> primaries;
-            primaries.reserve(wing_orbits[g].size());
-            for (const WingSlot& slot : wing_orbits[g]) {
+            primaries.reserve(wing_orbits.at(g).size());
+            for (const WingSlot& slot : wing_orbits.at(g)) {
                 primaries.push_back(slot.primary);
             }
             complete_group(wing_groups_.at(g), primaries);
@@ -349,7 +364,7 @@ private:
         for (const SliceTurn h : moves_) {
             const Permutation& undo = geometry_->turn(h.inverse());
             const auto found = group.index.find(
-                cycle_key({undo[cells.at(0)], undo[cells.at(1)], undo[cells.at(2)]}));
+                cycle_key({undo.at(cells.at(0)), undo.at(cells.at(1)), undo.at(cells.at(2))}));
             if (found != group.index.end()) {
                 return conjugated(h, group.cycles.at(found->second).word);
             }
@@ -397,15 +412,15 @@ struct Usable {
 
 // The cycles of `cycles` whose three cells are all among `cells`, with their
 // cells numbered by position in `cells`.
-[[nodiscard]] std::vector<Usable> usable_cycles(std::span<const std::uint16_t> cells,
-                                                std::span<const ThreeCycle> cycles) {
+[[nodiscard]] std::vector<Usable> usable_cycles(const std::vector<std::uint16_t>& cells,
+                                                const std::vector<ThreeCycle>& cycles) {
     std::size_t largest = 0;
     for (const std::uint16_t f : cells) {
         largest = std::max<std::size_t>(largest, f);
     }
     std::vector<std::size_t> cell_of(largest + 1, kNoCell);
     for (std::size_t k = 0; k < cells.size(); ++k) {
-        cell_of.at(cells[k]) = k;
+        cell_of.at(cells.at(k)) = k;
     }
 
     std::vector<Usable> usable;
@@ -428,13 +443,15 @@ struct Usable {
 
 // How many more cells hold what they should once `u` has been applied: the
 // content at at[0] goes to at[1], at[1]'s to at[2], at[2]'s to at[0].
-[[nodiscard]] int gain_of(const Usable& u, const Labels& current, std::span<const int> target) {
+[[nodiscard]] int gain_of(const Usable& u, const Labels& current, const Labels& target) {
     const std::size_t a = u.at.at(0);
     const std::size_t b = u.at.at(1);
     const std::size_t c = u.at.at(2);
-    const auto right = [&](std::size_t cell, int label) { return label == target[cell] ? 1 : 0; };
-    return right(b, current[a]) + right(c, current[b]) + right(a, current[c]) -
-           right(a, current[a]) - right(b, current[b]) - right(c, current[c]);
+    const auto right = [&](std::size_t cell, int label) {
+        return label == target.at(cell) ? 1 : 0;
+    };
+    return right(b, current.at(a)) + right(c, current.at(b)) + right(a, current.at(c)) -
+           right(a, current.at(a)) - right(b, current.at(b)) - right(c, current.at(c));
 }
 
 // How many moves a word saves when it is merged onto the end of what has
@@ -486,7 +503,7 @@ struct Usable {
 
 // The cycle that fixes the most cells per move, or nullptr if none fixes any.
 [[nodiscard]] const Usable* best_cycle(const std::vector<Usable>& usable, const Labels& current,
-                                       std::span<const int> target, const Word& emitted) {
+                                       const Labels& target, const Word& emitted) {
     const Usable* best = nullptr;
     std::size_t best_gain = 0;
     std::size_t best_length = 1;
@@ -513,15 +530,15 @@ struct Usable {
 
 }  // namespace
 
-Result<Word> arrange(std::span<const std::uint16_t> cells, std::span<const ThreeCycle> cycles,
-                     Labels& current, std::span<const int> target) {
+Result<Word> arrange(const std::vector<std::uint16_t>& cells, const std::vector<ThreeCycle>& cycles,
+                     Labels& current, const Labels& target) {
     const std::size_t count = cells.size();
     if (current.size() != count || target.size() != count) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
     // Same multiset of labels, or no arrangement exists.
     Labels have = current;
-    Labels want(target.begin(), target.end());
+    Labels want = target;
     std::ranges::sort(have);
     std::ranges::sort(want);
     if (have != want) {
@@ -543,10 +560,10 @@ Result<Word> arrange(std::span<const std::uint16_t> cells, std::span<const Three
         const std::size_t a = best->at.at(0);
         const std::size_t b = best->at.at(1);
         const std::size_t c = best->at.at(2);
-        const int moved_a = current[a];
-        current[a] = current[c];
-        current[c] = current[b];
-        current[b] = moved_a;
+        const int moved_a = current.at(a);
+        current.at(a) = current.at(c);
+        current.at(c) = current.at(b);
+        current.at(b) = moved_a;
         out.insert(out.end(), best->word->begin(), best->word->end());
     }
     return std::unexpected(CubeError::no_solution);

@@ -72,9 +72,11 @@ struct Vec3 {
     const Vec3 n = unit(axis);
     const int along = dot(v, n);
     const Vec3 across = cross(v, n);
-    return {.x = (n.x * along) + across.x,
-            .y = (n.y * along) + across.y,
-            .z = (n.z * along) + across.z};
+    return {
+        .x = (n.x * along) + across.x,
+        .y = (n.y * along) + across.y,
+        .z = (n.z * along) + across.z,
+    };
 }
 
 // A sticker as geometry: the cubie it is on and the way it faces.
@@ -482,7 +484,7 @@ Position Geometry::position(std::size_t facelet) const noexcept {
 }
 
 const Permutation& Geometry::turn(SliceTurn turn) const noexcept {
-    const auto base = (static_cast<std::size_t>(turn.axis) * static_cast<std::size_t>(size_) +
+    const auto base = ((static_cast<std::size_t>(turn.axis) * static_cast<std::size_t>(size_)) +
                        static_cast<std::size_t>(turn.layer)) *
                       3;
     return turns_.at(base + static_cast<std::size_t>(turn.turns) - 1);

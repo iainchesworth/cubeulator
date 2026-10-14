@@ -98,7 +98,7 @@ that its workflow has to carry `merge_group`. The rule is:
 | `Scan dependency diff` | `dependency-review.yml` | yes | yes |
 | `clang-format` | `ci.yml` | when green | yes |
 | `clang-tidy` | `ci.yml` | when green | yes |
-| `Linux (GCC 15)` | `ci.yml` | when green | yes |
+| `Linux (GCC 16)` | `ci.yml` | when green | yes |
 | `macOS (AppleClang)` | `ci.yml` | when green | yes |
 | `Windows (MSVC)` | `ci.yml` | when green | yes |
 | `Coverage (Linux, GCC)` | `ci.yml` | when green | yes |

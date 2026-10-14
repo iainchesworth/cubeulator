@@ -17,17 +17,20 @@ using Key = std::string;
 
 constexpr int kMaxDepth = 14;  // 11 is God's number in half turns; margin for the join
 
-constexpr std::array<LayerMove, 9> kMoves = {{
-    {.face = Face::U, .depth = 0, .turns = 1},
-    {.face = Face::U, .depth = 0, .turns = 2},
-    {.face = Face::U, .depth = 0, .turns = 3},
-    {.face = Face::R, .depth = 0, .turns = 1},
-    {.face = Face::R, .depth = 0, .turns = 2},
-    {.face = Face::R, .depth = 0, .turns = 3},
-    {.face = Face::F, .depth = 0, .turns = 1},
-    {.face = Face::F, .depth = 0, .turns = 2},
-    {.face = Face::F, .depth = 0, .turns = 3},
-}};
+// The nine turns of the faces whose layers leave the down-back-left corner
+// alone: every turn count of U, R and F.
+constexpr std::array<LayerMove, 9> make_moves() {
+    std::array<LayerMove, 9> moves{};
+    std::size_t next = 0;
+    for (const Face face : {Face::U, Face::R, Face::F}) {
+        for (int turns = 1; turns <= 3; ++turns) {
+            moves.at(next++) = LayerMove{.face = face, .depth = 0, .turns = turns};
+        }
+    }
+    return moves;
+}
+
+constexpr std::array<LayerMove, 9> kMoves = make_moves();
 
 [[nodiscard]] Key key_of(const NCube& cube) {
     Key key;

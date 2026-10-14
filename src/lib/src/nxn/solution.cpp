@@ -26,17 +26,17 @@ struct Kept {
 // it can be merged with any of them. Returns whether it was.
 [[nodiscard]] bool absorb(std::vector<Kept>& kept, SliceTurn t) {
     for (std::size_t back = kept.size(); back-- > 0;) {
-        if (kept[back].turn.axis != t.axis) {
+        if (kept.at(back).turn.axis != t.axis) {
             return false;
         }
-        if (kept[back].turn.layer != t.layer) {
+        if (kept.at(back).turn.layer != t.layer) {
             continue;
         }
-        const int sum = (kept[back].turn.turns + t.turns) % 4;
+        const int sum = (kept.at(back).turn.turns + t.turns) % 4;
         if (sum == 0) {
             kept.erase(kept.begin() + static_cast<std::ptrdiff_t>(back));
         } else {
-            kept[back].turn.turns = sum;
+            kept.at(back).turn.turns = sum;
         }
         return true;
     }
@@ -48,7 +48,7 @@ struct Kept {
 void merge_steps(std::vector<Step>& steps, int size) {
     std::vector<Kept> kept;
     for (std::size_t s = 0; s < steps.size(); ++s) {
-        for (const LayerMove& move : steps[s].moves) {
+        for (const LayerMove& move : steps.at(s).moves) {
             SliceTurn t = to_slice_turn(move, size);
             t.turns = ((t.turns % 4) + 4) % 4;
             if (t.turns != 0 && !absorb(kept, t)) {
@@ -60,7 +60,7 @@ void merge_steps(std::vector<Step>& steps, int size) {
         step.moves.clear();
     }
     for (const Kept& k : kept) {
-        steps[k.step].moves.push_back(to_layer_move(k.turn, size));
+        steps.at(k.step).moves.push_back(to_layer_move(k.turn, size));
     }
 }
 

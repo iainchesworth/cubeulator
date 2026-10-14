@@ -4,8 +4,8 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <mdspan>
 #include <ranges>
-#include <span>
 
 #include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
@@ -72,52 +72,75 @@ template <FaceletState S>
 
 // --- A 3x3 made of an N x N --------------------------------------------------
 //
-// A view that maps the 6 x 3 x 3 index space of a 3x3 onto the corners, edge
-// cubies and face centres of an N x N cube's storage: row or column 0 and 2
-// are the cube's own first and last, and 1 is the middle one (the one beside
-// the middle, when there is none). The result is a 3x3 you can read, and hand
-// to code that reads 3x3s, with no copy and no knowledge of N on the reader's
-// side - this mapping is the only place the size appears.
+// An mdspan layout that maps the 6 x 3 x 3 index space of a 3x3 onto the
+// corners, edge cubies and face centres of an N x N cube's storage: row or
+// column 0 and 2 are the cube's own first and last, and 1 is the middle one
+// (the one beside the middle, when there is none). The result is a 3x3 you can
+// read, and hand to code that reads 3x3s, with no copy and no knowledge of N
+// on the reader's side - the mapping is the only place the size appears.
 //
 // What it shows is the cube's real 3x3 only once the cube is reduced, which
 // is when its centres are solid and its edges are paired; before that it is a
 // sample of stickers that have not been put in order.
-//
-// In terms of the standard library this is std::mdspan with a custom layout
-// (a mapping that is injective but not exhaustive or strided); it is written
-// out for the reason FaceletGrid is.
-class Facelets3x3 {
-public:
-    constexpr Facelets3x3(std::span<const Color> data, std::size_t size) noexcept
-        : data_(data), size_(size) {}
+struct Projected3x3Layout {
+    template <class Extents>
+    class mapping {
+    public:
+        using extents_type = Extents;
+        using index_type = Extents::index_type;
+        using size_type = Extents::size_type;
+        using rank_type = Extents::rank_type;
+        using layout_type = Projected3x3Layout;
 
-    [[nodiscard]] static constexpr std::size_t extent(std::size_t rank) noexcept {
-        return rank == 0 ? 6 : 3;
-    }
-    [[nodiscard]] static constexpr std::size_t rank() noexcept { return 3; }
+        constexpr mapping(const Extents& extents, index_type size) noexcept
+            : extents_(extents), size_(size) {}
 
-    // Which of the underlying cube's rows (or columns) the 3x3's line `i` is.
-    [[nodiscard]] constexpr std::size_t line(std::size_t i) const noexcept {
-        if (i == 0) {
-            return 0;
+        [[nodiscard]] constexpr const Extents& extents() const noexcept { return extents_; }
+
+        // The span of storage it reaches into: the whole cube's.
+        [[nodiscard]] constexpr index_type required_span_size() const noexcept {
+            return 6 * size_ * size_;
         }
-        return i == 1 ? (size_ - 1) / 2 : size_ - 1;
-    }
 
-    [[nodiscard]] constexpr const Color& operator[](std::size_t face, std::size_t row,
-                                                    std::size_t col) const noexcept {
-        return data_[(face * size_ * size_) + (line(row) * size_) + line(col)];
-    }
+        [[nodiscard]] constexpr index_type operator()(index_type face, index_type row,
+                                                      index_type col) const noexcept {
+            return (face * size_ * size_) + (line(row) * size_) + line(col);
+        }
 
-private:
-    std::span<const Color> data_;
-    std::size_t size_;
+        // Distinct (face, row, col) reach distinct stickers for any size from
+        // 3, but they are not a contiguous or strided run of the storage.
+        [[nodiscard]] static constexpr bool is_always_unique() noexcept { return true; }
+        [[nodiscard]] static constexpr bool is_always_exhaustive() noexcept { return false; }
+        [[nodiscard]] static constexpr bool is_always_strided() noexcept { return false; }
+        [[nodiscard]] constexpr bool is_unique() const noexcept { return true; }
+        [[nodiscard]] constexpr bool is_exhaustive() const noexcept { return size_ == 3; }
+        [[nodiscard]] constexpr bool is_strided() const noexcept { return false; }
+
+        friend constexpr bool operator==(const mapping&, const mapping&) noexcept = default;
+
+    private:
+        // Which of the cube's rows (or columns) the 3x3's line `i` is.
+        [[nodiscard]] constexpr index_type line(index_type i) const noexcept {
+            if (i == 0) {
+                return 0;
+            }
+            return i == 1 ? (size_ - 1) / 2 : size_ - 1;
+        }
+
+        Extents extents_;
+        index_type size_;
+    };
 };
+
+using Facelets3x3 =
+    std::mdspan<const Color, std::extents<std::size_t, 6, 3, 3>, Projected3x3Layout>;
 
 // `cube` seen as a 3x3. Requires cube.size() >= 3. Refers to the cube's
 // storage, which must outlive the view.
 [[nodiscard]] inline Facelets3x3 virtual_3x3(const NCube& cube) noexcept {
-    return Facelets3x3{cube.facelets(), static_cast<std::size_t>(cube.size())};
+    using Mapping = Projected3x3Layout::mapping<std::extents<std::size_t, 6, 3, 3>>;
+    return Facelets3x3{cube.facelets().data(), Mapping{std::extents<std::size_t, 6, 3, 3>{},
+                                                       static_cast<std::size_t>(cube.size())}};
 }
 
 }  // namespace cube::nxn

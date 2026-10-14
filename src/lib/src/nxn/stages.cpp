@@ -42,8 +42,10 @@ constexpr std::size_t kColourCount = 6;
     EdgeDisplays displays{};
     for (std::size_t loc = 0; loc < displays.size(); ++loc) {
         const EdgeLocation& where = geometry.edge_location(loc);
-        displays.at(loc) = EdgeDisplay{.on_a = scheme.at(static_cast<std::size_t>(where.a)),
-                                       .on_b = scheme.at(static_cast<std::size_t>(where.b))};
+        displays.at(loc) = EdgeDisplay{
+            .on_a = scheme.at(static_cast<std::size_t>(where.a)),
+            .on_b = scheme.at(static_cast<std::size_t>(where.b)),
+        };
     }
     return displays;
 }
@@ -56,9 +58,9 @@ constexpr std::size_t kColourCount = 6;
         EdgeDisplay display;
         for (const std::uint16_t f : geometry.mid_edge(loc)) {
             if (geometry.face_of(f) == where.a) {
-                display.on_a = cube.facelets()[f];
+                display.on_a = cube.facelet(f);
             } else {
-                display.on_b = cube.facelets()[f];
+                display.on_b = cube.facelet(f);
             }
         }
         displays.at(loc) = display;
@@ -100,8 +102,7 @@ constexpr std::size_t kColourCount = 6;
     Labels labels;
     labels.reserve(orbit.size());
     for (const WingSlot& slot : orbit) {
-        labels.push_back(
-            wing_label(cube.facelets()[slot.primary], cube.facelets()[slot.secondary]));
+        labels.push_back(wing_label(cube.facelet(slot.primary), cube.facelet(slot.secondary)));
     }
     return labels;
 }
@@ -121,7 +122,7 @@ constexpr std::size_t kColourCount = 6;
 [[nodiscard]] int wing_sign(const Labels& current, const Labels& target) {
     Permutation gather(target.size());
     for (std::size_t k = 0; k < target.size(); ++k) {
-        const auto from = std::ranges::find(current, target[k]);
+        const auto from = std::ranges::find(current, target.at(k));
         if (from == current.end()) {
             return 0;
         }
@@ -175,10 +176,9 @@ Result<EdgeDisplays> FreeCentres::displays(const NCube& cube, const Scheme& sche
         EdgeDisplays traded = home;
         const EdgeDisplay first = home.at(0);
         const EdgeDisplay second = home.at(1);
-        traded.at(1) =
-            (flips & 1) != 0 ? EdgeDisplay{.on_a = first.on_b, .on_b = first.on_a} : first;
+        traded.at(1) = flips % 2 != 0 ? EdgeDisplay{.on_a = first.on_b, .on_b = first.on_a} : first;
         traded.at(0) =
-            (flips & 2) != 0 ? EdgeDisplay{.on_a = second.on_b, .on_b = second.on_a} : second;
+            flips / 2 != 0 ? EdgeDisplay{.on_a = second.on_b, .on_b = second.on_a} : second;
         if (reduces_to_solvable(cube, scheme, traded)) {
             return traded;
         }
@@ -190,14 +190,14 @@ Result<EdgeDisplays> FreeCentres::displays(const NCube& cube, const Scheme& sche
 
 ParityHandler inner_layer_parity(Axis axis) {
     return [axis](const Geometry& geometry, std::size_t group) -> Result<SliceTurn> {
-        const auto orbits = geometry.wing_orbits();
+        const auto& orbits = geometry.wing_orbits();
         for (int layer = 1; layer < geometry.size() - 1; ++layer) {
             const SliceTurn candidate{.axis = axis, .layer = layer, .turns = 1};
             const Permutation& moves = geometry.turn(candidate);
             std::vector<bool> touches(orbits.size(), false);
             for (std::size_t g = 0; g < orbits.size(); ++g) {
-                for (const WingSlot& slot : orbits[g]) {
-                    touches.at(g) = touches.at(g) || moves[slot.primary] != slot.primary;
+                for (const WingSlot& slot : orbits.at(g)) {
+                    touches.at(g) = touches.at(g) || moves.at(slot.primary) != slot.primary;
                 }
             }
             if (std::ranges::count(touches, true) == 1 && touches.at(group)) {
@@ -235,10 +235,11 @@ StageFn make_wings_even(ParityHandler handler) {
         }
         const Geometry& geometry = context.cube.geometry();
         Step step{.stage = Stage::Parity, .core_stage = solver::Stage::Cross, .moves = {}};
-        const auto orbits = geometry.wing_orbits();
+        const auto& orbits = geometry.wing_orbits();
         for (std::size_t g = 0; g < orbits.size(); ++g) {
-            const int parity = wing_sign(wing_labels(context.cube, orbits[g]),
-                                         wing_targets(geometry, orbits[g], (*targets)->displays));
+            const int parity =
+                wing_sign(wing_labels(context.cube, orbits.at(g)),
+                          wing_targets(geometry, orbits.at(g), (*targets)->displays));
             if (parity == 0) {
                 return std::unexpected(CubeError::invalid_cube_state);
             }
@@ -267,13 +268,13 @@ StageFn solve_centres() {
         const Geometry& geometry = context.cube.geometry();
         const CycleLibrary& library = CycleLibrary::of(context.cube.size());
         Step step{.stage = Stage::Centres, .core_stage = solver::Stage::Cross, .moves = {}};
-        const auto orbits = geometry.centre_orbits();
+        const auto& orbits = geometry.centre_orbits();
         for (std::size_t k = 0; k < orbits.size(); ++k) {
-            const auto cells = geometry.orbit_facelets(orbits[k]);
+            const auto& cells = geometry.orbit_facelets(orbits.at(k));
             Labels current;
             Labels target;
             for (const std::uint16_t f : cells) {
-                current.push_back(static_cast<int>(context.cube.facelets()[f]));
+                current.push_back(static_cast<int>(context.cube.facelet(f)));
                 target.push_back(static_cast<int>(
                     (*targets)->scheme.at(static_cast<std::size_t>(geometry.face_of(f)))));
             }
@@ -301,14 +302,14 @@ StageFn solve_edges() {
         const Geometry& geometry = context.cube.geometry();
         const CycleLibrary& library = CycleLibrary::of(context.cube.size());
         Step step{.stage = Stage::Edges, .core_stage = solver::Stage::Cross, .moves = {}};
-        const auto orbits = geometry.wing_orbits();
+        const auto& orbits = geometry.wing_orbits();
         for (std::size_t g = 0; g < orbits.size(); ++g) {
             std::vector<std::uint16_t> cells;
-            for (const WingSlot& slot : orbits[g]) {
+            for (const WingSlot& slot : orbits.at(g)) {
                 cells.push_back(slot.primary);
             }
-            Labels current = wing_labels(context.cube, orbits[g]);
-            const Labels target = wing_targets(geometry, orbits[g], (*targets)->displays);
+            Labels current = wing_labels(context.cube, orbits.at(g));
+            const Labels target = wing_targets(geometry, orbits.at(g), (*targets)->displays);
             const Result<Word> word = arrange(cells, library.wings(g), current, target);
             if (!word) {
                 return std::unexpected(word.error());
@@ -354,9 +355,11 @@ StageFn solve_corners() {
             return std::unexpected(moves.error());
         }
         context.cube.apply(std::span<const LayerMove>{*moves});
-        context.steps.push_back(Step{.stage = Stage::Corners,
-                                     .core_stage = solver::Stage::Cross,
-                                     .moves = std::move(*moves)});
+        context.steps.push_back(Step{
+            .stage = Stage::Corners,
+            .core_stage = solver::Stage::Cross,
+            .moves = std::move(*moves),
+        });
         return {};
     };
 }

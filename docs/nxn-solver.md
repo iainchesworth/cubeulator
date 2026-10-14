@@ -35,8 +35,8 @@ parity algorithms.
 
 `NCube` is one flat array of `6 * N * N` colours, numbered
 `face * N^2 + row * N + col` (Face's enumerator order, row-major), which for
-N = 3 is `Cube`'s own numbering. `view()` reads it as six N x N matrices,
-`view()[face, row, col]`.
+N = 3 is `Cube`'s own numbering. `view()` reads it as six N x N matrices with
+`std::mdspan`, `view()[face, row, col]`.
 
 A layer turn is `SliceTurn{axis, layer, turns}`: which axis, how far along it
 (0 at the negative end), how many clockwise quarter turns seen from the
@@ -174,16 +174,11 @@ a colour at every (face, row, col). `solver::Cube` and `NCube` both are, and
 the range algorithms in `state.hpp` (`facelets_of`, `has_uniform_faces`,
 `colour_counts`) work on either.
 
-`virtual_3x3(cube)` is a view that maps the 6 x 3 x 3 index space of a 3x3
-onto the corners, edge cubies and face centres of the N x N storage: row or
-column 0 and 2 are the first and last, 1 is the middle one. It copies
-nothing, and the mapping is the only place the size appears.
-
-Both views are `std::mdspan` in everything but name (the second is an mdspan
-with a custom layout). They are written out as two small classes with the
-same `[face, row, col]` subscript and `extent()` because libstdc++ 15, which is
-the project's g++, has no `<mdspan>` (libstdc++ 16 has); replacing them with
-the standard type later changes nothing a caller writes. `NCube::to_cube3()` reads through it (renaming colours to the
+`virtual_3x3(cube)` is an `std::mdspan` with a custom layout that maps the
+6 x 3 x 3 index space of a 3x3 onto the corners, edge cubies and face centres
+of the N x N storage: row or column 0 and 2 are the first and last, 1 is the
+middle one. It copies nothing, and the layout is the only place the size
+appears. `NCube::to_cube3()` reads through it (renaming colours to the
 canonical scheme) to build the `Cube` the 3x3 solvers take. For a reduced
 cube this *is* the cube's 3x3; before reduction it is a sample of stickers.
 

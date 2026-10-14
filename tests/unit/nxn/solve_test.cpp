@@ -364,14 +364,14 @@ TEST_CASE("arrange sorts by 3-cycles and refuses what 3-cycles cannot do", "[nxn
 
     // Two labels swapped is an odd permutation; no 3-cycle makes it.
     cube::nxn::Labels odd = target;
-    std::swap(odd[0], odd[1]);
+    std::swap(odd.at(0), odd.at(1));
     const auto refused = cube::nxn::arrange(cell_list, library.centres(0), odd, target);
     REQUIRE_FALSE(refused.has_value());
     CHECK(refused.error() == CubeError::no_solution);
 
     // Labels that are not the same set can never be arranged into each other.
     cube::nxn::Labels other = target;
-    other[0] = 99;
+    other.at(0) = 99;
     const auto mismatch = cube::nxn::arrange(cell_list, library.centres(0), other, target);
     REQUIRE_FALSE(mismatch.has_value());
     CHECK(mismatch.error() == CubeError::invalid_cube_state);
