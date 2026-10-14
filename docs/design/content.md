@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-408 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+413 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -618,6 +618,16 @@ Review the solution.
 | `settings.dev.cubeStyle` | Cube style | Developer builds only. |
 | `settings.dev.stats` | Show frame rate | Developer builds only. |
 | `settings.dev.recording` | This developer build records failed scans on this device. | Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so. |
+| `settings.dev.diagnostics` | Write diagnostics to a file | Developer builds only. A switch in Settings. While it is on, the app writes what it reads and decides - colours, how they were named, how the cube was put together - to a file a developer can open while the app runs. Off at every start. |
+| `settings.dev.diagnosticsFrames` | Also keep camera frames | Developer builds only. A switch in Settings, under the diagnostics switch; it only takes effect while that one is on. The frames show whatever the camera sees, which can be a person. |
+| `settings.dev.diagnosticsSnapshot` | Snapshot now | Developer builds only. A button in Settings. Writes the scan and the solve as they stand, in one record, to the diagnostics file. |
+
+#### `diagnostics`
+
+| key | English | note for translators |
+|---|---|---|
+| `diagnostics.marker` | Writing diagnostics to %1 | Developer builds only. A strip on every screen while the diagnostics file is being written, so that it is never silent. %1 is the file's path. |
+| `diagnostics.markerFrames` | Writing diagnostics and camera frames to %1 | Developer builds only. As diagnostics.marker, when camera frames are being kept as well. %1 is the folder the diagnostics are written to. |
 
 #### `about`
 

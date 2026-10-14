@@ -17,6 +17,7 @@
 #include <QPoint>
 #include <QSize>
 #include <QString>
+#include <QTemporaryDir>
 #include <QVariant>
 
 #include <functional>
@@ -178,6 +179,10 @@ private:
     void boot();
     void reset(Start start, Scene3D scene);
 
+    // Where the diagnostics channel writes in this run, so that pressing the
+    // Settings screen's switches leaves nothing in the user's own directory.
+    // Declared before the runtime, which writes to it, and so outlives it.
+    QTemporaryDir diagnostics_dir_;
     std::unique_ptr<cube::app::AppRuntime> runtime_;
     bool full_3d_ = false;
     QQuickWindow* window_ = nullptr;

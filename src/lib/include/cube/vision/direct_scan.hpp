@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cube/error.hpp>
+#include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_view.hpp>
 #include <cube/vision/prepared_frame.hpp>
 
@@ -9,6 +11,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -85,6 +88,91 @@ struct ScannedCube {
     SessionColours colours{};
 };
 
+// Which way the named sides were put together into a cube (or not).
+enum class AssemblyPath : std::uint8_t {
+    // The naming makes exactly one cube.
+    single_candidate,
+    // It makes several, and the corner reads fit one of them better than any
+    // other.
+    chosen_by_corners,
+    // It makes several, and the corner reads so far cannot say which:
+    // CubeError::ambiguous_scan.
+    ambiguous,
+    // No candidate was listed, but assembling directly made a cube.
+    direct,
+    // The naming makes no cube, and trading the names of two centres does.
+    names_exchanged,
+    // Nothing assembled, traded or not.
+    failed,
+};
+
+// The pair of names exchanged to make a cube, when one was.
+struct NameExchange {
+    // The two sides, as indices into the six handed to resolve_colors (see
+    // ScanDiagnosis::sides).
+    std::size_t first_side = 0;
+    std::size_t second_side = 0;
+    // The names those two centres carried before the trade.
+    cube::model::FacetColor first_name = cube::model::FacetColor::unknown;
+    cube::model::FacetColor second_name = cube::model::FacetColor::unknown;
+    // colour_distance between the two centres: the closest-looking pair wins.
+    float centre_distance = 0.0F;
+};
+
+// How the cube was put together from the six named sides, or why it was not:
+// the working of the assembly step, read-only, for whoever is finding out why
+// a scan came out as it did (docs/diagnostics.md).
+struct AssemblyTrace {
+    AssemblyPath path = AssemblyPath::failed;
+    // How many cubes the naming makes as it stands.
+    std::size_t candidates = 0;
+    // When there were several: how many of the corner reads fit each.
+    std::vector<std::size_t> corner_fits;
+    std::size_t corner_reads = 0;
+    // The candidate the corner reads chose.
+    std::optional<std::size_t> chosen;
+    // Why assembling the naming as it stands failed, when it was tried.
+    std::optional<CubeError> direct_error;
+    std::optional<NameExchange> exchange;
+    // Why there is no cube.
+    std::optional<CubeError> error;
+};
+
+// What one evaluation of a scan did, end to end, as plain data. The same
+// evaluation SideScan::scanned() makes, with its working kept.
+struct ScanDiagnosis {
+    // One captured side.
+    struct Side {
+        // Its place in the order sides were first shown: the order
+        // SideScan::sides() lists them in.
+        std::size_t first_seen = 0;
+        std::size_t reads = 0;
+        // The nine fused colours, laid out as the side was FIRST seen - the
+        // layout resolve_colors names. SideScan::sides() lists the same nine
+        // turned `roll` quarter-turns, to how the side was last shown.
+        std::array<cv::Vec3f, 9> lab{};
+        int roll = 0;
+        // The most recent frame's read belongs to this side.
+        bool in_view = false;
+    };
+
+    // Reads grouped so far, strays included, and how many of those have
+    // enough reads to count as a side.
+    std::size_t groups = 0;
+    std::size_t captured = 0;
+    std::size_t corner_reads = 0;
+    // The captured sides, at most six, in the order resolve_colors takes them
+    // (most reads first) - which is the order `naming` and `assembly` use.
+    std::vector<Side> sides;
+    // How the colours were named; empty until six sides are captured, and
+    // when naming failed.
+    std::optional<ColorResolution> naming;
+    // How the cube was assembled; empty when there was no naming.
+    std::optional<AssemblyTrace> assembly;
+    // What SideScan::scanned() answers.
+    Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
+};
+
 // Accumulates reads over one scan and reports the sides seen so far and,
 // once six are in, the cube.
 class SideScan {
@@ -139,6 +227,12 @@ public:
     // stickers of that colour, so one odd sticker (a logo on a centre) does
     // not stand for its colour.
     [[nodiscard]] Result<ScannedCube> scanned() const;
+    // scanned() with the working kept: the sides it used, how the colours
+    // were named, how the cube was assembled. The same evaluation, so
+    // `result` is exactly what scanned() returns; it costs what scanned()
+    // costs plus copying the answer out, and nothing in the app calls it
+    // unless a developer has asked (docs/diagnostics.md).
+    [[nodiscard]] ScanDiagnosis diagnose() const;
 
 private:
     struct Group {

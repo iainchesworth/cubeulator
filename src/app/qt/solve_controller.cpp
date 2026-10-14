@@ -3,11 +3,15 @@
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
+#include <cube/diagnostics/describe.hpp>
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
+
+#include <array>
+#include <cstddef>
 
 using cube::solver::Cube;
 using cube::solver::Face;
@@ -254,6 +258,26 @@ int SolveController::currentStageIndex() const {
 
 bool SolveController::isSolving() const {
     return isSolving_;
+}
+
+cube::diagnostics::Json SolveController::diagnosticState() const {
+    using cube::diagnostics::Json;
+    constexpr std::array<const char*, 3> kMethods = {"beginner", "intermediate", "advanced"};
+    Json state = Json::object();
+    state.set("method", kMethods.at(static_cast<std::size_t>(method_)));
+    state.set("is_solving", isSolving_);
+    state.set("continuation", continuation_);
+    state.set("move_index", stepped_.current_index());
+    state.set("total_moves", stepped_.move_count());
+    state.set("at_end", stepped_.at_end());
+    state.set("current_move", cube::diagnostics::move_json(currentMove()));
+    state.set("moves", cube::diagnostics::moves_json(stepped_.moves()));
+    state.set("cube", cube::diagnostics::cube_json(stepped_.current_cube()));
+    state.set("solved", stepped_.current_cube().is_solved());
+    state.set("started_from",
+              pending_.has_value() ? cube::diagnostics::cube_json(*pending_) : Json());
+    state.set("stage", currentStageIndex());
+    return state;
 }
 
 void SolveController::nextMove() {

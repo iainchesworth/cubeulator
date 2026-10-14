@@ -11,6 +11,9 @@ AppPaths current() {
     }
     if (const char* local_appdata = std::getenv("LOCALAPPDATA")) {
         paths.cache_dir = std::filesystem::path(local_appdata) / "Cubeulator" / "Cache";
+        // Local, not roaming: a log of this machine's camera has no business
+        // following the user to another one.
+        paths.diagnostics_dir = std::filesystem::path(local_appdata) / "Cubeulator" / "Diagnostics";
     }
     return paths;
 }

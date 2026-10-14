@@ -16,6 +16,13 @@ Recordings show whatever the camera sees, which can be the person holding the
 cube. They stay out of the repository (`/tests/data/captures/` and
 `/docs/evidence/` are ignored for that reason) and out of anything published.
 
+The recorder is also what the [live diagnostics channel](diagnostics.md) uses
+when it is asked to keep frames - a separate switch from the channel itself,
+off by default. It then writes this format to `frames/` beside the diagnostics
+file, one folder per scan, and the same recording marker is shown. The channel
+on its own writes no frames: its records are numbers and names, in JSON Lines,
+described in [diagnostics.md](diagnostics.md).
+
 ## Directory layout
 
 ```
