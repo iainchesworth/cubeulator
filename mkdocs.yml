@@ -1,0 +1,90 @@
+site_name: Cubeulator
+site_description: A camera-driven, on-device Rubik's Cube solver.
+site_url: https://iainchesworthlabs.github.io/cubeulator/
+repo_url: https://github.com/iainchesworthlabs/cubeulator
+repo_name: iainchesworthlabs/cubeulator
+edit_uri: edit/develop/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.tracking
+    - navigation.top
+    - content.code.copy
+    - content.action.edit
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets:
+      base_path: ["."]
+      check_paths: true
+
+nav:
+  - Home: index.md
+  - User guide:
+      - Overview: guide/index.md
+      - Installing: guide/install.md
+      - Scanning a cube: guide/scan.md
+      - Following the solution: guide/solve.md
+      - Past solves: guide/history.md
+      - Settings and shortcuts: guide/settings.md
+      - Privacy: guide/privacy.md
+      - Troubleshooting: guide/troubleshooting.md
+      - In your browser: web.md
+  - FAQ: faq.md
+  - Build and contribute:
+      - Getting started: getting-started.md
+      - Building & packaging: building.md
+      - Testing & coverage: testing.md
+      - Profiling: profiling.md
+      - Performance: performance.md
+      - Translations: i18n.md
+      - Contributing: CONTRIBUTING.md
+      - Code of conduct: CODE_OF_CONDUCT.md
+  - How it works:
+      - Architecture: architecture.md
+      - Vision pipeline: vision-pipeline.md
+      - Solve methods: solver-methods.md
+      - Cubes of any size: nxn-solver.md
+      - Recording format: recording-format.md
+      - Live diagnostics: diagnostics.md
+      - Platform isolation: platform-isolation.md
+      - Dependency strategy: dependency-strategy.md
+  - Project:
+      - Licensing: licensing.md
+      - Security policy: SECURITY.md
+  - For maintainers:
+      - CI & dependencies: ci.md
+      - Packaging the desktop app: packaging.md
+      - Cutting a release: releasing.md
+      - Branch protection: branch-protection.md
+      - Investigations: investigations/README.md

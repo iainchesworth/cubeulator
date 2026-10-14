@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/iainchesworthlabs/cubeulator/security/advisories/new
+    about: Please report vulnerabilities privately rather than as a public issue.
+  - name: Documentation
+    url: https://iainchesworthlabs.github.io/cubeulator/
+    about: Getting started, building, architecture, and contributing docs.

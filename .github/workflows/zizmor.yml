@@ -1,0 +1,49 @@
+name: Zizmor
+
+# Static analysis of the workflow YAML itself (script injection via
+# untrusted inputs, overly-broad permissions, unpinned actions, etc.).
+# Visible-only (continue-on-error on the scan step): findings land in the
+# Security > Code scanning tab but don't block merges.
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "50 3 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: zizmor-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zizmor:
+    name: Analyze workflows
+    runs-on: ubuntu-24.04
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      # The version is pinned in ci/requirements-zizmor.txt, which
+      # Dependabot's pip ecosystem for /ci keeps current.
+      - name: Run zizmor
+        continue-on-error: true
+        run: uv run --no-project --with-requirements ci/requirements-zizmor.txt -- zizmor --format=sarif . > results.sarif
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          sarif_file: results.sarif
+          category: zizmor

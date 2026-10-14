@@ -1,0 +1,4 @@
+# zizmor, the workflow linter run by .github/workflows/zizmor.yml. Kept in a
+# requirements file (rather than an env var in the workflow) so Dependabot's
+# pip ecosystem for /ci can keep it current.
+zizmor==1.30.1

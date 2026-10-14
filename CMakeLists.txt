@@ -1,0 +1,136 @@
+# CMake 4 is required; the version range keeps policy behaviour current up to 4.4.
+cmake_minimum_required(VERSION 3.28...4.4)
+
+# ---------------------------------------------------------------------------
+# Vendored vcpkg (git submodule at deps/vcpkg).
+#
+# The dependency provider is pinned by the submodule so builds are fully
+# reproducible without a machine-wide vcpkg or a VCPKG_ROOT env var. The
+# CMakePresets point CMAKE_TOOLCHAIN_FILE at deps/vcpkg/scripts/buildsystems.
+# If the submodule was not checked out, initialise it here so a fresh clone
+# configures without extra steps.
+# ---------------------------------------------------------------------------
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake")
+    find_package(Git QUIET)
+    if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+        message(STATUS "Initialising vendored vcpkg submodule (deps/vcpkg)")
+        execute_process(
+            COMMAND "${GIT_EXECUTABLE}" submodule update --init --depth 1 -- deps/vcpkg
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            RESULT_VARIABLE CUBEULATOR_SUBMODULE_RESULT)
+        if(NOT CUBEULATOR_SUBMODULE_RESULT EQUAL 0)
+            message(FATAL_ERROR
+                "Failed to initialise the vcpkg submodule. Run:\n"
+                "  git submodule update --init --depth 1 deps/vcpkg")
+        endif()
+    endif()
+endif()
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/deps/vcpkg/scripts/buildsystems/vcpkg.cmake")
+    message(FATAL_ERROR
+        "Vendored vcpkg not found at deps/vcpkg.\n"
+        "Clone with submodules (git clone --recurse-submodules ...) or run:\n"
+        "  git submodule update --init --depth 1 deps/vcpkg")
+endif()
+
+# ---------------------------------------------------------------------------
+# Select vcpkg manifest features BEFORE project() (the vcpkg toolchain reads
+# VCPKG_MANIFEST_FEATURES when it is loaded at project() time). Qt is a
+# prebuilt dependency found via CMAKE_PREFIX_PATH (see ci/), not vcpkg.
+# ---------------------------------------------------------------------------
+if(NOT DEFINED CUBEULATOR_BUILD_TESTS OR CUBEULATOR_BUILD_TESTS)
+    list(APPEND VCPKG_MANIFEST_FEATURES "tests")
+endif()
+
+# Tracy is opt-in: the one switch (declared in cmake/Tracy.cmake) both makes
+# the profiler client resolvable and turns the instrumentation macros real.
+if(CUBEULATOR_ENABLE_TRACY)
+    list(APPEND VCPKG_MANIFEST_FEATURES "profiling")
+endif()
+
+project(Cubeulator
+    VERSION 0.1.0
+    DESCRIPTION "A camera-driven, on-device Rubik's Cube solver"
+    HOMEPAGE_URL "https://github.com/iainchesworthlabs/cubeulator"
+    LANGUAGES CXX)
+
+# The pre-release label of this version: "beta.1" for 0.1.0-beta.1, "" for a
+# final release. project(VERSION) cannot hold a label, so it sits beside it.
+# tools/release/prepare_release.py sets the pair together, and the Release
+# workflow checks the tag against it (docs/releasing.md). Everything that is
+# named for the version - the packages, the version resource, version.hpp's
+# version_string - uses CUBEULATOR_VERSION_FULL, so a beta is never a package
+# called by the final's name.
+set(CUBEULATOR_VERSION_PRERELEASE "beta.1")
+set(CUBEULATOR_VERSION_FULL "${PROJECT_VERSION}")
+if(NOT CUBEULATOR_VERSION_PRERELEASE STREQUAL "")
+    if(NOT CUBEULATOR_VERSION_PRERELEASE MATCHES "^(alpha|beta|rc)\\.[1-9][0-9]*$")
+        message(FATAL_ERROR
+            "CUBEULATOR_VERSION_PRERELEASE is '${CUBEULATOR_VERSION_PRERELEASE}'; "
+            "expected alpha.N, beta.N or rc.N, or empty for a final release.")
+    endif()
+    string(APPEND CUBEULATOR_VERSION_FULL "-${CUBEULATOR_VERSION_PRERELEASE}")
+endif()
+
+# ---------------------------------------------------------------------------
+# Global language settings: C++23 only, no compiler extensions.
+# ---------------------------------------------------------------------------
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Export compile_commands.json for clang-tidy / editors.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# Put all runtime artefacts in one place so the Qt app can find its plugins.
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+# The one place the target OS is decided (cmake/Platform.cmake); every other
+# CMake file reads what the platform's fragment declared.
+include(Platform)
+include(CompilerWarnings)
+include(Sanitizers)
+include(Coverage)
+include(Tracy)
+include(ProfileRecorder)
+include(MobileDependencies)
+
+cube_configure_mobile_dependencies()
+
+# ---------------------------------------------------------------------------
+# Options
+# ---------------------------------------------------------------------------
+option(CUBEULATOR_BUILD_APP "Build the Qt6 GUI application" ON)
+option(CUBEULATOR_BUILD_TESTS "Build the unit and integration test suites" ON)
+
+# ---------------------------------------------------------------------------
+# Targets
+# ---------------------------------------------------------------------------
+# The library holds ALL of the solver/vision/render/i18n logic and is
+# completely GUI-free.
+add_subdirectory(src/lib)
+
+# Always added: src/app/CMakeLists.txt builds the platform-abstraction
+# library (cube_platform) unconditionally so the per-OS interface selection
+# is exercised on every preset, including CUBEULATOR_BUILD_APP=OFF headless
+# builds; the Qt GUI executable inside it is separately gated on
+# CUBEULATOR_BUILD_APP.
+add_subdirectory(src/app)
+
+# Desktop-only developer instruments (the scan scoreboard - see
+# docs/recovery-plan.md); gated per-platform inside.
+add_subdirectory(tools)
+
+if(CUBEULATOR_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
+
+include(Packaging)
+
+message(STATUS "Cubeulator ${CUBEULATOR_VERSION_FULL}")
+message(STATUS "  Build app   : ${CUBEULATOR_BUILD_APP}")
+message(STATUS "  Build tests : ${CUBEULATOR_BUILD_TESTS}")
+message(STATUS "  Tracy       : ${CUBEULATOR_ENABLE_TRACY}")
+message(STATUS "  Recorder    : ${CUBEULATOR_ENABLE_PROFILE_RECORDER}")

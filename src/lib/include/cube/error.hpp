@@ -1,0 +1,76 @@
+#pragma once
+
+#include <cstdint>
+#include <expected>
+#include <string_view>
+
+namespace cube {
+
+// Every fallible operation in the library reports failure through this enum
+// rather than by throwing. Combined with `Result<T>` (an alias for
+// std::expected) this lets call sites compose with the C++23 monadic
+// operations (and_then / transform / or_else) instead of try/catch.
+enum class CubeError : std::uint8_t {
+    // Cube state / solver
+    invalid_cube_state,
+    unsolvable_state,
+    invalid_move_sequence,
+    no_solution,
+
+    // Vision / capture pipeline
+    camera_not_found,
+    camera_start_failed,
+    camera_control_unavailable,
+    no_valid_cube_detected,
+    face_capture_incomplete,
+    ambiguous_scan,
+
+    // Edge-AI / inference
+    model_load_failed,
+    inference_provider_unavailable,
+    inference_failed,
+
+    // i18n
+    locale_resource_not_found,
+};
+
+[[nodiscard]] constexpr std::string_view to_string(CubeError error) noexcept {
+    switch (error) {
+        case CubeError::invalid_cube_state:
+            return "the supplied cube state is not physically valid";
+        case CubeError::unsolvable_state:
+            return "no solution exists for this cube state";
+        case CubeError::invalid_move_sequence:
+            return "the move sequence contains an invalid move";
+        case CubeError::no_solution:
+            return "no solution could be found";
+        case CubeError::camera_not_found:
+            return "no camera device was found";
+        case CubeError::camera_start_failed:
+            return "the camera could not be started";
+        case CubeError::camera_control_unavailable:
+            return "the camera's capture settings could not be controlled";
+        case CubeError::no_valid_cube_detected:
+            return "no valid cube was detected in the frame";
+        case CubeError::face_capture_incomplete:
+            return "not all faces have been captured yet";
+        case CubeError::ambiguous_scan:
+            return "the scanned sides can be put together in more than one way";
+        case CubeError::model_load_failed:
+            return "the inference model could not be loaded";
+        case CubeError::inference_provider_unavailable:
+            return "no suitable inference execution provider is available";
+        case CubeError::inference_failed:
+            return "inference failed to produce a result";
+        case CubeError::locale_resource_not_found:
+            return "a locale resource file could not be found";
+    }
+    return "unknown error";
+}
+
+// The library-wide fallible result type. `Result<void>` is valid and is used
+// for operations that either succeed or report a CubeError.
+template <typename T>
+using Result = std::expected<T, CubeError>;
+
+}  // namespace cube

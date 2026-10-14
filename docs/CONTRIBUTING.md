@@ -1,0 +1,97 @@
+# Contributing
+
+Thanks for taking a look at Cubeulator! This guide is short — the goal is
+just to save you a round-trip on the handful of things that aren't obvious
+from the code.
+
+## Before you start
+
+For anything more than a typo fix, it's worth
+[opening an issue](https://github.com/iainchesworthlabs/cubeulator/issues) first
+to say what you're thinking — it avoids duplicated effort and lets us agree
+on the approach before you sink time into it. A security problem is the
+exception: report it privately, as the [security policy](SECURITY.md) says,
+not in an issue. Everyone taking part is held to the
+[code of conduct](CODE_OF_CONDUCT.md).
+
+## Branching model
+
+This project follows [gitflow](https://nvie.com/posts/a-successful-git-branching-model/):
+
+- **`develop`** is the integration branch — target your PR here. It is
+  protected: nothing is pushed to it directly, and pull requests land
+  through a [merge queue](branch-protection.md) rather than by hand.
+- **`main`** only receives tagged releases (a `develop` → `main` release PR,
+  or a `hotfix/*`); day-to-day work never targets it directly.
+- Branch names must start with `feature/`, `bugfix/`, `release/`,
+  `hotfix/`, or `support/`, followed by letters, digits, `.`, `_` or `-` (no
+  second `/`) — a required CI check (`Validate gitflow branch name`) enforces
+  this on every PR.
+- **`spike/<name>`** is for finding something out. It is pushed, tried (CI legs
+  are dispatched at it by hand) and shown, and it is **never merged**: a pull
+  request from one fails that same check, deliberately. What it found goes in
+  [a page under `docs/investigations/`](investigations/README.md); a spike left
+  alone for 30 days is tagged `archive/spike-<name>` and its branch deleted.
+
+## Set up your build
+
+See [Getting started](getting-started.md) for toolchain requirements and
+your first build. `-DCUBEULATOR_BUILD_APP=OFF` skips Qt entirely if you're
+only touching `cube::lib` and want a faster inner loop.
+
+## Tests are not optional
+
+This project is TDD by convention: new behaviour comes with a test, and
+existing behaviour that changes gets its test updated in the same PR. See
+[Testing & coverage](testing.md) for where each kind of test lives.
+
+CI enforces an **80% line and branch coverage** floor
+(`Coverage (Linux, GCC)`) — a PR that drops coverage below that will fail
+that check.
+
+## Code style
+
+- Formatting follows the repo's
+  [`.clang-format`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-format) —
+  run `clang-format` before committing, or configure your editor to do it
+  on save. The version is **23.1.3**: CI installs that wheel from
+  [`ci/requirements-lint.txt`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/ci/requirements-lint.txt)
+  and checks with it (`pip install -r ci/requirements-lint.txt` gives you the
+  same one). A 21, 22 or 23 formats the tree the same way, so any is fine
+  locally.
+- [`.clang-tidy`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/.clang-tidy)
+  is what the `clang-tidy` CI check runs, over a Clang build of everything
+  but the Qt app; a build on your machine does not run it. Compiler warnings
+  are treated as errors in every build, so fix them rather than silencing
+  them where you reasonably can.
+- Modern C++23 is encouraged over older idioms — see
+  [Architecture](architecture.md) for the patterns already in use
+  (`Result<T>` over `std::expected`, for one) and follow their lead.
+
+## Opening a pull request
+
+1. Push your `feature/*` or `bugfix/*` branch and open a PR against
+   `develop`.
+2. Make sure the required checks are green — see
+   [Branch protection and the merge queue](branch-protection.md) for which
+   checks are required on `develop` today (the set grows as the build and
+   analysis jobs go green).
+3. When it's ready, put it in the queue: `gh pr merge --auto --merge <n>`
+   (or **Merge when ready** on the PR). GitHub merges it onto the current
+   `develop` tip, re-runs the required checks on that tree, and lands it —
+   you don't rebase or re-merge `develop` yourself unless the PR conflicts.
+   Your remote branch is deleted once it merges.
+4. If a person using the app would notice the change, add a **changelog
+   fragment**: one small file, `changelog.d/<slug>.<type>.md`, holding one item
+   (`added`, `changed`, `fixed`, ...). It is a file of its own so that pull
+   requests open at the same time do not conflict over `CHANGELOG.md`. If the
+   change is not one a reader of the changelog would want to hear about (a
+   refactor, a test, a build detail), label the PR `no-changelog`. How to write
+   one is in
+   [`changelog.d/README.md`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/changelog.d/README.md);
+   the `Changelog fragment` check says when one is missing and is advisory.
+5. Keep PRs focused — a bug fix doesn't need to carry an unrelated
+   refactor along with it.
+
+That's it. If anything here is unclear or out of date, flagging it in an
+issue is itself a welcome contribution.

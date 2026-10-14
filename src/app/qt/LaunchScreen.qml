@@ -1,0 +1,175 @@
+import QtQuick
+import Cubeulator
+
+Rectangle {
+    id: root
+    color: Theme.paper
+    readonly property bool wide: width >= Theme.wideBreakpoint
+
+    // ---- narrow (phone) ----
+    Column {
+        visible: !root.wide
+        anchors.fill: parent
+        anchors.margins: Theme.space6
+        spacing: Theme.space4
+
+        Text {
+            text: qsTrId("app.name")
+            font.capitalization: Font.AllUppercase
+            color: Theme.accent
+            font.family: Theme.fontHeading
+            font.pixelSize: 11
+            font.letterSpacing: 1.6
+        }
+
+        Item {
+            width: parent.width
+            height: root.height - 360
+            Cube3DView {
+                width: 190; height: 190
+                anchors.centerIn: parent
+                shaderStyle: SettingsState.shaderStyleIndex
+                autoRotate: SettingsState.cubeAutoRotate
+                autoRotateSpeed: SettingsState.rotateSpeedValue
+                showStats: SettingsState.statsForNerds && !root.wide
+                LayoutMirroring.enabled: false
+                LayoutMirroring.childrenInherit: true
+            }
+        }
+
+        Column {
+            width: parent.width
+            spacing: Theme.space2
+
+            AppButton {
+                width: parent.width; height: 46
+                variant: "primary"; block: true
+                objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
+                onClicked: AppState.beginScan()
+            }
+            AppButton {
+                width: parent.width; height: 44
+                variant: "secondary"; block: true
+                objectName: "launch.solveHistory"; text: qsTrId("home.history"); trailingIcon: "chevron-right"
+                onClicked: AppState.openHistory()
+            }
+            Rectangle { width: parent.width; height: 1; color: Theme.divider }
+            Item {
+                width: parent.width
+                height: 40
+                AppButton {
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    objectName: "launch.language"; variant: "ghost"; text: LanguageManager.currentLanguageName; leadingIcon: "globe"
+                    onClicked: AppState.openSettings()
+                }
+                AppButton {
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    objectName: "launch.settings"; variant: "ghost"; text: qsTrId("common.settings"); leadingIcon: "menu"
+                    onClicked: AppState.openSettings()
+                }
+            }
+        }
+    }
+
+    // ---- wide (tablet/desktop) ----
+    Row {
+        visible: root.wide
+        anchors.fill: parent
+
+        // An Item with explicit anchors, not a Column with a hand-computed
+        // spacer: the previous fixed "parent.height - 340" spacer assumed a
+        // specific window height and pushed the English/Settings footer
+        // below the visible area on shorter windows. Anchoring the footer to
+        // the bottom and the hero copy to vertical-center keeps every piece
+        // on screen at any wide-layout height.
+        Item {
+            id: leftPane
+            width: parent.width / 2
+            height: parent.height
+
+            readonly property real pad: Theme.space8 + Theme.space2
+
+            Text {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.margins: leftPane.pad
+                text: qsTrId("app.name")
+                font.capitalization: Font.AllUppercase
+                color: Theme.accent
+                font.family: Theme.fontHeading
+                font.pixelSize: 11
+                font.letterSpacing: 1.8
+            }
+
+            Column {
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: leftPane.pad
+                anchors.rightMargin: leftPane.pad
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: Theme.space3
+                Text {
+                    text: qsTrId("app.tagline")
+                    color: Theme.ink
+                    font.family: Theme.fontHeading
+                    font.weight: Font.ExtraBold
+                    font.pixelSize: 44
+                    lineHeight: 0.98
+                    lineHeightMode: Text.ProportionalHeight
+                    // The line break is the author's; a longer line is not cut
+                    // off or run into the other pane, it wraps.
+                    width: parent.width
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    text: qsTrId("home.lede")
+                    color: Theme.inkMuted(0.55)
+                    font.family: Theme.fontHeading
+                    font.pixelSize: 15
+                    width: 340
+                    wrapMode: Text.WordWrap
+                }
+                Row {
+                    spacing: Theme.space3
+                    topPadding: Theme.space3
+                    AppButton {
+                        height: 46; variant: "primary"
+                        objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
+                        onClicked: AppState.beginScan()
+                    }
+                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: qsTrId("home.history"); onClicked: AppState.openHistory() }
+                }
+            }
+
+            Row {
+                anchors.left: parent.left
+                anchors.bottom: parent.bottom
+                anchors.margins: leftPane.pad
+                spacing: Theme.space6
+                AppButton { objectName: "launch.language"; variant: "ghost"; text: LanguageManager.currentLanguageName; leadingIcon: "globe"; onClicked: AppState.openSettings() }
+                AppButton { objectName: "launch.settings"; variant: "ghost"; text: qsTrId("common.settings"); leadingIcon: "menu"; onClicked: AppState.openSettings() }
+            }
+        }
+
+        Rectangle {
+            width: parent.width / 2
+            height: parent.height
+            color: Theme.surface
+
+            Rectangle { anchors.left: parent.left; width: 2; height: parent.height; color: Theme.divider }
+
+            Cube3DView {
+                width: 320; height: 320
+                anchors.centerIn: parent
+                shaderStyle: SettingsState.shaderStyleIndex
+                autoRotate: SettingsState.cubeAutoRotate
+                autoRotateSpeed: SettingsState.rotateSpeedValue
+                showStats: SettingsState.statsForNerds && root.wide
+                LayoutMirroring.enabled: false
+                LayoutMirroring.childrenInherit: true
+            }
+        }
+    }
+}

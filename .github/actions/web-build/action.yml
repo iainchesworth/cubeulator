@@ -1,0 +1,98 @@
+name: Build the web app
+description: >-
+  Builds Cubeulator for the browser: installs Emscripten and Qt's WebAssembly
+  kit, then configures and builds each of the presets asked for (by default
+  web-emscripten-release, whose result is a directory of static files at
+  build/web-emscripten-release/bin - see docs/web.md). One definition for the
+  CI legs (ci.yml) and for the documentation publish (docs.yml), so the
+  toolchain versions below are stated once.
+
+  Not included, on purpose: the checkout (it needs the vcpkg submodule with
+  full history, and the caller's own settings) and the vcpkg binary cache
+  (restore before this, save after it with if: always(), as the other legs
+  do - triplet wasm32-emscripten-threads).
+
+inputs:
+  presets:
+    description: >-
+      Space-separated configure presets to configure and build, in order
+      (web-emscripten-release, web-emscripten-diagnostics,
+      web-emscripten-tests). Each is a build tree of its own under
+      build/<preset>; they share the vcpkg tree.
+    required: false
+    default: web-emscripten-release
+
+runs:
+  using: composite
+  steps:
+    # Qt 6.12.0 requires exactly this Emscripten: Qt's toolchain file stops
+    # the configure on any other (doc.qt.io/qt-6/wasm.html). Move the two
+    # together when Qt moves. setup-emsdk exports EMSDK, which the preset and
+    # Qt's toolchain both read.
+    - name: Install Emscripten
+      uses: emscripten-core/setup-emsdk@4528d102f7230f0e7b276855c01ea1159be0e984 # v16
+      with:
+        version: "5.0.5"
+
+    - name: Install CMake 4 + Ninja
+      uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+      with:
+        cmakeVersion: "latest"
+
+    # The threaded kit: the app needs std::thread and QtConcurrent, which the
+    # single-threaded kit cannot run (see docs/building.md). install-qt-action
+    # also installs the matching desktop kit (the host tools: moc, rcc, qsb,
+    # lrelease) and exports QT_HOST_PATH and QT_ROOT_DIR.
+    #
+    # aqtsource: the same pinned aqtinstall commit the Windows legs use. The
+    # last release (3.3.0) cannot read the Qt 6.11+ repository layout, WebAssembly
+    # kits included, and fails with "Failed to download checksum for the file
+    # 'Updates.xml'"; the fix is on master and unreleased. Go back to the
+    # default once a release newer than 3.3.0 exists.
+    - name: Install Qt (prebuilt, WebAssembly)
+      uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+      with:
+        version: "6.12.0"
+        target: wasm
+        arch: wasm_multithread
+        modules: "qtquick3d qtshadertools"
+        aqtsource: "git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+        cache: true
+
+    # QT_ROOT_DIR is read by the preset to chainload the kit's
+    # qt.toolchain.cmake (which chainloads Emscripten's). QT_HOST_PATH and its
+    # cmake dir are normally supplied by Qt's own qt-cmake wrapper, which this
+    # project does not use - the same four-variable story as Android
+    # (docs/building.md).
+    # Configuring is where vcpkg builds the dependencies, so it is where a
+    # download from github.com that answers 500 fails a job that has otherwise
+    # done nothing wrong (it did, once, on the macOS leg of a release dry run).
+    # What a failed attempt built is in vcpkg's binary cache and buildtrees, so
+    # a second attempt resumes rather than starts again. The desktop legs of
+    # release.yml do the same.
+    - name: Configure and build
+      shell: bash
+      env:
+        PRESETS: ${{ inputs.presets }}
+      run: |
+        set -uo pipefail
+        for preset in $PRESETS; do
+          echo "::group::$preset"
+          configured=false
+          for attempt in 1 2 3; do
+            if cmake --preset "$preset" \
+                -DQT_HOST_PATH="$QT_HOST_PATH" \
+                -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"; then
+              configured=true
+              break
+            fi
+            echo "::warning::configuring $preset failed (attempt $attempt of 3)"
+            sleep 30
+          done
+          if [ "$configured" != true ]; then
+            echo "::error::configuring $preset failed three times"
+            exit 1
+          fi
+          cmake --build --preset "$preset" || exit 1
+          echo "::endgroup::"
+        done

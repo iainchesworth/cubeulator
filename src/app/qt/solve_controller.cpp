@@ -1,0 +1,296 @@
+#include "solve_controller.hpp"
+
+#include "colour_name.hpp"
+
+#include <QVariantMap>
+#include <QtConcurrentRun>
+
+#include <cube/diagnostics/describe.hpp>
+#include <cube/error.hpp>
+#include <cube/nxn/cube3.hpp>
+#include <cube/profiling.hpp>
+#include <cube/solver/notation.hpp>
+#include <cube/solver/outside_view.hpp>
+#include <cube/solver/solver.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+
+using cube::nxn::solve_3x3;
+using cube::solver::Cube;
+using cube::solver::Face;
+using cube::solver::SolveMethod;
+using cube::solver::SteppedSolution;
+
+namespace {
+
+QString face_letter(Face face) {
+    switch (face) {
+        case Face::U:
+            return QStringLiteral("U");
+        case Face::D:
+            return QStringLiteral("D");
+        case Face::L:
+            return QStringLiteral("L");
+        case Face::R:
+            return QStringLiteral("R");
+        case Face::F:
+            return QStringLiteral("F");
+        case Face::B:
+            return QStringLiteral("B");
+    }
+    return QStringLiteral("U");
+}
+
+QVariantList face_colors(const Cube& cube, Face face) {
+    QVariantList colors;
+    colors.reserve(9);
+    for (cube::solver::Color color : cube.face(face)) {
+        colors.append(colour_name(color));
+    }
+    return colors;
+}
+
+// Every sticker of `cube`: side letter -> nine colour names, each side as
+// seen from outside it.
+QVariantMap stickers_of(const Cube& cube) {
+    QVariantMap sides;
+    for (const Face face : cube::solver::kAllFaces) {
+        QVariantList colors;
+        colors.reserve(9);
+        for (const cube::solver::Color color : cube::solver::outside_view(cube, face)) {
+            colors.append(colour_name(color));
+        }
+        sides.insert(face_letter(face), colors);
+    }
+    return sides;
+}
+
+SolveMethod to_solver_method(SolveController::Method method) {
+    switch (method) {
+        case SolveController::Beginner:
+            return SolveMethod::Beginner;
+        case SolveController::Intermediate:
+            return SolveMethod::Intermediate;
+        case SolveController::Advanced:
+            return SolveMethod::Advanced;
+    }
+    return SolveMethod::Beginner;
+}
+
+// Every method completes in seconds or far less on any scramble (the beginner
+// method's last layer uses fixed 2-look algorithms - see
+// src/lib/src/solver/last_layer.hpp; it once ranged up to tens of minutes
+// when that stage was searched per-scramble - and the other two take
+// milliseconds). beginSolve() below still runs it on a background thread via
+// QtConcurrent::run rather than the UI thread, so even those seconds never
+// affect app responsiveness.
+
+// Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
+SteppedSolution solve_stepped(Cube scrambled, SolveMethod method) {
+    CUBE_ZONE_SCOPED_N("app.solve_stepped");
+    const auto solution = solve_3x3(scrambled, method);
+    if (solution.has_value()) {
+        return SteppedSolution::from(scrambled, *solution);
+    }
+    // Should not happen for a physically valid cube (every real cube
+    // solves) - fall back to an already-solved, zero-move stepped solution
+    // so the UI has something consistent to show rather than crashing.
+    return SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
+}
+
+}  // namespace
+
+SolveController::SolveController(QObject* parent) : QObject(parent) {
+    // Safe placeholder so topColors()/etc. never read an empty stepped_
+    // before the first real scan completes.
+    stepped_ = SteppedSolution::from(Cube::solved(), cube::solver::Solution{});
+    connect(&solveWatcher_, &QFutureWatcher<SteppedSolution>::finished, this,
+            &SolveController::applySolveResult);
+}
+
+void SolveController::solveCube(const Cube& cube) {
+    scanned_ = cube;
+    beginSolve(cube);
+}
+
+void SolveController::resumeCube(const Cube& scanned, const Cube& from, Method method, int turn) {
+    scanned_ = scanned;
+    if (method != method_) {
+        // Recorded, not acted on through setMethod(): the cube to solve is
+        // `from`, not the one a method change would carry on from.
+        method_ = method;
+        emit methodChanged();
+    }
+    beginSolve(from);
+    resume_turn_ = std::max(0, turn);
+}
+
+void SolveController::setMethod(Method method) {
+    if (method == method_) {
+        return;
+    }
+    method_ = method;
+    emit methodChanged();
+
+    // Nothing scanned yet: the method is only recorded, and the next solve
+    // uses it.
+    if (!pending_.has_value()) {
+        return;
+    }
+    // Carry on from the cube as it stands. A solve still in flight is
+    // replaced - its cube is the one to solve - rather than waited for: the
+    // QFutureWatcher drops the old future's result when it is given a new one.
+    const Cube from = isSolving_ ? *pending_ : stepped_.current_cube();
+    // It continues a solution only if one had landed for this cube. A scan
+    // whose solve is still being worked out has none, and what it replaces is
+    // still "a new cube to solve" (HeldCube starts that from the stated hold).
+    const bool continuation = isSolving_ ? solving_continuation_ : true;
+    beginSolve(from, continuation);
+}
+
+void SolveController::beginSolve(const Cube& scrambled, bool continuation) {
+    // A scan can't complete while a solve is in flight (the scan screen isn't
+    // reachable again until this solve's result has been applied - see
+    // AppState.qml), but a method change can: it replaces the solve.
+    pending_ = scrambled;
+    solving_continuation_ = continuation;
+    resume_turn_ = 0;
+    isSolving_ = true;
+    CUBE_MESSAGE("solve.started");
+    emit stateChanged();
+    solveWatcher_.setFuture(
+        QtConcurrent::run(&solve_stepped, scrambled, to_solver_method(method_)));
+}
+
+void SolveController::applySolveResult() {
+    CUBE_ZONE_SCOPED_N("app.solve.apply_result");
+    CUBE_MESSAGE("solve.finished");
+    stepped_ = solveWatcher_.result();
+    // A solve picked up from the history lands on the turn it was left at.
+    for (int i = 0; i < resume_turn_ && !stepped_.at_end(); ++i) {
+        stepped_.next();
+    }
+    resume_turn_ = 0;
+    isSolving_ = false;
+    continuation_ = solving_continuation_;
+    emit solutionChanged();
+    emit stateChanged();
+}
+
+QVariantList SolveController::topColors() const {
+    return face_colors(stepped_.current_cube(), Face::U);
+}
+QVariantList SolveController::rightColors() const {
+    return face_colors(stepped_.current_cube(), Face::R);
+}
+QVariantList SolveController::leftColors() const {
+    return face_colors(stepped_.current_cube(), Face::F);
+}
+
+QVariantMap SolveController::stickers() const {
+    return stickers_of(stepped_.current_cube());
+}
+
+QVariantMap SolveController::stickersAt(int turn) const {
+    return stickers_of(stepped_.cube_at(turn));
+}
+
+QVariantList SolveController::moves() const {
+    QVariantList moves;
+    moves.reserve(stepped_.move_count());
+    for (const cube::solver::Move& move : stepped_.moves()) {
+        moves.append(QVariantMap{
+            {QStringLiteral("face"), face_letter(move.face)},
+            {QStringLiteral("turns"), move.turns},
+            {QStringLiteral("notation"), QString::fromStdString(cube::solver::to_string(move))}});
+    }
+    return moves;
+}
+
+QString SolveController::currentMoveNotation() const {
+    if (stepped_.at_end()) {
+        return QString();
+    }
+    return QString::fromStdString(cube::solver::to_string(stepped_.current_move()));
+}
+
+QString SolveController::currentMoveFace() const {
+    if (stepped_.at_end()) {
+        return QString();
+    }
+    return face_letter(stepped_.current_move().face);
+}
+
+int SolveController::currentMoveTurns() const {
+    return stepped_.at_end() ? 0 : stepped_.current_move().turns;
+}
+
+int SolveController::moveIndex() const {
+    return stepped_.current_index();
+}
+int SolveController::totalMoves() const {
+    return stepped_.move_count();
+}
+bool SolveController::atStart() const {
+    return stepped_.at_start();
+}
+bool SolveController::atEnd() const {
+    return stepped_.at_end();
+}
+
+QVariantList SolveController::stageRanges() const {
+    QVariantList ranges;
+    for (const auto& range : stepped_.stage_ranges()) {
+        QVariantMap entry;
+        entry[QStringLiteral("stageIndex")] = static_cast<int>(range.stage);
+        entry[QStringLiteral("startIndex")] = range.start_index;
+        entry[QStringLiteral("endIndex")] = range.end_index;
+        ranges.append(entry);
+    }
+    return ranges;
+}
+
+int SolveController::currentStageIndex() const {
+    if (stepped_.at_end()) {
+        return stepped_.stage_ranges().empty()
+                   ? 0
+                   : static_cast<int>(stepped_.stage_ranges().back().stage);
+    }
+    return static_cast<int>(stepped_.current_stage());
+}
+
+bool SolveController::isSolving() const {
+    return isSolving_;
+}
+
+cube::diagnostics::Json SolveController::diagnosticState() const {
+    using cube::diagnostics::Json;
+    constexpr std::array<const char*, 3> kMethods = {"beginner", "intermediate", "advanced"};
+    Json state = Json::object();
+    state.set("method", kMethods.at(static_cast<std::size_t>(method_)));
+    state.set("is_solving", isSolving_);
+    state.set("continuation", continuation_);
+    state.set("move_index", stepped_.current_index());
+    state.set("total_moves", stepped_.move_count());
+    state.set("at_end", stepped_.at_end());
+    state.set("current_move", cube::diagnostics::move_json(currentMove()));
+    state.set("moves", cube::diagnostics::moves_json(stepped_.moves()));
+    state.set("cube", cube::diagnostics::cube_json(stepped_.current_cube()));
+    state.set("solved", stepped_.current_cube().is_solved());
+    state.set("started_from",
+              pending_.has_value() ? cube::diagnostics::cube_json(*pending_) : Json());
+    state.set("stage", currentStageIndex());
+    return state;
+}
+
+void SolveController::nextMove() {
+    stepped_.next();
+    emit stateChanged();
+}
+
+void SolveController::previousMove() {
+    stepped_.previous();
+    emit stateChanged();
+}

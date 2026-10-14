@@ -1,0 +1,54 @@
+// Windows resource for Cubeulator.exe: the icon and the version resource.
+//
+// Generated into the build tree by cmake/GenerateVersion.cmake - the same
+// script that stamps cube/version.hpp - so the version shown in
+// Properties > Details is the version the app reports in About.
+// Edit this template, not the generated copy.
+//
+// Properties > Details reads:
+//   File description   FileDescription
+//   Product name       ProductName
+//   Product version    ProductVersion
+//   Copyright          LegalCopyright
+// and Task Manager shows FileDescription.
+
+#include <winver.h>
+
+// The first icon in the file is the one the shell and the taskbar use, and
+// Qt's Windows plugin looks for this resource name for the window class.
+IDI_ICON1 ICON "@CUBEULATOR_ICON_FILE@"
+
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @CUBEULATOR_VERSION_MAJOR@,@CUBEULATOR_VERSION_MINOR@,@CUBEULATOR_VERSION_PATCH@,0
+ PRODUCTVERSION @CUBEULATOR_VERSION_MAJOR@,@CUBEULATOR_VERSION_MINOR@,@CUBEULATOR_VERSION_PATCH@,0
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS VS_FF_DEBUG
+#else
+ FILEFLAGS 0x0L
+#endif
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 0809: English (United Kingdom); 04B0: Unicode.
+        BLOCK "080904B0"
+        BEGIN
+            VALUE "CompanyName", "@CUBEULATOR_PUBLISHER@"
+            VALUE "FileDescription", "Cubeulator"
+            VALUE "FileVersion", "@CUBEULATOR_VERSION@"
+            VALUE "InternalName", "Cubeulator"
+            VALUE "LegalCopyright", "@CUBEULATOR_COPYRIGHT@"
+            VALUE "OriginalFilename", "Cubeulator.exe"
+            VALUE "ProductName", "Cubeulator"
+            VALUE "ProductVersion", "@CUBEULATOR_VERSION@"
+            VALUE "Comments", "Build @CUBEULATOR_GIT_DESCRIBE@"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0809, 0x04B0
+    END
+END

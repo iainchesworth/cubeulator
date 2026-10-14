@@ -1,0 +1,1282 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  # Manual runs can name the legs they want, so a fix to one platform does
+  # not pay for all of them (the full matrix is hours of hosted runners and
+  # the pool is shared with other repositories):
+  #   gh workflow run ci.yml --ref <branch> -f legs=macos
+  # Jobs of a dispatched run are renamed "dispatch - <name>", so a run that
+  # skips legs can never report a check under a required check's name on the
+  # branch's head commit.
+  workflow_dispatch:
+    inputs:
+      legs:
+        description: >-
+          Comma-separated legs to run: clang-format, platform-isolation,
+          clang-tidy, linux, macos, windows, coverage, system, android, ios,
+          web, web-test, perf, web-perf - or "all" (which includes neither perf
+          nor web-perf, the wall-time performance checks: name them).
+        type: string
+        default: all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.legs }}
+  # develop and main are the refs a pull request restores its vcpkg cache from
+  # (docs/ci.md, "The vcpkg binary cache"), and a cold ONNX Runtime build alone
+  # is 39 minutes on Windows. A push there that is cancelled by the next push
+  # restarts that package from nothing, so under a stream of merges it never
+  # finishes and the cache is never warmed: on 2026-10-13, 29 of the 31 push
+  # runs on develop were cancelled that way and none completed. Those runs go
+  # to the end (a newer push waits, and replaces any older one still waiting);
+  # everything else is superseded as before.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  clang-format:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-format' || 'clang-format' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-format,') }}
+    # Routed by the CONTROL_RUNNER_JSON repository variable (a runner-label
+    # JSON array; unset means GitHub-hosted, deleting it switches back). A
+    # fork PR is pinned to the hosted image whatever the variable says: fork
+    # code must never reach a self-hosted runner. See docs/ci.md. Only the
+    # seconds-long jobs are routed; the build legs stay on hosted images.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Pinned to one release, not to whatever `clang-format` means this year:
+      # the repo is formatted with one release (docs/CONTRIBUTING.md).
+      # clang-format comes from a pinned PyPI wheel, not apt: the apt package
+      # is whatever Ubuntu ships, so a runner-image bump could change the
+      # formatting rules under an unchanged tree. Pinning also lets a
+      # developer install exactly this version locally
+      # (`pip install -r ci/requirements-lint.txt`), and Dependabot's pip
+      # ecosystem for /ci keeps the pin current. The wheel is ~1.5 MB and
+      # needs no root.
+      - name: Install uv
+        uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+
+      - name: Install clang-format (pinned)
+        run: |
+          uv venv "$RUNNER_TEMP/lint-venv"
+          uv pip install --python "$RUNNER_TEMP/lint-venv/bin/python" --requirement ci/requirements-lint.txt
+          echo "$RUNNER_TEMP/lint-venv/bin" >> "$GITHUB_PATH"
+          "$RUNNER_TEMP/lint-venv/bin/clang-format" --version
+
+      - name: Check formatting
+        run: |
+          clang-format --version
+          find src tests -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 \
+            | xargs -0 clang-format --dry-run --Werror
+
+  # The no-#ifdef rule (docs/platform-isolation.md): the operating system is a
+  # CMake decision, so no platform code, OS header or runtime OS test may sit
+  # outside src/app/platform. Cheap, fast and deliberately not behind the
+  # build legs, so a violation is reported even while a porting leg is red.
+  platform-isolation:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - platform-isolation' || 'platform-isolation' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',platform-isolation,') }}
+    # Seconds-long, so routed like clang-format: by the CONTROL_RUNNER_JSON
+    # repository variable, with a fork PR pinned to the hosted image (see
+    # docs/ci.md). The fleet image ships pwsh, which the check needs.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Check for platform code outside the platform section
+        shell: pwsh
+        run: ./tools/checks/check_platform_isolation.ps1 -Root $PWD
+
+  clang-tidy:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - clang-tidy' || 'clang-tidy' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',clang-tidy,') }}
+    runs-on: ubuntu-26.04
+    # Caps vcpkg's internal build parallelism - see the equivalent comment
+    # on build-and-test below (onnxruntime OOM'd this runner at full nproc
+    # parallelism).
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+    steps:
+      # fetch-depth: 0 is required for vcpkg's version resolution - see the
+      # equivalent comment on build-and-test below.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and the coverage job - see the fuller comment there on
+      # why per-preset keys were wasteful/over quota.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # Clang parses with the newest libstdc++ it can find, and <mdspan> is in
+      # 16, not the 15 the image ships. g++-16 brings that library; see
+      # .github/actions/install-gcc.
+      - name: Install GCC 16 (for its libstdc++)
+        uses: $/.github/actions/install-gcc
+
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11/GL headers).
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
+      # clang-tidy uses its own clang frontend to parse the compile commands
+      # regardless of which compiler actually built the code, so this job
+      # compiles with clang++ rather than GCC to avoid a cross-toolchain
+      # parsing mismatch entirely (it only needs to statically analyze the
+      # code, not test GCC-specific behavior - that's the build-and-test
+      # job's Linux leg). Ubuntu 24.04's *default* apt clang/clang-tidy
+      # package was 1:18.0 (noble's stock version), too old to parse
+      # <expected> at all - cascading into "no template named 'Result'"/"no
+      # member 'expected'" errors on every file (confirmed in CI on that
+      # image).
+      #
+      # Clang 23 is the current release, and ubuntu-26.04 only carries 20-22,
+      # so it comes from apt.llvm.org (ci/install-llvm.sh verifies the
+      # archive key against a pinned fingerprint). Caveat: that archive keeps
+      # one build per major - a snapshot of LLVM's release/23.x branch,
+      # rebuilt as the branch moves - so this is the latest 23.x, not a
+      # frozen version, and the gate can shift between runs. clang-format,
+      # which must be deterministic, is a pinned wheel (see that job). When a
+      # clang-tidy 23 wheel exists on PyPI, move it into
+      # ci/requirements-lint.txt and drop this install.
+      #
+      # libclang-rt-23-dev: the sanitizer runtimes (libclang_rt.asan.a, ...)
+      # this job's -fsanitize=address,undefined build links. The archive only
+      # lists it as a Recommends of libclang-common-23-dev, and
+      # install-llvm.sh installs with --no-install-recommends, so without it
+      # every link fails with "cannot find .../libclang_rt.asan_static.a".
+      - name: Install Clang 23
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libclang-rt-23-dev
+
+      - name: Configure (library + platform only, no Qt app)
+        run: >
+          cmake --preset linux-gcc-debug
+          -DCMAKE_CXX_COMPILER=clang++-23
+          -DCUBEULATOR_BUILD_APP=OFF
+
+      # A full build (not just configure) is required here: Ninja's compile
+      # commands reference a "@....modmap" response file that only exists
+      # after a real build (C++20 modules dependency-scanning support) -
+      # running clang-tidy standalone against a configure-only tree errors
+      # on that missing file for every translation unit (confirmed locally).
+      - name: Build
+        run: cmake --build --preset linux-gcc-debug
+
+      # .clang-tidy itself leaves WarningsAsErrors empty (local/IDE use stays
+      # advisory-only, matching CountdownSolver's convention), so
+      # --warnings-as-errors is passed explicitly here to make this a real
+      # gate rather than a step that always exits 0. jq is preinstalled on
+      # GitHub-hosted runners.
+      - name: Run clang-tidy
+        run: |
+          jq -r '.[].file' build/linux-gcc-debug/compile_commands.json \
+            | grep -E '/(src|tests)/' \
+            | xargs clang-tidy-23 -p build/linux-gcc-debug --warnings-as-errors='*'
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # Picks the desktop build legs. A push, pull request or merge_group run
+  # always gets all three; only a manual dispatch can narrow it. The matrix
+  # lives here, as JSON, because a job-level `if` cannot see `matrix` - this
+  # is the one place the legs are defined.
+  plan:
+    name: Plan build legs
+    # Routed like clang-format above. It is a few seconds of jq, but every
+    # build leg waits on it, so queueing it behind the hosted pool stalls the
+    # whole run.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Select build legs
+        id: plan
+        shell: bash
+        env:
+          LEGS: ${{ github.event_name == 'workflow_dispatch' && inputs.legs || 'all' }}
+        run: |
+          # macOS builds on macos-26 (Xcode 26). It was pinned to macos-15
+          # because that SDK dropped AGL.framework, which Qt 6.8.3 linked
+          # unconditionally ("ld: framework 'AGL' not found"). Qt 6.12 lists
+          # macOS 26 as supported, so that no longer applies; if this leg
+          # regresses on the SDK, macos-15 is the known-good fallback. The iOS
+          # job stays on macos-15 for an unrelated vcpkg reason (see ios-build).
+          all='[
+            {"leg": "linux",   "name": "Linux (GCC 16)",     "os": "ubuntu-26.04",        "preset": "linux-gcc-release",   "triplet": "x64-linux",   "package_generators": "DEB;RPM",    "package_artifact": "cubeulator-linux-x64"},
+            {"leg": "macos",   "name": "macOS (AppleClang)", "os": "macos-26",            "preset": "macos-clang-release", "triplet": "arm64-osx",  "package_generators": "DragNDrop", "package_artifact": "cubeulator-macos-arm64"},
+            {"leg": "windows", "name": "Windows (MSVC)",     "os": "windows-2025-vs2026", "preset": "windows-msvc-release", "triplet": "x64-windows", "package_generators": "NSIS",      "package_artifact": "cubeulator-windows-x64"}
+          ]'
+          for leg in ${LEGS//,/ }; do
+            case "$leg" in
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web|web-test|perf|web-perf) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, web-test, perf, web-perf, all)"
+                 exit 1 ;;
+            esac
+          done
+          if [ -z "$LEGS" ] || [ "$LEGS" = all ]; then
+            selected=$(jq -c . <<<"$all")
+          else
+            selected=$(jq -c --arg legs ",${LEGS// /},"               '[.[] | select(.leg as $leg | $legs | contains("," + $leg + ","))]' <<<"$all")
+          fi
+          count=$(jq 'length' <<<"$selected")
+          # Only the desktop legs are chosen here; a dispatch that names just
+          # clang-format, platform-isolation, android, ios, web, web-test or coverage
+          # legitimately selects none.
+          echo "legs: $LEGS -> $count desktop leg(s)"
+          echo "matrix=$selected" >> "$GITHUB_OUTPUT"
+
+  build-and-test:
+    name: ${{ github.event_name == 'workflow_dispatch' && format('dispatch - {0}', matrix.name) || matrix.name }}
+    needs: plan
+    # The matrix is empty when a dispatch names no desktop leg, which would
+    # otherwise be an error rather than a skip.
+    if: ${{ needs.plan.outputs.matrix != '[]' }}
+    runs-on: ${{ matrix.os }}
+    # Caps vcpkg's internal build parallelism (used for every port it
+    # compiles, including a single heavy port's own --parallel build step).
+    # Confirmed in CI: building onnxruntime with the runner's default
+    # nproc-wide parallelism (4 on these standard runners) OOM'd the whole
+    # runner (exit 143, "runner has received a shutdown signal") partway
+    # through compiling it, well after its ~30 Boost/Abseil transitive
+    # dependencies had already built and cached successfully at full
+    # parallelism - onnxruntime's own translation units are large/heavy
+    # enough that 4 of them compiling at once exceeds the runner's memory.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+    # CI only builds the Release preset per platform - it's what would
+    # actually ship, and vcpkg builds both debug/release variants of every
+    # dependency together in one pass regardless, so a Debug leg here would
+    # mostly just re-verify the same dependency build under a different
+    # CMAKE_BUILD_TYPE. Debug remains fully available locally (`cmake
+    # --preset <platform>-debug`) or via a personal CMakeUserPresets.json -
+    # it's just not something CI needs to babysit on every push.
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.matrix) }}
+
+    steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # vcpkg's x-gha binary caching provider was removed; its 'files' provider
+      # plus actions/cache is the supported replacement. The local actions below
+      # wrap that pair (restore now, save at the end of the job even on failure).
+      # Keyed per vcpkg triplet, not per CMake preset: vcpkg builds both
+      # debug and release variants of every package together in one pass,
+      # regardless of our own project's build type, so linux-gcc-debug and
+      # linux-gcc-release (same x64-linux triplet) would otherwise each
+      # cache a near-identical copy of opencv4/onnxruntime (~1.8GB when bgfx
+      # was still in the manifest).
+      # GitHub's 10GB-per-repo cache cap was being exceeded by this
+      # duplication across every preset/triplet combination, causing
+      # semi-random eviction (confirmed via the cache usage API - 10.7GB
+      # across 15 entries, over the limit).
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: ${{ matrix.triplet }}
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # GCC 16 has a step of its own: the ubuntu-26.04 image ships GCC 13 to
+      # 15 side by side, and 16 is in the archive but not on the image. 16
+      # rather than 15 because the library uses std::mdspan, which libstdc++
+      # only has from 16. The archive's gcc-16 is a snapshot of trunk
+      # (16-20260322), not a release - see docs/ci.md. The
+      # -DCMAKE_CXX_COMPILER=g++-16 reference below resolves to it.
+      - name: Install GCC 16 (Linux)
+        if: runner.os == 'Linux'
+        uses: $/.github/actions/install-gcc
+
+      # The X11/GL development headers were added when bgfx's port
+      # unconditionally find_package(X11)d even with examples/tools disabled
+      # ("Could NOT find X11"). bgfx has since been removed from the
+      # manifest; the packages stay until a Linux leg shows that nothing
+      # else (Qt's OpenGL probe, say) wants them. libglu1-mesa-dev went with
+      # glew, whose glew.pc declared `Requires: glu`.
+      #
+      # A third gap used to be listed here: the autotools chain (autoconf
+      # autoconf-archive automake libtool libltdl-dev) for gperf and for the
+      # vcpkg-make X11 ports, and libxtst-dev for at-spi2-core. They were
+      # reached through opencv4[gtk] -> gtk3 -> pango -> fontconfig -> gperf.
+      # With opencv4[gtk,highgui] gone, no port left in the x64-linux plan is
+      # built with autotools and none needs libxtst. The Android job below
+      # still installs the autotools chain: opencv4[gtk] is not supported on
+      # android, so this change does not alter that job's plan.
+      - name: Install vcpkg build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
+      # E4a: tools CPack's package generators need. makensis has to be present
+      # at configure time (cmake/Packaging.cmake looks for it then); rpmbuild
+      # and fakeroot are for the .rpm and for root-owned files in the .deb.
+      #
+      # NSIS comes from Chocolatey, whose community feed answers 504 Gateway
+      # Timeout now and then (it failed two pull requests' Windows legs within
+      # one hour on 2026-10-14, over a package that was never the problem).
+      # What it installs is a directory makensis runs from in place, so the
+      # directory is cached and only a miss goes to the feed. This workflow
+      # saves the cache; release.yml only restores it, the same split as the
+      # vcpkg binary cache (docs/ci.md). A cache a pull request saves is seen
+      # by that pull request alone, so none can plant what a release runs.
+      - name: Restore NSIS (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\Program Files (x86)\NSIS
+          key: nsis-3.13.0-${{ runner.os }}-${{ runner.arch }}
+
+      - name: Install NSIS (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          $usable = [bool](Get-Command makensis -ErrorAction SilentlyContinue)
+          if (-not $usable -and (Test-Path $makensis)) {
+            # From the cache: prove it runs where it is, or install it properly.
+            & $makensis /VERSION
+            if ($LASTEXITCODE -eq 0) {
+              $usable = $true
+            } else {
+              Write-Warning "the cached NSIS does not run; installing it from Chocolatey"
+              Remove-Item -Recurse -Force (Split-Path $makensis)
+            }
+          }
+          if (-not $usable) {
+            # A miss, or an unusable copy: the feed, with a few tries.
+            foreach ($attempt in 1..4) {
+              choco install nsis --version 3.13.0 --no-progress -y
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 4) { throw "choco install nsis failed four times" }
+              Write-Warning "choco install nsis failed (attempt $attempt of 4)"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
+          }
+          # CPack finds makensis on PATH, and failing that in the registry
+          # value NSIS's own installer writes. A restored directory brings
+          # neither, so say where it is for the steps that follow (a cache hit
+          # without this failed every Windows leg at "Cannot find NSIS
+          # compiler makensis", at the Package step, after the build had
+          # passed).
+          if (-not (Get-Command makensis -ErrorAction SilentlyContinue)) {
+            $dir = Split-Path $makensis
+            Add-Content -Path $env:GITHUB_PATH -Value $dir
+            $env:PATH = "$dir;$env:PATH"
+          }
+          makensis /VERSION
+
+      - name: Install packaging tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y rpm fakeroot desktop-file-utils appstream
+
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+      # Prebuilt Qt (official binaries) so the GUI app builds without
+      # compiling Qt from source. Sets QT_ROOT_DIR for find_package(Qt6).
+      - name: Install Qt (prebuilt)
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.12.0"
+          # Windows only. Qt 6.11+ moved the Windows kits into per-architecture
+          # repository folders, which aqtinstall's last release (3.3.0, the
+          # action's default) predates: it fails with "Failed to locate XML
+          # data for Qt version '6.12.0'". "Support Qt 6.11+ for Windows x64"
+          # (7e5a5c3d, 2026-03-01) is on aqtinstall master but unreleased, so
+          # the Windows leg installs this pinned master commit. Linux and macOS
+          # still use the legacy layout the release handles, so they keep it.
+          # Drop this once a release after 3.3.0 exists and the action's
+          # aqtversion default moves to it.
+          aqtsource: ${{ runner.os == 'Windows' && 'git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7' || '' }}
+          modules: "qtquick3d qtshadertools"
+          cache: true
+
+      - name: Configure
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+          EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-16' || '' }}
+        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER
+
+      - name: Build
+        id: build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      # The system tests (tests/system, label "system") draw the real app
+      # and need a display; they have their own legs below.
+      - name: Test
+        run: ctest --preset ${{ matrix.preset }} -LE system
+
+      # The same system suite on the Windows and macOS runners, which have a
+      # desktop session. Not a gate yet: whether Qt Quick 3D renders on these
+      # runners' graphics is what this step finds out, and it is reported
+      # rather than forced green (docs/testing.md, "System tests").
+      - name: System tests (experimental off Linux)
+        if: ${{ !cancelled() && runner.os != 'Linux' && steps.build.outcome == 'success' }}
+        continue-on-error: true
+        run: ctest --preset ${{ matrix.preset }}-system --output-on-failure
+
+      - name: Upload system-test pictures
+        if: always() && runner.os != 'Linux'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output-${{ matrix.triplet }}
+          path: build/${{ matrix.preset }}/system-test-output
+          if-no-files-found: ignore
+
+      # E4a: one installable package per desktop OS, built from the tree just
+      # tested and kept as a build artifact. Nothing is released or published.
+      # How the packages are put together is docs/packaging.md.
+      # Runs whenever the build did, whatever the test steps said: whether a
+      # package can be made does not depend on a unit test, and a red test
+      # should not hide a packaging problem on a platform that is slow to
+      # report one.
+      - name: Package
+        id: package
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+          PACKAGE_GENERATORS: ${{ matrix.package_generators }}
+        # CPack writes the package to the directory it is run from, the
+        # workspace root; its staging tree is there too, kept short because
+        # NSIS stops at 260 characters.
+        run: cpack --config "build/${CMAKE_PRESET}/CPackConfig.cmake" -G "${PACKAGE_GENERATORS}"
+
+      - name: Upload package
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ${{ matrix.package_artifact }}
+          path: |
+            Cubeulator-*.exe
+            Cubeulator-*.dmg
+            Cubeulator-*.deb
+            Cubeulator-*.rpm
+          if-no-files-found: error
+
+      # A package that built but is missing its Qt (a deploy script that
+      # quietly did nothing on a platform) is worse than a failed job. Run
+      # after the upload so the artifact can still be looked at. The release
+      # workflow runs the same script on the same packages.
+      - name: Check the package contents
+        if: ${{ !cancelled() && steps.package.outcome == 'success' }}
+        shell: bash
+        run: packaging/check-package.sh .
+
+      # After the upload, so that a metadata complaint cannot lose the package.
+      - name: Validate desktop entry and AppStream metadata (Linux)
+        if: ${{ !cancelled() && runner.os == 'Linux' && steps.package.outcome == 'success' }}
+        env:
+          CMAKE_PRESET: ${{ matrix.preset }}
+        run: |
+          desktop-file-validate "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.desktop"
+          appstreamcli validate --no-net "build/${CMAKE_PRESET}/packaging/com.iainchesworthlabs.cubeulator.metainfo.xml"
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: ${{ matrix.triplet }}
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  android-build:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Android (arm64-v8a)' || 'Android (arm64-v8a)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',android,') }}
+    # ubuntu-26.04, matching every other build agent - see the diagnostic
+    # step below for why this needed a closer look before deciding whether
+    # to stay here.
+    runs-on: ubuntu-26.04
+    continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # >= v4.0.2: v4.0.1's default `packages: tools platform-tools` asks
+      # sdkmanager for the long-removed `tools` package ("Warning: Failed to
+      # find package 'tools'", exit code 1), which failed this step after the
+      # licences were already accepted. v4.0.2 dropped it from the default.
+      - name: Install Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+
+      # NDK r28c (28.2.13676358), JDK 21, SDK platform 36 / build-tools 36.0.0.
+      #
+      # r28c is NEWER than the r27c (27.2.12479018) Qt 6.12's prerequisites
+      # name and its libraries were built with. Qt only *recommends* building
+      # an app with the same NDK "to avoid missing symbol errors"; it does not
+      # call a newer one unsupported, and its CMake does not check. That is a
+      # departure from Qt's tested configuration, taken on purpose (the maintainer,
+      # 2026-10-13): r28c's libc++ has std::expected::transform/and_then,
+      # std::format and std::print, ranges::contains/fold_left and mdspan,
+      # which r26b lacks (compile-probed), and it carries libc++'s fix for
+      # std::expected clobbering its has-value flag through tail padding
+      # (llvm-project#68552, #70494; an ABI change). Result<T> is
+      # std::expected throughout. If an APK misbehaves, r27c is Qt's
+      # documented NDK and the first thing to try.
+      #
+      # ubuntu-26.04's default JDK is 25; JAVA_HOME_21_X64 is preinstalled
+      # alongside it.
+      - name: Install Android NDK, platform and build-tools
+        run: |
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36" "build-tools;36.0.0"
+          echo "ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          test -d "$JAVA_HOME_21_X64" || { echo "::error::JDK 21 (JAVA_HOME_21_X64) is not preinstalled on this image"; exit 1; }
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+
+      # gperf (a transitive dependency, built as a host tool regardless of
+      # target triplet) needs these from the system package manager to build
+      # from source via autotools - see the equivalent comment on clang-tidy
+      # in build-and-test above. No X11/GL packages needed here.
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y autoconf autoconf-archive automake libtool libltdl-dev
+
+      # Keyed per vcpkg triplet (arm64-android) - see the fuller comment on
+      # build-and-test above on why per-preset keys were wasteful/over the
+      # 10GB cap; keeping the same scheme everywhere avoids reintroducing the
+      # same mistake later.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: arm64-android
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # All platforms share the same Qt/QML shell (see docs/architecture.md),
+      # so this leg installs Qt for Android same as build-and-test installs
+      # it for desktop. install-qt-action also provisions the matching host
+      # (Linux desktop) Qt and exports QT_HOST_PATH automatically when
+      # target: android is set - QT_HOST_PATH_CMAKE_DIR and
+      # CMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH are still passed explicitly
+      # since the NDK toolchain defaults CMAKE_FIND_ROOT_PATH_MODE_PACKAGE to
+      # ONLY, which would otherwise hide both Qt kits and vcpkg's install
+      # tree from find_package() (confirmed locally on windows-msvc/android).
+      - name: Install Qt (prebuilt, Android)
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.12.0"
+          target: android
+          arch: android_arm64_v8a
+          modules: "qtquick3d qtshadertools"
+          cache: true
+
+      # vcpkg now builds opencv4/onnxruntime here too, chainloaded onto
+      # the NDK toolchain the same way as fmt - see docs/dependency-strategy.md.
+      # No libx11-dev install needed. Release only - see the equivalent
+      # comment on build-and-test above.
+      - name: Configure
+        run: >
+          cmake --preset android-clang-release
+          -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+          -DQT_HOST_PATH="$QT_HOST_PATH"
+          -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"
+          -DCMAKE_FIND_ROOT_PATH_MODE_PACKAGE=BOTH
+          -DANDROID_SDK_ROOT="$ANDROID_SDK_ROOT"
+
+      # CMake's Check*/Find* modules (e.g. FindThreads) only print "Failed"
+      # to the main log on failure - the actual compiler/linker error only
+      # ever lands in CMakeError.log/CMakeOutput.log inside the build tree.
+      # The first attempt at this diagnostic assumed a fixed path and found
+      # nothing there (confirmed in CI: the assumed path didn't exist, or
+      # CMake never flushed it before the FATAL_ERROR unwound) - this version
+      # searches the whole build tree instead of guessing a path, and also
+      # dumps the relevant CMakeCache.txt entries in case a stale cached
+      # try_compile result (not a fresh failure) is the real culprit.
+      - name: Dump CMake diagnostics on configure failure
+        if: failure()
+        run: |
+          echo "::group::find build -iname CMakeError.log/CMakeOutput.log"
+          find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" || true
+          echo "::endgroup::"
+          while IFS= read -r f; do
+            echo "::group::$f"
+            cat "$f" || true
+            echo "::endgroup::"
+          done < <(find build -iname "CMakeError.log" -o -iname "CMakeOutput.log" 2>/dev/null || true)
+          echo "::group::build/android-clang-release/CMakeFiles listing"
+          find build/android-clang-release/CMakeFiles -maxdepth 1 2>&1 || true
+          echo "::endgroup::"
+          echo "::group::CMakeCache.txt PTHREAD/THREADS entries"
+          grep -i "pthread\|thread" build/android-clang-release/CMakeCache.txt 2>&1 || true
+          echo "::endgroup::"
+
+      - name: Build
+        run: cmake --build --preset android-clang-release
+
+      # androiddeployqt runs automatically as part of the build above and
+      # produces a debug-signed APK; upload it so the Qt/QML shell can
+      # actually be installed and looked at, not just compiled.
+      - name: Upload APK
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cube_app-android-arm64-v8a
+          path: build/android-clang-release/src/app/android-build/build/outputs/apk/**/*.apk
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: arm64-android
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The browser (docs/web.md): the same Qt/QML app, as WebAssembly. Built here
+  # to prove it still builds; docs.yml builds it again for the site, from the
+  # same composite action, because that publish only runs for main.
+  web-build:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web (WebAssembly)' || 'Web (WebAssembly)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',web,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md).
+    continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. Only fmt and opencv4 (core, imgproc, imgcodecs and
+    # the image codecs) are built for this triplet.
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet, like every other leg (see build-and-test).
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      - name: Build the web app
+        uses: $/.github/actions/web-build
+
+      # The whole site: index.html, cube_app.js/.wasm, qtloader.js and the
+      # isolation worker. Unzipped, any static server can host it.
+      - name: Upload the web app
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web
+          path: build/web-emscripten-release/bin
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The browser's tests (docs/testing.md, "Browser tests"): the library's own
+  # test binaries as WebAssembly under Node, and the app driven in Chromium.
+  web-test:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web tests (Node + Chromium)' || 'Web tests (Node + Chromium)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',web-test,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md). The browser suite draws in software, one page at a
+    # time; an hour and a half is a hang, not a slow run.
+    timeout-minutes: 90
+    continue-on-error: true
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      # The diagnostics build is the app with the recorder and the read-only
+      # driver the browser tests use; the tests preset is the library, its
+      # unit, integration and performance binaries, as WebAssembly for Node.
+      - name: Build the diagnostics app and the Node tests
+        uses: $/.github/actions/web-build
+        with:
+          presets: web-emscripten-diagnostics web-emscripten-tests
+
+      # The same test cases as the desktop legs, compiled to WebAssembly:
+      # what they find is what only WebAssembly gets wrong (docs/testing.md,
+      # "Browser tests").
+      - name: Unit, integration and performance tests (WebAssembly, under Node)
+        shell: bash
+        run: >
+          ctest --test-dir build/web-emscripten-tests -j 4
+          --timeout 900 --output-on-failure
+
+      # Chromium is Playwright's own, with the system libraries it needs.
+      # Software WebGL (SwiftShader): the page draws with a CPU renderer here.
+      - name: Install the browser tests' dependencies
+        shell: bash
+        working-directory: tests/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Browser tests (Chromium, the app in a page)
+        shell: bash
+        working-directory: tests/web
+        env:
+          CUBEULATOR_WEB_DIR: ${{ github.workspace }}/build/web-emscripten-diagnostics/bin
+        run: npx playwright test --project=app
+
+      - name: Upload the browser tests' reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web-test-reports
+          path: |
+            tests/web/reports
+            tests/web/test-results
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # Wall-time budgets for the browser, read from the in-process recorder. Only
+  # when it is named, as `perf` is (docs/ci.md).
+  web-perf:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web performance (Chromium)' || 'Web performance (Chromium)' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && contains(format(',{0},', inputs.legs), ',web-perf,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md). The browser suite draws in software, one page at a
+    # time; an hour and a half is a hang, not a slow run.
+    timeout-minutes: 90
+    continue-on-error: true
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      - name: Build the diagnostics app
+        uses: $/.github/actions/web-build
+        with:
+          presets: web-emscripten-diagnostics
+
+      - name: Install the browser tests' dependencies
+        shell: bash
+        working-directory: tests/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # One worker, and the wall-time budgets on: a stopwatch cannot share a
+      # machine (docs/testing.md, "Performance in the browser").
+      - name: Performance journeys (Chromium)
+        shell: bash
+        working-directory: tests/web
+        env:
+          CUBEULATOR_WEB_DIR: ${{ github.workspace }}/build/web-emscripten-diagnostics/bin
+          CUBEULATOR_WEB_PERF_TIMING: "1"
+        run: npx playwright test --project=perf
+
+      # The summaries, the Chrome traces (DevTools Performance panel,
+      # Perfetto) and the tracy-csvexport-shaped CSVs of each journey.
+      - name: Upload the performance reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web-perf-reports
+          path: tests/web/reports/perf
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  ios-build:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - iOS (device, build-only, unsigned)' || 'iOS (device, build-only, unsigned)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',ios,') }}
+    # Pinned to macos-15, not the newer macos-26: confirmed in CI that
+    # libwebp's arm64-ios build intermittently fails vcpkg_fixup_pkgconfig
+    # on macos-26 ("pkg-config --exists libsharpyuv failed") - a known,
+    # still-open vcpkg/pkgconf issue (microsoft/vcpkg#50681), not something
+    # to work around here. Revisit once that's resolved upstream.
+    runs-on: macos-15
+    continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. opencv4/onnxruntime now build here too (see
+    # docs/dependency-strategy.md), including onnxruntime, which already
+    # OOM'd desktop runners at default parallelism.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet (arm64-ios), shared across debug/release -
+      # see the equivalent comment on android-build above.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: arm64-ios
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # Unsigned build only (see the ios-clang-* preset's
+      # CODE_SIGNING_ALLOWED=NO cache vars) - no Apple Developer certificate
+      # is available in this job. No Qt install needed - see the android job
+      # comment above; the same reasoning applies here. vcpkg now builds
+      # opencv4/onnxruntime here too - see the android job comment
+      # above. Release only - see the equivalent comment on build-and-test
+      # above.
+      - name: Configure
+        run: cmake --preset ios-clang-release
+
+      - name: Build
+        run: cmake --build --preset ios-clang-release
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: arm64-ios
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The system tests: the real app, started from its main() wiring, driven by
+  # mouse, touch and key events, rendered for real. Qt Quick 3D has no
+  # software fallback, so the display is Xvfb and the GL is Mesa's llvmpipe.
+  # Built with coverage instrumentation, so the same run measures the C++
+  # under src/app/qt - reported here, not gated (docs/testing.md).
+  system-tests:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - System tests (Linux, Xvfb + software GL)' || 'System tests (Linux, Xvfb + software GL)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',system,') }}
+    runs-on: ubuntu-26.04
+    # See the equivalent comment on build-and-test.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+      QT_QPA_PLATFORM: xcb
+      LIBGL_ALWAYS_SOFTWARE: "1"
+
+    steps:
+      # fetch-depth: 0 is required - see the comment on build-and-test.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The x64-linux triplet cache, shared with build-and-test's Linux leg.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
+      # The vcpkg build dependencies (see build-and-test), then what a Qt
+      # window needs to open on Xvfb and render in software: the xcb platform
+      # plugin's libraries, Mesa's software rasteriser, and xauth for
+      # xvfb-run.
+      - name: Install build and display dependencies
+        run: >
+          sudo apt-get install -y
+          libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+          xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libfontconfig1 libxkbcommon-x11-0
+          libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
+          libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
+
+      - name: Install gcovr
+        run: pip install --quiet gcovr==8.6
+
+      # The Qt the app ships on: the build legs' version and action pin, so the
+      # system tests run the Qt that users run, and share the legs' Qt cache.
+      - name: Install Qt (prebuilt)
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.12.0"
+          modules: "qtquick3d qtshadertools"
+          cache: true
+
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-coverage
+          -DCMAKE_CXX_COMPILER=g++-16
+          -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-coverage
+
+      # What the display and GL stack actually are, in the log: the first
+      # thing to read when the render checks fail.
+      - name: Show the display stack
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" bash -c 'glxinfo -B 2>/dev/null | head -20 || true'
+
+      - name: System tests
+        run: >
+          xvfb-run -a -s "-screen 0 1280x1024x24"
+          ctest --preset linux-gcc-coverage-system --output-on-failure
+
+      # The controller tests drive the same classes without a window; their
+      # lines count toward the same report.
+      - name: Controller tests
+        working-directory: build/linux-gcc-coverage/bin
+        run: ./cube_qt_controller_tests
+
+      - name: Upload system-test pictures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: system-test-output
+          path: build/linux-gcc-coverage/system-test-output
+          if-no-files-found: warn
+
+      # C++ under src/app/qt, measured but not gated: nothing here joins the
+      # 80% gate of the Coverage job below until the numbers have been looked
+      # at. QML is not in this report - gcov cannot see it; the reach report
+      # in the artifact above is the QML measure.
+      # --gcov-ignore-parse-errors: the same negative branch count in cube.cpp
+      # the Coverage job below reads past (gcc bug 68080). This report is not
+      # gated, but a gcovr that exits 64 here still fails the whole job, and
+      # this is an `if: always()` step on a run that otherwise passed.
+      - name: App coverage report
+        if: always()
+        run: >
+          gcovr --root . --filter 'src/app/qt/.*'
+          --gcov-executable gcov-16
+          --exclude-throw-branches --exclude-unreachable-branches
+          --gcov-ignore-errors=no_working_dir_found
+          --gcov-ignore-parse-errors negative_hits.warn_once_per_file
+          --object-directory build/linux-gcc-coverage
+          --print-summary --html-details build/coverage-app.html
+          --json-summary build/coverage-app.json
+
+      - name: Upload app coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report-app
+          path: |
+            build/coverage-app*.html
+            build/coverage-app.json
+
+      # Saved even when a later step fails - see build-and-test.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  coverage:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Coverage (Linux, GCC)' || 'Coverage (Linux, GCC)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',coverage,') }}
+    runs-on: ubuntu-26.04
+    # Caps vcpkg's internal build parallelism - see the equivalent comment
+    # on build-and-test above (onnxruntime OOM'd this runner at full nproc
+    # parallelism).
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 is required, not just nice-to-have: vcpkg's version
+      # resolution does `git read-tree <historical-tree-hash>` against the
+      # deps/vcpkg submodule to check out the exact pinned version of each
+      # port. A shallow submodule clone (actions/checkout's default) only has
+      # the tip commit's objects, so it fails for any port whose pinned tree
+      # isn't byte-identical to the tree at HEAD (confirmed in CI: failed on
+      # protobuf, a transitive onnxruntime dependency).
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet (x64-linux), shared with build-and-test's
+      # Linux legs and clang-tidy - see the fuller comment on build-and-test
+      # above on why per-preset keys were wasteful/over the 10GB cap.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # GCC 16 is installed, not shipped: see the comment on build-and-test.
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test above (X11/GL headers).
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
+      - name: Install gcovr
+        run: pip install --quiet gcovr==8.6
+
+      # No GUI app needed to measure coverage of cube::lib/cube::platform, so
+      # this leg skips the Qt install entirely.
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-coverage
+          -DCMAKE_CXX_COMPILER=g++-16
+          -DCUBEULATOR_BUILD_APP=OFF
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-coverage
+
+      - name: Test
+        run: ctest --preset linux-gcc-coverage
+
+      # --gcov-suspicious-hits-threshold: gcovr 8 stops with "SuspiciousHits ...
+      # cube.cpp:283 Got suspicious hit value" (gcc bug 68080's signature)
+      # for any line hit more than its default threshold. The solver's slow
+      # corpus tests run an -O0, -fno-inline build of Cube::at() ~5.8e10 times;
+      # those counters are correct (checked: 64-bit, none negative). 1e12
+      # keeps the detector for a counter that really has gone wrong.
+      #
+      # --gcov-ignore-parse-errors negative_hits.warn_once_per_file: with the
+      # CFOP and two-phase corpora in the tests, a branch counter in cube.cpp
+      # (the `switch (face)` of Cube::at(), cube.cpp:39) is read back negative
+      # - the same gcc bug 68080, now past what the threshold above can
+      # excuse - and gcovr stops before it has read any report. The hit is
+      # taken as zero and named once per file, which can only lower the branch
+      # figure the gate below holds, never raise it.
+      - name: Coverage report + gate
+        run: >
+          gcovr --root . --filter 'src/.*'
+          --gcov-executable gcov-16
+          --exclude-throw-branches --exclude-unreachable-branches
+          --gcov-ignore-errors=no_working_dir_found
+          --gcov-suspicious-hits-threshold 1000000000000
+          --gcov-ignore-parse-errors negative_hits.warn_once_per_file
+          --object-directory build/linux-gcc-coverage
+          --print-summary --html-details build/coverage.html
+          --fail-under-line 80 --fail-under-branch 80
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-report
+          path: build/coverage*.html
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The wall-time half of the performance tier (docs/testing.md, "Performance
+  # tests"), on the Linux Release build. Dispatch only, and only when it is
+  # named - legs=all does not include it - because a stopwatch on a shared
+  # runner is the one check that can fail for no reason of its own. The work
+  # budgets (search nodes, pixel buffers) are exact, and run in every build
+  # leg's plain ctest above.
+  #
+  #   gh workflow run ci.yml --ref <branch> -f legs=perf
+  #
+  # Only cube_perf_tests is built: it links cube::lib and nothing else, so this
+  # leg installs no Qt and builds no app, like the coverage leg.
+  performance:
+    name: dispatch - Performance (Linux, GCC, wall time)
+    if: ${{ github.event_name == 'workflow_dispatch' && contains(format(',{0},', inputs.legs), ',perf,') }}
+    runs-on: ubuntu-26.04
+    # See the equivalent comment on build-and-test.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 for the same reason as build-and-test.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet (x64-linux), shared with the other Linux legs.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test.
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-release
+          -DCMAKE_CXX_COMPILER=g++-16
+          -DCUBEULATOR_BUILD_APP=OFF
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-release --target cube_perf_tests
+
+      # The *-perf test preset selects the `perf` label and sets
+      # CUBE_PERF_TIMING, which is what turns the wall-time cases on.
+      - name: Performance tests
+        run: ctest --preset linux-gcc-perf
+
+      # Saved even when a later step fails - see build-and-test.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}

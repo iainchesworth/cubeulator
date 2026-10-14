@@ -1,0 +1,68 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
+  "name": "cubeulator",
+  "version": "0.1.0",
+  "description": "A camera-driven, on-device Rubik's Cube solver.",
+  "homepage": "https://github.com/iainchesworthlabs/cubeulator",
+  "license": "GPL-3.0-or-later",
+  "builtin-baseline": "5b698638c97b4610044a254347d571f823e56557",
+  "dependencies": [
+    "fmt",
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "platform": "!emscripten",
+      "features": [
+        "calib3d",
+        { "name": "dshow", "platform": "windows & !uwp" },
+        "fs",
+        "intrinsics",
+        "jpeg",
+        { "name": "msmf", "platform": "windows & !uwp & !mingw" },
+        "png",
+        "quirc",
+        "thread",
+        "tiff",
+        { "name": "v4l", "platform": "linux" },
+        "webp"
+      ]
+    },
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "platform": "emscripten",
+      "features": [
+        "intrinsics"
+      ]
+    }
+  ],
+  "default-features": [],
+  "features": {
+    "tests": {
+      "description": "Dependencies for the unit and integration test suites",
+      "dependencies": [
+        "catch2"
+      ]
+    },
+    "profiling": {
+      "description": "Tracy profiler instrumentation (CUBEULATOR_ENABLE_TRACY) - opt-in, selected by -DCUBEULATOR_ENABLE_TRACY=ON, so a normal build never pulls it in",
+      "dependencies": [
+        {
+          "name": "tracy",
+          "default-features": false,
+          "features": [
+            "on-demand"
+          ]
+        },
+        {
+          "name": "tracy",
+          "host": true,
+          "default-features": false,
+          "features": [
+            "cli-tools"
+          ]
+        }
+      ]
+    }
+  }
+}

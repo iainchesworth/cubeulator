@@ -1,0 +1,27 @@
+name: Install GCC
+description: >-
+  Installs g++-<version> (and with it gcov-<version> and that release's
+  libstdc++) from the Ubuntu archive. The ubuntu-26.04 runner image ships GCC
+  13 to 15 side by side; a newer one is in the archive but not on the image, so
+  a job that compiles with it - or that runs Clang, which uses the newest
+  libstdc++ it can find - installs it first.
+
+inputs:
+  version:
+    description: GCC major version to install.
+    required: false
+    default: "16"
+
+runs:
+  using: composite
+  steps:
+    # The version is passed through the environment, not interpolated into the
+    # script, so no input can become part of a command line.
+    - name: Install g++
+      shell: bash
+      env:
+        GCC_VERSION: ${{ inputs.version }}
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends "g++-${GCC_VERSION}"
+        "g++-${GCC_VERSION}" --version | head -n 1

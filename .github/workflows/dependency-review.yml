@@ -1,0 +1,45 @@
+name: Dependency Review
+
+# Diffs the dependency graph on every PR (vcpkg.json + Actions used in
+# .github/workflows) and fails the check if the diff introduces a
+# moderate-or-worse known vulnerability. This is the one scanner in this
+# repo's security setup that's a required, blocking check — see
+# docs/branch-protection.md.
+
+on:
+  pull_request:
+    branches: [main, develop]
+  # develop's merge queue needs "Scan dependency diff" to report on its
+  # temporary gh-readonly-queue/... ref: GitHub only runs workflows that opt
+  # into merge_group there, so without this every queue entry would wait out
+  # its check timeout. actions/dependency-review-action diffs a queue entry
+  # against github.event.merge_group.base_sha (supported since v3.1.0).
+  merge_group:
+    branches: [develop]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: dependency-review-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-review:
+    name: Scan dependency diff
+    # Routed by the CONTROL_RUNNER_JSON repository variable (a runner-label
+    # JSON array; unset means GitHub-hosted, deleting it switches back). A
+    # fork PR is pinned to the hosted image whatever the variable says: fork
+    # code must never reach a self-hosted runner. See docs/ci.md.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-24.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-24.04"]') }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: on-failure

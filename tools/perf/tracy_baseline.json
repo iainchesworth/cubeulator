@@ -1,0 +1,92 @@
+{
+  "schema": 1,
+  "about": "Per-zone cost of cube_perf_tests under Tracy: the zone's fastest call, as a multiple of the perf.calibration zone's fastest call. Written by tools/perf/tracy_check.py --update; see docs/testing.md, 'Tracy: per-zone, local and nightly'.",
+  "workload": "cube_perf_tests [perf] with CUBE_PERF_TIMING=1",
+  "tolerance": 3.0,
+  "zones": {
+    "perf.calibration": {
+      "count": 156,
+      "ratio": 1.0
+    },
+    "solver.algorithm_search": {
+      "count": 152,
+      "ratio": 7.383e-05
+    },
+    "solver.assemble_all": {
+      "count": 20,
+      "ratio": 0.07252
+    },
+    "solver.assemble_scan": {
+      "count": 21,
+      "ratio": 0.0775
+    },
+    "solver.cfop": {
+      "count": 44,
+      "ratio": 0.1276
+    },
+    "solver.corners": {
+      "count": 38,
+      "ratio": 0.01033
+    },
+    "solver.cross": {
+      "count": 38,
+      "ratio": 0.01452
+    },
+    "solver.merge_adjacent_moves": {
+      "count": 116,
+      "ratio": 0.0002826
+    },
+    "solver.middle_edges": {
+      "count": 38,
+      "ratio": 3.38
+    },
+    "solver.oll": {
+      "count": 38,
+      "ratio": 0.003045
+    },
+    "solver.piece_search": {
+      "count": 360,
+      "ratio": 0.002844
+    },
+    "solver.pll": {
+      "count": 38,
+      "ratio": 0.00316
+    },
+    "solver.solve": {
+      "count": 86,
+      "ratio": 0.1276
+    },
+    "solver.two_phase": {
+      "count": 34,
+      "ratio": 1.679
+    },
+    "solver.two_phase.prepare": {
+      "count": 2,
+      "ratio": 2.037e-05
+    },
+    "vision.corner_view.read_corner": {
+      "count": 51,
+      "ratio": 0.01218
+    },
+    "vision.direct_scan.add": {
+      "count": 1988,
+      "ratio": 2.546e-07
+    },
+    "vision.direct_scan.read_side": {
+      "count": 85,
+      "ratio": 0.005344
+    },
+    "vision.direct_scan.scanned": {
+      "count": 17,
+      "ratio": 0.1225
+    },
+    "vision.prepare_frame": {
+      "count": 136,
+      "ratio": 0.1737
+    },
+    "vision.resolve_colors": {
+      "count": 228,
+      "ratio": 0.04745
+    }
+  }
+}

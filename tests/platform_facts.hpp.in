@@ -1,0 +1,35 @@
+#pragma once
+
+// NOTE: generated from platform_facts.hpp.in by tests/CMakeLists.txt.
+// Do not edit the generated copy; edit the template, or the platform's
+// src/app/platform/<os>/platform.cmake that supplies the values.
+//
+// What the test binaries need to know about the platform they run on. They do
+// not ask which OS that is: the platform's fragment says, once, here.
+
+#include <string_view>
+
+namespace cube::test::platform {
+
+// The Qt platform plugin a Qt test binary falls back to when QT_QPA_PLATFORM
+// is unset. Empty keeps Qt's own default (Windows: its own plugin is the only
+// one deployed beside the binaries, and it needs no display for items that
+// are never shown).
+inline constexpr std::string_view default_qpa_platform = "@CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM@";
+
+// Space-separated environment variables through which the platform's desktop
+// session reaches a program; empty where a session is always there.
+inline constexpr std::string_view display_variables =
+    "@CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES@";
+
+// One line of advice for when none of them is set. PROGRAM stands for the
+// test binary.
+inline constexpr std::string_view display_help = "@CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP@";
+
+// Whether a test that draws the real app makes its window invisible to the
+// developer (transparent, click-through, never activated), so a run does not
+// flick windows across the desktop it is run from or take the keyboard. Where
+// it is false the window is shown as any window is.
+inline constexpr bool hide_window = @CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW_CXX@;
+
+}  // namespace cube::test::platform

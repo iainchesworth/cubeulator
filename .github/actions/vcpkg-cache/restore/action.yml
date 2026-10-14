@@ -1,0 +1,58 @@
+name: Restore vcpkg binary cache
+description: >-
+  Points vcpkg's `files` binary cache at a directory under RUNNER_TEMP and
+  fills it from the newest cache saved for this triplet. Pair it with
+  ../save, run with `if: always()` as the job's last step.
+
+inputs:
+  triplet:
+    description: vcpkg triplet the cache is keyed on (x64-linux, arm64-osx, ...).
+    required: true
+
+outputs:
+  listing:
+    description: Fingerprint of what was restored; hand it to ../save.
+    value: ${{ steps.fingerprint.outputs.listing }}
+
+runs:
+  using: composite
+  steps:
+    # The value written is RUNNER_TEMP (runner-assigned) plus a literal suffix:
+    # nothing a pull request title, branch name or other input can reach.
+    # VCPKG_BINARY_SOURCES has to be a real environment variable for every
+    # later step (CMake's vcpkg toolchain reads it implicitly).
+    - name: Create the cache directory and point vcpkg at it
+      shell: bash
+      run: | # zizmor: ignore[github-env] RUNNER_TEMP-derived, not attacker-influenced - see above
+        mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+        echo "VCPKG_BINARY_SOURCES=clear;files,$RUNNER_TEMP/vcpkg-cache,readwrite" >> "$GITHUB_ENV"
+
+    # `key` is never an exact hit: entries are named after their contents
+    # (see ../save), so this always falls through to restore-keys, which
+    # GitHub resolves to the most recently created entry with that prefix.
+    #
+    # The key carries the triplet and nothing else, deliberately: vcpkg names
+    # an archive by its ABI hash, which already covers the triplet, the port
+    # and its dependencies' versions and the compiler, and every archive holds
+    # the debug and the release variant. The CMake preset (Debug, Release,
+    # coverage) and the compiler the project itself is built with are not in
+    # that hash, so linux-gcc-debug, linux-gcc-release and the Clang 23
+    # clang-tidy job all share one set of archives - see docs/ci.md.
+    - name: Restore the newest cache for this triplet
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/vcpkg-cache
+        key: vcpkg-binary-cache-${{ inputs.triplet }}-restore
+        restore-keys: |
+          vcpkg-binary-cache-${{ inputs.triplet }}-
+
+    - name: Fingerprint what was restored
+      id: fingerprint
+      shell: bash
+      env:
+        MATCHED: ${{ steps.restore.outputs.cache-matched-key }}
+      run: |
+        cd "$RUNNER_TEMP/vcpkg-cache"
+        echo "listing=$(LC_ALL=C ls -R . | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        echo "vcpkg cache: restored $(LC_ALL=C ls -R . | grep -c '\.zip$' || true) archive(s) from ${MATCHED:-nothing (cold cache)}"

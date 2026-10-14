@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist for Cubeulator.app. Configured by cmake/DesktopPackaging.cmake
+  (@VARIABLES@); CMake then fills in the ${...} bundle variables itself.
+
+  NSCameraUsageDescription is the string `permission.system.camera` from
+  docs/design/strings.json, so the wording lives in one place. Translations
+  of it go in InfoPlist.strings with the other languages (E5).
+
+  LSMinimumSystemVersion is the floor of the Qt the app is built against
+  (Qt 6.12: macOS 14.4). Raise it with Qt; the docs say the same
+  (README.md, docs/releasing.md, tools/release/render_release_notes.py).
+-->
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>@CUBEULATOR_BUNDLE_NAME@</string>
+    <key>CFBundleIdentifier</key>
+    <string>@CUBEULATOR_BUNDLE_ID@</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>@CUBEULATOR_BUNDLE_NAME@</string>
+    <key>CFBundleDisplayName</key>
+    <string>@CUBEULATOR_BUNDLE_NAME@</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>@CUBEULATOR_BUNDLE_VERSION@</string>
+    <key>CFBundleVersion</key>
+    <string>@CUBEULATOR_BUNDLE_VERSION@</string>
+    <key>CFBundleIconFile</key>
+    <string>@CUBEULATOR_ICNS_NAME@</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.4</string>
+    <key>NSCameraUsageDescription</key>
+    <string>@CUBEULATOR_CAMERA_USAGE_DESCRIPTION@</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>@CUBEULATOR_COPYRIGHT@</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSSupportsAutomaticGraphicsSwitching</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+</dict>
+</plist>

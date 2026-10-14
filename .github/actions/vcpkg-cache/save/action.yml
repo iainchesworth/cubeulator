@@ -1,0 +1,92 @@
+name: Save vcpkg binary cache
+description: >-
+  Saves the vcpkg binary cache if packages were added since ../restore and no
+  identical entry is already readable from this ref, under a key named after
+  the cache's contents. Meant to run with `if: always()` so a failing build
+  keeps the packages vcpkg had already built.
+
+inputs:
+  triplet:
+    description: vcpkg triplet the cache is keyed on; the same value as ../restore.
+    required: true
+  restored:
+    description: The `listing` output of ../restore.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Decide whether anything new was built
+      id: state
+      shell: bash
+      env:
+        RESTORED: ${{ inputs.restored }}
+      run: |
+        mkdir -p "$RUNNER_TEMP/vcpkg-cache"
+        cd "$RUNNER_TEMP/vcpkg-cache"
+        packages=$(LC_ALL=C ls -R . | grep -c '\.zip$' || true)
+        listing=$(LC_ALL=C ls -R . | sha256sum | cut -c1-16)
+        changed=false
+        if [ "$packages" -gt 0 ] && [ "$listing" != "$RESTORED" ]; then
+          changed=true
+        fi
+        echo "packages=$packages" >> "$GITHUB_OUTPUT"
+        echo "listing=$listing" >> "$GITHUB_OUTPUT"
+        echo "changed=$changed" >> "$GITHUB_OUTPUT"
+        echo "vcpkg cache: $packages package(s); restored $RESTORED, now $listing; save=$changed"
+
+    # A cache entry is readable only from its own ref, the pull request's base
+    # and the default branch, so two refs can each hold a full copy of the same
+    # key. That is what pull requests did: a run that started from an older
+    # entry rebuilt the same packages develop already had and stored its own
+    # 1.6 GB duplicate, one per PR. An exact-key lookup (no download) from here
+    # sees every scope this run can restore from, so if the key is already
+    # there, storing it again would only spend quota.
+    - name: Is an identical entry already readable from this ref?
+      id: exists
+      if: steps.state.outputs.changed == 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/vcpkg-cache
+        key: vcpkg-binary-cache-${{ inputs.triplet }}-${{ steps.state.outputs.listing }}
+        lookup-only: true
+
+    # Keyed by content, not by run: a clean run that built nothing new saves
+    # nothing, and jobs that built the same set (the four x64-linux jobs)
+    # produce the same key, so only the first one stores it (the rest get
+    # "another job may be creating this cache" and carry on).
+    - name: Save
+      id: save
+      if: steps.state.outputs.changed == 'true' && steps.exists.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/vcpkg-cache
+        key: vcpkg-binary-cache-${{ inputs.triplet }}-${{ steps.state.outputs.listing }}
+
+    # One line per job on the run's summary page, so "did this leg restore, and
+    # did it have to store anything" does not mean opening a log.
+    - name: Summarise
+      if: always()
+      shell: bash
+      env:
+        TRIPLET: ${{ inputs.triplet }}
+        PACKAGES: ${{ steps.state.outputs.packages }}
+        LISTING: ${{ steps.state.outputs.listing }}
+        RESTORED: ${{ inputs.restored }}
+        CHANGED: ${{ steps.state.outputs.changed }}
+        EXISTS: ${{ steps.exists.outputs.cache-hit }}
+      run: |
+        if [ "$CHANGED" != true ]; then
+          if [ "${PACKAGES:-0}" -gt 0 ] 2>/dev/null; then
+            outcome="nothing new built - not saved"
+          else
+            outcome="no packages in the cache directory - not saved"
+          fi
+        elif [ "$EXISTS" = true ]; then
+          outcome="identical entry already readable from this ref - not saved"
+        else
+          outcome="new entry \`vcpkg-binary-cache-$TRIPLET-$LISTING\` offered to the cache"
+        fi
+        if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+          echo "- vcpkg cache \`$TRIPLET\`: ${PACKAGES:-?} archive(s), restored \`$RESTORED\`, $outcome" >> "$GITHUB_STEP_SUMMARY"
+        fi

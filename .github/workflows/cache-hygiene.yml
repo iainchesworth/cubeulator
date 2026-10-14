@@ -1,0 +1,102 @@
+name: Cache hygiene
+
+# Keeps the repository's 10 GB Actions cache quota for entries something can
+# still restore (docs/ci.md, "The vcpkg binary cache"). GitHub evicts the
+# least recently used entries once the quota is exceeded, with no regard for
+# which of them took an hour to build, so the quota has to be defended:
+#
+#   - a closed pull request's caches, and those of a deleted branch or tag,
+#     can never be read again (a cache is readable only from its own ref, a PR's
+#     base and the default branch);
+#   - the vcpkg and Qt caches are saved under a new key whenever their content
+#     changes, and only the newest of a family is restored.
+#
+# ci/prune-actions-cache.sh holds the rules. Not a gate: nothing waits for it.
+
+on:
+  # A closed PR's caches go as soon as it is closed (merged, or not), and an
+  # open one's superseded generations go on each push: a PR that changes the
+  # dependency set stores a full copy per job and per cancelled run, and three
+  # of them (5.4 GB) were observed at once under one PR ref.
+  pull_request:
+    types: [synchronize, closed]
+  # Each merge stores a new vcpkg generation; the previous one goes with it.
+  # A push prunes BEFORE the run it started has saved that generation, which
+  # leaves two behind until the next push; the workflow_run trigger below
+  # prunes after it.
+  push:
+    branches: [main, develop]
+  # After a CI or CodeQL run on develop or main finished saving its caches.
+  # `workflow_run` is read from the default branch, so this only takes effect
+  # once a release has put this file on main; until then the push trigger
+  # above is the sweep. It checks out the default branch and runs only that
+  # code, and takes nothing from the triggering run, so a pull request's
+  # branch name and code never reach it.
+  # zizmor: ignore[dangerous-triggers] main's own script, nothing taken from the event
+  workflow_run:
+    workflows: [CI, "CodeQL (C++)"]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Only list what would be deleted.
+        type: boolean
+        default: true
+      purge:
+        description: >-
+          Delete every entry whose key starts with this, on every ref - the
+          reset for a vcpkg cache that has carried stale archives too long
+          (for example `vcpkg-binary-cache-x64-windows-`). The next run on
+          that triplet builds from cold.
+        type: string
+        default: ""
+
+# Deny-all at the top level; the job grants itself only what it uses.
+permissions: {}
+
+# One at a time, never cancelled half way through a delete loop.
+concurrency:
+  group: cache-hygiene
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    name: Prune Actions caches
+    # A fork PR's token cannot delete anything, and a fork's caches are not in
+    # this repository's quota in the first place.
+    if: >-
+      ${{
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled')
+      }}
+    # Routed like the other seconds-long jobs (docs/ci.md, "Self-hosted
+    # runners"): by the CONTROL_RUNNER_JSON repository variable, unset meaning
+    # the hosted image, and a fork PR pinned to hosted whatever it says. The
+    # hosted pool is saturated for hours by the build legs, and a prune that
+    # waits behind them is cancelled by the next one before it ever starts
+    # (most of its first day's runs). The fleet image ships gh and jq.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
+    timeout-minutes: 15
+    permissions:
+      actions: write # delete cache entries (gh cache delete)
+      contents: read # check out the script
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: ci/prune-actions-cache.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Prune
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # A manual run defaults to a dry run; every other trigger deletes.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '' }}
+          PURGE: ${{ github.event_name == 'workflow_dispatch' && inputs.purge || '' }}
+        run: |
+          args=()
+          if [ -n "$DRY_RUN" ]; then args+=(--dry-run); fi
+          if [ -n "$PURGE" ]; then args+=(--purge "$PURGE"); fi
+          bash ci/prune-actions-cache.sh "${args[@]}"

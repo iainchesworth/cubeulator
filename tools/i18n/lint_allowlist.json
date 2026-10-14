@@ -1,0 +1,128 @@
+{
+  "$comment": [
+    "Literals the translation lint (tools/i18n/lint_strings.py) lets through, by file and literal, each with the lane that owns the file.",
+    "A new literal in these files fails the lint like any other; an entry whose literal is gone fails it too, so the list can only get shorter.",
+    "Whoever converts a literal removes its entry. docs/i18n.md lists, per lane, what has to change; `lint_strings.py --report` prints it.",
+    "Experience-lane files are converted now where the design has a string for the text (docs/design/strings.json). What remains here from that lane is text that has no id because nothing in the design says it.",
+    "An entry with \"shown\": false is not text a person reads (a developer log line, say): it is allowed, and is left out of the report of what a lane has to change."
+  ],
+  "entries": [
+    {
+      "file": "src/app/qt/CompleteScreen.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "The Method statistic, which the design drops. E3d rebuilds Complete on the kit.",
+      "literals": [
+        "METHOD"
+      ]
+    },
+    {
+      "file": "src/app/qt/DirectScanScreen.qml",
+      "owner": "scan lane (feature/direct-scan)",
+      "reason": "The scan screen's headline and guidance. R4 and E3c rebuild its chrome with the scan lane; ids exist for most of these (scan.title.*, scan.guide.*).",
+      "literals": [
+        " of 6 sides read",
+        "All six sides make a valid cube. Working out the solution…",
+        "Camera unavailable",
+        "Cancel",
+        "Cube read",
+        "Hold it still",
+        "Hold one side of the cube square to the camera",
+        "Reading this side — hold it there",
+        "Recording this scan to ",
+        "Setting the camera's exposure and colour balance…",
+        "Start over",
+        "Starting the camera…",
+        "These six sides do not make a valid cube yet. Show each side again, square to the camera.",
+        "These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.",
+        "Turn to a side that is not filled in below, square to the camera"
+      ]
+    },
+    {
+      "file": "src/app/qt/SettingsScreen.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "Settings the design removes (the two ScanSession settings, cube motion, shader style) or moves behind a developer build. E3a rebuilds this screen on the kit and these go with it; none has an id because none survives.",
+      "literals": [
+        "Auto-rotate when idle",
+        "CUBE MOTION",
+        "RENDERING",
+        "Shader style for the 3D cube shown around the app.",
+        "Test turn"
+      ]
+    },
+    {
+      "file": "src/app/qt/SettingsState.qml",
+      "owner": "kit session (feature/ax-kit)",
+      "reason": "Labels held in the settings object (themes, shader styles, speeds). SettingsScreen no longer reads the theme labels: it maps the key to settings.theme.*; the rest go with the kit's rebuild of SettingsState. The graphics backends' names (product names, left literal) are not here any more: the platform supplies them, from src/app/platform/<os>/platform_info_<os>.cpp.",
+      "literals": [
+        "Auto",
+        "Borderlands Cel-Shading",
+        "Dark",
+        "Instructional Glow",
+        "Light",
+        "Physically-Based Realism",
+        "System"
+      ]
+    },
+    {
+      "file": "src/app/qt/SolveScreen.qml",
+      "owner": "solve lane (feature/solve-guidance)",
+      "reason": "The solve screen's stage names, hints and captions. E3d restyles the chrome with the solve lane; ids exist for most of these (stage.*, solve.*).",
+      "literals": [
+        " OF ",
+        " facing you",
+        " on top, ",
+        " was turned, but not the way shown. Turn it back and try again.",
+        ") was turned instead. Turn it back, then make the move shown.",
+        "Bring the four white edges home, matching each side centre.",
+        "Camera unavailable",
+        "Drag the cube to look round it",
+        "Finish",
+        "Hold any side square to the camera and the cube here turns to match",
+        "Insert the four white corners to complete the first layer.",
+        "Left side",
+        "Matched to your cube",
+        "Matched. Make the move and it steps on by itself.",
+        "Matched. The camera cannot see the side facing you: press Next after this move.",
+        "Middle layer",
+        "Next move",
+        "Not the move that was asked for",
+        "Not the side that was expected",
+        "Only the view has turned. Keep your cube as it is.",
+        "Orient last layer",
+        "Orient the last layer's edges and corners so the top side reads solid.",
+        "Out of step? Rescan",
+        "Permute last layer",
+        "Permute the last layer's pieces into their solved positions.",
+        "Previous",
+        "Rescan the cube and carry on from there",
+        "Right side",
+        "STAGE ",
+        "STAGES",
+        "Seen from behind",
+        "Send the middle-layer edges home.",
+        "Show a side again if you turn the cube over",
+        "Solved",
+        "Solving…",
+        "Starting the camera…",
+        "That side is not expected",
+        "That side looks the same turned. Show another to tell which way up.",
+        "That was not the move",
+        "The side facing the camera is not what the solution has there. If the last move went wrong and cannot be put right, rescan.",
+        "White corners",
+        "White cross",
+        "half turn",
+        "quarter turn",
+        "unknown",
+        "wrong"
+      ]
+    },
+    {
+      "file": "src/app/qt/StatsOverlay.qml",
+      "owner": "experience lane (feature/app-experience)",
+      "reason": "Developer-build overlay; developer strings may stay in English (screens/settings.md).",
+      "literals": [
+        "FPS "
+      ]
+    }
+  ]
+}

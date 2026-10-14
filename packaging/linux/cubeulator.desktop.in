@@ -1,0 +1,20 @@
+[Desktop Entry]
+# Named for the application id, which is also the id Wayland and GNOME match
+# a window to this file by (QGuiApplication::setDesktopFileName).
+# Comment is `store.summary` in docs/design/strings.json; translated Comment
+# lines are added with the other languages (E5).
+Type=Application
+Version=1.5
+Name=@CUBEULATOR_APP_DISPLAY_NAME@
+Comment=@CUBEULATOR_STORE_SUMMARY@
+Exec=cubeulator
+Icon=@CUBEULATOR_APP_ID@
+Terminal=false
+# One main category (Game), with LogicGame under it: two main categories
+# (Utility and Game) is what desktop-file-validate hints at, and the
+# application would appear twice in a menu.
+Categories=Game;LogicGame;
+Keywords=cube;rubik;solver;puzzle;
+StartupNotify=true
+# The class X11 windows carry: Qt uses the application name.
+StartupWMClass=Cubeulator

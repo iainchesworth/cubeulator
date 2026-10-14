@@ -1,0 +1,104 @@
+name: CodeQL (C++)
+
+on:
+  push:
+    branches: [main, develop]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    - cron: "17 3 * * 1"
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  # Same rule as ci.yml: a push to develop or main finishes, because it is the
+  # run that stores the vcpkg cache pull requests restore from.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/develop' && github.ref != 'refs/heads/main' }}
+
+jobs:
+  analyze:
+    name: Analyze (C++)
+    runs-on: ubuntu-26.04
+    permissions:
+      security-events: write
+      contents: read
+    # Caps vcpkg's internal build parallelism - see the equivalent comment
+    # in ci.yml's build-and-test job (onnxruntime OOM'd this runner at full
+    # nproc parallelism).
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 is required for vcpkg's version resolution against the
+      # deps/vcpkg submodule — see the equivalent comment in ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          languages: cpp
+          build-mode: manual
+
+      # Keyed per vcpkg triplet (x64-linux), shared with ci.yml's Linux legs,
+      # clang-tidy, and coverage jobs - all resolve the identical x64-linux
+      # package set regardless of preset, so a single shared cache avoids
+      # the wasteful per-preset duplication that pushed total cache usage
+      # over GitHub's 10GB-per-repo cap (confirmed via the cache usage API).
+      # actions/cache tolerates concurrent jobs racing to populate the same
+      # key (whichever finishes first wins; the others just skip their own
+      # save harmlessly).
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # GCC 16 is installed, not shipped: see the comment on ci.yml's
+      # build-and-test job.
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test in ci.yml (X11/GL headers).
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+
+      # Sanitizers disabled: CodeQL's build tracer sets its own LD_PRELOAD for
+      # the whole build step, which collides with ASan needing to be first in
+      # the preload chain. CodeQL is pure static analysis and gets nothing
+      # from ASan/UBSan being enabled here.
+      - name: Configure (library + platform only, no Qt app)
+        run: >
+          cmake --preset linux-gcc-debug
+          -DCMAKE_CXX_COMPILER=g++-16
+          -DCUBEULATOR_BUILD_APP=OFF
+          -DCUBEULATOR_ENABLE_SANITIZERS=OFF
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-debug
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
+        with:
+          category: "/language:cpp"
+
+      # Saved even when a later step fails: otherwise a red leg throws away every
+      # package vcpkg had already built and the next attempt starts from nothing
+      # (an hour or more on Windows and macOS). Only saves when packages were
+      # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}

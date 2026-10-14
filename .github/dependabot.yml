@@ -1,0 +1,123 @@
+version: 2
+
+# What Dependabot owns here, and which of its pull requests merge themselves.
+# The policy lives in .github/workflows/dependabot-auto-merge.yml; the short
+# version is in docs/ci.md ("Dependabot").
+#
+#   github-actions, pip   weekly. Minor/patch updates are grouped into one PR
+#                         that the auto-merge workflow puts in develop's merge
+#                         queue. A major update is its own PR and waits for a
+#                         human.
+#   vcpkg + deps/vcpkg    monthly, one combined PR (the manifest baseline and
+#                         the submodule have to move together), never
+#                         auto-merged: it rebuilds every dependency, and the
+#                         build jobs are not yet required checks on develop
+#                         (docs/branch-protection.md).
+#
+# Dependabot cannot see Qt, the Android NDK/SDK, the Emscripten version, the
+# Clang/GCC packages the jobs apt-install, or the runner image labels;
+# docs/ci.md lists those pins.
+#
+# Every PR targets develop: gitflow only lets release/hotfix/support branches
+# (or develop itself) open a PR against main. branch-name-check.yml allows the
+# dependabot/* branch prefix, which is not configurable.
+#
+# rebase-strategy is "disabled" on purpose: develop's rule does not require
+# branches to be up to date (the merge queue makes each entry current), and an
+# automatic rebase of every open PR on every merge would re-run the whole CI
+# matrix on a runner pool shared with other repositories. Ask for one with
+# "@dependabot rebase" when a PR actually conflicts.
+#
+# cooldown waits a week after a version is published before proposing it, so
+# the community has time to catch a compromised release before this repo
+# updates to it. (Security updates ignore it.)
+
+multi-ecosystem-groups:
+  vcpkg-stack:
+    schedule:
+      interval: "monthly"
+    target-branch: "develop"
+    labels:
+      - "dependencies"
+      - "vcpkg"
+
+updates:
+  - package-ecosystem: "github-actions"
+    # The workflows, and the composite action that builds the web app for both
+    # ci.yml and docs.yml (its action pins must move with the workflows').
+    directories:
+      - "/"
+      - "/.github/actions/web-build"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    rebase-strategy: "disabled"
+    open-pull-requests-limit: 3
+    groups:
+      # Everything below a major lands in one PR. Majors match no group, so
+      # Dependabot raises each as its own PR - that is what keeps them out of
+      # the auto-merge lane.
+      github-actions:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Documentation toolchain (mkdocs, mkdocs-material). The requirement ranges
+  # in docs/requirements.txt cap the majors (mkdocs 2 is a rewrite that
+  # mkdocs-material does not support), so this mostly yields security updates.
+  - package-ecosystem: "pip"
+    directory: "/docs"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    rebase-strategy: "disabled"
+    groups:
+      docs-tooling:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # CI tooling that is pip-installed by a workflow (currently zizmor).
+  - package-ecosystem: "pip"
+    directory: "/ci"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+    rebase-strategy: "disabled"
+    groups:
+      ci-tooling:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # vcpkg: the manifest's builtin-baseline, and the vendored vcpkg checkout
+  # the toolchain file and ports' helper scripts come from. One PR, because
+  # the ports resolved from the baseline are built with the submodule's
+  # scripts; a baseline that is newer than the submodule can fail.
+  - package-ecosystem: "vcpkg"
+    directory: "/"
+    multi-ecosystem-group: "vcpkg-stack"
+    patterns:
+      - "*"
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    multi-ecosystem-group: "vcpkg-stack"
+    patterns:
+      - "*"
+    cooldown:
+      default-days: 7

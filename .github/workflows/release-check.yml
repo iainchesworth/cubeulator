@@ -1,0 +1,93 @@
+name: Release readiness
+
+# On a pull request into main (a develop -> main release PR, or a hotfix): is
+# this a release the Release workflow will accept, and what would its notes
+# say? It reads the tree the way the Release workflow does
+# (tools/release/check_release.py): the version CMakeLists.txt declares, the
+# dated CHANGELOG.md section that is the newest one, with its summary, bold
+# lead-ins and (a pre-release) the closing caveat.
+#
+# A second job asks whether the commit being released is green on every
+# workflow the README has a badge for (tools/release/check_health.py): CI,
+# CodeQL, OSV-Scanner and Zizmor. The badges on the front page of `main` are
+# those workflows' latest runs there, so a release that reaches `main` with one
+# of them red puts a red badge on the front page of the first release.
+#
+# Advisory: neither job is one of main-protection's required checks (they are
+# listed in docs/branch-protection.md), so they need no merge_group trigger.
+# They exist so that a release PR says, before the merge, what the tag would
+# fail on after it. The preview of the notes, and the table of workflows, are
+# in the job summaries. The second job is red while CI is still running on the
+# commit (CI is hours): re-run it when CI has finished.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: release-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  readiness:
+    name: Release readiness
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Check the tree
+        id: check
+        shell: bash
+        run: python3 tools/release/check_release.py --github-output "$GITHUB_OUTPUT"
+
+      # What the release page would say, with the package names the build
+      # produces. The signed/attested/SBOM sentence is the real release's.
+      - name: Preview the release notes
+        shell: bash
+        env:
+          VERSION: ${{ steps.check.outputs.version }}
+          TAG: ${{ steps.check.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 tools/release/render_release_notes.py \
+            --version "$VERSION" --tag "$TAG" --repo "$REPO" \
+            --signed --attested --sbom --output notes.md
+          {
+            echo "### Release notes for $TAG, as they would be rendered"
+            echo
+            cat notes.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  health:
+    name: Commit is green
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The pull request's head is the develop tip for a release PR (a hotfix
+      # branch's head for a hotfix), and every workflow has run on it by the
+      # time a release is decided. The two jobs of this workflow are left out:
+      # one is this job, the other is judged by its own rules.
+      - name: Check CI, CodeQL and the scanners on the head commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 tools/release/check_health.py \
+            --repo "$REPO" --ref "$HEAD_SHA" \
+            --ignore "Release readiness" --ignore "Commit is green" \
+            --summary "$GITHUB_STEP_SUMMARY"
