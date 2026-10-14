@@ -15,7 +15,7 @@ colour or a pixel size written into a screen is a defect (plan, E3 gate).
 
 ## The direction
 
-Kept from the app as it stands *(Iain, 2026-10-13)*. The original design
+Kept from the app as it stands *(the maintainer, 2026-10-13)*. The original design
 handoff is gone, so this is reconstructed from the QML.
 
 - **Flat.** Fills and rules. No shadows, gradients, blurs or glows.

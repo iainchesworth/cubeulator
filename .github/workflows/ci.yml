@@ -551,7 +551,7 @@ jobs:
       # name and its libraries were built with. Qt only *recommends* building
       # an app with the same NDK "to avoid missing symbol errors"; it does not
       # call a newer one unsupported, and its CMake does not check. That is a
-      # departure from Qt's tested configuration, taken on purpose (Iain,
+      # departure from Qt's tested configuration, taken on purpose (the maintainer,
       # 2026-10-13): r28c's libc++ has std::expected::transform/and_then,
       # std::format and std::print, ranges::contains/fold_left and mdspan,
       # which r26b lacks (compile-probed), and it carries libc++'s fix for

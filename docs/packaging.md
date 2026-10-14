@@ -95,8 +95,8 @@ Needs, besides the build's own tools:
 | | value |
 |---|---|
 | Display name | Cubeulator |
-| Identifier | `com.iainchesworthlabs.cubeulator`, on every platform (Iain, 2026-10-13, after the repository moved to `iainchesworthlabs`; it follows the account; until then it had the `org` prefix and the old account): the macOS bundle id, the Linux app id and desktop file name, later the Android package and iOS bundle id |
-| Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the AppStream developer and CPack's vendor and contact. The copyright line (`CUBEULATOR_COPYRIGHT_HOLDER`) stays in Iain's own name: "Copyright (C) 2026 Iain Chesworth" |
+| Identifier | `com.iainchesworthlabs.cubeulator`, on every platform (the maintainer, 2026-10-13, after the repository moved to `iainchesworthlabs`; it follows the account; until then it had the `org` prefix and the old account): the macOS bundle id, the Linux app id and desktop file name, later the Android package and iOS bundle id |
+| Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the AppStream developer and CPack's vendor and contact. The copyright line (`CUBEULATOR_COPYRIGHT_HOLDER`) stays in the maintainer's own name: "Copyright (C) 2026 Iain Chesworth" |
 | Windows AppUserModelID | `IainChesworthLabs.Cubeulator`, following the publisher |
 | Executable | `Cubeulator.exe`, `Cubeulator.app`, `cubeulator` |
 | Version | `project(VERSION)` and `CUBEULATOR_VERSION_PRERELEASE` in the top-level `CMakeLists.txt` (set together by `tools/release/prepare_release.py`, see [Cutting a release](releasing.md#versions)), through `cmake/GenerateVersion.cmake`: in `cube/version.hpp`, the Windows version resource, `Info.plist` (without the pre-release label), the AppStream release and every package's file name |
@@ -262,7 +262,7 @@ project's key, a build-provenance attestation for each package and an SBOM. They
 prove where a file came from. The operating system does not look at them.
 
 **What the operating system looks at is not configured**, and no certificate is
-referenced anywhere (Iain has not decided; both cost an account and a yearly
+referenced anywhere (the maintainer has not decided; both cost an account and a yearly
 fee, and neither can be tried without one). It plugs in at two places:
 
 - **Windows**: after CPack writes the installer, sign it with `signtool`
