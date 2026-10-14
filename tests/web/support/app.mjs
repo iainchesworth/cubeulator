@@ -49,7 +49,7 @@ export class CubeulatorApp {
    * Opens a fresh page on the app and waits until it has drawn its first screen.
    * @param {import('@playwright/test').Browser} browser
    * @param {{viewport?: {width:number,height:number}, camera?: 'fake'|'browser', query?: string,
-   *          touch?: boolean, permissions?: string[], lightProbe?: boolean,
+   *          touch?: boolean, permissions?: string[],
    *          screen?: string, storage?: Record<string,string>}} [options]
    *          `screen` is the one to wait for (launch); `storage` is what the
    *          browser's localStorage holds when the app starts, as an earlier
@@ -66,7 +66,6 @@ export class CubeulatorApp {
       touch: options.touch ?? false,
       camera: options.camera ?? 'fake',
       permissions: options.permissions ?? ['camera'],
-      lightProbe: options.lightProbe ?? false,
     });
     let context = contexts.get(key);
     if (!context) {
@@ -79,13 +78,6 @@ export class CubeulatorApp {
       });
       if ((options.camera ?? 'fake') === 'fake') {
         await context.addInitScript({ content: await readFile(fakeCameraScript, 'utf8') });
-      }
-      if (!(options.lightProbe ?? false)) {
-        // The cube's light probe is prefiltered on a software renderer in some
-        // twenty seconds of every core, for every page (driver_web.cpp says
-        // more); a case that is about how the cube looks asks for it.
-        await context.addInitScript({
-          content: "window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' };" });
       }
       contexts.set(key, context);
     }
@@ -406,8 +398,8 @@ export class CubeulatorApp {
 
   /**
    * Waits until the app has presented `count` frames (the recorder's "UI"
-   * set). With its light probe on, the first frames of a page take seconds
-   * each on a software renderer; whatever is measured is measured after them.
+   * set). The first frames of a page take seconds each on a software renderer;
+   * whatever is measured is measured after them.
    */
   async waitForFrames(count = 5, timeout = 180_000) {
     await expect.poll(async () => (await this.profile()).frames.UI ?? 0,
