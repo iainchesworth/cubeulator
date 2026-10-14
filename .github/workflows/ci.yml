@@ -701,7 +701,9 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',web-test,') }}
     runs-on: ubuntu-26.04
     # Not required until it has run green on develop, like the other porting
-    # legs (docs/ci.md).
+    # legs (docs/ci.md). The browser suite draws in software, one page at a
+    # time; an hour and a half is a hang, not a slow run.
+    timeout-minutes: 90
     continue-on-error: true
     env:
       VCPKG_MAX_CONCURRENCY: "4"
@@ -779,7 +781,9 @@ jobs:
     if: ${{ github.event_name == 'workflow_dispatch' && contains(format(',{0},', inputs.legs), ',web-perf,') }}
     runs-on: ubuntu-26.04
     # Not required until it has run green on develop, like the other porting
-    # legs (docs/ci.md).
+    # legs (docs/ci.md). The browser suite draws in software, one page at a
+    # time; an hour and a half is a hang, not a slow run.
+    timeout-minutes: 90
     continue-on-error: true
     env:
       VCPKG_MAX_CONCURRENCY: "4"
