@@ -346,10 +346,12 @@ nothing from the one before.
 
 What a case costs there is mostly **the first frame of a 3D cube**: the
 launch and solve screens (and the settings preview) are a `View3D` with MSAA, a
-procedural light probe and six lights, and the first frame of each one - which
-is every return to a screen that has it - spends eight seconds on llvmpipe
-prefiltering the probe. Measured with `QSG_RENDER_TIMING` on the CI preset
-(`linux-gcc-coverage`, Qt 6.8.3, four cores): in the cube-drag case eight such
+light probe and six lights, and the first frame of each one - which is every
+return to a screen that has it - spent eight seconds on llvmpipe prefiltering
+the probe (it is a prefiltered file now, and that is gone:
+[performance](performance.md#the-light-probe); what follows is what the
+harness's choices were made on). Measured with `QSG_RENDER_TIMING` on the CI
+preset (`linux-gcc-coverage`, Qt 6.8.3, four cores): in the cube-drag case eight such
 frames were 66 of its 82 seconds and the other 147 frames were 0.7 s in all;
 the same case with the probe left out is 16 s. (Antialiasing off changed
 nothing; a never-removed 3D view to keep Qt's caches alive changed nothing.)
@@ -386,10 +388,14 @@ added:
   hard the cube is, and the solver's own tests cover its time on a hard one.
 - **No light probe unless the case is about how the cube looks.** Before a
   view's first frame is synchronised the harness takes the probe off its
-  environment, so the cube is lit by its six lights alone and the first frame
-  is not eight seconds. `App::fresh(Start, Scene3D::full)` keeps it, and the
-  screenshot tour and the render checks ask for that. A pixel comparison
-  between two runs of the cheap cube is still a comparison of the same thing.
+  environment, so the cube is lit by its six lights alone. This was the first
+  frame not being eight seconds; the probe is a prefiltered file now and the
+  first frame is the same with it
+  ([performance](performance.md#the-light-probe)), so the choice buys nothing
+  today and `Scene3D::cheap` could go. `App::fresh(Start, Scene3D::full)` keeps
+  the probe, and the screenshot tour and the render checks ask for that. A
+  pixel comparison between two runs of the cheap cube is still a comparison of
+  the same thing.
 - **A press for each kind of move, not for each move.** The journey presses
   Next for the first and last few moves and for the first of every kind of turn
   (`R`, `U'`, `F2`...), and steps the rest through the controller; the tour
@@ -996,12 +1002,13 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic |
-| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic, and that each of the five drafts shows its own script |
+| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off; the launch and settings screens again in Hebrew, Arabic and Yiddish, mirrored |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
 | `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
 | `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
+| `tumble.spec.mjs` | a cube turned about one axis and then another, drawn by `cube_tumble_sim` and played to the camera at its recorded frame times; skipped unless `TUMBLE_SESSION` names the session (see [the investigation](investigations/2026-10-14-scan-tumble.md)) |
 | `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
 | `package.spec.mjs` | the `package` project: any built copy of the site, the release zip unzipped included, starts, is isolated, draws and is quiet (it needs nothing the diagnostics build adds) |
 | `perf.spec.mjs` | the journeys again, read from the recorder; see below |
@@ -1013,17 +1020,14 @@ settings says what the storage holds when the app starts: `appOptions.storage`.)
 A failure attaches the page's console and a screenshot (and a Playwright trace
 on the retry).
 
-**The light probe.** On a headless runner the page draws in software
-(SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first
-frame of every 3D view: some twenty seconds of every core, for every page, and
-the same again when the page is closed. The suite leaves the probe out (the
-cube is still lit by its lights), as `tests/system` does natively
-(`App::Scene3D::cheap`): the context's init script sets
-`window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' }`, which the
-page passes to the app as environment and the driver reads
-(`driver_web.cpp`). `appOptions: { lightProbe: true }` keeps it, and the `perf`
-project does, so that what it measures is the app as shipped. The first
-version of the suite did not, and spent half a minute per test closing pages.
+**The light probe.** The suite runs the app as it ships, light probe included.
+On a headless runner the page draws in software (SwiftShader), and while the
+probe was prefiltered by Qt Quick 3D on the first frame of every 3D view that
+was half a minute of every core for each page, and the same again when it was
+closed - the first version of the suite spent thirty seconds a test on it and
+then left the probe out. The probe is a prefiltered file now (`tools/lightprobe`,
+[performance](performance.md#the-light-probe)): the 30th frame of a page is
+there in two or three seconds and closing it is one.
 
 **One worker.** SwiftShader's threads spin on every core they find, so two pages
 at once measured seven times slower each than one. `CUBEULATOR_WEB_WORKERS`

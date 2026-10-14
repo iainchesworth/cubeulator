@@ -78,3 +78,46 @@ for (const layout of LAYOUTS) {
     });
   });
 }
+
+// The right-to-left drafts (docs/i18n.md), in both layouts: the layout is
+// mirrored and the words are the language's own, longer or shorter than the
+// English, set in the face the browser has (Qt's bundled DejaVu Sans), and
+// nothing may run off an edge. The solve and completion screens are the
+// native tests' for now: a demo page has no Settings to choose a language in.
+const RIGHT_TO_LEFT = [
+  [7, 'he'],
+  [8, 'ar'],
+  [9, 'yi'],
+];
+
+for (const layout of LAYOUTS) {
+  test.describe(`${layout.name} layout, right to left`, () => {
+    test.use({ appOptions: { viewport: layout.viewport, touch: layout.touch } });
+
+    for (const [chip, code] of RIGHT_TO_LEFT) {
+      test(`${code}: the settings and launch screens fit, mirrored`, async ({ app }) => {
+        await app.click('launch.settings');
+        await app.waitForScreen('settings');
+        await app.click(`settings.language.${chip}`);
+        await expect
+          .poll(async () => (await app.singleton('LanguageManager')).selectedLanguage)
+          .toBe(code);
+        await app.settle();
+        expect(await app.cutOff(), 'settings').toEqual([]);
+
+        await app.click('settings.back');
+        await app.waitForScreen('launch');
+        expect(await app.cutOff(), 'launch').toEqual([]);
+
+        // Mirrored: on a wide window the copy and the button lead from the
+        // right; the chosen words are not the English.
+        const window = (await app.state()).window;
+        const start = await app.find('launch.startScan');
+        expect(start.text).not.toBe('Scan a cube');
+        if (layout.wide) {
+          expect(start.x + start.width / 2).toBeGreaterThan(window.width / 2);
+        }
+      });
+    }
+  });
+}

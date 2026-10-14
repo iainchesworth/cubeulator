@@ -232,19 +232,46 @@ test.describe('language', () => {
     });
   }
 
-  test('shows a string no catalogue has translated in English, never as its id', async ({ app }) => {
-    // Hebrew, Arabic and Yiddish have no translation yet (every entry
-    // unfinished, which the build leaves out), so a chosen one shows English.
-    // When their translations land the text changes and the id half of this
-    // still holds: what is on screen is words.
+  // The five drafts (docs/i18n.md) show their own words, in their own script.
+  // What the browser draws them with (Qt's bundled face; there are no system
+  // fonts) is not in the page's text and is looked at in a screenshot, as
+  // docs/i18n.md says.
+  const DRAFTS = [
+    [5, 'ja', /^[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u],
+    [7, 'he', /^\p{Script=Hebrew}/u],
+    [8, 'ar', /^\p{Script=Arabic}/u],
+    [9, 'yi', /^\p{Script=Hebrew}/u],
+  ];
+  for (const [chip, code, script] of DRAFTS) {
+    test(`${code} shows its own words and nothing of the English`, async ({ app }) => {
+      await openSettings(app);
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.click('settings.back');
+      await app.waitForScreen('launch');
+      const scan = (await app.find('launch.startScan')).text;
+      expect(scan, 'the main button, in the language').toMatch(script);
+      expect(scan).not.toBe('Scan a cube');
+      // And the product name is still the product name.
+      expect(await app.texts()).toContain('Cubeulator');
+    });
+  }
+
+  test('shows no string as its raw id, in any language', async ({ app }) => {
+    // Every language has a draft, so a string missing from one (one added
+    // since) shows its English and never its id. What is on screen is words,
+    // in each of the eight.
     await openSettings(app);
-    await app.click('settings.language.7');
-    await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('he');
-    await app.settle();
-    for (const text of await app.texts()) {
-      expect(text, 'a raw string id on screen').not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+    for (const [chip, code] of [[2, 'de'], [3, 'fr'], [4, 'es'], [5, 'ja'], [6, 'zh-CN'],
+                                [7, 'he'], [8, 'ar'], [9, 'yi']]) {
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.settle();
+      for (const text of await app.texts()) {
+        expect(text, `a raw string id on screen in ${code}`)
+          .not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+      }
     }
-    expect(await app.texts(), 'English under an untranslated language').toContain('Camera');
   });
 
   // German, French and Spanish are complete drafts: what the person reads is

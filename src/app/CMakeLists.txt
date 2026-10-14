@@ -159,7 +159,8 @@ if(CUBEULATOR_BUILD_APP)
         RESOURCES
             qt/shaders/toon.frag
             qt/shaders/cel.frag
-            qt/shaders/celshade_post.frag)
+            qt/shaders/celshade_post.frag
+            qt/lightprobe/sky.ktx)
 
     # Qt6::Gui: SystemTheme.cpp uses QGuiApplication/QStyleHints, which live
     # in Gui, not Core (unlike QCameraPermission, added to Core specifically

@@ -306,10 +306,17 @@ TEST_CASE("a string with no translation shows its English through the manager",
     LanguageManager manager(*qGuiApp, engine);
     manager.applyInitialLanguage();
 
-    // None of these three is translated yet (E5): each must show the English.
-    for (const char* code : {"he", "ar", "yi"}) {
-        INFO(code);
-        REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
+    // A language whose catalogue has nothing finished in it - one just added,
+    // before E5 has been to it (docs/i18n.md, "Adding a language") - must show
+    // the English. Every language of the app is a draft today, so the loop is
+    // empty until one is added; the same property, entry by entry and for the
+    // drafts, is held by translation_runtime_test.cpp.
+    for (const cube::i18n_test::Language& language : cube::i18n_test::read_languages()) {
+        if (language.translated || language.draft || language.pseudo) {
+            continue;
+        }
+        INFO(str(language.code));
+        REQUIRE(manager.setLanguage(language.code));
         CHECK(qtTrId("home.scan") == QLatin1String("Scan a cube"));
         CHECK(qtTrId("common.back") == QLatin1String("Back"));
     }
@@ -353,16 +360,30 @@ TEST_CASE("a draft language shows its translation through the manager",
     LanguageManager manager(*qGuiApp, engine);
     manager.applyInitialLanguage();
 
-    // Japanese and Simplified Chinese are complete drafts: the person sees
-    // them, in Han and kana, and not the English under them.
-    auto is_cjk = [](const QString& s) { return !s.isEmpty() && s.front().unicode() >= 0x3000; };
-    for (const char* code : {"ja", "zh-CN"}) {
-        INFO(code);
-        REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
+    // Japanese, Simplified Chinese, Hebrew, Arabic and Yiddish are complete
+    // drafts: the person sees them, in their own script, and not the English
+    // under them.
+    struct Draft {
+        const char* code;
+        char16_t first;  // the script's first code point
+        char16_t last;   // and its last
+        bool rtl;
+    };
+    const Draft drafts[] = {
+        {"ja", 0x3000, 0xFFFF, false}, {"zh-CN", 0x3000, 0xFFFF, false},
+        {"he", 0x0590, 0x05FF, true},  {"yi", 0x0590, 0x05FF, true},
+        {"ar", 0x0600, 0x06FF, true},
+    };
+    for (const Draft& draft : drafts) {
+        INFO(draft.code);
+        REQUIRE(manager.setLanguage(QString::fromLatin1(draft.code)));
+        CHECK(manager.rtl() == draft.rtl);
         for (const char* id : {"home.scan", "common.back", "settings.section.language"}) {
             INFO(id);
             const QString shown = qtTrId(id);
-            CHECK(is_cjk(shown));
+            REQUIRE_FALSE(shown.isEmpty());
+            CHECK(shown.front().unicode() >= draft.first);
+            CHECK(shown.front().unicode() <= draft.last);
         }
         // The product name is not translated.
         CHECK(qtTrId("app.name") == QLatin1String("Cubeulator"));

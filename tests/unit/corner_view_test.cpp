@@ -750,3 +750,175 @@ TEST_CASE("corner views settle a cube whose red and orange sides are each the ot
     REQUIRE(settled.has_value());
     CHECK(*settled == cube);
 }
+
+TEST_CASE("two sides turned to much the same angle are two sides, not a grid across their edge",
+          "[corner]") {
+    // At near-equal angles the two sides read as one continuous grid, and a 3x3
+    // window across their shared edge holds as many blobs as either side and
+    // fits as well. Taken first - the fullest, then the tightest - it left six
+    // blobs and three that make no lattice: 18 blobs, one lattice, no read, in
+    // the middle of every quarter-turn of a tumble.
+    const Cube cube = cube::test::scramble(3);
+    const SessionColours colours = drawn_colours();
+    for (const float width : {22.0F, 26.0F, 30.0F, 34.0F}) {
+        // Level, and the same column step on both: six columns of one grid.
+        const cube::test::CornerPose even{.left_width = width, .right_width = width, .tilt = 0.0F};
+        for (const Face left : kAllFaces) {
+            INFO("column step " << width << " pixels, " << static_cast<int>(left)
+                                << " on the left");
+            const auto read = read_corner(cube::test::draw_cube_corner(cube, left, even));
+            const CornerRead& corner = ::cube::test::must_have(read);
+            CHECK(corner.sides.size() == 2);
+            CHECK(fit_corner(corner, cube, colours).fits);
+        }
+    }
+}
+
+TEST_CASE("the same view held for a second is one corner read, and another view is another",
+          "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto first = read_corner(corner_frame(cube, Face::F));
+    const auto second = read_corner(corner_frame(cube, Face::R));
+    REQUIRE(first.has_value());
+    REQUIRE(second.has_value());
+
+    SideScan scan;
+    // A tumble that shows two sides for a second is thirty reads of them.
+    for (int i = 0; i < 100; ++i) {
+        scan.add_corner(first);
+    }
+    CHECK(scan.corner_reads() == 1);
+    scan.add_corner(second);
+    CHECK(scan.corner_reads() == 2);
+    for (int i = 0; i < 100; ++i) {
+        scan.add_corner(second);
+    }
+    // The early view is not pushed out by the late one repeated.
+    CHECK(scan.corner_reads() == 2);
+}
+
+TEST_CASE("a slow tumble's early views still count when its late views are all the same",
+          "[corner]") {
+    // The cubes six sides make are told apart by the views that differ between
+    // them. With the newest few dozen reads kept, a second held on one view
+    // pushed the others out, and the cubes they had told apart were tied.
+    const Cube cube = patterned_cube();
+    SideScan scan;
+    show_sides(scan, cube);
+    REQUIRE_FALSE(scan.cube().has_value());
+    for (const Face left : kAllFaces) {
+        scan.add_corner(read_corner(corner_frame(cube, left)));
+    }
+    const auto settled_by_all = scan.cube();
+    REQUIRE(settled_by_all.has_value());
+
+    SideScan tumbled;
+    show_sides(tumbled, cube);
+    for (const Face left : kAllFaces) {
+        tumbled.add_corner(read_corner(corner_frame(cube, left)));
+    }
+    // And then three seconds on the last view.
+    const auto last = read_corner(corner_frame(cube, Face::B));
+    for (int i = 0; i < 90; ++i) {
+        tumbled.add_corner(last);
+    }
+    const auto settled = tumbled.cube();
+    REQUIRE(settled.has_value());
+    CHECK(*settled == *settled_by_all);
+    CHECK(tumbled.corner_reads() <= 6);
+}
+
+TEST_CASE("more cubes than a few dozen are weighed, so the true one is not left out", "[corner]") {
+    // The six sides of the patterned cube make twenty cubes. With sixteen of
+    // them looked at, the true one was not among them one time in five (and
+    // the other recorded cube makes 32, which is one in two).
+    const Cube drawn = patterned_cube();
+    SideScan probe;
+    show_sides(probe, drawn);
+    const auto diagnosis = probe.diagnose();
+    const auto& naming = ::cube::test::must_have(diagnosis.naming);
+    const std::vector<Cube> all = cube::solver::assemble_all_scanned_faces(naming.faces, 64);
+    REQUIRE(all.size() > 16);
+
+    // Each of them, in turn, is the cube in the hand; every one is found.
+    for (const Cube& truth : all) {
+        SideScan scan;
+        show_sides(scan, truth);
+        const auto before = scan.cube();
+        REQUIRE_FALSE(before.has_value());
+        for (int asked = 0; asked < 4 && !scan.cube().has_value(); ++asked) {
+            const auto now = scan.diagnose();
+            const auto& assembly = ::cube::test::must_have(now.assembly);
+            const auto& corner = ::cube::test::must_have(assembly.settling_corner);
+            const std::array<Face, 3> faces = faces_of(truth, corner);
+            const cv::Mat frame =
+                cube::test::draw_cube_corner3(truth, faces.at(0), faces.at(1), faces.at(2));
+            REQUIRE_FALSE(frame.empty());
+            hold(scan, frame, 6);
+        }
+        const auto settled = scan.cube();
+        REQUIRE(settled.has_value());
+        CHECK(*settled == truth);
+    }
+}
+
+namespace {
+
+// A drawing in the colours of the default one, a fraction of as bright: the
+// same side lit a little less, as it is when it is turned away from the lamp.
+Drawing dimmed(float gain) {
+    Drawing drawing;
+    drawing.paint = [gain](Color colour) { return cube::test::paint(colour) * gain; };
+    return drawing;
+}
+
+}  // namespace
+
+TEST_CASE("a side seen at an angle in less light than it was read square-on is the same side",
+          "[corner]") {
+    // The same orange was read at lightness 14, 22 and 31 in one recorded scan,
+    // and a drawn cube turned slowly gave a second group for each of three
+    // sides. A group of its own reaches kMinReads and counts as one of the
+    // six, and the scan is six sides that make no cube.
+    const Cube cube = cube::test::scramble(3);
+    const auto sides = three_sides(cube, Face::U, Face::R, Face::F);
+
+    SideScan scan;
+    const cv::Mat flat = draw_side(sides.at(0), Pose{});
+    for (int i = 0; i < 12; ++i) {
+        scan.add(cube::vision::read_side(flat));
+    }
+    REQUIRE(scan.sides().size() == 1);
+    scan.add(std::nullopt);
+
+    // The up side again, as a corner shows it, but much less lit; and the
+    // other two as they were drawn.
+    const cube::test::Corner3Pose upright;
+    hold(scan, cube::test::draw_corner3(sides, upright, dimmed(0.75F)), 24);
+    CHECK(scan.sides().size() == 3);
+}
+
+TEST_CASE("a side turned at the same speed is held still at ten frames a second as at thirty",
+          "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto stickers = cube::test::outside_view(cube, Face::U);
+
+    const auto reads_for = [&](float interval_ms) {
+        SideScan scan;
+        // A fifth of a sticker's pitch from frame to frame, back and forth.
+        for (int i = 0; i < 24; ++i) {
+            Pose pose;
+            pose.centre.x += (i % 2 == 0) ? 0.0F : 0.2F * pose.pitch;
+            scan.add(cube::vision::read_side(draw_side(stickers, pose)), interval_ms);
+        }
+        return scan.sides().empty() ? std::size_t{0} : scan.sides().front().reads;
+    };
+    // At the nominal interval a fifth of a pitch is moving...
+    CHECK(reads_for(33.0F) == 0);
+    // ...and a tenth of a second later it is the same speed and not moving.
+    CHECK(reads_for(100.0F) >= SideScan::kMinReads);
+    // A stall of a second allows no more than four frames' worth.
+    CHECK(reads_for(1000.0F) >= SideScan::kMinReads);
+    CHECK(cube::vision::interval_scale(0.0F) == 1.0F);
+    CHECK(cube::vision::interval_scale(1000.0F) == cube::vision::kMaxIntervalScale);
+}

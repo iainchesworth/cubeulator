@@ -17,9 +17,9 @@
     { "code": "es",    "file": "es",    "tag": "es",    "name": "Español",  "plurals": 2, "rtl": false, "translated": false, "draft": true },
     { "code": "ja",    "file": "ja",    "tag": "ja",    "name": "日本語",     "plurals": 1, "rtl": false, "translated": false, "draft": true },
     { "code": "zh-CN", "file": "zh_CN", "tag": "zh_CN", "name": "简体中文",   "plurals": 1, "rtl": false, "translated": false, "draft": true },
-    { "code": "he",    "file": "he",    "tag": "he",    "name": "עברית",    "plurals": 2, "rtl": true,  "translated": false },
-    { "code": "ar",    "file": "ar",    "tag": "ar",    "name": "العربية",  "plurals": 6, "rtl": true,  "translated": false },
-    { "code": "yi",    "file": "yi",    "tag": "yi",    "name": "יידיש",    "plurals": 2, "rtl": true,  "translated": false }
+    { "code": "he",    "file": "he",    "tag": "he",    "name": "עברית",    "plurals": 2, "rtl": true,  "translated": false, "draft": true },
+    { "code": "ar",    "file": "ar",    "tag": "ar",    "name": "العربية",  "plurals": 6, "rtl": true,  "translated": false, "draft": true },
+    { "code": "yi",    "file": "yi",    "tag": "yi",    "name": "יידיש",    "plurals": 2, "rtl": true,  "translated": false, "draft": true }
   ],
   "pseudo": { "code": "xx", "file": "xx", "tag": "en_XA", "plurals": 2, "rtl": false }
 }
