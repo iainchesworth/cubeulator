@@ -1,1 +1,0 @@
-**The solved screen's figures can be read in the dark theme.** The box that shows your turns, time and method was drawn as a solid white rectangle under the dark theme's near-white text, so the figures were almost invisible; it now takes the page's own colour in both themes. The checkboxes in Settings had the same white fill and are fixed too.
