@@ -161,7 +161,7 @@ and both are proposals:
 
 - **Read turns aloud**, using the platform's own speech, so that a screen
   reader is not needed just for this and a sighted person with their eyes
-  on the cube gets it too. **Out of the first release** *(Iain,
+  on the cube gets it too. **Out of the first release** *(the maintainer,
   2026-10-13)*. Until it exists, following by ear needs the platform's
   screen reader, which reads the same sentences.
 - **Describe the cube**, for checking by touch-free comparison at a stage

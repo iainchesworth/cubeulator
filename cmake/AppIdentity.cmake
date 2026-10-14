@@ -3,7 +3,7 @@
 # include_guard'ed, so every including scope gets the variables) by
 # cmake/DesktopPackaging.cmake and cmake/Packaging.cmake.
 #
-# The identifier follows its repository's account (Iain, 2026-10-13, after the
+# The identifier follows its repository's account (the maintainer, 2026-10-13, after the
 # repository moved to iainchesworthlabs): com.iainchesworthlabs.cubeulator,
 # like ICL Forge's macOS apps. Until that move it had the "org" prefix of
 # Countdown Solver and the old account. It is the macOS bundle id, the Linux app
@@ -25,8 +25,8 @@ set(CUBEULATOR_WINDOWS_APP_USER_MODEL_ID "IainChesworthLabs.Cubeulator")
 #
 # "Iain Chesworth Labs" follows the repository's account, which moved from
 # iainchesworth to iainchesworthlabs on 2026-10-13 (develop, PR #6). Before
-# the move it was "Iain Chesworth" (family.md D1: the publisher follows the
-# account).
+# the move it was the person's own name (family.md D1: the publisher follows
+# the account).
 set(CUBEULATOR_PUBLISHER "Iain Chesworth Labs")
 # The copyright line stays in the person's name whatever the publisher is
 # (family.md D1/F1).

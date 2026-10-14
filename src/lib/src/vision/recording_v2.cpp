@@ -11,6 +11,7 @@
 #include <cctype>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -102,6 +103,25 @@ enum class ManifestField : std::uint8_t {
     cube,
 };
 
+// What the recorder keeps in recording_stats.json that check_recording reads.
+enum class StatsField : std::uint8_t {
+    dropped,
+    failed,
+    error,
+};
+
+constexpr std::string_view field_name(StatsField field) noexcept {
+    switch (field) {
+        case StatsField::dropped:
+            return "dropped";
+        case StatsField::failed:
+            return "failed";
+        case StatsField::error:
+            return "error";
+    }
+    return {};
+}
+
 constexpr std::string_view field_name(ManifestField field) noexcept {
     switch (field) {
         case ManifestField::state:
@@ -120,12 +140,13 @@ constexpr std::string_view field_name(ManifestField field) noexcept {
     return {};
 }
 
-// Tiny flat-object JSON value reader: given the raw file text, finds
-// "key" and returns its string value, std::nullopt for null/absent.
-// Tolerant by design (unknown keys ignored, ordering free); NOT a general
-// JSON parser - the manifest is a flat object of string-or-null values
-// per docs/recording-format.md.
-std::optional<std::string> json_string_field(const std::string& text, ManifestField field) {
+// Tiny flat-object JSON value reader: given the raw file text, finds "key"
+// and returns where its value starts (past the colon and any spaces),
+// std::nullopt when the key is absent. Tolerant by design (unknown keys
+// ignored, ordering free); NOT a general JSON parser - the manifest and the
+// recorder's stats are flat objects per docs/recording-format.md.
+template <typename Field>
+std::optional<std::size_t> json_value_start(const std::string& text, Field field) {
     const std::string needle = "\"" + std::string(field_name(field)) + "\"";
     std::size_t pos = text.find(needle);
     if (pos == std::string::npos) {
@@ -139,9 +160,17 @@ std::optional<std::string> json_string_field(const std::string& text, ManifestFi
     while (pos < text.size() && (std::isspace(static_cast<unsigned char>(text.at(pos))) != 0)) {
         ++pos;
     }
-    if (pos >= text.size() || text.at(pos) != '"') {
+    return pos;
+}
+
+// The key's string value, std::nullopt for null/absent.
+template <typename Field>
+std::optional<std::string> json_string_field(const std::string& text, Field field) {
+    const auto start = json_value_start(text, field);
+    if (!start || *start >= text.size() || text.at(*start) != '"') {
         return std::nullopt;  // null or malformed - both read as absent
     }
+    std::size_t pos = *start;
     std::string value;
     for (++pos; pos < text.size(); ++pos) {
         const char ch = text.at(pos);
@@ -167,6 +196,17 @@ std::optional<std::string> json_string_field(const std::string& text, ManifestFi
         }
     }
     return std::nullopt;  // unterminated string
+}
+
+// The key's integer value; zero for absent or not a number. A stream reads
+// it without atoi's silent zero for text and without pointer arithmetic.
+int json_int_field(const std::string& text, StatsField field) {
+    const auto start = json_value_start(text, field);
+    int value = 0;
+    if (start) {
+        std::istringstream{text.substr(*start)} >> value;
+    }
+    return value;
 }
 
 }  // namespace
@@ -321,9 +361,16 @@ std::optional<std::string> index_problem(const std::string& dir,
     return std::nullopt;
 }
 
-// Recorder-side drop audit (recording_stats.json, written by stop()). Absent
-// file = pre-v2 or externally-assembled recording: no verdict.
-std::optional<std::string> recorder_drop_problem(const std::string& dir) {
+// What the recorder said about itself (recording_stats.json, written by
+// stop()): frames it dropped and frames it could not write.
+struct RecorderStats {
+    int dropped = 0;
+    int failed = 0;
+    std::string error;
+};
+
+// Absent file = pre-v2 or externally-assembled recording: no verdict.
+std::optional<RecorderStats> read_recorder_stats(const std::string& dir) {
     std::ifstream stats_file(fs::path(dir) / "recording_stats.json");
     if (!stats_file) {
         return std::nullopt;
@@ -331,27 +378,23 @@ std::optional<std::string> recorder_drop_problem(const std::string& dir) {
     std::stringstream buffer;
     buffer << stats_file.rdbuf();
     const std::string text = buffer.str();
-    const auto pos = text.find("\"dropped\"");
-    if (pos == std::string::npos) {
-        return std::nullopt;
-    }
-    const auto colon = text.find(':', pos);
-    if (colon == std::string::npos) {
-        return std::nullopt;
-    }
-    // The number after the colon; a stream reads it without atoi's silent
-    // zero for text and without pointer arithmetic.
-    int dropped = 0;
-    std::istringstream{text.substr(colon + 1)} >> dropped;
-    if (dropped <= 0) {
-        return std::nullopt;
-    }
-    return "recorder dropped " + std::to_string(dropped) + " frame(s) (queue overflow)";
+    return RecorderStats{
+        .dropped = json_int_field(text, StatsField::dropped),
+        .failed = json_int_field(text, StatsField::failed),
+        .error = json_string_field(text, StatsField::error).value_or(""),
+    };
 }
 
 }  // namespace
 
 std::optional<std::string> check_recording(const std::string& dir) {
+    const auto stats = read_recorder_stats(dir);
+    // First, because it is the cause of what follows: a writer that gave up
+    // leaves an index with no rows, or short of frames, and those say less.
+    if (stats && stats->failed > 0) {
+        return "recorder failed to write " + std::to_string(stats->failed) +
+               " frame(s): " + (stats->error.empty() ? "no reason recorded" : stats->error);
+    }
     std::ifstream index_stream(fs::path(dir) / std::string(kIndexCsvName));
     if (!index_stream) {
         return "no " + std::string(kIndexCsvName) + " under " + dir;
@@ -368,8 +411,35 @@ std::optional<std::string> check_recording(const std::string& dir) {
             return "manifest state invalid: " + *problem;
         }
     }
-    return recorder_drop_problem(dir);
+    if (stats && stats->dropped > 0) {
+        return "recorder dropped " + std::to_string(stats->dropped) + " frame(s) (queue overflow)";
+    }
+    return std::nullopt;
 }
+
+namespace {
+
+constexpr int kAnalysisJpegQuality = 90;
+
+// The default encoder: returns false for a path it cannot write, and throws a
+// cv::Exception for an extension it has no encoder for.
+bool imwrite_jpeg(const std::string& path, const cv::Mat& frame, int jpeg_quality) {
+    return cv::imwrite(path, frame, {cv::IMWRITE_JPEG_QUALITY, jpeg_quality});
+}
+
+// An exception's message without the trailing newline OpenCV's carry.
+std::string message_of(const std::exception& error) {
+    std::string text = error.what();
+    while (!text.empty() && (std::isspace(static_cast<unsigned char>(text.back())) != 0)) {
+        text.pop_back();
+    }
+    return text;
+}
+
+}  // namespace
+
+AsyncRecorder::AsyncRecorder(FrameEncoder encoder)
+    : encoder_(encoder ? std::move(encoder) : FrameEncoder(imwrite_jpeg)) {}
 
 AsyncRecorder::~AsyncRecorder() {
     if (!running_) {
@@ -409,6 +479,7 @@ std::optional<std::string> AsyncRecorder::start(const std::string& dir, const Ma
     pass_ = 0;
     stats_ = {};
     stopping_ = false;
+    writer_failed_ = false;
     running_ = true;
     writer_ = std::thread([this] { writer_loop(); });
     return std::nullopt;
@@ -421,6 +492,12 @@ void AsyncRecorder::push(const cv::Mat& full_bgr, std::int64_t t_ms) {
     }
     std::unique_lock lock(mutex_);
     ++stats_.pushed;
+    if (writer_failed_) {
+        // Nothing is writing any more: queueing would only fill the queue and
+        // hold the frames in memory, then count them as dropped.
+        ++stats_.failed;
+        return;
+    }
     if (queue_.size() >= kQueueCapacity) {
         // Never block the producer thread: drop and COUNT. Passes are
         // numbered writer-side, so a drop leaves no index gap - the count
@@ -448,11 +525,19 @@ AsyncRecorder::Stats AsyncRecorder::stop() {
     writer_.join();
     running_ = false;
     // The integrity record check_recording audits: a dropped frame is a
-    // failed clip even though the index itself stays contiguous.
+    // failed clip even though the index itself stays contiguous, and so is a
+    // frame that could not be written. A recording that wrote every frame
+    // gets the same file it always did: `failed` and `error` appear only when
+    // something failed.
     std::ofstream stats_file(fs::path(dir_) / "recording_stats.json", std::ios::trunc);
     stats_file << "{\"pushed\": " << stats_.pushed << ", \"written\": " << stats_.written
-               << ", \"dropped\": " << stats_.dropped << ", \"queue_peak\": " << stats_.queue_peak
-               << "}\n";
+               << ", \"dropped\": " << stats_.dropped << ", \"queue_peak\": " << stats_.queue_peak;
+    if (stats_.failed > 0) {
+        std::string error;
+        append_json_string(error, stats_.error);
+        stats_file << ", \"failed\": " << stats_.failed << ", \"error\": " << error;
+    }
+    stats_file << "}\n";
     return stats_;
 }
 
@@ -472,22 +557,69 @@ void AsyncRecorder::writer_loop() {
             queue_.pop_front();
         }
         CUBE_ZONE_SCOPED_N("vision.recorder.write_job");
-        const auto analysis = analysis_downscale(job.full);
-        const std::string name = frame_filename(pass_);
-        cv::imwrite((dir / name).string(), analysis.frame, {cv::IMWRITE_JPEG_QUALITY, 90});
-        if (record_full_res_) {
-            cv::imwrite((dir / std::string(kFullResSubdir) / name).string(), job.full,
-                        {cv::IMWRITE_JPEG_QUALITY, kFullResJpegQuality});
+        if (const auto problem = write_job(job, index)) {
+            // Stop here, not on to the next frame: a directory that cannot be
+            // written now is not likely to be in 33 ms, and every attempt is
+            // a frame's encode spent on a failure already known.
+            fail_writer(*problem);
+            return;
         }
-        index << pass_ << ',' << job.t_ms << ',' << analysis.frame.cols << ','
-              << analysis.frame.rows << ',' << job.full.cols << ',' << job.full.rows << '\n';
-        index.flush();
         ++pass_;
         {
             std::scoped_lock lock(mutex_);
             ++stats_.written;
         }
     }
+}
+
+std::optional<std::string> AsyncRecorder::write_job(const Job& job, std::ostream& index) const {
+    // Everything that can go wrong here is caught: cv::imwrite returns false
+    // for a path it cannot write but throws for an extension with no encoder,
+    // resize can throw, and an exception that left the writer thread's
+    // function would be std::terminate. `target` is what was being written,
+    // for the message.
+    std::string target = dir_;
+    try {
+        const fs::path dir(dir_);
+        const auto analysis = analysis_downscale(job.full);
+        const std::string name = frame_filename(pass_);
+        target = (dir / name).string();
+        if (!encoder_(target, analysis.frame, kAnalysisJpegQuality)) {
+            return "cannot write " + target;
+        }
+        if (record_full_res_) {
+            target = (dir / std::string(kFullResSubdir) / name).string();
+            if (!encoder_(target, job.full, kFullResJpegQuality)) {
+                return "cannot write " + target;
+            }
+        }
+        // The row comes last: it claims the frames above are on disk.
+        target = (dir / std::string(kIndexCsvName)).string();
+        index << pass_ << ',' << job.t_ms << ',' << analysis.frame.cols << ','
+              << analysis.frame.rows << ',' << job.full.cols << ',' << job.full.rows << '\n';
+        index.flush();
+        if (!index) {
+            return "cannot append to " + target;
+        }
+        return std::nullopt;
+    } catch (const std::exception& error) {
+        return "cannot write " + target + ": " + message_of(error);
+    } catch (...) {
+        return "cannot write " + target + ": unknown exception";
+    }
+}
+
+void AsyncRecorder::fail_writer(const std::string& problem) {
+    std::deque<Job> abandoned;
+    {
+        std::scoped_lock lock(mutex_);
+        writer_failed_ = true;
+        stats_.error = problem;
+        // The job in hand, and every one that was waiting behind it.
+        stats_.failed += 1 + static_cast<int>(queue_.size());
+        abandoned.swap(queue_);
+    }
+    // `abandoned` frees its frames here, outside the lock push() takes.
 }
 
 }  // namespace cube::vision::recording

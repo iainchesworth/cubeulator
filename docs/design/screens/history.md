@@ -5,7 +5,7 @@
 > has **Keep a history of solves** and **Clear history**. What is not yet is
 > under **Status: built** below.
 
-Lane: experience. New. In the first release by Iain's decision of
+Lane: experience. New. In the first release by the maintainer's decision of
 2026-10-13; the "Solve history" button on Home did nothing before.
 
 **Status: built** (`HistoryScreen.qml`, `SolveHistory`). What is not yet:
