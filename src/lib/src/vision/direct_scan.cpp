@@ -41,6 +41,19 @@ constexpr float kMaxAxisRatio = 1.18F;
 constexpr float kMaxAxisCosine = 0.17F;
 constexpr float kMaxLatticeRms = 0.12F;
 
+// A side found only by the second look in read_side (see narrow_contours) is
+// accepted if its gaps are plastic: the twelve points midway between
+// neighbouring stickers, at their 75th percentile (so a finger or a glint may
+// cover two), no brighter than this fraction of its darkest sticker. The
+// second look's outlines are the noisier, and over a curtain, a hand or a
+// shirt they make lattices out of what is not a cube. Measured over the
+// recorded sessions, it found 143 lattices on cubes in black plastic and 137
+// of them had that ratio at 0.8 or under (half at 0.45 or under); in six
+// sessions of a paper cube in front of curtains it found 421, and none was
+// under 0.85 (the middle one was 1.8). The first look is not held to this:
+// it is what it was.
+constexpr float kMaxGapOverSticker = 0.8F;
+
 // Half-width of the sampled patch, in sticker spacings: 0.6 of a spacing
 // across, three quarters of a sticker, which keeps well inside its edge for a
 // side up to 15% off square-on. It is wide on purpose. A logo is printed on
@@ -157,11 +170,9 @@ template <typename T>
 
 // Bright, compact, squarish regions bounded by darker plastic: the outlines
 // prepare_frame found, kept when they are the size and shape of a sticker.
-[[nodiscard]] std::vector<Blob> sticker_blobs(const PreparedFrame& frame) {
-    const std::vector<std::vector<cv::Point>>& contours = frame.contours;
-
-    const double frame_area =
-        static_cast<double>(frame.working.rows) * static_cast<double>(frame.working.cols);
+[[nodiscard]] std::vector<Blob> sticker_blobs(const std::vector<std::vector<cv::Point>>& contours,
+                                              const cv::Mat& working) {
+    const double frame_area = static_cast<double>(working.rows) * static_cast<double>(working.cols);
     std::vector<Blob> blobs;
     for (const auto& contour : contours) {
         const double area = cv::contourArea(contour);
@@ -905,19 +916,45 @@ struct Evaluation {
     return evaluation;
 }
 
-}  // namespace
+// Which of read_side's two looks a set of blobs came from.
+enum class Look : std::uint8_t {
+    // The outlines prepare_frame took.
+    first,
+    // narrow_contours: more of the frame is an outline, so more is held to.
+    second,
+};
 
-std::optional<SideRead> read_side(const cv::Mat& bgr) {
-    const std::optional<PreparedFrame> frame = prepare_frame(bgr);
-    return frame.has_value() ? read_side(*frame) : std::nullopt;
+// Whether the plastic between the lattice's stickers is darker than the
+// stickers: see kMaxGapOverSticker.
+[[nodiscard]] bool gaps_are_plastic(const cv::Mat& value, const Lattice& lattice) {
+    const auto at = [&value](const cv::Point2f& point) {
+        const int x = std::clamp(static_cast<int>(std::lround(point.x)), 0, value.cols - 1);
+        const int y = std::clamp(static_cast<int>(std::lround(point.y)), 0, value.rows - 1);
+        return static_cast<float>(value.at<std::uint8_t>(y, x));
+    };
+    float darkest = std::numeric_limits<float>::max();
+    std::vector<float> gaps;
+    for (int row = 0; row < 3; ++row) {
+        for (int column = 0; column < 3; ++column) {
+            const cv::Point2f centre = lattice.at(column, row);
+            darkest = std::min(darkest, at(centre));
+            if (column < 2) {
+                gaps.push_back(at((centre + lattice.at(column + 1, row)) * 0.5F));
+            }
+            if (row < 2) {
+                gaps.push_back(at((centre + lattice.at(column, row + 1)) * 0.5F));
+            }
+        }
+    }
+    const auto quartile = gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() * 3 / 4);
+    std::nth_element(gaps.begin(), quartile, gaps.end());
+    return *quartile <= kMaxGapOverSticker * std::max(darkest, 1.0F);
 }
 
-std::optional<SideRead> read_side(const PreparedFrame& frame) {
-    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
-    const cv::Mat& working = frame.working;
-    const float scale = frame.scale;
-
-    const std::vector<Blob> blobs = sticker_blobs(frame);
+// The side the blobs make, if they make one: the lattice through them, judged
+// square-on, and the nine colours sampled at its cells.
+[[nodiscard]] std::optional<SideRead> read_blobs(const PreparedFrame& frame,
+                                                 const std::vector<Blob>& blobs, Look look) {
     if (blobs.size() < kMinLatticeBlobs) {
         return std::nullopt;
     }
@@ -932,6 +969,9 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
         cosine > kMaxAxisCosine || lattice->rms > kMaxLatticeRms) {
         return std::nullopt;
     }
+    if (look == Look::second && !gaps_are_plastic(frame.brightness, *lattice)) {
+        return std::nullopt;
+    }
 
     const float pitch = (columns + rows) / 2.0F;
     const int half_width = std::max(2, static_cast<int>(kPatchHalfWidth * pitch));
@@ -939,18 +979,47 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
     const std::array<cv::Point2f, 9>& centres = upright.centres;
 
     SideRead read;
-    read.pitch = pitch * scale;
+    read.pitch = pitch * frame.scale;
     read.stickers_found = static_cast<int>(lattice->blobs);
     read.found = upright.found;
     for (std::size_t i = 0; i < 9; ++i) {
-        const std::optional<cv::Vec3f> lab = sticker_lab(working, centres.at(i), half_width);
+        const std::optional<cv::Vec3f> lab = sticker_lab(frame.working, centres.at(i), half_width);
         if (!lab.has_value()) {
             return std::nullopt;
         }
         read.lab.at(i) = *lab;
-        read.centres.at(i) = centres.at(i) * scale;
+        read.centres.at(i) = centres.at(i) * frame.scale;
     }
     return read;
+}
+
+}  // namespace
+
+std::optional<SideRead> read_side(const cv::Mat& bgr) {
+    const std::optional<PreparedFrame> frame = prepare_frame(bgr);
+    return frame.has_value() ? read_side(*frame) : std::nullopt;
+}
+
+std::optional<SideRead> read_side(const PreparedFrame& frame) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
+    const std::vector<Blob> blobs = sticker_blobs(frame.contours, frame.working);
+    if (std::optional<SideRead> read = read_blobs(frame, blobs, Look::first); read.has_value()) {
+        return read;
+    }
+    // Most frames of a scan have nothing in them near a side: no six
+    // sticker-sized outlines at all. The second look is for the frame that
+    // came close, six or more that did not make a side.
+    if (blobs.size() < kMinLatticeBlobs) {
+        return std::nullopt;
+    }
+    // A dark sticker beside a bright one is clipped by the mean the outlines
+    // were taken against, and a row of them is lost; the outlines taken
+    // against a narrower block keep it (see narrow_contours). A frame the
+    // first look read is read as it was: only one it read nothing of is
+    // looked at again.
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side_second_look");
+    return read_blobs(frame, sticker_blobs(narrow_contours(frame.brightness), frame.working),
+                      Look::second);
 }
 
 float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {

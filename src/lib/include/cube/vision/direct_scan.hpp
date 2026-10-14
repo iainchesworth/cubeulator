@@ -51,6 +51,13 @@ struct SideRead {
 // the stickers; returns nothing for a side seen at an angle, a partial
 // lattice that does not span three rows and three columns, or no cube.
 //
+// A frame with six or more sticker-sized outlines in it and no side among them
+// is looked at a second time, against a narrower block (narrow_contours,
+// prepared_frame.hpp): a dark sticker beside a bright one is clipped by the
+// first, and a lattice the second finds is kept only if it sits on plastic
+// darker than its darkest sticker. A side the first look reads is read as it
+// was.
+//
 // `bgr` is an 8-bit BGR frame of any size; frames wider than the working
 // width are reduced first, so the cost beyond that reduction does not grow
 // with camera resolution.

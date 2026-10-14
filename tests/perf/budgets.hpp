@@ -125,11 +125,16 @@ inline constexpr MethodBudget kAdvanced = {
 // working width before it does anything else, so its buffers do not depend on
 // the camera: that is the contract in direct_scan.hpp, and it is what these
 // hold. Measured: 101 to 115 buffers, 1.92 MB (2.8 working-width frames) at
-// every size; a frame with no cube in it 36 to 54 buffers, 1.85 MB.
+// every size; a frame with no cube in it 36 to 54 buffers, 1.85 MB - except
+// the 1080p room, 113 buffers and 2.32 MB. That one has seven sticker-sized
+// outlines in it and no side, which is what earns a second look (outlines
+// taken against a narrower block, read_side in direct_scan.cpp): the
+// threshold, the contours and the shape filter again, and a second lattice
+// search through what they found.
 inline constexpr std::uint64_t kReadBuffers = 145;
 inline constexpr std::uint64_t kReadBytes = 2'400'000;
-inline constexpr std::uint64_t kEmptyReadBuffers = 70;
-inline constexpr std::uint64_t kEmptyReadBytes = 2'320'000;
+inline constexpr std::uint64_t kEmptyReadBuffers = 140;
+inline constexpr std::uint64_t kEmptyReadBytes = 2'900'000;
 // Bytes a read of the larger sizes may allocate, as a multiple of what the
 // working-width read did: they pay for the one reduction, and nothing else.
 // Measured 1.00.
