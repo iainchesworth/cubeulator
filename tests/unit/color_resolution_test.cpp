@@ -924,7 +924,7 @@ const std::array<FacetColor, 6> kCentreOrder = {
 // has no one to catch it.
 
 // Morning daylight, bright blue sky (direct-scan/20261013/s01).
-const MeasuredCube& daylight() {
+const MeasuredCube& daylight_cube() {
     static const MeasuredCube cube{
         .light = "daylight",
         .centres = {{
@@ -941,7 +941,7 @@ const MeasuredCube& daylight() {
 }
 
 // A tungsten lamp (live-demo-p6-retry, 2026-08-07).
-const MeasuredCube& tungsten() {
+const MeasuredCube& tungsten_cube() {
     static const MeasuredCube cube{
         .light = "tungsten",
         .centres = {{
@@ -958,7 +958,7 @@ const MeasuredCube& tungsten() {
 }
 
 // An evening warm-white LED, 2026-10-14.
-const MeasuredCube& evening_led() {
+const MeasuredCube& evening_led_cube() {
     static const MeasuredCube cube{
         .light = "warm-white LED",
         .centres = {{
@@ -1002,7 +1002,7 @@ float hue_degrees(const cv::Vec3f& lab) {
 
 TEST_CASE("the white centre is found, and how far the light is from neutral is read from it",
           "[vision][white-reference]") {
-    for (const MeasuredCube* cube : {&daylight(), &tungsten(), &evening_led()}) {
+    for (const MeasuredCube* cube : {&daylight_cube(), &tungsten_cube(), &evening_led_cube()}) {
         INFO(cube->light);
         const auto found = find_white_reference(faces_of(*cube));
         const WhiteReference& reference = cube::test::must_have(found);
@@ -1014,14 +1014,14 @@ TEST_CASE("the white centre is found, and how far the light is from neutral is r
 TEST_CASE("a warm light is corrected and a neutral one is left exactly alone",
           "[vision][white-reference]") {
     SECTION("daylight changes nothing") {
-        const auto found = find_white_reference(faces_of(daylight()));
+        const auto found = find_white_reference(faces_of(daylight_cube()));
         const WhiteReference& reference = cube::test::must_have(found);
         CHECK(reference.cast < kMinCorrectedCast);
-        for (const cv::Vec3f& centre : daylight().centres) {
+        for (const cv::Vec3f& centre : daylight_cube().centres) {
             CHECK(neutralised(reference, centre) == centre);
         }
     }
-    for (const MeasuredCube* cube : {&tungsten(), &evening_led()}) {
+    for (const MeasuredCube* cube : {&tungsten_cube(), &evening_led_cube()}) {
         SECTION(cube->light) {
             const auto found = find_white_reference(faces_of(*cube));
             const WhiteReference& reference = cube::test::must_have(found);
@@ -1037,7 +1037,7 @@ TEST_CASE("a warm light is corrected and a neutral one is left exactly alone",
 
 TEST_CASE("a warm light puts yellow in the orange band and correcting it puts it back",
           "[vision][white-reference]") {
-    for (const MeasuredCube* cube : {&tungsten(), &evening_led()}) {
+    for (const MeasuredCube* cube : {&tungsten_cube(), &evening_led_cube()}) {
         INFO(cube->light);
         const cv::Vec3f& yellow = cube->centres.at(1);
         // The premise: as measured, hue classification calls it orange.
@@ -1052,7 +1052,7 @@ TEST_CASE("a warm light puts yellow in the orange band and correcting it puts it
 
 TEST_CASE("red and orange are further apart in hue once the light is neutralised",
           "[vision][white-reference]") {
-    const MeasuredCube& cube = evening_led();
+    const MeasuredCube& cube = evening_led_cube();
     const auto found = find_white_reference(faces_of(cube));
     const WhiteReference& reference = cube::test::must_have(found);
     const float before = hue_degrees(cube.centres.at(3)) - hue_degrees(cube.centres.at(2));
@@ -1069,19 +1069,19 @@ TEST_CASE("no reference is taken from six centres none of which is plausibly whi
     // through as the least chromatic - which a real cube cannot be: it
     // always has its white centre.)
     SECTION("every centre strongly coloured") {
-        MeasuredCube cube = tungsten();
+        MeasuredCube cube = tungsten_cube();
         cube.centres.at(0) = {46.0F, 40.0F, -30.0F};  // a purple where the white was
         CHECK_FALSE(find_white_reference(faces_of(cube)).has_value());
     }
     SECTION("the candidate would need a gain no light asks for") {
-        MeasuredCube cube = tungsten();
+        MeasuredCube cube = tungsten_cube();
         // A yellow: chroma 36 is under the cast ceiling and clear of the
         // runner up, so only the gain bound stands between it and "white".
         cube.centres.at(0) = {50.0F, 2.0F, 36.0F};
         CHECK_FALSE(find_white_reference(faces_of(cube)).has_value());
     }
     SECTION("a centre that is not a number") {
-        auto faces = faces_of(evening_led());
+        auto faces = faces_of(evening_led_cube());
         faces.at(3).lab.at(4)(1) = std::numeric_limits<float>::quiet_NaN();
         CHECK_FALSE(find_white_reference(faces).has_value());
     }
@@ -1091,7 +1091,7 @@ TEST_CASE("a dark blue under a warm light is not mistaken for the white",
           "[vision][white-reference]") {
     // Blue is the least chromatic centre of the cube under the LED (15
     // against the white's 29) and the darkest by far.
-    const auto faces = faces_of(evening_led());
+    const auto faces = faces_of(evening_led_cube());
     REQUIRE(chroma_of_centre(faces, 5) < chroma_of_centre(faces, 0));
     const auto found = find_white_reference(faces);
     const WhiteReference& reference = cube::test::must_have(found);
@@ -1100,7 +1100,7 @@ TEST_CASE("a dark blue under a warm light is not mistaken for the white",
 
 TEST_CASE("the tungsten cube is named right once the white is known, and was not before",
           "[vision][white-reference]") {
-    const auto faces = faces_of(tungsten());
+    const auto faces = faces_of(tungsten_cube());
 
     // As measured, the closest two colours are named backwards: this is the
     // case the exchange of names in assembly existed to rescue.
@@ -1130,7 +1130,7 @@ TEST_CASE("two neighbours that arrive in one hue band are told apart by which is
     // at 44, so both come out red. Orange is the darker here (as a shaded
     // one is), which is what the distance matching gets backwards: it pairs
     // the lighter cluster with the orange reference.
-    MeasuredCube cube = daylight();
+    MeasuredCube cube = daylight_cube();
     cube.centres.at(2) = {60.0F, 38.0F, 14.0F};  // red, hue 20, light
     cube.centres.at(3) = {36.0F, 40.0F, 22.0F};  // orange, hue 29, dark
     const auto faces = faces_of(cube);
