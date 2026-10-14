@@ -35,10 +35,12 @@ platform is added, and the CI check that holds it.
 
 ## GUI shell strategy
 
-Every platform — desktop (Windows/Linux/macOS) and mobile (Android/iOS) —
-shares the same Qt 6 Quick/QML shell (`src/app/qt/`). There is no
-native-per-platform shell split: Android is packaged via `androiddeployqt`,
-iOS via Qt's Xcode integration, both loading the same `Main.qml`.
+Every platform — desktop (Windows/Linux/macOS), mobile (Android/iOS) and the
+browser (WebAssembly) — shares the same Qt 6 Quick/QML shell
+(`src/app/qt/`). There is no native-per-platform shell split: Android is
+packaged via `androiddeployqt`, iOS via Qt's Xcode integration, and the web
+build is Qt for WebAssembly's one `.wasm` module, all loading the same
+`Main.qml`.
 
 ## What's implemented today vs. planned
 

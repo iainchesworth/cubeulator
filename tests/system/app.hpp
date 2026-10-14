@@ -74,7 +74,13 @@ public:
     // change), and a case that is about to leave it should not pay that to
     // have been there. Nothing is drawn or opened on the permission screen.
     enum class Start { launch, elsewhere };
-    static App& fresh(Start start = Start::launch);
+    //
+    // Scene3D::cheap (the default) draws 3D views without the light probe:
+    // the cube is lit by its lights alone, and a view's first frame is not
+    // eight seconds on a software renderer (see boot()). A case that is about
+    // how the cube looks - the tour, the render checks - asks for ::full.
+    enum class Scene3D { cheap, full };
+    static App& fresh(Start start = Start::launch, Scene3D scene = Scene3D::cheap);
     // Boots the application and leaves it exactly as start-up made it: no
     // reset. For what only a launch can show (what was read from the store).
     static App& launched();
@@ -170,9 +176,10 @@ public:
 private:
     App();
     void boot();
-    void reset(Start start);
+    void reset(Start start, Scene3D scene);
 
     std::unique_ptr<cube::app::AppRuntime> runtime_;
+    bool full_3d_ = false;
     QQuickWindow* window_ = nullptr;
     QObject* app_state_ = nullptr;
     QObject* settings_state_ = nullptr;

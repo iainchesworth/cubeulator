@@ -102,6 +102,32 @@ not something vcpkg itself enforces. The strategy is to let vcpkg build
 OpenCV the same way on every platform rather than pre-committing to a
 heavier, platform-specific fallback before testing the simpler path.
 
+## WebAssembly
+
+The browser build ([Try it in your browser](web.md)) takes its two libraries
+from vcpkg the same way, on the `wasm32-emscripten-threads` triplet
+(`cmake/triplets/`): vcpkg's own `wasm32-emscripten` with `-pthread`, because
+Qt's multithreaded WebAssembly kit is built with atomics and shared memory and
+the linker refuses an object that was not. Where it differs from the rest:
+
+- **OpenCV is its own, smaller, entry in `vcpkg.json`**, selected by
+  `"platform": "emscripten"` (the desktop and mobile entry carries
+  `"!emscripten"`): core, imgproc, imgcodecs and videoio only, with the
+  `intrinsics` feature (OpenCV's WebAssembly SIMD path), and none of the image
+  codecs, calib3d or QR code feature. Nothing the app ships calls any of them;
+  they are minutes of WebAssembly compiling each. The one consequence is that
+  `cv::imwrite` has no encoder in the browser, which only the developer scan
+  recording uses, and that cannot be turned on there.
+- **OpenCV runs single-threaded.** `WITH_PTHREADS_PF=OFF`, set in the triplet:
+  with it on, the first `cv::cvtColor` or `cv::resize` on the GUI thread
+  - the browser's main thread - would hand work to a pool of Web Workers that
+  only the main thread's event loop can create, and wait for them.
+- **vcpkg's wasm32-emscripten triplet is community tier**, not covered by
+  vcpkg's own CI, and only recently applies `VCPKG_C_FLAGS`/`VCPKG_CXX_FLAGS`
+  at all (the wrapper toolchain landed in July 2026, and the `builtin-baseline`
+  here includes it). Moving the baseline back past it would silently drop
+  `-pthread`.
+
 ## What this means for CI
 
 `ci.yml`'s `android-build` and `ios-build` jobs build opencv4 for
