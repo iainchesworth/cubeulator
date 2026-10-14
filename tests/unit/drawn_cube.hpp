@@ -46,15 +46,27 @@ namespace cube::test {
 
 // A cluttered room: mid-grey with noise and a scatter of coloured boxes, so
 // the reader has to pick the lattice out of something.
+//
+// Every value is drawn on a statement of its own. The arguments of a call are
+// evaluated in an order the standard leaves open, MSVC and GCC take them right
+// to left and clang left to right, and `cv::Point(rng.uniform(..),
+// rng.uniform(..))` swapped its two coordinates (and the same for the box and
+// the colour) from one compiler to the next - a different room, so a side the
+// reader found on one was lost on another. The order here is the right-to-left
+// one the cases were written against, so that is the room every compiler draws.
 [[nodiscard]] inline cv::Mat room(cv::Size size) {
     cv::Mat frame(size, CV_8UC3, cv::Scalar(96, 104, 110));
     cv::RNG rng(1234);
     for (int i = 0; i < 40; ++i) {
-        const cv::Point corner(rng.uniform(0, size.width), rng.uniform(0, size.height));
-        const cv::Size box(rng.uniform(8, size.width / 6), rng.uniform(8, size.height / 5));
-        cv::rectangle(frame, cv::Rect(corner, box),
-                      cv::Scalar(rng.uniform(30, 220), rng.uniform(30, 220), rng.uniform(30, 220)),
-                      cv::FILLED);
+        const int top = rng.uniform(0, size.height);
+        const int left = rng.uniform(0, size.width);
+        const int height = rng.uniform(8, size.height / 5);
+        const int width = rng.uniform(8, size.width / 6);
+        const int red = rng.uniform(30, 220);
+        const int green = rng.uniform(30, 220);
+        const int blue = rng.uniform(30, 220);
+        cv::rectangle(frame, cv::Rect(cv::Point(left, top), cv::Size(width, height)),
+                      cv::Scalar(blue, green, red), cv::FILLED);
     }
     cv::Mat noise(size, CV_8UC3);
     rng.fill(noise, cv::RNG::NORMAL, cv::Scalar::all(0), cv::Scalar::all(6));

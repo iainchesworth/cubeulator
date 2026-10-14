@@ -914,6 +914,17 @@ what they find is what only WebAssembly gets wrong (a `size_t` that is 32 bits
 in a hash, a stack of 64 KB, a thread that waits for a Web Worker nobody has
 started, exceptions compiled out by default).
 
+A drawn scene (`tests/unit/drawn_cube.hpp`) is held to the same: a seed has to
+be the same picture on every compiler. `std::mt19937`'s words are specified, so
+draw from those; `std::uniform_int_distribution` and `std::normal_distribution`
+are each library's own algorithm (libc++ takes the low two bits of a word for
+`(0, 3)`, MSVC and libstdc++ the high two), and the arguments of a call are
+evaluated in whatever order the compiler picks (clang left to right, MSVC and
+GCC right to left), so a value drawn as an argument is a different value on the
+next. Draw each on a statement of its own. A side the reader cannot find in one
+compiler's picture is not found in that one, and that is how a cube of six
+sides was once read as five on WebAssembly alone.
+
 ```sh
 cmake --preset web-emscripten-tests
 cmake --build --preset web-emscripten-tests
