@@ -23,6 +23,7 @@
 #include <optional>
 #include <random>
 #include <string_view>
+#include <vector>
 #include "must_have.hpp"
 
 using cube::CubeError;
@@ -492,10 +493,13 @@ float lightness_of(const cv::Vec3f& lab) {
 // Each side's centre, read back as the colour of that face's centre. The
 // sides are shown in the order of kAllFaces, so side i is face i.
 void expect_centres_of(const SideScan& scan, const Cube& cube) {
-    REQUIRE(scan.sides().size() == 6);
+    // A copy: sides() returns its vector by value, and what is taken from
+    // it below must outlive the call.
+    const std::vector<SideScan::Side> sides = scan.sides();
+    REQUIRE(sides.size() == 6);
     for (std::size_t i = 0; i < 6; ++i) {
         const Color centre = cube.face(kAllFaces.at(i)).at(4);
-        const cv::Vec3f& measured = scan.sides().at(i).lab.at(4);
+        const cv::Vec3f& measured = sides.at(i).lab.at(4);
         Color nearest = Color::White;
         float best = std::numeric_limits<float>::max();
         for (const Color colour : kColours) {
@@ -524,9 +528,10 @@ TEST_CASE("two sides that differ only in where red and orange sit are two sides"
         hold_lab(scan, hand, kRedCentred, 14);
     }
 
-    REQUIRE(scan.sides().size() == 2);
-    const auto& orange_side = scan.sides().at(0);
-    const auto& red_side = scan.sides().at(1);
+    const std::vector<SideScan::Side> sides = scan.sides();
+    REQUIRE(sides.size() == 2);
+    const SideScan::Side& orange_side = sides.at(0);
+    const SideScan::Side& red_side = sides.at(1);
     CHECK(orange_side.reads == 52);
     CHECK(red_side.reads == 52);
     // Each keeps the layout it was shown in, not a blend of the two.
@@ -569,6 +574,25 @@ TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are c
         }
         shown = turned_once(shown);
     }
+}
+
+TEST_CASE("two sides whose centres read as one colour are still two sides", "[direct-scan]") {
+    // Orange lit to read as red: the centre of one side is the colour of the
+    // centre of another, and only the rest says they are two. A hand covers
+    // at most three stickers of a read the lattice found; these differ in
+    // all eight.
+    const cv::Vec3f green = cube::test::warm_lamp_lab(Color::Green);
+    Lab9 other;
+    other.fill(green);
+    other.at(4) = kLampOrange;
+
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 3; ++round) {
+        hold_lab(scan, hand, kOrangeCentred, 12);
+        hold_lab(scan, hand, other, 12);
+    }
+    CHECK(scan.sides().size() == 2);
 }
 
 TEST_CASE("a flood of lattices that are no side does not cost the side being held",

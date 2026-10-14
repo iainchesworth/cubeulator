@@ -52,10 +52,7 @@ constexpr float kMaxLatticeRms = 0.12F;
 constexpr float kPatchHalfWidth = 0.30F;
 
 // Which side a read belongs to is decided by its CENTRE sticker, because the
-// centre never moves and a cube's six centres are six distinct colours:
-// resolve_colors refuses a scan whose centres sit closer than
-// kMinCentreSeedSeparationLab, so that is the least two real centres can be
-// apart. Everything below is derived from it rather than stated afresh.
+// centre never moves and a cube's six centres are six distinct colours.
 //
 // This used to be a mean over all nine stickers of colour_distance, under
 // 12. Two sides of one cube can differ in nothing but which of red and
@@ -65,44 +62,53 @@ constexpr float kPatchHalfWidth = 0.30F;
 // the two sides of the cube this was found on differed in three, 3 to 6 over
 // the nine, so they were fused into one: its medians were a blend of both,
 // the colours seemed to flip as either was shown, and the scan waited for a
-// sixth side it had already swallowed. Their centres were 16 Lab units apart
-// in plain Lab.
+// sixth side it had already swallowed. Their centres were 16 to 20 Lab units
+// apart in plain Lab.
 
-// Two stickers further apart than this are two colours: the floor
-// resolve_colors holds centres to.
-constexpr float kDifferentColourLab = kMinCentreSeedSeparationLab;
+// Two stickers within this of each other, in plain Lab with lightness at full
+// weight (it is the lightness that separates the closest pair), are one
+// colour. Below kMinCentreSeedSeparationLab on purpose: resolve_colors will
+// not name two centres closer than that, and it reports it. Grouping them as
+// one side down to there would hide that report behind a scan that waits for
+// a sixth side it is never given; held apart to just under it, they are two
+// sides and the colour naming says why they cannot be told. Replayed over
+// every recorded session the grouping is identical for any value from 8 to
+// 12 and from 10 to 16 for the centre alone. The closest two centres on a
+// real cube read 13.6 apart under tungsten light (live-demo-p6-retry) and 16
+// to 20 apart under the lamp of the cube this was found on.
+constexpr float kSameColourLab = 10.0F;
+static_assert(kSameColourLab < kMinCentreSeedSeparationLab,
+              "two centres resolve_colors refuses as one colour must not be one side here");
 
-// A read's centre within this of a side's centre is that side: close enough
-// that no other side's centre can be there. Plain Lab with lightness at
-// full weight - it is the lightness that separates the closest pair.
-// Replayed over every recorded session the grouping is identical for any
-// value from 10 to 16. The closest two centres on a real cube read 13.6 apart
-// under tungsten light (live-demo-p6-retry) and 16 to 20 apart under the lamp
-// of the cube this was found on.
-constexpr float kSameCentreLab = 10.0F;
-static_assert(kSameCentreLab < kDifferentColourLab,
-              "a centre that could be another side's must not be taken for this one");
-
-// Beyond that the centre cannot vouch - it may be glare on this side's
-// centre or another side's - and the other eight stickers must: every one
-// still within kDifferentColourLab of the side's. Two look-alike sides can
-// differ in nothing but the centre and one sticker, and allowing a sticker to
-// differ joins them; replayed on the pair this was found on that left a
-// margin of 1.3 Lab, against 7.7 holding all eight to the match. The cost is
-// a stray group now and then when a finger covers a sticker while the centre
-// is read through glare, and a stray is not a side until it is held for
-// kMinReads.
+// A read's centre within kSameColourLab of a side's is that side, however
+// much of it a hand covers. Beyond that the centre cannot vouch - it may be
+// glare on this side's centre or another side's - and the other eight
+// stickers must: every one within kSameColourLab of the side's. Two
+// look-alike sides can differ in nothing but the centre and one sticker, and
+// allowing a sticker to differ joins them; replayed on the pair this was
+// found on that left a margin of 1.3 Lab, against 7.7 holding all eight to
+// the match. The cost is a stray group now and then when a finger covers a
+// sticker while the centre is read through glare, and a stray is not a side
+// until it is held for kMinReads.
+//
+// But a centre that matches is not the end of it. Two sides can look the
+// same colour at the centre - orange lit to read as red - and then it is
+// the rest that says they are two. A hand can leave no more than this many
+// of the eight stickers other than the centre unlike the side's: the reader
+// needs six of the nine in the lattice, so at most three are covered, and one
+// more is noise. More than that is another side whatever its centre reads.
+constexpr int kMostStickersAHandCovers = 4;
 
 // Cost of laying a read on a side is the summed distance of the eight
 // stickers other than the centre, each capped so one finger cannot decide a
 // quarter-turn.
-constexpr float kRollCostCap = 2.0F * kDifferentColourLab;
+constexpr float kRollCostCap = 2.0F * kSameColourLab;
 
 // A side keeps the quarter-turn it last had unless another explains the
 // read by more than one differing sticker's worth. A held side's pattern is
 // the same from frame to frame; without this its turn flapped between
 // nearly-tied choices and the median fused them.
-constexpr float kRollPriorMargin = kDifferentColourLab;
+constexpr float kRollPriorMargin = kSameColourLab;
 
 // Groups kept. A read that is no side seen so far starts a group of its own,
 // and every read is compared with every group, so a scene full of lattices
@@ -436,9 +442,9 @@ struct SideFit {
 // pattern was laid down at whichever turn the noise preferred.
 //
 // Then the judgement. The centre is the side's identity (see
-// kSameCentreLab). When it agrees the read is the side, however many
-// stickers a hand covers. When it does not, it may be glare on the centre or
-// another side; the other eight say which.
+// kSameColourLab). When it agrees the read is the side, however many
+// stickers a hand covers (up to kMostStickersAHandCovers). When it does not,
+// it may be glare on the centre or another side; the other eight say which.
 [[nodiscard]] SideFit fit_to_side(const std::array<cv::Vec3f, 9>& read,
                                   const std::array<cv::Vec3f, 9>& side, int prior_roll) {
     const auto cost_of = [&](int roll) {
@@ -466,15 +472,18 @@ struct SideFit {
     }
 
     const std::array<cv::Vec3f, 9> turned = rolled(read, fit.roll);
-    if (lab_gap(turned.at(4), side.at(4)) <= kSameCentreLab) {
-        fit.same = true;
-        return fit;
-    }
-    fit.same = true;
+    int differing = 0;
     for (std::size_t i = 0; i < 9; ++i) {
-        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kDifferentColourLab) {
-            fit.same = false;
+        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kSameColourLab) {
+            ++differing;
         }
+    }
+    if (differing > kMostStickersAHandCovers) {
+        fit.same = false;
+    } else if (lab_gap(turned.at(4), side.at(4)) <= kSameColourLab) {
+        fit.same = true;
+    } else {
+        fit.same = differing == 0;
     }
     return fit;
 }

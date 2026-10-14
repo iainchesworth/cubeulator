@@ -83,14 +83,18 @@ Nothing in the reader names a colour. It returns measured Lab.
 - A counting read joins the **group** it belongs to, or starts a new one.
   The deciding sticker is the **centre**, which never moves, and a cube's six
   centres are six distinct colours: a read whose centre is within
-  `kSameCentreLab` (10 Lab units, plain Lab with lightness at full weight) of
-  a group's centre belongs to it, whatever a hand covers. Where the centre
+  `kSameColourLab` (10 Lab units, plain Lab with lightness at full weight) of
+  a group's centre belongs to it, whatever a hand covers - up to
+  `kMostStickersAHandCovers` (4) of the other eight differing; more than that
+  is another side whose centre happens to read the same. Where the centre
   cannot vouch, the other eight stickers must: every one within
-  `kDifferentColourLab` (12, which is `kMinCentreSeedSeparationLab`) of the
-  group's. Of the groups a read could
-  join, the one it fits best takes it. Groups that turn out to be one side,
-  a side that was begun on a noisy read or lit differently for a moment, are
-  merged after each read, the earlier surviving.
+  `kSameColourLab` of the group's. Of the groups a read could join, the one
+  it fits best takes it. Groups that turn out to be one side, a side that was
+  begun on a noisy read or lit differently for a moment, are merged after each
+  read, the earlier surviving. `kSameColourLab` sits just under
+  `kMinCentreSeedSeparationLab` (12) on purpose: two centres `resolve_colors`
+  refuses as one colour are still two sides here, so the refusal is reported
+  instead of the scan waiting for a sixth side.
 - The **quarter-turn** that lays a read on a group is the one that fits the
   eight stickers other than the centre best, each distance capped so a finger
   over one sticker cannot decide it, and a group keeps the turn it last had
