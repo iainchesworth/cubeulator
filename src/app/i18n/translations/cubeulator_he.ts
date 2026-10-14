@@ -713,7 +713,7 @@ In your hands.</source>
     <message id="scan.guide.ambiguousCorner">
         <source>Turn the cube slowly to show the corner where %1, %2 and %3 meet.</source>
         <extracomment>Guidance when six sides are read and fit together in more than one way, and showing one particular corner (two or three sides in one view) would tell the cubes they make apart. %1, %2 and %3 are the colours of the centres of the three sides that meet there - colour.white and the like, in no particular order. Shown in place of scan.guide.ambiguous, which says only that two sides should show at once.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>סובבו את הקובייה לאט כדי להראות את הפינה שבה נפגשים %1, %2 ו-%3.</translation>
     </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
@@ -1499,22 +1499,22 @@ In your hands.</source>
     <message id="history.a11y.row">
         <source>%1. %2</source>
         <extracomment>Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1. %2</translation>
     </message>
     <message id="history.a11y.delete">
         <source>Delete, %1</source>
         <extracomment>Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>מחיקה, %1</translation>
     </message>
     <message id="history.a11y.deleted">
         <source>Solve deleted.</source>
         <extracomment>Announced by a screen reader after one solve is deleted from the list.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>הפתרון נמחק.</translation>
     </message>
     <message id="history.a11y.cleared">
         <source>History cleared.</source>
         <extracomment>Announced by a screen reader after every solve is deleted from the list.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ההיסטוריה נוקתה.</translation>
     </message>
     <message id="settings.section.language">
         <source>Language</source>
