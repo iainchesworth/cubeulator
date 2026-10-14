@@ -6,6 +6,7 @@
 | --- | --- | --- | --- |
 | `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), Web build (the same app as WebAssembly, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
 | `release.yml` | Builds the three desktop packages on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run. A PR that changes it runs only the release tools' self-test | N/A (tags and manual runs) | No |
+| `spike-sweep.yml` | Mondays: a `spike/*` branch whose tip is 30 days old is tagged `archive/spike-<name>` and deleted ([Investigations](investigations/README.md)). Run by hand it is a dry run | N/A (schedule and manual runs) | No |
 | `release-check.yml` | On a PR into `main`: is this a release the Release workflow will accept, and what would its notes say (in the job summary) | No (advisory) | No |
 | `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes | Yes (skipped, a pass) |

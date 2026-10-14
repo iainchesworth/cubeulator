@@ -23,6 +23,11 @@ This project follows [gitflow](https://nvie.com/posts/a-successful-git-branching
 - Branch names must start with `feature/`, `bugfix/`, `release/`,
   `hotfix/`, or `support/` — a required CI check
   (`Validate gitflow branch name`) enforces this on every PR.
+- **`spike/<name>`** is for finding something out. It is pushed, tried (CI legs
+  are dispatched at it by hand) and shown, and it is **never merged**: a pull
+  request from one fails that same check, deliberately. What it found goes in
+  [a page under `docs/investigations/`](investigations/README.md); a spike left
+  alone for 30 days is tagged `archive/spike-<name>` and its branch deleted.
 
 ## Set up your build
 

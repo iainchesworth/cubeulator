@@ -1,0 +1,100 @@
+name: Spike sweep
+
+# Spike branches (spike/*, docs/investigations/README.md) are for finding out
+# whether an idea is any good, and most are not. A branch nobody has touched for
+# a month is a branch nobody is going to; left alone, they pile up in every
+# listing and every agent's picture of the repository.
+#
+# So: a spike whose tip commit is older than 30 days is archived. It is tagged
+# archive/spike-<name> at its tip, and then the branch is deleted. Nothing is
+# lost, and a spike is brought back with
+#
+#   git branch spike/<name> archive/spike-<name>
+#
+# the same shape as archive/tracking-first, which kept the tracker.
+#
+# Scheduled workflows only run from the default branch, so this starts working
+# when the first release reaches main.
+
+on:
+  schedule:
+    - cron: "17 3 * * 1" # Mondays, 03:17 UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "Archive spike branches whose tip commit is older than this many days"
+        type: string
+        default: "30"
+      dry_run:
+        description: "Say what would be archived and change nothing"
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: spike-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Archive stale spike branches
+    runs-on: ubuntu-26.04
+    permissions:
+      contents: write # create the archive tag, delete the branch
+    steps:
+      - name: Archive
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          DAYS: ${{ inputs.days || '30' }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
+            echo "::error::days must be a number, got '$DAYS'"
+            exit 1
+          fi
+          cutoff="$(date -u -d "-${DAYS} days" +%s)"
+
+          {
+            echo "### Spike sweep (older than ${DAYS} days, dry run: ${DRY_RUN})"
+            echo
+            echo "| Branch | Tip | Last commit | What |"
+            echo "|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          seen=0
+          archived=0
+          while IFS=$'\t' read -r ref sha; do
+            [ -n "$ref" ] || continue
+            seen=$((seen + 1))
+            branch="${ref#refs/heads/}"
+            slug="${branch#spike/}"
+            when="$(gh api "repos/${REPO}/commits/${sha}" --jq '.commit.committer.date')"
+            age="$(date -u -d "$when" +%s)"
+            if [ "$age" -ge "$cutoff" ]; then
+              echo "| \`$branch\` | \`${sha:0:8}\` | $when | kept |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            tag="archive/spike-${slug//\//-}"
+            if gh api "repos/${REPO}/git/ref/tags/${tag}" > /dev/null 2>&1; then
+              tag="${tag}-${sha:0:8}"
+            fi
+
+            if [ "$DRY_RUN" = "true" ]; then
+              echo "| \`$branch\` | \`${sha:0:8}\` | $when | would be tagged \`$tag\` and deleted |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+
+            # The tag first; the branch is deleted only once the tag exists.
+            gh api --method POST "repos/${REPO}/git/refs" -f "ref=refs/tags/${tag}" -f "sha=${sha}" > /dev/null
+            gh api --method DELETE "repos/${REPO}/git/refs/heads/${branch}" > /dev/null
+            archived=$((archived + 1))
+            echo "| \`$branch\` | \`${sha:0:8}\` | $when | archived as \`$tag\` |" >> "$GITHUB_STEP_SUMMARY"
+            echo "Archived $branch at ${sha:0:8} as $tag"
+          done < <(gh api --paginate "repos/${REPO}/git/matching-refs/heads/spike/" --jq '.[] | [.ref, .object.sha] | @tsv')
+
+          echo "$seen spike branch(es) seen, $archived archived."
