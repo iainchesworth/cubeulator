@@ -413,11 +413,16 @@ struct Judgements {
     std::size_t again = 0;
     // What the last one came to.
     std::optional<vision::AssemblyPath> path;
+    // The faces looked at by all the assemblies, in search nodes
+    // (cube/solver/search_work.hpp): what each assembly costs, which the count
+    // of assemblies does not say.
+    std::uint64_t nodes = 0;
 };
 
 [[nodiscard]] Judgements judge_a_scan(const solver::Cube& cube) {
     Judgements out;
     vision::SideScan scan;
+    solver::reset_search_work();
     // The controller judges whenever a side's fused colours moved, which a read
     // of a side held in view does; judging after every read is that, bounded.
     // Says whether the scan made a cube.
@@ -437,6 +442,7 @@ struct Judgements {
     for (const std::optional<vision::SideRead>& read : scan_reads(cube, 12)) {
         scan.add(read);
         if (judge(false)) {
+            out.nodes = solver::search_work().nodes;
             return out;
         }
     }
@@ -444,11 +450,20 @@ struct Judgements {
     for (int i = 0; i < 100; ++i) {
         judge(true);
     }
+    out.nodes = solver::search_work().nodes;
     return out;
 }
 
 void add_judgement(std::vector<Metric>& out, const std::string& base, const Judgements& work,
-                   std::uint64_t assembled_budget) {
+                   std::uint64_t assembled_budget, std::uint64_t nodes_budget) {
+    out.push_back({
+        .name = base + ".assembly.nodes",
+        .measured = number(work.nodes),
+        .budget = number(nodes_budget),
+        .unit = "nodes",
+        .note = "faces looked at by every assembly of the scan: what skipping combinations "
+                "that are no cube saves, held",
+    });
     out.push_back({
         .name = base + ".assembled",
         .measured = number(work.assembled),
@@ -476,12 +491,13 @@ std::vector<Metric> judgement_metrics() {
     const Judgements settled = judge_a_scan(test::scramble(1));
     out.push_back(expected_read("judge.settled.path",
                                 settled.path == vision::AssemblyPath::single_candidate, true));
-    add_judgement(out, "judge.settled", settled, b::kSettledAssemblies);
+    add_judgement(out, "judge.settled", settled, b::kSettledAssemblies, b::kSettledNodes);
 
     const Judgements several = judge_a_scan(cube_of_several_ways());
     out.push_back(expected_read("judge.several_ways.path",
                                 several.path == vision::AssemblyPath::ambiguous, true));
-    add_judgement(out, "judge.several_ways", several, b::kSeveralWaysAssemblies);
+    add_judgement(out, "judge.several_ways", several, b::kSeveralWaysAssemblies,
+                  b::kSeveralWaysNodes);
 
     // Six sides that make no cube: the dearest, where the listing finds none and
     // each of the fifteen pairs of centres is asked whether trading their names
@@ -492,7 +508,7 @@ std::vector<Metric> judgement_metrics() {
                                 none.path == vision::AssemblyPath::failed ||
                                     none.path == vision::AssemblyPath::names_exchanged,
                                 true));
-    add_judgement(out, "judge.no_cube", none, b::kNoCubeAssemblies);
+    add_judgement(out, "judge.no_cube", none, b::kNoCubeAssemblies, b::kNoCubeNodes);
     return out;
 }
 

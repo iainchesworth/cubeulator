@@ -14,9 +14,9 @@ namespace cube::solver {
 // notices it in a profile.
 //
 // Written by the searches themselves (piece_search and bfs_search, the
-// last-layer search, the CFOP pair search and the two-phase search), once per
-// search as it ends, so it costs a thread-local add per search and nothing per
-// node. The performance tests (tests/perf, docs/testing.md "Performance
+// last-layer search, the CFOP pair search, the two-phase search and the scan's
+// assembly of six faces into a cube), once per search as it ends, so it costs a thread-local add
+// per search and nothing per node. The performance tests (tests/perf, docs/testing.md "Performance
 // tests") reset it, make a call and read it; nothing in the application does.
 struct SearchWork {
     // Searches that ran far enough to visit a node. A search whose start

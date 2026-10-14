@@ -51,10 +51,15 @@ struct AssembledScan {
 // pointed at that face - sees it, in any in-plane rotation, which a
 // rectified camera image satisfies by construction.
 //
-// 4096 iterations of (from_facelets + is_solvable) is sub-millisecond
-// bit-twiddling on any target, so no pruning is attempted - exhaustiveness
-// is the point, since it guarantees the unique solvable assembly is found
-// whenever one exists.
+// The search is exhaustive: the unique solvable assembly is found whenever one
+// exists. It does not try every combination one by one - a combination whose
+// faces turned so far put two stickers of one axis pair on an edge or a corner
+// is given up there, and a face that looks the same turned is tried once - but
+// what that skips is only what from_facelets() would have refused or what an
+// earlier combination had already made, so the cubes found, and their order,
+// are those of trying all 4,096 (tests/unit/solver/scan_assembly_test.cpp holds
+// it to that). Each look at the faces counts as a node in
+// cube/solver/search_work.hpp.
 //
 // Duplicate rotation combinations that build the SAME cube (a face whose
 // sticker pattern is rotationally symmetric - trivially, every face of a
