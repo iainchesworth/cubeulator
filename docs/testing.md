@@ -534,7 +534,7 @@ A change that makes the app meaningfully slower fails a test, the same way a
 change that makes it wrong fails a unit test. `cube_perf_tests` is that tier:
 its own binary, linked against `cube::lib` alone (no Qt, no window), with every
 number it holds the app to in one file,
-[`tests/perf/budgets.hpp`](../tests/perf/budgets.hpp).
+[`tests/perf/budgets.hpp`](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/perf/budgets.hpp).
 
 It has two halves, and the split is the design:
 
@@ -613,7 +613,7 @@ loose part.
 4), so the cases are visible in a run and cannot be mistaken for passes. Which
 build is which is decided by CMake and passed in as `CUBE_PERF_OPTIMISED` /
 `CUBE_PERF_INSTRUMENTED`, read as `constexpr bool`s in
-[`perf_build.hpp`](../tests/perf/perf_build.hpp); nothing uses the preprocessor
+[`perf_build.hpp`](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/perf/perf_build.hpp); nothing uses the preprocessor
 (the platform-isolation job holds that for all of `tests/`).
 
 The wall-time checks are opt-in because they are the one test that can fail

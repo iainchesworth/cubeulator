@@ -21,6 +21,7 @@
 
 #include <QColor>
 #include <QDir>
+#include <QFontDatabase>
 #include <QGuiApplication>
 #include <QImage>
 #include <QMetaObject>
@@ -287,8 +288,13 @@ TEST_CASE("a screen that is up changes language without being made again",
     CHECK_FALSE(screen.mirrored_under(screen.item()));
 }
 
-TEST_CASE("every converted screen holds the pseudo-locale without cutting a string off",
-          "[i18n][screen][pseudo]") {
+namespace {
+
+// Every converted screen, at both sizes, in `language`: no string cut off, run
+// off the window or out of its pane, and no label out of its button. The
+// pseudo-locale is the proxy for a real translation (40% longer than the
+// English); the same checks run on the real Japanese and Chinese below.
+void holds_the_layout_in(const char* language) {
     struct Size {
         int w;
         int h;
@@ -298,9 +304,9 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
     for (const char* type :
          {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen"}) {
         for (const Size& size : sizes) {
-            in_language("xx");
+            in_language(language);
             Screen screen(type, size.w, size.h);
-            INFO(type << ", " << size.what);
+            INFO(language << ", " << type << ", " << size.what);
             int checked = 0;
             for (QQuickItem* text : screen.find_all("QQuickText")) {
                 const QString shown = text->property("text").toString();
@@ -349,6 +355,81 @@ TEST_CASE("every converted screen holds the pseudo-locale without cutting a stri
                 FAIL_CHECK("button below the window: " << str(pushed));
             }
         }
+    }
+}
+
+}  // namespace
+
+TEST_CASE("every converted screen holds the pseudo-locale without cutting a string off",
+          "[i18n][screen][pseudo]") {
+    holds_the_layout_in("xx");
+}
+
+TEST_CASE("every converted screen holds the real Japanese and Chinese without cutting a string off",
+          "[i18n][screen][cjk]") {
+    // The drafts, not their proxy: whatever the machine draws Han and kana
+    // with, a translated string must fit the box the English was given.
+    for (const char* language : {"ja", "zh-CN"}) {
+        holds_the_layout_in(language);
+    }
+}
+
+TEST_CASE("the face follows the app's language for Japanese and Chinese, and back",
+          "[i18n][screen][face]") {
+    // Japanese and Chinese share code points and not shapes. A family left to
+    // glyph fallback draws one in the other's forms, so Theme names it by the
+    // language (docs/design/platforms.md, "Fonts"). One probe, made in English,
+    // read again after each switch: the binding is live.
+    in_language("en");
+    QQmlComponent component(&t::engine());
+    component.setData(
+        "import QtQuick\nimport Cubeulator\nItem { property string face: Theme.fontHeading }",
+        QUrl(QStringLiteral("qrc:/i18n_test_face.qml")));
+    REQUIRE_FALSE(component.isError());
+    std::unique_ptr<QObject> probe(component.create());
+    REQUIRE(probe != nullptr);
+    auto face = [&](const char* code) {
+        in_language(code);
+        return probe->property("face").toString();
+    };
+    const QStringList installed = QFontDatabase::families();
+    auto has_any = [&](std::initializer_list<const char*> names) {
+        for (const char* name : names) {
+            if (installed.contains(QLatin1String(name))) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    CHECK(face("en") == QLatin1String("Archivo"));
+
+    const QString ja = face("ja");
+    const QString zh = face("zh-CN");
+    INFO("ja: " << str(ja) << ", zh-CN: " << str(zh));
+    // Whatever it names exists on this machine: a family that is not installed
+    // would be glyph fallback again, under a name.
+    for (const QString& chosen : {ja, zh}) {
+        CHECK((chosen == QLatin1String("Archivo") || installed.contains(chosen)));
+    }
+    // Where the machine has a face for a language, that is the one chosen.
+    if (has_any(
+            {"Yu Gothic UI", "Meiryo UI", "Hiragino Sans", "Noto Sans CJK JP", "Noto Sans JP"})) {
+        CHECK(ja != QLatin1String("Archivo"));
+    }
+    if (has_any({"Microsoft YaHei UI", "Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC",
+                 "Noto Sans SC"})) {
+        CHECK(zh != QLatin1String("Archivo"));
+    }
+    // And they are not the same face: that is the point.
+    if (ja != QLatin1String("Archivo") && zh != QLatin1String("Archivo")) {
+        CHECK(ja != zh);
+    }
+
+    // Every other language keeps Archivo, and a switch back is live.
+    for (const char* code : {"de", "he", "xx", "en"}) {
+        INFO(code);
+        CHECK(face(code) == QLatin1String("Archivo"));
     }
 }
 

@@ -39,6 +39,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import fragments  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -49,6 +50,7 @@ PLATFORMS: tuple[tuple[str, str], ...] = (
     (".dmg", "macOS 14.4 and later, Apple Silicon"),
     (".deb", "Linux, Debian and Ubuntu"),
     (".rpm", "Linux, Fedora"),
+    (".zip", "Web: any current browser (static files to host)"),
 )
 
 _RELATIVE_LINK_RE = re.compile(r"\]\((?!https?://|mailto:|#|/)([^)\s]+)\)")
@@ -65,6 +67,7 @@ def expected_names(version: str) -> list[str]:
         f"Cubeulator-{version}-macos-arm64.dmg",
         f"Cubeulator-{version}-linux-x64.deb",
         f"Cubeulator-{version}-linux-x64.rpm",
+        f"Cubeulator-{version}-web.zip",
     ]
 
 
@@ -82,7 +85,7 @@ def install_section(template: str, names: list[str], version: str) -> str:
     """The template with the real package names in it."""
     fallback = dict(zip((s for s, _ in PLATFORMS), expected_names(version)))
     filled = template
-    for token, suffix in (("@WINDOWS@", ".exe"), ("@MACOS@", ".dmg"), ("@DEB@", ".deb"), ("@RPM@", ".rpm")):
+    for token, suffix in (("@WINDOWS@", ".exe"), ("@MACOS@", ".dmg"), ("@DEB@", ".deb"), ("@RPM@", ".rpm"), ("@WEB@", ".zip")):
         files = _files_for(names, suffix)
         filled = filled.replace(token, files[0] if files else fallback[suffix])
     return filled.strip("\n")
@@ -231,7 +234,8 @@ def main(argv: list[str] | None = None) -> int:
     template = args.install_notes.read_text(encoding="utf-8") if args.install_notes.exists() else ""
     try:
         if args.from_unreleased and changelog.get(text, args.version) is None:
-            text = changelog.cut(text, args.version, date.today())
+            found, _ = fragments.read(args.changelog.parent / fragments.DIRECTORY)
+            text = changelog.cut(fragments.merge(text, found), args.version, date.today())
         notes = render(
             text,
             version=args.version,

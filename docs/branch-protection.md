@@ -24,6 +24,12 @@ feature/* bugfix/* ──PR──▶ merge queue ──▶ develop ──release
   diverge and the next release PR re-lists every commit). Hotfixes go to
   `main` from a `hotfix/*` branch and are merged back into `develop`
   through a PR from a `bugfix/*` or `support/*` branch.
+- **`spike/*` is the one prefix that is never merged.** It is for
+  investigations ([Investigations](investigations/README.md)): the branch is
+  pushed, CI legs are dispatched at it by hand, and a pull request from it fails
+  `Validate gitflow branch name` on purpose, which is a required check, so it can
+  neither be queued nor merged. `spike-sweep.yml` tags and deletes one that has
+  been untouched for 30 days.
 - **Head branches are deleted** when their PR merges. A stacked PR whose base
   was the merged branch is retargeted to `develop` automatically.
 
@@ -126,9 +132,20 @@ so a release PR could not merge at all. The required checks are untouched: a
 release PR is expected to have them green, and bypassing them is a deliberate
 act, not something the ruleset allows by default.
 
-`release-check.yml` ("Release readiness") also runs on a pull request into
-`main`. It is advisory, not in the table above, and says whether the tree is a
-release the Release workflow will accept and what its notes would say.
+`release-check.yml` also runs on a pull request into `main`, as two jobs, both
+advisory and neither in the table above. `Release readiness` says whether the
+tree is a release the Release workflow will accept and what its notes would
+say. `Commit is green` says whether the PR's head commit is green on every
+workflow the README has a badge for (CI, CodeQL, OSV-Scanner, Zizmor). The
+nine required checks already hold the build, test, coverage, clang and CodeQL
+legs of the PR's own run, but not OSV-Scanner or Zizmor, and not the push runs
+on `develop` that the badges on `main` come to show, so a release can pass
+them and still arrive with a red badge. It is red while CI is still running on
+the commit.
+Making `Commit is green` a required check on `main` is the one change that
+would make "do not release from a red `develop`" a rule of the repository
+rather than of the maintainer; the check has to have reported on a pull request
+before the ruleset can name it.
 
 ## Repository settings
 

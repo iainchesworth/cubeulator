@@ -306,11 +306,36 @@ TEST_CASE("a string with no translation shows its English through the manager",
     LanguageManager manager(*qGuiApp, engine);
     manager.applyInitialLanguage();
 
-    // None of the eight is translated yet (E5): each must show the English.
-    for (const char* code : {"de", "fr", "es", "ja", "zh-CN", "he", "ar", "yi"}) {
+    // None of these six is translated yet (E5): each must show the English.
+    for (const char* code : {"de", "fr", "es", "he", "ar", "yi"}) {
         INFO(code);
         REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
         CHECK(qtTrId("home.scan") == QLatin1String("Scan a cube"));
         CHECK(qtTrId("common.back") == QLatin1String("Back"));
+    }
+}
+
+TEST_CASE("a draft language shows its translation through the manager",
+          "[i18n][manager][translated]") {
+    Fresh fresh;
+    QQmlEngine engine;
+    LanguageManager manager(*qGuiApp, engine);
+    manager.applyInitialLanguage();
+
+    // Japanese and Simplified Chinese are complete drafts: the person sees
+    // them, in Han and kana, and not the English under them.
+    auto is_cjk = [](const QString& s) { return !s.isEmpty() && s.front().unicode() >= 0x3000; };
+    for (const char* code : {"ja", "zh-CN"}) {
+        INFO(code);
+        REQUIRE(manager.setLanguage(QString::fromLatin1(code)));
+        for (const char* id : {"home.scan", "common.back", "settings.section.language"}) {
+            INFO(id);
+            const QString shown = qtTrId(id);
+            CHECK(is_cjk(shown));
+        }
+        // The product name is not translated.
+        CHECK(qtTrId("app.name") == QLatin1String("Cubeulator"));
+        // A count is written in the language's own number format.
+        CHECK(qtTrId("scan.leave.body", 3).contains(QLocale().toString(3)));
     }
 }

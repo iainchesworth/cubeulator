@@ -13,6 +13,16 @@ what each platform is supposed to do is specified in
 | macOS | `Cubeulator-<version>-macos-arm64.dmg` | CPack `DragNDrop` | `Cubeulator.app`, dragged to Applications |
 | Linux | `Cubeulator-<version>-linux-x64.deb` and `.rpm` | CPack `DEB`, `RPM` | `/usr/lib/cubeulator` (the app, the Qt it carries, and Qt's translations), `/usr/bin/cubeulator`, and the desktop entry, AppStream metadata, icons and licence under `/usr/share` |
 
+The browser build is not packaged by CPack: it is a directory of static files
+(`build/web-emscripten-release/bin`), which `docs.yml` serves under `/app/` and
+`release.yml` zips as `Cubeulator-<version>-web.zip` with `LICENSE.txt`,
+`THIRD-PARTY-NOTICES.txt` and `HOSTING.txt` (`packaging/web/make-package.sh`).
+Because there is no installer to refuse an unresolved notice, the script reads
+the build's inventory and refuses one itself; `packaging/web/check-package.sh`
+then holds what is in the zip: the files the page loads, a module that is
+WebAssembly and threaded, the notices and the licence. See
+[Try it in your browser](web.md#hosting-it-yourself).
+
 A plain `cpack` with no `-G` also writes a `.zip` (and, on Linux, a `.tar.gz`);
 CI and the release name the generators they want, and only the packages in the
 table are published.

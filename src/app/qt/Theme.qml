@@ -43,7 +43,35 @@ QtObject {
     readonly property color faceL: "#DF7A2B"
     readonly property color faceR: "#D1372A"
 
-    readonly property string fontHeading: "Archivo"
+    // The face. Archivo is the Latin one. Japanese and Chinese share code
+    // points and not shapes, so for them the family is chosen by the app's
+    // language and not left to glyph fallback, which draws Chinese in
+    // Japanese forms (or the reverse) and sets one line in two faces at two
+    // weights. QML's font has no fallback list, so the first of the
+    // language's own families that is installed is named here. Which families
+    // those are is the platform's to say (PlatformFacts, from
+    // interfaces/platform_info.hpp: the system faces on a desktop or phone,
+    // the bundled Noto Sans JP and SC in the browser). Qt.uiLanguage is the
+    // language the manager installed: "ja_JP", "zh_CN".
+    // docs/design/platforms.md, "Fonts".
+    //
+    // The first installed family for `code` ("ja" or "zh"), or "" when the
+    // machine has none.
+    function systemCjkFamily(code) {
+        const wanted = code === "ja" ? PlatformFacts.japaneseFaces : PlatformFacts.chineseFaces;
+        const installed = Qt.fontFamilies();
+        for (let i = 0; i < wanted.length; ++i) {
+            if (installed.indexOf(wanted[i]) >= 0)
+                return wanted[i];
+        }
+        return "";
+    }
+    readonly property string fontHeading: {
+        const code = Qt.uiLanguage.split(/[-_]/)[0].toLowerCase();
+        if (code === "ja" || code === "zh")
+            return systemCjkFamily(code) || "Archivo";
+        return "Archivo";
+    }
     readonly property string fontMono: "IBM Plex Mono"
 
     readonly property real space1: 4

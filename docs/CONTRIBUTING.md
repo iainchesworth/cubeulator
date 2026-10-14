@@ -23,6 +23,11 @@ This project follows [gitflow](https://nvie.com/posts/a-successful-git-branching
 - Branch names must start with `feature/`, `bugfix/`, `release/`,
   `hotfix/`, or `support/` — a required CI check
   (`Validate gitflow branch name`) enforces this on every PR.
+- **`spike/<name>`** is for finding something out. It is pushed, tried (CI legs
+  are dispatched at it by hand) and shown, and it is **never merged**: a pull
+  request from one fails that same check, deliberately. What it found goes in
+  [a page under `docs/investigations/`](investigations/README.md); a spike left
+  alone for 30 days is tagged `archive/spike-<name>` and its branch deleted.
 
 ## Set up your build
 
@@ -70,7 +75,16 @@ the required check.
    `develop` tip, re-runs the required checks on that tree, and lands it —
    you don't rebase or re-merge `develop` yourself unless the PR conflicts.
    Your remote branch is deleted once it merges.
-4. Keep PRs focused — a bug fix doesn't need to carry an unrelated
+4. If a person using the app would notice the change, add a **changelog
+   fragment**: one small file, `changelog.d/<slug>.<type>.md`, holding one item
+   (`added`, `changed`, `fixed`, ...). It is a file of its own so that pull
+   requests open at the same time do not conflict over `CHANGELOG.md`. If the
+   change is not one a reader of the changelog would want to hear about (a
+   refactor, a test, a build detail), label the PR `no-changelog`. How to write
+   one is in
+   [`changelog.d/README.md`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/changelog.d/README.md);
+   the `Changelog fragment` check says when one is missing and is advisory.
+5. Keep PRs focused — a bug fix doesn't need to carry an unrelated
    refactor along with it.
 
 That's it. If anything here is unclear or out of date, flagging it in an

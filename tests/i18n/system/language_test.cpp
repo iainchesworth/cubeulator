@@ -256,39 +256,62 @@ TEST_CASE("the cube does not mirror when the layout around it does", "[system][l
     CHECK(difference(in_english, in_hebrew) < 0.02);
 }
 
+namespace {
+
+// The converted screens of the real window, in `language` at one layout:
+// nothing cut off, off the window or out of its pane. The pseudo-locale is the
+// proxy for a real translation; the real Japanese and Chinese run the same.
+void nothing_is_cut_off_in(const char* language, Layout layout) {
+    App& app = App::fresh();
+    LanguageGuard guard(app);
+    app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
+    switch_to(app, language);
+
+    const auto check_screen = [&](const char* screen) {
+        INFO(language << ", screen " << screen);
+        QStringList cut = strings_cut_off(app);
+        for (const QString& s : cut) {
+            FAIL_CHECK("cut off: " << str(s));
+        }
+    };
+
+    check_screen("launch");
+    app.click("launch.settings");
+    REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
+    app.settle();
+    check_screen("settings");
+    app.click("settings.back");
+    REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
+    const QString which = QLatin1String(language) == QLatin1String("xx")
+                              ? QStringLiteral("pseudo")
+                              : QString::fromLatin1(language);
+    for (const char* screen : {"permission", "complete"}) {
+        app.go(QString::fromLatin1(screen));
+        app.settle();
+        check_screen(screen);
+        app.shot(QStringLiteral("language_%1_%2_%3")
+                     .arg(QString::fromLatin1(screen), which,
+                          QString::fromLatin1(cube::systest::to_string(layout))));
+    }
+    app.go("launch");
+}
+
+}  // namespace
+
 TEST_CASE("the pseudo-locale cuts nothing off on the converted screens",
           "[system][language][pseudo]") {
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
-        App& app = App::fresh();
-        LanguageGuard guard(app);
-        app.resize(layout == Layout::wide ? cube::systest::kDesktop : cube::systest::kPhone);
-        switch_to(app, "xx");
+        nothing_is_cut_off_in("xx", layout);
+    }
+}
 
-        const auto check_screen = [&](const char* screen) {
-            INFO("screen " << screen);
-            QStringList cut = strings_cut_off(app);
-            for (const QString& s : cut) {
-                FAIL_CHECK("cut off: " << str(s));
-            }
-        };
-
-        check_screen("launch");
-        app.click("launch.settings");
-        REQUIRE(app.wait_for([&]() { return app.screen() == "settings"; }));
-        app.settle();
-        check_screen("settings");
-        app.click("settings.back");
-        REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
-        for (const char* screen : {"permission", "complete"}) {
-            app.go(QString::fromLatin1(screen));
-            app.settle();
-            check_screen(screen);
-            app.shot(QStringLiteral("language_%1_pseudo_%2")
-                         .arg(QString::fromLatin1(screen),
-                              QString::fromLatin1(cube::systest::to_string(layout))));
-        }
-        app.go("launch");
+TEST_CASE("the real Japanese and Chinese cut nothing off on the converted screens",
+          "[system][language][cjk]") {
+    const char* language = GENERATE("ja", "zh-CN");
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION(language << " in the " << cube::systest::to_string(layout) << " layout") {
+        nothing_is_cut_off_in(language, layout);
     }
 }
 

@@ -46,6 +46,8 @@ struct Language {
     int plurals = 2;
     bool rtl = false;
     bool translated = false;
+    // A complete first translation that no fluent reader has been through.
+    bool draft = false;
     bool pseudo = false;
 };
 

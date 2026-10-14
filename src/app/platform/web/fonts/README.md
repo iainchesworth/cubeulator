@@ -9,8 +9,8 @@ desktops use the system's own faces, chosen by language
 
 | file | family | what it holds | licence |
 |---|---|---|---|
-| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
-| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
+| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue (722 glyphs, 354 KB) and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
+| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue (740 glyphs, 271 KB) and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
 
 They are the Noto Sans faces cut down by `tools/fonts/subset_cjk.py` to exactly
 the characters the app can show: a closed set, since every string is in a
@@ -37,7 +37,16 @@ python -I tools/fonts/subset_cjk.py --write \
 
 `--write` needs `fonttools` (`pip install fonttools`). Run it on files you
 fetched into a directory of their own; the `-I` keeps Python from loading
-anything from the current directory.
+anything from the current directory. `-I` also ignores the per-user site
+directory, so a `pip install --user fonttools` is not seen: use a virtual
+environment (`python -m venv v && v/bin/pip install fonttools`) and run its
+`python -I`. On Windows give the full fonts as `C:/...` paths, not Git Bash's
+`/c/...`.
+
+The subsets were regenerated on 2026-10-14 when the Japanese and Simplified
+Chinese translations first landed (before that they held only the language
+names, kana and ASCII), from the unmodified fonts in the table below with
+fontTools 4.66.1.
 
 ## Where the full fonts came from
 
@@ -56,8 +65,8 @@ project ships:
 SHA-256 of what is in this folder:
 
 ```
-2593c9a83974bff08142a7e0aed147b65ecd4a102541c2d67d2d72b0e2e50023  NotoSansJP-Subset.ttf
-56b2e9610d2f31d9b8b834f25a099e94f09d4123bd29f01464e4581781fa3937  NotoSansSC-Subset.ttf
+f30b51fa6ad890ce8afd3a591b175a3e380aab56b4d2abff90a9393d8a3c760e  NotoSansJP-Subset.ttf
+176592c9e60ab2c936c59123f1f39284ac2aa81b87e5b938c52a3e69c4fd2fdb  NotoSansSC-Subset.ttf
 ```
 
 ## Notes

@@ -7,7 +7,8 @@
 
 What it does, and nothing else (docs/releasing.md, "Preparing the release"):
 
-  * moves `## [Unreleased]` in CHANGELOG.md under `## [<version>] - <date>`,
+  * merges the fragments in changelog.d/ into `## [Unreleased]` (and deletes
+    them), then moves it in CHANGELOG.md under `## [<version>] - <date>`,
     leaving `[Unreleased]` empty;
   * sets `project(Cubeulator VERSION M.M.P ...)` and
     `CUBEULATOR_VERSION_PRERELEASE` in the top-level CMakeLists.txt;
@@ -31,6 +32,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import fragments  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -90,8 +92,16 @@ def main(argv: list[str] | None = None) -> int:
     log_eol = "\r\n" if "\r\n" in log_raw else "\n"
     cmake_eol = "\r\n" if "\r\n" in cmake_raw else "\n"
 
+    # Changes arrive as files in changelog.d/ (fragments.py); they join
+    # [Unreleased] here, and are removed once the release holds them.
+    found, frag_problems = fragments.read(args.root / fragments.DIRECTORY)
+    if frag_problems:
+        for problem in frag_problems:
+            print(f"error: {problem}", file=sys.stderr)
+        return 1
+
     try:
-        cut_text = changelog.cut(log_raw, args.version, args.date)
+        cut_text = changelog.cut(fragments.merge(log_raw, found), args.version, args.date)
         new_cmake = set_version(cmake_raw.replace("\r\n", "\n"), args.version)
     except changelog.ChangelogError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -107,7 +117,10 @@ def main(argv: list[str] | None = None) -> int:
 
     changelog_path.write_text(cut_text.replace("\n", log_eol), encoding="utf-8", newline="")
     cmake_path.write_text(new_cmake.replace("\n", cmake_eol), encoding="utf-8", newline="")
-    print(f"CHANGELOG.md: [Unreleased] cut as [{args.version}] - {args.date.isoformat()}")
+    for fragment in found:
+        (args.root / fragments.DIRECTORY / fragment.name).unlink()
+    merged = f", with {len(found)} fragment(s) from {fragments.DIRECTORY}/" if found else ""
+    print(f"CHANGELOG.md: [Unreleased] cut as [{args.version}] - {args.date.isoformat()}{merged}")
     print(f"CMakeLists.txt: version {args.version}")
     if problems:
         print("The section is cut; fix the points above, then re-run with --check.")

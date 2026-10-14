@@ -160,7 +160,52 @@ private:
             cube::solver::random_scramble(13)};
 }
 
+struct Lights {
+    int declared = 0;
+    int on = 0;
+};
+
+// The directional lights a view has, and how many of them are switched on.
+[[nodiscard]] Lights directional_lights(const QObject* view) {
+    Lights lights;
+    for (const QObject* object : view->findChildren<QObject*>()) {
+        for (const QMetaObject* type = object->metaObject(); type != nullptr;
+             type = type->superClass()) {
+            if (qstrcmp(type->className(), "QQuick3DDirectionalLight") == 0) {
+                ++lights.declared;
+                lights.on += object->property("visible").toBool() ? 1 : 0;
+                break;
+            }
+        }
+    }
+    return lights;
+}
+
 }  // namespace
+
+TEST_CASE("no more directional lights are on than Qt Quick 3D draws", "[qml][cube-view]") {
+    // Qt Quick 3D draws four and leaves the rest out, logging "Too many
+    // directional lights in scene" and not saying which. The cube then looks
+    // like whatever four it happened to keep; asking for no more than four
+    // makes that a choice. (evenLight, which the solve screen uses, asked for
+    // five.)
+    constexpr int kMostDrawn = 4;
+
+    View view;
+    for (const bool even : {false, true}) {
+        for (const int style : {0, 1, 2}) {
+            INFO("evenLight " << even << ", shaderStyle " << style);
+            view.set("evenLight", even);
+            view.set("shaderStyle", style);
+
+            const Lights lights = directional_lights(view.item());
+            // A count of nothing found would pass for any number of lights.
+            REQUIRE(lights.declared > 0);
+            CHECK(lights.on >= 2);
+            CHECK(lights.on <= kMostDrawn);
+        }
+    }
+}
 
 TEST_CASE("the 3D cube is painted as the solver has the cube", "[qml][cube-view]") {
     View view;

@@ -7,10 +7,18 @@ name: Release readiness
 # dated CHANGELOG.md section that is the newest one, with its summary, bold
 # lead-ins and (a pre-release) the closing caveat.
 #
-# Advisory: it is not one of main-protection's required checks (they are
-# listed in docs/branch-protection.md), so it needs no merge_group trigger. It
-# exists so that a release PR says, before the merge, what the tag would fail
-# on after it. The preview of the notes is in the job summary.
+# A second job asks whether the commit being released is green on every
+# workflow the README has a badge for (tools/release/check_health.py): CI,
+# CodeQL, OSV-Scanner and Zizmor. The badges on the front page of `main` are
+# those workflows' latest runs there, so a release that reaches `main` with one
+# of them red puts a red badge on the front page of the first release.
+#
+# Advisory: neither job is one of main-protection's required checks (they are
+# listed in docs/branch-protection.md), so they need no merge_group trigger.
+# They exist so that a release PR says, before the merge, what the tag would
+# fail on after it. The preview of the notes, and the table of workflows, are
+# in the job summaries. The second job is red while CI is still running on the
+# commit (CI is hours): re-run it when CI has finished.
 
 on:
   pull_request:
@@ -55,3 +63,31 @@ jobs:
             echo
             cat notes.md
           } >> "$GITHUB_STEP_SUMMARY"
+
+  health:
+    name: Commit is green
+    runs-on: ubuntu-26.04
+    permissions:
+      actions: read
+      checks: read
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The pull request's head is the develop tip for a release PR (a hotfix
+      # branch's head for a hotfix), and every workflow has run on it by the
+      # time a release is decided. The two jobs of this workflow are left out:
+      # one is this job, the other is judged by its own rules.
+      - name: Check CI, CodeQL and the scanners on the head commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 tools/release/check_health.py \
+            --repo "$REPO" --ref "$HEAD_SHA" \
+            --ignore "Release readiness" --ignore "Commit is green" \
+            --summary "$GITHUB_STEP_SUMMARY"
