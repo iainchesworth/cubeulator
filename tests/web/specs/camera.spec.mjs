@@ -12,7 +12,7 @@ const FAILURES = [
 
 test.describe('a camera that cannot be started', () => {
   for (const [what, errorName] of FAILURES) {
-    test(`${what}: says so, and a new scan works once the camera is back`, async ({ app }) => {
+    test(`${what}: says so, and Try again works once the camera is back`, async ({ app }) => {
       await app.page.evaluate((name) => window.__fakeCamera.deny(name), errorName);
       await app.click('launch.startScan');
       await app.waitForScreen('scan');
@@ -26,17 +26,35 @@ test.describe('a camera that cannot be started', () => {
       expect(scan.starting).toBe(false);
       expect(scan.cameraError).not.toBe('');
 
+      // The way on is on the screen: "Start over" is for a scan with sides in
+      // it and gives way to Try again, which asks for the camera as the scan
+      // did on entry. Cancel is still there.
+      await app.waitFor('scan.retry');
+      expect(await app.texts()).toContain('Try again');
+      expect(await app.texts()).not.toContain('Start over');
+      expect(await app.texts()).toContain('Cancel');
+
+      // Asked while the camera is still refused: the same screen again, the
+      // browser asked a second time, and nothing taken down.
+      const asked = await app.page.evaluate(() => window.__fakeCamera.attempts());
+      await app.click('scan.retry');
+      await expect.poll(() => app.page.evaluate(() => window.__fakeCamera.attempts()),
+        { message: 'Try again asks the browser for the camera' }).toBeGreaterThan(asked);
+      await app.waitFor('scan.retry');
+      expect((await app.singleton('DirectScan')).cameraError).not.toBe('');
+      expect(await app.texts()).toContain('Camera unavailable');
+
       // The camera comes back (the permission is granted, the other program
-      // lets go). "Start over" is for a scan with sides in it and is not
-      // offered here; the way out is Cancel, and then Scan again.
+      // lets go) and Try again gets it, on the screen it is on.
       await app.page.evaluate(() => window.__fakeCamera.deny(null));
-      await app.clickText('Cancel');
-      await app.waitForScreen('launch');
-      await app.click('launch.startScan');
-      await app.waitForScreen('scan');
+      await app.click('scan.retry');
       await expect.poll(async () => (await app.singleton('DirectScan')).running).toBe(true);
       expect((await app.singleton('DirectScan')).cameraError).toBe('');
+      expect(await app.screen()).toBe('scan');
+      expect(await app.find('scan.retry')).toBeNull();
       expect(await app.texts()).not.toContain('Camera unavailable');
+      expect(await app.texts()).toContain('Start over');
+      expect(await app.page.evaluate(() => window.__fakeCamera.live())).toBe(true);
     });
   }
 
