@@ -11,7 +11,7 @@ namespace cube::solver {
 // One stage's contiguous slice of the flattened move list: moves at index
 // [start_index, end_index) belong to `stage`.
 struct StageRange {
-    Stage stage;
+    Stage stage = Stage::Cross;
     int start_index = 0;
     int end_index = 0;
 };

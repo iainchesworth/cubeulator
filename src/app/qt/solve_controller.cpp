@@ -7,6 +7,7 @@
 
 #include <cube/diagnostics/describe.hpp>
 #include <cube/error.hpp>
+#include <cube/nxn/cube3.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
@@ -16,9 +17,9 @@
 #include <array>
 #include <cstddef>
 
+using cube::nxn::solve_3x3;
 using cube::solver::Cube;
 using cube::solver::Face;
-using cube::solver::solve;
 using cube::solver::SolveMethod;
 using cube::solver::SteppedSolution;
 
@@ -89,7 +90,7 @@ SolveMethod to_solver_method(SolveController::Method method) {
 // Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
 SteppedSolution solve_stepped(Cube scrambled, SolveMethod method) {
     CUBE_ZONE_SCOPED_N("app.solve_stepped");
-    const auto solution = solve(scrambled, method);
+    const auto solution = solve_3x3(scrambled, method);
     if (solution.has_value()) {
         return SteppedSolution::from(scrambled, *solution);
     }

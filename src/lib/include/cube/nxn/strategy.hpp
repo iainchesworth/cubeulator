@@ -3,6 +3,7 @@
 #include <array>
 #include <concepts>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <span>
@@ -150,8 +151,20 @@ template <TargetPolicy P>
 // Puts every wing where its edge shows the display it should, by 3-cycles.
 [[nodiscard]] StageFn solve_edges();
 
+// How the core stage reads the reduced cube as a 3x3.
+enum class CoreView : std::uint8_t {
+    // With every colour renamed so each centre shows its face's canonical
+    // colour (NCube::to_cube3): a cube held in any orientation is solved. What
+    // a size above 3 needs, since nothing fixes its colours' places.
+    Renamed,
+    // Exactly as held (NCube::to_cube3_as_held, size 3 only): a cube whose
+    // centres are not where the 3x3 solvers' scheme puts them is refused, as
+    // the app has always refused a scan assembled into the wrong slots.
+    AsHeld,
+};
+
 // Solves the 3x3 the reduced cube is, with Context::method.
-[[nodiscard]] StageFn solve_core();
+[[nodiscard]] StageFn solve_core(CoreView view = CoreView::Renamed);
 
 // Solves a 2x2 as one search.
 [[nodiscard]] StageFn solve_corners();

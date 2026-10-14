@@ -1,5 +1,6 @@
 #include <cube/nxn/strategy.hpp>
 
+#include <algorithm>
 #include <span>
 #include <utility>
 
@@ -37,7 +38,15 @@ Result<Solution> solve(const NCube& scrambled, const Strategy& strategy,
             return std::unexpected(result.error());
         }
     }
-    merge_steps(context.steps, scrambled.size());
+    // The 3x3 solver's moves are merged already, in the way its own stages
+    // expect; merging them again would merge turns it chose not to (R L R'
+    // is L), so a solution that is only the 3x3's is returned as it was
+    // made. Anything a reduction added has to be merged with it.
+    const bool only_core = std::ranges::all_of(
+        context.steps, [](const Step& step) { return step.stage == Stage::Core; });
+    if (!only_core) {
+        merge_steps(context.steps, scrambled.size());
+    }
 
     NCube check = scrambled;
     for (const Step& step : context.steps) {

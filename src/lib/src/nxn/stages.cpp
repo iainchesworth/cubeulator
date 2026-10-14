@@ -330,9 +330,10 @@ StageFn solve_edges() {
     };
 }
 
-StageFn solve_core() {
-    return [](Context& context) -> Result<void> {
-        const Result<solver::Cube> core_cube = context.cube.to_cube3();
+StageFn solve_core(CoreView view) {
+    return [view](Context& context) -> Result<void> {
+        const Result<solver::Cube> core_cube =
+            view == CoreView::AsHeld ? context.cube.to_cube3_as_held() : context.cube.to_cube3();
         if (!core_cube) {
             return std::unexpected(core_cube.error());
         }

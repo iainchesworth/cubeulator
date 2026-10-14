@@ -394,4 +394,8 @@ Result<Word> solve_centre_stickers(NCube& cube, const std::array<Color, 6>& sche
     return Search(cube, scheme).run();
 }
 
+void prepare_centre_search(int size) {
+    (void)action_set(size);
+}
+
 }  // namespace cube::nxn::detail

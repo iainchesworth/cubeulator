@@ -79,7 +79,8 @@ add_executable(cube_unit_tests
     unit/solver/piece_search_test.cpp
     unit/nxn/model_test.cpp
     unit/nxn/solve_test.cpp
-    unit/nxn/strategy_test.cpp)
+    unit/nxn/strategy_test.cpp
+    unit/nxn/cube3_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
