@@ -79,17 +79,22 @@ The words at the top left are the guide. In the order you will meet them:
 - **Cancel** goes back to the start screen.
 - **Start over** forgets the sides read so far and begins again. It is dimmed
   until the first side is read.
+- **Try again** takes the place of *Start over* when the camera could not be
+  started. It asks for the camera again, so once whatever was in the way is
+  sorted you do not have to go back to the start screen.
 
 ## If the camera will not open
 
 The screen says **Camera unavailable** and gives the reason, for example *no
 camera device was found* or *the camera could not be started*. Another program
-may be using the camera, or the system may be blocking it. See
-[Troubleshooting](troubleshooting.md#the-camera-does-not-open).
+may be using the camera, or the system may be blocking it. Sort that out (see
+[Troubleshooting](troubleshooting.md#the-camera-does-not-open)), then press
+**Try again**.
 
 <figure markdown="span">
   ![The scan screen reading Camera unavailable: no camera device was found.](img/scan-camera-unavailable-wide-light.webp){ loading=lazy }
-  <figcaption>Camera unavailable.</figcaption>
+  <figcaption>Camera unavailable, with <strong>Try again</strong> to ask for
+  the camera once more.</figcaption>
 </figure>
 
 ## Holding a corner to the camera
