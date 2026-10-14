@@ -238,7 +238,7 @@ void descend_by_swaps(const SampleArray& samples, const MeanArray& means,
 
 }  // namespace
 
-Facelet classify_lab(const cv::Vec3f& lab) {
+LabClassification classify_lab_explained(const cv::Vec3f& lab) {
     // Hue-angle classification, NOT nearest-reference-distance: webcam
     // exposure washes strongly-coloured tiles toward pastel, which loses
     // CHROMA (the a/b magnitude) while preserving HUE (the a/b direction).
@@ -412,12 +412,22 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // answer stays unknown at confidence zero no matter which way the sample
     // points.
     if (near_neutral && lab(0) <= kWhiteLightnessFloor) {
-        return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
+        return LabClassification{
+            .facelet = Facelet{.color = FacetColor::unknown, .confidence = 0.0F},
+            .hue_degrees = hue,
+            .chroma = chroma,
+            .rule = LabRule::dark_neutral,
+        };
     }
     if (near_neutral && lab(1) > kNeutralWhiteMinA) {
         const float confidence =
             std::clamp(1.0F - (chroma / (2.0F * kWhiteChromaFloor)), 0.0F, 1.0F);
-        return Facelet{.color = FacetColor::white, .confidence = confidence};
+        return LabClassification{
+            .facelet = Facelet{.color = FacetColor::white, .confidence = confidence},
+            .hue_degrees = hue,
+            .chroma = chroma,
+            .rule = LabRule::neutral_white,
+        };
     }
     // A green-ward near-neutral falls THROUGH to the hue bands below. It
     // cannot be caught by the warm-cast branch on the way: that branch
@@ -448,9 +458,15 @@ Facelet classify_lab(const cv::Vec3f& lab) {
                                   (kWhiteChromaSoftCeiling - kWhiteChromaFloor);
         const float lightness_term =
             std::clamp((lab(0) - kWhiteLightnessFloor) / kWhiteLightnessConfidenceSpan, 0.0F, 1.0F);
-        return Facelet{
-            .color = FacetColor::white,
-            .confidence = std::clamp(std::min(chroma_term, lightness_term), 0.0F, 1.0F),
+        return LabClassification{
+            .facelet =
+                Facelet{
+                    .color = FacetColor::white,
+                    .confidence = std::clamp(std::min(chroma_term, lightness_term), 0.0F, 1.0F),
+                },
+            .hue_degrees = hue,
+            .chroma = chroma,
+            .rule = LabRule::warm_cast_white,
         };
     }
 
@@ -469,7 +485,16 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // even washed tiles comfortably reach so glare-dimmed cells rank lower
     // without ever zeroing out.
     const float confidence = std::clamp(chroma / 30.0F, 0.2F, 1.0F);
-    return Facelet{.color = color, .confidence = confidence};
+    return LabClassification{
+        .facelet = Facelet{.color = color, .confidence = confidence},
+        .hue_degrees = hue,
+        .chroma = chroma,
+        .rule = LabRule::hue_band,
+    };
+}
+
+Facelet classify_lab(const cv::Vec3f& lab) {
+    return classify_lab_explained(lab).facelet;
 }
 
 namespace {
@@ -537,22 +562,27 @@ namespace {
 // assignment is a deterministic function of the means, so a repeated
 // assignment is a fixed point and iteration can stop; the cap guards against
 // a rare 2-cycle rather than being the expected exit. Leaves the final means
-// in `means` and returns the assignment.
-[[nodiscard]] std::array<int, kSampleCount> refine_clusters(const SampleArray& samples,
-                                                            MeanArray& means) {
-    constexpr int kMaxIterations = 10;
+// in `means` and returns the assignment and the rounds it took.
+struct Refinement {
     std::array<int, kSampleCount> assignment{};
-    assignment.fill(-1);
+    int iterations = 0;
+};
+
+[[nodiscard]] Refinement refine_clusters(const SampleArray& samples, MeanArray& means) {
+    constexpr int kMaxIterations = 10;
+    Refinement refinement;
+    refinement.assignment.fill(-1);
     for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
         const std::array<int, kSampleCount> next = assign_clusters(samples, means);
         means = cluster_means(samples, next);
-        const bool stable = next == assignment;
-        assignment = next;
+        const bool stable = next == refinement.assignment;
+        refinement.assignment = next;
+        refinement.iterations = iteration + 1;
         if (stable) {
             break;
         }
     }
-    return assignment;
+    return refinement;
 }
 
 // Naming is a one-to-one matching, not six independent nearest-lookups: under
@@ -561,9 +591,16 @@ namespace {
 // the red one), but the matching that must name every cluster at once still
 // prefers the consistent labelling because the displaced colour would leave
 // its own reference unpaired at a far larger cost. 6! = 720 permutations -
-// brute force is exact and trivial. Returns, per cluster, the palette entry.
-[[nodiscard]] std::array<std::size_t, face_count> best_palette_permutation(
-    const MeanArray& means, const ColorPalette& palette) {
+// brute force is exact and trivial.
+struct PaletteMatch {
+    // Per cluster, the palette entry it was matched to.
+    std::array<std::size_t, face_count> permutation{};
+    // The summed Lab distance of that matching.
+    float total = 0.0F;
+};
+
+[[nodiscard]] PaletteMatch best_palette_permutation(const MeanArray& means,
+                                                    const ColorPalette& palette) {
     // The identity permutation, written out: std::ranges::iota is C++23 and
     // Apple's libc++ (Xcode 16.4) does not have it, and modernize-use-ranges
     // rewrites std::iota into it.
@@ -583,8 +620,15 @@ namespace {
             best_permutation = permutation;
         }
     }
-    return best_permutation;
+    return {.permutation = best_permutation, .total = best_total};
 }
+
+// What classify_lab made of each cluster mean, and which of the three
+// outcomes the override came to.
+struct HueNaming {
+    std::array<LabClassification, face_count> readings{};
+    HueOverride result = HueOverride::collision;
+};
 
 // Hue-first override of the distance matching: washed cluster means suffer
 // the same distortion classify_lab() was rebuilt around (chroma shrinks, hue
@@ -593,13 +637,15 @@ namespace {
 // names the six clusters DISTINCTLY, trust it outright; on any collision (two
 // washed clusters in one hue band) keep the exact global-distance
 // permutation instead.
-void apply_hue_names(const MeanArray& means, const ColorPalette& palette,
-                     std::array<std::size_t, face_count>& permutation) {
+[[nodiscard]] HueNaming apply_hue_names(const MeanArray& means, const ColorPalette& palette,
+                                        std::array<std::size_t, face_count>& permutation) {
+    HueNaming naming;
     std::array<std::size_t, face_count> hue_names{};
     std::array<int, face_count + 1> name_counts{};
     bool any_unknown = false;
     for (std::size_t c = 0; c < face_count; ++c) {
-        const auto color = classify_lab(means.at(c)).color;
+        naming.readings.at(c) = classify_lab_explained(means.at(c));
+        const auto color = naming.readings.at(c).facelet.color;
         any_unknown = any_unknown || color == FacetColor::unknown;
         hue_names.at(c) = static_cast<std::size_t>(color);
         ++name_counts.at(static_cast<std::size_t>(color));
@@ -614,8 +660,13 @@ void apply_hue_names(const MeanArray& means, const ColorPalette& palette,
     // colour and break the exactly-9 census the assembler relies on. The
     // exact global-distance matching is a complete answer; fall back to it
     // wholesale.
-    if (!all_distinct || any_unknown) {
-        return;
+    if (any_unknown) {
+        naming.result = HueOverride::unknown_cluster;
+        return naming;
+    }
+    if (!all_distinct) {
+        naming.result = HueOverride::collision;
+        return naming;
     }
     for (std::size_t c = 0; c < face_count; ++c) {
         for (std::size_t p = 0; p < face_count; ++p) {
@@ -625,6 +676,8 @@ void apply_hue_names(const MeanArray& means, const ColorPalette& palette,
             }
         }
     }
+    naming.result = HueOverride::applied;
+    return naming;
 }
 
 // How safely sample `s` sits in the cluster the assignment chose: 1 when it
@@ -655,6 +708,14 @@ void apply_hue_names(const MeanArray& means, const ColorPalette& palette,
 
 Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     const std::array<CapturedFace, 6>& faces) {
+    const auto explained = resolve_colors_explained(faces);
+    if (!explained) {
+        return std::unexpected(explained.error());
+    }
+    return explained->faces;
+}
+
+Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 6>& faces) {
     CUBE_ZONE_SCOPED_N("vision.resolve_colors");
     SampleArray samples{};
     for (std::size_t face = 0; face < face_count; ++face) {
@@ -674,21 +735,41 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
 
-    const std::array<int, kSampleCount> assignment = refine_clusters(samples, means);
+    ColorResolution resolution;
+    for (std::size_t c = 0; c < face_count; ++c) {
+        resolution.clusters.at(c).seed = means.at(c);
+    }
+
+    const Refinement refinement = refine_clusters(samples, means);
+    resolution.iterations = refinement.iterations;
 
     const ColorPalette palette = default_palette();
-    std::array<std::size_t, face_count> permutation = best_palette_permutation(means, palette);
-    apply_hue_names(means, palette, permutation);
+    const PaletteMatch match = best_palette_permutation(means, palette);
+    std::array<std::size_t, face_count> permutation = match.permutation;
+    const HueNaming hue = apply_hue_names(means, palette, permutation);
+    resolution.match_cost = match.total;
+    resolution.hue_override = hue.result;
+    resolution.hue_changed_names = permutation != match.permutation;
 
-    std::array<std::array<Facelet, 9>, 6> resolved{};
+    for (std::size_t c = 0; c < face_count; ++c) {
+        ClusterNaming& cluster = resolution.clusters.at(c);
+        cluster.mean = means.at(c);
+        cluster.hue = hue.readings.at(c);
+        cluster.by_distance = palette.entries.at(match.permutation.at(c)).color;
+        cluster.name = palette.entries.at(permutation.at(c)).color;
+    }
+
     for (std::size_t s = 0; s < kSampleCount; ++s) {
-        const auto own = static_cast<std::size_t>(assignment.at(s));
-        resolved.at(s / facelets_per_face).at(s % facelets_per_face) = Facelet{
+        const auto own = static_cast<std::size_t>(refinement.assignment.at(s));
+        const std::size_t face = s / facelets_per_face;
+        const std::size_t cell = s % facelets_per_face;
+        resolution.cluster_of.at(face).at(cell) = static_cast<std::uint8_t>(own);
+        resolution.faces.at(face).at(cell) = Facelet{
             .color = palette.entries.at(permutation.at(own)).color,
             .confidence = assignment_confidence(samples.at(s), means, own),
         };
     }
-    return resolved;
+    return resolution;
 }
 
 }  // namespace cube::vision

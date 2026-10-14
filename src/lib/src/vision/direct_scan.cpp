@@ -465,13 +465,10 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     return colours;
 }
 
-// The cube among several that the six sides make, if the corner reads say
-// which: the one that most of them fit, and more than any other. A read
-// that fits every candidate (it showed sides whose edges the candidates
-// agree on) says nothing, and a read that fits none is a blurred frame.
-[[nodiscard]] std::optional<solver::Cube> choose_by_corners(
-    const std::vector<solver::Cube>& candidates, const std::vector<CornerRead>& corners,
-    const SessionColours& colours) {
+// How many corner reads fit each candidate.
+[[nodiscard]] std::vector<std::size_t> corner_fits(const std::vector<solver::Cube>& candidates,
+                                                   const std::vector<CornerRead>& corners,
+                                                   const SessionColours& colours) {
     std::vector<std::size_t> fits(candidates.size(), 0);
     for (const CornerRead& read : corners) {
         for (std::size_t i = 0; i < candidates.size(); ++i) {
@@ -480,11 +477,19 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
             }
         }
     }
+    return fits;
+}
+
+// The candidate among several that the corner reads say it is, if they do:
+// the one that most of them fit, and more than any other. A read that fits
+// every candidate (it showed sides whose edges the candidates agree on) says
+// nothing, and a read that fits none is a blurred frame.
+[[nodiscard]] std::optional<std::size_t> choose_by_corners(const std::vector<std::size_t>& fits) {
     const auto best = std::ranges::max_element(fits);
     if (best == fits.end() || *best == 0 || std::count(fits.begin(), fits.end(), *best) != 1) {
         return std::nullopt;
     }
-    return candidates.at(static_cast<std::size_t>(best - fits.begin()));
+    return static_cast<std::size_t>(best - fits.begin());
 }
 
 // `named` with two colour names traded wherever they appear.
@@ -503,10 +508,16 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 }
 
 // The cube that trading the names of the two closest-looking centres makes,
-// when any trade does - else `failure`.
-[[nodiscard]] Result<ScannedCube> assemble_with_closest_exchange(
-    const NamedSides& named, const std::array<CapturedFace, 6>& faces, CubeError failure) {
-    Result<ScannedCube> best = std::unexpected(failure);
+// when any trade does - else `failure` - and which trade it was.
+struct Exchanged {
+    Result<ScannedCube> result;
+    std::optional<NameExchange> exchange;
+};
+
+[[nodiscard]] Exchanged assemble_with_closest_exchange(const NamedSides& named,
+                                                       const std::array<CapturedFace, 6>& faces,
+                                                       CubeError failure) {
+    Exchanged best{.result = std::unexpected(failure), .exchange = std::nullopt};
     float best_distance = std::numeric_limits<float>::max();
     for (std::size_t a = 0; a < 6; ++a) {
         for (std::size_t b = a + 1; b < 6; ++b) {
@@ -519,13 +530,26 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
                 with_names_exchanged(named, named.at(a).at(4).color, named.at(b).at(4).color);
             if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
                 cube.has_value()) {
-                best = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
+                best.result = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
+                best.exchange = NameExchange{
+                    .first_side = a,
+                    .second_side = b,
+                    .first_name = named.at(a).at(4).color,
+                    .second_name = named.at(b).at(4).color,
+                    .centre_distance = distance,
+                };
                 best_distance = distance;
             }
         }
     }
     return best;
 }
+
+// The cube, and how it was put together.
+struct Assembled {
+    Result<ScannedCube> result;
+    AssemblyTrace trace;
+};
 
 // Assembles the cube, letting physical validity settle which colour is which
 // where colour alone cannot.
@@ -542,31 +566,79 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 // opposite pair, three exchanges assemble: the true one, and two that name a
 // valid cube wrongly. The pair that really was confused is the pair that
 // looks alike, so the exchange between the closest two colours wins.
-[[nodiscard]] Result<ScannedCube> assemble(const NamedSides& named,
-                                           const std::array<CapturedFace, 6>& faces,
-                                           const std::vector<CornerRead>& corners) {
+//
+// What happened on the way is returned beside the cube, in an AssemblyTrace:
+// values this function holds anyway, handed back instead of dropped.
+[[nodiscard]] Assembled assemble(const NamedSides& named, const std::array<CapturedFace, 6>& faces,
+                                 const std::vector<CornerRead>& corners) {
+    Assembled out{.result = std::unexpected(CubeError::invalid_cube_state), .trace = {}};
+    AssemblyTrace& trace = out.trace;
+    trace.corner_reads = corners.size();
+
     // A naming that makes one cube is done. One that makes several is a
     // valid naming, so exchanging names would only invent a different cube:
     // the sides themselves are ambiguous, and only more than six flat
     // views can say which.
     const std::vector<solver::Cube> candidates = solver::assemble_all_scanned_faces(named);
+    trace.candidates = candidates.size();
     if (candidates.size() == 1) {
-        return ScannedCube{.cube = candidates.front(), .colours = colours_of(named, faces)};
+        trace.path = AssemblyPath::single_candidate;
+        out.result = ScannedCube{.cube = candidates.front(), .colours = colours_of(named, faces)};
+        return out;
     }
     if (candidates.size() > 1) {
         const SessionColours colours = colours_of(named, faces);
-        if (const auto chosen = choose_by_corners(candidates, corners, colours);
-            chosen.has_value()) {
-            return ScannedCube{.cube = *chosen, .colours = colours};
+        trace.corner_fits = corner_fits(candidates, corners, colours);
+        trace.chosen = choose_by_corners(trace.corner_fits);
+        if (trace.chosen.has_value()) {
+            trace.path = AssemblyPath::chosen_by_corners;
+            out.result = ScannedCube{.cube = candidates.at(*trace.chosen), .colours = colours};
+            return out;
         }
-        return std::unexpected(CubeError::ambiguous_scan);
+        trace.path = AssemblyPath::ambiguous;
+        trace.error = CubeError::ambiguous_scan;
+        out.result = std::unexpected(CubeError::ambiguous_scan);
+        return out;
     }
     const Result<solver::Cube> direct = solver::assemble_scanned_faces(named);
     if (direct.has_value()) {
-        return ScannedCube{.cube = *direct, .colours = colours_of(named, faces)};
+        trace.path = AssemblyPath::direct;
+        out.result = ScannedCube{.cube = *direct, .colours = colours_of(named, faces)};
+        return out;
     }
+    trace.direct_error = direct.error();
 
-    return assemble_with_closest_exchange(named, faces, direct.error());
+    Exchanged exchanged = assemble_with_closest_exchange(named, faces, direct.error());
+    out.result = std::move(exchanged.result);
+    trace.exchange = exchanged.exchange;
+    if (out.result.has_value()) {
+        trace.path = AssemblyPath::names_exchanged;
+    } else {
+        trace.path = AssemblyPath::failed;
+        trace.error = out.result.error();
+    }
+    return out;
+}
+
+// Naming and assembly of six sides, with the working of both.
+struct Evaluation {
+    Result<ColorResolution> naming = std::unexpected(CubeError::face_capture_incomplete);
+    std::optional<AssemblyTrace> assembly;
+    Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
+};
+
+[[nodiscard]] Evaluation evaluate(const std::array<CapturedFace, 6>& faces,
+                                  const std::vector<CornerRead>& corners) {
+    Evaluation evaluation;
+    evaluation.naming = resolve_colors_explained(faces);
+    if (!evaluation.naming) {
+        evaluation.result = std::unexpected(evaluation.naming.error());
+        return evaluation;
+    }
+    Assembled assembled = assemble(evaluation.naming->faces, faces, corners);
+    evaluation.result = std::move(assembled.result);
+    evaluation.assembly = std::move(assembled.trace);
+    return evaluation;
 }
 
 }  // namespace
@@ -760,11 +832,42 @@ Result<ScannedCube> SideScan::scanned() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces.at(i).lab = groups_.at(captured.at(i)).fused;
     }
-    const auto named = resolve_colors(faces);
-    if (!named) {
-        return std::unexpected(named.error());
+    return evaluate(faces, corners_).result;
+}
+
+ScanDiagnosis SideScan::diagnose() const {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.diagnose");
+    const std::vector<std::size_t> captured = captured_by_support();
+
+    ScanDiagnosis diagnosis;
+    diagnosis.groups = groups_.size();
+    diagnosis.captured = captured.size();
+    diagnosis.corner_reads = corners_.size();
+    for (std::size_t i = 0; i < std::min<std::size_t>(captured.size(), 6); ++i) {
+        const Group& group = groups_.at(captured.at(i));
+        diagnosis.sides.push_back(ScanDiagnosis::Side{
+            .first_seen = captured.at(i),
+            .reads = group.reads.size(),
+            .lab = group.fused,
+            .roll = group.roll,
+            .in_view = in_view_ == captured.at(i),
+        });
     }
-    return assemble(*named, faces, corners_);
+    if (captured.size() < 6) {
+        return diagnosis;
+    }
+
+    std::array<CapturedFace, 6> faces{};
+    for (std::size_t i = 0; i < 6; ++i) {
+        faces.at(i).lab = diagnosis.sides.at(i).lab;
+    }
+    Evaluation evaluation = evaluate(faces, corners_);
+    if (evaluation.naming.has_value()) {
+        diagnosis.naming = std::move(*evaluation.naming);
+    }
+    diagnosis.assembly = std::move(evaluation.assembly);
+    diagnosis.result = std::move(evaluation.result);
+    return diagnosis;
 }
 
 }  // namespace cube::vision
