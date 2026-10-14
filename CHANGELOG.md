@@ -10,6 +10,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.0-rc.1] - 2026-10-14
+
 The first release of Cubeulator, a Rubik's Cube solver that reads the cube through a camera. Hold each side of a scrambled cube up to the camera and it works out the cube, solves it, and shows you the solution turn by turn on a 3D cube. For Windows, macOS and Linux.
 
 ### Added
