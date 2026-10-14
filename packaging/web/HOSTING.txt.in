@@ -1,0 +1,54 @@
+Cubeulator @VERSION@ for the browser
+====================================
+
+This directory is the whole app: static files, with nothing to install and no
+server component. Put it on any web server and open index.html. Nothing the
+camera sees leaves the visitor's device; the cube is read and solved inside
+the page.
+
+What the host has to do
+-----------------------
+
+* Serve it over https (or from localhost). A browser only gives the camera to
+  a secure page.
+* Serve .wasm files as application/wasm (every common server does).
+* Nothing else for threads. The app is threaded and a browser allows that only
+  to a page that is cross-origin isolated. index.html registers a small service
+  worker (cubeulator-isolation.js) that adds the two headers to the app's own
+  files and reloads the page once; its scope is the directory it is served
+  from. A host that sends them itself needs none of it and the worker steps
+  aside:
+
+      Cross-Origin-Opener-Policy: same-origin
+      Cross-Origin-Embedder-Policy: require-corp
+
+* Serve it from a directory of its own: every reference in the page is
+  relative, so any path works, but the service worker's scope is that
+  directory.
+
+Try it locally
+--------------
+
+    python3 -m http.server 8000
+    # then open http://localhost:8000/ in Chrome, Edge, Firefox or Safari 16.4+
+
+Add ?demo=7 to the address to open a scrambled cube with its solution worked
+out, with no camera.
+
+What is in it
+-------------
+
+  index.html, cube_app.js, cube_app.wasm, qtloader.js   the app
+  cubeulator-isolation.js                               the service worker above
+  icon.svg                                              the icon
+  LICENSE.txt                                           GPL-3.0-or-later
+  THIRD-PARTY-NOTICES.txt                               the licences of everything inside cube_app.wasm
+                                                        (Qt, OpenCV and the libraries it uses, the fonts)
+
+These are the files that the hosted copy serves, built by the same workflow
+from the same commit as the other downloads of this release: the release's
+SHA512SUMS and provenance attestation cover the zip. The page's
+"Documentation" link points at the parent directory of the project's own site
+and means nothing elsewhere.
+
+Source and issues: https://github.com/iainchesworthlabs/cubeulator

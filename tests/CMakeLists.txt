@@ -235,6 +235,7 @@ if(CUBEULATOR_BUILD_APP)
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
+        unit/platform_facts_test.cpp
         unit/solve_controller_test.cpp
         unit/solve_history_test.cpp)
 
@@ -448,6 +449,17 @@ if(Python3_Interpreter_FOUND)
                 "${CMAKE_SOURCE_DIR}/tools/release/test_release_tools.py")
     set_tests_properties(release_tools_selftest
         PROPERTIES LABELS "release" ENVIRONMENT "PYTHONUTF8=1")
+
+    # The notices generator on a static Qt's link line (the browser build):
+    # QML plugin registration objects and resource bundles are linked as
+    # objects, and are attributed by where they sit under the Qt prefix.
+    # Runs the real generator over a made-up file API reply; needs no Qt.
+    add_test(NAME notices_static_qt_selftest
+        COMMAND "${Python3_EXECUTABLE}"
+                "${CMAKE_SOURCE_DIR}/tools/licences/test_static_qt_objects.py")
+    set_tests_properties(notices_static_qt_selftest
+        PROPERTIES LABELS "licensing"
+                   ENVIRONMENT "PYTHONUTF8=1;CMAKE_COMMAND=${CMAKE_COMMAND}")
 endif()
 
 # --- Third-party notices (E0b, docs/licensing.md) --------------------------

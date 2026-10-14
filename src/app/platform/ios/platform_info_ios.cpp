@@ -7,6 +7,8 @@ PlatformInfo current() {
     return PlatformInfo{
         .is_mobile = true,
         .graphics_backends = {{.key = "metal", .label = "Metal"}},
+        .japanese_faces = {"Hiragino Sans", "Hiragino Kaku Gothic ProN"},
+        .chinese_faces = {"PingFang SC", "Heiti SC"},
     };
 }
 

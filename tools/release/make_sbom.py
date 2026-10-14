@@ -17,7 +17,7 @@ inventory into SPDX 2.3, one SBOM for the release:
 
 What it says:
 
-  * one SPDX package per release file (the .exe, .dmg, .deb, .rpm), with its
+  * one SPDX package per release file (the .exe, .dmg, .deb, .rpm and the web .zip), with its
     file name, its SHA-256 and SHA-512, and where it will be downloaded from;
   * one package per component that ships in it, with version, the licence it
     declares and the one it is distributed under, copyright and homepage;
@@ -46,7 +46,7 @@ from pathlib import Path
 SPDX_VERSION = "SPDX-2.3"
 
 # Which inventory a release file belongs to.
-PLATFORM_OF_SUFFIX = {".exe": "windows", ".dmg": "macos", ".deb": "linux", ".rpm": "linux"}
+PLATFORM_OF_SUFFIX = {".exe": "windows", ".dmg": "macos", ".deb": "linux", ".rpm": "linux", ".zip": "web"}
 
 _ID_SANITISE_RE = re.compile(r"[^A-Za-z0-9.\-]+")
 _LICENSE_TOKEN_RE = re.compile(r"[A-Za-z0-9.+\-]+")
@@ -200,7 +200,7 @@ def build(
             )
 
     if not describes:
-        raise SbomError("none of the files is a package this tool knows (.exe, .dmg, .deb, .rpm)")
+        raise SbomError("none of the files is a package this tool knows (.exe, .dmg, .deb, .rpm, .zip)")
 
     # A namespace that is unique to this content, as SPDX asks.
     digest = hashlib.sha256(
@@ -239,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         default=[],
         metavar="PLATFORM=PATH",
-        help="a platform's third-party-notices.json (repeat for windows, macos, linux)",
+        help="a platform's third-party-notices.json (repeat for windows, macos, linux, web)",
     )
     parser.add_argument("--created", help="ISO time for creationInfo; default now (UTC)")
     parser.add_argument("--output", type=Path, required=True)

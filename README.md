@@ -13,7 +13,7 @@ A camera-driven, on-device Rubik's Cube solver: hold each side of a scrambled
 cube up to the camera, and Cubeulator works out the cube, solves it, and shows
 you the solution turn by turn on a 3D cube.
 
-> **Status: pre-release.** For Windows, macOS and Linux. The scan has been
+> **Status: pre-release.** For Windows, macOS and Linux, and in a browser. The scan has been
 > checked on recorded sessions and a webcam, not yet across cameras, rooms and
 > cubes, and there is no review screen yet. [CHANGELOG.md](CHANGELOG.md) says
 > what each release does and what is not yet proven.
@@ -34,6 +34,7 @@ You need a camera; a webcam is enough.
 | macOS 14.4 and later, Apple Silicon | `Cubeulator-<version>-macos-arm64.dmg` | Drag it to Applications; right-click it and choose *Open* (it is not notarised) |
 | Debian, Ubuntu | `Cubeulator-<version>-linux-x64.deb` | `sudo apt install ./Cubeulator-<version>-linux-x64.deb` |
 | Fedora | `Cubeulator-<version>-linux-x64.rpm` | `sudo dnf install ./Cubeulator-<version>-linux-x64.rpm` |
+| A current browser | nothing to install: [open it online](https://iainchesworthlabs.github.io/cubeulator/app/), or host `Cubeulator-<version>-web.zip` yourself | needs https (or localhost) for the camera; [how it works and what it needs](docs/web.md) |
 
 The packages are not yet signed by Microsoft or Apple, which is why Windows and
 macOS ask. What each release does carry is a SHA-512 manifest, GPG signatures,

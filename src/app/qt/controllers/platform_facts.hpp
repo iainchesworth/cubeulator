@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QObject>
+#include <QStringList>
 #include <QVariantList>
 
 namespace cube::app {
@@ -18,16 +19,25 @@ class PlatformFacts : public QObject {
     // The graphics backends the Settings screen offers beyond "auto", as a
     // list of { key, label } maps in display order.
     Q_PROPERTY(QVariantList graphicsBackends READ graphicsBackends CONSTANT)
+    // The families this platform's interface is set in for Japanese and
+    // Simplified Chinese, in preference order (Theme.qml takes the first that
+    // is installed).
+    Q_PROPERTY(QStringList japaneseFaces READ japaneseFaces CONSTANT)
+    Q_PROPERTY(QStringList chineseFaces READ chineseFaces CONSTANT)
 
 public:
     explicit PlatformFacts(QObject* parent = nullptr);
 
     [[nodiscard]] bool isMobile() const noexcept;
     [[nodiscard]] QVariantList graphicsBackends() const;
+    [[nodiscard]] QStringList japaneseFaces() const;
+    [[nodiscard]] QStringList chineseFaces() const;
 
 private:
     bool is_mobile_ = false;
     QVariantList graphics_backends_;
+    QStringList japanese_faces_;
+    QStringList chinese_faces_;
 };
 
 }  // namespace cube::app
