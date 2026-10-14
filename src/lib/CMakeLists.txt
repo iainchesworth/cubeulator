@@ -71,6 +71,10 @@ target_sources(cube_lib
         src/vision/direct_scan.cpp
         src/vision/corner_view.cpp
         src/vision/held_cube.cpp
+        src/diagnostics/json.cpp
+        src/diagnostics/describe.cpp
+        src/diagnostics/record.cpp
+        src/diagnostics/jsonl_file.cpp
         src/i18n/i18n.cpp)
 
 # Two files make the compiler build lookup tables from loops: the two-phase

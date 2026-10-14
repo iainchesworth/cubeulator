@@ -75,6 +75,10 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/app_controllers.cpp
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
+        qt/controllers/diagnostic_records.hpp
+        qt/controllers/diagnostic_records.cpp
+        qt/controllers/diagnostics.hpp
+        qt/controllers/diagnostics.cpp
         qt/controllers/direct_scan.hpp
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp

@@ -39,6 +39,36 @@ ApplicationWindow {
         from: 0; to: 1; duration: 280; easing.type: Easing.OutCubic
     }
 
+    // The diagnostics channel is never silent: while it writes, every screen
+    // says so, and where (docs/diagnostics.md). Nothing is shown when it is
+    // off, which is how the app starts.
+    Rectangle {
+        objectName: "diagnostics.marker"
+        visible: Diagnostics.enabled
+        z: 1000
+        anchors.left: parent.left; anchors.bottom: parent.bottom
+        anchors.margins: Theme.space2
+        width: Math.min(markerText.implicitWidth + 2 * Theme.space3, parent.width - 2 * Theme.space2)
+        height: markerText.implicitHeight + 2 * Theme.space1
+        radius: 6
+        color: Qt.rgba(0.08, 0.075, 0.07, 0.78)
+        // The camera picture and the cube are not mirrored, and neither is a
+        // path.
+        LayoutMirroring.enabled: false
+
+        Text {
+            id: markerText
+            anchors.centerIn: parent
+            width: parent.width - 2 * Theme.space3
+            elide: Text.ElideMiddle
+            text: Diagnostics.framesEnabled
+                  ? qsTrId("diagnostics.markerFrames").arg(Diagnostics.directory)
+                  : qsTrId("diagnostics.marker").arg(Diagnostics.path)
+            color: "#F3F2F2"
+            font.family: Theme.fontMono; font.pixelSize: 11
+        }
+    }
+
     // E4a: desktop shortcuts, the macOS menu bar and the placeholder About.
     // Not on a phone: it needs the desktop shell's singletons (KeepAwake,
     // AppInfo), which AppRuntime registers only where that shell is built.

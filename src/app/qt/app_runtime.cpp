@@ -8,9 +8,20 @@
 #include <QGuiApplication>
 #include <QQuickWindow>
 
+#include <utility>
+
 namespace cube::app {
 
 AppRuntime::AppRuntime() {
+    wire();
+}
+
+AppRuntime::AppRuntime(std::filesystem::path diagnostics_dir)
+    : controllers_(std::move(diagnostics_dir)) {
+    wire();
+}
+
+void AppRuntime::wire() {
     controllers_.registerWithQml();
     desktop_.registerWithQml();
     controllers_.addImageProviders(engine_);

@@ -6,6 +6,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <cube/diagnostics/json.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/solver/stepped_solution.hpp>
 
@@ -126,6 +127,11 @@ public:
     [[nodiscard]] int currentStageIndex() const;
 
     [[nodiscard]] bool isSolving() const;
+
+    // The solve as it stands, for a diagnostics record
+    // (docs/diagnostics.md): method, the cube now, the whole move list, which
+    // move is next and how far through.
+    [[nodiscard]] cube::diagnostics::Json diagnosticState() const;
 
     [[nodiscard]] Method method() const noexcept { return method_; }
     void setMethod(Method method);

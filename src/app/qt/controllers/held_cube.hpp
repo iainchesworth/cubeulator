@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cube/diagnostics/json.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
 #include <cube/vision/held_cube.hpp>
@@ -19,6 +20,7 @@ class SolveController;
 namespace cube::app {
 
 class DirectScan;
+class Diagnostics;
 
 // How the cube is being held while it is solved, for the solve screen.
 //
@@ -108,6 +110,14 @@ public:
     [[nodiscard]] QString sight() const;
     [[nodiscard]] QString wrongSide() const;
 
+    // The developer diagnostics channel (docs/diagnostics.md), or none. While
+    // it is on, each change in what a frame says is written as a `held`
+    // record; this replaces the CUBE_HELD_LOG file.
+    void setDiagnostics(Diagnostics* diagnostics) noexcept { diagnostics_ = diagnostics; }
+    // The hold, whether it has been seen, and what the camera makes of the
+    // side in view now, for a snapshot record.
+    [[nodiscard]] cube::diagnostics::Json diagnosticState() const;
+
 signals:
     void holdChanged();
     void sightChanged();
@@ -149,8 +159,8 @@ private:
     // asked for: one quarter of it made, which is progress and not a mistake.
     [[nodiscard]] bool half_way_there(const cube::vision::SideRead& read,
                                       const cube::vision::SessionColours& colours) const;
-    // Appends what was just made of a frame to the file CUBE_HELD_LOG names,
-    // when it names one. Numbers only: no picture is kept.
+    // Writes what was just made of a frame to the diagnostics channel, when it
+    // is on: the verdict and the numbers it came from. No picture is kept.
     void note(const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
               const Verdict& verdict) const;
     void setSight(Sight sight, cube::solver::Face wrong_side = cube::solver::Face::U);
@@ -158,6 +168,7 @@ private:
 
     DirectScan& scan_;
     SolveController& solve_;
+    Diagnostics* diagnostics_ = nullptr;
 
     cube::solver::Hold hold_ = cube::solver::kStatedHold;
     bool seen_ = false;
