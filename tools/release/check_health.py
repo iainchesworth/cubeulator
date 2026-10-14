@@ -10,8 +10,9 @@ The README shows a badge for each of CI, CodeQL, OSV-Scanner and Zizmor, and on
 `main` each shows the latest run there. A release that reaches `main` with one
 of those red (or never run) puts a red badge on the project's front page, and
 "the required checks passed on the pull request" does not rule that out: the
-required checks are two small jobs, and the workflows that carry the badges are
-the whole of CI, CodeQL and the scanners.
+nine checks `main` requires are the pull request's own run of the build, test,
+coverage, clang and CodeQL legs; they do not include OSV-Scanner or Zizmor, or
+the push runs on `develop` that the badges on `main` come to show.
 
 So this reads the workflows the README has badges for (it parses README.md, so
 a badge added there is held to the same rule), finds each one's run on the
