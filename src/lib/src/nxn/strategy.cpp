@@ -15,14 +15,17 @@ Strategy default_strategy(int size) {
     Strategy strategy{size % 2 == 1 ? "odd: fixed centres, reduction"
                                     : "even: free centres, reduction"};
     if (size % 2 == 1) {
-        strategy.then("plan", plan(FixedCentres{}));
+        strategy.then("plan", plan(FixedCentres{}))
+            .then("parity", make_wings_even())
+            .then("centres", solve_centres())
+            .then("plan_edges", plan_edges(FixedCentres{}));
     } else {
-        strategy.then("plan", plan(FreeCentres{}));
+        strategy.then("plan", plan(FreeCentres{}))
+            .then("parity", make_wings_even())
+            .then("centres", solve_centres())
+            .then("plan_edges", plan_edges(FreeCentres{}));
     }
-    strategy.then("parity", make_wings_even())
-        .then("centres", solve_centres())
-        .then("edges", solve_edges())
-        .then("core", solve_core());
+    strategy.then("edges", solve_edges()).then("core", solve_core());
     return strategy;
 }
 

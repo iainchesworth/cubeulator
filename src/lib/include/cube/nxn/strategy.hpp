@@ -54,11 +54,18 @@ struct EdgeDisplay {
 using EdgeDisplays = std::array<EdgeDisplay, Geometry::kEdgeLocations>;
 using Scheme = std::array<Color, 6>;
 
-// Where the pieces are to end up: the colour of every face, and what every
-// edge shows. Worked out once by Plan and read by every later stage.
+// Where the pieces are to end up. The colour of every face is worked out
+// once, first, and the centres are built to it. What every edge shows is
+// worked out twice, because it depends on the corners and the stage that
+// builds the centres turns them: `reference` is what an edge shows when
+// everything is home, which is all the parity decision needs (it asks only how
+// odd the wings' permutation is), and `displays` is what each edge will show
+// once the 3x3 the cube becomes is known to be solvable, set after the
+// centres by plan_edges().
 struct Targets {
     Scheme scheme{};
-    EdgeDisplays displays{};
+    EdgeDisplays reference{};
+    std::optional<EdgeDisplays> displays;
 };
 
 // The state a Strategy's stages work on.
@@ -73,6 +80,7 @@ struct Context {
 template <typename P>
 concept TargetPolicy = requires(const P& policy, const NCube& cube, const Scheme& scheme) {
     { policy.scheme(cube) } -> std::same_as<Result<Scheme>>;
+    { policy.reference_displays(cube, scheme) } -> std::same_as<EdgeDisplays>;
     { policy.displays(cube, scheme) } -> std::same_as<Result<EdgeDisplays>>;
 };
 
@@ -81,6 +89,7 @@ concept TargetPolicy = requires(const P& policy, const NCube& cube, const Scheme
 // them, and the centres and wings are solved to match.
 struct FixedCentres {
     [[nodiscard]] static Result<Scheme> scheme(const NCube& cube);
+    [[nodiscard]] static EdgeDisplays reference_displays(const NCube& cube, const Scheme& scheme);
     [[nodiscard]] static Result<EdgeDisplays> displays(const NCube& cube, const Scheme& scheme);
 };
 
@@ -90,6 +99,7 @@ struct FixedCentres {
 // solvable 3x3.
 struct FreeCentres {
     [[nodiscard]] static Result<Scheme> scheme(const NCube& cube);
+    [[nodiscard]] static EdgeDisplays reference_displays(const NCube& cube, const Scheme& scheme);
     [[nodiscard]] static Result<EdgeDisplays> displays(const NCube& cube, const Scheme& scheme);
 };
 
@@ -118,14 +128,23 @@ concept StageLike = std::copy_constructible<S> && requires(const S& stage, Conte
 
 // Stages. Each is a factory for a callable value; compose them in a Strategy.
 
-// Chooses the targets with `policy`. Does not turn the cube.
+// Chooses the colour of every face, and the reference for what an edge shows,
+// with `policy`. Does not turn the cube.
 template <TargetPolicy P>
 [[nodiscard]] StageFn plan(P policy);
+
+// Chooses what every edge will show, with `policy`, from the cube as it is:
+// run after the centres, which may have moved the corners and with them what
+// the cube needs to be a solvable 3x3. Does not turn the cube.
+template <TargetPolicy P>
+[[nodiscard]] StageFn plan_edges(P policy);
 
 // Makes each wing orbit's permutation even, with `handler`.
 [[nodiscard]] StageFn make_wings_even(ParityHandler handler = inner_layer_parity());
 
-// Puts every centre sticker on its face's colour, by 3-cycles.
+// Puts every centre sticker on its face's colour. See solve_centre_stickers():
+// a search over short words that may disturb the wings and corners, which the
+// stages after this one put right.
 [[nodiscard]] StageFn solve_centres();
 
 // Puts every wing where its edge shows the display it should, by 3-cycles.
@@ -182,19 +201,32 @@ private:
 
 namespace detail {
 
-[[nodiscard]] Result<void> plan_targets(
-    Context& context, Result<Scheme> scheme,
-    const std::function<Result<EdgeDisplays>(const Scheme&)>& displays);
+[[nodiscard]] Result<void> plan_scheme(Context& context, const Scheme& scheme,
+                                       const EdgeDisplays& reference);
+[[nodiscard]] Result<void> plan_displays(Context& context, Result<EdgeDisplays> displays);
 
 }  // namespace detail
 
 template <TargetPolicy P>
 StageFn plan(P policy) {
     return [policy = std::move(policy)](Context& context) -> Result<void> {
-        return detail::plan_targets(context, policy.scheme(context.cube),
-                                    [&policy, &context](const Scheme& scheme) {
-                                        return policy.displays(context.cube, scheme);
-                                    });
+        const Result<Scheme> scheme = policy.scheme(context.cube);
+        if (!scheme) {
+            return std::unexpected(scheme.error());
+        }
+        const EdgeDisplays reference = policy.reference_displays(context.cube, *scheme);
+        return detail::plan_scheme(context, *scheme, reference);
+    };
+}
+
+template <TargetPolicy P>
+StageFn plan_edges(P policy) {
+    return [policy = std::move(policy)](Context& context) -> Result<void> {
+        if (!context.targets) {
+            return std::unexpected(CubeError::no_solution);
+        }
+        return detail::plan_displays(context,
+                                     policy.displays(context.cube, context.targets->scheme));
     };
 }
 

@@ -13,11 +13,13 @@ taking its stickers with it. That rule is applied once per size to build a
 permutation table per layer turn (`Geometry`), so a turn costs a table lookup
 at every size. A big cube is solved by *reduction*: put the centres right,
 pair the edges, and what is left is a 3x3 that the existing solvers finish.
-Centres and edges are put right with 3-cycles that are **found by search**,
-not written down: short commutators are enumerated, each folded into the one
-rearrangement it makes, and the ones that move three pieces and nothing else
-are kept (`CycleLibrary`). There are no per-size algorithm tables, and no
-parity algorithms.
+Wings are put right with 3-cycles that are **found by search**, not written
+down: short commutators are enumerated, each folded into the one rearrangement
+it makes, and the ones that move three pieces and nothing else are kept
+(`CycleLibrary`). Centres are built by a greedy search over a wider set of short
+words that may disturb the wings and corners - which are not solved yet - and
+scored by how many centre stickers they put right per move. There are no
+per-size algorithm tables, and no parity algorithms.
 
 ## Layers
 
@@ -27,7 +29,8 @@ parity algorithms.
 | Geometry | `geometry.hpp` | Per size: facelet positions, the table of every layer turn, the 24 whole-cube rotations, sticker orbits, piece roles |
 | State | `cube.hpp` | `NCube`: 6 N^2 colours, turned by table; reduced check; `to_cube3()` |
 | Concepts and views | `state.hpp` | `FaceletState`, range algorithms, the zero-copy virtual 3x3 |
-| Commutator engine | `commutator.hpp` | `CycleLibrary` of pure 3-cycles; `arrange()` sorts by them |
+| Commutator engine | `commutator.hpp` | `CycleLibrary` of pure 3-cycles; `arrange()` sorts by them (the edges stage) |
+| Centre search | `src/nxn/centres.cpp` | Greedy search over short words for the centres stage |
 | Strategy | `strategy.hpp` | Stages as values; `default_strategy(size)`; target policies; parity handler |
 | Result | `solution.hpp` | `Step`, `Solution`, merging of turns |
 
@@ -103,10 +106,45 @@ This is the "procedural A and B from the layer depth" idea, with the search
 doing the work of choosing them: nothing in it knows what a 4x4 or a 7x7 is.
 
 `arrange()` sorts the cells of one orbit to a target by repeatedly applying
-the cycle that fixes the most cells per move. With a complete library and an
+the cycle that fixes the most cells per move, preferring (among equals) the one
+whose setup merges with what was just emitted. With a complete library and an
 even permutation it cannot stall: some cycle always fixes at least one cell
 and breaks none (a wrong cell, its unique source, and any third wrong cell; or
-the one cycle that finishes a last 3-cycle).
+the one cycle that finishes a last 3-cycle). It is what builds the wings, which
+have to land in exact slots and must leave everything else alone.
+
+## Centres
+
+Centres have more freedom than wings: while they are built, the wings and
+corners are unsolved, so a word may do whatever it likes to them as long as
+two things hold. It must not move a face's middle cubie (an odd size reads its
+colour scheme from those). And it must be even on every wing orbit, so that the
+parity decision made before the centres are built is still true afterwards.
+Outer turns and commutators of two turns are always even on every orbit (the
+sign is a homomorphism, and a commutator is `s(x) s(z) s(x) s(z) = 1`), and a
+conjugate of an even word is even, so the candidates are:
+
+* every outer-layer turn;
+* every commutator `x z x' z'` of two turns of different axes (inner layers
+  included), 4 moves, each also done after one setup turn and undone after;
+* the pure 3-cycles of the commutator engine, which guarantee progress.
+
+Each step picks a few wrong stickers, and for each looks only at candidates
+that put the right colour on it (an index from "sticker that changes" to
+"actions that change it", with the action's effect kept only for centre
+stickers), and takes the one that puts the most stickers right per move.
+Because the pure cycles are among the candidates, some candidate always gains;
+the search cannot stall.
+
+What this costs the stages after it: outer turns move corners, which can change
+whether an edge target is a solvable 3x3, so the edges' displays are planned
+*after* the centres (`plan_edges`), not before. The parity decision does not
+need them: every solvable target has the same sign.
+
+Measured against 3-cycles alone, this is 52% fewer centre moves at 4x4 (61 to
+29), 45% fewer at 5x5 and 37% fewer at 9x9. A wider family (six- and eight-move
+commutators) and conjugation by two turns were tried and are slightly worse and
+much slower: the greedy score is per move, and the bigger words mislead it.
 
 ## Parity
 
@@ -135,8 +173,10 @@ targets, and the cube is solvable or it is not.
 ```
 size 2       corners                                  one search (bidirectional)
 size 3       core                                     no reduction
-even >= 4    plan, parity, centres, edges, core       FreeCentres
-odd  >= 5    plan, parity, centres, edges, core       FixedCentres
+even >= 4    plan, parity, centres, plan_edges,       FreeCentres
+             edges, core
+odd  >= 5    plan, parity, centres, plan_edges,       FixedCentres
+             edges, core
 ```
 
 A `Strategy` is an ordered list of named stages; a stage is any copyable
@@ -154,6 +194,11 @@ three methods).
 * `FreeCentres` (even): the face colours are read from the corners (opposite
   colours are those that never share a corner; the down-back-left corner fixes
   which face gets which), and the edge displays are home or a trade.
+
+A policy answers three questions: the faces' colours, a *reference* for what
+an edge shows when everything is home (what the parity decision needs), and the
+edge *displays* the wings are finally built to - the one that makes the reduced
+cube a solvable 3x3, asked after the centres.
 
 `ParityHandler` is the injection point for the parity turn. The default
 (`inner_layer_parity`) searches for the first inner layer, perpendicular to a
@@ -187,37 +232,43 @@ cube this *is* the cube's 3x3; before reduction it is a sample of stickers.
 Seeded scrambles of 60 + 10 N random layer turns, Advanced core, MSVC
 RelWithDebInfo on the development machine (20 scrambles per size):
 
-| N | Centres | Wings | Parity | Core | Total (mean) | Max |
-|---|---|---|---|---|---|---|
-| 2 | - | - | - | 8.3 | 8.3 | 10 |
-| 3 | - | - | - | 20.1 | 20.1 | 22 |
-| 4 | 61.5 | 84.7 | 0.3 | 17.2 | 164 | 182 |
-| 5 | 119.5 | 86.2 | 0.4 | 20.4 | 226 | 243 |
-| 6 | 240.9 | 171.6 | 1.3 | 17.4 | 431 | 465 |
-| 7 | 364.9 | 169.9 | 0.9 | 20.6 | 556 | 586 |
-| 8 | 551.6 | 259.6 | 1.1 | 17.1 | 830 | 886 |
-| 9 | 736.3 | 257.2 | 1.4 | 20.2 | 1015 | 1048 |
+| N | Centres | Wings | Parity | Core | Total (mean) | Max | Before the centre search |
+|---|---|---|---|---|---|---|---|
+| 2 | - | - | - | 8.3 | 8.3 | 10 | 8.3 |
+| 3 | - | - | - | 20.1 | 20.1 | 22 | 20.1 |
+| 4 | 29.2 | 85.8 | 0.6 | 18.1 | 134 | 145 | 164 |
+| 5 | 65.7 | 85.3 | 0.3 | 20.1 | 171 | 187 | 226 |
+| 6 | 142.7 | 172.0 | 1.2 | 17.9 | 334 | 347 | 431 |
+| 7 | 224.1 | 169.6 | 1.1 | 20.3 | 415 | 436 | 556 |
+| 8 | 337.2 | 258.9 | 1.0 | 17.9 | 615 | 643 | 830 |
+| 9 | 463.7 | 255.1 | 1.4 | 20.1 | 740 | 766 | 1015 |
 
 Every solve is verified by replaying its moves on the scramble. The 3x3 core
 alone, over 1000 scrambles: beginner 99 mean (59-142), intermediate 52
 (36-61), advanced 20.3 (15-23).
 
-The cycle library is built once per size, on first use: about 30 ms at 4x4,
-230 ms at 7x7 and 640 ms at 9x9 on the development machine; a solve after
-that is a few tens of milliseconds. Tables are per size and per process.
+The cycle library and the centre search's action set are built once per size,
+on first use: together about 0.1 s at 5x5, 0.5 s at 7x7 and 1.5 s at 9x9 on
+the development machine; a solve after that takes 50 to 300 ms. Tables are per
+size and per process.
 
 ## What this is not, yet
 
-* **Short.** A solution is a few hundred moves at 5x5. The only thing done to
-  shorten them is that, of the cycles that fix the most cells per move, the
-  one whose setup moves merge with what was just emitted is preferred (about 5%
-  fewer moves than without). The larger gains are structural and each is a
-  replacement for one stage: building a face's centres with block moves before
-  falling back to 3-cycles, and pairing edges with the insert-and-undo method.
-* **A mobile cost budget.** The library build is the one-off cost; it has not
-  been measured on a phone, and it grows faster than N (N = 9 is over half a
-  second here). Symmetry would cut it (build one cycle per rotation class and
-  rotate), or it could be built for the sizes asked for only, which it is.
+* **Shortest possible.** The wings are now about half of every solution above
+  4x4. Three things were tried for them and none is in: richer word families
+  (no gain: with the centres, corners and middle edges all held still, the best
+  word per move is the pure cycle already used); letting wing words scramble the
+  corners (27% fewer wing moves at 4x4, but half the time it leaves an odd
+  corner permutation that needs two edges swapped, and it gains nothing at odd
+  sizes, whose middle edges fix every target); and "pair the wings first, place
+  the pairs afterwards" for even sizes, which is the way humans do it and is
+  where the next gain is - it is a different objective (a pair of wings in one
+  edge, anywhere) with a parity fix, not a different set of words.
+* **A mobile cost budget.** The one-off builds are the cost; they have not been
+  measured on a phone and they grow faster than N. Symmetry would cut them
+  (build one cycle per rotation class and rotate), and they are built for the
+  sizes asked for only.
 * **Scanning, wide-move notation, a UI.** None exist for sizes above 3.
-* **Platforms other than the one it was built on** - see the testing note
-  in the pull request.
+* **A compiler other than g++-16 snapshot, MSVC and Clang 23** has not been
+  built with; the platform legs (Android, macOS, web) need `<mdspan>`, which
+  their libc++ has.

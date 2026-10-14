@@ -7,6 +7,7 @@
 #include <cube/nxn/commutator.hpp>
 #include <cube/nxn/strategy.hpp>
 
+#include "centres.hpp"
 #include "two_by_two.hpp"
 
 namespace cube::nxn {
@@ -153,6 +154,10 @@ Result<Scheme> FixedCentres::scheme(const NCube& cube) {
     return scheme_of(cube);
 }
 
+EdgeDisplays FixedCentres::reference_displays(const NCube& cube, const Scheme& /*scheme*/) {
+    return mid_edge_displays(cube);
+}
+
 Result<EdgeDisplays> FixedCentres::displays(const NCube& cube, const Scheme& scheme) {
     const EdgeDisplays mid = mid_edge_displays(cube);
     if (reduces_to_solvable(cube, scheme, mid)) {
@@ -163,6 +168,10 @@ Result<EdgeDisplays> FixedCentres::displays(const NCube& cube, const Scheme& sch
 
 Result<Scheme> FreeCentres::scheme(const NCube& cube) {
     return scheme_of(cube);
+}
+
+EdgeDisplays FreeCentres::reference_displays(const NCube& cube, const Scheme& scheme) {
+    return home_displays(scheme, cube.geometry());
 }
 
 Result<EdgeDisplays> FreeCentres::displays(const NCube& cube, const Scheme& scheme) {
@@ -212,16 +221,19 @@ ParityHandler inner_layer_parity(Axis axis) {
 
 namespace detail {
 
-Result<void> plan_targets(Context& context, Result<Scheme> scheme,
-                          const std::function<Result<EdgeDisplays>(const Scheme&)>& displays) {
-    if (!scheme) {
-        return std::unexpected(scheme.error());
+Result<void> plan_scheme(Context& context, const Scheme& scheme, const EdgeDisplays& reference) {
+    context.targets = Targets{.scheme = scheme, .reference = reference, .displays = std::nullopt};
+    return {};
+}
+
+Result<void> plan_displays(Context& context, Result<EdgeDisplays> displays) {
+    if (!displays) {
+        return std::unexpected(displays.error());
     }
-    const Result<EdgeDisplays> shown = displays(*scheme);
-    if (!shown) {
-        return std::unexpected(shown.error());
+    if (!context.targets) {
+        return std::unexpected(CubeError::no_solution);
     }
-    context.targets = Targets{.scheme = *scheme, .displays = *shown};
+    context.targets->displays = *displays;
     return {};
 }
 
@@ -239,7 +251,7 @@ StageFn make_wings_even(ParityHandler handler) {
         for (std::size_t g = 0; g < orbits.size(); ++g) {
             const int parity =
                 wing_sign(wing_labels(context.cube, orbits.at(g)),
-                          wing_targets(geometry, orbits.at(g), (*targets)->displays));
+                          wing_targets(geometry, orbits.at(g), (*targets)->reference));
             if (parity == 0) {
                 return std::unexpected(CubeError::invalid_cube_state);
             }
@@ -265,26 +277,14 @@ StageFn solve_centres() {
         if (!targets) {
             return std::unexpected(targets.error());
         }
-        const Geometry& geometry = context.cube.geometry();
-        const CycleLibrary& library = CycleLibrary::of(context.cube.size());
+        Result<Word> word = detail::solve_centre_stickers(context.cube, (*targets)->scheme);
+        if (!word) {
+            return std::unexpected(word.error());
+        }
         Step step{.stage = Stage::Centres, .core_stage = solver::Stage::Cross, .moves = {}};
-        const auto& orbits = geometry.centre_orbits();
-        for (std::size_t k = 0; k < orbits.size(); ++k) {
-            const auto& cells = geometry.orbit_facelets(orbits.at(k));
-            Labels current;
-            Labels target;
-            for (const std::uint16_t f : cells) {
-                current.push_back(static_cast<int>(context.cube.facelet(f)));
-                target.push_back(static_cast<int>(
-                    (*targets)->scheme.at(static_cast<std::size_t>(geometry.face_of(f)))));
-            }
-            const Result<Word> word = arrange(cells, library.centres(k), current, target);
-            if (!word) {
-                return std::unexpected(word.error());
-            }
-            for (const SliceTurn t : *word) {
-                turn(context, t, step);
-            }
+        step.moves.reserve(word->size());
+        for (const SliceTurn t : *word) {
+            step.moves.push_back(to_layer_move(t, context.cube.size()));
         }
         if (!step.moves.empty()) {
             context.steps.push_back(std::move(step));
@@ -299,6 +299,11 @@ StageFn solve_edges() {
         if (!targets) {
             return std::unexpected(targets.error());
         }
+        if (!(*targets)->displays) {
+            // plan_edges() has not run: a mistake in the strategy.
+            return std::unexpected(CubeError::no_solution);
+        }
+        const EdgeDisplays& displays = *(*targets)->displays;
         const Geometry& geometry = context.cube.geometry();
         const CycleLibrary& library = CycleLibrary::of(context.cube.size());
         Step step{.stage = Stage::Edges, .core_stage = solver::Stage::Cross, .moves = {}};
@@ -309,7 +314,7 @@ StageFn solve_edges() {
                 cells.push_back(slot.primary);
             }
             Labels current = wing_labels(context.cube, orbits.at(g));
-            const Labels target = wing_targets(geometry, orbits.at(g), (*targets)->displays);
+            const Labels target = wing_targets(geometry, orbits.at(g), displays);
             const Result<Word> word = arrange(cells, library.wings(g), current, target);
             if (!word) {
                 return std::unexpected(word.error());

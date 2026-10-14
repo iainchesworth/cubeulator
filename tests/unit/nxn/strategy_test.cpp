@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <cube/nxn/cube.hpp>
@@ -156,7 +157,7 @@ TEST_CASE("each size gets the stages it needs and no others", "[nxn][strategy]")
     using Names = std::vector<std::string>;
     CHECK(stage_names(cube::nxn::default_strategy(2)) == Names{"corners"});
     CHECK(stage_names(cube::nxn::default_strategy(3)) == Names{"core"});
-    const Names reduction = {"plan", "parity", "centres", "edges", "core"};
+    const Names reduction = {"plan", "parity", "centres", "plan_edges", "edges", "core"};
     for (int size = 4; size <= 9; ++size) {
         CHECK(stage_names(cube::nxn::default_strategy(size)) == reduction);
     }
@@ -179,6 +180,7 @@ TEST_CASE("a strategy built by hand runs its stages in order", "[nxn][strategy]"
     by_hand.then("plan", cube::nxn::plan(cube::nxn::FreeCentres{}))
         .then("parity", cube::nxn::make_wings_even())
         .then("centres", cube::nxn::solve_centres())
+        .then("plan_edges", cube::nxn::plan_edges(cube::nxn::FreeCentres{}))
         .then("edges", cube::nxn::solve_edges())
         .then("core", cube::nxn::solve_core());
     const auto manual = cube::nxn::solve(scrambled, by_hand);
@@ -191,7 +193,8 @@ TEST_CASE("a strategy built by hand runs its stages in order", "[nxn][strategy]"
 TEST_CASE("a stage that needs targets, run without planning them, fails cleanly",
           "[nxn][strategy]") {
     Strategy no_plan{"no plan"};
-    no_plan.then("centres", cube::nxn::solve_centres());
+    no_plan.then("centres", cube::nxn::solve_centres())
+        .then("plan_edges", cube::nxn::plan_edges(cube::nxn::FreeCentres{}));
     const auto result =
         cube::nxn::solve(cube::nxn::random_scramble({.size = 4, .seed = 1U, .moves = 30}), no_plan);
     REQUIRE_FALSE(result.has_value());
@@ -258,6 +261,7 @@ TEST_CASE("the parity fix can be injected, and any valid choice solves the cube"
         strategy.then("plan", cube::nxn::plan(cube::nxn::FreeCentres{}))
             .then("parity", cube::nxn::make_wings_even(handler))
             .then("centres", cube::nxn::solve_centres())
+            .then("plan_edges", cube::nxn::plan_edges(cube::nxn::FreeCentres{}))
             .then("edges", cube::nxn::solve_edges())
             .then("core", cube::nxn::solve_core());
         const auto solution = cube::nxn::solve(cube, strategy);
@@ -283,8 +287,145 @@ TEST_CASE("a handler that fixes nothing is caught, not trusted", "[nxn][strategy
     strategy.then("plan", cube::nxn::plan(cube::nxn::FreeCentres{}))
         .then("parity", cube::nxn::make_wings_even(useless))
         .then("centres", cube::nxn::solve_centres())
+        .then("plan_edges", cube::nxn::plan_edges(cube::nxn::FreeCentres{}))
         .then("edges", cube::nxn::solve_edges())
         .then("core", cube::nxn::solve_core());
     const auto solution = cube::nxn::solve(cube, strategy);
     CHECK_FALSE(solution.has_value());
+}
+
+// ---------------------------------------------------------------------------
+// The centre stage: what it may do to the rest of the cube, and what it must
+// leave alone.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Runs the stages of the default strategy up to (not including) `stop`.
+Context run_until(const NCube& cube, std::string_view stop) {
+    Context context{.cube = cube,
+                    .steps = {},
+                    .method = cube::solver::SolveMethod::Advanced,
+                    .targets = std::nullopt};
+    for (const auto& entry : cube::nxn::default_strategy(cube.size()).stages()) {
+        if (entry.name == stop) {
+            break;
+        }
+        REQUIRE(entry.run(context).has_value());
+    }
+    return context;
+}
+
+// The sign of each wing orbit's permutation from where its wings are to
+// where `displays` says they go: +1 when 3-cycles alone could do it.
+std::vector<int> wing_signs(const NCube& cube, const cube::nxn::EdgeDisplays& displays) {
+    const auto& g = cube.geometry();
+    std::vector<int> signs;
+    for (const auto& orbit : g.wing_orbits()) {
+        const auto label = [](Color a, Color b) {
+            return (static_cast<int>(a) * 6) + static_cast<int>(b);
+        };
+        std::vector<int> current;
+        std::vector<int> target;
+        for (const auto& slot : orbit) {
+            current.push_back(label(cube.facelet(slot.primary), cube.facelet(slot.secondary)));
+            const auto& where = g.edge_location(slot.location);
+            const auto& d = displays.at(slot.location);
+            const auto shown = [&](std::uint16_t f) {
+                return g.face_of(f) == where.a ? d.on_a : d.on_b;
+            };
+            target.push_back(label(shown(slot.primary), shown(slot.secondary)));
+        }
+        cube::nxn::Permutation gather(target.size());
+        for (std::size_t k = 0; k < target.size(); ++k) {
+            const auto from = std::ranges::find(current, target[k]);
+            REQUIRE(from != current.end());
+            gather[k] = static_cast<std::uint16_t>(from - current.begin());
+        }
+        signs.push_back(cube::nxn::sign(gather));
+    }
+    return signs;
+}
+
+}  // namespace
+
+TEST_CASE("after the centre stage every centre sticker shows its face's colour", "[nxn][centres]") {
+    for (int size = 4; size <= 7; ++size) {
+        const NCube scrambled =
+            cube::nxn::random_scramble({.size = size, .seed = 31U, .moves = 80});
+        const Context context = run_until(scrambled, "plan_edges");
+        REQUIRE(context.targets.has_value());
+        const auto& g = context.cube.geometry();
+        for (std::size_t f = 0; f < g.facelet_count(); ++f) {
+            if (g.role(f) == cube::nxn::Role::Centre) {
+                CHECK(context.cube.facelet(f) ==
+                      context.targets->scheme.at(static_cast<std::size_t>(g.face_of(f))));
+            }
+        }
+    }
+}
+
+TEST_CASE("the centre stage never moves the middle cubie of a face", "[nxn][centres]") {
+    // An odd size reads its colour scheme from those cubies; a search that
+    // moved one would be solving to a different cube.
+    for (const int size : {5, 7}) {
+        for (unsigned seed = 1; seed <= 4; ++seed) {
+            const NCube scrambled =
+                cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 90});
+            const Context before = run_until(scrambled, "centres");
+            const Context after = run_until(scrambled, "plan_edges");
+            const auto& g = before.cube.geometry();
+            for (std::size_t f = 0; f < g.facelet_count(); ++f) {
+                if (g.role(f) == cube::nxn::Role::FaceCentre) {
+                    CHECK(after.cube.facelet(f) == before.cube.facelet(f));
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("the centre stage leaves every wing orbit's parity as it found it", "[nxn][centres]") {
+    // The parity decision is made before the centres are built, so a word that
+    // changed it would send the edges stage a cube it cannot arrange.
+    for (int size = 4; size <= 7; ++size) {
+        for (unsigned seed = 1; seed <= 4; ++seed) {
+            const NCube scrambled =
+                cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 90});
+            const Context before = run_until(scrambled, "centres");
+            const Context after = run_until(scrambled, "plan_edges");
+            REQUIRE(before.targets.has_value());
+            // Same reference for both: signs are compared like with like.
+            const auto reference = before.targets->reference;
+            if (size % 2 == 1) {
+                // An odd size's reference is its middle edges, which the
+                // centre stage may move; compare against the ones now there.
+                const auto now =
+                    cube::nxn::FixedCentres::reference_displays(after.cube, before.targets->scheme);
+                CHECK(wing_signs(after.cube, now) == wing_signs(before.cube, reference));
+            } else {
+                CHECK(wing_signs(after.cube, reference) == wing_signs(before.cube, reference));
+            }
+            // And the parity stage left them all even.
+            for (const int s : wing_signs(before.cube, reference)) {
+                CHECK(s == 1);
+            }
+        }
+    }
+}
+
+TEST_CASE("centres are built in far fewer moves than 3-cycles alone would take", "[nxn][centres]") {
+    // 3-cycles fix at most three stickers for eight or more moves; the search
+    // over words that may disturb the wings must do clearly better, or it is
+    // not earning its place. 5x5: 48 stickers off a scramble, about 120 moves
+    // by 3-cycles, about 70 now.
+    const NCube scrambled = cube::nxn::random_scramble({.size = 5, .seed = 7U, .moves = 100});
+    const Context after = run_until(scrambled, "plan_edges");
+    std::size_t moves = 0;
+    for (const auto& step : after.steps) {
+        if (step.stage == Stage::Centres) {
+            moves += step.moves.size();
+        }
+    }
+    CHECK(moves > 0);
+    CHECK(moves < 100);
 }
