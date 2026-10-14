@@ -53,12 +53,26 @@ runs:
     # cmake dir are normally supplied by Qt's own qt-cmake wrapper, which this
     # project does not use - the same four-variable story as Android
     # (docs/building.md).
+    # Configuring is where vcpkg builds the dependencies, so it is where a
+    # download from github.com that answers 500 fails a job that has otherwise
+    # done nothing wrong (it did, once, on the macOS leg of a release dry run).
+    # What a failed attempt built is in vcpkg's binary cache and buildtrees, so
+    # a second attempt resumes rather than starts again. The desktop legs of
+    # release.yml do the same.
     - name: Configure
       shell: bash
-      run: >
-        cmake --preset web-emscripten-release
-        -DQT_HOST_PATH="$QT_HOST_PATH"
-        -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"
+      run: |
+        for attempt in 1 2 3; do
+          if cmake --preset web-emscripten-release \
+              -DQT_HOST_PATH="$QT_HOST_PATH" \
+              -DQT_HOST_PATH_CMAKE_DIR="$QT_HOST_PATH/lib/cmake"; then
+            exit 0
+          fi
+          echo "::warning::configure failed (attempt $attempt of 3)"
+          sleep 30
+        done
+        echo "::error::configure failed three times"
+        exit 1
 
     - name: Build
       shell: bash
