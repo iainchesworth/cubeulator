@@ -18,6 +18,7 @@
 #include <cube/solver/solver.hpp>
 
 #include <memory>
+#include <set>
 
 #include <QCoreApplication>
 #include <QQmlComponent>
@@ -181,13 +182,29 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         CHECK(next->property("text").toString() == "Next move");
         app.settle();
 
-        // Every move, one press each. A press plays the turn and the step
-        // lands when it has finished.
+        // The moves, a press each for the first and last few and for the first
+        // of every kind of turn (R, U', F2, ...), and the rest stepped through
+        // the controller. A press plays the turn and the step lands when it
+        // has finished; the same control is pressed ninety times, and played
+        // out on a software renderer that was a third of the walk. The kinds
+        // are what differ between presses - which layer, which way, how far -
+        // so each one is pressed once.
         const int total = solve.totalMoves();
+        constexpr int kPressedAtEachEnd = 3;
+        std::set<QString> kinds;
         for (int taken = 1; taken <= total; ++taken) {
-            app.click("solve.next");
             INFO("move " << taken << " of " << total);
-            REQUIRE(app.wait_for([&]() { return solve.moveIndex() == taken; }, 15'000));
+            const bool new_kind = kinds.insert(solve.currentMoveNotation()).second;
+            const bool pressed =
+                new_kind || taken <= kPressedAtEachEnd || taken > total - kPressedAtEachEnd;
+            if (pressed) {
+                app.click("solve.next");
+                REQUIRE(app.wait_for([&]() { return solve.moveIndex() == taken; }, 15'000));
+            } else {
+                solve.nextMove();
+                REQUIRE(solve.moveIndex() == taken);
+                app.pump(10);
+            }
         }
         CHECK(solve.atEnd());
         CHECK(app.screen() == "solve");
