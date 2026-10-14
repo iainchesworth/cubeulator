@@ -188,8 +188,8 @@ enum class HueOverride : std::uint8_t {
 // One of the six clusters, which the face whose centre seeded it indexes.
 struct ClusterNaming {
     // The centre that seeded the cluster, and its mean once it settled.
-    cv::Vec3f seed{};
-    cv::Vec3f mean{};
+    cv::Vec3f seed;
+    cv::Vec3f mean;
     // classify_lab's reading of the mean: the hue and chroma the hue naming
     // used, and the name it gave.
     LabClassification hue;

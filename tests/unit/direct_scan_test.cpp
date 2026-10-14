@@ -26,6 +26,7 @@
 #include <random>
 #include <string_view>
 #include <vector>
+#include "deterministic_rng.hpp"
 #include "must_have.hpp"
 
 using cube::CubeError;
@@ -420,20 +421,14 @@ namespace {
 
 using Lab9 = std::array<cv::Vec3f, 9>;
 
-// Functions, not objects of static storage duration: a Vec3f is not a
-// constant expression, and an object built at start-up that could throw has no
-// one to catch it.
 cv::Vec3f lamp_red() {
     return cube::test::warm_lamp_lab(Color::Red);
 }
-
 cv::Vec3f lamp_orange() {
     return cube::test::warm_lamp_lab(Color::Orange);
 }
-
-const Drawing& lamp() {
-    static const Drawing drawing = cube::test::warm_lamp_drawing();
-    return drawing;
+Drawing lamp_drawing() {
+    return cube::test::warm_lamp_drawing();
 }
 
 // A read as the reader gives it, from nine measured colours: the lattice
@@ -444,11 +439,11 @@ SideRead read_of(const Lab9& lab) {
     read.pitch = 40.0F;
     read.stickers_found = 9;
     read.found.fill(true);
-    for (std::size_t row = 0; row < 3; ++row) {
-        for (std::size_t column = 0; column < 3; ++column) {
-            read.centres.at((row * 3) + column) = {100.0F + (40.0F * static_cast<float>(column)),
-                                                   100.0F + (40.0F * static_cast<float>(row))};
-        }
+    for (std::size_t i = 0; i < 9; ++i) {
+        const std::size_t column = i % 3;
+        const std::size_t row = i / 3;
+        read.centres.at(i) = {100.0F + (40.0F * static_cast<float>(column)),
+                              100.0F + (40.0F * static_cast<float>(row))};
     }
     return read;
 }
@@ -469,7 +464,6 @@ Lab9 red_orange_side(std::initializer_list<std::size_t> orange_cells) {
 Lab9 orange_centred() {
     return red_orange_side({1, 2, 4, 5, 8});
 }
-
 Lab9 red_centred() {
     return red_orange_side({0, 1, 2, 5});
 }
@@ -617,7 +611,7 @@ TEST_CASE("a scan says how far the light was from neutral, read from the cube's 
     SECTION("under a warm lamp the white measures pink") {
         const Cube cube = cube::test::scramble(21);
         SideScan scan;
-        show_cube(scan, cube, 21, lamp());
+        show_cube(scan, cube, 21, lamp_drawing());
         const auto whole = scan.scanned();
         REQUIRE(whole.has_value());
         CHECK(whole->cube == cube);
@@ -741,7 +735,7 @@ TEST_CASE("a cube with a whole red side and a whole orange side is read as six s
     REQUIRE_FALSE(cube.face(Face::F) == Cube::solved().face(Face::F));
 
     SideScan scan;
-    show_cube(scan, cube, 5, lamp());
+    show_cube(scan, cube, 5, lamp_drawing());
     expect_centres_of(scan, cube);
     const auto flat = scan.cube();
     REQUIRE_FALSE(flat.has_value());
@@ -757,7 +751,7 @@ TEST_CASE("a cube whose red and orange sides are each the other's colours is rea
     REQUIRE(cube.face(Face::R).at(4) != cube.face(Face::L).at(4));
 
     SideScan scan;
-    show_cube(scan, cube, 3, lamp());
+    show_cube(scan, cube, 3, lamp_drawing());
 
     expect_centres_of(scan, cube);
 }
@@ -866,12 +860,12 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     }
 
     // How the colours were named, and how the cube was put together.
-    REQUIRE(diagnosis.naming.has_value());
-    CHECK(diagnosis.naming->iterations >= 1);
-    REQUIRE(diagnosis.assembly.has_value());
-    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::single_candidate);
-    CHECK(diagnosis.assembly->candidates == 1);
-    CHECK_FALSE(diagnosis.assembly->error.has_value());
+    const auto& naming = ::cube::test::must_have(diagnosis.naming);
+    CHECK(naming.iterations >= 1);
+    const auto& assembly = ::cube::test::must_have(diagnosis.assembly);
+    CHECK(assembly.path == cube::vision::AssemblyPath::single_candidate);
+    CHECK(assembly.candidates == 1);
+    CHECK_FALSE(assembly.error.has_value());
 
     // The same colour naming the assembly was given.
     std::array<cube::vision::CapturedFace, 6> faces{};
@@ -882,8 +876,7 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     REQUIRE(named.has_value());
     for (std::size_t side = 0; side < 6; ++side) {
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            CHECK(diagnosis.naming->faces.at(side).at(cell).color ==
-                  named->at(side).at(cell).color);
+            CHECK(naming.faces.at(side).at(cell).color == named->at(side).at(cell).color);
         }
     }
 
@@ -892,10 +885,10 @@ TEST_CASE("diagnose is the evaluation scanned makes, with the working kept", "[d
     const auto shown = scan.sides();
     REQUIRE(shown.size() == 6);
     // Same reads, same count, in the order they were first shown.
-    for (std::size_t i = 0; i < shown.size(); ++i) {
+    for (const auto& shown_side : shown) {
         std::size_t reads_here = 0;
         for (const auto& side : diagnosis.sides) {
-            if (side.reads == shown.at(i).reads) {
+            if (side.reads == shown_side.reads) {
                 ++reads_here;
             }
         }
@@ -940,25 +933,23 @@ TEST_CASE("diagnose names the pair of colours that were exchanged to make the cu
         CHECK(diagnosis.result->cube == cube);
 
         // Naming by colour made no cube; trading two names did.
-        REQUIRE(diagnosis.assembly.has_value());
-        const cube::vision::AssemblyTrace& trace = *diagnosis.assembly;
+        const cube::vision::AssemblyTrace& trace = ::cube::test::must_have(diagnosis.assembly);
         CHECK(trace.path == cube::vision::AssemblyPath::names_exchanged);
         CHECK(trace.candidates == 0);
-        REQUIRE(trace.direct_error.has_value());
-        CHECK(*trace.direct_error == CubeError::invalid_cube_state);
-        REQUIRE(trace.exchange.has_value());
+        CHECK(::cube::test::must_have(trace.direct_error) == CubeError::invalid_cube_state);
+        const auto& exchange = ::cube::test::must_have(trace.exchange);
 
         // The two colours that look alike by tungsten light: red and orange.
-        const cube::model::FacetColor first = trace.exchange->first_name;
-        const cube::model::FacetColor second = trace.exchange->second_name;
+        const cube::model::FacetColor first = exchange.first_name;
+        const cube::model::FacetColor second = exchange.second_name;
         const bool red_and_orange =
             (first == cube::model::FacetColor::red && second == cube::model::FacetColor::orange) ||
             (first == cube::model::FacetColor::orange && second == cube::model::FacetColor::red);
         CHECK(red_and_orange);
-        CHECK(trace.exchange->first_side != trace.exchange->second_side);
-        CHECK(trace.exchange->first_side < 6);
-        CHECK(trace.exchange->second_side < 6);
-        CHECK(trace.exchange->centre_distance >= 0.0F);
+        CHECK(exchange.first_side != exchange.second_side);
+        CHECK(exchange.first_side < 6);
+        CHECK(exchange.second_side < 6);
+        CHECK(exchange.centre_distance >= 0.0F);
     }
 }
 
@@ -1000,13 +991,12 @@ TEST_CASE("diagnose reports the candidates when the sides make the cube two ways
     const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
     REQUIRE_FALSE(diagnosis.result.has_value());
     CHECK(diagnosis.result.error() == CubeError::ambiguous_scan);
-    REQUIRE(diagnosis.assembly.has_value());
-    CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::ambiguous);
-    CHECK(diagnosis.assembly->candidates >= 2);
-    CHECK(diagnosis.assembly->corner_fits.size() == diagnosis.assembly->candidates);
-    CHECK_FALSE(diagnosis.assembly->chosen.has_value());
-    REQUIRE(diagnosis.assembly->error.has_value());
-    CHECK(*diagnosis.assembly->error == CubeError::ambiguous_scan);
+    const auto& assembly = ::cube::test::must_have(diagnosis.assembly);
+    CHECK(assembly.path == cube::vision::AssemblyPath::ambiguous);
+    CHECK(assembly.candidates >= 2);
+    CHECK(assembly.corner_fits.size() == assembly.candidates);
+    CHECK_FALSE(assembly.chosen.has_value());
+    CHECK(::cube::test::must_have(assembly.error) == CubeError::ambiguous_scan);
 }
 
 TEST_CASE("a scan that does not make a cube is reported with the cause", "[direct-scan]") {

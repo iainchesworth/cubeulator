@@ -766,9 +766,12 @@ TEST_CASE("classify_lab_explained says which rule decided and from what", "[visi
     CHECK(warm.facelet.color == FacetColor::white);
 
     // classify_lab is this with the rest dropped.
-    const std::array<cv::Vec3f, 4> samples = {red, cv::Vec3f(92.0F, 0.0F, 0.0F),
-                                              cv::Vec3f(30.0F, 0.0F, 0.0F),
-                                              cv::Vec3f(75.0F, 10.0F, 17.0F)};
+    const std::array<cv::Vec3f, 4> samples = {
+        red,
+        cv::Vec3f(92.0F, 0.0F, 0.0F),
+        cv::Vec3f(30.0F, 0.0F, 0.0F),
+        cv::Vec3f(75.0F, 10.0F, 17.0F),
+    };
     for (const cv::Vec3f& lab : samples) {
         CHECK(classify_lab(lab).color == classify_lab_explained(lab).facelet.color);
         CHECK(classify_lab(lab).confidence == classify_lab_explained(lab).facelet.confidence);

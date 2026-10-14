@@ -7,11 +7,11 @@
 
 namespace cube::diagnostics {
 
-Json make_record(std::uint64_t seq, std::string_view time, std::string_view kind, Json data) {
+Json make_record(const RecordHeader& header, Json data) {
     Json record = Json::object();
-    record.set("seq", seq);
-    record.set("time", time);
-    record.set("kind", kind);
+    record.set("seq", header.seq);
+    record.set("time", header.time);
+    record.set("kind", header.kind);
     record.set("data", std::move(data));
     return record;
 }

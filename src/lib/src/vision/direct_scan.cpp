@@ -455,11 +455,16 @@ struct SideFit {
 // kSameColourLab). When it agrees the read is the side, however many
 // stickers a hand covers (up to kMostStickersAHandCovers). When it does not,
 // it may be glare on the centre or another side; the other eight say which.
-// The two arrays are not interchangeable - the read is laid on the side, and the
-// turn is the read's - and every caller names them at the call.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-[[nodiscard]] SideFit fit_to_side(const std::array<cv::Vec3f, 9>& read,
-                                  const std::array<cv::Vec3f, 9>& side, int prior_roll) {
+struct FitInputs {
+    std::array<cv::Vec3f, 9> read;
+    std::array<cv::Vec3f, 9> side;
+    int prior_roll = 0;
+};
+
+[[nodiscard]] SideFit fit_to_side(const FitInputs& inputs) {
+    const std::array<cv::Vec3f, 9>& read = inputs.read;
+    const std::array<cv::Vec3f, 9>& side = inputs.side;
+    const int prior_roll = inputs.prior_roll;
     const auto cost_of = [&](int roll) {
         float cost = 0.0F;
         const std::array<cv::Vec3f, 9> turned = rolled(read, roll);
@@ -595,14 +600,9 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     return static_cast<std::size_t>(best - fits.begin());
 }
 
-// The corner of the cube whose view tells the most of the cubes still possible
-// apart: of the candidates, those the corner reads fit best (all of them when
-// none fits), and of the eight corners the one at which the most pairs of them
-// differ on a side the corner shows. A corner shows all nine stickers of each of
-// its three sides, so two cubes are told apart there when any of those three
-// sides is not the same on both. The centres are the same on every candidate
-// (they are what names the sides), so the corner is said by their colours.
-[[nodiscard]] std::optional<std::array<solver::Color, 3>> settling_corner_of(
+// The candidates the corner reads fit best: every one when none is fitted
+// better than another (or there are no fits to go by).
+[[nodiscard]] std::vector<const solver::Cube*> best_fitting(
     const std::vector<solver::Cube>& candidates, const std::vector<std::size_t>& fits) {
     std::size_t most = 0;
     for (const std::size_t count : fits) {
@@ -614,6 +614,34 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
             remaining.push_back(&candidates.at(i));
         }
     }
+    return remaining;
+}
+
+// How many pairs of `cubes` differ on a side of `corner`.
+[[nodiscard]] std::size_t pairs_told_apart(const std::vector<const solver::Cube*>& cubes,
+                                           const std::array<solver::Face, 3>& corner) {
+    std::size_t told = 0;
+    for (std::size_t a = 0; a < cubes.size(); ++a) {
+        for (std::size_t b = a + 1; b < cubes.size(); ++b) {
+            const bool differ = std::ranges::any_of(corner, [&](solver::Face face) {
+                return cubes.at(a)->face(face) != cubes.at(b)->face(face);
+            });
+            told += differ ? 1U : 0U;
+        }
+    }
+    return told;
+}
+
+// The corner of the cube whose view tells the most of the cubes still possible
+// apart: of the candidates, those the corner reads fit best (all of them when
+// none fits), and of the eight corners the one at which the most pairs of them
+// differ on a side the corner shows. A corner shows all nine stickers of each of
+// its three sides, so two cubes are told apart there when any of those three
+// sides is not the same on both. The centres are the same on every candidate
+// (they are what names the sides), so the corner is said by their colours.
+[[nodiscard]] std::optional<std::array<solver::Color, 3>> settling_corner_of(
+    const std::vector<solver::Cube>& candidates, const std::vector<std::size_t>& fits) {
+    const std::vector<const solver::Cube*> remaining = best_fitting(candidates, fits);
     if (remaining.size() < 2) {
         return std::nullopt;
     }
@@ -625,15 +653,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
         for (const Face depth : {Face::F, Face::B}) {
             for (const Face side : {Face::L, Face::R}) {
                 const std::array<Face, 3> corner = {vertical, depth, side};
-                std::size_t told = 0;
-                for (std::size_t a = 0; a < remaining.size(); ++a) {
-                    for (std::size_t b = a + 1; b < remaining.size(); ++b) {
-                        const bool differ = std::ranges::any_of(corner, [&](Face face) {
-                            return remaining.at(a)->face(face) != remaining.at(b)->face(face);
-                        });
-                        told += differ ? 1U : 0U;
-                    }
-                }
+                const std::size_t told = pairs_told_apart(remaining, corner);
                 if (told > best_told) {
                     best_told = told;
                     best = corner;
@@ -911,7 +931,8 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
     SideFit nearest_fit;
     std::size_t claiming = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const SideFit fit = fit_to_side(lab, groups_.at(i).fused, groups_.at(i).roll);
+        const SideFit fit = fit_to_side(
+            {.read = lab, .side = groups_.at(i).fused, .prior_roll = groups_.at(i).roll});
         if (!fit.same) {
             continue;
         }
@@ -1004,12 +1025,18 @@ void SideScan::drop_weakest_stray() {
     }
 }
 
-std::optional<SideScan::AlikePair> SideScan::alike_pair() const {
+// A group begun while its side was only a read or two old is judged on a
+// noisy colour, and a side whose light changed part way through can start a
+// second. Neither is a different side, and two groups of one side leave the
+// scan a side short. Joined here, the earlier group surviving so the sides
+// keep the order they were first seen in.
+std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
     for (std::size_t keep = 0; keep < groups_.size(); ++keep) {
         for (std::size_t other = keep + 1; other < groups_.size(); ++other) {
             // Two groups are each in the turn their side was first seen in, so
             // no turn is more likely than another.
-            const SideFit fit = fit_to_side(groups_.at(other).fused, groups_.at(keep).fused, 0);
+            const SideFit fit = fit_to_side(
+                {.read = groups_.at(other).fused, .side = groups_.at(keep).fused, .prior_roll = 0});
             if (fit.same) {
                 return AlikePair{.keep = keep, .other = other, .roll = fit.roll};
             }
@@ -1019,20 +1046,19 @@ std::optional<SideScan::AlikePair> SideScan::alike_pair() const {
 }
 
 void SideScan::absorb(const AlikePair& pair) {
-    const auto [keep, other, roll] = pair;
-    Group& kept = groups_.at(keep);
-    for (const auto& read : groups_.at(other).reads) {
-        kept.reads.push_back(rolled(read, roll));
+    Group& kept = groups_.at(pair.keep);
+    for (const auto& read : groups_.at(pair.other).reads) {
+        kept.reads.push_back(rolled(read, pair.roll));
     }
-    for (const auto& read : groups_.at(other).flat_reads) {
-        kept.flat_reads.push_back(rolled(read, roll));
+    for (const auto& read : groups_.at(pair.other).flat_reads) {
+        kept.flat_reads.push_back(rolled(read, pair.roll));
     }
     kept.fused = fuse(kept.flat_reads.size() >= kMinReads ? kept.flat_reads : kept.reads);
-    groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
+    groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(pair.other));
     for (std::size_t& viewed : in_view_) {
-        if (viewed == other) {
-            viewed = keep;
-        } else if (viewed > other) {
+        if (viewed == pair.other) {
+            viewed = pair.keep;
+        } else if (viewed > pair.other) {
             --viewed;
         }
     }
@@ -1041,14 +1067,8 @@ void SideScan::absorb(const AlikePair& pair) {
     in_view_.erase(duplicates.begin(), duplicates.end());
 }
 
-// A group begun while its side was only a read or two old is judged on a
-// noisy colour, and a side whose light changed part way through can start a
-// second. Neither is a different side, and two groups of one side leave the
-// scan a side short. Joined here, the earlier group surviving so the sides
-// keep the order they were first seen in; one pair at a time, because joining
-// two moves the fused colours the others are compared with.
 void SideScan::merge_alike_groups() {
-    while (const std::optional<AlikePair> pair = alike_pair()) {
+    while (const std::optional<AlikePair> pair = first_alike_pair()) {
         absorb(*pair);
     }
 }
@@ -1127,8 +1147,10 @@ std::vector<SideScan::Side> SideScan::sides() const {
         const Group& group = groups_.at(i);
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
-        Side side{.reads = group.reads.size(),
-                  .in_view = std::ranges::find(in_view_, i) != in_view_.end()};
+        Side side{
+            .reads = group.reads.size(),
+            .in_view = std::ranges::find(in_view_, i) != in_view_.end(),
+        };
         for (std::size_t cell = 0; cell < 9; ++cell) {
             side.lab.at(static_cast<std::size_t>(
                 kRoll.at(static_cast<std::size_t>(group.roll)).at(cell))) = group.fused.at(cell);

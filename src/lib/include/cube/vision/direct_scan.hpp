@@ -277,17 +277,20 @@ private:
     // corner view that could be either of two sides is not counted, and
     // nothing is started. Says whether it was counted.
     bool count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
-    // Joins groups that have turned out to be one side.
-    void merge_alike_groups();
-    // Two groups that are one side, and the turn that lays `other` on `keep`.
+    // Two groups that have turned out to be one side: the earlier one, the
+    // later one, and the quarter-turn that lays the later on the earlier.
     struct AlikePair {
         std::size_t keep = 0;
         std::size_t other = 0;
         int roll = 0;
     };
-    [[nodiscard]] std::optional<AlikePair> alike_pair() const;
-    // Folds the pair's `other` into its `keep` and takes it out.
+    // The first such pair, in the order the groups were begun.
+    [[nodiscard]] std::optional<AlikePair> first_alike_pair() const;
+    // Joins the later group of `pair` into the earlier and renumbers the
+    // sides in view.
     void absorb(const AlikePair& pair);
+    // Joins groups that have turned out to be one side.
+    void merge_alike_groups();
     // Bounds the groups kept, dropping the least-supported stray.
     void drop_weakest_stray();
 
