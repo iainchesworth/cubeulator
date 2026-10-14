@@ -276,6 +276,19 @@ if(TARGET cube_app)
 endif()
 
 # ---------------------------------------------------------------------------
+# Bundled fonts: whatever a build compiles in under :/fonts is registered at
+# start-up (qt/kit/bundled_fonts.cpp, called from main.cpp). The platform
+# fragment adds the files - the browser build's Japanese and Chinese faces -
+# so nothing here tests the OS. Part of cube_app_qml, which cube_app links
+# whole, so that main.cpp finds the function.
+# ---------------------------------------------------------------------------
+if(CUBEULATOR_BUILD_APP)
+    target_sources(cube_app_qml PRIVATE
+        qt/kit/bundled_fonts.hpp
+        qt/kit/bundled_fonts.cpp)
+endif()
+
+# ---------------------------------------------------------------------------
 # cube_app_runtime - the application's start-up, shared by cube_app (main.cpp)
 # and the system tests (tests/system): the controllers (AppControllers),
 # their registration as QML singletons, the language (cube_app_i18n) and the

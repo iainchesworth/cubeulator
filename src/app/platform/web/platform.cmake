@@ -71,7 +71,19 @@ endfunction()
 # cross-origin isolated (shell/cubeulator-isolation.js says why a static host
 # needs one) and the icon, next to the .js/.wasm/qtloader.js Qt writes.
 # Together they are the whole site: serve the directory.
+#
+# And its fonts. A browser has no system fonts and the face Qt bundles has no
+# Japanese or Chinese, so the two the app is written in (fonts/, cut down to the
+# characters the catalogues use; tools/fonts/subset_cjk.py) are compiled in
+# under :/fonts, where main.cpp registers every font it finds.
 function(cube_platform_deploy_qt_runtime target qml_dir)
+    qt_add_resources(${target} "web_cjk_fonts"
+        PREFIX "/fonts"
+        BASE "${CUBEULATOR_PLATFORM_DIR}/fonts"
+        FILES
+            "${CUBEULATOR_PLATFORM_DIR}/fonts/NotoSansJP-Subset.ttf"
+            "${CUBEULATOR_PLATFORM_DIR}/fonts/NotoSansSC-Subset.ttf")
+
     set(shell "${CUBEULATOR_PLATFORM_DIR}/shell")
     set(out "$<TARGET_FILE_DIR:${target}>")
     add_custom_command(TARGET ${target} POST_BUILD
@@ -106,6 +118,7 @@ function(cube_platform_configure_desktop_shell target)
         "${PROJECT_SOURCE_DIR}/src/app/platform/posix/desktop_shell_mobile.cpp")
 endfunction()
 
-# Nothing to install: the app is the directory above, not an installed program.
+# Nothing to install: the app is the directory above, not an installed program
+# (and cube_app is not a desktop one, so this hook is not even called).
 function(cube_platform_configure_desktop_app target)
 endfunction()
