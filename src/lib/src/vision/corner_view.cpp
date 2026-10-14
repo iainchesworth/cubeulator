@@ -5,6 +5,7 @@
 #include <cube/solver/outside_view.hpp>
 #include <cube/vision/corner_fit.hpp>
 #include <cube/vision/prepared_frame.hpp>
+#include <cube/vision/sticker_colour.hpp>
 
 #include <opencv2/imgproc.hpp>
 
@@ -465,35 +466,6 @@ void turn_clockwise(Lattice& lattice) {
     return edges;
 }
 
-[[nodiscard]] std::optional<cv::Vec3f> patch_lab(const cv::Mat& bgr, const cv::Point2f& centre,
-                                                 int half_width) {
-    const int x = static_cast<int>(std::lround(centre.x));
-    const int y = static_cast<int>(std::lround(centre.y));
-    const cv::Rect patch =
-        cv::Rect(x - half_width, y - half_width, (2 * half_width) + 1, (2 * half_width) + 1) &
-        cv::Rect(0, 0, bgr.cols, bgr.rows);
-    if (patch.area() < 9) {
-        return std::nullopt;
-    }
-    cv::Mat as_float;
-    bgr(patch).convertTo(as_float, CV_32FC3, 1.0 / 255.0);
-    cv::Mat lab;
-    cv::cvtColor(as_float, lab, cv::COLOR_BGR2Lab);
-
-    cv::Vec3f median;
-    for (int channel = 0; channel < 3; ++channel) {
-        std::vector<float> values;
-        values.reserve(static_cast<std::size_t>(patch.area()));
-        for (int row = 0; row < lab.rows; ++row) {
-            for (int col = 0; col < lab.cols; ++col) {
-                values.push_back(lab.at<cv::Vec3f>(row, col)(channel));
-            }
-        }
-        median(channel) = median_of(std::move(values));
-    }
-    return median;
-}
-
 }  // namespace
 
 std::optional<CornerRead> read_corner(const cv::Mat& bgr) {
@@ -543,7 +515,7 @@ std::optional<CornerRead> read_corner(const PreparedFrame& frame) {
         for (std::size_t cell = 0; cell < 9; ++cell) {
             const CellPosition position = position_of(cell);
             const cv::Point2f centre = lattice.at(position.column, position.row);
-            const std::optional<cv::Vec3f> lab = patch_lab(working, centre, half_width);
+            const std::optional<cv::Vec3f> lab = sticker_lab(working, centre, half_width);
             if (!lab.has_value()) {
                 return std::nullopt;
             }

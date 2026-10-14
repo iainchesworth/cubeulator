@@ -19,6 +19,7 @@
 #include <cstddef>
 #include <functional>
 #include <numbers>
+#include <optional>
 #include <utility>
 
 namespace cube::test {
@@ -92,7 +93,26 @@ struct Drawing {
     int rows = 3;
     // The colour each sticker is drawn in; replace to light the cube differently.
     std::function<cv::Scalar(solver::Color)> paint = &cube::test::paint;
+    // A wordmark in four colours across the middle of the centre sticker of a
+    // side whose centre is this colour, the way a Rubik's cube's white centre
+    // carries one. It runs corner to corner and covers about a quarter of the
+    // sticker, and it is painted with `paint`, so it is lit as the rest is.
+    std::optional<solver::Color> logo_on_centre;
 };
+
+// The wordmark of Drawing::logo_on_centre: four squares stepping along the
+// sticker's diagonal.
+inline void draw_logo(cv::Mat& frame, const Pose& pose, float column, float row,
+                      const Drawing& drawing) {
+    constexpr std::array<solver::Color, 4> kLetters = {solver::Color::Green, solver::Color::Blue,
+                                                       solver::Color::Yellow, solver::Color::Red};
+    constexpr float kStep = 0.13F;
+    constexpr float kHalf = 0.11F;
+    for (std::size_t i = 0; i < kLetters.size(); ++i) {
+        const float along = (static_cast<float>(i) - 1.5F) * kStep;
+        fill_square(frame, pose, column + along, row + along, kHalf, drawing.paint(kLetters[i]));
+    }
+}
 
 // One cube side as the camera sees it: dark plastic and nine stickers,
 // row-major from the top-left.
@@ -105,6 +125,10 @@ struct Drawing {
             fill_square(frame, pose, static_cast<float>(column - 1), static_cast<float>(row - 1),
                         0.4F, drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]));
         }
+    }
+    if (drawing.logo_on_centre.has_value() && drawing.rows == 3 &&
+        stickers[4] == *drawing.logo_on_centre) {
+        draw_logo(frame, pose, 0.0F, 0.0F, drawing);
     }
     return frame;
 }

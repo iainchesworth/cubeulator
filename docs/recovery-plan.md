@@ -202,6 +202,26 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   a faster way to scan; R5(a), reading a side up to about 35 degrees off
   square-on.
 
+- **Logo on a centre sticker.** A Rubik's cube's white centre carries a
+  wordmark in four colours across its middle, where a sticker was sampled
+  (median of a patch 0.44 of a spacing across). On recorded reads of such a
+  side the centre sat 13 Lab units from the white stickers beside it, nearly
+  all of it lightness (L 52 against 65-67 in the evening recording): a
+  darker, pinker tile on the scan screen, though the cube still solved. Both
+  readers now sample through `sticker_lab`: a patch 0.6 of a spacing across
+  and the densest cluster of its pixels, not the median. Over 84 reads the
+  centre is 2.0 from its neighbours; `cube_scan board` is unchanged (4 of 4
+  exact) and held-cube matching is a little tighter (633 to 638 of 645 steady
+  reads matched). The drawn tests cover a wordmark over 62% of the patch.
+- **Three sides at a corner do not give the other three.** Asked whether a
+  corner view's 27 stickers fix the 27 hidden ones: no. Enumerating every
+  valid cube that agrees with the visible three sides, over random cubes,
+  fixes 6 of the 27 hidden stickers (the three opposite centres and the third
+  sticker of the three corners that have two showing), and a median of 7,680
+  cubes still fit (1,152 to 17,280). Nothing can be filled in from it. What a
+  corner view does give is three sides per frame, which is the faster scan
+  that R5(b) names as not done.
+
 ## Why it does not work today
 
 1. **The read path depends on a tracker that cannot know which face is
