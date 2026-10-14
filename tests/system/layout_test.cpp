@@ -33,7 +33,7 @@ struct Screen {
 };
 
 constexpr Screen kScreens[] = {
-    {"launch", false},   {"permission", false}, {"scan", false},    {"solve", true},
+    {"launch", false},   {"permission", false}, {"scan", false},     {"solve", true},
     {"settings", false}, {"history", false},    {"complete", false}, {"solution", true},
 };
 
