@@ -1,5 +1,8 @@
 # Getting started
 
+This page is for building Cubeulator from source. To use it, see the
+[user guide](guide/index.md) and [Installing](guide/install.md).
+
 ## Requirements
 
 - A C++23 compiler: GCC 15+, Clang 21+, MSVC 14.51+, or AppleClang 17+.

@@ -31,6 +31,8 @@ theme:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
@@ -48,24 +50,35 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Try it in your browser: web.md
-  - Getting started: getting-started.md
-  - Building & packaging: building.md
-  - Testing & coverage: testing.md
-  - Profiling: profiling.md
-  - Performance: performance.md
-  - Translations: i18n.md
-  - Architecture: architecture.md
-  - Solve methods: solver-methods.md
-  - Platform isolation: platform-isolation.md
-  - Vision pipeline: vision-pipeline.md
-  - Recording format: recording-format.md
-  - Dependency strategy: dependency-strategy.md
-  - Licensing: licensing.md
-  - FAQ / troubleshooting: faq.md
-  - Contributing: CONTRIBUTING.md
-  - Code of conduct: CODE_OF_CONDUCT.md
-  - Security policy: SECURITY.md
+  - User guide:
+      - Overview: guide/index.md
+      - Installing: guide/install.md
+      - Scanning a cube: guide/scan.md
+      - Following the solution: guide/solve.md
+      - Settings and shortcuts: guide/settings.md
+      - Privacy: guide/privacy.md
+      - Troubleshooting: guide/troubleshooting.md
+      - In your browser: web.md
+  - FAQ: faq.md
+  - Build and contribute:
+      - Getting started: getting-started.md
+      - Building & packaging: building.md
+      - Testing & coverage: testing.md
+      - Profiling: profiling.md
+      - Performance: performance.md
+      - Translations: i18n.md
+      - Contributing: CONTRIBUTING.md
+      - Code of conduct: CODE_OF_CONDUCT.md
+  - How it works:
+      - Architecture: architecture.md
+      - Vision pipeline: vision-pipeline.md
+      - Solve methods: solver-methods.md
+      - Recording format: recording-format.md
+      - Platform isolation: platform-isolation.md
+      - Dependency strategy: dependency-strategy.md
+  - Project:
+      - Licensing: licensing.md
+      - Security policy: SECURITY.md
   - For maintainers:
       - CI & dependencies: ci.md
       - Packaging the desktop app: packaging.md
