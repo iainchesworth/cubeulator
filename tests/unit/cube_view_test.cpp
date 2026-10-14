@@ -20,7 +20,6 @@
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
 
-#include <QtCore/qfloat16.h>
 #include <QtQml/qqml.h>
 #include <QByteArray>
 #include <QColor>
@@ -481,6 +480,24 @@ namespace {
     return nullptr;
 }
 
+// An IEEE half float, from its 16 bits. By hand rather than through Qt's
+// qfloat16: a memcpy into that class is -Wclass-memaccess under GCC, and what
+// the test needs of it is this.
+[[nodiscard]] double half_to_double(quint16 bits) {
+    const int sign = (bits >> 15) & 0x1;
+    const int exponent = (bits >> 10) & 0x1F;
+    const int mantissa = bits & 0x3FF;
+    double magnitude = 0.0;
+    if (exponent == 0) {
+        magnitude = std::ldexp(static_cast<double>(mantissa), -24);  // zero and denormals
+    } else if (exponent == 0x1F) {
+        magnitude = mantissa == 0 ? HUGE_VAL : std::nan("");
+    } else {
+        magnitude = std::ldexp(static_cast<double>(mantissa | 0x400), exponent - 25);
+    }
+    return sign != 0 ? -magnitude : magnitude;
+}
+
 // The mean brightness of one face of the cube map's first level (RGBA16F,
 // faces in the order +X -X +Y -Y +Z -Z; KTX 1: a 64-byte header, the key/value
 // data, then per level a size and the six faces).
@@ -488,16 +505,13 @@ namespace {
                                      quint32 key_value_bytes) {
     const qsizetype face_bytes = qsizetype{size} * size * 8;
     const qsizetype first = 64 + qsizetype{key_value_bytes} + 4;
-    const auto* texels = reinterpret_cast<const quint16*>(
-        file.constData() + first + static_cast<qsizetype>(face) * face_bytes);
+    const char* texels = file.constData() + first + static_cast<qsizetype>(face) * face_bytes;
     double sum = 0.0;
     for (std::size_t i = 0; i < std::size_t{size} * size; ++i) {
-        quint16 half[3];
-        std::memcpy(half, texels + i * 4, sizeof(half));
+        quint16 half[3];  // red, green, blue; the alpha after them is not read
+        std::memcpy(half, texels + i * 8, sizeof(half));
         for (const quint16 bits : half) {
-            qfloat16 value;
-            std::memcpy(&value, &bits, sizeof(bits));
-            sum += static_cast<double>(static_cast<float>(value));
+            sum += half_to_double(bits);
         }
     }
     return sum / (3.0 * static_cast<double>(size) * size);
