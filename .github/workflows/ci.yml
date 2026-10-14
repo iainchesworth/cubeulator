@@ -90,7 +90,7 @@ jobs:
     # docs/ci.md). The fleet image ships pwsh, which the check needs.
     runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -126,7 +126,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -320,7 +320,7 @@ jobs:
           triplet: ${{ matrix.triplet }}
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -466,7 +466,7 @@ jobs:
 
       - name: Upload system-test pictures
         if: always() && runner.os != 'Linux'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: system-test-output-${{ matrix.triplet }}
           path: build/${{ matrix.preset }}/system-test-output
@@ -493,7 +493,7 @@ jobs:
 
       - name: Upload package
         if: ${{ !cancelled() && steps.package.outcome == 'success' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ matrix.package_artifact }}
           path: |
@@ -610,7 +610,7 @@ jobs:
           triplet: arm64-android
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -681,7 +681,7 @@ jobs:
       # actually be installed and looked at, not just compiled.
       - name: Upload APK
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cube_app-android-arm64-v8a
           path: build/android-clang-release/src/app/android-build/build/outputs/apk/**/*.apk
@@ -737,7 +737,7 @@ jobs:
       # isolation worker. Unzipped, any static server can host it.
       - name: Upload the web app
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cubeulator-web
           path: build/web-emscripten-release/bin
@@ -815,7 +815,7 @@ jobs:
 
       - name: Upload the browser tests' reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cubeulator-web-test-reports
           path: |
@@ -886,7 +886,7 @@ jobs:
       # Perfetto) and the tracy-csvexport-shaped CSVs of each journey.
       - name: Upload the performance reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cubeulator-web-perf-reports
           path: tests/web/reports/perf
@@ -940,7 +940,7 @@ jobs:
           triplet: arm64-ios
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -1000,7 +1000,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -1059,7 +1059,7 @@ jobs:
 
       - name: Upload system-test pictures
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: system-test-output
           path: build/linux-gcc-coverage/system-test-output
@@ -1087,7 +1087,7 @@ jobs:
 
       - name: Upload app coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report-app
           path: |
@@ -1136,7 +1136,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
@@ -1195,7 +1195,7 @@ jobs:
 
       - name: Upload coverage report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: coverage-report
           path: build/coverage*.html
@@ -1246,7 +1246,7 @@ jobs:
           triplet: x64-linux
 
       - name: Install CMake 4 + Ninja
-        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        uses: lukka/get-cmake@a89e43e22a96abafcd7a62db652a65ecd33052c9 # v4.4.4
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
