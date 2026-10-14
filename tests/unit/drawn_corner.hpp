@@ -37,13 +37,14 @@ namespace cube::test {
 // right edge turned so that its edge against `left` is its left column - side
 // by side, rows level, as they are on the cube.
 [[nodiscard]] inline cv::Mat draw_cube_corner(const solver::Cube& cube, solver::Face left,
-                                              const CornerPose& pose = {}) {
+                                              const CornerPose& pose = {},
+                                              const Drawing& drawing = {}) {
     const solver::Face neighbour = solver::right_of(left);
     std::array<solver::Color, 9> right = solver::outside_view(cube, neighbour);
     for (int i = 0; i < (3 - edge_towards(neighbour, left) + 4) % 4; ++i) {
         right = turned_clockwise(right);
     }
-    return draw_corner(solver::outside_view(cube, left), right, pose);
+    return draw_corner(solver::outside_view(cube, left), right, pose, drawing);
 }
 
 // The three sides of `cube` that meet at the corner of `a`, `b` and `c`, as

@@ -101,6 +101,43 @@ struct Drawing {
     std::optional<solver::Color> logo_on_centre;
 };
 
+// The six colours of a real cube under a warm lamp, measured in float Lab on
+// 2026-10-14 from the scan in which two sides were fused into one. Red and
+// orange are 16 Lab apart and almost all of that is lightness - the one axis
+// colour_distance counts for a quarter - and the blue and green are nearly
+// black.
+[[nodiscard]] inline cv::Vec3f warm_lamp_lab(solver::Color colour) {
+    switch (colour) {
+        case solver::Color::White:
+            return {65.5F, 22.5F, 16.5F};
+        case solver::Color::Yellow:
+            return {54.3F, 25.9F, 53.0F};
+        case solver::Color::Red:
+            return {28.4F, 50.4F, 36.5F};
+        case solver::Color::Orange:
+            return {41.0F, 56.1F, 46.7F};
+        case solver::Color::Green:
+            return {16.8F, -12.7F, 14.8F};
+        case solver::Color::Blue:
+            return {11.0F, 5.5F, -15.5F};
+    }
+    return {};
+}
+
+// A cube drawn in those colours.
+[[nodiscard]] inline Drawing warm_lamp_drawing() {
+    Drawing drawing;
+    drawing.paint = [](solver::Color colour) {
+        const cv::Mat3f lab(1, 1, warm_lamp_lab(colour));
+        cv::Mat3f bgr;
+        cv::cvtColor(lab, bgr, cv::COLOR_Lab2BGR);
+        const cv::Vec3f value = bgr(0, 0) * 255.0F;
+        return cv::Scalar(cv::saturate_cast<uchar>(value(0)), cv::saturate_cast<uchar>(value(1)),
+                          cv::saturate_cast<uchar>(value(2)));
+    };
+    return drawing;
+}
+
 // The wordmark of Drawing::logo_on_centre: four squares stepping along the
 // sticker's diagonal.
 inline void draw_logo(cv::Mat& frame, const Pose& pose, float column, float row,

@@ -155,6 +155,28 @@ public:
     // so a finished scan can stay on screen while this runs.
     void solveCube(const cube::solver::Cube& cube);
 
+    // The cube as the scan handed it over: what the solve being followed is a
+    // solve OF. Set by solveCube(); a method change part-way does not move it
+    // (solutionStart() is what moves). Empty until the first scan.
+    [[nodiscard]] const std::optional<cube::solver::Cube>& scannedCube() const noexcept {
+        return scanned_;
+    }
+    // The cube the solution in force - or the one in flight - starts from. The
+    // scanned cube until the method is changed part-way, then the cube in hand
+    // at that moment. The turn moveIndex() counts is a turn of THIS solution.
+    [[nodiscard]] const std::optional<cube::solver::Cube>& solutionStart() const noexcept {
+        return pending_;
+    }
+
+    // Picks a solve up where it was left: `from` is solved with `method` and,
+    // when the solution lands, stepped on `turn` turns, so the screen opens on
+    // the turn that was reached. `scanned` is kept as the cube the solve is of
+    // (see scannedCube()). It is a new cube as far as HeldCube is concerned
+    // (solutionContinuesCube() is false): it starts from the hold the screen
+    // asks for.
+    void resumeCube(const cube::solver::Cube& scanned, const cube::solver::Cube& from,
+                    Method method, int turn);
+
 public slots:
     void nextMove();
     void previousMove();
@@ -186,6 +208,11 @@ private:
     // from; empty until the first. A method change with nothing scanned only
     // records the method.
     std::optional<cube::solver::Cube> pending_;
+    // The cube the scan read, whatever the method has done since.
+    std::optional<cube::solver::Cube> scanned_;
+    // Turns to step on when the solve in flight lands (resumeCube); 0 for any
+    // other solve.
+    int resume_turn_ = 0;
     bool solving_continuation_ = false;
     bool continuation_ = false;
 };

@@ -1489,6 +1489,26 @@ In your hands.</source>
         <extracomment>Dialog button.</extracomment>
         <translation>消去</translation>
     </message>
+    <message id="history.a11y.row">
+        <source>%1. %2</source>
+        <extracomment>Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary.</extracomment>
+        <translation>%1。%2</translation>
+    </message>
+    <message id="history.a11y.delete">
+        <source>Delete, %1</source>
+        <extracomment>Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart.</extracomment>
+        <translation>削除、%1</translation>
+    </message>
+    <message id="history.a11y.deleted">
+        <source>Solve deleted.</source>
+        <extracomment>Announced by a screen reader after one solve is deleted from the list.</extracomment>
+        <translation>記録を削除しました。</translation>
+    </message>
+    <message id="history.a11y.cleared">
+        <source>History cleared.</source>
+        <extracomment>Announced by a screen reader after every solve is deleted from the list.</extracomment>
+        <translation>履歴を消去しました。</translation>
+    </message>
     <message id="settings.section.language">
         <source>Language</source>
         <extracomment>Section heading and row label.</extracomment>

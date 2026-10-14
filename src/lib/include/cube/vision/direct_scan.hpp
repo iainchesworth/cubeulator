@@ -264,10 +264,15 @@ private:
     };
 
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
-    // Counts one read of nine colours towards the nearest side, or starts a
-    // side with it, and says which. A read from a corner view that is nearly
-    // as close to a second side is not counted, and nothing is said.
-    std::optional<std::size_t> count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
+    // Counts one read of nine colours towards the side it is, or starts a
+    // side with it, and puts that side among those in view. A read from a
+    // corner view that could be either of two sides is not counted, and
+    // nothing is started. Says whether it was counted.
+    bool count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
+    // Joins groups that have turned out to be one side.
+    void merge_alike_groups();
+    // Bounds the groups kept, dropping the least-supported stray.
+    void drop_weakest_stray();
 
     std::vector<Group> groups_;
     std::vector<CornerRead> corners_;

@@ -5,6 +5,7 @@
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
 #include "controllers/platform_facts.hpp"
+#include "controllers/solve_history.hpp"
 #include "solve_controller.hpp"
 
 #include <filesystem>
@@ -50,6 +51,10 @@ struct AppControllers {
     // cube to match and words each move from it. It watches the camera's
     // frames against the solver's cube, hence the two it is made from.
     HeldCube held{directScan, solve};
+    // The solves kept on this device: it writes them as the solve controller
+    // steps through one, and puts the unfinished one back on request. Its file
+    // is in the app's own data folder (SolveHistory::defaultFile).
+    SolveHistory history{solve};
 
 private:
     // What both constructors do once the members are there.
