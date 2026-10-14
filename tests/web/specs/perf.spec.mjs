@@ -65,34 +65,18 @@ const zone = (summary, name) => {
   return entry;
 };
 
-
 // What each frame of the scan cost, from the recorder's trace: the summary has
 // a zone's mean and its longest, and a ceiling wants the tail as well.
-//
-// With `cold`, the dearest of the first ten frames is reported apart (`cold`)
-// and left out of the rest: the first read of a real picture costs the page
-// a quarter to a half of a second, once, wherever it falls among the frames
-// before it (docs/investigations/2026-10-15-web-scan-frame-cost.md), and what a
-// ceiling is for is the frames that follow it.
-async function frameCosts(app, { cold = false } = {}) {
-  return app.page.evaluate((withCold) => {
+async function frameCosts(app) {
+  return app.page.evaluate(() => {
     const trace = JSON.parse(window.cubeulatorProfile.trace());
     const all = trace.traceEvents.filter((e) => e.ph === 'X' && e.name === 'direct_scan.process_frame')
-      .sort((a, b) => a.ts - b.ts).map((e) => e.dur / 1000);
-    let coldMs = 0;
-    let kept = all;
-    if (withCold && all.length > 0) {
-      const head = all.slice(0, 10);
-      const slowest = head.indexOf(Math.max(...head));
-      coldMs = head[slowest];
-      kept = all.filter((_, i) => i !== slowest);
-    }
-    const rest = [...kept].sort((a, b) => a - b);
+      .map((e) => e.dur / 1000);
+    const rest = [...all].sort((a, b) => a - b);
     const at = (p) => (rest.length > 0 ? rest[Math.min(rest.length - 1, Math.floor(p * rest.length))] : 0);
     return {
       count: all.length,
       dropped: trace.otherData.dropped,
-      cold: coldMs,
       mean: rest.length > 0 ? rest.reduce((a, b) => a + b, 0) / rest.length : 0,
       p50: at(0.5),
       p95: at(0.95),
@@ -101,7 +85,7 @@ async function frameCosts(app, { cold = false } = {}) {
       over50: rest.filter((v) => v > 50).length,
       over100: rest.filter((v) => v > 100).length,
     };
-  }, cold);
+  });
 }
 
 // How many times the scan put its six named sides together into a cube while it
@@ -137,17 +121,11 @@ async function assembliesRun(app) {
 const FRAME_MEAN_MS = 33;
 const FRAME_P95_MS = 66;
 const FRAME_MAX_MS = 250;
-// The page's one cold frame, the first read of a real picture (see frameCosts).
-const COLD_FRAME_MS = 1_500;
-
 function leaveFrameBudgets(frames, report) {
   report.frames = frames;
   withinBudget('mean frame of the scan (ms)', frames.mean, FRAME_MEAN_MS, report);
   withinBudget('95th percentile frame of the scan (ms)', frames.p95, FRAME_P95_MS, report);
   withinBudget('longest frame of the scan (ms)', frames.max, FRAME_MAX_MS, report);
-  if (frames.cold > 0) {
-    withinBudget('cold frame of the scan (ms)', frames.cold, COLD_FRAME_MS, report);
-  }
 }
 
 test.describe('performance', () => {
@@ -311,7 +289,7 @@ test.describe('performance', () => {
       const picture = readFileSync(`${session}/${names[i]}`).toString('base64');
       await app.page.evaluate((data) => window.__fakeCamera.image(`data:image/jpeg;base64,${data}`), picture);
       if (i % 60 === 59 || i === names.length - 1) {
-        costs.push(await frameCosts(app, { cold: costs.length === 0 }));
+        costs.push(await frameCosts(app));
         assembled += (await assembliesRun(app)).count;
         await app.clearProfile();
         if ((await app.singleton('DirectScan')).complete) {
@@ -326,7 +304,6 @@ test.describe('performance', () => {
     const frames = {
       count,
       dropped: costs.reduce((n, c) => n + c.dropped, 0),
-      cold: costs.length > 0 ? costs[0].cold : 0,
       mean: count > 0 ? costs.reduce((s, c) => s + c.mean * c.count, 0) / count : 0,
       p50: Math.max(0, ...costs.map((c) => c.p50)),
       p95: Math.max(0, ...costs.map((c) => c.p95)),

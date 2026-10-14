@@ -1141,10 +1141,11 @@ camera's 33 ms is one the page does not draw:
   frame of the scan inside the camera's interval, the 95th percentile inside
   two, and the longest inside a quarter of a second.
 - **`a tumbled scan`**: the same figures for a session `cube_tumble_sim` drew
-  (`tools/scan`), named by `TUMBLE_SESSION`, with the dearest of its first ten
-  frames reported apart as the cold one (the first read of a real picture costs
-  the page a quarter to a half of a second, once); skipped without one, because
-  a recording shows a person and a drawing is made by running the tool.
+  (`tools/scan`), named by `TUMBLE_SESSION`; skipped without one, because a
+  recording shows a person and a drawing is made by running the tool. Its
+  longest frame is held with the rest: the first frame of a scan was a quarter
+  of a second of the page's main thread until the colour conversion was
+  warmed up on the worker that opens the camera.
   `cube_scan cost <session>` prints the same figures natively, stage by stage.
 
 ### What this does not cover

@@ -874,4 +874,57 @@ CornerFit fit_corner(const CornerRead& read, const solver::Cube& cube,
     return fit;
 }
 
+std::vector<CornerFit> fit_corner_each(const CornerRead& read,
+                                       const std::vector<solver::Cube>& cubes,
+                                       const SessionColours& colours, float max_distance) {
+    std::vector<CornerFit> fits;
+    fits.reserve(cubes.size());
+    if (read.sides.size() < 2 || read.edges.empty()) {
+        fits.assign(cubes.size(), CornerFit{});
+        return fits;
+    }
+    // The colour each side's centre is named by - match_side's first step,
+    // which does not look at the cube - and so which face of a cube the side is.
+    std::vector<std::size_t> named;
+    named.reserve(read.sides.size());
+    for (const ObliqueSide& side : read.sides) {
+        std::size_t nearest = 0;
+        float nearest_distance = std::numeric_limits<float>::max();
+        for (std::size_t colour = 0; colour < colours.size(); ++colour) {
+            const float distance = colour_distance(side.lab.at(4), colours.at(colour));
+            if (distance < nearest_distance) {
+                nearest_distance = distance;
+                nearest = colour;
+            }
+        }
+        named.push_back(nearest);
+    }
+
+    // What a fit of this read depends on in a cube: which face each side is,
+    // and that face's nine colours as an outside viewer sees it.
+    using Shown = std::array<std::uint8_t, kMaxSides * 10>;
+    std::vector<std::pair<Shown, CornerFit>> known;
+    for (const solver::Cube& cube : cubes) {
+        Shown shown{};
+        std::size_t at = 0;
+        for (const std::size_t colour : named) {
+            const Face face = face_with_centre(cube, static_cast<Color>(colour));
+            shown.at(at++) = static_cast<std::uint8_t>(face);
+            for (const Color sticker : solver::outside_view(cube, face)) {
+                shown.at(at++) = static_cast<std::uint8_t>(sticker);
+            }
+        }
+        const auto same = std::ranges::find_if(
+            known, [&shown](const auto& entry) { return entry.first == shown; });
+        if (same != known.end()) {
+            fits.push_back(same->second);
+            continue;
+        }
+        const CornerFit fit = fit_corner(read, cube, colours, max_distance);
+        known.emplace_back(shown, fit);
+        fits.push_back(fit);
+    }
+    return fits;
+}
+
 }  // namespace cube::vision

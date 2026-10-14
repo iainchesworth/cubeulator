@@ -148,6 +148,15 @@ Nothing in the reader names a colour. It returns measured Lab.
   does, so red and orange, which differ almost only in lightness under a warm
   lamp, scored under 10 a sticker even with every one of them traded, and two
   sides of a partly solved cube were fused into one (2026-10-14).
+- A group's colours are the **median** of every read of it, per cell and per
+  channel (of the square-on reads alone once there are `kMinReads` of them).
+  They are kept as two heaps for each of the 27 numbers (`ReadSet`,
+  `RunningMedian`, `cube/vision/read_set.hpp`): a read costs 27 heap
+  insertions and the median is a value or two at the tops, to the bit what
+  sorting every read gave. The reads themselves are not kept. With the sort, a
+  read cost as many numbers as there were reads, and a cube held in view for ten
+  minutes cost the scan 5 ms of every frame more at the end than at the start
+  (0.07 to 0.59 ms in the first minute, in the browser).
 - A group is **captured** once it has `kMinReads` (8) reads, about a third of a
   second of holding still.
 - When more than six groups are captured (a stray lattice, a side re-captured
@@ -468,9 +477,14 @@ the scan while watching.
   state to hand between threads. Only `latestFrame()` is called from elsewhere
   (the preview image provider). In the browser that thread is the page's main
   thread, so a frame that takes longer than the camera's interval is a frame the
-  page does not draw: a frame there costs a mean of 5 to 8 ms (an assembly, when one is
-  made, 4 to 25 ms more: see "What an assembly costs in the browser" above, and
-  [the measurement](investigations/2026-10-15-web-scan-frame-cost.md)).
+  page does not draw: a frame there costs a mean of 3.5 to 8 ms (an assembly,
+  when one is made, 4 to 25 ms more: see "What an assembly costs in the browser"
+  above, and [the measurement](investigations/2026-10-15-web-scan-frame-cost.md)).
+  The first float colour conversion in the process builds OpenCV's tables, 90 ms
+  natively and 250 to 330 in a page, which would be the first frame's; the
+  controller does it on the worker that opens the camera
+  (`warm_up_colour_conversion`, `DirectScan::openCamera`), where it is hidden
+  behind the camera opening.
 - **Solve** runs once per scan on a `QtConcurrent` worker so the seconds it can
   take never reach the UI thread.
 

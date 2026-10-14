@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <mutex>
 #include <vector>
 
 namespace cube::vision {
@@ -117,8 +118,22 @@ void within(const std::vector<cv::Vec3f>& pixels, const cv::Vec3f& centre, float
 
 }  // namespace
 
+void warm_up_colour_conversion() {
+    static std::once_flag built;
+    std::call_once(built, [] {
+        // A pixel each way: the conversions the library makes, and so the
+        // tables they share.
+        const cv::Mat3f pixel(1, 1, cv::Vec3f(0.5F, 0.5F, 0.5F));
+        cv::Mat lab;
+        cv::cvtColor(pixel, lab, cv::COLOR_BGR2Lab);
+        cv::Mat back;
+        cv::cvtColor(lab, back, cv::COLOR_Lab2BGR);
+    });
+}
+
 std::optional<cv::Vec3f> sticker_lab(const cv::Mat& bgr, const cv::Point2f& centre,
                                      int half_width) {
+    warm_up_colour_conversion();
     const int x = static_cast<int>(std::lround(centre.x));
     const int y = static_cast<int>(std::lround(centre.y));
     const cv::Rect patch =

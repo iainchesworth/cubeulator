@@ -37,6 +37,7 @@
 #include <cube/vision/corner_fit.hpp>
 #include <cube/vision/direct_scan.hpp>
 #include <cube/vision/held_cube.hpp>
+#include <cube/vision/sticker_colour.hpp>
 
 #include <opencv2/imgcodecs.hpp>
 
@@ -1147,6 +1148,13 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
         pictures.push_back(cv::imread(path.string(), cv::IMREAD_COLOR));
     }
 
+    // As the app does while the camera opens (DirectScan::openCamera): the first
+    // float conversion to Lab builds tables that take 90 ms natively, and 250 to
+    // 330 in a browser, and would be the first frame's.
+    const Clock::time_point warming = Clock::now();
+    cube::vision::warm_up_colour_conversion();
+    const float warm_ms = since(warming);
+
     struct Stage {
         std::string name;
         std::vector<float> ms;
@@ -1278,6 +1286,8 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
     };
     fmt::print("{}: {} frames x {} runs; the scan judged {} times, {} ended in a cube\n",
                session.filename().string(), pictures.size(), runs, judged, completed);
+    fmt::print("  (the colour conversion was warmed up first, as the app does: {:.1f} ms)\n",
+               static_cast<double>(warm_ms));
     fmt::print("  {:32} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8} {:>5} {:>5} {:>5}\n", "stage (ms)", "n",
                "mean", "p50", "p90", "p99", "max", ">33", ">50", ">100");
     for (const Stage& stage : stages) {

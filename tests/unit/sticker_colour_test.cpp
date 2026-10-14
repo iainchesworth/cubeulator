@@ -1,7 +1,9 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "must_have.hpp"
 
+#include <cube/vision/direct_scan.hpp>
 #include <cube/vision/sticker_colour.hpp>
 
 #include <opencv2/core.hpp>
@@ -131,4 +133,29 @@ TEST_CASE("a patch off the edge of the frame is clipped to it", "[sticker-colour
     // And one wholly outside has no colour to give.
     const std::optional<cv::Vec3f> none = sticker_lab(frame, cv::Point2f(-40.0F, -40.0F), kHalf);
     CHECK_FALSE(none.has_value());
+}
+
+TEST_CASE("warming the colour conversion up changes no colour and may be asked for twice",
+          "[sticker-colour]") {
+    // The conversion builds its tables on first use, which is a quarter of a
+    // second in a browser. Asking for that ahead of time is asked for by the
+    // scan while a camera opens; what it must not do is change a colour, and a
+    // second or a concurrent ask must be a no-op.
+    cube::vision::warm_up_colour_conversion();
+    cube::vision::warm_up_colour_conversion();
+
+    const cv::Mat frame(kSide, kSide, CV_8UC3, cv::Scalar(40, 120, 200));
+    const auto lab = ::cube::test::must_have(sticker_lab(frame, frame_centre(), kHalf));
+    // The same colour the conversion gives a pixel of its own.
+    const cv::Mat3f pixel(1, 1, cv::Vec3f(40.0F / 255.0F, 120.0F / 255.0F, 200.0F / 255.0F));
+    cv::Mat3f expected;
+    cv::cvtColor(pixel, expected, cv::COLOR_BGR2Lab);
+    for (int channel = 0; channel < 3; ++channel) {
+        CHECK(lab(channel) == Catch::Approx(expected(0, 0)(channel)).margin(1.0e-3));
+    }
+    // And back, as the screen's colour chips do it.
+    const cv::Vec3b bgr = cube::vision::lab_to_bgr(lab);
+    CHECK(std::abs(static_cast<int>(bgr(0)) - 40) <= 1);
+    CHECK(std::abs(static_cast<int>(bgr(1)) - 120) <= 1);
+    CHECK(std::abs(static_cast<int>(bgr(2)) - 200) <= 1);
 }

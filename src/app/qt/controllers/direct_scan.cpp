@@ -6,6 +6,7 @@
 
 #include <cube/diagnostics/describe.hpp>
 #include <cube/profiling.hpp>
+#include <cube/vision/sticker_colour.hpp>
 
 #include <QColor>
 #include <QDateTime>
@@ -355,8 +356,14 @@ void DirectScan::openCamera(const QString& deviceId) {
     // Opening a camera takes seconds on some drivers; keep the GUI alive.
     const cube::platform::camera::DeviceInfo device{.identifier = deviceId.toStdString(),
                                                     .display_name = ""};
-    start_watcher_.setFuture(
-        QtConcurrent::run([device]() { return cube::platform::camera::start(device); }));
+    // On the worker, ahead of the camera: the first conversion of a colour in
+    // the scan builds tables that take a quarter of a second in a browser, and
+    // it would be the first frame of the scan, on the page's main thread, that
+    // paid for them. The worker has the time: opening a camera takes longer.
+    start_watcher_.setFuture(QtConcurrent::run([device]() {
+        cube::vision::warm_up_colour_conversion();
+        return cube::platform::camera::start(device);
+    }));
     emit runningChanged();
 }
 
