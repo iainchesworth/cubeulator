@@ -52,6 +52,7 @@ add_executable(cube_unit_tests
     unit/frame_recording_test.cpp
     unit/recording_v2_test.cpp
     unit/direct_scan_test.cpp
+    unit/sticker_colour_test.cpp
     unit/corner_view_test.cpp
     unit/held_cube_test.cpp
     unit/lib_stub_functions_test.cpp
