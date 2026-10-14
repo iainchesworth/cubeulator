@@ -214,6 +214,12 @@ a setting already in the store). `ctest --preset <preset>-system -R
 system.walk` runs the shards; `-j` runs entries side by side, which on four
 cores took the whole set from 8.7 to 4.4 minutes (below).
 
+The relaunch case needs the settings store seeded before the app exists, which
+only its ctest entry does (`CUBE_SYSTEM_TEST_THEME`). Picked up through a tag it
+shares with other cases (`[settings]`, `[system]`) it is reported as skipped,
+with that reason; run alone without the seed, the binary exits 4, so the
+entry cannot pass without the check having been made.
+
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
 
