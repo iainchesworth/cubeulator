@@ -19,6 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
+import check_health  # noqa: E402
 import check_release  # noqa: E402
 import fragments  # noqa: E402
 import make_sbom  # noqa: E402
@@ -679,6 +680,201 @@ class Check(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("version=0.2.0-beta.1\n", out.read_text(encoding="utf-8"))
         self.assertIn("prerelease=true\n", out.read_text(encoding="utf-8"))
+
+
+class Health(unittest.TestCase):
+    """check_health: is a commit green on the workflows the README has badges for."""
+
+    SHA = "a" * 40
+    MERGED = "b" * 40
+    FIRST = "c" * 40
+
+    @staticmethod
+    def wf_run(workflow_event, status="completed", conclusion="success", created="2026-10-14T10:00:00Z"):
+        return {
+            "event": workflow_event,
+            "status": status,
+            "conclusion": conclusion,
+            "created_at": created,
+            "html_url": f"https://example.invalid/{workflow_event}/{created}",
+        }
+
+    def api(self, runs_by_workflow, checks=(), parents=(), merged_runs=None):
+        """A fake `gh api` over a commit, its workflow runs and its check runs."""
+
+        def fake(path):
+            if path.endswith(f"/commits/{self.SHA}") or path.endswith("/commits/develop"):
+                return {
+                    "sha": self.SHA,
+                    "parents": [{"sha": p} for p in parents],
+                    "commit": {"message": "Merge pull request #1\n\nbody"},
+                }
+            if path.endswith(f"/commits/{self.MERGED}"):
+                return {"sha": self.MERGED, "parents": [], "commit": {"message": "Tip of develop"}}
+            if "/actions/workflows/" in path:
+                workflow = path.split("/actions/workflows/")[1].split("/")[0]
+                table = merged_runs if (merged_runs is not None and self.MERGED in path) else runs_by_workflow
+                return {"workflow_runs": table.get(workflow, [])}
+            if "/check-runs" in path:
+                return {"total_count": len(checks), "check_runs": list(checks)}
+            raise AssertionError(path)
+
+        return fake
+
+    @staticmethod
+    def check(name, status="completed", conclusion="success"):
+        return {"name": name, "status": status, "conclusion": conclusion}
+
+    def assess(self, runs, **kw):
+        extra = {k: kw.pop(k) for k in ("checks", "parents", "merged_runs") if k in kw}
+        return check_health.assess(
+            "o/r", "develop", ["ci.yml", "codeql.yml"], self.api(runs, **extra), **kw
+        )
+
+    def test_the_workflows_are_the_ones_the_readme_has_badges_for(self):
+        readme = (
+            "[![CI](https://github.com/o/r/actions/workflows/ci.yml/badge.svg)](x)\n"
+            "[![Zizmor](https://github.com/o/r/actions/workflows/zizmor.yml/badge.svg)](x)\n"
+            "[![again](https://github.com/o/r/actions/workflows/ci.yml/badge.svg)](x)\n"
+            "[![Docs](https://img.shields.io/badge/docs-published-2f7d7b)](x)\n"
+        )
+        self.assertEqual(check_health.badge_workflows(readme), ["ci.yml", "zizmor.yml"])
+        # and the real README names the ones the docs say it does
+        real = (Path(__file__).resolve().parents[2] / "README.md").read_text(encoding="utf-8")
+        names = check_health.badge_workflows(real)
+        self.assertIn("ci.yml", names)
+        self.assertIn("codeql.yml", names)
+        for name in names:
+            workflow = Path(__file__).resolve().parents[2] / ".github" / "workflows" / name
+            self.assertTrue(workflow.exists(), f"README has a badge for {name}, which does not exist")
+
+    def test_green_when_every_workflow_succeeded_on_the_commit(self):
+        report = self.assess(
+            {"ci.yml": [self.wf_run("push")], "codeql.yml": [self.wf_run("push")]},
+            checks=[self.check("a"), self.check("b", conclusion="skipped")],
+        )
+        self.assertTrue(report.ok, report.problems())
+        self.assertEqual(report.checks_green, 1)
+
+    def test_a_failed_workflow_is_named(self):
+        report = self.assess(
+            {"ci.yml": [self.wf_run("push", conclusion="failure")], "codeql.yml": [self.wf_run("push")]}
+        )
+        self.assertFalse(report.ok)
+        self.assertEqual(len(report.problems()), 1)
+        self.assertIn("ci.yml is failure", report.problems()[0])
+
+    def test_a_workflow_still_running_is_not_green(self):
+        report = self.assess(
+            {
+                "ci.yml": [self.wf_run("push", status="in_progress", conclusion=None)],
+                "codeql.yml": [self.wf_run("push")],
+            }
+        )
+        self.assertFalse(report.ok)
+        self.assertIn("has not finished", report.problems()[0])
+
+    def test_a_workflow_that_never_ran_is_not_green(self):
+        report = self.assess({"ci.yml": [self.wf_run("push")]})
+        self.assertFalse(report.ok)
+        self.assertIn("codeql.yml has no run", report.problems()[0])
+
+    def test_a_cancelled_run_says_what_to_do(self):
+        report = self.assess(
+            {"ci.yml": [self.wf_run("push", conclusion="cancelled")], "codeql.yml": [self.wf_run("push")]}
+        )
+        self.assertIn("Re-run it", report.problems()[0])
+
+    def test_skipped_proves_nothing(self):
+        report = self.assess(
+            {"ci.yml": [self.wf_run("push", conclusion="skipped")], "codeql.yml": [self.wf_run("push")]}
+        )
+        self.assertFalse(report.ok)
+
+    def test_the_newest_push_run_speaks_for_a_workflow(self):
+        runs = [
+            self.wf_run("push", conclusion="failure", created="2026-10-14T09:00:00Z"),
+            self.wf_run("push", created="2026-10-14T11:00:00Z"),
+            # a newer pull_request run does not replace what the badge shows
+            self.wf_run("pull_request", conclusion="failure", created="2026-10-14T12:00:00Z"),
+        ]
+        report = self.assess({"ci.yml": runs, "codeql.yml": [self.wf_run("push")]})
+        self.assertTrue(report.ok, report.problems())
+
+    def test_a_hotfix_branch_is_judged_on_its_pull_request_runs(self):
+        runs = {"ci.yml": [self.wf_run("pull_request")], "codeql.yml": [self.wf_run("pull_request")]}
+        self.assertTrue(self.assess(runs).ok)
+        # unless the event is pinned
+        self.assertFalse(self.assess(runs, event="push").ok)
+
+    def test_a_red_check_run_blocks_a_running_one_is_only_listed(self):
+        runs = {"ci.yml": [self.wf_run("push")], "codeql.yml": [self.wf_run("push")]}
+        checks = [
+            self.check("Build (Windows)", conclusion="failure"),
+            self.check("Release readiness", conclusion="failure"),
+            self.check("Build (macOS)", status="in_progress", conclusion=None),
+        ]
+        report = self.assess(runs, checks=checks, ignore=("Release readiness",))
+        self.assertEqual(report.problems(), ["check run failed: Build (Windows) (failure)"])
+        self.assertEqual(report.checks_running, ["Build (macOS)"])
+        # a pull request's own checks that are still going do not make a commit not green
+        report = self.assess(runs, checks=[self.check("Build (macOS)", status="queued", conclusion=None)])
+        self.assertTrue(report.ok, report.problems())
+
+    def test_a_merge_commit_is_judged_by_what_it_merged(self):
+        merged = {"ci.yml": [self.wf_run("push")], "codeql.yml": [self.wf_run("push")]}
+        # the merge commit itself has only just been pushed
+        fresh = {"ci.yml": [self.wf_run("push", status="queued", conclusion=None)]}
+        report = self.assess(
+            fresh, parents=[self.FIRST, self.MERGED], merged_runs=merged, through_merge=True
+        )
+        self.assertTrue(report.ok, report.problems())
+        self.assertEqual(report.sha, self.MERGED)
+        self.assertIn("merge commit", report.note)
+        # without the flag it is the merge commit that is read
+        self.assertFalse(
+            self.assess(fresh, parents=[self.FIRST, self.MERGED], merged_runs=merged).ok
+        )
+
+    def test_a_commit_that_is_not_a_merge_is_read_as_it_is(self):
+        runs = {"ci.yml": [self.wf_run("push")], "codeql.yml": [self.wf_run("push")]}
+        report = self.assess(runs, parents=[self.FIRST], through_merge=True)
+        self.assertEqual(report.sha, self.SHA)
+        self.assertTrue(report.ok)
+
+    def test_a_partial_list_of_check_runs_is_not_taken_as_green(self):
+        runs = {"ci.yml": [self.wf_run("push")], "codeql.yml": [self.wf_run("push")]}
+        api = self.api(runs)
+
+        def paged(path):
+            if "/check-runs" in path:
+                # one check run on the first page, and nothing where 249 more should be
+                return {"total_count": 250, "check_runs": [self.check("a")] if path.endswith("&page=1") else []}
+            return api(path)
+
+        report = check_health.assess("o/r", "develop", ["ci.yml", "codeql.yml"], paged)
+        self.assertFalse(report.ok)
+        self.assertIn("1 of 250", report.problems()[0])
+
+    def test_the_summary_is_markdown_and_says_what_is_wrong(self):
+        report = self.assess(
+            {"ci.yml": [self.wf_run("push", conclusion="failure")], "codeql.yml": [self.wf_run("push")]}
+        )
+        text = report.markdown()
+        self.assertIn("| `ci.yml` | ❌ |", text)
+        self.assertIn("| `codeql.yml` | ✅ |", text)
+        self.assertIn("**Not green:**", text)
+
+    def test_scorecard_without_a_result_says_why_the_badge_is_red(self):
+        ok, text = check_health.scorecard("o/r", lambda url: (404, ""))
+        self.assertFalse(ok)
+        self.assertIn("invalid repo path", text)
+        body = '{"score": 8.3, "date": "2026-10-20T04:00:00Z", "repo": {"commit": "deadbeef00"}}'
+        ok, text = check_health.scorecard("o/r", lambda url: (200, body))
+        self.assertTrue(ok)
+        self.assertIn("8.3", text)
+        with self.assertRaises(check_health.HealthError):
+            check_health.scorecard("o/r", lambda url: (500, ""))
 
 
 if __name__ == "__main__":
