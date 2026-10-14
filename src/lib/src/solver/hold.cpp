@@ -26,8 +26,12 @@ std::array<Color, 9> camera_view(const Cube& cube, const Hold& hold) noexcept {
     // side as its viewer sees it, the neighbours run top, right, bottom,
     // left; the one that is the holder's top has to be turned up to the top,
     // which is one anticlockwise quarter turn for each place round it is.
-    const std::array<Face, 4> clockwise = {top_of(side), right_of(side), opposite(top_of(side)),
-                                           opposite(right_of(side))};
+    const std::array<Face, 4> clockwise = {
+        top_of(side),
+        right_of(side),
+        opposite(top_of(side)),
+        opposite(right_of(side)),
+    };
     for (const Face neighbour : clockwise) {
         if (neighbour == hold.up) {
             break;

@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #include <cube/error.hpp>
@@ -29,23 +30,29 @@ struct PieceGoal {
 
 namespace piece_search_detail {
 
-// Where each of `count` packed 6-bit facelet codes goes under `map`.
-[[nodiscard]] inline std::uint64_t map_codes(std::uint64_t packed, std::size_t count,
+// `count` 6-bit facelet codes packed into one word, the first in the low bits.
+struct PackedCodes {
+    std::uint64_t packed = 0;
+    std::size_t count = 0;
+};
+
+// Where each of the packed facelet codes goes under `map`.
+[[nodiscard]] inline std::uint64_t map_codes(const PackedCodes& codes,
                                              const Cube::FaceletMap& map) noexcept {
     std::uint64_t out = 0;
-    for (std::size_t i = 0; i < count; ++i) {
-        const unsigned shift = static_cast<unsigned>(6 * i);
-        out |= std::uint64_t{map.at((packed >> shift) & 63U)} << shift;
+    for (std::size_t i = 0; i < codes.count; ++i) {
+        const auto shift = static_cast<unsigned>(6 * i);
+        out |= std::uint64_t{map.at((codes.packed >> shift) & 63U)} << shift;
     }
     return out;
 }
 
 [[nodiscard]] inline std::uint64_t hash_of(const SignatureKey& key) noexcept {
     std::uint64_t h = key.cross * 0x9E3779B97F4A7C15ULL;
-    h ^= key.rest + 0xC2B2AE3D27D4EB4FULL + (h << 6) + (h >> 2);
-    h ^= h >> 33;
+    h ^= key.rest + 0xC2B2AE3D27D4EB4FULL + (h << 6U) + (h >> 2U);
+    h ^= h >> 33U;
     h *= 0xFF51AFD7ED558CCDULL;
-    h ^= h >> 33;
+    h ^= h >> 33U;
     return h;
 }
 
@@ -63,7 +70,7 @@ struct Node {
 // one per visited signature.
 class Arena {
 public:
-    Arena() : slots_(1U << 12, 0U) {}
+    Arena() : slots_(1U << 12U, 0U) {}
 
     [[nodiscard]] std::size_t size() const noexcept { return nodes_.size(); }
     [[nodiscard]] const Node& at(std::size_t i) const { return nodes_.at(i); }
@@ -124,8 +131,8 @@ private:
 // a real cube; `search` below sends anything else to bfs_search.
 [[nodiscard]] inline Result<std::vector<Move>> piece_search(const SignatureKey& start,
                                                             const std::vector<Face>& allowed_faces,
-                                                            const PieceGoal& goal, int max_depth,
-                                                            std::size_t max_visited_nodes) {
+                                                            const PieceGoal& goal,
+                                                            const SearchLimits& limits) {
     CUBE_ZONE_SCOPED_N("solver.piece_search");
     namespace psd = piece_search_detail;
 
@@ -138,12 +145,16 @@ private:
     turns.reserve(allowed_faces.size() * 3);
     for (const Face face : allowed_faces) {
         for (std::uint8_t quarter = 1; quarter <= 3; ++quarter) {
-            turns.push_back(TurnOf{face, quarter, &Cube::facelet_map(Move{face, quarter})});
+            turns.push_back(TurnOf{
+                .face = face,
+                .turns = quarter,
+                .map = &Cube::facelet_map(Move{.face = face, .turns = quarter}),
+            });
         }
     }
 
     psd::Arena arena;
-    arena.insert(psd::Node{start, -1, 0, 0, 0});
+    arena.insert(psd::Node{.key = start, .parent = -1, .face = 0, .turns = 0, .depth = 0});
     const SearchWorkScope work([&arena] { return arena.size(); });
 
     const auto reconstruct = [&arena](std::size_t leaf, const TurnOf& last) {
@@ -151,22 +162,23 @@ private:
         for (auto i = static_cast<std::int32_t>(leaf); i > 0;
              i = arena.at(static_cast<std::size_t>(i)).parent) {
             const psd::Node& node = arena.at(static_cast<std::size_t>(i));
-            path.push_back(Move{static_cast<Face>(node.face), node.turns});
+            path.push_back(Move{.face = static_cast<Face>(node.face), .turns = node.turns});
         }
-        std::reverse(path.begin(), path.end());
-        path.push_back(Move{last.face, last.turns});
+        std::ranges::reverse(path);
+        path.push_back(Move{.face = last.face, .turns = last.turns});
         return path;
     };
 
     for (std::size_t head = 0; head < arena.size(); ++head) {
         const psd::Node current = arena.at(head);
-        if (current.depth >= max_depth) {
+        if (std::cmp_greater_equal(current.depth, limits.max_depth)) {
             continue;
         }
         for (const TurnOf& turn : turns) {
             const SignatureKey next{
-                psd::map_codes(current.key.cross, 4, *turn.map),
-                psd::map_codes(current.key.rest, goal.rest_codes, *turn.map),
+                .cross = psd::map_codes({.packed = current.key.cross, .count = 4}, *turn.map),
+                .rest = psd::map_codes({.packed = current.key.rest, .count = goal.rest_codes},
+                                       *turn.map),
             };
             for (const SignatureKey& wanted : goal.keys) {
                 if (next == wanted) {
@@ -175,12 +187,16 @@ private:
                     return reconstruct(head, turn);
                 }
             }
-            if (arena.size() >= max_visited_nodes) {
+            if (arena.size() >= limits.max_visited_nodes) {
                 return std::unexpected(CubeError::no_solution);
             }
-            arena.insert(psd::Node{next, static_cast<std::int32_t>(head),
-                                   static_cast<std::uint8_t>(turn.face), turn.turns,
-                                   static_cast<std::uint8_t>(current.depth + 1)});
+            arena.insert(psd::Node{
+                .key = next,
+                .parent = static_cast<std::int32_t>(head),
+                .face = static_cast<std::uint8_t>(turn.face),
+                .turns = turn.turns,
+                .depth = static_cast<std::uint8_t>(current.depth + 1),
+            });
         }
     }
     return std::unexpected(CubeError::no_solution);
@@ -202,13 +218,14 @@ Result<std::vector<Move>> search(const Cube& start, const std::vector<Face>& all
                                  const PieceGoal& goal,
                                  std::size_t max_visited_nodes = kMaxVisitedNodes) {
     if (!start.is_solvable()) {
-        return bfs_search(start, allowed_faces, postcondition, signature, max_depth,
-                          max_visited_nodes);
+        return bfs_search(start, allowed_faces, postcondition, signature,
+                          {.max_depth = max_depth, .max_visited_nodes = max_visited_nodes});
     }
     if (postcondition(start)) {
         return std::vector<Move>{};
     }
-    return piece_search(signature(start), allowed_faces, goal, max_depth, max_visited_nodes);
+    return piece_search(signature(start), allowed_faces, goal,
+                        {.max_depth = max_depth, .max_visited_nodes = max_visited_nodes});
 }
 
 }  // namespace cube::solver::detail

@@ -48,7 +48,7 @@ PLATFORMS: tuple[tuple[str, str], ...] = (
     (".exe", "Windows 10 and later, 64-bit"),
     (".dmg", "macOS 14.4 and later, Apple Silicon"),
     (".deb", "Linux, Debian and Ubuntu"),
-    (".rpm", "Linux, Fedora and openSUSE"),
+    (".rpm", "Linux, Fedora"),
 )
 
 _RELATIVE_LINK_RE = re.compile(r"\]\((?!https?://|mailto:|#|/)([^)\s]+)\)")

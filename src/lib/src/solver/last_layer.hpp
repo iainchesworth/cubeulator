@@ -50,15 +50,25 @@ namespace cube::solver::detail {
 // Bare U-layer turns: never touch F2L by construction, and let the search
 // align a case to wherever the fixed algorithms expect it (the "AUF" -
 // adjust U face - between algorithms in human solving).
-inline const std::vector<Move> kAdjustU = {Move{Face::U, 1}};
-inline const std::vector<Move> kAdjustU2 = {Move{Face::U, 2}};
-inline const std::vector<Move> kAdjustUPrime = {Move{Face::U, 3}};
+[[nodiscard]] inline std::vector<Move> adjust_u() {
+    return {Move{.face = Face::U, .turns = 1}};
+}
+[[nodiscard]] inline std::vector<Move> adjust_u2() {
+    return {Move{.face = Face::U, .turns = 2}};
+}
+[[nodiscard]] inline std::vector<Move> adjust_u_prime() {
+    return {Move{.face = Face::U, .turns = 3}};
+}
 
 // F R U R' U' F' - the standard 2-look OLL edge-orientation algorithm.
 // Applied from the right AUF it advances dot -> L-shape -> line -> cross.
-inline const std::vector<Move> kEdgeOrientFlip = {Move{Face::F, 1}, Move{Face::R, 1},
-                                                  Move{Face::U, 1}, Move{Face::R, 3},
-                                                  Move{Face::U, 3}, Move{Face::F, 3}};
+[[nodiscard]] inline std::vector<Move> edge_orient_flip() {
+    return {
+        Move{.face = Face::F, .turns = 1}, Move{.face = Face::R, .turns = 1},
+        Move{.face = Face::U, .turns = 1}, Move{.face = Face::R, .turns = 3},
+        Move{.face = Face::U, .turns = 3}, Move{.face = Face::F, .turns = 3},
+    };
+}
 
 // R U R' U R U2 R' (Sune) and R U2 R' U' R U' R' (Anti-Sune) - the
 // standard 2-look OLL corner-orientation pair. Together with U turns they
@@ -67,12 +77,22 @@ inline const std::vector<Move> kEdgeOrientFlip = {Move{Face::F, 1}, Move{Face::R
 // algorithm_search's output: the search minimises word count, where an
 // AUF costs the same as a Sune, so it sometimes emits a third application
 // in place of interleaved U turns.
-inline const std::vector<Move> kSune = {Move{Face::R, 1}, Move{Face::U, 1}, Move{Face::R, 3},
-                                        Move{Face::U, 1}, Move{Face::R, 1}, Move{Face::U, 2},
-                                        Move{Face::R, 3}};
-inline const std::vector<Move> kAntiSune = {Move{Face::R, 1}, Move{Face::U, 2}, Move{Face::R, 3},
-                                            Move{Face::U, 3}, Move{Face::R, 1}, Move{Face::U, 3},
-                                            Move{Face::R, 3}};
+[[nodiscard]] inline std::vector<Move> sune() {
+    return {
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 1},
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::U, .turns = 1},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 2},
+        Move{.face = Face::R, .turns = 3},
+    };
+}
+[[nodiscard]] inline std::vector<Move> anti_sune() {
+    return {
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 2},
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::U, .turns = 3},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 3},
+        Move{.face = Face::R, .turns = 3},
+    };
+}
 
 // R' F R' B2 R F' R' B2 R2 (A-perm) - cycles three U-layer corners without
 // touching orientation. With U turns it reaches every last-layer corner
@@ -80,19 +100,31 @@ inline const std::vector<Move> kAntiSune = {Move{Face::R, 1}, Move{Face::U, 2}, 
 // bare U turn is itself an odd corner permutation that the following
 // cycles then absorb (the edges it also moves are the next stage's
 // problem, not this one's).
-inline const std::vector<Move> kCornerCycle = {
-    Move{Face::R, 3}, Move{Face::F, 1}, Move{Face::R, 3}, Move{Face::B, 2}, Move{Face::R, 1},
-    Move{Face::F, 3}, Move{Face::R, 3}, Move{Face::B, 2}, Move{Face::R, 2}};
+[[nodiscard]] inline std::vector<Move> corner_cycle() {
+    return {
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::F, .turns = 1},
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::B, .turns = 2},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::F, .turns = 3},
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::B, .turns = 2},
+        Move{.face = Face::R, .turns = 2},
+    };
+}
 
 // R U' R U R U R U' R' U' R2 (U-perm) - cycles three U-layer edges without
 // touching corners or orientation. Once the corners are permuted, the
 // remaining edge permutation is always even (a legal cube's corner and
 // edge permutation parities match), so 3-cycles plus U alignment always
 // finish the solve.
-inline const std::vector<Move> kEdgeCycle = {Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 1},
-                                             Move{Face::U, 1}, Move{Face::R, 1}, Move{Face::U, 1},
-                                             Move{Face::R, 1}, Move{Face::U, 3}, Move{Face::R, 3},
-                                             Move{Face::U, 3}, Move{Face::R, 2}};
+[[nodiscard]] inline std::vector<Move> edge_cycle() {
+    return {
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 3},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 1},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 1},
+        Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 3},
+        Move{.face = Face::R, .turns = 3}, Move{.face = Face::U, .turns = 3},
+        Move{.face = Face::R, .turns = 2},
+    };
+}
 
 // ---------------------------------------------------------------------------
 // Search
@@ -106,11 +138,11 @@ inline const std::vector<Move> kEdgeCycle = {Move{Face::R, 1}, Move{Face::U, 3},
 [[nodiscard]] inline std::uint64_t last_layer_key(const Cube& cube) noexcept {
     std::uint64_t key = 0;
     for (int index = 0; index < 9; ++index) {
-        key = (key << 3) | static_cast<std::uint64_t>(cube.at(Face::U, index));
+        key = (key << 3U) | static_cast<std::uint64_t>(cube.at(Face::U, index));
     }
     for (Face side : {Face::F, Face::R, Face::B, Face::L}) {
         for (int index = 0; index < 3; ++index) {
-            key = (key << 3) | static_cast<std::uint64_t>(cube.at(side, index));
+            key = (key << 3U) | static_cast<std::uint64_t>(cube.at(side, index));
         }
     }
     return key;
@@ -147,9 +179,9 @@ Result<std::vector<Move>> algorithm_search(const Cube& start,
 
     struct Node {
         Cube cube;
-        std::int32_t parent;
-        std::int32_t word;
-        std::int32_t depth;
+        std::int32_t parent = -1;
+        std::int32_t word = -1;
+        std::int32_t depth = 0;
     };
 
     std::vector<Node> nodes;
@@ -160,33 +192,33 @@ Result<std::vector<Move>> algorithm_search(const Cube& start,
 
     auto reconstruct = [&](std::size_t leaf, std::size_t last_word) {
         std::vector<std::int32_t> words;
-        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0;
-             i = nodes[static_cast<std::size_t>(i)].parent) {
-            words.push_back(nodes[static_cast<std::size_t>(i)].word);
+        for (auto i = static_cast<std::int32_t>(leaf); i > 0;
+             i = nodes.at(static_cast<std::size_t>(i)).parent) {
+            words.push_back(nodes.at(static_cast<std::size_t>(i)).word);
         }
-        std::reverse(words.begin(), words.end());
+        std::ranges::reverse(words);
         words.push_back(static_cast<std::int32_t>(last_word));
 
         std::vector<Move> solution;
         for (std::int32_t word : words) {
-            const std::vector<Move>& moves = alphabet[static_cast<std::size_t>(word)];
+            const std::vector<Move>& moves = alphabet.at(static_cast<std::size_t>(word));
             solution.insert(solution.end(), moves.begin(), moves.end());
         }
         return solution;
     };
 
     for (std::size_t head = 0; head < nodes.size(); ++head) {
-        if (nodes[head].depth >= max_words) {
+        if (nodes.at(head).depth >= max_words) {
             continue;
         }
         // Copies, not references: the push_back below may reallocate the
         // arena and invalidate anything pointing into it.
-        const Cube current = nodes[head].cube;
-        const std::int32_t depth = nodes[head].depth;
+        const Cube current = nodes.at(head).cube;
+        const std::int32_t depth = nodes.at(head).depth;
 
         for (std::size_t word = 0; word < alphabet.size(); ++word) {
             Cube next = current;
-            for (const Move& move : alphabet[word]) {
+            for (const Move& move : alphabet.at(word)) {
                 next = next.apply(move);
             }
             if (postcondition(next)) {
@@ -197,8 +229,12 @@ Result<std::vector<Move>> algorithm_search(const Cube& start,
                 return std::unexpected(CubeError::no_solution);
             }
             if (visited.insert(last_layer_key(next)).second) {
-                nodes.push_back(Node{std::move(next), static_cast<std::int32_t>(head),
-                                     static_cast<std::int32_t>(word), depth + 1});
+                nodes.push_back(Node{
+                    std::move(next),
+                    static_cast<std::int32_t>(head),
+                    static_cast<std::int32_t>(word),
+                    depth + 1,
+                });
             }
         }
     }

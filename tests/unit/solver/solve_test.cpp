@@ -10,11 +10,13 @@
 
 #include <cube/solver/notation.hpp>
 #include <cube/solver/solver.hpp>
+#include "../deterministic_rng.hpp"
 
 using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::merge_adjacent_moves;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::parse_algorithm;
 using cube::solver::random_scramble;
 using cube::solver::Solution;
@@ -25,8 +27,9 @@ using cube::solver::to_string;
 
 namespace {
 
-constexpr std::array<Stage, 5> kStagesInOrder = {Stage::Cross, Stage::WhiteCorners,
-                                                 Stage::MiddleEdges, Stage::Oll, Stage::Pll};
+constexpr std::array<Stage, 5> kStagesInOrder = {
+    Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges, Stage::Oll, Stage::Pll,
+};
 
 // A Solution with one step per stage, in solving order, from one algorithm
 // string per stage ("" for a stage with no moves).
@@ -80,7 +83,7 @@ TEST_CASE("solve fully solves a corpus of random scrambles via the beginner meth
           "[solve][slow]") {
     for (unsigned seed = 0; seed < 3; ++seed) {
         CAPTURE(seed);
-        const Cube scrambled = random_scramble(seed, 25);
+        const Cube scrambled = random_scramble(seed, MoveCount{25});
         const auto solution = solve(scrambled);
         REQUIRE(solution.has_value());
 
@@ -96,7 +99,7 @@ TEST_CASE("solve fully solves a corpus of random scrambles via the beginner meth
 
 TEST_CASE("solve produces every stage in order for a scramble that needs each one",
           "[solve][slow]") {
-    const Cube scrambled = random_scramble(0, 25);
+    const Cube scrambled = random_scramble(0, MoveCount{25});
     const auto solution = solve(scrambled);
     REQUIRE(solution.has_value());
 
@@ -204,10 +207,15 @@ TEST_CASE("merge_adjacent_moves drops a move that turns nothing", "[solve]") {
     // face" has to hold for any Solution, and a zero-turn move between two R
     // moves leaves them adjacent.
     Solution solution;
-    solution.steps.push_back(
-        SolveStep{.stage = Stage::Cross,
-                  .moves = {Move{.face = Face::R, .turns = 1}, Move{.face = Face::U, .turns = 0},
-                            Move{.face = Face::R, .turns = 1}}});
+    solution.steps.push_back(SolveStep{
+        .stage = Stage::Cross,
+        .moves =
+            {
+                Move{.face = Face::R, .turns = 1},
+                Move{.face = Face::U, .turns = 0},
+                Move{.face = Face::R, .turns = 1},
+            },
+    });
     REQUIRE(to_string(flatten(merge_adjacent_moves(solution))) == "R2");
 }
 
@@ -215,12 +223,12 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
     // Three faces only, so same-face neighbours are common and cascades
     // frequent; sequences split at random points into the five stages.
     constexpr std::array<Face, 3> kFaces = {Face::R, Face::U, Face::F};
-    std::mt19937 rng{12345};
+    std::mt19937 rng = ::cube::test::deterministic_rng(12345U);
     std::uniform_int_distribution<std::size_t> face_dist{0, kFaces.size() - 1};
     std::uniform_int_distribution<int> turn_dist{1, 3};
     std::uniform_int_distribution<int> length_dist{0, 40};
 
-    const Cube start = random_scramble(11, 20);
+    const Cube start = random_scramble(11, MoveCount{20});
     for (int trial = 0; trial < 300; ++trial) {
         CAPTURE(trial);
         std::vector<Move> sequence(static_cast<std::size_t>(length_dist(rng)));
@@ -244,7 +252,8 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
             original.steps.push_back(SolveStep{
                 .stage = kStagesInOrder.at(i),
                 .moves = std::vector<Move>(sequence.begin() + static_cast<std::ptrdiff_t>(from),
-                                           sequence.begin() + static_cast<std::ptrdiff_t>(to))});
+                                           sequence.begin() + static_cast<std::ptrdiff_t>(to)),
+            });
             from = to;
         }
         CAPTURE(to_string(flatten(original)));
@@ -266,7 +275,7 @@ TEST_CASE("solve never emits two adjacent moves on one face, across stage bounda
           "[solve][slow]") {
     for (unsigned seed = 0; seed < 10; ++seed) {
         CAPTURE(seed);
-        const Cube scrambled = random_scramble(seed, 25);
+        const Cube scrambled = random_scramble(seed, MoveCount{25});
         const auto solution = solve(scrambled);
         REQUIRE(solution.has_value());
         REQUIRE(solution->steps.size() == kStagesInOrder.size());
@@ -300,7 +309,7 @@ TEST_CASE("solve tidies short scrambles too, where some stages have nothing to d
     for (const int move_count : {2, 3, 5}) {
         for (unsigned seed = 0; seed < 4; ++seed) {
             CAPTURE(move_count, seed);
-            const Cube scrambled = random_scramble(seed, move_count);
+            const Cube scrambled = random_scramble(seed, MoveCount{move_count});
             const auto solution = solve(scrambled);
             REQUIRE(solution.has_value());
             REQUIRE(solution->steps.size() == kStagesInOrder.size());
@@ -323,14 +332,14 @@ TEST_CASE("solve says at once that a cube no turns can solve has no solution", "
     std::array<std::array<cube::solver::Color, 9>, 6> flipped_edge{};
     std::array<std::array<cube::solver::Color, 9>, 6> twisted_corner{};
     for (const Face face : cube::solver::kAllFaces) {
-        flipped_edge[static_cast<std::size_t>(face)] = solved.face(face);
-        twisted_corner[static_cast<std::size_t>(face)] = solved.face(face);
+        flipped_edge.at(static_cast<std::size_t>(face)) = solved.face(face);
+        twisted_corner.at(static_cast<std::size_t>(face)) = solved.face(face);
     }
-    std::swap(flipped_edge[static_cast<std::size_t>(Face::U)][7],
-              flipped_edge[static_cast<std::size_t>(Face::F)][1]);
-    twisted_corner[static_cast<std::size_t>(Face::U)][8] = cube::solver::Color::Orange;
-    twisted_corner[static_cast<std::size_t>(Face::R)][2] = cube::solver::Color::Green;
-    twisted_corner[static_cast<std::size_t>(Face::F)][2] = cube::solver::Color::Yellow;
+    std::swap(flipped_edge.at(static_cast<std::size_t>(Face::U)).at(7),
+              flipped_edge.at(static_cast<std::size_t>(Face::F)).at(1));
+    twisted_corner.at(static_cast<std::size_t>(Face::U)).at(8) = cube::solver::Color::Orange;
+    twisted_corner.at(static_cast<std::size_t>(Face::R)).at(2) = cube::solver::Color::Green;
+    twisted_corner.at(static_cast<std::size_t>(Face::F)).at(2) = cube::solver::Color::Yellow;
 
     for (const auto& facelets : {flipped_edge, twisted_corner}) {
         const auto start = Cube::from_facelets(facelets);
@@ -341,8 +350,10 @@ TEST_CASE("solve says at once that a cube no turns can solve has no solution", "
             CAPTURE(seed);
             Cube cube = *start;
             for (unsigned i = 0; i < 20; ++i) {
-                cube = cube.apply(Move{.face = cube::solver::kAllFaces[(seed + i * 5) % 6],
-                                       .turns = static_cast<int>(1 + ((seed + i) % 3))});
+                cube = cube.apply(Move{
+                    .face = cube::solver::kAllFaces.at((seed + (i * 5)) % 6),
+                    .turns = static_cast<int>(1 + ((seed + i) % 3)),
+                });
             }
             const auto begun = std::chrono::steady_clock::now();
             const auto solution = solve(cube);

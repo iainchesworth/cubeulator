@@ -41,8 +41,9 @@ TEST_CASE("platform_info::current offers only graphics backends the app can appl
     // main.cpp's applyPersistedGraphicsBackend() applies exactly these keys;
     // a platform that lists another would offer a choice that silently does
     // nothing on the next launch.
-    constexpr std::array<std::string_view, 5> kApplicable{"d3d11", "d3d12", "vulkan", "opengl",
-                                                          "metal"};
+    constexpr std::array<std::string_view, 5> kApplicable{
+        "d3d11", "d3d12", "vulkan", "opengl", "metal",
+    };
     REQUIRE_FALSE(info.graphics_backends.empty());
 
     std::vector<std::string> keys;

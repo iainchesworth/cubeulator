@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -73,18 +74,40 @@ constexpr std::uint64_t kHardNodeLimit = 60'000'000;
 // would merge), and of two opposite faces only in one order (U then D, never
 // D then U - they commute, so the other order is the same solution twice).
 // Faces are numbered U D L R F B, so opposite faces differ in the low bit.
-bool may_follow(int face, int last) noexcept {
+// The faces are unsigned here because that bit is flipped with ^, and the
+// search's root passes -1 for "no last face": it wraps to a value no face has.
+// (An int face with the flip spelled any other way cost the advanced method a
+// third of its speed: the compiler stops folding it across the unrolled loop.)
+bool may_follow(unsigned face, unsigned last) noexcept {
     if (face == last) {
         return false;
     }
-    return last != (face ^ 1) || face >= last;
+    return last != (face ^ 1U) || face >= last;
 }
+
+// Where the search stands. Phase 1 works in three coordinates, phase 2 in
+// three others; both carry the same bookkeeping.
+struct Phase1Coords {
+    int twist = 0;
+    int flip = 0;
+    int slice = 0;
+};
+struct Phase2Coords {
+    int cperm = 0;
+    int uedge = 0;
+    int sperm = 0;
+};
+struct Position {
+    int depth_left = 0;  // moves still to find at this level
+    int depth = 0;       // moves already in path_
+    int last_face = -1;  // the face of the last move, -1 at the root
+};
 
 class TwoPhaseSearch {
 public:
     TwoPhaseSearch(const detail::Phase1MoveTables& phase1, const detail::Phase2Tables& phase2,
                    const CubieCube& start)
-        : p1_(phase1), p2_(phase2), start_(start) {}
+        : p1_(&phase1), p2_(&phase2), start_(start) {}
 
     // Searches until nothing shorter can be found or the budget is spent;
     // the answer is then solution(), or found() is false if the node
@@ -95,7 +118,8 @@ public:
         const int slice = detail::slice_of(start_);
         const int h0 = std::max(prune1(twist, slice), prune1_flip(flip, slice));
         for (int depth = h0; depth <= kMaxPhase1Depth && depth < best_length_ && !stop_; ++depth) {
-            search_phase1(twist, flip, slice, depth, 0, -1);
+            search_phase1({.twist = twist, .flip = flip, .slice = slice},
+                          {.depth_left = depth, .depth = 0, .last_face = -1});
         }
     }
 
@@ -106,12 +130,12 @@ public:
 
 private:
     [[nodiscard]] int prune1(int twist, int slice) const noexcept {
-        return p2_.twist_slice_prune.at((static_cast<std::size_t>(twist) * kSliceCount) +
-                                        static_cast<std::size_t>(slice));
+        return p2_->twist_slice_prune.at((static_cast<std::size_t>(twist) * kSliceCount) +
+                                         static_cast<std::size_t>(slice));
     }
     [[nodiscard]] int prune1_flip(int flip, int slice) const noexcept {
-        return p2_.flip_slice_prune.at((static_cast<std::size_t>(flip) * kSliceCount) +
-                                       static_cast<std::size_t>(slice));
+        return p2_->flip_slice_prune.at((static_cast<std::size_t>(flip) * kSliceCount) +
+                                        static_cast<std::size_t>(slice));
     }
 
     // Counts a node and applies both stopping rules. True means stop.
@@ -126,7 +150,8 @@ private:
         return stop_;
     }
 
-    void search_phase1(int twist, int flip, int slice, int depth_left, int depth, int last_face) {
+    void search_phase1(Phase1Coords at, Position pos) {
+        const auto [depth_left, depth, last_face] = pos;
         if (depth_left == 0) {
             // The last move must be one phase 2 cannot make (a quarter turn
             // of L, R, F or B): otherwise the same cube was reachable one
@@ -141,27 +166,28 @@ private:
             return;
         }
         for (int face = 0; face < 6; ++face) {
-            if (!may_follow(face, last_face)) {
+            if (!may_follow(static_cast<unsigned>(face), static_cast<unsigned>(last_face))) {
                 continue;
             }
             for (int turn = 0; turn < 3; ++turn) {
                 if (spend_node()) {
                     return;
                 }
-                const auto m = static_cast<std::size_t>((face * 3) + turn);
-                const int next_twist =
-                    p1_.twist.at((static_cast<std::size_t>(twist) * kMoveCount) + m);
-                const int next_flip =
-                    p1_.flip.at((static_cast<std::size_t>(flip) * kMoveCount) + m);
-                const int next_slice =
-                    p1_.slice.at((static_cast<std::size_t>(slice) * kMoveCount) + m);
+                const auto m =
+                    (static_cast<std::size_t>(face) * 3) + static_cast<std::size_t>(turn);
+                const Phase1Coords next{
+                    .twist = p1_->twist.at((static_cast<std::size_t>(at.twist) * kMoveCount) + m),
+                    .flip = p1_->flip.at((static_cast<std::size_t>(at.flip) * kMoveCount) + m),
+                    .slice = p1_->slice.at((static_cast<std::size_t>(at.slice) * kMoveCount) + m),
+                };
                 const int h =
-                    std::max(prune1(next_twist, next_slice), prune1_flip(next_flip, next_slice));
+                    std::max(prune1(next.twist, next.slice), prune1_flip(next.flip, next.slice));
                 if (h >= depth_left) {
                     continue;
                 }
                 path_.at(static_cast<std::size_t>(depth)) = static_cast<std::uint8_t>(m);
-                search_phase1(next_twist, next_flip, next_slice, depth_left - 1, depth + 1, face);
+                search_phase1(
+                    next, {.depth_left = depth_left - 1, .depth = depth + 1, .last_face = face});
                 if (stop_) {
                     return;
                 }
@@ -184,9 +210,10 @@ private:
         const int max_depth2 = std::min(kMaxPhase2Depth, best_length_ - 1 - depth);
         const int h0 = std::max(prune2_corners(cperm, sperm), prune2_edges(uedge, sperm));
         for (int depth2 = h0; depth2 <= max_depth2; ++depth2) {
-            if (search_phase2(cperm, uedge, sperm, depth2, depth, last_face)) {
+            if (search_phase2({.cperm = cperm, .uedge = uedge, .sperm = sperm},
+                              {.depth_left = depth2, .depth = depth, .last_face = last_face})) {
                 best_length_ = depth + depth2;
-                best_.assign(path_.begin(), path_.begin() + best_length_);
+                best_.assign(path_.begin(), std::next(path_.begin(), best_length_));
                 best_phase1_length_ = static_cast<std::size_t>(depth);
                 if (!found_) {
                     found_ = true;
@@ -201,41 +228,44 @@ private:
     }
 
     [[nodiscard]] int prune2_corners(int cperm, int sperm) const noexcept {
-        return p2_.cperm_sperm_prune.at((static_cast<std::size_t>(cperm) * kSlicePermCount) +
-                                        static_cast<std::size_t>(sperm));
+        return p2_->cperm_sperm_prune.at((static_cast<std::size_t>(cperm) * kSlicePermCount) +
+                                         static_cast<std::size_t>(sperm));
     }
     [[nodiscard]] int prune2_edges(int uedge, int sperm) const noexcept {
-        return p2_.uedge_sperm_prune.at((static_cast<std::size_t>(uedge) * kSlicePermCount) +
-                                        static_cast<std::size_t>(sperm));
+        return p2_->uedge_sperm_prune.at((static_cast<std::size_t>(uedge) * kSlicePermCount) +
+                                         static_cast<std::size_t>(sperm));
     }
 
-    bool search_phase2(int cperm, int uedge, int sperm, int depth_left, int depth, int last_face) {
+    bool search_phase2(Phase2Coords at, Position pos) {
+        const auto [depth_left, depth, last_face] = pos;
         if (depth_left == 0) {
-            return cperm == 0 && uedge == 0 && sperm == 0;
+            return at.cperm == 0 && at.uedge == 0 && at.sperm == 0;
         }
         for (std::size_t i = 0; i < kPhase2MoveCount; ++i) {
             const int move = kPhase2Moves.at(i);
             const int face = move / 3;
-            if (!may_follow(face, last_face)) {
+            if (!may_follow(static_cast<unsigned>(face), static_cast<unsigned>(last_face))) {
                 continue;
             }
             if (spend_node()) {
                 return false;
             }
-            const int next_cperm =
-                p2_.cperm_move.at((static_cast<std::size_t>(cperm) * kPhase2MoveCount) + i);
-            const int next_uedge =
-                p2_.uedge_move.at((static_cast<std::size_t>(uedge) * kPhase2MoveCount) + i);
-            const int next_sperm =
-                p2_.sperm_move.at((static_cast<std::size_t>(sperm) * kPhase2MoveCount) + i);
-            const int h = std::max(prune2_corners(next_cperm, next_sperm),
-                                   prune2_edges(next_uedge, next_sperm));
+            const Phase2Coords next{
+                .cperm =
+                    p2_->cperm_move.at((static_cast<std::size_t>(at.cperm) * kPhase2MoveCount) + i),
+                .uedge =
+                    p2_->uedge_move.at((static_cast<std::size_t>(at.uedge) * kPhase2MoveCount) + i),
+                .sperm =
+                    p2_->sperm_move.at((static_cast<std::size_t>(at.sperm) * kPhase2MoveCount) + i),
+            };
+            const int h = std::max(prune2_corners(next.cperm, next.sperm),
+                                   prune2_edges(next.uedge, next.sperm));
             if (h >= depth_left) {
                 continue;
             }
             path_.at(static_cast<std::size_t>(depth)) = static_cast<std::uint8_t>(move);
-            if (search_phase2(next_cperm, next_uedge, next_sperm, depth_left - 1, depth + 1,
-                              face)) {
+            if (search_phase2(
+                    next, {.depth_left = depth_left - 1, .depth = depth + 1, .last_face = face})) {
                 return true;
             }
             if (stop_) {
@@ -245,8 +275,8 @@ private:
         return false;
     }
 
-    const detail::Phase1MoveTables& p1_;
-    const detail::Phase2Tables& p2_;
+    const detail::Phase1MoveTables* p1_;
+    const detail::Phase2Tables* p2_;
     CubieCube start_;
     std::array<std::uint8_t, kMaxTotalLength + 1> path_{};
 

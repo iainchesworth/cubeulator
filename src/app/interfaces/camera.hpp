@@ -129,8 +129,11 @@ enum class PhotometryControl : std::uint8_t {
 };
 
 inline constexpr std::array<PhotometryControl, 4> kPhotometryControls{
-    PhotometryControl::auto_white_balance, PhotometryControl::exposure,
-    PhotometryControl::brightness, PhotometryControl::saturation};
+    PhotometryControl::auto_white_balance,
+    PhotometryControl::exposure,
+    PhotometryControl::brightness,
+    PhotometryControl::saturation,
+};
 
 [[nodiscard]] constexpr std::string_view to_string(PhotometryControl control) noexcept {
     switch (control) {

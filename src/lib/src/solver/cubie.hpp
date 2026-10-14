@@ -71,11 +71,11 @@ struct CubieCube {
 inline constexpr std::size_t kMoveCount = 18;
 
 [[nodiscard]] constexpr std::size_t move_index(Move move) noexcept {
-    return static_cast<std::size_t>(move.face) * 3 + static_cast<std::size_t>(move.turns - 1);
+    return (static_cast<std::size_t>(move.face) * 3) + static_cast<std::size_t>(move.turns - 1);
 }
 
 [[nodiscard]] constexpr Move move_from_index(std::size_t index) noexcept {
-    return Move{kAllFaces[index / 3], static_cast<int>(index % 3) + 1};
+    return Move{.face = kAllFaces.at(index / 3), .turns = static_cast<int>(index % 3) + 1};
 }
 
 // `state` followed by `move`: the cube you get by applying `move` to a cube
@@ -84,14 +84,14 @@ inline constexpr std::size_t kMoveCount = 18;
 [[nodiscard]] constexpr CubieCube multiply(const CubieCube& state, const CubieCube& move) noexcept {
     CubieCube result;
     for (std::size_t pos = 0; pos < kCornerCount; ++pos) {
-        const std::size_t from = move.cp[pos];
-        result.cp[pos] = state.cp[from];
-        result.co[pos] = static_cast<std::uint8_t>((state.co[from] + move.co[pos]) % 3);
+        const std::size_t from = move.cp.at(pos);
+        result.cp.at(pos) = state.cp.at(from);
+        result.co.at(pos) = static_cast<std::uint8_t>((state.co.at(from) + move.co.at(pos)) % 3);
     }
     for (std::size_t pos = 0; pos < kEdgeCount; ++pos) {
-        const std::size_t from = move.ep[pos];
-        result.ep[pos] = state.ep[from];
-        result.eo[pos] = static_cast<std::uint8_t>((state.eo[from] + move.eo[pos]) % 2);
+        const std::size_t from = move.ep.at(pos);
+        result.ep.at(pos) = state.ep.at(from);
+        result.eo.at(pos) = static_cast<std::uint8_t>((state.eo.at(from) + move.eo.at(pos)) % 2);
     }
     return result;
 }
@@ -101,46 +101,60 @@ inline constexpr std::size_t kMoveCount = 18;
 // eoX, spelled with the piece names above. Everything else - the half turns,
 // the counter-clockwise turns, every table the solvers search with - is
 // computed from them.
-inline constexpr std::array<CubieCube, 6> kQuarterTurns = {{
-    // U
-    {{kUBR, kURF, kUFL, kULB, kDFR, kDLF, kDBL, kDRB},
-     {0, 0, 0, 0, 0, 0, 0, 0},
-     {kUB, kUR, kUF, kUL, kDR, kDF, kDL, kDB, kFR, kFL, kBL, kBR},
-     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-    // D
-    {{kURF, kUFL, kULB, kUBR, kDLF, kDBL, kDRB, kDFR},
-     {0, 0, 0, 0, 0, 0, 0, 0},
-     {kUR, kUF, kUL, kUB, kDF, kDL, kDB, kDR, kFR, kFL, kBL, kBR},
-     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-    // L
-    {{kURF, kULB, kDBL, kUBR, kDFR, kUFL, kDLF, kDRB},
-     {0, 1, 2, 0, 0, 2, 1, 0},
-     {kUR, kUF, kBL, kUB, kDR, kDF, kFL, kDB, kFR, kUL, kDL, kBR},
-     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-    // R
-    {{kDFR, kUFL, kULB, kURF, kDRB, kDLF, kDBL, kUBR},
-     {2, 0, 0, 1, 1, 0, 0, 2},
-     {kFR, kUF, kUL, kUB, kBR, kDF, kDL, kDB, kDR, kFL, kBL, kUR},
-     {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}},
-    // F
-    {{kUFL, kDLF, kULB, kUBR, kURF, kDFR, kDBL, kDRB},
-     {1, 2, 0, 0, 2, 1, 0, 0},
-     {kUR, kFL, kUL, kUB, kDR, kFR, kDL, kDB, kUF, kDF, kBL, kBR},
-     {0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0}},
-    // B
-    {{kURF, kUFL, kUBR, kDRB, kDFR, kDLF, kULB, kDBL},
-     {0, 0, 1, 2, 0, 0, 2, 1},
-     {kUR, kUF, kUL, kBR, kDR, kDF, kDL, kBL, kFR, kFL, kUB, kDB},
-     {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1}},
-}};
+inline constexpr std::array<CubieCube, 6> kQuarterTurns = {
+    {
+        // U
+        {
+            .cp = {kUBR, kURF, kUFL, kULB, kDFR, kDLF, kDBL, kDRB},
+            .co = {0, 0, 0, 0, 0, 0, 0, 0},
+            .ep = {kUB, kUR, kUF, kUL, kDR, kDF, kDL, kDB, kFR, kFL, kBL, kBR},
+            .eo = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        },
+        // D
+        {
+            .cp = {kURF, kUFL, kULB, kUBR, kDLF, kDBL, kDRB, kDFR},
+            .co = {0, 0, 0, 0, 0, 0, 0, 0},
+            .ep = {kUR, kUF, kUL, kUB, kDF, kDL, kDB, kDR, kFR, kFL, kBL, kBR},
+            .eo = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        },
+        // L
+        {
+            .cp = {kURF, kULB, kDBL, kUBR, kDFR, kUFL, kDLF, kDRB},
+            .co = {0, 1, 2, 0, 0, 2, 1, 0},
+            .ep = {kUR, kUF, kBL, kUB, kDR, kDF, kFL, kDB, kFR, kUL, kDL, kBR},
+            .eo = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        },
+        // R
+        {
+            .cp = {kDFR, kUFL, kULB, kURF, kDRB, kDLF, kDBL, kUBR},
+            .co = {2, 0, 0, 1, 1, 0, 0, 2},
+            .ep = {kFR, kUF, kUL, kUB, kBR, kDF, kDL, kDB, kDR, kFL, kBL, kUR},
+            .eo = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+        },
+        // F
+        {
+            .cp = {kUFL, kDLF, kULB, kUBR, kURF, kDFR, kDBL, kDRB},
+            .co = {1, 2, 0, 0, 2, 1, 0, 0},
+            .ep = {kUR, kFL, kUL, kUB, kDR, kFR, kDL, kDB, kUF, kDF, kBL, kBR},
+            .eo = {0, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0},
+        },
+        // B
+        {
+            .cp = {kURF, kUFL, kUBR, kDRB, kDFR, kDLF, kULB, kDBL},
+            .co = {0, 0, 1, 2, 0, 0, 2, 1},
+            .ep = {kUR, kUF, kUL, kBR, kDR, kDF, kDL, kBL, kFR, kFL, kUB, kDB},
+            .eo = {0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 1},
+        },
+    },
+};
 
 [[nodiscard]] constexpr std::array<CubieCube, kMoveCount> make_move_cubies() noexcept {
     std::array<CubieCube, kMoveCount> moves{};
     for (std::size_t face = 0; face < kQuarterTurns.size(); ++face) {
-        const CubieCube& quarter = kQuarterTurns[face];
-        moves[face * 3] = quarter;
-        moves[face * 3 + 1] = multiply(quarter, quarter);
-        moves[face * 3 + 2] = multiply(moves[face * 3 + 1], quarter);
+        const CubieCube& quarter = kQuarterTurns.at(face);
+        moves.at(face * 3) = quarter;
+        moves.at((face * 3) + 1) = multiply(quarter, quarter);
+        moves.at((face * 3) + 2) = multiply(moves.at((face * 3) + 1), quarter);
     }
     return moves;
 }
@@ -151,7 +165,7 @@ inline constexpr std::array<CubieCube, kMoveCount> kMoveCubies = make_move_cubie
 // What one move does, as a CubieCube (the state a solved cube is left in by
 // it). Index as above; out-of-range is a precondition violation.
 [[nodiscard]] constexpr const CubieCube& move_cubie(std::size_t index) noexcept {
-    return kMoveCubies[index];
+    return kMoveCubies.at(index);
 }
 
 // The cubie description of `cube`, or nullopt if `cube` is not a reachable

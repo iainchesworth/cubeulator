@@ -32,6 +32,7 @@ install(CODE "
     set(QT_DEPLOY_LIB_DIR \"${_app_dir}/lib\")
     set(QT_DEPLOY_PLUGINS_DIR \"${_app_dir}/plugins\")
     set(QT_DEPLOY_QML_DIR \"${_app_dir}/qml\")
+    set(QT_DEPLOY_TRANSLATIONS_DIR \"${_app_dir}/translations\")
 ")
 
 cube_install_desktop_executable(${target} "${_bindir}")
@@ -39,6 +40,43 @@ cube_install_desktop_executable(${target} "${_bindir}")
 # Qt's runtime, plugins and the QML modules the app imports: the libraries and
 # plugins are copied beside the executable.
 cube_deploy_qt_on_install(${target})
+
+# Two things Qt's deployment script does not do the way a package needs.
+#
+# 1. qt.conf. The script writes one with the prefix and the four directories it
+#    was given, but never a Translations entry, so Qt would look for its own
+#    catalogues (LanguageManager loads qt_<language>.qm from
+#    QLibraryInfo::TranslationsPath) in <prefix>/translations, which is
+#    /usr/translations: a directory in /usr that no other package would
+#    expect, and one that collides with any other Qt application packaged the
+#    same way. They are deployed into the private directory above, and
+#    qt.conf says so.
+# 2. Plugins that cannot be given honest dependencies. The deployment copies
+#    every platform theme and the Wayland integrations Qt knows. The GTK 3
+#    theme (libqgtk3.so) links GTK, Cairo, Pango and ATK, which a KDE or a
+#    minimal desktop does not have and the package should not require; Qt
+#    falls back to the desktop-portal theme, which is bundled. The Wayland
+#    client libraries and shell integrations belong to a Wayland platform
+#    plugin the package does not carry (xcb only: a Wayland session runs the
+#    app through XWayland, docs/packaging.md), so they would be unused weight
+#    with dependencies of their own. The QML debugger and profiler servers
+#    (plugins/qmltooling) are not a thing a release carries.
+#    packaging/check-package.sh holds all three.
+install(CODE "
+    set(_cube_root \"\$ENV{DESTDIR}\${CMAKE_INSTALL_PREFIX}/${_app_dir}\")
+    file(APPEND \"\${_cube_root}/bin/qt.conf\" \"Translations = ${_app_dir}/translations\\n\")
+    file(REMOVE \"\${_cube_root}/plugins/platformthemes/libqgtk3.so\")
+    file(REMOVE_RECURSE \"\${_cube_root}/plugins/qmltooling\")
+    file(GLOB _cube_wayland_dirs LIST_DIRECTORIES true \"\${_cube_root}/plugins/wayland-*\")
+    file(GLOB _cube_wayland_libs \"\${_cube_root}/lib/libQt6Wayland*\"
+                                \"\${_cube_root}/lib/libQt6WlShellIntegration*\")
+    if(_cube_wayland_dirs)
+        file(REMOVE_RECURSE \${_cube_wayland_dirs})
+    endif()
+    if(_cube_wayland_libs)
+        file(REMOVE \${_cube_wayland_libs})
+    endif()
+")
 
 # The licence and the third-party notices are installed by
 # cube_add_third_party_notices() (cmake/ThirdPartyNotices.cmake), under
@@ -56,6 +94,12 @@ cube_string_from_inventory("store.summary" CUBEULATOR_STORE_SUMMARY)
 cube_string_from_inventory("about.what" CUBEULATOR_ABOUT_WHAT)
 # Honours SOURCE_DATE_EPOCH, so a reproducible build stays reproducible.
 string(TIMESTAMP CUBEULATOR_RELEASE_DATE "%Y-%m-%d" UTC)
+# A pre-release is a development release to a software centre.
+if(CUBEULATOR_VERSION_PRERELEASE STREQUAL "")
+    set(CUBEULATOR_APPSTREAM_RELEASE_TYPE "stable")
+else()
+    set(CUBEULATOR_APPSTREAM_RELEASE_TYPE "development")
+endif()
 # AppStream orders versions the way Debian does: "~" sorts before the release.
 string(REPLACE "-" "~" CUBEULATOR_APPSTREAM_VERSION "${CUBEULATOR_VERSION_FULL}")
 

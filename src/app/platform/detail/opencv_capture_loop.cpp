@@ -41,8 +41,10 @@ Result<std::vector<DeviceInfo>> OpenCvCaptureLoop::enumerate_devices() const {
          ++index) {
         cv::VideoCapture probe(index, backend_);
         if (probe.isOpened()) {
-            devices.push_back(DeviceInfo{.identifier = std::to_string(index),
-                                         .display_name = "Camera " + std::to_string(index)});
+            devices.push_back(DeviceInfo{
+                .identifier = std::to_string(index),
+                .display_name = "Camera " + std::to_string(index),
+            });
             consecutive_misses = 0;
         } else {
             ++consecutive_misses;

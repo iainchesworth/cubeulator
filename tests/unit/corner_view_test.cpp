@@ -2,6 +2,7 @@
 
 #include "drawn_corner.hpp"
 #include "drawn_cube.hpp"
+#include "must_have.hpp"
 
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
@@ -18,6 +19,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <optional>
 #include <string_view>
 
 using cube::solver::Color;
@@ -59,11 +61,11 @@ SessionColours drawn_colours() {
         const cv::Scalar bgr = cube::test::paint(colour);
         const cv::Mat3f source(
             1, 1,
-            cv::Vec3f(static_cast<float>(bgr[0]) / 255.0F, static_cast<float>(bgr[1]) / 255.0F,
-                      static_cast<float>(bgr[2]) / 255.0F));
+            cv::Vec3f(static_cast<float>(bgr(0)) / 255.0F, static_cast<float>(bgr(1)) / 255.0F,
+                      static_cast<float>(bgr(2)) / 255.0F));
         cv::Mat3f lab;
         cv::cvtColor(source, lab, cv::COLOR_BGR2Lab);
-        colours[static_cast<std::size_t>(colour)] = lab(0, 0);
+        colours.at(static_cast<std::size_t>(colour)) = lab(0, 0);
     }
     return colours;
 }
@@ -103,23 +105,24 @@ void show_sides(SideScan& scan, const Cube& cube) {
 TEST_CASE("two sides turned corner-on are two lattices that share an edge", "[corner]") {
     const Cube cube = cube::test::scramble(2);
     const std::optional<CornerRead> read = read_corner(corner_frame(cube, Face::F));
+    const CornerRead& corner = ::cube::test::must_have(read);
 
-    REQUIRE(read.has_value());
-    REQUIRE(read->sides.size() == 2);
-    REQUIRE(read->edges.size() == 1);
+    REQUIRE(corner.sides.size() == 2);
+    REQUIRE(corner.edges.size() == 1);
 
     // Whichever way round each lattice was indexed, the stickers along the
     // shared edge sit against one another: first with last.
-    const auto& edge = read->edges.front();
-    const auto& first = read->sides[edge.first];
-    const auto& second = read->sides[edge.second];
+    const auto& edge = corner.edges.front();
+    const auto& first = corner.sides.at(edge.first);
+    const auto& second = corner.sides.at(edge.second);
     const auto cells_first = edge_cells(edge.on_first);
     const auto cells_second = edge_cells(edge.on_second);
     for (std::size_t t = 0; t < 3; ++t) {
-        const cv::Point2f gap = first.centres[cells_first[t]] - second.centres[cells_second[2 - t]];
+        const cv::Point2f gap =
+            first.centres.at(cells_first.at(t)) - second.centres.at(cells_second.at(2 - t));
         CHECK(std::hypot(gap.x, gap.y) < 1.2F * first.pitch);
     }
-    for (const auto& side : read->sides) {
+    for (const auto& side : corner.sides) {
         CHECK(side.pitch > 15.0F);
         for (const bool found : side.found) {
             CHECK(found);
@@ -133,24 +136,24 @@ TEST_CASE("a frame no side is square in goes from one preparation to both reader
     // reader of the frame itself.
     const Cube cube = cube::test::scramble(2);
     const cv::Mat frame = corner_frame(cube, Face::F);
-    const auto prepared = prepare_frame(frame);
-    REQUIRE(prepared.has_value());
+    const auto prepared_read = prepare_frame(frame);
+    const auto& prepared = ::cube::test::must_have(prepared_read);
 
-    CHECK_FALSE(cube::vision::read_side(*prepared).has_value());
+    CHECK_FALSE(cube::vision::read_side(prepared).has_value());
     CHECK_FALSE(cube::vision::read_side(frame).has_value());
 
-    const auto shared = read_corner(*prepared);
-    const auto direct = read_corner(frame);
-    REQUIRE(shared.has_value());
-    REQUIRE(direct.has_value());
-    REQUIRE(shared->sides.size() == direct->sides.size());
-    REQUIRE(shared->edges.size() == direct->edges.size());
-    for (std::size_t i = 0; i < shared->sides.size(); ++i) {
-        CHECK(shared->sides.at(i).pitch == direct->sides.at(i).pitch);
-        CHECK(shared->sides.at(i).found == direct->sides.at(i).found);
+    const auto shared_read = read_corner(prepared);
+    const auto direct_read = read_corner(frame);
+    const auto& shared = ::cube::test::must_have(shared_read);
+    const auto& direct = ::cube::test::must_have(direct_read);
+    REQUIRE(shared.sides.size() == direct.sides.size());
+    REQUIRE(shared.edges.size() == direct.edges.size());
+    for (std::size_t i = 0; i < shared.sides.size(); ++i) {
+        CHECK(shared.sides.at(i).pitch == direct.sides.at(i).pitch);
+        CHECK(shared.sides.at(i).found == direct.sides.at(i).found);
         for (std::size_t cell = 0; cell < 9; ++cell) {
-            CHECK(shared->sides.at(i).centres.at(cell) == direct->sides.at(i).centres.at(cell));
-            CHECK(shared->sides.at(i).lab.at(cell) == direct->sides.at(i).lab.at(cell));
+            CHECK(shared.sides.at(i).centres.at(cell) == direct.sides.at(i).centres.at(cell));
+            CHECK(shared.sides.at(i).lab.at(cell) == direct.sides.at(i).lab.at(cell));
         }
     }
 }
@@ -170,16 +173,15 @@ TEST_CASE("a corner view fits the cube it was drawn from and not a cube one turn
     for (const Face left : kAllFaces) {
         INFO("left side " << static_cast<int>(left));
         const auto read = read_corner(corner_frame(cube, left));
-        REQUIRE(read.has_value());
-        CHECK(fit_corner(*read, cube, colours).fits);
+        CHECK(fit_corner(::cube::test::must_have(read), cube, colours).fits);
     }
 
     // A turn of the front, right or back layer changes stickers in this view.
-    const auto read = read_corner(corner_frame(cube, Face::F));
-    REQUIRE(read.has_value());
+    const auto front_read = read_corner(corner_frame(cube, Face::F));
+    const auto& front = ::cube::test::must_have(front_read);
     for (const Face turned : {Face::F, Face::R, Face::U, Face::D}) {
         INFO("turned " << static_cast<int>(turned));
-        CHECK_FALSE(fit_corner(*read, cube.apply({turned, 1}), colours).fits);
+        CHECK_FALSE(fit_corner(front, cube.apply({turned, 1}), colours).fits);
     }
 }
 
@@ -193,8 +195,7 @@ TEST_CASE("a corner view with one side turned is not the cube", "[corner]") {
     std::array<Color, 9> right = cube::solver::outside_view(cube, cube::solver::right_of(Face::F));
     right = cube::test::turned_clockwise(right);
     const auto read = read_corner(draw_corner(cube::solver::outside_view(cube, Face::F), right));
-    REQUIRE(read.has_value());
-    CHECK_FALSE(fit_corner(*read, cube, colours).fits);
+    CHECK_FALSE(fit_corner(::cube::test::must_have(read), cube, colours).fits);
 }
 
 TEST_CASE("sides that put together two ways are settled by the corners seen", "[corner]") {

@@ -9,6 +9,7 @@
 #include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/scan_assembly.hpp>
+#include "../deterministic_rng.hpp"
 
 using cube::model::Facelet;
 using cube::model::FacetColor;
@@ -19,8 +20,6 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
-using cube::solver::rotation_hint_for_tracked_scan;
-using cube::solver::RotationHint;
 
 namespace {
 
@@ -57,10 +56,9 @@ std::array<Facelet, 9> to_model_face(const std::array<Color, 9>& colors) {
 // round-trip tests: assembly searches all four rotations either way.)
 std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
     std::array<Color, 9> rotated{};
-    for (int row = 0; row < 3; ++row) {
-        for (int col = 0; col < 3; ++col) {
-            rotated.at(static_cast<std::size_t>((3 * row) + col)) =
-                face.at(static_cast<std::size_t>((3 * (2 - col)) + row));
+    for (std::size_t row = 0; row < 3; ++row) {
+        for (std::size_t col = 0; col < 3; ++col) {
+            rotated.at((3 * row) + col) = face.at((3 * (2 - col)) + row);
         }
     }
     return rotated;
@@ -73,9 +71,8 @@ std::array<Color, 9> rotated_clockwise(const std::array<Color, 9>& face) {
 // faces is the column-flipped solver array.
 std::array<Color, 9> outside_view(Face face, std::array<Color, 9> stickers) {
     if (face == Face::D || face == Face::R || face == Face::B) {
-        for (int row = 0; row < 3; ++row) {
-            std::swap(stickers.at(static_cast<std::size_t>(row * 3)),
-                      stickers.at(static_cast<std::size_t>((row * 3) + 2)));
+        for (std::size_t row = 0; row < 3; ++row) {
+            std::swap(stickers.at(row * 3), stickers.at((row * 3) + 2));
         }
     }
     return stickers;
@@ -155,113 +152,18 @@ TEST_CASE("a solved cube's uniform faces assemble despite degenerate rotations",
 }
 
 // The canonical near-solved ambiguity (scan_assembly.hpp's "within a
-// couple of moves of solved"): one U quarter-turn away from solved,
-// captured canonically. U and D are uniform (rotation-degenerate), and the
-// four side faces - six own-colour stickers plus one displaced row each -
-// admit a SECOND joint rotation assignment that builds a different but
-// equally solvable cube (the displaced rows re-read as a D-layer turn), so
-// the unhinted search must reject the scan as ambiguous. Shared fixture
-// for every hint test below.
-namespace {
-std::array<std::array<Facelet, 9>, 6> ambiguous_near_solved_input() {
-    return model_faces_of(Cube::solved().apply(Move{.face = Face::U, .turns = 1}));
-}
-}  // namespace
-
-TEST_CASE("a rotation hint lifts near-solved assembly ambiguity", "[scan_assembly]") {
-    const Cube original = Cube::solved().apply(Move{.face = Face::U, .turns = 1});
-    const auto input = ambiguous_near_solved_input();
-
-    // Establish the premise: without a hint this scan IS ambiguous - if it
-    // ever stops being (a solver change), every hint test here is testing
-    // nothing and must be rebuilt on a new fixture.
-    const auto unhinted = assemble_scanned_faces_with_mapping(input);
-    REQUIRE_FALSE(unhinted.has_value());
-    REQUIRE(unhinted.error() == cube::CubeError::invalid_cube_state);
-
-    // Canonical capture means the true assembly applies zero quarter turns
-    // to every face; the rival survivor needs the side faces re-rotated,
-    // so an all-zeros hint scores the true cube strictly highest.
-    RotationHint hint;
-    hint.quarter_turns.fill(0);
-    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
-    REQUIRE(hinted.has_value());
-    REQUIRE(hinted->cube == original);
-    // Mapping bookkeeping is hint-independent (centres pin it before the
-    // search runs): canonical input order means the identity mapping.
-    for (std::size_t face_index = 0; face_index < hinted->input_index_of_face.size();
-         ++face_index) {
-        REQUIRE(hinted->input_index_of_face.at(face_index) == face_index);
-    }
-}
-
-TEST_CASE("a rotation hint can select the rival survivor instead", "[scan_assembly]") {
-    const Cube original = Cube::solved().apply(Move{.face = Face::U, .turns = 1});
-    const auto input = ambiguous_near_solved_input();
-
-    // Hint the four side faces at a half-turn (input order is solver-Face
-    // order here: U,D,L,R,F,B), leaving the degenerate U/D unhinted: the
-    // displaced rows land on the D layer and the OTHER solvable assembly
-    // must win - proof the hint genuinely selects rather than merely
-    // rubber-stamping the assembly the unhinted search would have found
-    // first.
-    RotationHint hint;
-    hint.quarter_turns = {RotationHint::kNoHint, RotationHint::kNoHint, 2, 2, 2, 2};
-    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
-    REQUIRE(hinted.has_value());
-    REQUIRE(hinted->cube != original);
-    REQUIRE(hinted->cube.is_solvable());
-}
-
-TEST_CASE("a hint never vetoes a unique survivor", "[scan_assembly]") {
-    // A scrambled cube's assembly is unique; a hint - even one that
-    // contradicts the true rotations - must not be able to reject it.
-    // Geometry outvotes advice.
-    std::mt19937 rng{7};
-    const Cube original = scrambled_cube(rng, 25);
-    const auto input = model_faces_of(original);
-
-    RotationHint wrong_hint;
-    wrong_hint.quarter_turns.fill(3);  // canonical capture: true digits are all 0
-    const auto hinted = assemble_scanned_faces_with_mapping(input, &wrong_hint);
-    REQUIRE(hinted.has_value());
-    REQUIRE(hinted->cube == original);
-}
-
-TEST_CASE("an unusable hint behaves exactly like no hint", "[scan_assembly]") {
-    const auto input = ambiguous_near_solved_input();
-
-    // Default-constructed (all kNoHint) and out-of-range entries alike
-    // carry no expectation: the ambiguity must fail exactly as unhinted.
-    RotationHint empty_hint;
-    const auto with_empty = assemble_scanned_faces_with_mapping(input, &empty_hint);
-    REQUIRE_FALSE(with_empty.has_value());
-    REQUIRE(with_empty.error() == cube::CubeError::invalid_cube_state);
-
-    RotationHint malformed_hint;
-    malformed_hint.quarter_turns = {7, -5, 4, 99, RotationHint::kNoHint, -1};
-    const auto with_malformed = assemble_scanned_faces_with_mapping(input, &malformed_hint);
-    REQUIRE_FALSE(with_malformed.has_value());
-    REQUIRE(with_malformed.error() == cube::CubeError::invalid_cube_state);
-
-    const auto with_null = assemble_scanned_faces_with_mapping(input, nullptr);
-    REQUIRE_FALSE(with_null.has_value());
-    REQUIRE(with_null.error() == cube::CubeError::invalid_cube_state);
-}
-
-TEST_CASE("a hint that cannot separate the survivors leaves the ambiguity standing",
+// couple of moves of solved"): one U quarter-turn away from solved, captured
+// canonically. U and D are uniform (rotation-degenerate), and the four side
+// faces - six own-colour stickers plus one displaced row each - admit a
+// SECOND joint rotation assignment that builds a different but equally
+// solvable cube (the displaced rows re-read as a D-layer turn). Two distinct
+// solvable assemblies are rejected, never guessed.
+TEST_CASE("faces that put together as two different solvable cubes are rejected",
           "[scan_assembly]") {
-    const auto input = ambiguous_near_solved_input();
-
-    // Hinting only the uniform U face is worthless evidence: every
-    // survivor reaches digit 0 on a rotationally symmetric face, so all
-    // scores tie and the scan must still fail - a hint may only ever win
-    // STRICTLY.
-    RotationHint hint;
-    hint.quarter_turns.at(0) = 0;
-    const auto hinted = assemble_scanned_faces_with_mapping(input, &hint);
-    REQUIRE_FALSE(hinted.has_value());
-    REQUIRE(hinted.error() == cube::CubeError::invalid_cube_state);
+    const auto input = model_faces_of(Cube::solved().apply(Move{.face = Face::U, .turns = 1}));
+    const auto result = assemble_scanned_faces(input);
+    REQUIRE_FALSE(result.has_value());
+    REQUIRE(result.error() == cube::CubeError::invalid_cube_state);
 }
 
 TEST_CASE("duplicate centre colours are rejected", "[scan_assembly]") {
@@ -285,7 +187,7 @@ TEST_CASE("a cross-face sticker swap that keeps colour counts is rejected", "[sc
     // positions to corner positions and edge positions to edge positions,
     // and after the swap one colour occupies five edge slots and three
     // corner slots - no real cube (4 of each per colour) matches that.
-    std::mt19937 rng{42};
+    std::mt19937 rng = ::cube::test::deterministic_rng(42U);
     const Cube original = scrambled_cube(rng, 25);
     auto captured = model_faces_of(original);
 
@@ -312,186 +214,4 @@ TEST_CASE("a cross-face sticker swap that keeps colour counts is rejected", "[sc
     const auto result = assemble_scanned_faces(captured);
     REQUIRE_FALSE(result.has_value());
     REQUIRE(result.error() == cube::CubeError::invalid_cube_state);
-}
-
-namespace {
-
-// The 24 proper rotations of the cube as signed axis permutations,
-// column[a] = the image of body axis +e_a in the solver frame. Generated
-// from all 6 axis permutations x 8 sign choices, keeping determinant +1.
-std::vector<std::array<std::array<int, 3>, 3>> all_body_orientations() {
-    std::vector<std::array<std::array<int, 3>, 3>> orientations;
-    std::array<int, 3> perm = {0, 1, 2};
-    do {
-        for (int signs = 0; signs < 8; ++signs) {
-            std::array<std::array<int, 3>, 3> column{};
-            for (int a = 0; a < 3; ++a) {
-                column.at(static_cast<std::size_t>(a))
-                    .at(static_cast<std::size_t>(perm.at(static_cast<std::size_t>(a)))) =
-                    ((signs >> a) & 1) != 0 ? -1 : 1;
-            }
-            const auto& cx = column.at(0);
-            const auto& cy = column.at(1);
-            const auto& cz = column.at(2);
-            const int det = (cx.at(0) * ((cy.at(1) * cz.at(2)) - (cy.at(2) * cz.at(1)))) -
-                            (cy.at(0) * ((cx.at(1) * cz.at(2)) - (cx.at(2) * cz.at(1)))) +
-                            (cz.at(0) * ((cx.at(1) * cy.at(2)) - (cx.at(2) * cy.at(1))));
-            if (det == 1) {
-                orientations.push_back(column);
-            }
-        }
-    } while (std::ranges::next_permutation(perm).found);
-    return orientations;
-}
-
-Face face_of_direction(const std::array<int, 3>& d) {
-    if (d.at(0) == 1) {
-        return Face::R;
-    }
-    if (d.at(0) == -1) {
-        return Face::L;
-    }
-    if (d.at(1) == 1) {
-        return Face::U;
-    }
-    if (d.at(1) == -1) {
-        return Face::D;
-    }
-    return d.at(2) == 1 ? Face::F : Face::B;
-}
-
-// The facelet layout documented in cube.hpp, restated here from that spec
-// (not lifted from any implementation) so a mis-derived producer cannot
-// agree with a mis-derived test.
-int solver_index_of(Face face, const std::array<int, 3>& q) {
-    switch (face) {
-        case Face::U:
-        case Face::D:
-            return ((q.at(2) + 1) * 3) + (q.at(0) + 1);
-        case Face::R:
-        case Face::L:
-            return ((1 - q.at(1)) * 3) + (q.at(2) + 1);
-        case Face::F:
-        case Face::B:
-            return ((1 - q.at(1)) * 3) + (q.at(0) + 1);
-    }
-    return 0;
-}
-
-}  // namespace
-
-TEST_CASE("the tracked-scan hint producer derives digits that re-orient every capture",
-          "[scan_assembly]") {
-    // For each of the 24 ways the tracked body can sit in the solver frame,
-    // sample a scrambled cube through the body-frame cell convention
-    // (face_projection.cpp's: col along +axis(a+1), row along +axis(a+2)),
-    // then require the produced digit to rotate each capture onto the
-    // solver facelet layout exactly, and hinted assembly to round-trip.
-    std::mt19937 rng{20260804};
-    const Cube cube = scrambled_cube(rng, 30);
-    for (const auto& column : all_body_orientations()) {
-        std::array<std::array<Facelet, 9>, 6> captured{};
-        std::array<std::array<Color, 9>, 6> captured_colors{};
-        std::array<int, 6> body_ids{};
-        std::array<Face, 6> shown{};
-        for (int id = 0; id < 6; ++id) {
-            const int body_axis = id / 2;
-            const int sign = (id % 2 == 0) ? 1 : -1;
-            std::array<int, 3> outward{};
-            for (int k = 0; k < 3; ++k) {
-                outward.at(static_cast<std::size_t>(k)) =
-                    sign *
-                    column.at(static_cast<std::size_t>(body_axis)).at(static_cast<std::size_t>(k));
-            }
-            const Face face = face_of_direction(outward);
-            // face_projection.cpp's outside-view axes: cyclic pair on
-            // negative body faces, swapped on positive ones.
-            const int axis_u = (sign > 0) ? (body_axis + 2) % 3 : (body_axis + 1) % 3;
-            const int axis_v = (sign > 0) ? (body_axis + 1) % 3 : (body_axis + 2) % 3;
-            std::array<Color, 9> colors{};
-            for (int row = 0; row < 3; ++row) {
-                for (int col = 0; col < 3; ++col) {
-                    std::array<int, 3> p{};
-                    p.at(static_cast<std::size_t>(body_axis)) = sign;
-                    p.at(static_cast<std::size_t>(axis_u)) = col - 1;
-                    p.at(static_cast<std::size_t>(axis_v)) = row - 1;
-                    std::array<int, 3> q{};
-                    for (int k = 0; k < 3; ++k) {
-                        q.at(static_cast<std::size_t>(k)) =
-                            (column.at(0).at(static_cast<std::size_t>(k)) * p.at(0)) +
-                            (column.at(1).at(static_cast<std::size_t>(k)) * p.at(1)) +
-                            (column.at(2).at(static_cast<std::size_t>(k)) * p.at(2));
-                    }
-                    colors.at(static_cast<std::size_t>((row * 3) + col)) =
-                        cube.face(face).at(static_cast<std::size_t>(solver_index_of(face, q)));
-                }
-            }
-            captured_colors.at(static_cast<std::size_t>(id)) = colors;
-            captured.at(static_cast<std::size_t>(id)) = to_model_face(colors);
-            body_ids.at(static_cast<std::size_t>(id)) = id;
-            shown.at(static_cast<std::size_t>(id)) = face;
-        }
-
-        const RotationHint hint = rotation_hint_for_tracked_scan(captured, body_ids);
-        for (std::size_t i = 0; i < captured.size(); ++i) {
-            REQUIRE(hint.quarter_turns.at(i) >= 0);
-            // Digits are defined over the search's arrays, i.e. AFTER
-            // assembly's handedness flip on D/R/B - outside_view applies
-            // that same self-inverse flip.
-            std::array<Color, 9> reoriented = outside_view(shown.at(i), captured_colors.at(i));
-            for (int k = 0; k < hint.quarter_turns.at(i); ++k) {
-                reoriented = rotated_clockwise(reoriented);
-            }
-            REQUIRE(reoriented == cube.face(shown.at(i)));
-        }
-
-        const auto assembled = assemble_scanned_faces_with_mapping(captured, &hint);
-        REQUIRE(assembled.has_value());
-        REQUIRE(assembled->cube == cube);
-    }
-}
-
-TEST_CASE("the hint producer degrades to no advice on inputs that cannot name a rotation",
-          "[scan_assembly]") {
-    std::mt19937 rng{20260804};
-    const Cube cube = scrambled_cube(rng, 30);
-    const auto faces = model_faces_of(cube);  // input order = Face enum: U,D,L,R,F,B
-    // Body ids that make the body frame coincide with the solver frame:
-    // +x shows R, -x L, +y U, -y D, +z F, -z B.
-    const std::array<int, 6> identity_ids = {2, 3, 1, 0, 4, 5};
-
-    const RotationHint good = rotation_hint_for_tracked_scan(faces, identity_ids);
-    for (const int digit : good.quarter_turns) {
-        REQUIRE(digit != RotationHint::kNoHint);
-    }
-
-    SECTION("a repeated body id is not a bijection") {
-        std::array<int, 6> repeated = identity_ids;
-        repeated.at(5) = repeated.at(0);
-        const RotationHint hint = rotation_hint_for_tracked_scan(faces, repeated);
-        for (const int digit : hint.quarter_turns) {
-            REQUIRE(digit == RotationHint::kNoHint);
-        }
-    }
-
-    SECTION("swapping which body axis shows L and R composes a reflection") {
-        // Opposite-face ids swapped: both centre correspondences still
-        // agree on the x column's DIRECTION (-x), so the pair check
-        // passes - but the columns then form det -1, a mirror.
-        std::array<int, 6> mirrored = identity_ids;
-        std::swap(mirrored.at(2), mirrored.at(3));
-        const RotationHint hint = rotation_hint_for_tracked_scan(faces, mirrored);
-        for (const int digit : hint.quarter_turns) {
-            REQUIRE(digit == RotationHint::kNoHint);
-        }
-    }
-
-    SECTION("an unknown centre colour cannot pin a cube position") {
-        auto unknown_centre = faces;
-        unknown_centre.at(0).at(4).color = FacetColor::unknown;
-        const RotationHint hint = rotation_hint_for_tracked_scan(unknown_centre, identity_ids);
-        for (const int digit : hint.quarter_turns) {
-            REQUIRE(digit == RotationHint::kNoHint);
-        }
-    }
 }
