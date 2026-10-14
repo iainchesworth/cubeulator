@@ -386,6 +386,18 @@ TEST_CASE("every converted screen holds the real Japanese and Chinese without cu
     }
 }
 
+TEST_CASE("every converted screen holds the real Hebrew, Arabic and Yiddish without cutting a "
+          "string off",
+          "[i18n][screen][rtl-real]") {
+    // The right-to-left drafts, and not the pseudo-locale in their direction:
+    // Arabic is joined and set wider than its English, Hebrew narrower, and
+    // Yiddish carries points. Whatever the machine draws them with, a
+    // translated string must fit the box the English was given, mirrored.
+    for (const char* language : {"he", "ar", "yi"}) {
+        holds_the_layout_in(language);
+    }
+}
+
 TEST_CASE("the face follows the app's language for Japanese and Chinese, and back",
           "[i18n][screen][face]") {
     // Japanese and Chinese share code points and not shapes. A family left to

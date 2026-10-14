@@ -608,7 +608,7 @@ In your hands.</source>
     <message id="permission.body">
         <source>Cubeulator reads your cube's colours through the camera.</source>
         <extracomment>First paragraph.</extracomment>
-        <translation>Cubeulator קורא את צבעי הקובייה שלכם דרך המצלמה.</translation>
+        <translation>‏Cubeulator קורא את צבעי הקובייה שלכם דרך המצלמה.</translation>
     </message>
     <message id="permission.point1">
         <source>The camera picture is used on this device only.</source>
@@ -643,7 +643,7 @@ In your hands.</source>
     <message id="permission.refused.body">
         <source>Cubeulator cannot scan without the camera. You can allow it in your device's settings, or enter the colours by hand.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator לא יכול לסרוק בלי המצלמה. אפשר לאשר את הגישה בהגדרות המכשיר, או להזין את הצבעים ידנית.</translation>
+        <translation>‏Cubeulator לא יכול לסרוק בלי המצלמה. אפשר לאשר את הגישה בהגדרות המכשיר, או להזין את הצבעים ידנית.</translation>
     </message>
     <message id="permission.askAgain">
         <source>Ask again</source>
@@ -653,7 +653,7 @@ In your hands.</source>
     <message id="permission.system.camera">
         <source>Cubeulator uses the camera to read the colours on your cube. Pictures stay on this device.</source>
         <extracomment>The reason shown by iOS and macOS inside their own permission prompt (NSCameraUsageDescription). One or two sentences.</extracomment>
-        <translation>Cubeulator משתמש במצלמה כדי לקרוא את הצבעים בקובייה שלכם. התמונות נשארות במכשיר הזה.</translation>
+        <translation>‏Cubeulator משתמש במצלמה כדי לקרוא את הצבעים בקובייה שלכם. התמונות נשארות במכשיר הזה.</translation>
     </message>
     <message id="scan.title.starting">
         <source>Starting the camera…</source>
@@ -999,7 +999,7 @@ In your hands.</source>
     <message id="review.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Try again, or scan it instead.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator לא הצליח לחשב איך לפתור את הקובייה הזו. נסו שוב, או סרקו אותה.</translation>
+        <translation>‏Cubeulator לא הצליח לחשב איך לפתור את הקובייה הזו. נסו שוב, או סרקו אותה.</translation>
     </message>
     <message id="review.discard.title">
         <source>Discard these colours?</source>
@@ -1052,7 +1052,7 @@ In your hands.</source>
     <message id="solve.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Check the colours, or scan it again.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator לא הצליח לחשב איך לפתור את הקובייה הזו. בדקו את הצבעים או סרקו שוב.</translation>
+        <translation>‏Cubeulator לא הצליח לחשב איך לפתור את הקובייה הזו. בדקו את הצבעים או סרקו שוב.</translation>
     </message>
     <message id="solve.alreadySolved.title">
         <source>This cube is already solved</source>
@@ -1684,7 +1684,7 @@ In your hands.</source>
     <message id="settings.camera.choose">
         <source>Cubeulator reads the cube with this camera.</source>
         <extracomment>Text above the list of cameras.</extracomment>
-        <translation>Cubeulator קורא את הקובייה באמצעות המצלמה הזו.</translation>
+        <translation>‏Cubeulator קורא את הקובייה באמצעות המצלמה הזו.</translation>
     </message>
     <message id="settings.camera.none">
         <source>No camera was found. Plug one in, then look again.</source>
@@ -1829,7 +1829,7 @@ In your hands.</source>
     <message id="about.trademark">
         <source>Cubeulator is not affiliated with the makers of any cube.</source>
         <extracomment>Small print.</extracomment>
-        <translation>Cubeulator אינו קשור ליצרני אף קובייה.</translation>
+        <translation>‏Cubeulator אינו קשור ליצרני אף קובייה.</translation>
     </message>
     <message id="about.build">
         <source>%1 · built from %2</source>
@@ -1864,7 +1864,7 @@ In your hands.</source>
     <message id="licences.intro">
         <source>Cubeulator is built with these components. Each is used under its own licence.</source>
         <extracomment>Text above the list.</extracomment>
-        <translation>Cubeulator בנוי מהרכיבים האלה. כל אחד מהם בשימוש לפי הרישיון שלו.</translation>
+        <translation>‏Cubeulator בנוי מהרכיבים האלה. כל אחד מהם בשימוש לפי הרישיון שלו.</translation>
     </message>
     <message id="licences.own">
         <source>Cubeulator</source>
@@ -1904,7 +1904,7 @@ In your hands.</source>
     <message id="privacy.history.body">
         <source>Cubeulator keeps a list of the cubes you have solved: the colours, the turns, the date and how long it took. It stays on this device. You can clear it, or turn it off, in Settings.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator שומר רשימה של הקוביות שפתרתם: הצבעים, הסיבובים, התאריך וכמה זמן זה לקח. היא נשארת במכשיר הזה. אפשר לנקות אותה או לכבות אותה בהגדרות.</translation>
+        <translation>‏Cubeulator שומר רשימה של הקוביות שפתרתם: הצבעים, הסיבובים, התאריך וכמה זמן זה לקח. היא נשארת במכשיר הזה. אפשר לנקות אותה או לכבות אותה בהגדרות.</translation>
     </message>
     <message id="privacy.network.title">
         <source>The internet</source>
@@ -1914,7 +1914,7 @@ In your hands.</source>
     <message id="privacy.network.body">
         <source>Cubeulator does not use the internet. It has no accounts, no adverts and no tracking.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator לא משתמש באינטרנט. אין בו חשבונות, פרסומות או מעקב.</translation>
+        <translation>‏Cubeulator לא משתמש באינטרנט. אין בו חשבונות, פרסומות או מעקב.</translation>
     </message>
     <message id="help.title">
         <source>Help</source>
@@ -2058,7 +2058,7 @@ It does not yet read cubes without stickers, cubes made of white or light plasti
 
 It does not work with other sizes of cube.</source>
         <extracomment>Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences.</extracomment>
-        <translation>Cubeulator עובד עם קובייה רגילה של 3x3: תשע מדבקות צבעוניות בכל צד, עם פלסטיק כהה ביניהן, בצבעים לבן, צהוב, אדום, כתום, ירוק וכחול.
+        <translation>‏Cubeulator עובד עם קובייה רגילה של 3x3: תשע מדבקות צבעוניות בכל צד, עם פלסטיק כהה ביניהן, בצבעים לבן, צהוב, אדום, כתום, ירוק וכחול.
 
 הוא עדיין לא קורא קוביות בלי מדבקות, קוביות מפלסטיק לבן או בהיר, קוביות עם תמונות או קוביות בצבעים אחרים. עדיין אפשר להזין אחת כזו ידנית אם אפשר להתאים את ששת הצבעים שלה לששת הצבעים האלה.
 

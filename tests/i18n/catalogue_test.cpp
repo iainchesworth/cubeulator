@@ -241,3 +241,93 @@ TEST_CASE("a catalogue is not marked right to left unless its language is", "[i1
     }
     CHECK(rtl == 3);
 }
+
+namespace {
+
+// The characters a right-to-left catalogue may use: its own script's letters
+// and points, the Latin of the product name, notation and keys, and the few
+// marks the app's wording uses. Every one is in the face the browser build
+// draws it with (Qt's bundled DejaVu Sans) and in the system's own faces.
+// What it refuses is what a keyboard or a paste brings in by accident: Persian
+// letters in Arabic, Hebrew presentation forms (the generator writes letter
+// and point instead), a Cyrillic lookalike.
+[[nodiscard]] bool allowed_in_rtl_catalogue(const QString& code, char32_t c) {
+    if (c == U'
+' || (c >= 0x20 && c < 0x7F)) {
+        return true;  // layout, Latin, digits, ASCII punctuation
+    }
+    if (c == 0x00B7 || c == 0x2026 || c == 0x200E || c == 0x200F) {
+        return true;  // middle dot, ellipsis, left-to-right and right-to-left marks
+    }
+    if (code == QLatin1String("ar")) {
+        return (c >= 0x0621 && c <= 0x063A) || (c >= 0x0640 && c <= 0x064A) ||  // letters, tatweel
+               (c >= 0x064B && c <= 0x0652) ||                                    // tashkeel
+               c == 0x060C || c == 0x061B || c == 0x061F;  // comma, semicolon, question mark
+    }
+    // Hebrew and Yiddish: letters, the points, maqaf, geresh and gershayim,
+    // and the three Yiddish digraphs.
+    return (c >= 0x05D0 && c <= 0x05EA) || (c >= 0x05B0 && c <= 0x05BF) ||
+           (c >= 0x05C1 && c <= 0x05C2) || (c >= 0x05F0 && c <= 0x05F4);
+}
+
+}  // namespace
+
+TEST_CASE("a right-to-left catalogue uses characters of its own script and the app's marks only",
+          "[i18n][catalogue][script]") {
+    for (const Language& l : read_languages()) {
+        if (!l.rtl) {
+            continue;
+        }
+        const Catalogue c = read_catalogue(catalogue_path(l));
+        for (const Entry& e : c.entries) {
+            if (!e.type.isEmpty()) {
+                continue;
+            }
+            for (const QString& form : e.forms) {
+                for (const char32_t ch : form.toUcs4()) {
+                    INFO(str(l.code) << " / " << str(e.id) << ": U+"
+                                     << QString::number(static_cast<uint>(ch), 16).toUpper().toStdString()
+                                     << " in " << str(form));
+                    CHECK(allowed_in_rtl_catalogue(l.code, ch));
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("a right-to-left string that opens with a Latin word opens with a right-to-left mark",
+          "[i18n][catalogue][bidi]") {
+    // Qt Quick Text takes a string's direction from its first strong
+    // character. "Cubeulator ..." with nothing before it is laid out left to
+    // right: the words come out in the wrong order and the text sits against
+    // the wrong edge (seen in the browser build). U+200F first fixes it. The
+    // product name on its own (app.name, the first row of the licences) is a
+    // name and not a sentence.
+    const QRegularExpression placeholder(QStringLiteral("%L?[0-9n]+"));
+    for (const Language& l : read_languages()) {
+        if (!l.rtl) {
+            continue;
+        }
+        const Catalogue c = read_catalogue(catalogue_path(l));
+        for (const Entry& e : c.entries) {
+            if (!e.type.isEmpty() || e.id == QLatin1String("app.name") ||
+                e.id == QLatin1String("licences.own")) {
+                continue;
+            }
+            for (const QString& form : e.forms) {
+                QString text = form;
+                text.remove(placeholder);
+                for (const QChar ch : text) {
+                    if (!ch.isLetter()) {
+                        continue;
+                    }
+                    INFO(str(l.code) << " / " << str(e.id) << ": " << str(form));
+                    if (ch.unicode() < 0x80) {
+                        CHECK(form.startsWith(QChar(0x200F)));
+                    }
+                    break;
+                }
+            }
+        }
+    }
+}

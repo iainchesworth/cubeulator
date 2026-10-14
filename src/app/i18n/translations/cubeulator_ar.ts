@@ -1857,7 +1857,7 @@ In your hands.</source>
     <message id="about.trademark">
         <source>Cubeulator is not affiliated with the makers of any cube.</source>
         <extracomment>Small print.</extracomment>
-        <translation>Cubeulator غير تابع لأي من الجهات المصنّعة للمكعبات.</translation>
+        <translation>‏Cubeulator غير تابع لأي من الجهات المصنّعة للمكعبات.</translation>
     </message>
     <message id="about.build">
         <source>%1 · built from %2</source>

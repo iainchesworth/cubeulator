@@ -608,7 +608,7 @@ In your hands.</source>
     <message id="permission.body">
         <source>Cubeulator reads your cube's colours through the camera.</source>
         <extracomment>First paragraph.</extracomment>
-        <translation>Cubeulator לײענט די פֿאַרבן פֿון אײַער קוביע דורך דער קאַמערע.</translation>
+        <translation>‏Cubeulator לײענט די פֿאַרבן פֿון אײַער קוביע דורך דער קאַמערע.</translation>
     </message>
     <message id="permission.point1">
         <source>The camera picture is used on this device only.</source>
@@ -643,7 +643,7 @@ In your hands.</source>
     <message id="permission.refused.body">
         <source>Cubeulator cannot scan without the camera. You can allow it in your device's settings, or enter the colours by hand.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator קען נישט סקאַנירן אָן דער קאַמערע. איר קענט עס דערלױבן אין די אײַנשטעלונגען פֿון אײַער אַפּאַראַט, אָדער אַרײַנגעבן די פֿאַרבן מיט דער האַנט.</translation>
+        <translation>‏Cubeulator קען נישט סקאַנירן אָן דער קאַמערע. איר קענט עס דערלױבן אין די אײַנשטעלונגען פֿון אײַער אַפּאַראַט, אָדער אַרײַנגעבן די פֿאַרבן מיט דער האַנט.</translation>
     </message>
     <message id="permission.askAgain">
         <source>Ask again</source>
@@ -653,7 +653,7 @@ In your hands.</source>
     <message id="permission.system.camera">
         <source>Cubeulator uses the camera to read the colours on your cube. Pictures stay on this device.</source>
         <extracomment>The reason shown by iOS and macOS inside their own permission prompt (NSCameraUsageDescription). One or two sentences.</extracomment>
-        <translation>Cubeulator באַנוצט די קאַמערע כּדי צו לײענען די פֿאַרבן אױף אײַער קוביע. בילדער בלײַבן אױף דעם אַפּאַראַט.</translation>
+        <translation>‏Cubeulator באַנוצט די קאַמערע כּדי צו לײענען די פֿאַרבן אױף אײַער קוביע. בילדער בלײַבן אױף דעם אַפּאַראַט.</translation>
     </message>
     <message id="scan.title.starting">
         <source>Starting the camera…</source>
@@ -999,7 +999,7 @@ In your hands.</source>
     <message id="review.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Try again, or scan it instead.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator האָט נישט געקענט אױסרעכענען װי אַזױ די קוביע אױפֿצולײזן. פּרובירט נאָך אַ מאָל, אָדער סקאַנירט זי.</translation>
+        <translation>‏Cubeulator האָט נישט געקענט אױסרעכענען װי אַזױ די קוביע אױפֿצולײזן. פּרובירט נאָך אַ מאָל, אָדער סקאַנירט זי.</translation>
     </message>
     <message id="review.discard.title">
         <source>Discard these colours?</source>
@@ -1052,7 +1052,7 @@ In your hands.</source>
     <message id="solve.failed.body">
         <source>Cubeulator could not work out how to solve this cube. Check the colours, or scan it again.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator האָט נישט געקענט אױסרעכענען װי אַזױ די קוביע אױפֿצולײזן. קוקט איבער די פֿאַרבן, אָדער סקאַנירט נאָך אַ מאָל.</translation>
+        <translation>‏Cubeulator האָט נישט געקענט אױסרעכענען װי אַזױ די קוביע אױפֿצולײזן. קוקט איבער די פֿאַרבן, אָדער סקאַנירט נאָך אַ מאָל.</translation>
     </message>
     <message id="solve.alreadySolved.title">
         <source>This cube is already solved</source>
@@ -1684,7 +1684,7 @@ In your hands.</source>
     <message id="settings.camera.choose">
         <source>Cubeulator reads the cube with this camera.</source>
         <extracomment>Text above the list of cameras.</extracomment>
-        <translation>Cubeulator לײענט די קוביע מיט דער דאָזיקער קאַמערע.</translation>
+        <translation>‏Cubeulator לײענט די קוביע מיט דער דאָזיקער קאַמערע.</translation>
     </message>
     <message id="settings.camera.none">
         <source>No camera was found. Plug one in, then look again.</source>
@@ -1829,7 +1829,7 @@ In your hands.</source>
     <message id="about.trademark">
         <source>Cubeulator is not affiliated with the makers of any cube.</source>
         <extracomment>Small print.</extracomment>
-        <translation>Cubeulator איז נישט פֿאַרבונדן מיט די מאַכערס פֿון קײן קוביע.</translation>
+        <translation>‏Cubeulator איז נישט פֿאַרבונדן מיט די מאַכערס פֿון קײן קוביע.</translation>
     </message>
     <message id="about.build">
         <source>%1 · built from %2</source>
@@ -1864,7 +1864,7 @@ In your hands.</source>
     <message id="licences.intro">
         <source>Cubeulator is built with these components. Each is used under its own licence.</source>
         <extracomment>Text above the list.</extracomment>
-        <translation>Cubeulator איז געבױט פֿון די דאָזיקע קאָמפּאָנענטן. יעדער װערט באַנוצט לױט זײַן אײגענער ליצענץ.</translation>
+        <translation>‏Cubeulator איז געבױט פֿון די דאָזיקע קאָמפּאָנענטן. יעדער װערט באַנוצט לױט זײַן אײגענער ליצענץ.</translation>
     </message>
     <message id="licences.own">
         <source>Cubeulator</source>
@@ -1904,7 +1904,7 @@ In your hands.</source>
     <message id="privacy.history.body">
         <source>Cubeulator keeps a list of the cubes you have solved: the colours, the turns, the date and how long it took. It stays on this device. You can clear it, or turn it off, in Settings.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator היט אַ רשימה פֿון די קוביעס װאָס איר האָט אױפֿגעלײזט: די פֿאַרבן, די דרײען, דאָס דאַטום און װי לאַנג עס האָט גענומען. עס בלײַבט אױף דעם אַפּאַראַט. איר קענט עס אױסמעקן, אָדער אױסלעשן, אין די אײַנשטעלונגען.</translation>
+        <translation>‏Cubeulator היט אַ רשימה פֿון די קוביעס װאָס איר האָט אױפֿגעלײזט: די פֿאַרבן, די דרײען, דאָס דאַטום און װי לאַנג עס האָט גענומען. עס בלײַבט אױף דעם אַפּאַראַט. איר קענט עס אױסמעקן, אָדער אױסלעשן, אין די אײַנשטעלונגען.</translation>
     </message>
     <message id="privacy.network.title">
         <source>The internet</source>
@@ -1914,7 +1914,7 @@ In your hands.</source>
     <message id="privacy.network.body">
         <source>Cubeulator does not use the internet. It has no accounts, no adverts and no tracking.</source>
         <extracomment>Body.</extracomment>
-        <translation>Cubeulator באַנוצט נישט דעם אינטערנעץ. עס האָט נישט קײן חשבונות, קײן רעקלאַמעס, קײן נאָכפֿאָלגונג.</translation>
+        <translation>‏Cubeulator באַנוצט נישט דעם אינטערנעץ. עס האָט נישט קײן חשבונות, קײן רעקלאַמעס, קײן נאָכפֿאָלגונג.</translation>
     </message>
     <message id="help.title">
         <source>Help</source>
@@ -2058,7 +2058,7 @@ It does not yet read cubes without stickers, cubes made of white or light plasti
 
 It does not work with other sizes of cube.</source>
         <extracomment>Body of a Help topic. Paragraphs are separated by a blank line. Keep the short sentences.</extracomment>
-        <translation>Cubeulator אַרבעט מיט אַ געװײנטלעכער 3x3 קוביע: נײַן פֿאַרביקע קלעפּצעטלעך אױף יעדער זײַט, מיט פֿינצטער פּלאַסטיק צװישן זײ, אין װײַס, געל, רױט, אָראַנזש, גרין און בלאָ.
+        <translation>‏Cubeulator אַרבעט מיט אַ געװײנטלעכער 3x3 קוביע: נײַן פֿאַרביקע קלעפּצעטלעך אױף יעדער זײַט, מיט פֿינצטער פּלאַסטיק צװישן זײ, אין װײַס, געל, רױט, אָראַנזש, גרין און בלאָ.
 
 ער לײענט נאָך נישט קײן קוביעס אָן קלעפּצעטלעך, קוביעס פֿון װײַסן אָדער העלן פּלאַסטיק, קוביעס מיט בילדער, אָדער קוביעס אין אַנדערע פֿאַרבן. איר קענט אָבער נאָך אַלץ אַרײַנגעבן אַזאַ אײנע מיט דער האַנט, װען מע קען צופּאַסן אירע זעקס פֿאַרבן צו די זעקס דאָ.
 
@@ -2127,7 +2127,7 @@ F1 עפֿנט די הילף.</translation>
     <message id="menu.helpItem">
         <source>Cubeulator Help</source>
         <extracomment>Menu item, macOS Help menu.</extracomment>
-        <translation>Cubeulator הילף</translation>
+        <translation>‏Cubeulator הילף</translation>
     </message>
     <message id="menu.enterByHand">
         <source>Enter Colours by Hand</source>

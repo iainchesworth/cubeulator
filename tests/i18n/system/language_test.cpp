@@ -323,7 +323,8 @@ namespace {
 
 // The converted screens of the real window, in `language` at one layout:
 // nothing cut off, off the window or out of its pane. The pseudo-locale is the
-// proxy for a real translation; the real Japanese and Chinese run the same.
+// proxy for a real translation; the real drafts (Japanese, Chinese, Hebrew,
+// Arabic, Yiddish) run the same.
 void nothing_is_cut_off_in(const char* language, Layout layout) {
     App& app = App::fresh();
     LanguageGuard guard(app);
@@ -370,9 +371,12 @@ TEST_CASE("the pseudo-locale cuts nothing off on the converted screens",
     }
 }
 
-TEST_CASE("the real Japanese and Chinese cut nothing off on the converted screens",
+TEST_CASE("the real Japanese, Chinese, Hebrew, Arabic and Yiddish cut nothing off on the "
+          "converted screens",
           "[system][language][cjk]") {
-    const char* language = GENERATE("ja", "zh-CN");
+    // The drafts, not their proxy. The three right-to-left ones are mirrored
+    // as well, which the pseudo-locale (left to right) never is.
+    const char* language = GENERATE("ja", "zh-CN", "he", "ar", "yi");
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION(language << " in the " << cube::systest::to_string(layout) << " layout") {
         nothing_is_cut_off_in(language, layout);
