@@ -101,6 +101,16 @@ public:
 
     [[nodiscard]] Cube apply(Move move) const noexcept;
 
+    // The 54 facelets numbered face * 9 + index (Face's enumerator order, the
+    // row-major index within the face): where the sticker at each one lands
+    // when a move is applied. This is the table apply() itself runs on, for a
+    // search that follows a few pieces rather than copying whole cubes -
+    // `map[f]` is the facelet that shows, after the move, what `f` showed
+    // before it. Entries 54..63 and every entry for a malformed move map to
+    // themselves, as apply() leaves such a cube alone.
+    using FaceletMap = std::array<std::uint8_t, 64>;
+    [[nodiscard]] static const FaceletMap& facelet_map(Move move) noexcept;
+
     // True iff every sticker on every face matches that face's (fixed)
     // centre sticker.
     [[nodiscard]] bool is_solved() const noexcept;

@@ -55,6 +55,8 @@ Item {
             return "";
         if (DirectScan.settingUp)
             return "Setting the camera's exposure and colour balance…";
+        if (DirectScan.ambiguous)
+            return "These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.";
         if (DirectScan.conflicted)
             return "These six sides do not make a valid cube yet. Show each side again, square to the camera.";
         if (DirectScan.reading)

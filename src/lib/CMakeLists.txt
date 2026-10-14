@@ -22,7 +22,7 @@ set(CUBEULATOR_VERSION_HEADER "${CMAKE_CURRENT_BINARY_DIR}/generated/cube/versio
 cube_describe_build_target(CUBEULATOR_BUILD_TARGET)
 
 # Generate once at configure time so the header exists for the first build.
-set(CUBEULATOR_VERSION "${PROJECT_VERSION}")
+set(CUBEULATOR_VERSION "${CUBEULATOR_VERSION_FULL}")
 set(SRC "${CUBEULATOR_VERSION_TEMPLATE}")
 set(DST "${CUBEULATOR_VERSION_HEADER}")
 set(WORKDIR "${PROJECT_SOURCE_DIR}")
@@ -34,7 +34,7 @@ include("${PROJECT_SOURCE_DIR}/cmake/GenerateVersion.cmake")
 add_custom_target(cube_version ALL
     BYPRODUCTS "${CUBEULATOR_VERSION_HEADER}"
     COMMAND "${CMAKE_COMMAND}"
-        "-DCUBEULATOR_VERSION=${PROJECT_VERSION}"
+        "-DCUBEULATOR_VERSION=${CUBEULATOR_VERSION_FULL}"
         "-DCUBEULATOR_BUILD_TARGET=${CUBEULATOR_BUILD_TARGET}"
         "-DSRC=${CUBEULATOR_VERSION_TEMPLATE}"
         "-DDST=${CUBEULATOR_VERSION_HEADER}"
@@ -67,7 +67,9 @@ target_sources(cube_lib
         src/vision/color_resolution.cpp
         src/vision/color_classification.cpp
         src/vision/recording_v2.cpp
+        src/vision/prepared_frame.cpp
         src/vision/direct_scan.cpp
+        src/vision/corner_view.cpp
         src/vision/held_cube.cpp
         src/i18n/i18n.cpp)
 

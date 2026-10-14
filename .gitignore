@@ -28,6 +28,8 @@ mono_crash.*
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# ... but tools/release is the release tooling (docs/releasing.md), source.
+!/tools/release/
 
 [Dd]ebug/x64/
 [Dd]ebugPublic/x64/

@@ -50,7 +50,7 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Progress
 
-**2026-10-13.** R0, R2, R6 done; R1 started; R3 half done; R4 not run.
+**2026-10-14.** R0, R2, R6 done; R1 started; R3 half done; R4 not run; R5(b) started.
 
 - **R0.** Previous tip tagged `archive/tracking-first`. Webcam frames
   showing the user (`tests/data/captures`, `docs/evidence`) are removed from
@@ -186,6 +186,21 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   and fed nothing back to the product. `cube_scan board` is the scoreboard.
   `docs/vision-pipeline.md` and `docs/recording-format.md` describe what is
   left.
+- **R5(b), started.** About one scrambled cube in eighty (12 of 1000) is two
+  cubes to six flat square-on sides, however well read. `read_corner` finds
+  two or three lattices that touch in frames with no square-on side;
+  `fit_corner` asks whether a candidate cube explains them (each side matches
+  under a quarter-turn and the shared edges meet where the cube puts them);
+  `SideScan` takes the candidate most corner reads fit. `cube_scan corners`
+  scores it against truth: on the six two-side frames in the recorded
+  sessions, 4 fit the true cube and rule out 17-18 of the 18 cubes one turn
+  away; the 2 that did not were narrow strips. An ambiguous cube drawn with
+  its corner views settles to the true cube through `SideScan` and through
+  the app's controller, which says so (`ambiguous`) rather than "show each
+  side again". Not done: a recording of a person turning a real ambiguous
+  cube, so the end-to-end rate is unmeasured; reading three sides at once as
+  a faster way to scan; R5(a), reading a side up to about 35 degrees off
+  square-on.
 
 ## Why it does not work today
 

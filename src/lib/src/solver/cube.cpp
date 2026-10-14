@@ -172,10 +172,10 @@ constexpr MoveTable make_move_table(Face turned, int turns) {
             if (new_face == face && new_index == index) {
                 continue;  // the turned face's own centre
             }
-            table[count++] = StickerMove{.dst_face = new_face,
-                                         .dst_index = static_cast<std::uint8_t>(new_index),
-                                         .src_face = face,
-                                         .src_index = static_cast<std::uint8_t>(index)};
+            table.at(count++) = StickerMove{.dst_face = new_face,
+                                            .dst_index = static_cast<std::uint8_t>(new_index),
+                                            .src_face = face,
+                                            .src_index = static_cast<std::uint8_t>(index)};
         }
     }
     if (count != table.size()) {
@@ -189,11 +189,40 @@ constexpr auto kMoveTables = [] {
     std::array<std::array<MoveTable, 3>, 6> tables{};
     for (Face face : kAllFaces) {
         for (int turns = 1; turns <= 3; ++turns) {
-            tables[static_cast<std::size_t>(face)][static_cast<std::size_t>(turns - 1)] =
+            tables.at(static_cast<std::size_t>(face)).at(static_cast<std::size_t>(turns - 1)) =
                 make_move_table(face, turns);
         }
     }
     return tables;
+}();
+
+// The same tables seen from the stickers' side: facelet (face * 9 + index) to
+// the facelet it moves to. Built from kMoveTables, so it cannot disagree with
+// apply().
+constexpr auto kFaceletMaps = [] {
+    std::array<std::array<Cube::FaceletMap, 3>, 6> maps{};
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t turns = 0; turns < 3; ++turns) {
+            Cube::FaceletMap& map = maps.at(face).at(turns);
+            for (std::size_t i = 0; i < map.size(); ++i) {
+                map.at(i) = static_cast<std::uint8_t>(i);
+            }
+            for (const StickerMove& sticker : kMoveTables.at(face).at(turns)) {
+                map.at(static_cast<std::size_t>(sticker.src_face) * 9 + sticker.src_index) =
+                    static_cast<std::uint8_t>(static_cast<std::size_t>(sticker.dst_face) * 9 +
+                                              sticker.dst_index);
+            }
+        }
+    }
+    return maps;
+}();
+
+constexpr Cube::FaceletMap kIdentityFaceletMap = [] {
+    Cube::FaceletMap map{};
+    for (std::size_t i = 0; i < map.size(); ++i) {
+        map.at(i) = static_cast<std::uint8_t>(i);
+    }
+    return map;
 }();
 
 struct EdgePosition {
@@ -235,10 +264,10 @@ constexpr auto kEdgePositions = [] {
                         indices[n] = static_cast<std::uint8_t>(index_on_face(face, pos));
                         ++n;
                     }
-                    positions[count++] = EdgePosition{.face_a = faces[0],
-                                                      .index_a = indices[0],
-                                                      .face_b = faces[1],
-                                                      .index_b = indices[1]};
+                    positions.at(count++) = EdgePosition{.face_a = faces[0],
+                                                         .index_a = indices[0],
+                                                         .face_b = faces[1],
+                                                         .index_b = indices[1]};
                 }
             }
         }
@@ -258,12 +287,12 @@ constexpr auto kCornerPositions = [] {
                     if (dot(face_normal(face), Vec3{.x = cx, .y = cy, .z = cz}) != 1) {
                         continue;
                     }
-                    corner.faces[static_cast<std::size_t>(n)] = face;
-                    corner.indices[static_cast<std::size_t>(n)] = static_cast<std::uint8_t>(
+                    corner.faces.at(static_cast<std::size_t>(n)) = face;
+                    corner.indices.at(static_cast<std::size_t>(n)) = static_cast<std::uint8_t>(
                         index_on_face(face, Vec3{.x = cx, .y = cy, .z = cz}));
                     ++n;
                 }
-                positions[count++] = corner;
+                positions.at(count++) = corner;
             }
         }
     }
@@ -293,11 +322,11 @@ Result<Cube> Cube::from_facelets(const std::array<std::array<Color, 9>, 6>& face
 }
 
 Color Cube::at(Face face, int index) const noexcept {
-    return facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
+    return facelets_.at(static_cast<std::size_t>(face)).at(static_cast<std::size_t>(index));
 }
 
 std::array<Color, 9> Cube::face(Face face) const noexcept {
-    return facelets_[static_cast<std::size_t>(face)];
+    return facelets_.at(static_cast<std::size_t>(face));
 }
 
 Cube Cube::apply(Move move) const noexcept {
@@ -312,17 +341,26 @@ Cube Cube::apply(Move move) const noexcept {
         static_cast<std::size_t>(move.face) >= kMoveTables.size()) {
         return result;
     }
-    for (const StickerMove& sticker : kMoveTables[static_cast<std::size_t>(move.face)]
-                                                 [static_cast<std::size_t>(move.turns - 1)]) {
+    for (const StickerMove& sticker : kMoveTables.at(static_cast<std::size_t>(move.face))
+                                          .at(static_cast<std::size_t>(move.turns - 1))) {
         result.set(sticker.dst_face, sticker.dst_index, at(sticker.src_face, sticker.src_index));
     }
     return result;
 }
 
+const Cube::FaceletMap& Cube::facelet_map(Move move) noexcept {
+    if (move.turns < 1 || move.turns > 3 ||
+        static_cast<std::size_t>(move.face) >= kFaceletMaps.size()) {
+        return kIdentityFaceletMap;
+    }
+    return kFaceletMaps.at(static_cast<std::size_t>(move.face))
+        .at(static_cast<std::size_t>(move.turns - 1));
+}
+
 bool Cube::is_solved() const noexcept {
     for (Face face : kAllFaces) {
-        const auto& stickers = facelets_[static_cast<std::size_t>(face)];
-        const Color center = stickers[4];
+        const auto& stickers = facelets_.at(static_cast<std::size_t>(face));
+        const Color center = stickers.at(4);
         for (Color sticker : stickers) {
             if (sticker != center) {
                 return false;
@@ -357,8 +395,8 @@ constexpr int axis_pair_of(Color color) noexcept {
 bool Cube::is_physically_valid() const noexcept {
     std::array<int, 6> color_counts{};
     for (Face face : kAllFaces) {
-        for (Color sticker : facelets_[static_cast<std::size_t>(face)]) {
-            ++color_counts[static_cast<std::size_t>(sticker)];
+        for (Color sticker : facelets_.at(static_cast<std::size_t>(face))) {
+            ++color_counts.at(static_cast<std::size_t>(sticker));
         }
     }
     for (int count : color_counts) {
@@ -390,16 +428,16 @@ bool Cube::is_physically_valid() const noexcept {
                         continue;  // this face doesn't touch this corner
                     }
                     const int index = index_on_face(face, Vec3{.x = cx, .y = cy, .z = cz});
-                    colors[static_cast<std::size_t>(n)] = at(face, index);
+                    colors.at(static_cast<std::size_t>(n)) = at(face, index);
                     ++n;
                 }
                 std::array<bool, 3> seen_pair{false, false, false};
                 for (int i = 0; i < 3; ++i) {
-                    const int pair = axis_pair_of(colors[static_cast<std::size_t>(i)]);
-                    if (pair < 0 || seen_pair[static_cast<std::size_t>(pair)]) {
+                    const int pair = axis_pair_of(colors.at(static_cast<std::size_t>(i)));
+                    if (pair < 0 || seen_pair.at(static_cast<std::size_t>(pair))) {
                         return false;  // duplicate axis-pair on one corner: impossible
                     }
-                    seen_pair[static_cast<std::size_t>(pair)] = true;
+                    seen_pair.at(static_cast<std::size_t>(pair)) = true;
                 }
             }
         }
@@ -421,14 +459,14 @@ bool Cube::is_physically_valid() const noexcept {
                             continue;
                         }
                         const int index = index_on_face(face, pos);
-                        colors[static_cast<std::size_t>(n)] = at(face, index);
+                        colors.at(static_cast<std::size_t>(n)) = at(face, index);
                         ++n;
                     }
                     if (n != 2) {
                         continue;  // this axis pair is the edge's own zero coordinate
                     }
-                    const int pair0 = axis_pair_of(colors[0]);
-                    const int pair1 = axis_pair_of(colors[1]);
+                    const int pair0 = axis_pair_of(colors.at(0));
+                    const int pair1 = axis_pair_of(colors.at(1));
                     if (pair0 < 0 || pair1 < 0 || pair0 == pair1) {
                         return false;  // impossible colour combination on one edge
                     }
@@ -481,8 +519,8 @@ constexpr int permutation_parity(const std::array<int, N>& perm) noexcept {
     int parity = 0;
     for (std::size_t i = 0; i < N; ++i) {
         int length = 0;
-        for (std::size_t j = i; !visited[j]; j = static_cast<std::size_t>(perm[j])) {
-            visited[j] = true;
+        for (std::size_t j = i; !visited.at(j); j = static_cast<std::size_t>(perm.at(j))) {
+            visited.at(j) = true;
             ++length;
         }
         if (length != 0) {
@@ -569,11 +607,11 @@ bool Cube::is_solvable() const noexcept {
                 // the corner position this cubie occupies on a solved
                 // cube: its home slot.
                 const int target = corner_slot(home);
-                if (corner_home_seen[static_cast<std::size_t>(target)]) {
+                if (corner_home_seen.at(static_cast<std::size_t>(target))) {
                     return false;  // the same cubie twice: no real cube has that
                 }
-                corner_home_seen[static_cast<std::size_t>(target)] = true;
-                corner_perm[static_cast<std::size_t>(corner_slot(pos))] = target;
+                corner_home_seen.at(static_cast<std::size_t>(target)) = true;
+                corner_perm.at(static_cast<std::size_t>(corner_slot(pos))) = target;
             }
         }
     }
@@ -633,11 +671,11 @@ bool Cube::is_solvable() const noexcept {
                     // different axes, so their sum is the cubie's solved
                     // position.
                     const int target = edge_slot(home);
-                    if (edge_home_seen[static_cast<std::size_t>(target)]) {
+                    if (edge_home_seen.at(static_cast<std::size_t>(target))) {
                         return false;  // duplicated edge cubie
                     }
-                    edge_home_seen[static_cast<std::size_t>(target)] = true;
-                    edge_perm[static_cast<std::size_t>(edge_slot(pos))] = target;
+                    edge_home_seen.at(static_cast<std::size_t>(target)) = true;
+                    edge_perm.at(static_cast<std::size_t>(edge_slot(pos))) = target;
                 }
             }
         }
@@ -683,12 +721,12 @@ Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
 
 Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexcept {
     for (const CornerPosition& position : kCornerPositions) {
-        const std::array<Color, 3> colors = {at(position.faces[0], position.indices[0]),
-                                             at(position.faces[1], position.indices[1]),
-                                             at(position.faces[2], position.indices[2])};
+        const std::array<Color, 3> colors = {at(position.faces.at(0), position.indices.at(0)),
+                                             at(position.faces.at(1), position.indices.at(1)),
+                                             at(position.faces.at(2), position.indices.at(2))};
         auto slot_of = [&](Color target) -> int {
             for (int i = 0; i < 3; ++i) {
-                if (colors[static_cast<std::size_t>(i)] == target) {
+                if (colors.at(static_cast<std::size_t>(i)) == target) {
                     return i;
                 }
             }
@@ -701,12 +739,12 @@ Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexce
             const auto fa = static_cast<std::size_t>(ia);
             const auto fb = static_cast<std::size_t>(ib);
             const auto fc = static_cast<std::size_t>(ic);
-            return {.face_a = position.faces[fa],
-                    .index_a = position.indices[fa],
-                    .face_b = position.faces[fb],
-                    .index_b = position.indices[fb],
-                    .face_c = position.faces[fc],
-                    .index_c = position.indices[fc]};
+            return {.face_a = position.faces.at(fa),
+                    .index_a = position.indices.at(fa),
+                    .face_b = position.faces.at(fb),
+                    .index_b = position.indices.at(fb),
+                    .face_c = position.faces.at(fc),
+                    .index_c = position.indices.at(fc)};
         }
     }
     return {};  // unreachable for a physically valid cube

@@ -12,8 +12,21 @@ set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 
+# The system tests draw the real app in a real window, and on a developer's
+# desktop that window would otherwise flick through every screen in front of
+# whatever they are doing, and hold the foreground (the developer's keystrokes
+# go to it) for as long as the run lasts. A fully transparent, click-through,
+# non-activating tool window is still exposed and rendered by Qt, so that is
+# what the suite creates. Neither of the other ways of getting a window out of
+# the way works: minimised, it never gets its size, and positioned outside
+# every monitor, Windows sends it no expose event and the test cannot start.
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW ON)
+
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "C:/Qt" "$ENV{USERPROFILE}/Qt")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS msvc2022_64 msvc2019_64 mingw_64)
+
+# The installer's root: the licence and the notices sit beside bin/.
+set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/windows/camera_windows.cpp
@@ -80,11 +93,23 @@ function(cube_platform_deploy_qt_library target qt_target)
         COMMENT "copying $<TARGET_FILE_NAME:${qt_target}> next to $<TARGET_FILE_NAME:${target}>")
 endfunction()
 
+# The NSIS installer: Start menu entry, uninstaller, version, icon.
+# packaging/windows/Packaging.cmake.
 macro(cube_platform_configure_packaging)
-    find_program(CUBEULATOR_MAKENSIS_EXECUTABLE makensis)
-    if(CUBEULATOR_MAKENSIS_EXECUTABLE)
-        list(APPEND CPACK_GENERATOR "NSIS")
-        set(CPACK_NSIS_PACKAGE_NAME "${CPACK_PACKAGE_NAME}")
-        set(CPACK_NSIS_ENABLE_UNINSTALL_BEFORE_INSTALL ON)
-    endif()
+    include("${PROJECT_SOURCE_DIR}/packaging/windows/Packaging.cmake")
 endmacro()
+
+# The shell's Windows implementation: a display-required execution state and
+# the AppUserModelID. SetCurrentProcessExplicitAppUserModelID lives in shell32.
+function(cube_platform_configure_desktop_shell target)
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/app/platform/windows/desktop_shell_windows.cpp")
+    target_link_libraries(${target} PRIVATE shell32)
+endfunction()
+
+# Cubeulator.exe with its version resource and icon, and install rules that
+# carry the vcpkg DLLs, Qt and the C++ runtime beside it.
+# packaging/windows/ConfigureApp.cmake.
+function(cube_platform_configure_desktop_app target)
+    include("${PROJECT_SOURCE_DIR}/packaging/windows/ConfigureApp.cmake")
+endfunction()

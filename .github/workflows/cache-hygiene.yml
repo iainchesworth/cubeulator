@@ -14,11 +14,28 @@ name: Cache hygiene
 # ci/prune-actions-cache.sh holds the rules. Not a gate: nothing waits for it.
 
 on:
-  # A closed PR's caches go as soon as it is closed (merged, or not).
+  # A closed PR's caches go as soon as it is closed (merged, or not), and an
+  # open one's superseded generations go on each push: a PR that changes the
+  # dependency set stores a full copy per job and per cancelled run, and three
+  # of them (5.4 GB) were observed at once under one PR ref.
   pull_request:
-    types: [closed]
+    types: [synchronize, closed]
   # Each merge stores a new vcpkg generation; the previous one goes with it.
+  # A push prunes BEFORE the run it started has saved that generation, which
+  # leaves two behind until the next push; the workflow_run trigger below
+  # prunes after it.
   push:
+    branches: [main, develop]
+  # After a CI or CodeQL run on develop or main finished saving its caches.
+  # `workflow_run` is read from the default branch, so this only takes effect
+  # once a release has put this file on main; until then the push trigger
+  # above is the sweep. It checks out the default branch and runs only that
+  # code, and takes nothing from the triggering run, so a pull request's
+  # branch name and code never reach it.
+  # zizmor: ignore[dangerous-triggers] main's own script, nothing taken from the event
+  workflow_run:
+    workflows: [CI, "CodeQL (C++)"]
+    types: [completed]
     branches: [main, develop]
   workflow_dispatch:
     inputs:
@@ -48,10 +65,18 @@ jobs:
     name: Prune Actions caches
     # A fork PR's token cannot delete anything, and a fork's caches are not in
     # this repository's quota in the first place.
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-    # Hosted, not the self-hosted fleet: it needs gh and jq, which the hosted
-    # image carries, and a missed run only means the next one catches up.
-    runs-on: ubuntu-26.04
+    if: >-
+      ${{
+        (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        && (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion != 'cancelled')
+      }}
+    # Routed like the other seconds-long jobs (docs/ci.md, "Self-hosted
+    # runners"): by the CONTROL_RUNNER_JSON repository variable, unset meaning
+    # the hosted image, and a fork PR pinned to hosted whatever it says. The
+    # hosted pool is saturated for hours by the build legs, and a prune that
+    # waits behind them is cancelled by the next one before it ever starts
+    # (most of its first day's runs). The fleet image ships gh and jq.
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-26.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-26.04"]') }}
     timeout-minutes: 15
     permissions:
       actions: write # delete cache entries (gh cache delete)

@@ -23,6 +23,7 @@ enum class CubeError : std::uint8_t {
     camera_control_unavailable,
     no_valid_cube_detected,
     face_capture_incomplete,
+    ambiguous_scan,
 
     // Edge-AI / inference
     model_load_failed,
@@ -53,6 +54,8 @@ enum class CubeError : std::uint8_t {
             return "no valid cube was detected in the frame";
         case CubeError::face_capture_incomplete:
             return "not all faces have been captured yet";
+        case CubeError::ambiguous_scan:
+            return "the scanned sides can be put together in more than one way";
         case CubeError::model_load_failed:
             return "the inference model could not be loaded";
         case CubeError::inference_provider_unavailable:

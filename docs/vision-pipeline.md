@@ -20,15 +20,23 @@ flowchart TD
     CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV)"] --> LOCK["PhotometryLock<br/>exposure + white balance held"]
     LOCK --> LOOP["OpenCvCaptureLoop<br/>capture thread, mailbox of 1"]
     LOOP -->|BGR frame| CTRL["DirectScan::processFrame<br/>GUI thread, poll timer"]
-    CTRL --> READ["read_side<br/>blobs -> lattice -> nine Lab samples"]
+    CTRL --> PREP["prepare_frame<br/>working width, threshold, outlines - once"]
+    PREP --> READ["read_side<br/>blobs -> lattice -> nine Lab samples"]
     READ -->|"std::optional&lt;SideRead&gt;"| SCAN["SideScan::add<br/>group reads into sides"]
+    READ -.->|"no square-on side"| CORNER["read_corner<br/>two or three lattices that touch"]
+    PREP -.-> CORNER
+    CORNER -.-> SCAN2["SideScan::add_corner"]
     SCAN --> SIX{"six captured sides?"}
     SIX -->|no| CTRL
     SIX -->|yes| NAME["resolve_colors<br/>54 stickers -> 6 groups of 9"]
     NAME --> ASM["assemble_scanned_faces<br/>4^6 per-side rolls"]
-    ASM --> VALID{"Cube::from_facelets<br/>physically valid, solvable"}
-    VALID -->|no| REPAIR["naming repair:<br/>exchange two names"]
+    ASM --> VALID{"how many solvable cubes?"}
+    VALID -->|none| REPAIR["naming repair:<br/>exchange two names"]
     REPAIR --> ASM
+    VALID -->|several| TIE["fit_corner<br/>which one do the corner reads fit?"]
+    SCAN2 -.-> TIE
+    TIE -->|one| SOLVE
+    TIE -->|none or tied| AMBIG["ambiguous_scan:<br/>turn the cube so two sides show"]
     VALID -->|yes| SOLVE["solver::solve<br/>on a worker thread"]
     SOLVE --> STEP["SteppedSolution<br/>the solve screen steps through it"]
 ```
@@ -40,9 +48,12 @@ It needs a side held roughly square to the camera and relies on darker plastic
 between and around the stickers; a side seen at an angle, a lattice that does
 not span three rows and three columns, or no cube all return nothing.
 
-1. **Sticker blobs.** The frame is reduced to the working width, the maximum
-   channel is taken as the value image, blurred, and thresholded adaptively;
-   contours that are roughly square and roughly sticker-sized survive.
+1. **Sticker blobs.** `prepare_frame` (`cube/vision/prepared_frame.hpp`)
+   reduces the frame to the working width, takes the maximum channel as the
+   value image, blurs it, thresholds it adaptively and traces the outlines.
+   It is done once per frame and handed to both readers, because it is most
+   of what a read costs; contours that are roughly square and roughly
+   sticker-sized survive `read_side`'s shape test.
 2. **Lattice.** The sticker pitch comes from nearest-neighbour distances and
    the direction from the folded angles. An affine least-squares fit places a
    3x3 lattice through the blobs, and the fit must span all three rows and
@@ -91,6 +102,47 @@ Once six sides are captured:
 (`SessionColours`), which the solve screen's held-cube matching compares
 against.
 
+## Two sides in one view: `read_corner` and `fit_corner`
+
+Six square-on reads say what is on each side but not which way up each is
+relative to its neighbours. For about one scrambled cube in eighty (12 of
+1000 25-move scrambles) that leaves two valid cubes, and a perfect read still
+cannot choose: `assemble_all_scanned_faces` returns both and the scan reports
+`ambiguous_scan`, which the screen words differently from a misread.
+
+A cube turned between sides, or held corner-on, shows two sides at once, and
+where they meet the stickers along the shared edge are neighbours - the fact
+the flat reads lack.
+
+1. **`read_corner`** takes the same prepared outlines with a looser shape test (a side
+   at an angle is a parallelogram: a compact four-cornered contour, not a
+   square), and finds up to three 3x3 lattices by RANSAC over blob triples,
+   each fitted by least squares with its steps turning clockwise so the side
+   reads unmirrored. Two lattices share an edge when two corners of each
+   coincide; read as seen from outside, they walk that edge in opposite
+   directions, which is also a check. It runs only on frames that have no
+   square-on read, and gives up on a scene with more than 48 blobs.
+2. **`fit_corner`** asks whether a candidate cube could have produced the
+   read, in the session's own colours: each lattice's centre names the cube
+   side it is; each side's nine colours must match that side under some
+   quarter-turn; and for each shared edge the side across the edge, in the
+   turn that matched, must be the other lattice's side, with the stickers
+   along it paired as the cube has them (checked on 3D sticker positions
+   from the solver's own layout, not drawn by hand).
+3. **`SideScan`** keeps the newest 48 corner reads. When six sides make
+   several cubes it takes the one that most corner reads fit and more than
+   any other; a read that fits all of them says nothing and one that fits
+   none is a blurred frame. No pose is estimated anywhere in this.
+
+Measured on the recorded sessions with `cube_scan corners`: 6 frames with
+two sides in view (the sessions hold sides square-on, so turns are quick);
+4 fit the true cube and rule out 17 or 18 of the 18 cubes one turn away, and
+the 2 that did not were the narrow ones (a side with only 6 or 7 of its 9
+stickers found, at a steep angle). An ambiguous cube drawn
+with its corner views is settled to the true cube. Whether a real person
+turning a real ambiguous cube produces a read that fits is not measured yet:
+no recorded session is one.
+
 ## Camera photometry
 
 Colour is only comparable across frames if the camera stops adjusting itself.
@@ -138,8 +190,11 @@ watching.
   dark plastic between stickers. The July 2026 corpus is such a cube and reads
   0 of 14.
 - **Square-on only.** A side seen at an angle returns nothing, by design.
-- **A cube one turn from solved** assembles two ways from square-on views of
-  its sides alone; telling them apart needs two sides in one view.
+- **A cube that six flat sides put together two ways** (about one in eighty,
+  and any cube one turn from solved) needs a corner view to settle, and the
+  corner reader is validated on six real frames and drawn ones only. A side
+  seen at a steep angle, or with a finger across it, may not fit; the scan
+  keeps asking for more until a read does.
 - **Light.** Hard backlit or glare conditions are not proven; the measured
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
@@ -153,6 +208,7 @@ watching.
 | `cube_scan replay <session-dir>` | One session: the cube and its solution |
 | `cube_scan board <root-dir>` | Every session under the root, against its `truth.txt` |
 | `cube_scan holds <session-dir>` | How the cube was held, frame by frame |
+| `cube_scan corners <session-dir>` | Frames showing two sides at once, and whether they fit the true cube |
 
 The only gate is a real recorded session ending in the exact true cube.
 `truth.txt` is six words of nine letters from `WYROGB`, one per side, each side

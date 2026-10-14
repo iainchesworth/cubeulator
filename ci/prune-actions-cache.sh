@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Prunes this repository's GitHub Actions caches so the 10 GB quota is spent on
-# entries something can still restore. Run by .github/workflows/cache-hygiene.yml
-# and usable by hand (needs `gh`, authenticated with actions:write, and `jq`).
+# entries something can still restore. Run by the cache-hygiene workflow and
+# usable by hand (needs `gh`, authenticated with actions:write, and `jq`).
 #
-#   ./ci/prune-actions-cache.sh --dry-run          # show what would go
-#   ./ci/prune-actions-cache.sh                    # delete it
-#   ./ci/prune-actions-cache.sh --purge vcpkg-binary-cache-x64-windows-
+#   prune-actions-cache.sh --dry-run               # show what would go
+#   prune-actions-cache.sh                         # delete it
+#   prune-actions-cache.sh --purge vcpkg-Windows-  # a manual reset, see rule 3
+#
+# The same file is kept in every repository of the family (cubeulator, ICL Forge,
+# aqualink-automate, CountdownSolver); the key shapes it knows are listed under
+# rule 2, and a repository simply has none of the ones it does not use.
 #
 # What it removes, in order:
 #
@@ -16,21 +20,30 @@
 #      holds quota until GitHub's LRU eviction gets to it, and that eviction
 #      does not look at who is useful: it took a one-hour macOS vcpkg cache
 #      within two hours of it being saved.
-#   2. Superseded generations. The vcpkg cache (.github/actions/vcpkg-cache) is
-#      content-addressed: every save under a new key is a full copy of the
-#      directory, and only the newest one per triplet is ever restored. Qt
-#      installs (jurplel/install-qt-action) leave the same trail when a Qt
-#      version or runner image moves on. Per ref and per family (vcpkg: the
-#      triplet; Qt: the OS and target) the newest entry is kept and older ones
-#      go, unless something has read them in the last --grace-minutes (a job
-#      that is mid-restore must not lose the entry it is downloading).
+#   2. Superseded generations. A cache that is saved under a new key whenever
+#      its content changes (a content hash, a commit, a manifest hash) leaves a
+#      full copy behind each time, and a restore takes only the newest. Per ref,
+#      per family and per cache version (the version is a hash of the cached
+#      paths, so a run with other paths never restores that entry anyway) the
+#      newest entry is kept and older ones go, unless something has read them
+#      in the last --grace-minutes (a job that is mid-restore must not lose the
+#      entry it is downloading). The families, by key shape:
+#
+#        vcpkg-binary-cache-<triplet>-<16 hex>        cubeulator
+#        vcpkg-binary-cache-<preset>-<64 hex>         CountdownSolver
+#        vcpkg[-downloads]-<OS>-<ARCH>-<40 hex>-<64 hex>[-<lineage>][-<16 hex>]
+#                                                     ICL Forge, aqualink-automate
+#        vcpkg-downloads-<40 hex>-<64 hex>            aqualink-automate
+#        ccache-<job>-<OS>-<ARCH>-<40 hex>            ICL Forge
+#        install-qt-action-<os>-...-<desktop|android|ios>-...
+#        cache-trivy-<date>                           aqualink-automate
 #   3. Anything matching --purge PREFIX, on every ref. This is the manual reset
 #      for a vcpkg cache that has carried stale archives for too long: archives
 #      are never garbage-collected, because vcpkg has no notion of "no longer
 #      used". The next run on that triplet rebuilds from cold.
 #
-# Entries of any other family (setup-uv, CodeQL, ...) are only ever removed by
-# rule 1 or --purge.
+# Entries of any other family (setup-uv, setup-node, CodeQL, ...) are only ever
+# removed by rule 1 or --purge.
 #
 # For tests and offline use the four live lookups can be replaced with files:
 # --caches-file (JSON array as `gh cache list --json` prints it), --refs-file
@@ -81,7 +94,7 @@ if [ -n "$CACHES_FILE" ]; then
     cp "$CACHES_FILE" "$WORK/caches.json"
 else
     gh cache list -R "$REPO" --limit 1000 \
-        --json id,key,ref,sizeInBytes,createdAt,lastAccessedAt > "$WORK/caches.json"
+        --json id,key,ref,version,sizeInBytes,createdAt,lastAccessedAt > "$WORK/caches.json"
 fi
 
 # --- What is still alive ------------------------------------------------------
@@ -112,11 +125,24 @@ PURGE_JSON="$(printf '%s\n' "${PURGE[@]+"${PURGE[@]}"}" | jq -R . | jq -s 'map(s
 # shellcheck disable=SC2016  # jq program, not shell
 JQ_PLAN='
 def family:
-  (.key | capture("^vcpkg-binary-cache-(?<t>.+)-[0-9a-f]{16}$")? // null) as $v
-  | if $v then "vcpkg:" + $v.t
-    else (.key | capture("^install-qt-action-(?<os>[a-z0-9_]+)-.*?-(?<target>desktop|android|ios)-")? // null) as $q
-         | if $q then "qt:" + $q.os + ":" + $q.target else null end
-    end;
+  .key as $k
+  | if   ($k | test("^vcpkg-binary-cache-.+?-[0-9a-f]{64}"))
+      then "vcpkg:" + ($k | capture("^vcpkg-binary-cache-(?<p>.+?)-[0-9a-f]{64}").p)
+    elif ($k | test("^vcpkg-binary-cache-.+-[0-9a-f]{16}$"))
+      then "vcpkg:" + ($k | capture("^vcpkg-binary-cache-(?<t>.+)-[0-9a-f]{16}$").t)
+    elif ($k | test("^vcpkg(-downloads)?-[A-Za-z0-9]+-[A-Za-z0-9]+-[0-9a-f]{40}-[0-9a-f]{64}"))
+      then ($k | capture("^(?<kind>vcpkg(?:-downloads)?)-(?<os>[A-Za-z0-9]+)-(?<arch>[A-Za-z0-9]+)-[0-9a-f]{40}-[0-9a-f]{64}(?:-(?<suffix>.+?))?(?:-[0-9a-f]{16})?$")
+            | .kind + ":" + .os + "-" + .arch + (if .suffix then "-" + .suffix else "" end))
+    elif ($k | test("^vcpkg-downloads-[0-9a-f]{40}-[0-9a-f]{64}"))
+      then "vcpkg-downloads"
+    elif ($k | test("^ccache-.+-[0-9a-f]{40}$"))
+      then "ccache:" + ($k | capture("^ccache-(?<j>.+)-[0-9a-f]{40}$").j)
+    elif ($k | test("^install-qt-action-"))
+      then (($k | capture("^install-qt-action-(?<os>[a-z0-9_]+)-.*?-(?<target>desktop|android|ios)-")? // null)
+            | if . then "qt:" + .os + ":" + .target else null end)
+    elif ($k | test("^cache-trivy-[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+      then "trivy"
+    else null end;
 
 def orphan:
   (.ref | test("^refs/(heads|tags|pull)/")) and ((.ref | IN($live[])) | not);
@@ -129,7 +155,7 @@ map(. + {family: family})
 | map(. + {drop: (if purged then "purged" elif orphan then "ref gone" else null end)})
 # Rule 2: among the survivors, newest per (ref, family) stays.
 | ( map(select(.drop == null and .family != null))
-    | group_by([.ref, .family])
+    | group_by([.ref, .family, (.version // "")])
     | map(sort_by(.createdAt) | reverse | .[1:][])
     | map(.id) ) as $older
 | map(
@@ -170,6 +196,7 @@ TOTAL_AFTER=$((TOTAL_BEFORE - DROP_BYTES))
         echo
         echo "| reason | size | ref | key |"
         echo "| --- | ---: | --- | --- |"
+        # shellcheck disable=SC2016  # the backticks are markdown inside a jq string, not shell
         jq_text -r '.[] | select(.drop != null)
                | "| \(.drop) | \((.sizeInBytes / 1048576 | floor)) MB | `\(.ref)` | `\(.key | .[0:90])` |"' "$WORK/plan.json"
     fi

@@ -18,7 +18,7 @@ std::string join(const std::vector<std::string_view>& items) {
         if (i != 0) {
             out += (i + 1 == items.size()) ? " and " : ", ";
         }
-        out += items[i];
+        out += items.at(i);
     }
     return out;
 }
@@ -29,7 +29,7 @@ const ControlResult& PhotometryLockReport::result(PhotometryControl control) con
     // kPhotometryControls is declared in enum order, so the enumerator
     // doubles as the index - asserted by the unit test rather than by a
     // linear search here, which would run on every UI poll.
-    return controls[static_cast<std::size_t>(control)];
+    return controls.at(static_cast<std::size_t>(control));
 }
 
 bool PhotometryLockReport::exposure_locked() const noexcept {
@@ -156,7 +156,7 @@ ControlResult apply_one(cv::VideoCapture& capture, PhotometryControl control,
         // Only remember the pre-lock value if this is the first time we have
         // touched the control, so re-locking mid-session (a settings screen,
         // a second scan) still restores what the app found on arrival.
-        auto& slot = as_found.values[static_cast<std::size_t>(control)];
+        auto& slot = as_found.values.at(static_cast<std::size_t>(control));
         if (!slot.has_value()) {
             slot = original;
         }
@@ -295,7 +295,7 @@ PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockR
     PhotometryLockReport report;
     report.platform_supported = true;
     for (std::size_t i = 0; i < kPhotometryControls.size(); ++i) {
-        report.controls[i].control = kPhotometryControls[i];
+        report.controls.at(i).control = kPhotometryControls.at(i);
     }
 
     // Auto white balance first: turning an automatic off before fixing the
@@ -326,7 +326,7 @@ PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockR
         if (!step.requested) {
             continue;
         }
-        report.controls[static_cast<std::size_t>(step.control)] =
+        report.controls.at(static_cast<std::size_t>(step.control)) =
             step.control == PhotometryControl::auto_white_balance
                 ? hold_white_balance(capture, as_found, on_frame, report.white_balance_kelvin)
                 : apply_one(capture, step.control, step.override_value, as_found);
@@ -339,11 +339,11 @@ void restore(cv::VideoCapture& capture, PhotometrySnapshot& as_found) {
     // back its automatic last - after the values it governs are already back
     // where they were.
     for (std::size_t i = kPhotometryControls.size(); i > 0; --i) {
-        auto& slot = as_found.values[i - 1];
+        auto& slot = as_found.values.at(i - 1);
         if (!slot.has_value()) {
             continue;
         }
-        capture.set(property_id(kPhotometryControls[i - 1]), *slot);
+        capture.set(property_id(kPhotometryControls.at(i - 1)), *slot);
         slot.reset();
     }
 }

@@ -20,11 +20,11 @@ TEST_CASE("the six faces of a solved cube are pairwise distinct colours", "[cube
     const Cube solved = Cube::solved();
     std::array<Color, 6> centers{};
     for (Face face : kAllFaces) {
-        centers[static_cast<std::size_t>(face)] = solved.at(face, 4);
+        centers.at(static_cast<std::size_t>(face)) = solved.at(face, 4);
     }
     for (std::size_t i = 0; i < centers.size(); ++i) {
         for (std::size_t j = i + 1; j < centers.size(); ++j) {
-            REQUIRE(centers[i] != centers[j]);
+            REQUIRE(centers.at(i) != centers.at(j));
         }
     }
 }
@@ -57,7 +57,8 @@ TEST_CASE("a move followed by its inverse round-trips, from solved and from a sc
     // round-trip check below runs against a non-trivial starting state too.
     Cube scrambled = Cube::solved();
     for (int i = 0; i < 20; ++i) {
-        scrambled = scrambled.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = 1 + (i % 3)});
+        scrambled =
+            scrambled.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = 1 + (i % 3)});
     }
 
     for (const Cube& start : {Cube::solved(), scrambled}) {
@@ -181,7 +182,8 @@ TEST_CASE("half and prime turns equal composed quarter turns, for every face", "
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     Cube scrambled = Cube::solved();
     for (int i = 0; i < 20; ++i) {
-        scrambled = scrambled.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = 1 + (i % 3)});
+        scrambled =
+            scrambled.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = 1 + (i % 3)});
     }
 
     for (const Cube& start : {Cube::solved(), scrambled}) {
@@ -201,7 +203,7 @@ TEST_CASE("random move sequences stay physically valid at every step", "[cube]")
 
     Cube c = Cube::solved();
     for (int i = 0; i < 200; ++i) {
-        c = c.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
+        c = c.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
         CAPTURE(i);
         REQUIRE(c.is_physically_valid());
     }
@@ -262,7 +264,7 @@ TEST_CASE("from_facelets round-trips a physically valid cube's own facelets", "[
                               .apply(Move{.face = Face::U, .turns = 2});
     std::array<std::array<Color, 9>, 6> facelets{};
     for (Face face : kAllFaces) {
-        facelets[static_cast<std::size_t>(face)] = original.face(face);
+        facelets.at(static_cast<std::size_t>(face)) = original.face(face);
     }
 
     const auto result = Cube::from_facelets(facelets);
@@ -299,7 +301,7 @@ namespace {
 std::array<std::array<Color, 9>, 6> solved_facelets() {
     std::array<std::array<Color, 9>, 6> facelets{};
     for (Face face : kAllFaces) {
-        facelets[static_cast<std::size_t>(face)] = Cube::solved().face(face);
+        facelets.at(static_cast<std::size_t>(face)) = Cube::solved().face(face);
     }
     return facelets;
 }
@@ -315,7 +317,7 @@ TEST_CASE("solved and randomly scrambled cubes are solvable", "[cube]") {
 
     Cube c = Cube::solved();
     for (int i = 0; i < 200; ++i) {
-        c = c.apply(Move{.face = kAllFaces[face_dist(rng)], .turns = turn_dist(rng)});
+        c = c.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
         CAPTURE(i);
         REQUIRE(c.is_solvable());
     }
@@ -332,17 +334,17 @@ TEST_CASE("a single twisted corner is physically valid but not solvable", "[cube
     for (bool clockwise : {false, true}) {
         CAPTURE(clockwise);
         auto facelets = solved_facelets();
-        auto& u = facelets[static_cast<std::size_t>(Face::U)];
-        auto& r = facelets[static_cast<std::size_t>(Face::R)];
-        auto& f = facelets[static_cast<std::size_t>(Face::F)];
+        auto& u = facelets.at(static_cast<std::size_t>(Face::U));
+        auto& r = facelets.at(static_cast<std::size_t>(Face::R));
+        auto& f = facelets.at(static_cast<std::size_t>(Face::F));
         if (clockwise) {
-            u[8] = Color::Green;
-            r[2] = Color::Yellow;
-            f[2] = Color::Orange;
+            u.at(8) = Color::Green;
+            r.at(2) = Color::Yellow;
+            f.at(2) = Color::Orange;
         } else {
-            u[8] = Color::Orange;
-            r[2] = Color::Green;
-            f[2] = Color::Yellow;
+            u.at(8) = Color::Orange;
+            r.at(2) = Color::Green;
+            f.at(2) = Color::Yellow;
         }
 
         const auto result = Cube::from_facelets(facelets);
@@ -357,8 +359,8 @@ TEST_CASE("a single flipped edge is physically valid but not solvable", "[cube]"
     // stickers is a pure flip of that one cubie in place - colour counts
     // and cubie colour-sets untouched - but the flip sum becomes 1 (mod 2).
     auto facelets = solved_facelets();
-    facelets[static_cast<std::size_t>(Face::U)][7] = Color::Green;
-    facelets[static_cast<std::size_t>(Face::F)][1] = Color::Yellow;
+    facelets.at(static_cast<std::size_t>(Face::U)).at(7) = Color::Green;
+    facelets.at(static_cast<std::size_t>(Face::F)).at(1) = Color::Yellow;
 
     const auto result = Cube::from_facelets(facelets);
     REQUIRE(result.has_value());
@@ -374,8 +376,8 @@ TEST_CASE("two swapped corners are not solvable but a single quarter turn is", "
     // permutation) with the edge permutation untouched (even) - unequal
     // parities, unreachable.
     auto facelets = solved_facelets();
-    facelets[static_cast<std::size_t>(Face::R)][2] = Color::Red;
-    facelets[static_cast<std::size_t>(Face::L)][2] = Color::Orange;
+    facelets.at(static_cast<std::size_t>(Face::R)).at(2) = Color::Red;
+    facelets.at(static_cast<std::size_t>(Face::L)).at(2) = Color::Orange;
 
     const auto result = Cube::from_facelets(facelets);
     REQUIRE(result.has_value());
@@ -398,7 +400,7 @@ TEST_CASE("centres permuted from canonical are not solvable", "[cube]") {
     // solved(): is_solvable() must reject it.
     std::array<std::array<Color, 9>, 6> facelets{};
     const auto fill = [&](Face face, Color color) {
-        facelets[static_cast<std::size_t>(face)].fill(color);
+        facelets.at(static_cast<std::size_t>(face)).fill(color);
     };
     fill(Face::U, Color::Green);
     fill(Face::B, Color::Yellow);

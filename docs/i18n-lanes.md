@@ -32,14 +32,15 @@
 | `DirectScanScreen.qml` | 47 |  of 6 sides read | none: needs a string |
 | `DirectScanScreen.qml` | 53 | All six sides make a valid cube. Working out the solution… | `scan.guide.complete` |
 | `DirectScanScreen.qml` | 57 | Setting the camera's exposure and colour balance… | `scan.guide.settling` |
-| `DirectScanScreen.qml` | 59 | These six sides do not make a valid cube yet. Show each side again, square to the camera. | `scan.guide.conflict` |
-| `DirectScanScreen.qml` | 61 | Reading this side — hold it there | none: needs a string |
-| `DirectScanScreen.qml` | 63 | Hold it still | `scan.guide.inView` |
-| `DirectScanScreen.qml` | 65 | Hold one side of the cube square to the camera | `scan.guide.first` |
-| `DirectScanScreen.qml` | 66 | Turn to a side that is not filled in below, square to the camera | `scan.guide.next` |
-| `DirectScanScreen.qml` | 163 | Recording this scan to  | none: needs a string |
-| `DirectScanScreen.qml` | 260 | Cancel | `common.cancel` |
-| `DirectScanScreen.qml` | 266 | Start over | `scan.startOver` |
+| `DirectScanScreen.qml` | 59 | These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once. | `scan.guide.ambiguous` |
+| `DirectScanScreen.qml` | 61 | These six sides do not make a valid cube yet. Show each side again, square to the camera. | `scan.guide.conflict` |
+| `DirectScanScreen.qml` | 63 | Reading this side — hold it there | none: needs a string |
+| `DirectScanScreen.qml` | 65 | Hold it still | `scan.guide.inView` |
+| `DirectScanScreen.qml` | 67 | Hold one side of the cube square to the camera | `scan.guide.first` |
+| `DirectScanScreen.qml` | 68 | Turn to a side that is not filled in below, square to the camera | `scan.guide.next` |
+| `DirectScanScreen.qml` | 165 | Recording this scan to  | none: needs a string |
+| `DirectScanScreen.qml` | 262 | Cancel | `common.cancel` |
+| `DirectScanScreen.qml` | 268 | Start over | `scan.startOver` |
 
 ### solve lane (feature/solve-guidance)
 

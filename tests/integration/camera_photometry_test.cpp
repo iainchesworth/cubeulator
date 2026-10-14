@@ -36,13 +36,15 @@ PhotometryLockReport report_with(ControlOutcome auto_wb, ControlOutcome exposure
     PhotometryLockReport report;
     report.platform_supported = true;
     for (std::size_t i = 0; i < kPhotometryControls.size(); ++i) {
-        report.controls[i].control = kPhotometryControls[i];
+        report.controls.at(i).control = kPhotometryControls.at(i);
     }
-    report.controls[static_cast<std::size_t>(PhotometryControl::auto_white_balance)].outcome =
+    report.controls.at(static_cast<std::size_t>(PhotometryControl::auto_white_balance)).outcome =
         auto_wb;
-    report.controls[static_cast<std::size_t>(PhotometryControl::exposure)].outcome = exposure;
-    report.controls[static_cast<std::size_t>(PhotometryControl::brightness)].outcome = brightness;
-    report.controls[static_cast<std::size_t>(PhotometryControl::saturation)].outcome = saturation;
+    report.controls.at(static_cast<std::size_t>(PhotometryControl::exposure)).outcome = exposure;
+    report.controls.at(static_cast<std::size_t>(PhotometryControl::brightness)).outcome =
+        brightness;
+    report.controls.at(static_cast<std::size_t>(PhotometryControl::saturation)).outcome =
+        saturation;
     return report;
 }
 
@@ -55,7 +57,7 @@ PhotometryLockReport report_with(ControlOutcome auto_wb, ControlOutcome exposure
 // outcome - "exposure locked" reporting saturation's result, say.
 TEST_CASE("photometry control ordering matches the enum", "[camera][photometry]") {
     for (std::size_t i = 0; i < kPhotometryControls.size(); ++i) {
-        REQUIRE(static_cast<std::size_t>(kPhotometryControls[i]) == i);
+        REQUIRE(static_cast<std::size_t>(kPhotometryControls.at(i)) == i);
     }
 
     const PhotometryLockReport report =

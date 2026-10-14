@@ -6,7 +6,7 @@
 #include <cube/solver/corners.hpp>
 #include <cube/solver/cross.hpp>
 
-#include "bfs_search.hpp"
+#include "piece_search.hpp"
 
 namespace cube::solver {
 
@@ -22,10 +22,10 @@ struct EdgeSlot {
 // Each side face's equatorial (y=0) edge index is (row=1)*3+col - see
 // cube.cpp's layout derivation.
 constexpr std::array<EdgeSlot, 4> kEdgeSlots = {{
-    {Face::F, 5, Face::R, 5},  // FR
-    {Face::F, 3, Face::L, 5},  // FL
-    {Face::B, 5, Face::R, 3},  // BR
-    {Face::B, 3, Face::L, 3},  // BL
+    {.side_a = Face::F, .side_a_index = 5, .side_b = Face::R, .side_b_index = 5},  // FR
+    {.side_a = Face::F, .side_a_index = 3, .side_b = Face::L, .side_b_index = 5},  // FL
+    {.side_a = Face::B, .side_a_index = 5, .side_b = Face::R, .side_b_index = 3},  // BR
+    {.side_a = Face::B, .side_a_index = 3, .side_b = Face::L, .side_b_index = 3},  // BL
 }};
 
 bool slot_solved(const Cube& cube, const EdgeSlot& slot) noexcept {
@@ -51,6 +51,16 @@ std::uint64_t first_layer_corners_key(const Cube& cube) noexcept {
     }
     return key;
 }
+
+// The facelet codes (face * 9 + index, as piece_code_edge numbers them) at
+// which an edge piece's first colour can sit while the piece is in the U
+// layer: on U itself, or on the top edge sticker of a side face.
+constexpr std::array<std::uint64_t, 8> kUEdgeCodes = {
+    static_cast<std::uint64_t>(Face::U) * 9 + 1, static_cast<std::uint64_t>(Face::U) * 9 + 3,
+    static_cast<std::uint64_t>(Face::U) * 9 + 5, static_cast<std::uint64_t>(Face::U) * 9 + 7,
+    static_cast<std::uint64_t>(Face::F) * 9 + 1, static_cast<std::uint64_t>(Face::R) * 9 + 1,
+    static_cast<std::uint64_t>(Face::B) * 9 + 1, static_cast<std::uint64_t>(Face::L) * 9 + 1,
+};
 
 }  // namespace
 
@@ -79,7 +89,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
     };
 
     for (std::size_t i = 0; i < kEdgeSlots.size(); ++i) {
-        const EdgeSlot& target = kEdgeSlots[i];
+        const EdgeSlot& target = kEdgeSlots.at(i);
         const Color color_a = canonical_color(target.side_a);
         const Color color_b = canonical_color(target.side_b);
 
@@ -88,7 +98,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 return false;
             }
             for (std::size_t j = 0; j < i; ++j) {
-                if (!slot_solved(c, kEdgeSlots[j])) {
+                if (!slot_solved(c, kEdgeSlots.at(j))) {
                     return false;
                 }
             }
@@ -101,7 +111,7 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             return [&, track_target](const Cube& c) {
                 std::uint64_t rest = first_layer_corners_key(c);
                 for (std::size_t j = 0; j < i; ++j) {
-                    const EdgeSlot& s = kEdgeSlots[j];
+                    const EdgeSlot& s = kEdgeSlots.at(j);
                     rest = detail::push_code(rest,
                                              detail::piece_code_edge(c, canonical_color(s.side_a),
                                                                      canonical_color(s.side_b)));
@@ -109,9 +119,17 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 if (track_target) {
                     rest = detail::push_code(rest, detail::piece_code_edge(c, color_a, color_b));
                 }
-                return detail::SignatureKey{detail::cross_key(c), rest};
+                return detail::SignatureKey{.cross = detail::cross_key(c), .rest = rest};
             };
         };
+
+        const auto signature = make_signature(true);
+        // Where the signature stands on a solved cube: every piece home, the
+        // target included. The rest holds one code per tracked piece - the
+        // four first-layer corners, the edges already placed, the target,
+        // which was pushed last and so is its low six bits.
+        const detail::SignatureKey solved_key = signature(Cube::solved());
+        const std::size_t rest_codes = 4 + i + 1;
 
         // Unlike corners (where a D turn can cycle a misplaced piece
         // through all 4 D-slots), there's no single whole-layer turn that
@@ -140,8 +158,14 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
                 const Cube::EdgeLocation l = c.locate_edge(color_a, color_b);
                 return l.face_a == Face::U || l.face_b == Face::U;
             };
-            Result<std::vector<Move>> eject_step = detail::bfs_search(
-                cube, eject_allowed, eject_postcondition, make_signature(true), 8);
+            // "In the U layer" is one of eight codes for the target.
+            detail::PieceGoal eject_goal{.rest_codes = rest_codes, .keys = {}};
+            for (const std::uint64_t code : kUEdgeCodes) {
+                eject_goal.keys.push_back(
+                    detail::SignatureKey{solved_key.cross, (solved_key.rest & ~63ULL) | code});
+            }
+            Result<std::vector<Move>> eject_step =
+                detail::search(cube, eject_allowed, eject_postcondition, signature, 8, eject_goal);
             if (!eject_step.has_value()) {
                 return std::unexpected(eject_step.error());
             }
@@ -152,8 +176,9 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
             return placed_so_far(c) && slot_solved(c, target);
         };
         const std::vector<Face> insert_allowed = {Face::U, target.side_a, target.side_b};
-        Result<std::vector<Move>> insert_step = detail::bfs_search(
-            cube, insert_allowed, insert_postcondition, make_signature(true), 10);
+        const detail::PieceGoal insert_goal{.rest_codes = rest_codes, .keys = {solved_key}};
+        Result<std::vector<Move>> insert_step =
+            detail::search(cube, insert_allowed, insert_postcondition, signature, 10, insert_goal);
         if (insert_step.has_value()) {
             apply_step(*insert_step);
             continue;
@@ -165,8 +190,8 @@ Result<std::vector<Move>> solve_middle_edges(const Cube& start) {
         // always runs first (see above), but a defensive net is cheap and
         // this is off the hot path.
         const std::vector<Face> wide_allowed(kAllFaces.begin(), kAllFaces.end());
-        Result<std::vector<Move>> wide_step = detail::bfs_search(
-            cube, wide_allowed, insert_postcondition, make_signature(true), 10, 4'000'000);
+        Result<std::vector<Move>> wide_step = detail::search(
+            cube, wide_allowed, insert_postcondition, signature, 10, insert_goal, 4'000'000);
         if (!wide_step.has_value()) {
             return std::unexpected(wide_step.error());
         }

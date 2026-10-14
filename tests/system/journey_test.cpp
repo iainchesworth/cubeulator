@@ -227,7 +227,7 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
 TEST_CASE("the solve screen has a way out that reads the cube again", "[system][solve]") {
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     INFO("in the " << cube::systest::to_string(layout) << " layout");
-    App& app = App::fresh();
+    App& app = App::fresh(App::Start::elsewhere);
     app.resize(size_for(layout));
     auto& scan = app.runtime().directScan();
     auto& solve = app.runtime().solve();

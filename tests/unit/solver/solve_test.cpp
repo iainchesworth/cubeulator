@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <random>
 #include <string>
@@ -32,9 +33,9 @@ constexpr std::array<Stage, 5> kStagesInOrder = {Stage::Cross, Stage::WhiteCorne
 Solution solution_of(const std::array<std::string, 5>& per_stage) {
     Solution solution;
     for (std::size_t i = 0; i < per_stage.size(); ++i) {
-        const auto moves = parse_algorithm(per_stage[i]);
+        const auto moves = parse_algorithm(per_stage.at(i));
         REQUIRE(moves.has_value());
-        solution.steps.push_back(SolveStep{.stage = kStagesInOrder[i], .moves = *moves});
+        solution.steps.push_back(SolveStep{.stage = kStagesInOrder.at(i), .moves = *moves});
     }
     return solution;
 }
@@ -52,14 +53,14 @@ std::array<std::string, 5> notation_per_stage(const Solution& solution) {
     REQUIRE(solution.steps.size() == 5);
     std::array<std::string, 5> out;
     for (std::size_t i = 0; i < out.size(); ++i) {
-        out[i] = to_string(solution.steps[i].moves);
+        out.at(i) = to_string(solution.steps.at(i).moves);
     }
     return out;
 }
 
 bool has_adjacent_same_face(const std::vector<Move>& moves) {
     for (std::size_t i = 1; i < moves.size(); ++i) {
-        if (moves[i].face == moves[i - 1].face) {
+        if (moves.at(i).face == moves.at(i - 1).face) {
             return true;
         }
     }
@@ -193,7 +194,7 @@ TEST_CASE("merge_adjacent_moves merges across a stage boundary into exactly one 
             merge_adjacent_moves(solution_of({"R U F", "F' U' R'", "", "", ""}));
         REQUIRE(tidied.steps.size() == kStagesInOrder.size());
         for (std::size_t i = 0; i < kStagesInOrder.size(); ++i) {
-            REQUIRE(tidied.steps[i].stage == kStagesInOrder[i]);
+            REQUIRE(tidied.steps.at(i).stage == kStagesInOrder.at(i));
         }
     }
 }
@@ -224,7 +225,7 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         CAPTURE(trial);
         std::vector<Move> sequence(static_cast<std::size_t>(length_dist(rng)));
         for (Move& move : sequence) {
-            move = Move{.face = kFaces[face_dist(rng)], .turns = turn_dist(rng)};
+            move = Move{.face = kFaces.at(face_dist(rng)), .turns = turn_dist(rng)};
         }
 
         // Four cut points, so the five stages get consecutive slices (some
@@ -239,9 +240,9 @@ TEST_CASE("merge_adjacent_moves never changes what a sequence does to a cube", "
         Solution original;
         std::size_t from = 0;
         for (std::size_t i = 0; i < kStagesInOrder.size(); ++i) {
-            const std::size_t to = i < cuts.size() ? cuts[i] : sequence.size();
+            const std::size_t to = i < cuts.size() ? cuts.at(i) : sequence.size();
             original.steps.push_back(SolveStep{
-                .stage = kStagesInOrder[i],
+                .stage = kStagesInOrder.at(i),
                 .moves = std::vector<Move>(sequence.begin() + static_cast<std::ptrdiff_t>(from),
                                            sequence.begin() + static_cast<std::ptrdiff_t>(to))});
             from = to;
@@ -308,6 +309,50 @@ TEST_CASE("solve tidies short scrambles too, where some stages have nothing to d
             CAPTURE(to_string(moves));
             REQUIRE_FALSE(has_adjacent_same_face(moves));
             REQUIRE(apply_all(scrambled, moves).is_solved());
+        }
+    }
+}
+
+// Physically valid, and still no sequence of turns makes it: one edge flipped
+// in place, one corner twisted in place, each then scrambled. The answer is
+// no_solution (the beginner method has always said so), and it is known from
+// the cube alone, so it must not come after the first-two-layers searches have
+// spent their node budgets - seconds each, on a desktop, before this check.
+TEST_CASE("solve says at once that a cube no turns can solve has no solution", "[solve]") {
+    const Cube solved = Cube::solved();
+    std::array<std::array<cube::solver::Color, 9>, 6> flipped_edge{};
+    std::array<std::array<cube::solver::Color, 9>, 6> twisted_corner{};
+    for (const Face face : cube::solver::kAllFaces) {
+        flipped_edge[static_cast<std::size_t>(face)] = solved.face(face);
+        twisted_corner[static_cast<std::size_t>(face)] = solved.face(face);
+    }
+    std::swap(flipped_edge[static_cast<std::size_t>(Face::U)][7],
+              flipped_edge[static_cast<std::size_t>(Face::F)][1]);
+    twisted_corner[static_cast<std::size_t>(Face::U)][8] = cube::solver::Color::Orange;
+    twisted_corner[static_cast<std::size_t>(Face::R)][2] = cube::solver::Color::Green;
+    twisted_corner[static_cast<std::size_t>(Face::F)][2] = cube::solver::Color::Yellow;
+
+    for (const auto& facelets : {flipped_edge, twisted_corner}) {
+        const auto start = Cube::from_facelets(facelets);
+        REQUIRE(start.has_value());
+        REQUIRE_FALSE(start->is_solvable());
+
+        for (unsigned seed = 0; seed < 3; ++seed) {
+            CAPTURE(seed);
+            Cube cube = *start;
+            for (unsigned i = 0; i < 20; ++i) {
+                cube = cube.apply(Move{.face = cube::solver::kAllFaces[(seed + i * 5) % 6],
+                                       .turns = static_cast<int>(1 + ((seed + i) % 3))});
+            }
+            const auto begun = std::chrono::steady_clock::now();
+            const auto solution = solve(cube);
+            const auto took = std::chrono::steady_clock::now() - begun;
+
+            REQUIRE_FALSE(solution.has_value());
+            REQUIRE(solution.error() == cube::CubeError::no_solution);
+            // Microseconds now; the searches it replaces took seconds. A
+            // generous bound, so a loaded machine cannot trip it.
+            REQUIRE(took < std::chrono::milliseconds(500));
         }
     }
 }

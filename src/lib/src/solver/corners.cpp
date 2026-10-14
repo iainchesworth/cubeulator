@@ -5,7 +5,7 @@
 #include <cube/profiling.hpp>
 #include <cube/solver/cross.hpp>
 
-#include "bfs_search.hpp"
+#include "piece_search.hpp"
 
 namespace cube::solver {
 
@@ -23,10 +23,26 @@ struct CornerSlot {
 // corner index is (row=1-y)*3+col with y=-1, i.e. always row 2 - see
 // cube.cpp's layout derivation.
 constexpr std::array<CornerSlot, 4> kCornerSlots = {{
-    {6, Face::F, 6, Face::L, 8},  // DFL
-    {8, Face::F, 8, Face::R, 8},  // DFR
-    {0, Face::B, 6, Face::L, 6},  // DBL
-    {2, Face::B, 8, Face::R, 6},  // DBR
+    {.d_index = 6,
+     .side_a = Face::F,
+     .side_a_index = 6,
+     .side_b = Face::L,
+     .side_b_index = 8},  // DFL
+    {.d_index = 8,
+     .side_a = Face::F,
+     .side_a_index = 8,
+     .side_b = Face::R,
+     .side_b_index = 8},  // DFR
+    {.d_index = 0,
+     .side_a = Face::B,
+     .side_a_index = 6,
+     .side_b = Face::L,
+     .side_b_index = 6},  // DBL
+    {.d_index = 2,
+     .side_a = Face::B,
+     .side_a_index = 8,
+     .side_b = Face::R,
+     .side_b_index = 6},  // DBR
 }};
 
 bool slot_solved(const Cube& cube, const CornerSlot& slot) noexcept {
@@ -55,14 +71,14 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
     Cube cube = start;
 
     for (std::size_t i = 0; i < kCornerSlots.size(); ++i) {
-        const CornerSlot& slot = kCornerSlots[i];
+        const CornerSlot& slot = kCornerSlots.at(i);
 
         auto postcondition = [&](const Cube& c) {
             if (!cross_solved(c)) {
                 return false;
             }
             for (std::size_t j = 0; j <= i; ++j) {
-                if (!slot_solved(c, kCornerSlots[j])) {
+                if (!slot_solved(c, kCornerSlots.at(j))) {
                     return false;
                 }
             }
@@ -71,17 +87,21 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
         auto signature = [&](const Cube& c) {
             std::uint64_t rest = 0;
             for (std::size_t j = 0; j <= i; ++j) {
-                const CornerSlot& s = kCornerSlots[j];
+                const CornerSlot& s = kCornerSlots.at(j);
                 rest = detail::push_code(
                     rest, detail::piece_code_corner(c, Color::White, canonical_color(s.side_a),
                                                     canonical_color(s.side_b)));
             }
-            return detail::SignatureKey{detail::cross_key(c), rest};
+            return detail::SignatureKey{.cross = detail::cross_key(c), .rest = rest};
         };
+
+        // The cross and corners 0..i all home, as on a solved cube; one code
+        // per corner in the signature's rest.
+        const detail::PieceGoal goal{.rest_codes = i + 1, .keys = {signature(Cube::solved())}};
 
         const std::vector<Face> allowed = {Face::U, Face::D, slot.side_a, slot.side_b};
         Result<std::vector<Move>> step =
-            detail::bfs_search(cube, allowed, postcondition, signature, 10);
+            detail::search(cube, allowed, postcondition, signature, 10, goal);
         if (!step.has_value()) {
             return std::unexpected(step.error());
         }

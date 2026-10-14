@@ -21,6 +21,7 @@ namespace {
 // is not one of last_layer.hpp's 21 last-layer facelets.
 std::vector<std::pair<Face, int>> f2l_positions() {
     std::vector<std::pair<Face, int>> positions;
+    positions.reserve(9);
     for (int index = 0; index < 9; ++index) {
         positions.emplace_back(Face::D, index);
     }

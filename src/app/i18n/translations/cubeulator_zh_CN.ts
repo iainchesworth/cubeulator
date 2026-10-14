@@ -704,6 +704,11 @@ In your hands.</source>
         <extracomment>Guidance when six sides are read but something is wrong.</extracomment>
         <translation type="unfinished"></translation>
     </message>
+    <message id="scan.guide.ambiguous">
+        <source>These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.</source>
+        <extracomment>Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>
@@ -2015,6 +2020,41 @@ F1 opens Help.</source>
     <message id="menu.enterByHand">
         <source>Enter Colours by Hand</source>
         <extracomment>Menu item, macOS File menu. Title case as macOS menus are.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.closeWindow">
+        <source>Close Window</source>
+        <extracomment>Menu item, macOS File menu. Title case as macOS menus are. Closing the only window quits the app.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.help">
+        <source>Help</source>
+        <extracomment>Menu bar, macOS. Use the word macOS itself uses for its Help menu in this language, so that the system adds its search field to it.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.enterFullScreen">
+        <source>Enter Full Screen</source>
+        <extracomment>Menu item, macOS View menu. Use macOS's own wording for this command in this language.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.exitFullScreen">
+        <source>Exit Full Screen</source>
+        <extracomment>Menu item, macOS View menu, shown while the window is full screen. Use macOS's own wording.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.minimise">
+        <source>Minimise</source>
+        <extracomment>Menu item, macOS Window menu. Use macOS's own wording for this command in this language.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.zoom">
+        <source>Zoom</source>
+        <extracomment>Menu item, macOS Window menu. Makes the window as large as the screen allows. Use macOS's own wording.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="menu.bringAllToFront">
+        <source>Bring All to Front</source>
+        <extracomment>Menu item, macOS Window menu. Use macOS's own wording for this command in this language.</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message id="store.summary">

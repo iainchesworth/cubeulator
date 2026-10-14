@@ -23,7 +23,7 @@ Cube random_scramble(unsigned seed, int move_count) noexcept {
 
     Cube cube = Cube::solved();
     for (int i = 0; i < move_count; ++i) {
-        cube = cube.apply(Move{kAllFaces[face_dist(rng)], turn_dist(rng)});
+        cube = cube.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
     }
     return cube;
 }
@@ -39,7 +39,7 @@ Result<void> run_stage(Solution& solution, Cube& cube, Stage stage,
     for (const Move& m : *moves) {
         cube = cube.apply(m);
     }
-    solution.steps.push_back(SolveStep{stage, std::move(*moves)});
+    solution.steps.push_back(SolveStep{.stage = stage, .moves = std::move(*moves)});
     return {};
 }
 
@@ -61,13 +61,14 @@ Solution merge_adjacent_moves(Solution solution) {
     std::vector<Entry> kept;
 
     for (std::size_t step = 0; step < solution.steps.size(); ++step) {
-        for (const Move& move : solution.steps[step].moves) {
+        for (const Move& move : solution.steps.at(step).moves) {
             const int turns = ((move.turns % 4) + 4) % 4;
             if (turns == 0) {
                 continue;
             }
             if (kept.empty() || kept.back().move.face != move.face) {
-                kept.push_back(Entry{step, Move{move.face, turns}});
+                kept.push_back(
+                    Entry{.step = step, .move = Move{.face = move.face, .turns = turns}});
                 continue;
             }
             const int merged = (kept.back().move.turns + turns) % 4;
@@ -83,7 +84,7 @@ Solution merge_adjacent_moves(Solution solution) {
         step.moves.clear();
     }
     for (const Entry& entry : kept) {
-        solution.steps[entry.step].moves.push_back(entry.move);
+        solution.steps.at(entry.step).moves.push_back(entry.move);
     }
     return solution;
 }
@@ -93,6 +94,15 @@ namespace {
 Result<Solution> solve_beginner(const Cube& scrambled) {
     if (!scrambled.is_physically_valid()) {
         return std::unexpected(CubeError::invalid_cube_state);
+    }
+    // A cube no turning of the sides makes can never end solved, so the
+    // answer below is already known: say it now. Left to the stages, the
+    // first-two-layers searches go on until their node budgets run out - one
+    // per stage, seconds on a desktop - to arrive at the same no_solution.
+    // (The other two methods answer unsolvable_state here; this one has always
+    // said no_solution, and still does.)
+    if (!scrambled.is_solvable()) {
+        return std::unexpected(CubeError::no_solution);
     }
 
     Solution solution;

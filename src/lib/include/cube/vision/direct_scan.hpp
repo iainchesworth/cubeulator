@@ -2,6 +2,8 @@
 
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/vision/corner_view.hpp>
+#include <cube/vision/prepared_frame.hpp>
 
 #include <opencv2/core.hpp>
 
@@ -47,8 +49,13 @@ struct SideRead {
 // lattice that does not span three rows and three columns, or no cube.
 //
 // `bgr` is an 8-bit BGR frame of any size; frames wider than the working
-// width are reduced first, so the cost does not grow with camera resolution.
+// width are reduced first, so the cost beyond that reduction does not grow
+// with camera resolution.
 [[nodiscard]] std::optional<SideRead> read_side(const cv::Mat& bgr);
+// The same read from a frame already prepared (prepared_frame.hpp), for a
+// caller that hands the frame to more than one reader. The result is the one
+// read_side(bgr) gives for the frame it was prepared from.
+[[nodiscard]] std::optional<SideRead> read_side(const PreparedFrame& frame);
 
 // A read counts only if the side has been held still: its centre sticker
 // within this fraction of a sticker spacing of where the frame before had it.
@@ -99,6 +106,15 @@ public:
     void add(const std::optional<SideRead>& read);
     void reset();
 
+    // Feed the frame's corner read - two or three sides in one view - when
+    // it has one. Square-on reads cannot say which way up each side is
+    // relative to its neighbours; a corner read can, and it is what settles
+    // the cubes that six flat sides put together two ways (R5 in
+    // docs/recovery-plan.md). Nothing is counted towards a side.
+    void add_corner(const std::optional<CornerRead>& read);
+    // Corner reads kept so far; the newest few dozen.
+    [[nodiscard]] std::size_t corner_reads() const noexcept { return corners_.size(); }
+
     // True when the frame just added counted as a read of some side, whether
     // or not that side has enough reads to be captured yet.
     [[nodiscard]] bool reading() const noexcept { return in_view_.has_value(); }
@@ -115,7 +131,9 @@ public:
     // The cube, once six captured sides make exactly one physically valid
     // cube. face_capture_incomplete until six sides are in;
     // no_valid_cube_detected or invalid_cube_state while they do not yet
-    // make one (a misread side, or the same side captured twice).
+    // make one (a misread side, or the same side captured twice), and
+    // ambiguous_scan when they make more than one and the corner reads so
+    // far do not say which.
     [[nodiscard]] Result<solver::Cube> cube() const;
     // The same, with what each colour measured: the median over the nine
     // stickers of that colour, so one odd sticker (a logo on a centre) does
@@ -132,6 +150,7 @@ private:
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
 
     std::vector<Group> groups_;
+    std::vector<CornerRead> corners_;
     std::optional<cv::Point2f> previous_centre_;
     std::optional<std::size_t> in_view_;
 };

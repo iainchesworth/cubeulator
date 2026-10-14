@@ -34,7 +34,7 @@ TEST_CASE("every control on the launch, permission and complete screens can be p
     const std::string name = GENERATE(as<std::string>{}, "launch", "permission", "complete");
     const QString screen = QString::fromStdString(name);
     DYNAMIC_SECTION(name << " in the " << cube::systest::to_string(layout) << " layout") {
-        App& app = App::fresh();
+        App& app = App::fresh(name == "launch" ? App::Start::launch : App::Start::elsewhere);
         app.resize(size_for(layout));
         app.go(screen);
         app.pump(80);
@@ -51,7 +51,7 @@ TEST_CASE("every control on the launch, permission and complete screens can be p
 TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]") {
     const Layout layout = GENERATE(Layout::narrow, Layout::wide);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
-        App& app = App::fresh();
+        App& app = App::fresh(App::Start::elsewhere);
         auto& solve = app.runtime().solve();
         if (solve.totalMoves() == 0) {
             solve.solveCube(cube::systest::scramble(41));
@@ -95,7 +95,7 @@ TEST_CASE("every control on the solve screen can be pressed", "[system][sweep]")
 TEST_CASE("every control on the settings screen can be pressed", "[system][sweep][settings]") {
     const Layout layout = GENERATE(Layout::narrow, Layout::wide);
     DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
-        App& app = App::fresh();
+        App& app = App::fresh(App::Start::elsewhere);
         app.resize(size_for(layout));
         app.go("settings");
         app.pump(80);

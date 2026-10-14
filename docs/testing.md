@@ -28,16 +28,22 @@ independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
 machine-specific tuning belongs; the committed presets leave it unset so
 CI's 4-core runners aren't oversubscribed).
 
+That leaves out the **system tests**, which draw the real app in a window (see
+[System tests](#system-tests)): every committed test preset excludes the
+`system` label, so a plain `ctest` never opens a window. They are run with the
+matching `<preset>-system` preset.
+
 ## Debug is slow - use `fastdebug` for local iteration
 
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
 compiles unoptimized *and* enables ASan/UBSan (see
-[Sanitizers.cmake](../cmake/Sanitizers.cmake)). The solver's first-two-layer
-searches (`cube::solver::detail::bfs_search`, see
-[bfs_search.hpp](../src/lib/src/solver/bfs_search.hpp)) visit up to millions
-of nodes per stage, and an unoptimized build alone - independent of the
-sanitizers - is well over an order of magnitude slower there than Release,
-turning a fast Release corpus run into many Debug minutes.
+[Sanitizers.cmake](https://github.com/iainchesworthlabs/cubeulator/blob/main/cmake/Sanitizers.cmake)). The solver's first-two-layer
+searches (`cube::solver::detail::piece_search`, see
+[piece_search.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/piece_search.hpp)) visit up to
+hundreds of thousands of nodes per stage, and an unoptimized build alone -
+independent of the sanitizers - is well over an order of magnitude slower
+there than Release, turning a fast Release corpus run into many Debug
+minutes.
 
 For local dev/test iteration, prefer the `fastdebug` preset
 (`windows-msvc-fastdebug`/`linux-gcc-fastdebug`/`macos-clang-fastdebug`):
@@ -53,7 +59,7 @@ The solver's corpus tests (`solve_cross`, `solve_corners`,
 the `SteppedSolution` tests (each of the latter runs a full solve) are
 tagged `[slow]` - every one drives one or more random scrambles through
 the searched first-two-layer stages. (The last layer itself is fixed-algorithm and takes
-milliseconds - see [last_layer.hpp](../src/lib/src/solver/last_layer.hpp) -
+milliseconds - see [last_layer.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/last_layer.hpp) -
 so the corpus cost is the cross/corners/middle-edges searches.) The
 intermediate and advanced solvers' corpus tests (`cfop_test.cpp`,
 `two_phase_test.cpp`) carry the same tag, though they are far faster - tens of
@@ -78,7 +84,7 @@ nothing is rendered; it runs headless (offscreen platform off Windows) and
 is part of `ctest`.
 
 Camera frames in these and the controller tests are drawn
-([drawn_cube.hpp](../tests/unit/drawn_cube.hpp)), never recorded: a
+([drawn_cube.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/drawn_cube.hpp)), never recorded: a
 recording shows whoever was holding the cube.
 
 To *look* at the solve screen rather than check it, a hidden case puts the
@@ -92,7 +98,7 @@ cube_qml_tests "[.gallery]"
 ```
 
 The shot names are in
-[solve_screen_gallery_test.cpp](../tests/unit/solve_screen_gallery_test.cpp).
+[solve_screen_gallery_test.cpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/solve_screen_gallery_test.cpp).
 It needs a GPU, so `ctest` never selects it.
 
 To *use* the solve screen without scanning a cube first, start the app with
@@ -126,7 +132,7 @@ set CUBE_CAMERA_LOCK_TEST=1  && cube_integration_tests "[.camera-lock]"
   but leaves the image alone is a common DirectShow trap, and the report
   distinguishes the two.
 - `[.camera-lock]` verifies the photometry lock (see
-  [`interfaces/camera.hpp`](../src/app/interfaces/camera.hpp)) on real
+  [`interfaces/camera.hpp`](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/app/interfaces/camera.hpp)) on real
   hardware: frame-to-frame drift of mean L/chroma with the automatics
   running versus locked, the explicit-override path, that `stop()` puts the
   driver's settings back, and open+first-frame latency before and after.
@@ -145,16 +151,22 @@ the way a person would. One command runs it:
 
 ```
 cmake --build --preset <preset> --target cube_system_tests
-ctest --preset <preset> -L system --output-on-failure
+ctest --preset <preset>-system --output-on-failure
 ```
+
+`<preset>-system` is the test preset that selects only the `system` label;
+`<preset>` itself excludes it, and a command-line `-L system` cannot widen a
+preset that excludes the label (ctest applies both and finds nothing). A
+personal `CMakeUserPresets.json` test preset that wants the suite inherits
+`base-system` instead of `base`.
 
 That is a handful of ctest entries: `system.walk.<n>of<count>` (the suite bar
 the tour, cut into shards, five by default - a run of the app each),
 `system.tour` (the screenshot tour, below, a run of its own), `system.reach`
 (the reach gate, below; merges what the shards saw, needs no display) and
 `system.relaunch` (a second launch with a setting already in the store).
-`ctest -R system.walk` runs the shards; `-j` runs them side by side where
-there is a CPU to spare.
+`ctest --preset <preset>-system -R system.walk` runs the shards; `-j` runs them
+side by side where there is a CPU to spare.
 
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
@@ -162,8 +174,33 @@ it a display and software GL (this is what CI does):
 ```
 QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 \
   xvfb-run -a -s "-screen 0 1280x1024x24" \
-  ctest --preset linux-gcc-coverage -L system --output-on-failure
+  ctest --preset linux-gcc-coverage-system --output-on-failure
 ```
+
+**The window you do not see.** The window is shown, exposed and rendered for
+real - that is the point - but on a platform where that works (Windows today;
+`CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` in the platform's `platform.cmake`) it is
+created fully transparent, click-through, without a taskbar button and never
+activated. A run therefore does not flick screens across the desktop it is
+started from, and does not take the keyboard from whatever is being typed in
+(a shown window is the foreground window for the whole run). Clicks, key
+presses and `grab()` are sent to the window object, not to the screen, so none
+of it matters to them. To watch a case, set `CUBE_SYSTEM_TEST_VISIBLE=1`:
+
+```
+set CUBE_SYSTEM_TEST_VISIBLE=1
+cube_system_tests "[journey]"
+```
+
+A hidden window is never the active window, so a case about keyboard focus or a
+window-scoped shortcut should be looked at once with `CUBE_SYSTEM_TEST_VISIBLE=1`
+before it is trusted: nothing in the suite depends on activation today, but
+that is the one thing the OS no longer gives it.
+
+Do not minimise the window, or move it off every screen, to the same end: a
+minimised window never gets its size (every click lands outside it), and a
+window outside every monitor is never sent an expose, so the app never counts
+as shown.
 
 It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
 `tour/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
@@ -181,8 +218,9 @@ the time went on. Each case also prints what its reset cost (`[system]   reset:
 a software renderer neither is small, and nothing else says how much of a
 case's time they are.
 
-The `system` label keeps it out of the plain `ctest` runs of the build legs
-(`-LE system`): it needs somewhere to draw.
+The `system` label keeps it out of the plain `ctest` runs - the committed
+presets exclude it, and CI's build legs say `-LE system` as well: it needs
+somewhere to draw.
 
 ### How it works
 
@@ -223,16 +261,32 @@ either hits its timeout or hides which case was slow, so the walk is cut into
 **shards** - Catch2's `--shard-count`/`--shard-index` split the
 declaration-order list into contiguous runs, `CUBE_SYSTEM_WALK_SHARDS` of them
 (5). Every case is in exactly one, a case added tomorrow is in one without
-being told, and each shard's `TIMEOUT` (1500 s) is a safety net, not a budget.
+being told, and each shard's `TIMEOUT` (1200 s) is a safety net, not a budget.
 Cases are independent - each begins with `App::fresh()` - so a shard needs
 nothing from the one before.
+
+What a case costs there is mostly **bringing a screen with the 3D cube up**:
+the launch and solve screens (and the settings preview) are a `View3D` with
+MSAA, a procedural light probe and six lights, and each time one is created
+llvmpipe spends ten seconds or more on its first frame. Measured with the CI
+preset (`linux-gcc-coverage`, Qt 6.8.3, 20 cores): every `App::fresh()` that
+came back to the launch screen from another screen cost 10-12 s, and the two
+loops that did it 36 times each (every control inside the window; the same in
+Hebrew) were 555 s and 1349 s of a 55-minute walk. They are 55 s and 62 s now.
 
 The reach gate is the reason the shards write reports of their own: it merges
 the `reach-shard-*` files and judges the union, and fails if one of them is
 missing, so a shard that did not run cannot pass as a smaller suite.
 
-Four choices keep each shard short, and each is worth keeping when a case is
+Five choices keep each shard short, and each is worth keeping when a case is
 added:
+
+- **Start where the case is going.** `App::fresh(App::Start::elsewhere)` leaves
+  the app on the permission screen (nothing drawn, no camera) instead of the
+  launch screen; a case that is about to go to another screen uses it, so it
+  does not pay to bring the launch cube up and tear it down. A loop over
+  screens and sizes does one reset per screen and takes the window through the
+  sizes by resizing, which is also a thing a person does.
 
 - **Short scrambles.** The cases that need a solved cube to come back from a
   scan use `cube::systest::scramble(seed)` (`app.hpp`, `kScrambleMoves`),
@@ -253,7 +307,27 @@ added:
   looks every 50 ms, not every 25.
 
 If a shard still times out, the progress lines above say which case it was in
-and the reset lines how much of each case was before it began.
+and the reset lines (`reset: 12.0s (launch 0.5 cameras 0.0 language 11.3 ...)`)
+how much of each case was before it began and in which phase; a phase that
+shows the seconds is usually the first one that ran the event loop long enough
+for a frame, not the one that did the work.
+
+Two things the Linux runs showed about the harness, kept here because they
+look like test bugs and are not:
+
+- **The window reports its new size before the scene has it** (X11: the
+  geometry change arrives as an event). `App::resize` waits for the content
+  item, and `App::layout()` reads the scene's width, not the window's; before
+  that the sampler credited the wide layout's controls to `@narrow` for the
+  moments between the two, and the solve screen's `wide` read stale after a
+  resize.
+- **Qt crashed twice on the launch-to-other-screen change** that is the cost
+  above: under the threaded loop with Qt 6.12 on Windows (render thread), and
+  with the basic loop on Qt 6.8.3 under llvmpipe (main thread, inside the batch
+  renderer's RHI call, `QSGBatchRenderer::Renderer::prepareRenderPass`, a
+  frame after the old `View3D` was destroyed). Both are in Qt, and the app
+  makes the same screen change at "Start scanning". Fewer of these in the
+  walk makes both rarer; it does not make them go away.
 
 ### Decisions
 

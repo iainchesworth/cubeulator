@@ -11,9 +11,16 @@ set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "offscreen")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 
+# Not hidden: whether a transparent, click-through window is exposed and
+# rendered under AppKit has not been measured.
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
+
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/local/opt/qt6" "/opt/homebrew/opt/qt6")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS macos clang_64)
+
+# The root of the disk image: the licence and the notices sit beside the .app.
+set(CUBEULATOR_PLATFORM_NOTICES_DIR ".")
 
 set(CUBEULATOR_PLATFORM_SOURCES
     platform/macos/camera_macos.cpp
@@ -41,6 +48,22 @@ endfunction()
 function(cube_platform_deploy_qt_library target qt_target)
 endfunction()
 
+# The .dmg holding Cubeulator.app. packaging/macos/Packaging.cmake.
 macro(cube_platform_configure_packaging)
-    list(APPEND CPACK_GENERATOR "DragNDrop")
+    include("${PROJECT_SOURCE_DIR}/packaging/macos/Packaging.cmake")
 endmacro()
+
+# The shell's macOS implementation: a no-display-sleep power assertion, and
+# the window traits macOS has (its icon is the bundle's, a menu bar, a full
+# screen button). IOKit has the power assertion.
+function(cube_platform_configure_desktop_shell target)
+    target_sources(${target} PRIVATE
+        "${PROJECT_SOURCE_DIR}/src/app/platform/macos/desktop_shell_macos.cpp")
+    target_link_libraries(${target} PRIVATE "-framework IOKit" "-framework CoreFoundation")
+endfunction()
+
+# The bundle, its Info.plist and icon, install rules and Qt deployment into
+# it, and the code signature. packaging/macos/ConfigureApp.cmake.
+function(cube_platform_configure_desktop_app target)
+    include("${PROJECT_SOURCE_DIR}/packaging/macos/ConfigureApp.cmake")
+endfunction()

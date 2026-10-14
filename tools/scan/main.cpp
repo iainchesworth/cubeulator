@@ -5,6 +5,8 @@
 //   cube_scan replay <session-dir>   one session: the cube and its solution
 //   cube_scan board <root-dir>       every session under root against truth
 //   cube_scan holds <session-dir>    how the cube was held, frame by frame
+//   cube_scan corners <session-dir>  frames showing two sides at once, and
+//                                    whether they fit the true cube
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -17,6 +19,7 @@
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/vision/color_resolution.hpp>
+#include <cube/vision/corner_fit.hpp>
 #include <cube/vision/direct_scan.hpp>
 #include <cube/vision/held_cube.hpp>
 
@@ -138,10 +141,12 @@ struct Outcome {
     std::vector<cube::vision::SideScan::Side> captured;
     std::size_t frames = 0;
     std::size_t reads = 0;
+    std::size_t corner_reads = 0;
     std::size_t sides = 0;
-    std::optional<std::size_t> read_at;  // first frame at which the cube was known
-    std::optional<Cube> cube;            // the cube at that frame
-    std::size_t changes_after = 0;       // later frames whose cube differed
+    std::optional<cube::vision::SessionColours> colours;  // what each colour measured
+    std::optional<std::size_t> read_at;                   // first frame at which the cube was known
+    std::optional<Cube> cube;                             // the cube at that frame
+    std::size_t changes_after = 0;                        // later frames whose cube differed
 };
 
 [[nodiscard]] Outcome replay(const fs::path& session) {
@@ -149,9 +154,16 @@ struct Outcome {
     cube::vision::SideScan scan;
     for (const fs::path& frame : frames_of(session)) {
         const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
-        const auto read = cube::vision::read_side(bgr);
+        // As the app reads a frame: prepared once, the second reader only when
+        // the first found no side.
+        const auto prepared = cube::vision::prepare_frame(bgr);
+        const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
         outcome.reads += read.has_value() ? 1U : 0U;
         scan.add(read);
+        if (!read.has_value()) {
+            scan.add_corner(prepared.has_value() ? cube::vision::read_corner(*prepared)
+                                                 : std::nullopt);
+        }
         if (const auto cube = scan.cube(); cube.has_value()) {
             if (!outcome.cube.has_value()) {
                 outcome.cube = *cube;
@@ -164,6 +176,10 @@ struct Outcome {
     }
     outcome.captured = scan.sides();
     outcome.sides = outcome.captured.size();
+    outcome.corner_reads = scan.corner_reads();
+    if (const auto whole = scan.scanned(); whole.has_value()) {
+        outcome.colours = whole->colours;
+    }
     return outcome;
 }
 
@@ -239,8 +255,9 @@ void explain(const Outcome& outcome) {
 
 int run_replay(const fs::path& session) {
     const Outcome outcome = replay(session);
-    fmt::print("{}: frames {}  lattice reads {}  sides {}\n", session.filename().string(),
-               outcome.frames, outcome.reads, outcome.sides);
+    fmt::print("{}: frames {}  lattice reads {}  corner reads {}  sides {}\n",
+               session.filename().string(), outcome.frames, outcome.reads, outcome.corner_reads,
+               outcome.sides);
     if (!outcome.cube.has_value()) {
         fmt::print("  no cube: {} of 6 sides captured\n", outcome.sides);
         explain(outcome);
@@ -339,6 +356,81 @@ int run_board(const fs::path& root) {
 // is where that matcher's two distances were measured: how close a read sits
 // to the hold it shows, and how far off the nearest hold that would look
 // different is.
+// Frames that show two or three sides at once, scored against the true cube:
+// does the read fit it, and how many of the eighteen cubes one turn away does
+// it rule out? A read that rules out none says nothing about those turns
+// (they changed stickers it did not show); one that fits the true cube and
+// rules out most is what settles an ambiguous scan.
+int run_corners(const fs::path& session) {
+    const auto truth = truth_of(session);
+    if (!truth.has_value()) {
+        fmt::print("{}: no truth.txt, or it does not make a cube\n", session.string());
+        return 2;
+    }
+    const Outcome outcome = replay(session);
+    if (!outcome.colours.has_value()) {
+        fmt::print("{}: the scan did not complete, so the session's colours are not known\n",
+                   session.filename().string());
+        return 1;
+    }
+    std::vector<Cube> neighbours;
+    for (const Face face : cube::solver::kAllFaces) {
+        for (const int turns : {1, 2, 3}) {
+            neighbours.push_back(truth->apply(cube::solver::Move{face, turns}));
+        }
+    }
+
+    std::size_t seen = 0;
+    std::size_t fitting = 0;
+    std::size_t blurred = 0;
+    std::size_t informative = 0;
+    std::size_t rejected_total = 0;
+    for (const fs::path& frame : frames_of(session)) {
+        const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
+        if (cube::vision::read_side(bgr).has_value()) {
+            continue;
+        }
+        const auto read = cube::vision::read_corner(bgr);
+        if (!read.has_value()) {
+            continue;
+        }
+        ++seen;
+        const cube::vision::CornerFit fit =
+            cube::vision::fit_corner(*read, *truth, *outcome.colours);
+        std::size_t rejected = 0;
+        for (const Cube& other : neighbours) {
+            rejected += cube::vision::fit_corner(*read, other, *outcome.colours).fits ? 0U : 1U;
+        }
+        fmt::print(
+            "  {}: {} sides, {} edges  true cube {} (distance {:.1f})  "
+            "one-turn cubes ruled out {}/{}\n",
+            frame.filename().string(), read->sides.size(), read->edges.size(),
+            fit.fits ? "FITS" : "no fit", static_cast<double>(fit.distance), rejected,
+            neighbours.size());
+        if (fit.fits) {
+            ++fitting;
+            if (rejected > 0) {
+                ++informative;
+                rejected_total += rejected;
+            }
+        } else {
+            ++blurred;
+        }
+    }
+    fmt::print(
+        "{}: {} corner reads, {} fit the true cube, {} do not (blur, a finger, a "
+        "misread side)\n",
+        session.filename().string(), seen, fitting, blurred);
+    if (informative > 0) {
+        fmt::print(
+            "  of those that fit, {} ruled out at least one cube one turn away "
+            "(on average {:.1f} of {})\n",
+            informative, static_cast<double>(rejected_total) / static_cast<double>(informative),
+            neighbours.size());
+    }
+    return 0;
+}
+
 int run_holds(const fs::path& session) {
     const std::vector<fs::path> frames = frames_of(session);
     cube::vision::SideScan scan;
@@ -464,8 +556,11 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "holds") {
         return run_holds(fs::path(args[1]));
     }
+    if (args.size() == 2 && args[0] == "corners") {
+        return run_corners(fs::path(args[1]));
+    }
     fmt::print(
         "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
-        "  cube_scan holds <session-dir>\n");
+        "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir>\n");
     return 2;
 }

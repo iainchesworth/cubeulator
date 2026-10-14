@@ -1,9 +1,22 @@
 # FAQ / troubleshooting
 
-**Does Cubeulator actually solve cubes yet?**
-No — see the note at the top of [Home](index.md). This repository is
-currently the Spec 00 build/CI skeleton; the solver, capture pipeline,
-edge-AI tracking, and render logic each land as separate, later specs.
+**Does Cubeulator actually solve cubes?**
+Yes, on Windows, macOS and Linux: hold each side of a cube up to the camera, and
+it solves it and shows you the turns. It is a pre-release; the
+[home page](index.md) says what is and is not yet proven.
+
+**Windows says "Windows protected your PC", or macOS will not open it.**
+The packages are not yet signed by Microsoft or Apple. On Windows choose *More
+info*, then *Run anyway*. On macOS right-click the app and choose *Open*, or use
+*Open Anyway* in System Settings > Privacy & Security. Whether a file really
+came from this project is checked with the GPG signature and the attestation:
+[Verifying build authenticity](SECURITY.md#verifying-build-authenticity).
+
+**It does not read my cube.**
+It reads one side at a time, square on, in even light. Strong backlight (a
+window behind the cube), a cube with very light plastic and flush tiles, and a
+side shown at an angle are the cases it is not yet proven on; the
+[Vision pipeline](vision-pipeline.md) lists its known limits.
 
 **Why is iOS still build-only in CI, when Android now builds the app?**
 Both jobs attempt real vcpkg builds of OpenCV for their

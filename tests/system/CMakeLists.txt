@@ -9,9 +9,10 @@
 #
 # Needs a platform that can draw - a desktop session, or Xvfb with software GL
 # on a headless Linux box - because Qt Quick 3D has no software fallback and
-# the screenshots have to be rendered. That is why this is not part of the
-# plain `ctest` run CI's build-and-test legs do: it carries the label
-# `system`, and those legs say -LE system.
+# the screenshots have to be rendered. That is why this is not part of a plain
+# `ctest` run: it carries the label `system`, which the committed test presets
+# exclude (and CI's build-and-test legs say -LE system as well). Run it with
+# the matching `<preset>-system` test preset.
 # ---------------------------------------------------------------------------
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D QuickControls2 LabsSettings Test)
 
@@ -108,7 +109,7 @@ foreach(shard RANGE 1 ${CUBE_SYSTEM_WALK_SHARDS})
     # progress lines the run prints say where the time went.
     set_tests_properties(${walk_test} PROPERTIES
         LABELS "system"
-        TIMEOUT 1500
+        TIMEOUT 1200
         ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}")
     list(APPEND cube_system_walk_tests ${walk_test})
 endforeach()
@@ -120,7 +121,7 @@ add_test(NAME system.tour
     WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
 set_tests_properties(system.tour PROPERTIES
     LABELS "system"
-    TIMEOUT 1500
+    TIMEOUT 1200
     ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour")
 
 # The reach gate: whether the walk visited every screen, state and control in

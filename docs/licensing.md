@@ -9,13 +9,13 @@ taken, see below.**
 > ships on the desktop (direct download, Linux packages) and, when mobile
 > capture exists, Google Play and F-Droid. This is Option A below. Nothing in
 > the build or the notices changes: the Apple-store question stays open in
-> [`LICENSE-NOTE.md`](../LICENSE-NOTE.md) and returns when an Apple store
+> [`LICENSE-NOTE.md`](https://github.com/iainchesworthlabs/cubeulator/blob/main/LICENSE-NOTE.md) and returns when an Apple store
 > becomes a goal. It is the only reason a Qt commercial licence (Option B)
 > would be needed.
 
 This is an engineering inventory and a decision paper. It is not legal advice,
 it does not change Cubeulator's licence (GPL-3.0-or-later), and it does not
-settle the question [`LICENSE-NOTE.md`](../LICENSE-NOTE.md) leaves open. That
+settle the question [`LICENSE-NOTE.md`](https://github.com/iainchesworthlabs/cubeulator/blob/main/LICENSE-NOTE.md) leaves open. That
 decision is Iain's.
 
 How to read the evidence marks:
@@ -133,13 +133,20 @@ PCRE2, double-conversion, md4c, tinycbor, Unicode CLDR, glslang, SPIRV-Cross,
 Embree, tinyexr, xatlas, meshoptimizer, and several smaller attributions) is
 listed per module in the SBOMs. The build reads a condensed snapshot
 (`third_party/notices/qt-modules.json`) and emits one notice per component
-reached from the modules above. Platform differences seen when comparing the
-Windows and Android SBOMs (both read here): Embree, D3D12 memory allocator,
-the Windows zlib wrappers and wintab are Windows-only; `forkfd` is
-Android-only [V]. The macOS, Linux and iOS Qt builds were **not** available
-to read, so on those platforms the snapshot over-includes rather than
-guesses; `tools/licences/qt_sbom_manifest.py` re-derives it from any Qt
-install's `sbom/` directory [I].
+reached from the modules above. The snapshot is generated from the Qt 6.12.0
+SBOMs for **Windows, Android and macOS** [V: 2026-10-14; the macOS ones from
+the `clang_64` kit's `sbom/` folders]. Platform differences among them:
+Embree, D3D12 memory allocator, the Windows zlib wrappers and wintab are
+Windows-only; `forkfd` is Android-only; the Cocoa plugin, the Darwin
+permission plugins and `qeventdispatcher_cf` are macOS-only; and Qt GUI
+depends on QtDBus on macOS but not on Windows [V]. Edges that exist on only
+some platforms are kept per platform (`platformDepends`) so a macOS-only
+dependency is not applied to Windows. **Linux and iOS have not been read**,
+so on those platforms the snapshot over-includes rather than guesses;
+`tools/licences/qt_sbom_manifest.py` re-derives it from any Qt install's
+`sbom/` directory, and maps each library file name (`libqcocoa.a`,
+`qwindows.dll`) to its component from the SBOM's own list of packaged
+binaries, so plugin libraries no longer need hand-written aliases.
 
 Obligation summary for the Qt set, *as distributed under GPL-3.0-only*: the
 combined work is conveyed under GPL-3.0 with its Corresponding Source (which
@@ -534,7 +541,7 @@ Maintaining it:
 | a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
 | add the bundled fonts | add the files under `assets/fonts/`; the planned manifest entries start emitting; verify their copyright lines against the fonts |
-| add a platform (Linux, macOS) | run the Qt SBOM tool on that platform's Qt install; its components are over-included until then (the JSON says `qtPlatformVerified:false`) |
+| add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
 
 Known gaps, so nobody mistakes them for done:
 
@@ -556,8 +563,8 @@ Known gaps, so nobody mistakes them for done:
    unresolved, one generator warning (the four files above). The notices
    file is 343 KB and the JSON 356 KB. Linux, macOS and Android use the same
    mechanism, but `qt.deployedRoots` has no list for them yet (the generator
-   says so in a warning) and their Qt components are over-included until
-   `qt-modules.json` is verified there; CI is where they get checked.
+   says so in a warning); CI is where they get checked. Linux has not had its
+   Qt SBOM read, so its Qt components are over-included.
    The Windows build used a copy of an existing vcpkg installed tree, merged
    with five ports built in this session, configured with
    `VCPKG_MANIFEST_INSTALL=OFF`: another session held the shared

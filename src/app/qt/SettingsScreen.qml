@@ -36,6 +36,10 @@ Rectangle {
             model: chipRoot.options
             delegate: AppButton {
                 objectName: chipRoot.objectName !== "" ? chipRoot.objectName + "." + index : ""
+                // No wider than the row: "Same as this device (Deutsch)" is
+                // longer than a phone's, and a longer language's is longer
+                // still; it wraps rather than running off the window.
+                maxWidth: chipRoot.width
                 text: modelData
                 variant: index === chipRoot.currentIndex ? "primary" : "secondary"
                 onClicked: chipRoot.selected(index)
@@ -250,6 +254,21 @@ Rectangle {
                 font.family: Theme.fontHeading; font.pixelSize: 12
                 color: Theme.warning
                 width: parent.width; wrapMode: Text.WordWrap
+            }
+        }
+
+        // E4a: the way to About on Windows and Linux, which have no menu bar
+        // (platforms.md). A placeholder row; E3a/E3b replace it with the real
+        // About row and screen.
+        Column {
+            width: parent.width
+            // Reads AppInfo, which only the desktop shell registers.
+            visible: !AppState.isMobile
+            AppButton {
+                objectName: "settings.about"
+                variant: "ghost"
+                text: qsTrId("settings.about")
+                onClicked: AppInfo.showAbout()
             }
         }
 
