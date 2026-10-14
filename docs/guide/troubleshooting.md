@@ -9,8 +9,7 @@ The scan screen says **Camera unavailable**, with a reason such as *no camera
 device was found* or *the camera could not be started*.
 
 - **Is another program using it?** A video call, another app or a browser tab
-  can hold the camera exclusively. Close it and press **Cancel**, then **Scan a
-  cube** again.
+  can hold the camera exclusively. Close it and press **Try again**.
 - **Is the system letting Cubeulator use it?**
     - *Windows:* **Settings > Privacy & security > Camera**. Turn on **Camera
       access** and **Let desktop apps access your camera**.
@@ -27,6 +26,9 @@ device was found* or *the camera could not be started*.
 - **In a browser:** allow the camera when the browser asks, and check the
   address bar's site settings if you said no. The page has to be served over
   `https://`; see [Try it in your browser](../web.md).
+
+Once the cause is sorted, **Try again** on the scan screen asks for the camera
+again; you do not have to go back to the start screen.
 
 ## It will not read a side
 
