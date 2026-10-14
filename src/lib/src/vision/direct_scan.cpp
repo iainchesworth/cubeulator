@@ -400,8 +400,8 @@ struct Affine {
     for (std::size_t i = 0; i < points.size(); ++i) {
         const double c = cells.at(i).x;
         const double r = cells.at(i).y;
-        const double x = static_cast<double>(points.at(i).x);
-        const double y = static_cast<double>(points.at(i).y);
+        const auto x = static_cast<double>(points.at(i).x);
+        const auto y = static_cast<double>(points.at(i).y);
         cc += c * c;
         cr += c * r;
         c1 += c;
@@ -416,11 +416,13 @@ struct Affine {
         by.at(2) += y;
     }
     using Matrix = std::array<std::array<double, 3>, 3>;
-    const Matrix normal = {{
-        {cc, cr, c1},
-        {cr, rr, r1},
-        {c1, r1, one},
-    }};
+    const Matrix normal = {
+        {
+            {cc, cr, c1},
+            {cr, rr, r1},
+            {c1, r1, one},
+        },
+    };
     const auto determinant = [](const Matrix& m) {
         const auto entry = [&m](std::size_t row, std::size_t column) {
             return m.at(row).at(column);
