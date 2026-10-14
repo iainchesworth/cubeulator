@@ -37,13 +37,25 @@ gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
 
 `legs` is a comma-separated list (no spaces) of `clang-format`,
 `platform-isolation`, `clang-tidy`, `linux`, `macos`, `windows`, `coverage`,
-`system`, `android`, `ios`, `web`, `perf`, or `all` (the default, which does not
-include `perf`). An unknown name fails the run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
+`system`, `android`, `ios`, `web`, `web-test`, `perf`, `web-perf`, or `all` (the
+default, which includes neither `perf` nor `web-perf`). An unknown name fails
+the run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
 ([platform-isolation.md](platform-isolation.md)): fast, and independent of the
 build legs.
 `system` is the Linux job that runs the system tests under Xvfb (see
 [testing.md](testing.md#system-tests)); on Windows and macOS the same suite
 runs as a non-blocking step of their build legs.
+`web-test` is the browser's tests ([testing.md](testing.md#browser-tests)): it
+builds the `web-emscripten-diagnostics` app and the `web-emscripten-tests`
+binaries from one vcpkg tree, runs the unit, integration and performance cases
+as WebAssembly under Node with `ctest`, and then drives the app in Chromium with
+Playwright (`tests/web`). It uploads the Playwright report and traces. Like
+`web`, it is not a required check until it has run green on `develop`.
+`web-perf` is its wall-time half: the same diagnostics build, the `perf`
+Playwright project on one worker with `CUBEULATOR_WEB_PERF_TIMING=1`, and the
+journeys' summaries, Chrome traces and CSVs uploaded as
+`cubeulator-web-perf-reports`. It runs only when named, for the reason `perf`
+does.
 `perf` is the wall-time half of the performance tier: it builds only
 `cube_perf_tests` on the Linux Release preset (no Qt, no app) and runs
 `ctest --preset linux-gcc-perf`. It runs only when it is named - `all` leaves it
@@ -265,6 +277,7 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | clang-tidy and its compiler | Clang 23.x from apt.llvm.org | No, but it is a snapshot of `release/23.x` rebuilt as the branch moves, not a frozen version; there is no clang-tidy 23 wheel on PyPI yet. |
 | AppleClang | Xcode 26 on `macos-26` (desktop); `macos-15` (iOS) | iOS stays on `macos-15` for the open vcpkg pkg-config issue [microsoft/vcpkg#50681](https://github.com/microsoft/vcpkg/issues/50681). |
 | Emscripten | 5.0.5 (`.github/actions/web-build`) | **No: Qt decides.** Qt 6.12.0 requires exactly 5.0.5 and its toolchain file stops the configure on any other (doc.qt.io/qt-6/wasm.html). Qt 6.11 and 6.10 named 4.0.7. Move it when Qt moves, to the version Qt names for that release. |
+| Playwright | 1.61.1 (`tests/web/package.json`, exact) | Maybe: the browser tests' only dependency. Pinned exactly because the Chromium it drives is the build that release names; a bump is a deliberate change to that file and the lockfile, checked by the `web-test` leg. Dependabot does not watch it (an npm entry would put test-runner bumps in the auto-merge lane). |
 | Android | NDK r28c (28.2.13676358), JDK 21, platform 36, build-tools 36.0.0 | r30 exists. r28c is newer than the r27c Qt 6.12 names and builds its libraries with: Qt recommends matching it but does not rule a newer NDK out, so this is outside Qt's tested configuration on purpose (r27c is the fallback). r28c's libc++ has `std::expected::transform`/`and_then`, `std::format`/`std::print`, `ranges::contains`/`fold_left` and `mdspan`, which r26b lacks; it still lacks float `from_chars`, `views::enumerate` and `flat_map`. |
 | CMake | 4.4.2, exact (`lukka/get-cmake`'s catalog; the project's policies go to 4.4) | Yes: Kitware has 4.4.4, which the pinned action cannot install until it is bumped (see [What CI pins](#what-ci-pins)). |
 | mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |

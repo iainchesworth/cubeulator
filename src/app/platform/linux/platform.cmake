@@ -3,6 +3,8 @@
 
 set(CUBEULATOR_PLATFORM_DISPLAY_NAME "Linux")
 set(CUBEULATOR_PLATFORM_DESKTOP ON)
+# A native camera device, opened from the calling thread? (cmake/Platform.cmake)
+set(CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA ON)
 
 # No display is needed for the test binaries' items that are never shown.
 set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "offscreen")
@@ -20,6 +22,7 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
 # has not been measured; if the walk is ever run on one and the flicker
 # matters, this is where to try it.
 set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
+set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS "")
 
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/lib/qt6" "/usr/lib/x86_64-linux-gnu/qt6")

@@ -5,9 +5,10 @@
 #include <cstdint>
 #include <string_view>
 
-// CUBE_EXPECT_TRACY is set by tests/CMakeLists.txt from CUBEULATOR_ENABLE_TRACY
-// (1 or 0), so this file can ask "which variant did CMake select?" without an
-// #ifdef of its own.
+// CUBE_EXPECT_TRACY and CUBE_EXPECT_RECORDER are set by tests/CMakeLists.txt
+// from CUBEULATOR_ENABLE_TRACY and CUBEULATOR_ENABLE_PROFILE_RECORDER (1 or 0),
+// so this file can ask "which variant did CMake select?" without an #ifdef of
+// its own.
 
 namespace {
 
@@ -36,8 +37,9 @@ int manual_zone(int count) {
 
 }  // namespace
 
-TEST_CASE("the profiling variant matches the CMake option", "[profiling]") {
-    REQUIRE(cube::profiling::enabled == (CUBE_EXPECT_TRACY != 0));
+TEST_CASE("the profiling variant matches the CMake options", "[profiling]") {
+    REQUIRE(cube::profiling::enabled == (CUBE_EXPECT_TRACY != 0 || CUBE_EXPECT_RECORDER != 0));
+    REQUIRE(cube::profiling::to_recorder == (CUBE_EXPECT_RECORDER != 0));
 }
 
 TEST_CASE("instrumented code computes the same result", "[profiling]") {

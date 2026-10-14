@@ -190,6 +190,85 @@ count and fastest call, as a multiple of the test binary's own
 is therefore a deliberate act that updates that file as well. Both are
 described in [Performance tests](testing.md#performance-tests).
 
+## In the browser
+
+Tracy cannot be used on the web build, and not for want of a port: a Tracy
+client **opens a TCP listener** and answers UDP discovery, and a browser tab can
+do neither. What takes its place is a recorder inside the page.
+
+The same macros (`CUBE_ZONE_SCOPED`, `CUBE_PLOT`, `CUBE_FRAME_MARK_NAMED`, ...)
+have a third implementation, chosen the same way as the other two: by CMake,
+with `-DCUBEULATOR_ENABLE_PROFILE_RECORDER=ON`, which puts
+`src/lib/variants/profiling-recorder/` on the include path.
+Zones, frames, messages and plots then go to `cube::profile::Recorder`
+(`cube/profile/recorder.hpp`): a fixed ring of lock-free slots, two clock reads
+and a few relaxed atomic stores per zone, nothing allocated and nothing locked
+while recording. It is plain C++ and is built into `cube::lib` on every
+platform, so it is unit-tested natively (`profile_recorder_test.cpp`); only its
+export to the page is web code (`src/app/platform/web/profile_web.{cpp,js}`).
+
+```sh
+cmake --preset web-emscripten-diagnostics
+cmake --build --preset web-emscripten-diagnostics
+```
+
+That preset is Release with function names kept (`--profiling-funcs`: a trace
+reads `cube::solver::detail::bfs_search`, not `wasm-function[4171]`, without the
+size of full DWARF), the recorder, and the read-only driver the
+[browser tests](testing.md#browser-tests) use. It is for measuring; the site
+that is published is the plain `web-emscripten-release`.
+
+### Reading it
+
+The page gets `window.cubeulatorProfile`:
+
+| | |
+|---|---|
+| `recording` | `true` in this build; `false` in any other, where everything below is empty |
+| `summary()` | per zone: `count`, `total_ms`, `mean_ms`, `min_ms`, `max_ms`, `stddev_ms`; and how many frames and messages of each name |
+| `trace()` | Chrome's Trace Event Format, as text |
+| `csv()` | zone statistics in `tracy-csvexport`'s columns, so `tools/perf/tracy_check.py` and any script written against a Tracy export read it unchanged |
+| `clear()` | forget what has been recorded (the ring holds 131 072 events, about a quarter of an hour of a scan, then overwrites the oldest and counts them in `dropped`) |
+| `mark(text)` | a message on the timeline and a `performance.mark` of the same name: where a step begins |
+| `now()` | the recorder's clock, microseconds |
+| `memory()` | the wasm heap's size, and in Chromium the JavaScript heap's |
+| `download('trace' \| 'csv' \| 'summary')` | saves it as a file |
+
+From the DevTools console:
+
+```js
+cubeulatorProfile.summary().zones['solver.solve']
+copy(cubeulatorProfile.trace())      // or download('trace')
+```
+
+A trace opens in **DevTools > Performance > Load profile**, in
+[Perfetto](https://ui.perfetto.dev), and, through Tracy's `tracy-import-chrome`,
+in the Tracy GUI - so the one place the family's habit of reading a timeline in
+Tracy still works.
+
+### What to keep in mind
+
+- **The clock is `performance.now()`.** A page that is cross-origin isolated
+  (this one must be, for its threads) gets it at 5 microseconds; a zone shorter
+  than that reads as zero.
+- **DevTools open slows the page down**, and a page not in front is throttled.
+  Record with it closed and read the numbers from `summary()`, or record from a
+  script (Playwright's `page.evaluate`, which is what the suite does).
+- **The first runs are not the steady state**: WebAssembly is compiled by a
+  baseline tier first and optimised in the background. A number worth keeping is
+  taken after a warm-up, as the tests do.
+- **A headless runner draws in software** (SwiftShader), so frame times there
+  measure the CPU renderer; the solver and reader zones are CPU in any case.
+  A test that reads a frame time asserts the renderer first.
+- **Threads are Web Workers**: each shows as its own `thread N` track; the main
+  thread is the page's.
+- **Nothing here is shipped.** The ring is not allocated unless something
+  records into it, but the build is a development build like the Tracy one.
+
+The performance tests that read this - budgets on how long a solve and a
+scan take in the browser, and the report each run leaves - are in
+[Browser tests](testing.md#browser-tests).
+
 ## Licence
 
 Tracy is BSD-3-Clause. It is present only in a profiling build, which is a
@@ -205,8 +284,9 @@ shipped component.
 ## Why it is built this way
 
 - **CMake chooses the header, not an `#ifdef`.** `cube/profiling.hpp` exists
-  twice, under `src/lib/variants/profiling-tracy_{enabled,disabled}/`, and
-  `src/lib/CMakeLists.txt` puts one directory on the include path - the
+  three times, under `src/lib/variants/profiling-tracy_{enabled,disabled}/` and
+  `profiling-recorder/`, and `src/lib/CMakeLists.txt` puts one directory on the
+  include path - the
   mechanism ICL Forge uses for the same seam, and the one
   [architecture.md](architecture.md) already requires of platform
   differences. A unit test (`profiling_test.cpp`) pins the variant against the

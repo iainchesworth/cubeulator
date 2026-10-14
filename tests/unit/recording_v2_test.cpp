@@ -4,6 +4,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "jpeg_codec.hpp"
+
 #include <cube/solver/cube.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/recording_v2.hpp>
@@ -145,6 +147,7 @@ TEST_CASE("analysis downscale matches the live contract", "[recording]") {
 }
 
 TEST_CASE("async recorder writes a sound dual-stream recording", "[recording]") {
+    CUBE_SKIP_WITHOUT_JPEG_CODEC();
     const auto dir = fresh_dir("recorder");
     Manifest manifest;
     manifest.state = solved_state();
@@ -175,6 +178,7 @@ TEST_CASE("async recorder writes a sound dual-stream recording", "[recording]") 
 }
 
 TEST_CASE("check_recording names gaps, missing frames and drops", "[recording]") {
+    CUBE_SKIP_WITHOUT_JPEG_CODEC();
     const auto dir = fresh_dir("audit");
     Manifest manifest;
     AsyncRecorder recorder;
