@@ -239,8 +239,26 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   (about 4% on tungsten), so it is left for a corner reader with its own
   preparation. The scan screen draws no dots on a corner view yet
   (`stickerPoints` is the square-on read's nine), and its words say "this
-  side". Separately, that recording's six sides do not assemble into a valid
-  cube with or without this change; its true state was not recorded.
+  side".
+- **The first ambiguous cube held on corners by hand.** That same recording is
+  of a patterned cube (orange and red sides solid; green/blue and
+  white/yellow sides six and three, the three being two opposite corners and
+  an edge). Its six sides read correctly - the pattern is as described by the
+  person holding it - and make **20 valid cubes**, so the scan is ambiguous,
+  which is the case corner views exist for; what the scan screen says is
+  right and `cube_scan replay` now says it too. Corner reads did not settle
+  it, for two reasons. (1) `kCornerFitDistance` was 8, set from six frames
+  within 7; real hand-held sides sat at a median of 8.2 (90% within 11), and
+  not one of the 35 reads fitted any cube. It is 12 now (30 fit); on the
+  older recordings that fits more of the true cube (4 of 5, up from 3, on the
+  tungsten session) and still rules out 14 to 17.5 of the 18 cubes one turn
+  away. (2) The views shown were all of faces the candidates agree on: of the
+  eight cubes left, six tied at 30 reads each. Any corner that includes the
+  yellow-centred side tells all six apart, and one view of it would have
+  settled the scan. The screen asking for "two sides at once" without saying
+  which is the gap; working out the corner from the candidates is small
+  (the candidates and their per-face differences are all in `SideScan`) and
+  is the next step along with the corner reader's own preparation.
 
 ## Why it does not work today
 

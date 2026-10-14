@@ -590,3 +590,33 @@ TEST_CASE("a side only a corner has shown does not take the place of one read sq
         CHECK(cube::vision::colour_distance(side.lab.at(4), stray) > 5.0F);
     }
 }
+
+TEST_CASE("a corner lit differently from the scan still fits its cube", "[corner]") {
+    // By lamplight a side seen at an angle sits further from the colours the
+    // session measured than the one square-on reads. Here the whole view is
+    // warmer than the scan's colours, which puts every side 9.7 from them: out
+    // of reach at the old fitting distance of 8, and still plainly the
+    // cube's at 12, where a cube a turn away is as far off as ever.
+    const Cube cube = cube::test::scramble(2);
+    const SessionColours colours = drawn_colours();
+    cube::test::Drawing warmer;
+    warmer.paint = [](Color colour) {
+        const cv::Scalar plain = cube::test::paint(colour);
+        return cv::Scalar(plain(0) * 0.7, plain(1) * 0.92, plain(2));
+    };
+    const auto left = cube::solver::outside_view(cube, Face::F);
+    const auto right = cube::solver::outside_view(cube, cube::solver::right_of(Face::F));
+    const auto read_value = read_corner(draw_corner(left, right, cube::test::CornerPose{}, warmer));
+    const auto& read = ::cube::test::must_have(read_value);
+
+    const cube::vision::CornerFit fit = fit_corner(read, cube, colours);
+    CHECK(fit.distance > 8.0F);
+    CHECK(fit.distance < cube::vision::kCornerFitDistance);
+    CHECK(fit.fits);
+    CHECK_FALSE(fit_corner(read, cube, colours, 8.0F).fits);
+
+    for (const Face turned : {Face::F, Face::R, Face::U, Face::D}) {
+        INFO("turned " << static_cast<int>(turned));
+        CHECK_FALSE(fit_corner(read, cube.apply({turned, 1}), colours).fits);
+    }
+}

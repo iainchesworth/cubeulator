@@ -244,7 +244,11 @@ watching.
   and any cube one turn from solved) needs a corner view to settle, and the
   corner reader is validated on six real frames and drawn ones only. A side
   seen at a steep angle, or with a finger across it, may not fit; the scan
-  keeps asking for more until a read does.
+  keeps asking for more until a read does. A scan that is ambiguous is only
+  settled by corner views that include a side the candidate cubes differ on:
+  the screen asks for two sides at once but not which two (recorded: 20 cubes
+  fit six sides of a patterned cube, and the one view that told them apart
+  was never shown).
 - **Light.** Hard backlit or glare conditions are not proven; the measured
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
@@ -279,7 +283,9 @@ path cannot disagree.
 | `cube_scan replay <session-dir>` | One session: the cube and its solution |
 | `cube_scan board <root-dir>` | Every session under the root, against its `truth.txt` |
 | `cube_scan holds <session-dir>` | How the cube was held, frame by frame |
-| `cube_scan corners <session-dir>` | Frames showing two sides at once, and whether they fit the true cube |
+| `cube_scan corners <session-dir> [max-distance]` | Frames showing two sides at once, and whether they fit the true cube (at the distance a side may sit from the cube's, the app's own unless given) |
+| `cube_scan corner-colours <session-dir>` | How the sides of corner reads compare with the sides read square-on |
+| `cube_scan ambiguity <session-dir>` | The cubes six sides make, and how the session's corner reads vote among them at several distances |
 
 The only gate is a real recorded session ending in the exact true cube.
 `truth.txt` is six words of nine letters from `WYROGB`, one per side, each side
