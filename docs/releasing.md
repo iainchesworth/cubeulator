@@ -215,9 +215,10 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
 4. **Open the release PR**: `develop` → `main`, merge commit. The `Release
    readiness` check puts the rendered notes in its summary: read them there.
    `Commit is green` asks step 1's question of the PR's head commit and puts the
-   table in its summary. It is red while CI is still running on that commit
-   (re-run it when CI has finished) and it is advisory, so it is the
-   maintainer's decision, not the ruleset's, not to merge with it red.
+   table in its summary. It waits (up to three hours) for a workflow that has
+   not finished, fails at once on a red workflow or check run, and is advisory,
+   so it is the maintainer's decision, not the ruleset's, not to merge with it
+   red.
    `main`'s ruleset is in [Branch protection](branch-protection.md). It asks
    for "up to date", so anything that reaches `main` after the release PR's
    last green run (a hotfix, a back-merge) starts every check again, and the

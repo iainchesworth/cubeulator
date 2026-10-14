@@ -23,6 +23,12 @@ Which run counts: the newest `push` run of the workflow on that commit (what the
 badges show). Where there is none (a hotfix branch is built as a pull request,
 not pushed) the newest run of any event. `--event` pins it.
 
+    --wait MINUTES    a workflow that has not finished is not a failure: with
+                      this, wait for it (polling every --interval seconds, 60
+                      by default) up to MINUTES before judging. A run that has
+                      failed ends the wait at once. Without it the answer is
+                      immediate, and "has not finished" is a failure.
+
     --through-merge   if the commit is a merge commit, judge its second parent.
                       The release PR is merged into `main` with a merge commit
                       whose second parent is the `develop` tip that was tested;
@@ -45,6 +51,7 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
@@ -114,10 +121,21 @@ class Report:
     checks_running: list[str] = field(default_factory=list)  # informational
     partial: str = ""
     note: str = ""
+    gave_up_after: int = 0  # minutes waited for workflows that never finished
 
     @property
     def ok(self) -> bool:
         return not self.problems()
+
+    @property
+    def unfinished(self) -> bool:
+        """A workflow that has not finished (or has not started): waiting may change the answer."""
+        return any(r.state in ("running", "none") for r in self.rows)
+
+    @property
+    def failed(self) -> bool:
+        """Something has failed: waiting will not make it not so."""
+        return any(r.state == "red" for r in self.rows) or bool(self.checks_red)
 
     def problems(self) -> list[str]:
         found: list[str] = []
@@ -130,6 +148,11 @@ class Report:
                 )
             elif row.state == "red":
                 found.append(f"{row.workflow} is {row.detail or 'not green'} on {short} ({row.url})")
+            elif row.state == "running" and self.gave_up_after:
+                found.append(
+                    f"{row.workflow} had still not finished on {short} after {self.gave_up_after} "
+                    f"minutes ({row.url})"
+                )
             elif row.state == "running":
                 found.append(f"{row.workflow} has not finished on {short}: wait for it ({row.url})")
             elif row.state == "none":
@@ -242,6 +265,37 @@ def assess(
     return report
 
 
+def assess_waiting(
+    assess_once: Callable[[], Report],
+    *,
+    wait_minutes: float,
+    interval: float = 60.0,
+    sleep: Callable[[float], None] = time.sleep,
+    now: Callable[[], float] = time.monotonic,
+    say: Callable[[str], None] = print,
+) -> Report:
+    """assess_once() until nothing is unfinished, something has failed, or the time is up.
+
+    A workflow that has not finished is not a verdict yet; a failure is one at
+    once, so the wait ends there and the failure is reported without sitting out
+    the rest of the time.
+    """
+    deadline = now() + wait_minutes * 60.0
+    polls = 0
+    while True:
+        report = assess_once()
+        if report.failed or not report.unfinished:
+            return report
+        if wait_minutes <= 0 or now() >= deadline:
+            if wait_minutes > 0:
+                report.gave_up_after = int(wait_minutes)
+            return report
+        polls += 1
+        waiting = ", ".join(r.workflow for r in report.rows if r.state in ("running", "none"))
+        say(f"waiting for {waiting} on {report.sha[:8]} (poll {polls})")
+        sleep(interval)
+
+
 def scorecard(repo: str, fetch: Callable[[str], tuple[int, str]]) -> tuple[bool, str]:
     """Has OpenSSF Scorecard published a result for the repository?"""
     status, body = fetch(f"https://api.scorecard.dev/projects/github.com/{repo}")
@@ -287,6 +341,14 @@ def main(argv: list[str] | None = None) -> int:
         "--ignore", action="append", default=[], metavar="CHECK", help="a check run to leave out (repeatable)"
     )
     parser.add_argument("--summary", type=Path, help="append a markdown report here ($GITHUB_STEP_SUMMARY)")
+    parser.add_argument(
+        "--wait",
+        type=float,
+        default=0.0,
+        metavar="MINUTES",
+        help="wait up to this long for workflows that have not finished (default: do not wait)",
+    )
+    parser.add_argument("--interval", type=float, default=60.0, help="seconds between polls (default 60)")
     parser.add_argument("--scorecard", action="store_true", help="check the Scorecard result instead")
     args = parser.parse_args(argv)
 
@@ -304,14 +366,19 @@ def main(argv: list[str] | None = None) -> int:
             print("error: no workflow badges found in README.md and none given", file=sys.stderr)
             return 2
 
-        report = assess(
-            args.repo,
-            args.ref,
-            workflows,
-            gh_api,
-            event=args.event,
-            through_merge=args.through_merge,
-            ignore=tuple(args.ignore),
+        report = assess_waiting(
+            lambda: assess(
+                args.repo,
+                args.ref,
+                workflows,
+                gh_api,
+                event=args.event,
+                through_merge=args.through_merge,
+                ignore=tuple(args.ignore),
+            ),
+            wait_minutes=args.wait,
+            interval=args.interval,
+            say=lambda line: print(line, flush=True),
         )
     except (HealthError, OSError, json.JSONDecodeError, KeyError) as exc:
         print(f"error: {exc}", file=sys.stderr)
