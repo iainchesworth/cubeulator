@@ -25,7 +25,7 @@ flowchart TD
     READ -->|"std::optional&lt;SideRead&gt;"| SCAN["SideScan::add<br/>group reads into sides"]
     READ -.->|"no square-on side"| CORNER["read_corner<br/>two or three lattices that touch"]
     PREP -.-> CORNER
-    CORNER -.-> SCAN2["SideScan::add_corner"]
+    CORNER -.-> SCAN2["SideScan::add_corner<br/>counts each side held still; keeps the read"]
     SCAN --> SIX{"six captured sides?"}
     SIX -->|no| CTRL
     SIX -->|yes| NAME["resolve_colors<br/>54 stickers -> 6 groups of 9"]
@@ -142,6 +142,20 @@ the flat reads lack.
    several cubes it takes the one that most corner reads fit and more than
    any other; a read that fits all of them says nothing and one that fits
    none is a blurred frame. No pose is estimated anywhere in this.
+4. **Counting.** A cube held on a corner shows two or three sides in one
+   frame, so each side of a corner read is also a read of that side, counted
+   the way a square-on read is (`SideScan::add_corner`): the side must have
+   held still since the previous frame, have 7 or more of its 9 stickers
+   found (not placed by the fit) and not be a strip (one step at least 0.45 of
+   the other). It joins the side whose nine colours are nearest under some
+   quarter-turn, within the same-side distance, or starts one. Three sides
+   are captured in the time it takes one, and two corners - a corner and the
+   one across from it - are all six. This is in addition to the square-on
+   scan, not instead of it: the same side read both ways is one side, and once
+   a side has `kMinReads` square-on reads of its own its colours come from
+   those alone, because a side at an angle is lit a little differently.
+   `reads_in_view()` is the fewest among the sides in view, which is the one
+   the capture is waiting for.
 
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
@@ -151,6 +165,17 @@ stickers found, at a steep angle). An ambiguous cube drawn
 with its corner views is settled to the true cube. Whether a real person
 turning a real ambiguous cube produces a read that fits is not measured yet:
 no recorded session is one.
+
+`cube_scan corner-colours` measures what counting rests on: for every side of
+every corner read, how near it sits to the side the square-on reads of the same
+session captured. On the ten sides the recordings hold (all in two-side views;
+no recorded frame shows three) the distance is a median of 5.8 and at most
+12.0, and the next-nearest side is never closer than 11.8 more. The one at
+12.0 was a strip with six of its nine stickers found, which is where the
+gates came from; another six-of-nine strip sat at 6.1, so they are a margin
+and not a measured edge.
+Three sides at once is covered by drawn frames only until a corner-held scan
+is recorded (`CUBE_SCAN_RECORD_DIR`, then `cube_scan corner-colours` on it).
 
 ## Camera photometry
 

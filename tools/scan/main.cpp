@@ -7,6 +7,8 @@
 //   cube_scan holds <session-dir>    how the cube was held, frame by frame
 //   cube_scan corners <session-dir>  frames showing two sides at once, and
 //                                    whether they fit the true cube
+//   cube_scan corner-colours <dir>   how the sides of those frames compare
+//                                    with the sides read square-on
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -431,6 +433,115 @@ int run_corners(const fs::path& session) {
     return 0;
 }
 
+// How the sides of a corner view compare with the sides the square-on reads of
+// the same session captured. Whether a corner read can be counted towards a
+// side depends on its colours landing near that side's, so this prints, for
+// every side of every corner read, which captured side it is nearest under the
+// best quarter-turn and how near - beside how many of its nine stickers were
+// found and how foreshortened it is.
+int run_corner_colours(const fs::path& session) {
+    // kRoll[k][i] is the cell of a read that lands at cell i once the read is
+    // turned k quarter-turns; the scan's own table, which is file-local.
+    constexpr std::array<std::array<std::size_t, 9>, 4> kRoll = {{
+        {0, 1, 2, 3, 4, 5, 6, 7, 8},
+        {2, 5, 8, 1, 4, 7, 0, 3, 6},
+        {8, 7, 6, 5, 4, 3, 2, 1, 0},
+        {6, 3, 0, 7, 4, 1, 8, 5, 2},
+    }};
+
+    // Two reads are one side under this (direct_scan.cpp keeps it to itself).
+    constexpr float kSameSideDistance = 12.0F;
+
+    const Outcome outcome = replay(session);
+    fmt::print("{}: {} frames, {} square-on reads, {} sides captured\n",
+               session.filename().string(), outcome.frames, outcome.reads, outcome.sides);
+    if (outcome.captured.empty()) {
+        return 1;
+    }
+
+    std::size_t corner_frames = 0;
+    std::array<std::size_t, 4> by_sides{};
+    std::vector<float> distances;
+    std::vector<float> margins;
+    std::size_t unmatched = 0;
+    for (const fs::path& frame : frames_of(session)) {
+        const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
+        if (cube::vision::read_side(bgr).has_value()) {
+            continue;
+        }
+        const auto read = cube::vision::read_corner(bgr);
+        if (!read.has_value()) {
+            continue;
+        }
+        ++corner_frames;
+        ++by_sides.at(std::min<std::size_t>(read->sides.size(), 3));
+        for (std::size_t s = 0; s < read->sides.size(); ++s) {
+            const cube::vision::ObliqueSide& side = read->sides.at(s);
+            std::size_t found = 0;
+            for (const bool f : side.found) {
+                found += f ? 1U : 0U;
+            }
+            const cv::Point2f column = side.centres.at(1) - side.centres.at(0);
+            const cv::Point2f row = side.centres.at(3) - side.centres.at(0);
+            const float c = std::hypot(column.x, column.y);
+            const float r = std::hypot(row.x, row.y);
+            const float shear = std::abs(column.x * row.y - column.y * row.x) / (c * r);
+
+            float best = std::numeric_limits<float>::max();
+            float second = std::numeric_limits<float>::max();
+            std::size_t best_side = 0;
+            for (std::size_t g = 0; g < outcome.captured.size(); ++g) {
+                float nearest = std::numeric_limits<float>::max();
+                for (const auto& roll : kRoll) {
+                    float total = 0.0F;
+                    for (std::size_t i = 0; i < 9; ++i) {
+                        total += cube::vision::colour_distance(side.lab.at(roll.at(i)),
+                                                               outcome.captured.at(g).lab.at(i));
+                    }
+                    nearest = std::min(nearest, total / 9.0F);
+                }
+                if (nearest < best) {
+                    second = best;
+                    best = nearest;
+                    best_side = g;
+                } else if (nearest < second) {
+                    second = nearest;
+                }
+            }
+            distances.push_back(best);
+            if (second < std::numeric_limits<float>::max()) {
+                margins.push_back(second - best);
+            }
+            unmatched += best >= kSameSideDistance ? 1U : 0U;
+            fmt::print(
+                "  {} side {}/{}: found {}/9  steps {:.0f}x{:.0f}px  sin(shear) {:.2f}  nearest "
+                "side {}  distance {:.1f}  next {:.1f}\n",
+                frame.filename().string(), s + 1, read->sides.size(), found, static_cast<double>(c),
+                static_cast<double>(r), static_cast<double>(shear), best_side,
+                static_cast<double>(best),
+                static_cast<double>(second < std::numeric_limits<float>::max() ? second : -1.0F));
+        }
+    }
+    fmt::print(
+        "{} corner-read frames: {} with two sides, {} with three; {} sides read, {} further than "
+        "the same-side distance ({:.0f}) from every captured side\n",
+        corner_frames, by_sides.at(2), by_sides.at(3), distances.size(), unmatched,
+        static_cast<double>(kSameSideDistance));
+    if (!distances.empty()) {
+        fmt::print("  distance to the nearest side: median {:.1f}  90% {:.1f}  max {:.1f}\n",
+                   static_cast<double>(percentile(distances, 0.5)),
+                   static_cast<double>(percentile(distances, 0.9)),
+                   static_cast<double>(percentile(distances, 1.0)));
+    }
+    if (!margins.empty()) {
+        fmt::print("  clear of the next side: min {:.1f}  10% {:.1f}  median {:.1f}\n",
+                   static_cast<double>(percentile(margins, 0.0)),
+                   static_cast<double>(percentile(margins, 0.1)),
+                   static_cast<double>(percentile(margins, 0.5)));
+    }
+    return 0;
+}
+
 int run_holds(const fs::path& session) {
     const std::vector<fs::path> frames = frames_of(session);
     cube::vision::SideScan scan;
@@ -559,8 +670,12 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "corners") {
         return run_corners(fs::path(args[1]));
     }
+    if (args.size() == 2 && args[0] == "corner-colours") {
+        return run_corner_colours(fs::path(args[1]));
+    }
     fmt::print(
         "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
-        "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir>\n");
+        "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir>\n"
+        "  cube_scan corner-colours <session-dir>\n");
     return 2;
 }

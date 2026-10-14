@@ -16,6 +16,7 @@
 
 #include <opencv2/imgproc.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -27,6 +28,7 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::test::draw_corner;
+using cube::test::draw_corner3;
 using cube::test::draw_side;
 using cube::test::Pose;
 using cube::test::room;
@@ -243,4 +245,248 @@ TEST_CASE("a corner view of the wrong cube does not settle it", "[corner]") {
     const auto read = scan.cube();
     REQUIRE_FALSE(read.has_value());
     CHECK(read.error() == cube::CubeError::ambiguous_scan);
+}
+
+namespace {
+
+// The three sides of `cube` that meet at one corner, as arrays drawn
+// outside-in: the faces given, in the order given.
+std::array<std::array<Color, 9>, 3> three_sides(const Cube& cube, Face a, Face b, Face c) {
+    return {cube::test::outside_view(cube, a), cube::test::outside_view(cube, b),
+            cube::test::outside_view(cube, c)};
+}
+
+// Hold a frame in front of the camera as the app does: the frame is asked for
+// a side square to the camera first, and for a corner only when there is none.
+void hold(SideScan& scan, const cv::Mat& frame, int frames = 12) {
+    const auto prepared = prepare_frame(frame);
+    REQUIRE(prepared.has_value());
+    for (int i = 0; i < frames; ++i) {
+        const auto side = cube::vision::read_side(*prepared);
+        scan.add(side);
+        if (!side.has_value()) {
+            scan.add_corner(read_corner(*prepared));
+        }
+    }
+}
+
+}  // namespace
+
+TEST_CASE("three sides turned corner-on are three lattices, each against the next", "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const cv::Mat frame =
+        cube::test::draw_corner3(three_sides(cube, Face::U, Face::R, Face::F), {});
+    const std::optional<CornerRead> read = read_corner(frame);
+    const CornerRead& corner = ::cube::test::must_have(read);
+
+    REQUIRE(corner.sides.size() == 3);
+    CHECK(corner.edges.size() == 3);
+    for (const auto& side : corner.sides) {
+        CHECK(side.pitch > 15.0F);
+        for (const bool found : side.found) {
+            CHECK(found);
+        }
+    }
+}
+
+TEST_CASE("a cube held on a corner is read three sides at a time", "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto sides = three_sides(cube, Face::U, Face::R, Face::F);
+
+    SideScan scan;
+    // One frame in, nothing has held still yet.
+    hold(scan, cube::test::draw_corner3(sides), 1);
+    CHECK(scan.sides().empty());
+    CHECK_FALSE(scan.reading());
+
+    // Held for as long as one side needs, all three are captured.
+    hold(scan, cube::test::draw_corner3(sides), static_cast<int>(SideScan::kMinReads) + 1);
+    CHECK(scan.reading());
+    REQUIRE(scan.sides().size() == 3);
+    for (const SideScan::Side& side : scan.sides()) {
+        CHECK(side.reads >= SideScan::kMinReads);
+        CHECK(side.in_view);
+    }
+
+    // Each side is what was drawn: its nine colours are one of the three
+    // drawn sides, whichever way up the lattice happened to lay it.
+    const SessionColours colours = drawn_colours();
+    const auto nearest = [&](const cv::Vec3f& lab) {
+        std::size_t best = 0;
+        float best_distance = 1.0e9F;
+        for (std::size_t i = 0; i < colours.size(); ++i) {
+            const float d = cube::vision::colour_distance(lab, colours.at(i));
+            if (d < best_distance) {
+                best_distance = d;
+                best = i;
+            }
+        }
+        return best;
+    };
+    std::size_t matched = 0;
+    for (const SideScan::Side& side : scan.sides()) {
+        for (const auto& drawn : sides) {
+            std::array<Color, 9> turned = drawn;
+            for (int turn = 0; turn < 4; ++turn) {
+                bool same = true;
+                for (std::size_t i = 0; i < 9; ++i) {
+                    same =
+                        same && nearest(side.lab.at(i)) == static_cast<std::size_t>(turned.at(i));
+                }
+                if (same) {
+                    ++matched;
+                }
+                turned = cube::test::turned_clockwise(turned);
+            }
+        }
+    }
+    CHECK(matched >= 3);
+}
+
+TEST_CASE("two corner views are a whole cube", "[corner]") {
+    // The corner a cube is first held on and the one across from it show every
+    // side between them.
+    for (const unsigned seed : {3U, 4U, 5U}) {
+        const Cube cube = cube::test::scramble(seed);
+        SideScan scan;
+        hold(scan, cube::test::draw_corner3(three_sides(cube, Face::U, Face::R, Face::F)), 12);
+        scan.add(std::nullopt);
+        scan.add_corner(std::nullopt);
+        CHECK(scan.sides().size() == 3);
+        hold(scan, cube::test::draw_corner3(three_sides(cube, Face::D, Face::L, Face::B)), 12);
+
+        REQUIRE(scan.sides().size() == 6);
+        const auto read = scan.cube();
+        REQUIRE(read.has_value());
+        CHECK(*read == cube);
+    }
+}
+
+TEST_CASE("a side read square-on and then from a corner is one side", "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto sides = three_sides(cube, Face::U, Face::R, Face::F);
+
+    SideScan scan;
+    // The up side, square to the camera, first.
+    const cv::Mat flat = draw_side(sides.at(0), Pose{});
+    for (int i = 0; i < 12; ++i) {
+        scan.add(cube::vision::read_side(flat));
+    }
+    REQUIRE(scan.sides().size() == 1);
+    const std::size_t flat_reads = scan.sides().front().reads;
+    scan.add(std::nullopt);
+
+    hold(scan, cube::test::draw_corner3(sides), 12);
+    // The up side again is the same side, and the other two are new.
+    REQUIRE(scan.sides().size() == 3);
+    std::size_t most = 0;
+    for (const SideScan::Side& side : scan.sides()) {
+        most = std::max(most, side.reads);
+    }
+    CHECK(most > flat_reads);
+}
+
+TEST_CASE("a corner that is moving is not counted", "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto sides = three_sides(cube, Face::U, Face::R, Face::F);
+
+    SideScan scan;
+    // A cube swung about by a pitch (40 px) from frame to frame: the same
+    // three sides in view every time, never in the same place twice.
+    for (int i = 0; i < 24; ++i) {
+        const float swing = (i % 2 == 0) ? -30.0F : 30.0F;
+        const cube::test::Corner3Pose pose{.vertex = {320.0F + swing, 190.0F}};
+        hold(scan, cube::test::draw_corner3(sides, pose), 1);
+    }
+    CHECK(scan.sides().empty());
+    CHECK_FALSE(scan.reading());
+}
+
+namespace {
+
+// A side of a corner read, built rather than drawn: `columns` and `rows` are
+// the steps between neighbouring stickers in pixels, `found` how many of the
+// nine had a blob, and every sticker the one colour given.
+cube::vision::ObliqueSide made_side(cv::Point2f origin, cv::Point2f columns, cv::Point2f rows,
+                                    std::size_t found, const cv::Vec3f& colour) {
+    cube::vision::ObliqueSide side;
+    for (std::size_t cell = 0; cell < 9; ++cell) {
+        side.centres.at(cell) =
+            origin + static_cast<float>(cell % 3) * columns + static_cast<float>(cell / 3) * rows;
+        side.lab.at(cell) = colour;
+        side.found.at(cell) = cell < found;
+    }
+    side.pitch = 0.5F * static_cast<float>(cv::norm(columns) + cv::norm(rows));
+    return side;
+}
+
+// A corner of two sides held still for `frames` frames, the way the app feeds
+// it.
+SideScan hold_made(const cube::vision::ObliqueSide& first, const cube::vision::ObliqueSide& second,
+                   int frames) {
+    CornerRead read;
+    read.sides = {first, second};
+    SideScan scan;
+    for (int i = 0; i < frames; ++i) {
+        scan.add(std::nullopt);
+        scan.add_corner(read);
+    }
+    return scan;
+}
+
+const cv::Vec3f kWhiteish{90.0F, 0.0F, 0.0F};
+const cv::Vec3f kRedish{45.0F, 60.0F, 40.0F};
+
+}  // namespace
+
+TEST_CASE("a side of a corner with too few stickers found is not counted", "[corner]") {
+    const auto whole = made_side({100, 100}, {40, 0}, {0, 40}, 9, kWhiteish);
+    // Six of nine, which the corner reader will lay a lattice through: the
+    // other three are where the lattice puts them, and may be a finger.
+    const auto six = made_side({300, 100}, {40, 0}, {0, 40}, 6, kRedish);
+    const auto seven = made_side({300, 100}, {40, 0}, {0, 40}, 7, kRedish);
+
+    const SideScan with_six = hold_made(whole, six, 12);
+    REQUIRE(with_six.sides().size() == 1);
+    CHECK(with_six.sides().front().reads == 11);
+
+    const SideScan with_seven = hold_made(whole, seven, 12);
+    CHECK(with_seven.sides().size() == 2);
+}
+
+TEST_CASE("a side of a corner that is only a strip is not counted", "[corner]") {
+    const auto whole = made_side({100, 100}, {40, 0}, {0, 40}, 9, kWhiteish);
+    // A column step under half the row step: a side seen nearly edge-on, whose
+    // patches are mostly the neighbouring sticker.
+    const auto strip = made_side({300, 100}, {14, 0}, {0, 40}, 9, kRedish);
+    const auto slanted = made_side({300, 100}, {20, 0}, {0, 40}, 9, kRedish);
+
+    const SideScan with_strip = hold_made(whole, strip, 12);
+    CHECK(with_strip.sides().size() == 1);
+
+    const SideScan with_slanted = hold_made(whole, slanted, 12);
+    CHECK(with_slanted.sides().size() == 2);
+}
+
+TEST_CASE("the side with the fewest reads is the one a corner is waiting for", "[corner]") {
+    const auto first = made_side({100, 100}, {40, 0}, {0, 40}, 9, kWhiteish);
+    const auto second = made_side({300, 100}, {40, 0}, {0, 40}, 9, kRedish);
+
+    SideScan scan;
+    CornerRead one_side_late;
+    one_side_late.sides = {first};
+    CornerRead both;
+    both.sides = {first, second};
+    // The first side on its own for five frames, then both.
+    for (int i = 0; i < 5; ++i) {
+        scan.add(std::nullopt);
+        scan.add_corner(one_side_late);
+    }
+    for (int i = 0; i < 3; ++i) {
+        scan.add(std::nullopt);
+        scan.add_corner(both);
+    }
+    CHECK(scan.reading());
+    // First has 4 + 3 reads; second 2 (it was steady on the 2nd and 3rd).
+    CHECK(scan.reads_in_view() == 2);
 }

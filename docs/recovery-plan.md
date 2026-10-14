@@ -221,6 +221,18 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   cubes still fit (1,152 to 17,280). Nothing can be filled in from it. What a
   corner view does give is three sides per frame, which is the faster scan
   that R5(b) names as not done.
+- **Corner views count towards the sides.** `SideScan::add_corner` now counts
+  each side of a corner read as a read of that side (held still, 7 of 9
+  stickers found, not a strip), so a cube held on a corner is read three
+  sides at a time and two corners are the whole cube. Square-on scanning is
+  unchanged. On drawn frames: three sides captured in nine frames, a corner
+  and the corner across from it finish a scan through the app's controller.
+  On recordings only the six two-side frames exist (`cube_scan
+  corner-colours`): they sit 3 to 7 Lab units from their side, 12 at worst.
+  Not measured: a real hand holding a real cube on a corner, which no
+  recording shows - the three-sided reader has only seen drawn frames. The
+  scan screen draws no dots on a corner view yet (`stickerPoints` is the
+  square-on read's nine), and its words say "this side".
 
 ## Why it does not work today
 

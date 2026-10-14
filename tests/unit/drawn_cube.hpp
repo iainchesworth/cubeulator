@@ -292,4 +292,61 @@ struct CornerPose {
     return frame;
 }
 
+// Three sides of a cube turned so its near corner points at the camera: the
+// hexagon a cube makes when seen from a corner, three rhombi meeting at
+// `vertex`, each cube edge `edge` pixels long and the picture turned
+// `degrees` in its plane. The edges leave the vertex up, down-left and
+// down-right; the sides, in order, lie between (down-left, up), (down-right,
+// down-left) and (up, down-right), each with its steps turning clockwise so
+// that a side's array is as it looks from outside, row-major from the corner
+// the reader would call its first. Side `i`'s cells are `sides[i]` as given.
+struct Corner3Pose {
+    cv::Point2f vertex{320.0F, 190.0F};
+    float edge = 120.0F;
+    float degrees = 0.0F;
+};
+
+[[nodiscard]] inline cv::Mat draw_corner3(const std::array<std::array<solver::Color, 9>, 3>& sides,
+                                          const Corner3Pose& pose = {},
+                                          const Drawing& drawing = {}) {
+    cv::Mat frame = room(drawing.size);
+    const float radians = pose.degrees * std::numbers::pi_v<float> / 180.0F;
+    const auto turned = [&](float x, float y) {
+        return cv::Point2f(x * std::cos(radians) - y * std::sin(radians),
+                           x * std::sin(radians) + y * std::cos(radians));
+    };
+    const cv::Point2f up = turned(0.0F, -pose.edge);
+    const cv::Point2f down_left = turned(-0.866F * pose.edge, 0.5F * pose.edge);
+    const cv::Point2f down_right = turned(0.866F * pose.edge, 0.5F * pose.edge);
+
+    // A side as the parallelogram spanned from the vertex by `columns` and
+    // `rows` (each three cells long), with gaps of plastic between stickers.
+    const auto fill_side = [&](const cv::Point2f& columns, const cv::Point2f& rows,
+                               const std::array<solver::Color, 9>& stickers) {
+        const auto at = [&](float column, float row) {
+            return cv::Point(pose.vertex + (column / 3.0F) * columns + (row / 3.0F) * rows);
+        };
+        const std::array<cv::Point, 4> backing = {at(-0.04F, -0.04F), at(3.04F, -0.04F),
+                                                  at(3.04F, 3.04F), at(-0.04F, 3.04F)};
+        cv::fillConvexPoly(frame, backing.data(), 4, cv::Scalar(16, 16, 16), cv::LINE_AA);
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                const float c = static_cast<float>(column);
+                const float r = static_cast<float>(row);
+                const std::array<cv::Point, 4> quad = {
+                    at(c + 0.1F, r + 0.1F), at(c + 0.9F, r + 0.1F), at(c + 0.9F, r + 0.9F),
+                    at(c + 0.1F, r + 0.9F)};
+                cv::fillConvexPoly(
+                    frame, quad.data(), 4,
+                    drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]),
+                    cv::LINE_AA);
+            }
+        }
+    };
+    fill_side(down_left, up, sides[0]);
+    fill_side(down_right, down_left, sides[1]);
+    fill_side(up, down_right, sides[2]);
+    return frame;
+}
+
 }  // namespace cube::test

@@ -120,6 +120,45 @@ TEST_CASE("DirectScan finishes with the cube it was shown, once",
     CHECK_FALSE(scan.cube().has_value());
 }
 
+TEST_CASE("a cube held on two corners is read three sides at a time and finishes once",
+          "[qt][controllers][direct-scan]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto corner = [&cube](Face a, Face b, Face c) {
+        return cube::test::draw_corner3({cube::test::outside_view(cube, a),
+                                         cube::test::outside_view(cube, b),
+                                         cube::test::outside_view(cube, c)});
+    };
+    DirectScan scan;
+    int completed = 0;
+    QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+
+    // Held on the up-right-front corner: not a side square to the camera, so
+    // nothing is marked on the picture, but it is three sides being read.
+    hold(scan, corner(Face::U, Face::R, Face::F), kFramesToCapture - 1);
+    CHECK(scan.stickerPoints().isEmpty());
+    CHECK(scan.sidesRead() == 0);
+    CHECK(scan.reading());
+    CHECK(scan.captureProgress() > 0.0);
+    CHECK(scan.captureProgress() < 1.0);
+
+    scan.processFrame(corner(Face::U, Face::R, Face::F));
+    REQUIRE(scan.sidesRead() == 3);
+    for (const QVariant& side : scan.sides()) {
+        CHECK(side.toMap().value("inView").toBool());
+    }
+    CHECK(completed == 0);
+    CHECK_FALSE(scan.conflicted());
+
+    // Turned to the corner across from it, the other three finish it.
+    scan.processFrame(room({640, 360}));
+    hold(scan, corner(Face::D, Face::L, Face::B), kFramesToCapture);
+
+    REQUIRE(completed == 1);
+    REQUIRE(scan.cube().has_value());
+    CHECK(*scan.cube() == cube);
+    CHECK(scan.sidesRead() == 6);
+}
+
 TEST_CASE("a side being held fills towards counting", "[qt][controllers][direct-scan]") {
     DirectScan scan;
     const cv::Mat frame = draw_side(kMixed, Pose{});

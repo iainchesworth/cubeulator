@@ -60,6 +60,16 @@ constexpr float kSameSideDistance = 12.0F;
 // first two keeps a shaded sticker close to its own colour.
 constexpr float kShadingWeight = 0.25F;
 
+// A side of a corner view counts as a read of its side only if it was seen
+// whole enough and not too foreshortened. The ten sides the recorded sessions
+// show in two-side views (cube_scan corner-colours) sat 3 to 7 Lab units from
+// their side but one: a strip with six of nine found and a step under half the
+// other, at 12, the same-side distance. Another six-of-nine strip sat at 6, so
+// these are a margin and not a measured edge: a sticker the fit placed is what
+// a finger looks like, and ten sides are too few to say where the line is.
+constexpr int kMinCornerFound = 7;
+constexpr float kMinCornerAspect = 0.45F;
+
 struct Blob {
     cv::Point2f centre;
     float side = 0.0F;
@@ -697,27 +707,16 @@ void SideScan::reset() {
     groups_.clear();
     corners_.clear();
     previous_centre_.reset();
-    in_view_.reset();
+    previous_corner_centres_.clear();
+    in_view_.clear();
 }
 
-void SideScan::add(const std::optional<SideRead>& read) {
-    CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
-    in_view_.reset();
-    if (!read.has_value()) {
-        previous_centre_.reset();
-        return;
-    }
-    const bool steady = previous_centre_.has_value() && held_still(*read, *previous_centre_);
-    previous_centre_ = read->centres.at(4);
-    if (!steady) {
-        return;
-    }
-
+std::size_t SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
     std::optional<std::size_t> nearest;
     float nearest_distance = std::numeric_limits<float>::max();
     int nearest_roll = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const auto [distance, roll] = side_distance(read->lab, groups_.at(i).fused);
+        const auto [distance, roll] = side_distance(lab, groups_.at(i).fused);
         if (distance < nearest_distance) {
             nearest = i;
             nearest_distance = distance;
@@ -726,18 +725,64 @@ void SideScan::add(const std::optional<SideRead>& read) {
     }
     if (nearest.has_value() && nearest_distance < kSameSideDistance) {
         Group& group = groups_.at(*nearest);
-        group.reads.push_back(rolled(read->lab, nearest_roll));
-        group.fused = fuse(group.reads);
+        const std::array<cv::Vec3f, 9> aligned = rolled(lab, nearest_roll);
+        group.reads.push_back(aligned);
+        if (square_on) {
+            group.flat_reads.push_back(aligned);
+        }
+        // A side seen at an angle is lit a little differently, so once a side
+        // has been read square-on as often as it takes to count, those reads
+        // alone give its colours.
+        group.fused = fuse(group.flat_reads.size() >= kMinReads ? group.flat_reads : group.reads);
         group.roll = nearest_roll;
-        in_view_ = nearest;
-    } else {
-        groups_.push_back(Group{.fused = read->lab, .reads = {read->lab}, .roll = 0});
-        in_view_ = groups_.size() - 1;
+        return *nearest;
     }
+    Group group{.fused = lab, .reads = {lab}, .flat_reads = {}, .roll = 0};
+    if (square_on) {
+        group.flat_reads.push_back(lab);
+    }
+    groups_.push_back(std::move(group));
+    return groups_.size() - 1;
 }
 
-void SideScan::add_corner(const std::optional<CornerRead>& read) {
+void SideScan::add(const std::optional<SideRead>& read) {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
+    in_view_.clear();
     if (!read.has_value()) {
+        previous_centre_.reset();
+        return;
+    }
+    // A side square to the camera: whatever corner view came before is over.
+    previous_corner_centres_.clear();
+    const bool steady = previous_centre_.has_value() && held_still(*read, *previous_centre_);
+    previous_centre_ = read->centres.at(4);
+    if (!steady) {
+        return;
+    }
+    in_view_.push_back(count_read(read->lab, true));
+}
+
+namespace {
+
+// Whether a side of a corner view was seen well enough to count: most of its
+// stickers found, and not so foreshortened that it is a strip.
+[[nodiscard]] bool seen_whole_enough(const ObliqueSide& side) {
+    const auto found = std::ranges::count(side.found, true);
+    if (found < kMinCornerFound) {
+        return false;
+    }
+    const float along_columns = length((side.centres.at(2) - side.centres.at(0)) * 0.5F);
+    const float along_rows = length((side.centres.at(6) - side.centres.at(0)) * 0.5F);
+    const float longer = std::max(along_columns, along_rows);
+    return longer > 0.0F && std::min(along_columns, along_rows) >= kMinCornerAspect * longer;
+}
+
+}  // namespace
+
+void SideScan::add_corner(const std::optional<CornerRead>& read) {
+    in_view_.clear();
+    if (!read.has_value()) {
+        previous_corner_centres_.clear();
         return;
     }
     // Bounded: the newest are the ones worth having, and each is a few
@@ -747,10 +792,39 @@ void SideScan::add_corner(const std::optional<CornerRead>& read) {
         corners_.erase(corners_.begin());
     }
     corners_.push_back(*read);
+
+    // Each side that was seen whole and held still is a read of its side.
+    std::vector<cv::Point2f> centres;
+    for (const ObliqueSide& side : read->sides) {
+        const cv::Point2f centre = side.centres.at(4);
+        centres.push_back(centre);
+        if (!seen_whole_enough(side)) {
+            continue;
+        }
+        const float reach = kSteadyFraction * side.pitch;
+        const bool steady = std::ranges::any_of(
+            previous_corner_centres_,
+            [&](const cv::Point2f& before) { return length(centre - before) < reach; });
+        if (!steady) {
+            continue;
+        }
+        const std::size_t counted = count_read(side.lab, false);
+        if (std::ranges::find(in_view_, counted) == in_view_.end()) {
+            in_view_.push_back(counted);
+        }
+    }
+    previous_corner_centres_ = std::move(centres);
 }
 
 std::size_t SideScan::reads_in_view() const noexcept {
-    return in_view_.has_value() ? groups_.at(*in_view_).reads.size() : 0;
+    if (in_view_.empty()) {
+        return 0;
+    }
+    std::size_t fewest = std::numeric_limits<std::size_t>::max();
+    for (const std::size_t i : in_view_) {
+        fewest = std::min(fewest, groups_.at(i).reads.size());
+    }
+    return fewest;
 }
 
 std::vector<SideScan::Side> SideScan::sides() const {
@@ -765,7 +839,8 @@ std::vector<SideScan::Side> SideScan::sides() const {
         const Group& group = groups_.at(i);
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
-        Side side{.reads = group.reads.size(), .in_view = in_view_ == i};
+        Side side{.reads = group.reads.size(),
+                  .in_view = std::ranges::find(in_view_, i) != in_view_.end()};
         for (std::size_t cell = 0; cell < 9; ++cell) {
             side.lab.at(static_cast<std::size_t>(
                 kRoll.at(static_cast<std::size_t>(group.roll)).at(cell))) = group.fused.at(cell);
