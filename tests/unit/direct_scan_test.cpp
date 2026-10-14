@@ -744,14 +744,14 @@ TEST_CASE("a side with dark stickers beside bright ones is read at every quarter
     // snapped two of nine to the grid, and two had only six, the dark column
     // or row not an outline at all, so that they spanned two by three.
     const Cube cube = after("R2 L");
-    std::mt19937 rng(5);
+    std::mt19937 rng = cube::test::deterministic_rng(5);
     for (const Face face : kAllFaces) {
         const Placement placement = next_placement(rng);
         std::array<Color, 9> stickers = outside_view(cube, face);
         for (int turned = 0; turned < 4; ++turned) {
             INFO("side " << static_cast<int>(face) << " turned " << turned << " quarter-turns");
             const std::optional<SideRead> read =
-                read_side(draw_side(stickers, placement.pose, kLamp));
+                read_side(draw_side(stickers, placement.pose, lamp_drawing()));
             const auto& side = ::cube::test::must_have(read);
             CHECK(side.stickers_found >= 6);
             for (std::size_t i = 0; i < 9; ++i) {
