@@ -488,6 +488,63 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     return static_cast<std::size_t>(best - fits.begin());
 }
 
+// The corner of the cube whose view tells the most of the cubes still possible
+// apart: of the candidates, those the corner reads fit best (all of them when
+// none fits), and of the eight corners the one at which the most pairs of them
+// differ on a side the corner shows. A corner shows all nine stickers of each of
+// its three sides, so two cubes are told apart there when any of those three
+// sides is not the same on both. The centres are the same on every candidate
+// (they are what names the sides), so the corner is said by their colours.
+[[nodiscard]] std::optional<std::array<solver::Color, 3>> settling_corner_of(
+    const std::vector<solver::Cube>& candidates, const std::vector<std::size_t>& fits) {
+    std::size_t most = 0;
+    for (const std::size_t count : fits) {
+        most = std::max(most, count);
+    }
+    std::vector<const solver::Cube*> remaining;
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        if (i >= fits.size() || fits.at(i) == most) {
+            remaining.push_back(&candidates.at(i));
+        }
+    }
+    if (remaining.size() < 2) {
+        return std::nullopt;
+    }
+
+    using solver::Face;
+    std::size_t best_told = 0;
+    std::optional<std::array<Face, 3>> best;
+    for (const Face vertical : {Face::U, Face::D}) {
+        for (const Face depth : {Face::F, Face::B}) {
+            for (const Face side : {Face::L, Face::R}) {
+                const std::array<Face, 3> corner = {vertical, depth, side};
+                std::size_t told = 0;
+                for (std::size_t a = 0; a < remaining.size(); ++a) {
+                    for (std::size_t b = a + 1; b < remaining.size(); ++b) {
+                        const bool differ = std::ranges::any_of(corner, [&](Face face) {
+                            return remaining.at(a)->face(face) != remaining.at(b)->face(face);
+                        });
+                        told += differ ? 1U : 0U;
+                    }
+                }
+                if (told > best_told) {
+                    best_told = told;
+                    best = corner;
+                }
+            }
+        }
+    }
+    if (!best.has_value()) {
+        return std::nullopt;
+    }
+    std::array<solver::Color, 3> colours{};
+    for (std::size_t i = 0; i < 3; ++i) {
+        colours.at(i) = remaining.front()->face(best->at(i)).at(4);
+    }
+    std::ranges::sort(colours);
+    return colours;
+}
+
 // `named` with two colour names traded wherever they appear.
 [[nodiscard]] NamedSides with_names_exchanged(NamedSides named, model::FacetColor first,
                                               model::FacetColor second) {
@@ -593,6 +650,7 @@ struct Assembled {
         }
         trace.path = AssemblyPath::ambiguous;
         trace.error = CubeError::ambiguous_scan;
+        trace.settling_corner = settling_corner_of(candidates, trace.corner_fits);
         out.result = std::unexpected(CubeError::ambiguous_scan);
         return out;
     }

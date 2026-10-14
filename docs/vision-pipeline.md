@@ -157,6 +157,19 @@ the flat reads lack.
    `reads_in_view()` is the fewest among the sides in view, which is the one
    the capture is waiting for.
 
+5. **Asking for the corner that settles it.** When six sides make several
+   cubes and the corner reads so far cannot choose, the scan names the corner
+   to show (`AssemblyTrace::settling_corner`). Among the candidates the corner
+   reads fit best, it takes the corner of the eight whose three sides differ
+   between the most pairs of them - a corner view shows every sticker of its
+   three sides, so two cubes are told apart there when any of them differs -
+   and says it by the colours of the three centres. The scan screen asks for
+   that (`DirectScan.settlingCorner`, `scan.guide.ambiguousCorner`: "Turn the
+   cube slowly to show the corner where Yellow, Green and Red meet") and falls
+   back to "two sides at once" when no corner would help. Following it one
+   corner at a time settles the recorded patterned cube (twenty cubes from six
+   sides) in at most three views, in the tests.
+
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
 4 fit the true cube and rule out 17 or 18 of the 18 cubes one turn away, and

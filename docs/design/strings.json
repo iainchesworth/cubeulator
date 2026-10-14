@@ -160,6 +160,7 @@
   "scan.guide.seenBefore": ["This side is already read. Turn to another one", "Guidance when the side shown has been read before."],
   "scan.guide.conflict": ["These six sides do not make a valid cube yet. Show each side again, square to the camera.", "Guidance when six sides are read but something is wrong."],
   "scan.guide.ambiguous": ["These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once.", "Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which."],
+  "scan.guide.ambiguousCorner": ["Turn the cube slowly to show the corner where %1, %2 and %3 meet.", "Guidance when six sides are read and fit together in more than one way, and showing one particular corner (two or three sides in one view) would tell the cubes they make apart. %1, %2 and %3 are the colours of the centres of the three sides that meet there - colour.white and the like, in no particular order. Shown in place of scan.guide.ambiguous, which says only that two sides should show at once."],
   "scan.guide.complete": ["All six sides make a valid cube. Working out the solution…", "Guidance when the scan has finished."],
   "scan.guide.resuming": ["Starting the camera again. The sides already read are kept.", "Guidance when the app comes back after being in the background."],
   "scan.stuck.title": ["Not reading?", "Heading of a hint that appears after ten seconds without progress."],

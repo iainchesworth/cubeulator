@@ -131,6 +131,14 @@ struct AssemblyTrace {
     std::size_t corner_reads = 0;
     // The candidate the corner reads chose.
     std::optional<std::size_t> chosen;
+    // When the scan is ambiguous: the colours of the centres of the three sides
+    // that meet at the corner whose view would tell the most of the cubes still
+    // possible apart (those the corner reads so far fit best), in the order of
+    // solver::Color. Showing that corner - two or
+    // three sides in one view - is what settles the scan; a view of sides the
+    // candidates agree on, however long held, does not. Empty when nothing
+    // would, or when the scan is not ambiguous.
+    std::optional<std::array<solver::Color, 3>> settling_corner;
     // Why assembling the naming as it stands failed, when it was tried.
     std::optional<CubeError> direct_error;
     std::optional<NameExchange> exchange;

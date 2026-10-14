@@ -620,3 +620,88 @@ TEST_CASE("a corner lit differently from the scan still fits its cube", "[corner
         CHECK_FALSE(fit_corner(read, cube.apply({turned, 1}), colours).fits);
     }
 }
+
+namespace {
+
+// The face of `cube` whose centre is each colour of `corner`.
+std::array<Face, 3> faces_of(const Cube& cube, const std::array<Color, 3>& corner) {
+    std::array<Face, 3> faces{};
+    for (std::size_t i = 0; i < 3; ++i) {
+        for (const Face face : kAllFaces) {
+            if (cube.face(face).at(4) == corner.at(i)) {
+                faces.at(i) = face;
+            }
+        }
+    }
+    return faces;
+}
+
+Cube patterned_cube() {
+    const auto cube = cube::test::patterned_cube();
+    REQUIRE(cube.has_value());
+    return *cube;
+}
+
+}  // namespace
+
+TEST_CASE("a corner drawn with all three sides fits its cube and not one a turn away", "[corner]") {
+    const Cube cube = cube::test::scramble(2);
+    const SessionColours colours = drawn_colours();
+    for (const Face vertical : {Face::U, Face::D}) {
+        for (const Face depth : {Face::F, Face::B}) {
+            for (const Face side : {Face::L, Face::R}) {
+                INFO("corner " << static_cast<int>(vertical) << " " << static_cast<int>(depth)
+                               << " " << static_cast<int>(side));
+                const cv::Mat frame = cube::test::draw_cube_corner3(cube, vertical, depth, side);
+                REQUIRE_FALSE(frame.empty());
+                const auto read_value = read_corner(frame);
+                const auto& read = ::cube::test::must_have(read_value);
+                REQUIRE(read.sides.size() == 3);
+                REQUIRE(read.edges.size() == 3);
+                CHECK(fit_corner(read, cube, colours).fits);
+                for (const Face turned : kAllFaces) {
+                    CHECK_FALSE(fit_corner(read, cube.apply({turned, 1}), colours).fits);
+                }
+            }
+        }
+    }
+}
+
+TEST_CASE("a cube the sides settle has no corner to ask for", "[corner]") {
+    const Cube cube = cube::test::scramble(3);
+    SideScan scan;
+    show_sides(scan, cube);
+    REQUIRE(scan.cube().has_value());
+    const auto diagnosis = scan.diagnose();
+    REQUIRE(diagnosis.assembly.has_value());
+    CHECK_FALSE(diagnosis.assembly->settling_corner.has_value());
+}
+
+TEST_CASE("an ambiguous cube says which corner to show, and showing it settles it", "[corner]") {
+    const Cube cube = patterned_cube();
+    SideScan scan;
+    show_sides(scan, cube);
+    REQUIRE(scan.sides().size() == 6);
+    const auto before = scan.cube();
+    REQUIRE_FALSE(before.has_value());
+    REQUIRE(before.error() == cube::CubeError::ambiguous_scan);
+
+    // Follow what it asks for, as a person would, until it is settled. A view
+    // of the corner it names tells the cubes it was choosing between apart; a
+    // couple of those may be left, and then it asks for the next.
+    int asked = 0;
+    for (; asked < 4 && !scan.cube().has_value(); ++asked) {
+        const auto diagnosis = scan.diagnose();
+        REQUIRE(diagnosis.assembly.has_value());
+        const auto& corner = ::cube::test::must_have(diagnosis.assembly->settling_corner);
+        const std::array<Face, 3> faces = faces_of(cube, corner);
+        const cv::Mat frame =
+            cube::test::draw_cube_corner3(cube, faces.at(0), faces.at(1), faces.at(2));
+        REQUIRE_FALSE(frame.empty());
+        hold(scan, frame, 6);
+    }
+    const auto settled = scan.cube();
+    REQUIRE(settled.has_value());
+    CHECK(*settled == cube);
+    CHECK(asked <= 3);
+}

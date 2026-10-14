@@ -92,6 +92,13 @@ class DirectScan : public QObject {
     // The cube has been read. The six sides stay on show - the last one
     // included - until whoever listens for scanCompleted moves on.
     Q_PROPERTY(bool complete READ complete NOTIFY sidesChanged)
+    // While the scan is ambiguous: the three colours - "white", "yellow",
+    // "green", "blue", "orange", "red", in no particular order - of the sides
+    // that meet at the corner whose view would tell the cubes the six sides
+    // make apart. Showing it, with two or three of its sides in one view, is
+    // what settles the scan; the screen says it. Empty when the scan is not
+    // ambiguous or no corner would help.
+    Q_PROPERTY(QStringList settlingCorner READ settlingCorner NOTIFY sidesChanged)
 
     // The camera is being kept for the solve screen: sides are looked for in
     // every frame and reported (frameWatched), and none is added to the scan.
@@ -116,6 +123,7 @@ public:
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
     [[nodiscard]] bool ambiguous() const noexcept { return ambiguous_; }
     [[nodiscard]] bool complete() const noexcept { return scanned_.has_value(); }
+    [[nodiscard]] QStringList settlingCorner() const { return settling_corner_; }
     [[nodiscard]] bool watching() const noexcept { return watching_; }
     [[nodiscard]] QString recordingRoot() const { return recording_root_; }
 
@@ -225,6 +233,7 @@ private:
     std::vector<cube::vision::SideScan::Side> sides_;
     bool conflicted_ = false;
     bool ambiguous_ = false;
+    QStringList settling_corner_;
     std::optional<cube::vision::ScannedCube> scanned_;
     bool watching_ = false;
 

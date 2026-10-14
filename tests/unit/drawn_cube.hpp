@@ -20,6 +20,7 @@
 #include <functional>
 #include <numbers>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 namespace cube::test {
@@ -347,6 +348,52 @@ struct Corner3Pose {
     fill_side(down_right, down_left, sides[1]);
     fill_side(up, down_right, sides[2]);
     return frame;
+}
+
+// The cube of the first scan recorded with a cube held on corners by hand: a
+// pattern with the orange and red sides solid and the green, blue, white and
+// yellow sides six and three, the three being two opposite corners and an edge.
+// Its six sides make twenty cubes, which is what makes it ambiguous; this is
+// one of them, as `cube.face(face)` lays each side out.
+[[nodiscard]] inline std::optional<solver::Cube> patterned_cube() {
+    const auto side = [](std::string_view letters) {
+        std::array<solver::Color, 9> colours{};
+        for (std::size_t i = 0; i < 9; ++i) {
+            switch (letters[i]) {
+                case 'W':
+                    colours[i] = solver::Color::White;
+                    break;
+                case 'Y':
+                    colours[i] = solver::Color::Yellow;
+                    break;
+                case 'R':
+                    colours[i] = solver::Color::Red;
+                    break;
+                case 'O':
+                    colours[i] = solver::Color::Orange;
+                    break;
+                case 'G':
+                    colours[i] = solver::Color::Green;
+                    break;
+                default:
+                    colours[i] = solver::Color::Blue;
+                    break;
+            }
+        }
+        return colours;
+    };
+    std::array<std::array<solver::Color, 9>, 6> faces{};
+    const auto set = [&faces](solver::Face face, const std::array<solver::Color, 9>& colours) {
+        faces[static_cast<std::size_t>(face)] = colours;
+    };
+    set(solver::Face::U, side("YYWYYYWWY"));
+    set(solver::Face::D, side("YWWWWWWYY"));
+    set(solver::Face::L, side("RRRRRRRRR"));
+    set(solver::Face::R, side("OOOOOOOOO"));
+    set(solver::Face::F, side("BBGGGGGGB"));
+    set(solver::Face::B, side("BBGBBBGGB"));
+    const auto cube = solver::Cube::from_facelets(faces);
+    return cube.has_value() ? std::optional<solver::Cube>(*cube) : std::nullopt;
 }
 
 }  // namespace cube::test

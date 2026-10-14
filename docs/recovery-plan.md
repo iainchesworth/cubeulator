@@ -256,9 +256,12 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   eight cubes left, six tied at 30 reads each. Any corner that includes the
   yellow-centred side tells all six apart, and one view of it would have
   settled the scan. The screen asking for "two sides at once" without saying
-  which is the gap; working out the corner from the candidates is small
-  (the candidates and their per-face differences are all in `SideScan`) and
-  is the next step along with the corner reader's own preparation.
+  which was the gap, and it now says: `AssemblyTrace::settling_corner` is the
+  corner whose view tells the most of the cubes still possible apart, shown
+  as "Turn the cube slowly to show the corner where Yellow, Green and Red
+  meet". On the patterned cube, following it settles the scan in at most
+  three views (tests). Not yet seen on a real hand: that is the next
+  recording to make. The corner reader's own sticker-finding is still to do.
 
 ## Why it does not work today
 
