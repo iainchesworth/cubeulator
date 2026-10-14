@@ -89,7 +89,7 @@ void collect(QQuickItem* item, std::vector<QQuickItem*>& found,
         }
         const QColor fill = up->property("color").value<QColor>();
         fills.push_back(fill);
-        if (fill.alphaF() >= 1.0) {
+        if (cube::test::is_opaque(fill)) {
             break;
         }
     }
@@ -142,7 +142,7 @@ TEST_CASE("the figures on the complete screen's stats card can be read, in both 
         const QColor written = text->property("color").value<QColor>();
         const QColor behind = drawn_over(text);
         const QColor shown = cube::test::over(written, behind);
-        const bool figure = written.rgb() == ink.rgb() && written.alphaF() >= 1.0;
+        const bool figure = written.rgb() == ink.rgb() && cube::test::is_opaque(written);
         const std::string what = text->property("text").toString().toStdString();
         CAPTURE(what, shown.name().toStdString(), behind.name().toStdString());
         // The muted label is 4.2:1 on the light page at the 0.6 the screens

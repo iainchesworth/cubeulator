@@ -18,21 +18,43 @@ namespace cube::test {
 inline constexpr double kTextContrast = 4.5;
 inline constexpr double kLargeOrMutedContrast = 3.0;
 
+// QColor keeps its channels as float; the arithmetic below is in double.
+[[nodiscard]] inline double red_of(const QColor& colour) {
+    return static_cast<double>(colour.redF());
+}
+[[nodiscard]] inline double green_of(const QColor& colour) {
+    return static_cast<double>(colour.greenF());
+}
+[[nodiscard]] inline double blue_of(const QColor& colour) {
+    return static_cast<double>(colour.blueF());
+}
+[[nodiscard]] inline double alpha_of(const QColor& colour) {
+    return static_cast<double>(colour.alphaF());
+}
+
+// Nothing behind it shows through.
+[[nodiscard]] inline bool is_opaque(const QColor& colour) {
+    return colour.alpha() == 255;
+}
+
 [[nodiscard]] inline double linear_channel(double value) {
     return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
 }
 
 [[nodiscard]] inline double relative_luminance(const QColor& colour) {
-    return 0.2126 * linear_channel(colour.redF()) + 0.7152 * linear_channel(colour.greenF()) +
-           0.0722 * linear_channel(colour.blueF());
+    return 0.2126 * linear_channel(red_of(colour)) + 0.7152 * linear_channel(green_of(colour)) +
+           0.0722 * linear_channel(blue_of(colour));
 }
 
 // `top` painted over `below` (which is taken as opaque).
 [[nodiscard]] inline QColor over(const QColor& top, const QColor& below) {
-    const double alpha = top.alphaF();
-    return QColor::fromRgbF(top.redF() * alpha + below.redF() * (1.0 - alpha),
-                            top.greenF() * alpha + below.greenF() * (1.0 - alpha),
-                            top.blueF() * alpha + below.blueF() * (1.0 - alpha));
+    const double alpha = alpha_of(top);
+    const auto mixed = [alpha](double above, double under) {
+        return static_cast<float>(above * alpha + under * (1.0 - alpha));
+    };
+    return QColor::fromRgbF(mixed(red_of(top), red_of(below)),
+                            mixed(green_of(top), green_of(below)),
+                            mixed(blue_of(top), blue_of(below)));
 }
 
 [[nodiscard]] inline double contrast_ratio(const QColor& a, const QColor& b) {
