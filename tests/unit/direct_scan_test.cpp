@@ -117,7 +117,7 @@ void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& d
     std::uniform_real_distribution<float> shift(-40.0F, 40.0F);
     for (const Face face : kAllFaces) {
         std::array<Color, 9> stickers = outside_view(cube, face);
-        for (std::uint32_t turns = rng() >> 30U; turns > 0; --turns) {
+        for (auto turns = static_cast<std::uint32_t>(rng() >> 30U); turns > 0; --turns) {
             stickers = turned_clockwise(stickers);
         }
         show(scan, stickers,

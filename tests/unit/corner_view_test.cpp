@@ -426,8 +426,10 @@ cube::vision::ObliqueSide made_side(cv::Point2f origin, cv::Point2f columns, cv:
 // it.
 SideScan hold_made(const cube::vision::ObliqueSide& first, const cube::vision::ObliqueSide& second,
                    int frames) {
-    CornerRead read;
-    read.sides = {first, second};
+    // Built where it is declared: GCC 15 at -O3 reads a vector copy-assigned
+    // into a default-constructed one as a possible null dereference
+    // (-Werror=null-dereference), which it is not.
+    const CornerRead read{.sides = {first, second}, .edges = {}};
     SideScan scan;
     for (int i = 0; i < frames; ++i) {
         scan.add(std::nullopt);
@@ -475,10 +477,8 @@ TEST_CASE("the side with the fewest reads is the one a corner is waiting for", "
     const auto second = made_side({300, 100}, {40, 0}, {0, 40}, 9, kRedish);
 
     SideScan scan;
-    CornerRead one_side_late;
-    one_side_late.sides = {first};
-    CornerRead both;
-    both.sides = {first, second};
+    const CornerRead one_side_late{.sides = {first}, .edges = {}};
+    const CornerRead both{.sides = {first, second}, .edges = {}};
     // The first side on its own for five frames, then both.
     for (int i = 0; i < 5; ++i) {
         scan.add(std::nullopt);
@@ -504,8 +504,7 @@ TEST_CASE("a corner side nearly as close to two sides is not counted for either"
 
     SideScan scan;
     const auto feed = [&scan](const std::vector<cube::vision::ObliqueSide>& sides, int frames) {
-        CornerRead read;
-        read.sides = sides;
+        const CornerRead read{.sides = sides, .edges = {}};
         for (int i = 0; i < frames; ++i) {
             scan.add(std::nullopt);
             scan.add_corner(read);
@@ -577,8 +576,7 @@ TEST_CASE("a side only a corner has shown does not take the place of one read sq
     // A seventh colour held on a corner for far longer than any of them.
     const auto left = made_side({100, 100}, {40, 0}, {0, 40}, 9, stray);
     const auto right = made_side({300, 100}, {40, 0}, {0, 40}, 9, stray);
-    CornerRead read;
-    read.sides = {left, right};
+    const CornerRead read{.sides = {left, right}, .edges = {}};
     for (int i = 0; i < 40; ++i) {
         scan.add(std::nullopt);
         scan.add_corner(read);
