@@ -16,6 +16,7 @@
 | `zizmor.yml` | Lints the workflow YAML itself | No (visible only) | No |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) | No |
 | `docs.yml` | Builds the mkdocs site and the web app (`.github/actions/web-build`, the same one `ci.yml`'s Web leg uses), and publishes both to GitHub Pages - the app under `/app/` | N/A (push to `main` only) | No |
+| `docs-check.yml` | On a PR that touches `docs/` or `mkdocs.yml`: builds the documentation (not the web app) with `mkdocs build --strict`, so a broken link shows on the PR and not on the push to `main` that publishes the site | No (advisory) | No |
 | `dependabot-auto-merge.yml` | Enables auto-merge on Dependabot's minor/patch PRs for GitHub Actions and pip | No (acts on Dependabot PRs only) | No |
 | `cache-hygiene.yml` | Prunes the Actions cache quota: closed PRs' and deleted branches' entries, superseded vcpkg and Qt generations ([below](#the-vcpkg-binary-cache)) | No (acts on the cache only) | No |
 

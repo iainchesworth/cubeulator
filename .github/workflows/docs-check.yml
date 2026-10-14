@@ -1,0 +1,47 @@
+name: Docs check
+
+# The site is built, and published, only by a push to main (docs.yml), so a
+# page that does not build under `mkdocs build --strict` (a link to a file
+# outside docs/, a page missing from the nav, an anchor that is not there) was
+# invisible until the release that first reached main, and then failed it. This
+# builds the documentation, and only the documentation, on a pull request that
+# touches it.
+#
+# ADVISORY: not one of develop's required checks, so no merge_group trigger. It
+# does not build the web app that docs.yml adds under /app/; that is the slow
+# part and has its own leg.
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+      - ".github/workflows/docs-check.yml"
+
+permissions: {}
+
+concurrency:
+  group: docs-check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  strict-build:
+    name: Docs build (strict)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.x"
+
+      - name: Install mkdocs-material
+        run: pip install -r docs/requirements.txt
+
+      - name: Build the site, strictly
+        run: mkdocs build --strict
