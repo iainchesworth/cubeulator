@@ -19,7 +19,9 @@
 // or Perfetto) and <name>.csv (tracy-csvexport's columns), attached to the
 // test and uploaded by CI.
 import { test, expect } from '../support/fixtures.mjs';
+import { withEdgeFlipped } from '../support/app.mjs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const TIMING = process.env.CUBEULATOR_WEB_PERF_TIMING === '1';
@@ -62,6 +64,91 @@ const zone = (summary, name) => {
   expect(entry, `zone ${name} was recorded`).toBeDefined();
   return entry;
 };
+
+
+// What each frame of the scan cost, from the recorder's trace: the summary has
+// a zone's mean and its longest, and a ceiling wants the tail as well.
+//
+// With `cold`, the dearest of the first ten frames is reported apart (`cold`)
+// and left out of the rest: the first read of a real picture costs the page
+// a quarter to a half of a second, once, wherever it falls among the frames
+// before it (docs/investigations/2026-10-15-web-scan-frame-cost.md), and what a
+// ceiling is for is the frames that follow it.
+async function frameCosts(app, { cold = false } = {}) {
+  return app.page.evaluate((withCold) => {
+    const trace = JSON.parse(window.cubeulatorProfile.trace());
+    const all = trace.traceEvents.filter((e) => e.ph === 'X' && e.name === 'direct_scan.process_frame')
+      .sort((a, b) => a.ts - b.ts).map((e) => e.dur / 1000);
+    let coldMs = 0;
+    let kept = all;
+    if (withCold && all.length > 0) {
+      const head = all.slice(0, 10);
+      const slowest = head.indexOf(Math.max(...head));
+      coldMs = head[slowest];
+      kept = all.filter((_, i) => i !== slowest);
+    }
+    const rest = [...kept].sort((a, b) => a - b);
+    const at = (p) => (rest.length > 0 ? rest[Math.min(rest.length - 1, Math.floor(p * rest.length))] : 0);
+    return {
+      count: all.length,
+      dropped: trace.otherData.dropped,
+      cold: coldMs,
+      mean: rest.length > 0 ? rest.reduce((a, b) => a + b, 0) / rest.length : 0,
+      p50: at(0.5),
+      p95: at(0.95),
+      max: rest.length > 0 ? rest[rest.length - 1] : 0,
+      over33: rest.filter((v) => v > 33).length,
+      over50: rest.filter((v) => v > 50).length,
+      over100: rest.filter((v) => v > 100).length,
+    };
+  }, cold);
+}
+
+// How many times the scan put its six named sides together into a cube while it
+// was recorded (a search over the 4^6 turns of the sides, and for sides that make
+// no cube a search for each pair of centres whose names might be traded): the
+// recorder's `vision.direct_scan.assemble` zone, which has none for a judgement
+// answered as the last one was (SideScan::assemblies(), kRejudgeLabDistance).
+// `later` are those in the second half of the time the scan was read for.
+async function assembliesRun(app) {
+  return app.page.evaluate(() => {
+    const events = JSON.parse(window.cubeulatorProfile.trace()).traceEvents;
+    const frames = events.filter((e) => e.ph === 'X' && e.name === 'direct_scan.process_frame')
+      .map((e) => e.ts);
+    const assembled = events.filter((e) => e.ph === 'X' && e.name === 'vision.direct_scan.assemble')
+      .sort((a, b) => a.ts - b.ts);
+    const first = frames.length > 0 ? Math.min(...frames) : 0;
+    const last = frames.length > 0 ? Math.max(...frames) : 0;
+    const middle = (first + last) / 2;
+    return {
+      count: assembled.length,
+      later: assembled.filter((e) => e.ts > middle).length,
+      most_ms: assembled.reduce((m, e) => Math.max(m, e.dur / 1000), 0),
+    };
+  });
+}
+
+// One camera frame is 33 ms, and the scan runs on the page's main thread: a
+// frame that takes longer is one the page does not draw, and the camera's
+// frames wait. These are the ceilings a frame of a scan is held to, set well
+// above what a software-rendered runner measures (it draws with the same CPU
+// the scan reads with): the mean inside one camera interval, the tail inside
+// two, and the longest of a held scan inside a quarter of a second.
+const FRAME_MEAN_MS = 33;
+const FRAME_P95_MS = 66;
+const FRAME_MAX_MS = 250;
+// The page's one cold frame, the first read of a real picture (see frameCosts).
+const COLD_FRAME_MS = 1_500;
+
+function leaveFrameBudgets(frames, report) {
+  report.frames = frames;
+  withinBudget('mean frame of the scan (ms)', frames.mean, FRAME_MEAN_MS, report);
+  withinBudget('95th percentile frame of the scan (ms)', frames.p95, FRAME_P95_MS, report);
+  withinBudget('longest frame of the scan (ms)', frames.max, FRAME_MAX_MS, report);
+  if (frames.cold > 0) {
+    withinBudget('cold frame of the scan (ms)', frames.cold, COLD_FRAME_MS, report);
+  }
+}
 
 test.describe('performance', () => {
   test('start-up: from navigation to the first screen', async ({ app }) => {
@@ -132,6 +219,130 @@ test.describe('performance', () => {
     withinBudget('scan of six sides, wall (ms)', scanned, 150_000, report);
 
     await leaveReport(app, 'scan-and-solve', report);
+  });
+
+  test('six sides that make no cube, held in view: they are put together once, not on every frame',
+    async ({ app }) => {
+      test.setTimeout(300_000);
+      const report = { journey: 'no-cube-held', budgets: [] };
+      await app.waitForFrames();
+
+      await app.click('launch.startScan');
+      await app.waitForScreen('scan');
+      await expect.poll(async () => (await app.singleton('DirectScan')).running).toBe(true);
+
+      // A cube with one edge flipped in place: its six sides are read as six
+      // sides, and no cube comes of them, so putting them together asks the
+      // listing and then each of the fifteen pairs of centres. The camera's own
+      // noise is on the stickers, so that each frame is a read that moves a
+      // fused colour a little, which is what a held cube is.
+      const noise = 3;
+      const sides = withEdgeFlipped(await app.sides(1, 10));
+      await app.showCube(sides, { noise });
+      const scan = await app.singleton('DirectScan');
+      expect(scan.sidesRead).toBe(6);
+      expect(scan.complete).toBe(false);
+      expect(scan.conflicted, 'six sides that make no cube').toBe(true);
+
+      // The last side stays in front of the camera.
+      await app.showSide(sides.faces[5].stickers, undefined, noise);
+      await app.clearProfile();
+      await app.mark('journey.hold.begin');
+      await app.page.waitForTimeout(8_000);
+      await app.mark('journey.hold.end');
+
+      const summary = await app.profile();
+      const frames = await frameCosts(app);
+      const assembled = await assembliesRun(app);
+      expect(summary.dropped).toBe(0);
+      report.assembled = assembled;
+      report.framesProcessed = frames.count;
+
+      // What the scan did, counted: it was judged on frames of the held side,
+      // and the sides were put together afresh for a naming it had not met and
+      // for none it had. The first reads of the held side move its fused
+      // colours and so its naming a few times; once they settle a frame is
+      // judged for nothing, which is what a scan held for seconds is. Once for
+      // every frame is what it was.
+      expect(frames.count, 'frames of the held scan').toBeGreaterThan(20);
+      expect(assembled.count, 'times the sides were put together').toBeLessThanOrEqual(16);
+      expect(assembled.later, 'times in the second half of the hold').toBe(0);
+
+      leaveFrameBudgets(frames, report);
+      await leaveReport(app, 'no-cube-held', report);
+    });
+
+  // The browser's counterpart of `cube_scan cost`, on a session the simulator
+  // drew (tools/scan; docs/testing.md "Browser tests"), which is not in the
+  // repository: a recording shows a person, and a drawing is made by running the
+  // tool. Skipped unless one is named:
+  //
+  //   cube_tumble_sim /tmp/tumble "<layout>" 60 30
+  //   TUMBLE_SESSION=/tmp/tumble CUBEULATOR_WEB_PERF_TIMING=1 \
+  //     npx playwright test --project=perf -g tumbled
+  test('a tumbled scan: what a frame costs, and how often the sides are put together', async ({ app }) => {
+    test.skip(!process.env.TUMBLE_SESSION, 'set TUMBLE_SESSION to a directory cube_tumble_sim wrote');
+    test.setTimeout(600_000);
+    const session = process.env.TUMBLE_SESSION;
+    const report = { journey: 'tumble', session, budgets: [] };
+    const names = readdirSync(session).filter((n) => /^rec_\d+\.jpg$/.test(n)).sort();
+    const stamped = readFileSync(`${session}/index.csv`, 'utf8').trim().split('\n').slice(1)
+      .map((row) => Number(row.split(',')[1]));
+    // A drawn session's times start at zero, a recording's are the clock's.
+    const times = stamped.map((t) => t - stamped[0]);
+    expect(names.length).toBeGreaterThan(0);
+    await app.waitForFrames();
+
+    await app.click('launch.startScan');
+    await app.waitForScreen('scan');
+    await expect.poll(async () => (await app.singleton('DirectScan')).running).toBe(true);
+    await app.clearProfile();
+
+    // As the camera gives them, at their own times. Each stretch of frames is
+    // read out of the recorder before it is overwritten.
+    const costs = [];
+    const started = Date.now();
+    let assembled = 0;
+    for (let i = 0; i < names.length; i++) {
+      const wait = times[i] - (Date.now() - started);
+      if (wait > 0) {
+        await new Promise((resolve) => setTimeout(resolve, wait));
+      }
+      const picture = readFileSync(`${session}/${names[i]}`).toString('base64');
+      await app.page.evaluate((data) => window.__fakeCamera.image(`data:image/jpeg;base64,${data}`), picture);
+      if (i % 60 === 59 || i === names.length - 1) {
+        costs.push(await frameCosts(app, { cold: costs.length === 0 }));
+        assembled += (await assembliesRun(app)).count;
+        await app.clearProfile();
+        if ((await app.singleton('DirectScan')).complete) {
+          break;
+        }
+      }
+    }
+
+    // The stretches, folded into one: the means by count, the tail by the worst
+    // stretch (a tail of the whole is no more than the worst tail of a part).
+    const count = costs.reduce((n, c) => n + c.count, 0);
+    const frames = {
+      count,
+      dropped: costs.reduce((n, c) => n + c.dropped, 0),
+      cold: costs.length > 0 ? costs[0].cold : 0,
+      mean: count > 0 ? costs.reduce((s, c) => s + c.mean * c.count, 0) / count : 0,
+      p50: Math.max(0, ...costs.map((c) => c.p50)),
+      p95: Math.max(0, ...costs.map((c) => c.p95)),
+      max: Math.max(0, ...costs.map((c) => c.max)),
+      over33: costs.reduce((n, c) => n + c.over33, 0),
+      over50: costs.reduce((n, c) => n + c.over50, 0),
+      over100: costs.reduce((n, c) => n + c.over100, 0),
+    };
+    report.assembled = assembled;
+    expect(frames.count).toBeGreaterThan(0);
+    // Counted, so always: one assembly for each frame is what the scan did
+    // before it kept the last assembly that failed, and is not what it is now.
+    expect(assembled, 'times the sides were put together').toBeLessThan(frames.count / 4);
+
+    leaveFrameBudgets(frames, report);
+    await leaveReport(app, 'tumble', report);
   });
 
   test('solution methods: what each costs to make', async ({ app }) => {

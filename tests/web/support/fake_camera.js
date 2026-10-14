@@ -111,13 +111,23 @@
     context.fill();
   }
 
-  function drawSide(stickers, pose) {
+  // A camera's own noise: each channel of each sticker moves by up to `noise`
+  // levels either way, differently in every frame. A side drawn flat and
+  // still is the same picture every time, which no sensor gives, and a scan fed
+  // it again and again has nothing to re-fuse: the noise is what makes a held
+  // cube a stream of reads that each move a colour a little.
+  const noiseOf = prng(4321);
+  const level = (value, noise) =>
+    noise > 0 ? Math.max(0, Math.min(255, Math.round(value + (noiseOf() * 2 - 1) * noise))) : value;
+
+  function drawSide(stickers, pose, noise) {
     drawRoom();
     square(pose, 0, 0, 1.62, 'rgb(16,16,16)');
     for (let row = 0; row < 3; row++) {
       for (let column = 0; column < 3; column++) {
         const [r, g, b] = PAINT[stickers[row * 3 + column]];
-        square(pose, column - 1, row - 1, 0.4, `rgb(${r},${g},${b})`);
+        square(pose, column - 1, row - 1, 0.4,
+          `rgb(${level(r, noise)},${level(g, noise)},${level(b, noise)})`);
       }
     }
   }
@@ -129,7 +139,8 @@
       const rows = Math.min(HEIGHT, view.image.naturalHeight);
       context.drawImage(view.image, 0, (view.image.naturalHeight - rows) / 2, WIDTH, rows, 0, 0, WIDTH, rows);
     } else if (view.kind === 'side') {
-      drawSide(view.stickers, { x: WIDTH / 2, y: HEIGHT / 2, pitch: 40, degrees: 0, ...view.pose });
+      drawSide(view.stickers, { x: WIDTH / 2, y: HEIGHT / 2, pitch: 40, degrees: 0, ...view.pose },
+        view.noise ?? 0);
     } else {
       drawRoom();
     }
@@ -255,7 +266,9 @@
   window.__fakeCamera = {
     // What the lens sees from now on.
     room() { view = { kind: 'room' }; },
-    side(stickers, pose) { view = { kind: 'side', stickers, pose }; },
+    // `noise`, in levels of 255, is how far each channel of each sticker moves
+    // from frame to frame; none by default.
+    side(stickers, pose, noise) { view = { kind: 'side', stickers, pose, noise: noise ?? 0 }; },
     // A picture (a data: URL) for the lens to see, from the moment it has
     // loaded; until then the lens keeps what it had, and is never a room for a
     // frame in between.

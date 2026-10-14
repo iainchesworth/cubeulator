@@ -16,3 +16,8 @@ TEST_CASE("reading a side allocates a bounded set of pixel buffers at every fram
     cube::perf::skip_unless_optimised();
     cube::perf::check_within_budget(cube::perf::scan_metrics());
 }
+
+TEST_CASE("judging a scan runs its searches once for a naming, and none after", "[perf][scan]") {
+    cube::perf::skip_unless_optimised();
+    cube::perf::check_within_budget(cube::perf::judgement_metrics());
+}

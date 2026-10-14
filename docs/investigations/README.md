@@ -112,3 +112,8 @@ name.
   a much thinner one?](2026-10-15-square-on-dead-band.md) - not the thin side's
   blobs, which are never in the fit: the square grid `read_side` lays first; a
   second look places the blobs through their own fit.
+
+- [2026-10-15: what does one frame of the scan cost in the browser, and does the
+  verdict freeze the page?](2026-10-15-web-scan-frame-cost.md) - not freeze: the
+  dearest judgement is 12 to 25 ms there, and was repeated on most frames until
+  the assembly guard; `cube_scan cost` and the browser ceiling hold it.

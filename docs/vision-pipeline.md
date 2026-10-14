@@ -257,6 +257,17 @@ two frames. At 0.25 units it changed none and still made 56%: a held side's
 colours drift continuously, and what an assembly rests on is not the colours
 but the names they are given.
 
+**What an assembly costs in the browser.** Measured there, where the reader
+runs on the page's main thread (the investigation is
+[what a frame of the scan costs](investigations/2026-10-15-web-scan-frame-cost.md)):
+a naming that makes one cube or several is one search of the 4,096 turns, 4 to
+5 ms; one that makes none is that and fifteen trades of two names, 12 ms on a
+quiet desktop and 25 ms on a busy one. Natively, on an optimised build, the
+same are 10 ms and 47 ms - the 150 ms the tumble investigation quoted was a
+sanitizer build. `cube_scan cost` prints them, and the assemblies the guard
+above leaves, for a session; the performance tests hold the count
+(`judge.*`, [Performance tests](testing.md#performance-tests)).
+
 ## Two sides in one view: `read_corner` and `fit_corner`
 
 Six square-on reads say what is on each side but not which way up each is
@@ -455,7 +466,11 @@ the scan while watching.
 - **GUI thread** runs `DirectScan::processFrame`. A read is a few milliseconds,
   well inside the poll interval, so there is no analysis worker and no scan
   state to hand between threads. Only `latestFrame()` is called from elsewhere
-  (the preview image provider).
+  (the preview image provider). In the browser that thread is the page's main
+  thread, so a frame that takes longer than the camera's interval is a frame the
+  page does not draw: a frame there costs a mean of 5 to 8 ms (an assembly, when one is
+  made, 4 to 25 ms more: see "What an assembly costs in the browser" above, and
+  [the measurement](investigations/2026-10-15-web-scan-frame-cost.md)).
 - **Solve** runs once per scan on a `QtConcurrent` worker so the seconds it can
   take never reach the UI thread.
 
@@ -518,6 +533,7 @@ path cannot disagree.
 | `cube_scan corner-colours <session-dir>` | How the sides of corner reads compare with the sides read square-on |
 | `cube_scan ambiguity <session-dir>` | The cubes six sides make, and how the session's corner reads vote among them at several distances |
 | `cube_scan funnel <session-dir> [-v]` | Every frame with no square-on side, and how far it got in the corner reader; which gate stopped each side of a read; and what the scan decided, as the app's own loop would (`-v` per frame) |
+| `cube_scan cost <session-dir> [runs] [-v]` | What each frame costs, by stage (preparation, the two readers, feeding the scan, the verdict), as the app's loop makes it, over `runs` passes (three): mean, median, 90th, 99th and the longest in milliseconds, how many frames took more than 33, 50 and 100, and what the scan's verdicts came to, how long each took and how many of them put the sides together afresh. The same numbers in the browser are `tests/web`'s |
 
 `cube_scan` reads each frame's capture time from the session's `index.csv`, so
 a replay of a recording made at 22 frames a second holds a side still as the
