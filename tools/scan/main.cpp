@@ -151,7 +151,9 @@ struct Outcome {
     std::optional<std::size_t> read_at;                   // first frame at which the cube was known
     std::optional<Cube> cube;                             // the cube at that frame
     std::optional<cube::CubeError> failure;               // why the last frame had none
-    std::size_t changes_after = 0;                        // later frames whose cube differed
+    // The corner the scan would ask to be shown, when it is ambiguous.
+    std::optional<std::array<Color, 3>> settling_corner;
+    std::size_t changes_after = 0;  // later frames whose cube differed
 };
 
 [[nodiscard]] Outcome replay(const fs::path& session) {
@@ -186,6 +188,9 @@ struct Outcome {
         outcome.colours = whole->colours;
     } else {
         outcome.failure = whole.error();
+        if (const auto diagnosis = scan.diagnose(); diagnosis.assembly.has_value()) {
+            outcome.settling_corner = diagnosis.assembly->settling_corner;
+        }
     }
     return outcome;
 }
@@ -274,6 +279,15 @@ int run_replay(const fs::path& session) {
                    outcome.failure.has_value() ? fmt::format(" ({})", to_string(*outcome.failure))
                                                : std::string());
         explain(outcome);
+        if (outcome.settling_corner.has_value()) {
+            std::string colours;
+            for (const Color colour : *outcome.settling_corner) {
+                colours += colours.empty() ? "" : ", ";
+                colours += letter_of(colour);
+            }
+            fmt::print("  it would ask for the corner where the sides with centres {} meet\n",
+                       colours);
+        }
         return 1;
     }
     fmt::print("  cube known at frame {} ({} later frames disagreed)\n", *outcome.read_at,
