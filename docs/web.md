@@ -77,3 +77,13 @@ desktops is small:
 
 See [Building & packaging](building.md#webassembly-browser) for the preset,
 the Emscripten and Qt versions it needs, and how to serve the result locally.
+
+## Measuring it and testing it
+
+The browser cannot be profiled with Tracy (a Tracy client opens a TCP listener
+and a tab has none to offer), so the build has its own: the `diagnostics`
+preset records the same zones in the page and hands them over as a Chrome trace
+(`cubeulatorProfile.trace()`), a CSV and a summary - see
+[Profiling](profiling.md#in-the-browser). What the app does in a page, and that
+the library is right as WebAssembly, is tested on every change by the suites in
+[Browser tests](testing.md#browser-tests).

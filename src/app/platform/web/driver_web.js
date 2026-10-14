@@ -15,6 +15,9 @@
 //                                     ambiguous is a test bug, as natively)
 //   cubeulatorDriver.center(name)     where to click it, in the page's CSS
 //                                     pixels (the canvas's own box added)
+//   cubeulatorDriver.canvasBox()      the canvas Qt draws into: { left, top,
+//                                     width, height } (it is inside a shadow
+//                                     root, which a selector does not reach)
 //   cubeulatorDriver.texts()          what a person can read: the visible text
 //   cubeulatorDriver.singleton(name)  a singleton's properties, or null
 //   cubeulatorDriver.sides(seed, n)   the six sides of a scrambled cube, as the
@@ -38,8 +41,34 @@ mergeInto(LibraryManager.library, {
       return item.visible && item.opacity > 0.01 && item.width > 0 && item.height > 0;
     };
 
+    // Qt puts its canvas in a shadow root of its own.
+    var findCanvas = function (root) {
+      var all = root.querySelectorAll('*');
+      for (var i = 0; i < all.length; i++) {
+        if (all[i].tagName === 'CANVAS') {
+          return all[i];
+        }
+        if (all[i].shadowRoot) {
+          var found = findCanvas(all[i].shadowRoot);
+          if (found) {
+            return found;
+          }
+        }
+      }
+      return null;
+    };
+
     var driver = {
       version: 1,
+
+      canvasBox: function () {
+        var canvas = findCanvas(document);
+        if (!canvas) {
+          return null;
+        }
+        var box = canvas.getBoundingClientRect();
+        return { left: box.left, top: box.top, width: box.width, height: box.height };
+      },
 
       state: function () {
         return json(_cube_web_driver_state());
@@ -62,8 +91,7 @@ mergeInto(LibraryManager.library, {
         if (!item) {
           return null;
         }
-        var canvas = document.querySelector('#screen canvas') || document.querySelector('canvas');
-        var box = canvas ? canvas.getBoundingClientRect() : { left: 0, top: 0 };
+        var box = driver.canvasBox() || { left: 0, top: 0 };
         return {
           x: box.left + item.x + item.width / 2,
           y: box.top + item.y + item.height / 2,

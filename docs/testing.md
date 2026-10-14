@@ -16,6 +16,9 @@ Four layers, all Catch2:
 - **`tests/perf/`** — budgets on what the solver and the reader do, and an
   opt-in wall-time check, so that a change that makes the app meaningfully
   slower fails a test. See [Performance tests](#performance-tests).
+- **`tests/web/`** — the app in a browser, through its own page, with
+  Playwright; and the unit, integration and performance binaries again as
+  WebAssembly under Node. See [Browser tests](#browser-tests).
 
 Tests do not ask which OS they are on (see
 [Platform isolation](platform-isolation.md)): what differs per platform comes
@@ -787,6 +790,158 @@ no calibration workload in a process can stand in for.
   runs` is the other half: it notices the chain `solve()` runs changing.)
 - **Phones.** The counts are the same there; the milliseconds are not, and no
   ratio taken on a desktop says what a phone does.
+
+## Browser tests
+
+The web build ([Try it in your browser](web.md)) is tested in two ways, because
+it has two things worth testing: that the code is right when it is
+WebAssembly, and that the app is right in a page.
+
+### The library under Node
+
+The unit, integration and performance binaries are built for WebAssembly and
+run by `ctest`, with Node as the emulator CMake's Emscripten toolchain already
+names. These are the same sources and the same test cases as the desktop legs;
+what changes is the compiler, the C++ runtime and the 32-bit address space, so
+what they find is what only WebAssembly gets wrong (a `size_t` that is 32 bits
+in a hash, a stack of 64 KB, a thread that waits for a Web Worker nobody has
+started, exceptions compiled out by default).
+
+```sh
+cmake --preset web-emscripten-tests
+cmake --build --preset web-emscripten-tests
+ctest --test-dir build/web-emscripten-tests -j 8 -LE slow
+```
+
+(A personal `CMakeUserPresets.json` preset that inherits
+`web-emscripten-tests` moves the build tree and the vcpkg cache; see
+[Building](building.md#webassembly-browser).) About 215 cases run in about a
+minute. What does not:
+
+| Left out | Why |
+|---|---|
+| the Qt tests (`cube_qt_controller_tests`, `cube_qml_tests`, `cube_i18n_*`, `cube_system_tests`) | they need the app, which is built as a page: the browser suite below runs the same screens |
+| the camera cases under `tests/integration` (`CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA`) | the browser's camera is `getUserMedia()`, which has to be asked for by a page; its tests are the browser suite's |
+| the recording cases that write JPEG | the browser's OpenCV has no JPEG codec (the app never records), and says so: they are skipped, with the reason |
+
+The flags a WebAssembly test program has to be given - a pool of Web Workers
+big enough that none is waited for, a stack and a heap it fits in, the host's
+files - are the platform fragment's (`CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS`),
+not each target's.
+
+C++ exceptions are on in the web build (`-fexceptions`, Qt's own mode, in the
+vcpkg triplet and the platform fragment). Emscripten's default is to compile `throw`
+to an abort and `catch` to nothing, which Catch2 cannot report a failure
+through and which would make the app's own handlers (a degenerate camera frame
+drops one frame, not the scan) dead code in the one build nobody could see it
+in.
+
+### The app in a page
+
+`tests/web` drives the real app, in Chromium, through the page a visitor gets,
+with [Playwright](https://playwright.dev). The browser is real; the camera is
+a canvas the test draws the six sides of a scrambled cube on and hands to the
+page as a `MediaStream` (`support/fake_camera.js`), so everything from the
+`<video>` element down is the page's own path. Pressing is real too: pointer,
+touch and key events sent to the page, the way a person does.
+
+Reading is the part that needs help. Qt for WebAssembly draws into one canvas
+and mirrors none of its items into the DOM's accessibility tree, so a locator
+has nothing to find. The diagnostics build therefore carries a read-only
+**driver** (`window.cubeulatorDriver`,
+`src/app/platform/web/driver_web.{cpp,js}`): every item that has an
+`objectName` or text with where it is and whether a person can see it, the QML
+singletons' properties, and the six sides of the cube a seed scrambles. It is
+the browser's counterpart of `tests/system/app.hpp` - find by `objectName`,
+press at the centre, read back what is on show - and a test written against one
+reads like a test written against the other.
+
+```sh
+cmake --preset web-emscripten-diagnostics
+cmake --build --preset web-emscripten-diagnostics
+
+cd tests/web
+npm ci                       # @playwright/test only
+npx playwright install chromium
+CUBEULATOR_WEB_DIR=../../build/web-emscripten-diagnostics/bin npx playwright test
+```
+
+`CUBEULATOR_WEB_DIR` is the build's `bin/`; `support/serve.mjs` serves it with
+the two cross-origin-isolation headers the app's threads need.
+
+| File | What it holds |
+|---|---|
+| `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
+| `settings.spec.mjs` | each setting through its control and kept through a reload; every language, the CJK scripts, mirroring for Hebrew and Arabic |
+| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
+| `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
+| `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
+| `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
+| `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
+| `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
+| `package.spec.mjs` | the `package` project: any built copy of the site, the release zip unzipped included, starts, is isolated, draws and is quiet (it needs nothing the diagnostics build adds) |
+| `perf.spec.mjs` | the journeys again, read from the recorder; see below |
+
+A page per test, with the browser's storage cleared first: the module compiles
+in about a second and the first screen is up in two, so nothing a test leaves
+in the browser's storage reaches the next. A failure attaches the page's
+console and a screenshot (and a Playwright trace on the retry).
+
+**The light probe.** On a headless runner the page draws in software
+(SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first
+frame of every 3D view: some twenty seconds of every core, for every page, and
+the same again when the page is closed. The suite leaves the probe out (the
+cube is still lit by its lights), as `tests/system` does natively
+(`App::Scene3D::cheap`): the context's init script sets
+`window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' }`, which the
+page passes to the app as environment and the driver reads
+(`driver_web.cpp`). `appOptions: { lightProbe: true }` keeps it, and the `perf`
+project does, so that what it measures is the app as shipped. The first
+version of the suite did not, and spent half a minute per test closing pages.
+
+**One worker.** SwiftShader's threads spin on every core they find, so two pages
+at once measured seven times slower each than one. `CUBEULATOR_WEB_WORKERS`
+raises it on a machine with cores to spare.
+
+**Known today.** A few cases say what is true now and are marked "EXPECTED TO
+CHANGE", as in `tests/system/known_today_test.cpp`: "Review the solution" does
+nothing, a toggle's label does not answer a press (only its box does), Tab
+reaches no control and Escape leaves nothing, and a chosen language still
+shows English because the catalogues' entries are all unfinished. They fail
+when the app is fixed, which is the prompt to update them.
+
+### Performance in the browser
+
+`perf.spec.mjs` is its own project (`--project=perf`, one worker: a stopwatch
+cannot share a machine). Each journey - start-up, a scan and solve, the three
+solving methods, forty presses of Next - clears the recorder
+([Profiling](profiling.md#in-the-browser)), makes the journey, and reads what
+happened back from it. As in `tests/perf`, two kinds of check:
+
+- **what the app did**: how many solves, how many frames read, that nothing was
+  dropped from the ring, how far the heap grew. Always run, and the same on
+  every machine.
+- **how long it took**: budgets well above what a software-rendered runner
+  measures, so an order of magnitude fails and noise does not. Only run when
+  `CUBEULATOR_WEB_PERF_TIMING=1`, as `CUBE_PERF_TIMING` gates the native ones.
+
+Either way each journey leaves `reports/perf/<journey>.json` (the summary, the
+renderer string and the heap), `<journey>.trace.json` (open it in the DevTools
+Performance panel or Perfetto) and `<journey>.csv` (`tracy-csvexport`'s
+columns), which CI uploads.
+
+### What this does not cover
+
+- **Other browsers.** Chromium only. The app needs threads and WebGL 2; Firefox
+  and Safari have both, and a leg for either is a `projects` entry and the
+  browser install, not new tests.
+- **A real camera and a real GPU.** The page's `getUserMedia()` path is
+  exercised, with a stream the test draws and with Chromium's built-in fake
+  device; neither is a lens. Colour under a real webcam is the corpus tools'
+  (`tools/scan`).
+- **The published site.** These test the diagnostics build, which differs from
+  `web-emscripten-release` by the recorder and the driver only; whether the
+  deployed copy is served with the right headers is the docs workflow's check.
 
 ## Translation tests
 
