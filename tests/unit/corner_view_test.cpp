@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "drawn_corner.hpp"
@@ -921,4 +922,122 @@ TEST_CASE("a side turned at the same speed is held still at ten frames a second 
     CHECK(reads_for(1000.0F) >= SideScan::kMinReads);
     CHECK(cube::vision::interval_scale(0.0F) == 1.0F);
     CHECK(cube::vision::interval_scale(1000.0F) == cube::vision::kMaxIntervalScale);
+}
+
+namespace {
+
+// What read_side should give back of the left side of a drawn corner: its
+// nine colours as drawn and its centre sticker where the drawing puts it (the
+// left side starts three column steps left of the shared edge, and its centre
+// sticker is a column and a half and a row and a half in).
+void check_left_side_read(const cv::Mat& frame, const Cube& cube,
+                          const cube::test::CornerPose& pose) {
+    const auto read = cube::vision::read_side(frame);
+    const cube::vision::SideRead& side = ::cube::test::must_have(read);
+
+    const SessionColours colours = drawn_colours();
+    const std::array<Color, 9> drawn = cube::solver::outside_view(cube, Face::F);
+    CHECK(side.stickers_found == 9);
+    for (std::size_t i = 0; i < 9; ++i) {
+        INFO("sticker " << i);
+        CHECK(cv::norm(side.lab.at(i) - colours.at(static_cast<std::size_t>(drawn.at(i)))) < 3.0);
+    }
+    CHECK(side.centres.at(4).x == Catch::Approx(pose.edge_x - 1.5F * pose.left_width).margin(1.5));
+    CHECK(side.centres.at(4).y == Catch::Approx(pose.edge_y - 1.5F * pose.tilt).margin(1.5));
+}
+
+}  // namespace
+
+TEST_CASE("a side at the edge of the square-on gate is read beside a much thinner one",
+          "[corner][scan]") {
+    // A cube turned between two sides shows, for a third of every
+    // quarter-turn, one at about thirty degrees and the other too thin to be a
+    // blob. The near side is inside the gate (a column step 0.85 of a row's),
+    // but read_side lays a square grid at the nearest-neighbour spacing first,
+    // and a side that is narrower one way has its third column two and a bit
+    // spacings out: more than the 0.3 a cell may be off, so six of its nine
+    // blobs snapped, and the read was nothing. A shear inside the gate (a
+    // cosine of 0.17) does the same from the other side.
+    const Cube cube = cube::test::scramble(2);
+    struct Shape {
+        float pitch;
+        float left_width;
+        float right_width;
+        float tilt;
+    };
+    for (const Shape& shape : {
+             Shape{.pitch = 40.0F, .left_width = 34.5F, .right_width = 16.0F, .tilt = 0.0F},
+             Shape{.pitch = 40.0F, .left_width = 34.5F, .right_width = 8.0F, .tilt = 0.0F},
+             Shape{.pitch = 40.0F, .left_width = 34.0F, .right_width = 16.0F, .tilt = 2.0F},
+             Shape{.pitch = 56.0F, .left_width = 48.3F, .right_width = 22.4F, .tilt = 2.0F},
+             Shape{.pitch = 40.0F, .left_width = 37.0F, .right_width = 16.0F, .tilt = 6.0F},
+         }) {
+        INFO("pitch " << shape.pitch << ", left step " << shape.left_width << ", right step "
+                      << shape.right_width << ", tilt " << shape.tilt);
+        const cube::test::CornerPose pose{.pitch = shape.pitch,
+                                          .left_width = shape.left_width,
+                                          .right_width = shape.right_width,
+                                          .tilt = shape.tilt};
+        check_left_side_read(cube::test::draw_cube_corner(cube, Face::F, pose), cube, pose);
+    }
+}
+
+TEST_CASE("a side at the edge of the square-on gate with one sticker covered is still read",
+          "[corner][scan]") {
+    // Eight of nine is a side with a finger over one sticker: the fit through
+    // its blobs has ten equations for its six unknowns, and the covered cell is
+    // placed by it. (Six or seven would fit anything, and are not taken from a
+    // lattice placed through its own fit.)
+    const Cube cube = cube::test::scramble(2);
+    const cube::test::CornerPose pose{.left_width = 34.5F, .right_width = 16.0F, .tilt = 0.0F};
+    constexpr std::size_t kCovered = 2;  // top right of the left side
+    cv::Mat frame = cube::test::draw_cube_corner(cube, Face::F, pose);
+    const float left = pose.edge_x - (3.0F * pose.left_width) +
+                       (static_cast<float>(kCovered % 3) * pose.left_width);
+    const float top =
+        pose.edge_y - (1.5F * pose.pitch) + (static_cast<float>(kCovered / 3) * pose.pitch);
+    cv::rectangle(frame, cv::Point2f(left - 1.0F, top - 1.0F),
+                  cv::Point2f(left + pose.left_width + 1.0F, top + pose.pitch + 1.0F),
+                  cv::Scalar(16, 16, 16), cv::FILLED);
+
+    const auto read = cube::vision::read_side(frame);
+    const cube::vision::SideRead& side = ::cube::test::must_have(read);
+    CHECK(side.stickers_found == 8);
+    CHECK_FALSE(side.found.at(kCovered));
+    const SessionColours colours = drawn_colours();
+    const std::array<Color, 9> drawn = cube::solver::outside_view(cube, Face::F);
+    for (std::size_t i = 0; i < 9; ++i) {
+        if (i == kCovered) {
+            continue;
+        }
+        INFO("sticker " << i);
+        CHECK(cv::norm(side.lab.at(i) - colours.at(static_cast<std::size_t>(drawn.at(i)))) < 3.0);
+    }
+}
+
+TEST_CASE("a second side's stickers beside the side held square do not stop its read",
+          "[corner][scan]") {
+    // The right side's stickers are the left's size within the blob band, so
+    // they are neighbours of every seed of the left side. Nearly the same
+    // column step on both is one lattice of six columns to the nearest-
+    // neighbour pitch, and the square grid's cells were wrong for both sides.
+    // The 3x3 window that holds the seed and the most blobs is the seed's own
+    // side; the other side's fits, at 0.8, outside the gate, and is not it.
+    const Cube cube = cube::test::scramble(5);
+    const cube::test::CornerPose pose{.left_width = 36.0F, .right_width = 32.0F, .tilt = 3.0F};
+    check_left_side_read(cube::test::draw_cube_corner(cube, Face::F, pose), cube, pose);
+}
+
+TEST_CASE("a side past the square-on gate is not read however it is placed", "[corner][scan]") {
+    // Placing the blobs through their own fit must not take what the gate
+    // refuses: a
+    // column step 0.8 of a row's is forty degrees off, and a patch laid across
+    // it would not be inside its stickers.
+    const Cube cube = cube::test::scramble(2);
+    for (const float width : {32.0F, 30.0F, 26.0F}) {
+        INFO("left column step " << width << " of a 40 pixel row step");
+        const cube::test::CornerPose pose{.left_width = width, .right_width = 12.0F, .tilt = 0.0F};
+        CHECK_FALSE(
+            cube::vision::read_side(cube::test::draw_cube_corner(cube, Face::F, pose)).has_value());
+    }
 }

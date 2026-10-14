@@ -81,6 +81,15 @@ lattice `read_side` wants is not found. A side is read square-on a little
 later in the turn for it. It costs reads, not the cube; it is noted, not
 changed.
 
+> **Corrected 2026-10-15** ([the dead-band
+> investigation](2026-10-15-square-on-dead-band.md)). The far side's stickers
+> are not in the fit at all: past 1.45 to one they are not blobs. And in most of
+> that band the near side is not inside the gate: the two angles of a pair sum
+> to 103 to 104 degrees, not 90, so a far side at 65 to 69 has its near side at
+> 33 to 39 and a ratio of 0.79 to 0.85. What was lost inside the gate (15 of
+> the 72 frames) was the square grid `read_side` lays first, which cannot hold
+> a side narrower one way past about 0.87; it is read now, by placing the blobs through their own fit.
+
 On the tilted-hand recording the same cause, less often: of 345 frames that went
 to the corner reader, 35 were read (all two-sided), 161 had fewer than 12
 blobs, 115 one lattice, 34 two lattices that did not share an edge.

@@ -11,6 +11,7 @@
 #include <opencv2/imgproc.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <limits>
 #include <tuple>
 #include <utility>
@@ -359,6 +360,200 @@ struct SnappedPoints {
     return taken;
 }
 
+[[nodiscard]] float length(const cv::Point2f& v) {
+    return std::hypot(v.x, v.y);
+}
+
+// Whether a lattice is a side held square to the camera: its two steps
+// near-equal and near-perpendicular, and the blobs sitting on it.
+[[nodiscard]] bool is_square_on(const Lattice& lattice) {
+    const float columns = length(lattice.column_step);
+    const float rows = length(lattice.row_step);
+    const float cosine = std::abs(lattice.column_step.dot(lattice.row_step)) / (columns * rows);
+    return columns / rows > kMinAxisRatio && columns / rows < kMaxAxisRatio &&
+           cosine <= kMaxAxisCosine && lattice.rms <= kMaxLatticeRms;
+}
+
+// The origin and steps of the affine map from cell to pixels that is the least
+// squares fit through `points` at `cells`. Closed form, nothing allocated:
+// this is tried for every seed of a frame that has no side square-on, where
+// fit_affine's matrices would be a handful of buffers each time. The normal
+// equations of integer cells have an integer determinant, so a singular
+// choice of cells (all in one row) is exactly zero and no tolerance is needed.
+struct Affine {
+    cv::Point2f origin;
+    cv::Point2f column_step;
+    cv::Point2f row_step;
+};
+
+[[nodiscard]] std::optional<Affine> solve_affine(const std::vector<cv::Point2f>& points,
+                                                 const std::vector<cv::Point>& cells) {
+    // Sums of the design row (column, row, 1) with itself and with the point.
+    double cc = 0.0;
+    double cr = 0.0;
+    double c1 = 0.0;
+    double rr = 0.0;
+    double r1 = 0.0;
+    double one = 0.0;
+    std::array<double, 3> bx{};
+    std::array<double, 3> by{};
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        const double c = cells.at(i).x;
+        const double r = cells.at(i).y;
+        const double x = static_cast<double>(points.at(i).x);
+        const double y = static_cast<double>(points.at(i).y);
+        cc += c * c;
+        cr += c * r;
+        c1 += c;
+        rr += r * r;
+        r1 += r;
+        one += 1.0;
+        bx.at(0) += c * x;
+        bx.at(1) += r * x;
+        bx.at(2) += x;
+        by.at(0) += c * y;
+        by.at(1) += r * y;
+        by.at(2) += y;
+    }
+    using Matrix = std::array<std::array<double, 3>, 3>;
+    const Matrix normal = {{
+        {cc, cr, c1},
+        {cr, rr, r1},
+        {c1, r1, one},
+    }};
+    const auto determinant = [](const Matrix& m) {
+        const auto entry = [&m](std::size_t row, std::size_t column) {
+            return m.at(row).at(column);
+        };
+        return (entry(0, 0) * ((entry(1, 1) * entry(2, 2)) - (entry(1, 2) * entry(2, 1)))) -
+               (entry(0, 1) * ((entry(1, 0) * entry(2, 2)) - (entry(1, 2) * entry(2, 0)))) +
+               (entry(0, 2) * ((entry(1, 0) * entry(2, 1)) - (entry(1, 1) * entry(2, 0))));
+    };
+    const double det = determinant(normal);
+    if (std::abs(det) < 0.5) {
+        return std::nullopt;
+    }
+    // Cramer's rule: column `which` of the normal matrix replaced by `b`.
+    const auto solved = [&](const std::array<double, 3>& b, std::size_t which) {
+        Matrix m = normal;
+        for (std::size_t row = 0; row < 3; ++row) {
+            m.at(row).at(which) = b.at(row);
+        }
+        return determinant(m) / det;
+    };
+    const auto at = [&](std::size_t which) {
+        return cv::Point2f(static_cast<float>(solved(bx, which)),
+                           static_cast<float>(solved(by, which)));
+    };
+    return Affine{.origin = at(2), .column_step = at(0), .row_step = at(1)};
+}
+
+// The most cells either way that a neighbour set is placed through its own
+// lattice, from the first neighbour: the span of a side is 3, and a seed sees a
+// little more than one.
+constexpr int kMostCellsAway = 6;
+
+// The two steps of a fitted lattice must be this far from the same line (the
+// sine of the angle between them): a fit through points in a near-line has no
+// second axis to place the others by.
+constexpr float kMinAxesSine = 0.5F;
+
+// Fewest points already on the square grid from which the lattice they make
+// is trusted to place the others: two steps and an offset, with one to spare.
+constexpr std::size_t kMinPlacedFrom = 4;
+
+// Fewest blobs on a lattice placed through its own fit. The square grid is a
+// strong prior and six of nine is enough for it; an affine fit through six
+// points has no point left over to disagree, so a seed that is not a side can
+// always be fitted. With a finger over one sticker (eight of nine) it has ten
+// equations for its six unknowns. Of the reads a first version of this gained
+// on the recorded sessions the nine- and eight-sticker ones were all the
+// cube's sides, and two of the three with six or seven were not (21 and 34 Lab
+// units from every side the scan held).
+constexpr std::size_t kMinPlacedBlobs = 8;
+
+// The 3x3 windows, of the lattice that the neighbours already on the square
+// grid make, that hold at least kMinPlacedBlobs of all the neighbours.
+//
+// snap_to_grid lays a square grid at the nearest-neighbour spacing. A side
+// turned about one axis is not square: its steps along the turned axis are
+// shorter, and a cell two steps from the first neighbour sits 2/ratio spacings
+// out, past the 0.3 a cell may be off at a ratio of 0.87 - inside the 0.85 the
+// reader is documented to take, and beyond that earlier still once the steps
+// narrow with perspective, or the side is sheared (a cosine of 0.15 is inside
+// the gate and a third of a cell off by the third column). Placed through the
+// lattice the points themselves make, a cell is where the lattice puts it,
+// whatever the ratio and the shear.
+//
+// A blob beside the side that does sit on the lattice, a sticker of the side
+// next to it or a stray in the room, lands in a cell outside the window and is
+// left out; as part of the set it made the span more than three and the whole
+// seed was dropped. Two sides that make nearly one lattice have a window on
+// each, and some across their edge: they are all returned, for the caller to
+// choose among.
+//
+// Nothing when there is too little on the grid to fit, or the points it has
+// lie in a line.
+[[nodiscard]] std::vector<SnappedPoints> windows_through_fit(const std::vector<cv::Point2f>& points,
+                                                             const SnappedPoints& on_grid) {
+    if (on_grid.on_grid.size() < kMinPlacedFrom) {
+        return {};
+    }
+    const std::optional<Affine> fit = solve_affine(on_grid.on_grid, on_grid.cells);
+    if (!fit) {
+        return {};
+    }
+    const float det =
+        (fit->column_step.x * fit->row_step.y) - (fit->column_step.y * fit->row_step.x);
+    const float columns = std::hypot(fit->column_step.x, fit->column_step.y);
+    const float rows = std::hypot(fit->row_step.x, fit->row_step.y);
+    if (columns < 1.0F || rows < 1.0F || std::abs(det) < kMinAxesSine * columns * rows) {
+        return {};
+    }
+
+    // Every neighbour at the cell the fit puts it, if it is on one.
+    std::vector<cv::Point2f> placed_points;
+    std::vector<cv::Point> placed_cells;
+    for (const cv::Point2f& point : points) {
+        const cv::Point2f offset = point - fit->origin;
+        const float u = ((offset.x * fit->row_step.y) - (offset.y * fit->row_step.x)) / det;
+        const float v = ((fit->column_step.x * offset.y) - (fit->column_step.y * offset.x)) / det;
+        const float cell_u = std::round(u);
+        const float cell_v = std::round(v);
+        if (std::abs(u - cell_u) < kMaxCellResidual && std::abs(v - cell_v) < kMaxCellResidual &&
+            std::abs(cell_u) <= static_cast<float>(kMostCellsAway) &&
+            std::abs(cell_v) <= static_cast<float>(kMostCellsAway)) {
+            placed_points.push_back(point);
+            placed_cells.emplace_back(static_cast<int>(cell_u), static_cast<int>(cell_v));
+        }
+    }
+    if (placed_points.size() < kMinPlacedBlobs) {
+        return {};
+    }
+
+    const auto [min_u, max_u] = std::ranges::minmax_element(
+        placed_cells, [](const auto& l, const auto& r) { return l.x < r.x; });
+    const auto [min_v, max_v] = std::ranges::minmax_element(
+        placed_cells, [](const auto& l, const auto& r) { return l.y < r.y; });
+    std::vector<SnappedPoints> windows;
+    for (int u0 = min_u->x; u0 <= max_u->x - 2; ++u0) {
+        for (int v0 = min_v->y; v0 <= max_v->y - 2; ++v0) {
+            SnappedPoints window;
+            for (std::size_t i = 0; i < placed_points.size(); ++i) {
+                const cv::Point& cell = placed_cells.at(i);
+                if (cell.x >= u0 && cell.x < u0 + 3 && cell.y >= v0 && cell.y < v0 + 3) {
+                    window.on_grid.push_back(placed_points.at(i));
+                    window.cells.push_back(cell);
+                }
+            }
+            if (window.on_grid.size() >= kMinPlacedBlobs) {
+                windows.push_back(std::move(window));
+            }
+        }
+    }
+    return windows;
+}
+
 // The best 3x3 lattice through the blobs: most blobs on it, then tightest.
 // Each blob in turn seeds a group of similar-sized neighbours; the group's
 // nearest-neighbour spacing and direction give a grid to snap its members to.
@@ -391,9 +586,89 @@ struct SnappedPoints {
     }
     return best;
 }
+// A lattice, and the blobs that make it.
+struct Candidate {
+    Lattice lattice;
+    std::vector<cv::Point2f> members;
+};
 
-[[nodiscard]] float length(const cv::Point2f& v) {
-    return std::hypot(v.x, v.y);
+[[nodiscard]] bool shares_a_blob(const std::vector<cv::Point2f>& a,
+                                 const std::vector<cv::Point2f>& b) {
+    return std::ranges::any_of(
+        a, [&b](const cv::Point2f& point) { return std::ranges::find(b, point) != b.end(); });
+}
+
+// The lattice for a frame in which fit_lattice found no side held square: the
+// best that the neighbours of any seed make when they are placed through the
+// lattice they themselves make (windows_through_fit) as well as on the square
+// grid, and that passes is_square_on.
+//
+// Candidates are weighed as fit_lattice weighs them, the most blobs and then
+// the tightest, and a candidate is looked at only if it shares no blob with
+// one that was weighed before it and was refused. That is the point of it: a
+// lattice that fits better than this one, from the same blobs, and is not a
+// side held square, says these blobs are not one. A window of two columns of
+// the near side and the merged column of a much thinner side beside it passed
+// the gate on its own (ratio 0.852); the near side it was part of, at 0.80,
+// did not, and fitted tighter.
+[[nodiscard]] std::optional<Lattice> fit_lattice_through_fit(const std::vector<Blob>& blobs) {
+    std::vector<Candidate> candidates;
+    const auto consider = [&candidates](SnappedPoints set, float pitch) {
+        if (set.on_grid.size() < kMinLatticeBlobs) {
+            return;
+        }
+        // The same blobs as a lattice already weighed: seeds on one side
+        // find it again, each from its own neighbours.
+        const auto same = [&set](const Candidate& known) {
+            return known.members.size() == set.on_grid.size() &&
+                   std::ranges::all_of(set.on_grid, [&known](const cv::Point2f& point) {
+                       return std::ranges::find(known.members, point) != known.members.end();
+                   });
+        };
+        if (std::ranges::any_of(candidates, same)) {
+            return;
+        }
+        const std::vector<cv::Point2f> members = set.on_grid;
+        const std::optional<std::array<bool, 9>> taken = normalise_cells(set.cells);
+        if (!taken) {
+            return;
+        }
+        Lattice lattice = fit_affine(set.on_grid, set.cells, pitch);
+        lattice.found = *taken;
+        candidates.push_back(Candidate{.lattice = lattice, .members = members});
+    };
+
+    for (const Blob& seed : blobs) {
+        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed);
+        if (points.size() < kMinLatticeBlobs) {
+            continue;
+        }
+        const std::optional<GridFrame> frame = grid_frame(points);
+        if (!frame) {
+            continue;
+        }
+        const SnappedPoints snapped = snap_to_grid(points, *frame);
+        for (SnappedPoints& window : windows_through_fit(points, snapped)) {
+            consider(std::move(window), frame->pitch);
+        }
+        consider(snapped, frame->pitch);
+    }
+
+    std::ranges::sort(candidates, [](const Candidate& l, const Candidate& r) {
+        return std::tuple(r.lattice.blobs, l.lattice.rms) <
+               std::tuple(l.lattice.blobs, r.lattice.rms);
+    });
+    std::vector<cv::Point2f> weighed;
+    for (const Candidate& candidate : candidates) {
+        if (shares_a_blob(candidate.members, weighed)) {
+            continue;
+        }
+        weighed.insert(weighed.end(), candidate.members.begin(), candidate.members.end());
+        if (is_square_on(candidate.lattice)) {
+            return candidate.lattice;
+        }
+    }
+    return std::nullopt;
 }
 
 // The nine centres row-major with cell 0 nearest the image's top-left: of
@@ -978,17 +1253,21 @@ enum class Look : std::uint8_t {
     if (blobs.size() < kMinLatticeBlobs) {
         return std::nullopt;
     }
-    const std::optional<Lattice> lattice = fit_lattice(blobs);
-    if (!lattice.has_value()) {
+    // The first try is a square grid, which is all a side held square needs.
+    // Only when it leaves no side square-on are the blobs placed again,
+    // through the lattice they make: a side near the edge of the gate, or one
+    // with a blob beside it that is not part of it. A set of blobs that read
+    // before reads as it did, and one with a side held square pays nothing
+    // more.
+    std::optional<Lattice> lattice = fit_lattice(blobs);
+    if (!lattice.has_value() || !is_square_on(*lattice)) {
+        lattice = fit_lattice_through_fit(blobs);
+    }
+    if (!lattice.has_value() || !is_square_on(*lattice)) {
         return std::nullopt;
     }
     const float columns = length(lattice->column_step);
     const float rows = length(lattice->row_step);
-    const float cosine = std::abs(lattice->column_step.dot(lattice->row_step)) / (columns * rows);
-    if (columns / rows <= kMinAxisRatio || columns / rows >= kMaxAxisRatio ||
-        cosine > kMaxAxisCosine || lattice->rms > kMaxLatticeRms) {
-        return std::nullopt;
-    }
     if (look == Look::second && !gaps_are_plastic(frame.brightness, *lattice)) {
         return std::nullopt;
     }

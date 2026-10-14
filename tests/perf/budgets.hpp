@@ -148,6 +148,20 @@ inline constexpr std::uint64_t kCornerBuffers = 1300;
 inline constexpr std::uint64_t kCornerBytes = 2'520'000;
 inline constexpr std::uint64_t kEmptyCornerBuffers = 45;
 inline constexpr std::uint64_t kEmptyCornerBytes = 2'320'000;
+// The placement through the fit that read_side makes of the blobs when no side
+// is held square (a lattice placed through the one the blobs already on a
+// square grid make, fit_lattice_through_fit in direct_scan.cpp), on the same
+// terms: a side just past the gate that it finds nothing in (nine blobs for it
+// to weigh, so the frame also goes to the second look, where it is made again),
+// and a side at the edge of the gate that it finds. It allocates a matrix or
+// two for each distinct lattice it weighs. Measured: 205 buffers, 2.32 MB for
+// the side past the gate (the two looks without it, 175), and 119, 1.97 MB for
+// the side it finds (113, 1.99 MB for a side held square; 177 without it,
+// where the second look reads nothing).
+inline constexpr std::uint64_t kThroughFitMissBuffers = 260;
+inline constexpr std::uint64_t kThroughFitMissBytes = 2'900'000;
+inline constexpr std::uint64_t kThroughFitReadBuffers = 150;
+inline constexpr std::uint64_t kThroughFitReadBytes = 2'460'000;
 // SideScan::add() works on nine Lab triples and a few vectors, not pictures:
 // no pixel buffer at all (measured 0). SideScan::scanned() converts a handful
 // of single colours through cv::cvtColor on the way to naming them (measured
