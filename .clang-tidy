@@ -16,3 +16,12 @@ Checks: >
 WarningsAsErrors: ''
 HeaderFilterRegex: 'src/(lib|app|render)/.*'
 FormatStyle: file
+
+CheckOptions:
+  # Catch2's REQUIRE/CHECK/CAPTURE expand to a do-while with a try/catch and an
+  # && chain each - about five points of cognitive complexity per assertion
+  # before any nesting - so a test case with more than a handful of assertions
+  # exceeds the default threshold of 25 whatever it does itself. Complexity is
+  # judged on what the function's own code does; the check still applies in
+  # full to production code.
+  readability-function-cognitive-complexity.IgnoreMacros: true
