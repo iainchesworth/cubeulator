@@ -159,7 +159,10 @@ from the timestamp the controller has.
   to lock it from the page is
   `MediaStreamTrack.applyConstraints` with `exposureMode` and
   `whiteBalanceMode` set to `manual`, where the camera supports them; that is
-  the web platform's, and is not done here.
+  the web platform's, and was not done here. It is now (see
+  [Differences from the desktop apps](../web.md#differences-from-the-desktop-apps)),
+  and the drift itself is still unmeasured: `tools/web/camera-photometry-probe.html`
+  is how ([Testing](../testing.md#the-cameras-exposure-and-white-balance)).
 - **Three-sided views.** None was seen in any real recording; the blob step
   drops dark stickers beside a bright side (see `docs/vision-pipeline.md`), and
   the reader's own preparation is still the next step. The synthetic tumbles are

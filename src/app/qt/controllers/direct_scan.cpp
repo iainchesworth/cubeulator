@@ -206,6 +206,28 @@ cv::Mat DirectScan::latestFrame() const {
     return latest_frame_;
 }
 
+QVariantMap DirectScan::lock() const {
+    using cube::platform::camera::PhotometryControl;
+    const auto text = [](std::string_view value) {
+        return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
+    };
+
+    QVariantMap out;
+    out.insert(QStringLiteral("reported"), lock_report_.has_value());
+    out.insert(QStringLiteral("supported"), cube::platform::camera::photometry_control_supported());
+    if (lock_report_.has_value()) {
+        const auto& report = *lock_report_;
+        out.insert(
+            QStringLiteral("exposure"),
+            text(cube::app::records::id_of(report.result(PhotometryControl::exposure).outcome)));
+        out.insert(QStringLiteral("whiteBalance"),
+                   text(cube::app::records::id_of(
+                       report.result(PhotometryControl::auto_white_balance).outcome)));
+        out.insert(QStringLiteral("summary"), QString::fromStdString(report.summary()));
+    }
+    return out;
+}
+
 bool DirectScan::diagnosing() const noexcept {
     return diagnostics_ != nullptr && diagnostics_->enabled();
 }

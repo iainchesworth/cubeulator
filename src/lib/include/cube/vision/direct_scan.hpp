@@ -115,6 +115,10 @@ using SessionColours = std::array<cv::Vec3f, 6>;
 struct ScannedCube {
     solver::Cube cube;
     SessionColours colours{};
+    // How far from neutral the light was, read from the cube's own white
+    // centre (WhiteReference::cast); 0 when no white could be told. 3 to 5 by
+    // daylight, 29 under a warm-white LED.
+    float cast = 0.0F;
 };
 
 // Which way the named sides were put together into a cube (or not).
@@ -201,6 +205,10 @@ struct ScanDiagnosis {
     // The captured sides, at most six, in the order resolve_colors takes them
     // (most reads first) - which is the order `naming` and `assembly` use.
     std::vector<Side> sides;
+    // The cube's own white, which the sides were named by: how far from
+    // neutral the light was (white->cast) and the gains that took it out.
+    // Empty until six sides are captured, and when none was plausibly white.
+    std::optional<WhiteReference> white;
     // How the colours were named; empty until six sides are captured, and
     // when naming failed.
     std::optional<ColorResolution> naming;
