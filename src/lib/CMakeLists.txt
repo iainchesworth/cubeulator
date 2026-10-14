@@ -68,6 +68,7 @@ target_sources(cube_lib
         src/vision/color_classification.cpp
         src/vision/recording_v2.cpp
         src/vision/prepared_frame.cpp
+        src/vision/sticker_colour.cpp
         src/vision/direct_scan.cpp
         src/vision/corner_view.cpp
         src/vision/held_cube.cpp

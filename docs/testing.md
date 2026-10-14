@@ -108,6 +108,15 @@ Camera frames in these and the controller tests are drawn
 ([drawn_cube.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/drawn_cube.hpp)), never recorded: a
 recording shows whoever was holding the cube.
 
+The same suite holds the complete screen's stats card to the design system's
+contrast in both themes and both layouts
+([complete_screen_test.cpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/complete_screen_test.cpp)):
+what each piece of text in the card is drawn over is read from the Rectangles
+it sits in, which needs no GPU. A Rectangle with no `color` is opaque white, so
+a card left unfilled reads fine in the light theme and is near-white ink on
+white in the dark one. The system suite's `render_test.cpp` checks the same
+card's pixels.
+
 To *look* at the solve screen rather than check it, a hidden case puts the
 real screen in a window parked off-screen, drives it with drawn frames, and
 saves what it renders - one picture per run, chosen by name:

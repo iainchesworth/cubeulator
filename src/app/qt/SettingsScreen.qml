@@ -54,6 +54,7 @@ Rectangle {
         spacing: Theme.space2
         Rectangle {
             width: 20; height: 20; anchors.verticalCenter: parent.verticalCenter
+            color: "transparent"
             border.width: 1.5; border.color: Theme.divider
             Icon { anchors.centerIn: parent; visible: parent.parent.checked; name: "check"; color: Theme.accent; width: 14; height: 14; strokeWidth: 3 }
             MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.toggled() }

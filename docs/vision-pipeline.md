@@ -61,8 +61,17 @@ not span three rows and three columns, or no cube all return nothing.
    columns, with at least six of the nine stickers found as blobs. Stickers
    that were not found as blobs (a finger across one) are placed by the fit
    and flagged in `SideRead::found`.
-3. **Colour.** Each of the nine places is sampled as the median of a small
-   patch, in float CIELAB.
+3. **Colour.** Each of the nine places is sampled from a square patch 0.6 of
+   a sticker spacing across, in float CIELAB, by `sticker_lab`
+   (`cube/vision/sticker_colour.hpp`, shared with `read_corner`). The colour is
+   the densest cluster of the patch's pixels and the median of what lies
+   near it, not the plain per-channel median: a Rubik's cube's white centre has
+   a wordmark in four colours across its middle, exactly where a patch is laid,
+   and a median is dragged towards it (13 Lab units, almost all lightness, over
+   84 recorded reads) and fails outright once the logo is half the patch. The
+   plastic is the densest cluster for as long as it is the largest single
+   colour in the patch, which holds past half the patch being logo. A patch
+   with no cluster of a quarter of its pixels falls back to the median.
 
 Nothing in the reader names a colour. It returns measured Lab.
 

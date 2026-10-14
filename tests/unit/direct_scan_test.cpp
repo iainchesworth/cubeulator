@@ -139,6 +139,77 @@ TEST_CASE("a side held square to the camera is read row-major as the camera sees
     }
 }
 
+TEST_CASE("a logo across a centre sticker does not change the colour it reads", "[direct-scan]") {
+    // A Rubik's cube's white centre carries a wordmark in four colours across
+    // its middle, which is where a sticker is sampled. Over 84 reads of such a
+    // side in the recorded sessions the centre sat 13 Lab units from the white
+    // stickers beside it, nearly all of it lightness. Cell 4 of kMixed is the
+    // white centre and cell 8 a white corner.
+    const Pose pose{.centre = {300.0F, 170.0F}, .pitch = 42.0F};
+    const Drawing marked{.logo_on_centre = Color::White};
+
+    const std::optional<SideRead> plain = read_side(draw_side(kMixed, pose));
+    const std::optional<SideRead> logo = read_side(draw_side(kMixed, pose, marked));
+    const auto& plain_read = ::cube::test::must_have(plain);
+    const auto& logo_read = ::cube::test::must_have(logo);
+
+    CHECK(logo_read.stickers_found == 9);
+    CHECK(cv::norm(logo_read.lab.at(4) - plain_read.lab.at(4)) < 3.0);
+    CHECK(cv::norm(logo_read.lab.at(4) - logo_read.lab.at(8)) < 3.0);
+    // The other eight stickers are not what the logo is on.
+    for (const std::size_t i : {0U, 1U, 2U, 3U, 5U, 6U, 7U, 8U}) {
+        CHECK(cv::norm(logo_read.lab.at(i) - plain_read.lab.at(i)) < 1.0);
+    }
+}
+
+TEST_CASE("a logo on a white centre does not tint it by lamplight", "[direct-scan]") {
+    // The same side under an evening lamp: everything shifted towards red,
+    // the wordmark's red letter included. The white centre has to come out
+    // the colour of the white beside it, and not pinker.
+    const Drawing lamp_lit{
+        .paint =
+            [](Color colour) {
+                const cv::Scalar white = paint(colour);
+                return cv::Scalar(0.70 * white(0), 0.86 * white(1), 1.00 * white(2));
+            },
+        .logo_on_centre = Color::White,
+    };
+    const Pose pose{.centre = {300.0F, 170.0F}, .pitch = 42.0F};
+
+    const std::optional<SideRead> read = read_side(draw_side(kMixed, pose, lamp_lit));
+    const auto& side = ::cube::test::must_have(read);
+
+    // A hue shift is what the eye catches: compare chroma direction too.
+    const cv::Vec3f centre = side.lab.at(4);
+    const cv::Vec3f beside = side.lab.at(8);
+    CHECK(cv::norm(centre - beside) < 3.0);
+    CHECK(std::abs(centre(1) - beside(1)) < 2.0);
+    CHECK(std::abs(centre(2) - beside(2)) < 2.0);
+}
+
+TEST_CASE("a logo on a centre does not stop six sides making the cube", "[direct-scan]") {
+    for (const unsigned seed : {41U, 42U, 43U}) {
+        const Cube cube = cube::test::scramble(seed);
+        SideScan scan;
+        show_cube(scan, cube, seed, Drawing{.logo_on_centre = Color::White});
+
+        REQUIRE(scan.sides().size() == 6);
+        const auto read = scan.cube();
+        REQUIRE(read.has_value());
+        CHECK(*read == cube);
+
+        // What the screen shows for the white side: its centre in the white
+        // of the stickers around it.
+        for (const SideScan::Side& side : scan.sides()) {
+            if (nearest_colour(side.lab.at(4)) != Color::White) {
+                continue;
+            }
+            const cv::Vec3f white = lab_of(paint(Color::White));
+            CHECK(cv::norm(side.lab.at(4) - white) < 4.0);
+        }
+    }
+}
+
 TEST_CASE("a frame larger than the working size is read in its own pixels", "[direct-scan]") {
     const Pose pose{.centre = {960.0F, 520.0F}, .pitch = 120.0F, .degrees = 6.0F};
     const std::optional<SideRead> read =
