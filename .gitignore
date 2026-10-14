@@ -247,3 +247,7 @@ compile_commands.json
 .ninja_deps
 .ninja_log
 CMakeUserPresets.json
+
+# Python bytecode (the release and licence tools are run in place)
+__pycache__/
+*.pyc

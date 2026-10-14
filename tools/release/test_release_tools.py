@@ -8,6 +8,7 @@ wrong is not a tag.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -176,6 +177,7 @@ class Render(unittest.TestCase):
         "Cubeulator-0.2.0-beta.1-macos-arm64.dmg",
         "Cubeulator-0.2.0-beta.1-linux-x64.deb",
         "Cubeulator-0.2.0-beta.1-linux-x64.rpm",
+        "Cubeulator-0.2.0-beta.1-web.zip",
         "SHA512SUMS",
     ]
 
@@ -186,7 +188,7 @@ class Render(unittest.TestCase):
             repo="owner/repo",
             names=self.NAMES,
             install_template=(
-                "## Installing\n\nRun `@WINDOWS@`; `@MACOS@`; `@DEB@`; `@RPM@`.\n"
+                "## Installing\n\nRun `@WINDOWS@`; `@MACOS@`; `@DEB@`; `@RPM@`; host `@WEB@`.\n"
             ),
         )
         base.update(kw)
@@ -238,6 +240,17 @@ class Render(unittest.TestCase):
     def test_install_names_come_from_the_files(self):
         out = self.render()
         self.assertIn("`Cubeulator-0.2.0-beta.1-linux-x64.deb`", out)
+        self.assertIn("host `Cubeulator-0.2.0-beta.1-web.zip`", out)
+
+    def test_the_web_package_has_its_own_row(self):
+        out = self.render(attested=True)
+        self.assertIn("| Web: any current browser (static files to host) | `Cubeulator-0.2.0-beta.1-web.zip` |", out)
+        # a preview made before any package exists still names it
+        preview = notes.render(
+            GOOD, version="0.2.0-beta.1", tag="v0.2.0-beta.1", repo="owner/repo",
+            install_template="host `@WEB@`",
+        )
+        self.assertIn("host `Cubeulator-0.2.0-beta.1-web.zip`", preview)
 
     def test_an_unready_changelog_is_refused(self):
         bad = GOOD.replace("> **Pre-release.** Not yet proven on every webcam.\n", "")
@@ -334,6 +347,7 @@ class Sbom(unittest.TestCase):
         "macos": "Cubeulator-0.1.0-beta.1-macos-arm64.dmg",
         "deb": "Cubeulator-0.1.0-beta.1-linux-x64.deb",
         "rpm": "Cubeulator-0.1.0-beta.1-linux-x64.rpm",
+        "web": "Cubeulator-0.1.0-beta.1-web.zip",
     }
 
     def files(self, *keys: str):
@@ -354,7 +368,7 @@ class Sbom(unittest.TestCase):
             files=files if files is not None else self.files(),
             notices=notices
             if notices is not None
-            else {p: self.INVENTORY for p in ("windows", "macos", "linux")},
+            else {p: self.INVENTORY for p in ("windows", "macos", "linux", "web")},
             created=make_sbom.datetime(2026, 10, 14, tzinfo=make_sbom.timezone.utc),
         )
 
@@ -371,7 +385,7 @@ class Sbom(unittest.TestCase):
 
     def test_each_file_is_described_and_holds_its_platforms_components(self):
         doc = self.make()
-        self.assertEqual(len(doc["documentDescribes"]), 4)
+        self.assertEqual(len(doc["documentDescribes"]), 5)
         for file_pkg in (p for p in doc["packages"] if "packageFileName" in p):
             held = [r for r in doc["relationships"] if r["spdxElementId"] == file_pkg["SPDXID"]]
             self.assertEqual(len(held), 3, file_pkg["name"])
@@ -409,11 +423,25 @@ class Sbom(unittest.TestCase):
     def test_an_unresolved_inventory_is_refused(self):
         bad = dict(self.INVENTORY, unresolved=["Qt is not the Qt the notices were written for"])
         with self.assertRaises(make_sbom.SbomError):
-            self.make(notices={"windows": bad, "macos": bad, "linux": bad})
+            self.make(notices={"windows": bad, "macos": bad, "linux": bad, "web": bad})
 
     def test_a_platform_with_no_inventory_is_refused_rather_than_left_thin(self):
         with self.assertRaises(make_sbom.SbomError):
             self.make(notices={"windows": self.INVENTORY, "linux": self.INVENTORY})
+
+    def test_the_web_zip_is_described_from_the_web_inventory(self):
+        doc = self.make()
+        zip_pkg = next(p for p in doc["packages"] if p.get("packageFileName", "").endswith("-web.zip"))
+        self.assertEqual(zip_pkg["summary"], "Cubeulator 0.1.0-beta.1 for web")
+        held = [r for r in doc["relationships"] if r["spdxElementId"] == zip_pkg["SPDXID"]]
+        self.assertEqual(len(held), 3)
+        # the zip is a package of its own platform and only that
+        self.assertTrue(
+            all(r["relatedSpdxElement"].startswith("SPDXRef-web-") for r in held),
+            [r["relatedSpdxElement"] for r in held],
+        )
+        with self.assertRaises(make_sbom.SbomError):
+            self.make(notices={p: self.INVENTORY for p in ("windows", "macos", "linux")})
 
     def test_files_that_are_not_packages_are_left_out(self):
         files = self.files("windows")
@@ -679,6 +707,104 @@ class Check(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertIn("version=0.2.0-beta.1\n", out.read_text(encoding="utf-8"))
         self.assertIn("prerelease=true\n", out.read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(
+    _bash() and all(shutil.which(t) for t in ("zip", "unzip", "python3")),
+    "needs bash, zip, unzip and python3",
+)
+class WebPackage(unittest.TestCase):
+    """packaging/web/make-package.sh and check-package.sh, over a made-up build."""
+
+    ROOT = Path(__file__).resolve().parents[2]
+    MAKE = ROOT / "packaging" / "web" / "make-package.sh"
+    CHECK = ROOT / "packaging" / "web" / "check-package.sh"
+    INVENTORY = {"platform": "web", "qtPlatformVerified": True, "components": [{"name": "qt"}], "unresolved": []}
+
+    def build_dir(self, inventory=None, drop=()):
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        bin_dir = root / "build" / "bin"
+        notices = root / "build" / "third_party_notices"
+        bin_dir.mkdir(parents=True)
+        notices.mkdir(parents=True)
+        (bin_dir / "index.html").write_text(
+            '<script src="cubeulator-isolation.js"></script><script>load("cube_app.js");load("qtloader.js")</script>',
+            encoding="utf-8",
+        )
+        (bin_dir / "cube_app.js").write_text('var m="cube_app.wasm"; /* PThread */', encoding="utf-8")
+        (bin_dir / "qtloader.js").write_text("qtLoad", encoding="utf-8")
+        (bin_dir / "cubeulator-isolation.js").write_text("sw", encoding="utf-8")
+        (bin_dir / "icon.svg").write_text("<svg/>", encoding="utf-8")
+        (bin_dir / "cube_app.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00" + b"\x00" * 1_100_000)
+        (notices / "THIRD-PARTY-NOTICES.txt").write_text(
+            "Qt 6.12 ... OpenCV ... Noto Sans JP\n" + "\n".join(f"line {i}" for i in range(300)),
+            encoding="utf-8",
+        )
+        (notices / "third-party-notices.json").write_text(
+            json.dumps(inventory if inventory is not None else self.INVENTORY), encoding="utf-8"
+        )
+        for name in drop:
+            (bin_dir / name).unlink()
+        return root
+
+    def make(self, root: Path):
+        out = root / "dist"
+        proc = subprocess.run(
+            [_bash(), self.MAKE.as_posix(), (root / "build").as_posix(), "0.1.0-beta.1", out.as_posix()],
+            capture_output=True,
+            text=True,
+        )
+        return proc, out / "Cubeulator-0.1.0-beta.1-web.zip"
+
+    def check(self, package: Path):
+        proc = subprocess.run(
+            [_bash(), self.CHECK.as_posix(), package.as_posix()], capture_output=True, text=True
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def test_a_good_build_makes_a_package_that_passes(self):
+        proc, package = self.make(self.build_dir())
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertTrue(package.exists())
+        code, out = self.check(package)
+        self.assertEqual(code, 0, out)
+        self.assertIn("passes", out)
+
+    def test_an_unresolved_inventory_makes_no_package(self):
+        bad = dict(self.INVENTORY, unresolved=["Linked Qt library x"])
+        proc, package = self.make(self.build_dir(inventory=bad))
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(package.exists())
+        self.assertIn("unresolved", proc.stdout + proc.stderr)
+
+    def test_qt_sboms_not_read_for_the_platform_makes_no_package(self):
+        proc, package = self.make(self.build_dir(inventory=dict(self.INVENTORY, qtPlatformVerified=False)))
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(package.exists())
+
+    def test_a_site_without_its_module_is_not_packaged(self):
+        proc, package = self.make(self.build_dir(drop=("cube_app.wasm",)))
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(package.exists())
+
+    def test_the_check_names_what_is_wrong(self):
+        proc, package = self.make(self.build_dir())
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        work = Path(tmp.name)
+        shutil.unpack_archive(str(package), work / "x")
+        # a module that is not WebAssembly, and a page that does not load the worker
+        (work / "x" / "Cubeulator-0.1.0-beta.1-web" / "cube_app.wasm").write_bytes(b"MZ" + b"\x00" * 1_100_000)
+        (work / "x" / "Cubeulator-0.1.0-beta.1-web" / "index.html").write_text("<html/>", encoding="utf-8")
+        bad = work / "Cubeulator-0.1.0-beta.1-web.zip"
+        shutil.make_archive(str(bad.with_suffix("")), "zip", work / "x")
+        code, out = self.check(bad)
+        self.assertNotEqual(code, 0)
+        self.assertIn("cube_app.wasm is a WebAssembly module", out)
+        self.assertIn("index.html loads the isolation worker", out)
 
 
 if __name__ == "__main__":
