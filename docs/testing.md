@@ -996,8 +996,8 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic |
-| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic, and that each of the five drafts shows its own script |
+| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off; the launch and settings screens again in Hebrew, Arabic and Yiddish, mirrored |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
 | `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
