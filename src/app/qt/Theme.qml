@@ -43,7 +43,52 @@ QtObject {
     readonly property color faceL: "#DF7A2B"
     readonly property color faceR: "#D1372A"
 
-    readonly property string fontHeading: "Archivo"
+    // The face. Archivo is the Latin one. Japanese and Chinese share code
+    // points and not shapes, so for them the family is chosen by the app's
+    // language and not left to glyph fallback, which draws Chinese in
+    // Japanese forms (or the reverse) and sets one line in two faces at two
+    // weights. QML's font has no fallback list, so the first of the
+    // language's own system families that is installed is named here (the
+    // browser build registers its bundled Noto Sans JP and SC, which are the
+    // last candidates). Qt.uiLanguage is the language the manager installed:
+    // "ja_JP", "zh_CN". docs/design/platforms.md, "Fonts".
+    //
+    // Each name is under a `family:` key so that it is a name, not text, to
+    // the unwrapped-string lint.
+    readonly property var cjkFaces: ({
+        "windows": {
+            "ja": [{ family: "Yu Gothic UI" }, { family: "Meiryo UI" }, { family: "MS UI Gothic" }],
+            "zh": [{ family: "Microsoft YaHei UI" }, { family: "Microsoft YaHei" }]
+        },
+        "apple": {
+            "ja": [{ family: "Hiragino Sans" }, { family: "Hiragino Kaku Gothic ProN" }],
+            "zh": [{ family: "PingFang SC" }, { family: "Heiti SC" }]
+        },
+        "other": {
+            "ja": [{ family: "Noto Sans CJK JP" }, { family: "Noto Sans JP" }, { family: "Source Han Sans JP" }],
+            "zh": [{ family: "Noto Sans CJK SC" }, { family: "Noto Sans SC" },
+                   { family: "Source Han Sans SC" }, { family: "WenQuanYi Micro Hei" }]
+        }
+    })
+    // The first installed family for `code` ("ja" or "zh"), or "" when the
+    // machine has none.
+    function systemCjkFamily(code) {
+        const os = Qt.platform.os;
+        const group = os === "windows" ? "windows" : (os === "osx" || os === "ios" ? "apple" : "other");
+        const wanted = cjkFaces[group][code];
+        const installed = Qt.fontFamilies();
+        for (let i = 0; i < wanted.length; ++i) {
+            if (installed.indexOf(wanted[i].family) >= 0)
+                return wanted[i].family;
+        }
+        return "";
+    }
+    readonly property string fontHeading: {
+        const code = Qt.uiLanguage.split(/[-_]/)[0].toLowerCase();
+        if (code === "ja" || code === "zh")
+            return systemCjkFamily(code) || "Archivo";
+        return "Archivo";
+    }
     readonly property string fontMono: "IBM Plex Mono"
 
     readonly property real space1: 4
