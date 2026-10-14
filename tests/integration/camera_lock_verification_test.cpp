@@ -48,10 +48,24 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include "../unit/must_have.hpp"
 
 namespace camera = cube::platform::camera;
 
 namespace {
+
+const char* outcome_name(camera::ControlOutcome outcome) {
+    switch (outcome) {
+        case camera::ControlOutcome::applied:
+            return "applied";
+        case camera::ControlOutcome::rejected:
+            return "REJECTED";
+        case camera::ControlOutcome::unsupported:
+            return "unsupported";
+        default:
+            return "not requested";
+    }
+}
 
 std::string fixed2(double value) {
     std::ostringstream out;
@@ -87,8 +101,10 @@ Photometry measure(const cv::Mat& bgr) {
     cv::Mat chroma;
     cv::magnitude(a_signed, b_signed, chroma);
 
-    return Photometry{.l = cv::mean(planes.at(0))[0] * 100.0 / 255.0,
-                      .chroma = cv::mean(chroma)[0]};
+    return Photometry{
+        .l = cv::mean(planes.at(0))(0) * 100.0 / 255.0,
+        .chroma = cv::mean(chroma)(0),
+    };
 }
 
 struct Spread {
@@ -108,7 +124,10 @@ Spread spread_of(const std::vector<double>& values) {
         total += v;
     }
     return Spread{
-        .mean = total / static_cast<double>(values.size()), .lowest = *min_it, .highest = *max_it};
+        .mean = total / static_cast<double>(values.size()),
+        .lowest = *min_it,
+        .highest = *max_it,
+    };
 }
 
 // Peak-to-peak, not standard deviation: the measured defect was a drift
@@ -140,9 +159,11 @@ Run collect(int frames) {
         chroma_values.push_back(p.chroma);
     }
 
-    return Run{.l = spread_of(l_values),
-               .chroma = spread_of(chroma_values),
-               .frames = static_cast<int>(l_values.size())};
+    return Run{
+        .l = spread_of(l_values),
+        .chroma = spread_of(chroma_values),
+        .frames = static_cast<int>(l_values.size()),
+    };
 }
 
 void report_run(const std::string& label, const Run& run) {
@@ -150,6 +171,118 @@ void report_run(const std::string& label, const Run& run) {
         " min=" + fixed2(run.l.lowest) + " max=" + fixed2(run.l.highest) +
         " peak-to-peak=" + fixed2(run.l.range()) + " | chroma mean=" + fixed2(run.chroma.mean) +
         " peak-to-peak=" + fixed2(run.chroma.range()));
+}
+
+// How long after `since` the first frame arrived (zero if none did within
+// four seconds): the cold-open latency, through the same start() +
+// first-frame path the app uses.
+std::chrono::milliseconds first_frame_after(std::chrono::steady_clock::time_point since) {
+    for (int i = 0; i < 2000; ++i) {
+        if (camera::try_pop_latest_frame()) {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - since);
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return std::chrono::milliseconds{};
+}
+
+// The next photometry report, waiting up to ten seconds for it: the lock is
+// applied by the capture thread between grabs, so the report is what says it
+// has landed.
+std::optional<camera::PhotometryLockReport> wait_for_report() {
+    std::optional<camera::PhotometryLockReport> report;
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
+    while (!report && std::chrono::steady_clock::now() < deadline) {
+        report = camera::take_photometry_report();
+        if (!report) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+    return report;
+}
+
+void log_report(const camera::PhotometryLockReport& report) {
+    log("lock: platform_supported=" + std::string(report.platform_supported ? "yes" : "no") +
+        " fully_applied=" + std::string(report.fully_applied() ? "yes" : "no"));
+    for (const camera::PhotometryControl control : camera::kPhotometryControls) {
+        const camera::ControlResult& entry = report.result(control);
+        const char* outcome = outcome_name(entry.outcome);
+        log(std::string("  ") + std::string(camera::to_string(control)) + ": " + outcome +
+            " requested=" + fixed2(entry.requested) + " readback=" + fixed2(entry.readback));
+    }
+    log("summary: " + report.summary());
+}
+
+// Re-lock with an EXPLICIT exposure one stop away from where the
+// automatics left it. Two things need this: the override path (a
+// settings screen or a tuning run), and - more importantly - the
+// restore check at the bottom. A default lock writes each control back
+// to the value it just read, so restoring it would look correct even if
+// restore did nothing at all; only a value that genuinely moved can
+// prove the driver was put back. It also checks the re-lock rule that a
+// second lock keeps the FIRST-seen value as the one to restore.
+void relock_with_explicit_exposure(const camera::PhotometryLockReport& report, int frames) {
+    const double as_found_exposure = report.result(camera::PhotometryControl::exposure).requested;
+    camera::PhotometryLockRequest tweak;
+    tweak.exposure = as_found_exposure - 1.0;  // one stop shorter (log2 seconds)
+    REQUIRE(camera::request_photometry_lock(tweak).has_value());
+
+    const std::optional<camera::PhotometryLockReport> second = wait_for_report();
+    const auto& second_value = ::cube::test::must_have(second);
+    const camera::ControlResult& tweaked = second_value.result(camera::PhotometryControl::exposure);
+    log("override: asked for EXPOSURE=" + fixed2(*tweak.exposure) +
+        " readback=" + fixed2(tweaked.readback) + " (" +
+        (tweaked.outcome == camera::ControlOutcome::applied ? "applied" : "not applied") + ")");
+
+    const Run overridden = collect(frames);
+    report_run("OVERRIDE", overridden);
+}
+
+// Did stop() really put the driver back? This is not a nicety:
+// DirectShow property state lives in the driver and outlives the
+// process, so a lock that is not undone follows the user into every
+// other camera app on the machine and into this app's own next launch -
+// which would also make the next lock freeze the PREVIOUS scan's
+// exposure instead of this room's.
+//
+// Checked through a raw cv::VideoCapture rather than the platform API,
+// which deliberately exposes no property reads, and only after the last
+// stop() so it cannot perturb either latency measurement.
+void check_driver_restored(const camera::PhotometryLockReport& report) {
+    cv::VideoCapture fresh(0, cube::platform::camera::detail::capture_backend());
+    REQUIRE(fresh.isOpened());
+    cv::Mat frame;
+    fresh.read(frame);
+    const double exposure_now = fresh.get(cv::CAP_PROP_EXPOSURE);
+    const double brightness_now = fresh.get(cv::CAP_PROP_BRIGHTNESS);
+    const double saturation_now = fresh.get(cv::CAP_PROP_SATURATION);
+    log("after stop(): EXPOSURE=" + fixed2(exposure_now) + " BRIGHTNESS=" + fixed2(brightness_now) +
+        " SATURATION=" + fixed2(saturation_now) +
+        " AUTO_WB=" + fixed2(fresh.get(cv::CAP_PROP_AUTO_WB)));
+
+    // The default lock writes each control back to the value the device
+    // itself reported, so those written values ARE the pre-lock state -
+    // whatever the driver reads now must match them.
+    for (const camera::PhotometryControl control : {
+             camera::PhotometryControl::exposure,
+             camera::PhotometryControl::brightness,
+             camera::PhotometryControl::saturation,
+         }) {
+        const camera::ControlResult& entry = report.result(control);
+        if (entry.outcome != camera::ControlOutcome::applied) {
+            continue;
+        }
+        double now = saturation_now;
+        if (control == camera::PhotometryControl::exposure) {
+            now = exposure_now;
+        } else if (control == camera::PhotometryControl::brightness) {
+            now = brightness_now;
+        }
+        INFO("control: " << camera::to_string(control));
+        REQUIRE(std::abs(now - entry.requested) <= 0.5);
+    }
+    fresh.release();
 }
 
 }  // namespace
@@ -173,15 +306,7 @@ TEST_CASE("photometry lock holds a static scene still", "[.camera-lock]") {
     const auto started = camera::start(device);
     REQUIRE(started.has_value());
 
-    std::chrono::milliseconds first_frame_ms{};
-    for (int i = 0; i < 2000; ++i) {
-        if (auto frame = camera::try_pop_latest_frame()) {
-            first_frame_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - open_start);
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+    const std::chrono::milliseconds first_frame_ms = first_frame_after(open_start);
     REQUIRE(first_frame_ms.count() > 0);
     log("start()+first frame: " + std::to_string(first_frame_ms.count()) + "ms");
 
@@ -203,29 +328,9 @@ TEST_CASE("photometry lock holds a static scene still", "[.camera-lock]") {
     // The lock is applied a settling run after the request (see
     // interfaces/camera.hpp), so the report is what says it has landed -
     // sampling before it arrives would measure the automatics again.
-    std::optional<camera::PhotometryLockReport> report;
-    const auto report_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-    while (!report && std::chrono::steady_clock::now() < report_deadline) {
-        report = camera::take_photometry_report();
-        if (!report) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-    }
-    REQUIRE(report.has_value());
-
-    log("lock: platform_supported=" + std::string(report->platform_supported ? "yes" : "no") +
-        " fully_applied=" + std::string(report->fully_applied() ? "yes" : "no"));
-    for (const camera::PhotometryControl control : camera::kPhotometryControls) {
-        const camera::ControlResult& entry = report->result(control);
-        const char* outcome = entry.outcome == camera::ControlOutcome::applied    ? "applied"
-                              : entry.outcome == camera::ControlOutcome::rejected ? "REJECTED"
-                              : entry.outcome == camera::ControlOutcome::unsupported
-                                  ? "unsupported"
-                                  : "not requested";
-        log(std::string("  ") + std::string(camera::to_string(control)) + ": " + outcome +
-            " requested=" + fixed2(entry.requested) + " readback=" + fixed2(entry.readback));
-    }
-    log("summary: " + report->summary());
+    const std::optional<camera::PhotometryLockReport> report = wait_for_report();
+    const auto& report_value = ::cube::test::must_have(report);
+    log_report(report_value);
 
     const Run locked = collect(kFramesPerRun);
     report_run("LOCKED ", locked);
@@ -244,43 +349,15 @@ TEST_CASE("photometry lock holds a static scene still", "[.camera-lock]") {
     // over hardware. What is asserted is that the app told the truth about
     // it: if it claims exposure is locked, the numbers behind that claim are
     // in the log above for a human to check.
-    if (report->exposure_locked()) {
+    if (report_value.exposure_locked()) {
         log("exposure reported locked - the L peak-to-peak above is the evidence");
     } else {
         log("exposure NOT locked on this device - the manual-lighting fallback is the "
             "only route, and the app says so to the user");
     }
 
-    // Re-lock with an EXPLICIT exposure one stop away from where the
-    // automatics left it. Two things need this: the override path (a
-    // settings screen or a tuning run), and - more importantly - the
-    // restore check at the bottom. A default lock writes each control back
-    // to the value it just read, so restoring it would look correct even if
-    // restore did nothing at all; only a value that genuinely moved can
-    // prove the driver was put back. It also checks the re-lock rule that a
-    // second lock keeps the FIRST-seen value as the one to restore.
-    const double as_found_exposure = report->result(camera::PhotometryControl::exposure).requested;
-    if (report->exposure_locked()) {
-        camera::PhotometryLockRequest tweak;
-        tweak.exposure = as_found_exposure - 1.0;  // one stop shorter (log2 seconds)
-        REQUIRE(camera::request_photometry_lock(tweak).has_value());
-
-        std::optional<camera::PhotometryLockReport> second;
-        const auto second_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(10);
-        while (!second && std::chrono::steady_clock::now() < second_deadline) {
-            second = camera::take_photometry_report();
-            if (!second) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            }
-        }
-        REQUIRE(second.has_value());
-        const camera::ControlResult& tweaked = second->result(camera::PhotometryControl::exposure);
-        log("override: asked for EXPOSURE=" + fixed2(*tweak.exposure) +
-            " readback=" + fixed2(tweaked.readback) + " (" +
-            (tweaked.outcome == camera::ControlOutcome::applied ? "applied" : "not applied") + ")");
-
-        const Run overridden = collect(kFramesPerRun);
-        report_run("OVERRIDE", overridden);
+    if (report_value.exposure_locked()) {
+        relock_with_explicit_exposure(report_value, kFramesPerRun);
     }
 
     // stop() restores the driver's photometry (DirectShow property state
@@ -293,57 +370,10 @@ TEST_CASE("photometry lock holds a static scene still", "[.camera-lock]") {
     // ~1.0-1.4s DSHOW budget is the reason that backend was chosen.
     const auto reopen_start = std::chrono::steady_clock::now();
     REQUIRE(camera::start(device).has_value());
-    std::chrono::milliseconds reopen_ms{};
-    for (int i = 0; i < 2000; ++i) {
-        if (auto frame = camera::try_pop_latest_frame()) {
-            reopen_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - reopen_start);
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(2));
-    }
+    const std::chrono::milliseconds reopen_ms = first_frame_after(reopen_start);
     log("re-open after a locked session: " + std::to_string(reopen_ms.count()) +
         "ms (first open was " + std::to_string(first_frame_ms.count()) + "ms)");
     camera::stop();
 
-    // Did stop() really put the driver back? This is not a nicety:
-    // DirectShow property state lives in the driver and outlives the
-    // process, so a lock that is not undone follows the user into every
-    // other camera app on the machine and into this app's own next launch -
-    // which would also make the next lock freeze the PREVIOUS scan's
-    // exposure instead of this room's.
-    //
-    // Checked through a raw cv::VideoCapture rather than the platform API,
-    // which deliberately exposes no property reads, and only after the last
-    // stop() so it cannot perturb either latency measurement above.
-    {
-        cv::VideoCapture fresh(0, cube::platform::camera::detail::capture_backend());
-        REQUIRE(fresh.isOpened());
-        cv::Mat frame;
-        fresh.read(frame);
-        const double exposure_now = fresh.get(cv::CAP_PROP_EXPOSURE);
-        const double brightness_now = fresh.get(cv::CAP_PROP_BRIGHTNESS);
-        const double saturation_now = fresh.get(cv::CAP_PROP_SATURATION);
-        log("after stop(): EXPOSURE=" + fixed2(exposure_now) +
-            " BRIGHTNESS=" + fixed2(brightness_now) + " SATURATION=" + fixed2(saturation_now) +
-            " AUTO_WB=" + fixed2(fresh.get(cv::CAP_PROP_AUTO_WB)));
-
-        // The default lock writes each control back to the value the device
-        // itself reported, so those written values ARE the pre-lock state -
-        // whatever the driver reads now must match them.
-        for (const camera::PhotometryControl control :
-             {camera::PhotometryControl::exposure, camera::PhotometryControl::brightness,
-              camera::PhotometryControl::saturation}) {
-            const camera::ControlResult& entry = report->result(control);
-            if (entry.outcome != camera::ControlOutcome::applied) {
-                continue;
-            }
-            const double now = control == camera::PhotometryControl::exposure     ? exposure_now
-                               : control == camera::PhotometryControl::brightness ? brightness_now
-                                                                                  : saturation_now;
-            INFO("control: " << camera::to_string(control));
-            REQUIRE(std::abs(now - entry.requested) <= 0.5);
-        }
-        fresh.release();
-    }
+    check_driver_restored(report_value);
 }

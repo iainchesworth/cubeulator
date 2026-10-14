@@ -43,7 +43,8 @@ std::optional<PreparedFrame> prepare_frame(const cv::Mat& bgr) {
     cv::Mat value = cv::max(cv::max(channels.at(0), channels.at(1)), channels.at(2));
     cv::GaussianBlur(value, value, cv::Size(5, 5), 0.0);
 
-    const int block = static_cast<int>(std::min(working.rows, working.cols) * 0.12) | 1;
+    const int block =
+        static_cast<int>(static_cast<unsigned>(std::min(working.rows, working.cols) * 0.12) | 1U);
     cv::Mat binary;
     cv::adaptiveThreshold(value, binary, 255.0, cv::ADAPTIVE_THRESH_MEAN_C, cv::THRESH_BINARY,
                           std::max(block, 3), 8.0);

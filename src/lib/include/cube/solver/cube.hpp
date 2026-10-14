@@ -11,8 +11,9 @@ namespace cube::solver {
 // Cube's storage) so their order must stay stable.
 enum class Face : std::uint8_t { U, D, L, R, F, B };
 
-inline constexpr std::array<Face, 6> kAllFaces = {Face::U, Face::D, Face::L,
-                                                  Face::R, Face::F, Face::B};
+inline constexpr std::array<Face, 6> kAllFaces = {
+    Face::U, Face::D, Face::L, Face::R, Face::F, Face::B,
+};
 
 // A sticker colour. Deliberately named after the colour, not the face it
 // starts on: Theme.qml's faceU/faceD/etc. constants are a palette keyed by
@@ -56,10 +57,12 @@ enum class Color : std::uint8_t { White, Yellow, Green, Blue, Orange, Red };
 // ("R'"). No slice (M/E/S) or whole-cube (x/y/z) moves - this solver never
 // needs them (see docs/architecture.md).
 struct Move {
-    Face face;
+    Face face = Face::U;
     int turns = 1;
 
-    [[nodiscard]] constexpr Move inverse() const noexcept { return Move{face, 4 - turns}; }
+    [[nodiscard]] constexpr Move inverse() const noexcept {
+        return Move{.face = face, .turns = 4 - turns};
+    }
 
     friend constexpr bool operator==(const Move&, const Move&) = default;
 };
@@ -91,7 +94,7 @@ public:
 
     // row, col in [0,3).
     [[nodiscard]] Color at(Face face, int row, int col) const noexcept {
-        return at(face, row * 3 + col);
+        return at(face, (row * 3) + col);
     }
     [[nodiscard]] Color at(Face face, int index) const noexcept;
 
@@ -170,7 +173,7 @@ public:
 
 private:
     void set(Face face, int index, Color color) noexcept {
-        facelets_[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)] = color;
+        facelets_.at(static_cast<std::size_t>(face)).at(static_cast<std::size_t>(index)) = color;
     }
 
     std::array<std::array<Color, 9>, 6> facelets_{};

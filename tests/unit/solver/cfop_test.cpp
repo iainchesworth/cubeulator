@@ -17,6 +17,7 @@
 #include <cube/solver/oll.hpp>
 #include <cube/solver/solver.hpp>
 
+#include "../must_have.hpp"
 #include "cfop_case_index.hpp"
 #include "cfop_last_layer.hpp"
 #include "cfop_stages.hpp"
@@ -38,6 +39,7 @@ using cube::solver::f2l_solved;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::oll_solved;
 using cube::solver::parse_algorithm;
 using cube::solver::random_scramble;
@@ -112,6 +114,81 @@ CubieCube apply_all(CubieCube cubie, std::span<const Move> moves) {
 // The last layer tables - exhaustively
 // ---------------------------------------------------------------------------
 
+namespace {
+
+// The first three corner twists and edge flips of a last layer, as the digits
+// of `corner_twists` (base 3) and `edge_flips` (base 2); the fourth of each
+// is forced.
+struct Orientations {
+    int corner_twists = 0;
+    int edge_flips = 0;
+};
+
+// One last layer: the corners and edges in the given orders, oriented as given.
+CubieCube last_layer_state(const std::array<std::uint8_t, 4>& corners,
+                           const std::array<std::uint8_t, 4>& edges,
+                           const Orientations& orientations) {
+    CubieCube state;
+    int twist_sum = 0;
+    int flip_sum = 0;
+    int c = orientations.corner_twists;
+    int e = orientations.edge_flips;
+    for (std::size_t i = 0; i < 3; ++i) {
+        state.co.at(i) = static_cast<std::uint8_t>(c % 3);
+        twist_sum += c % 3;
+        c /= 3;
+        state.eo.at(i) = static_cast<std::uint8_t>(e % 2);
+        flip_sum += e % 2;
+        e /= 2;
+    }
+    state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
+    state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
+    for (std::size_t i = 0; i < 4; ++i) {
+        state.cp.at(i) = corners.at(i);
+        state.ep.at(i) = edges.at(i);
+    }
+    return state;
+}
+
+// What the two lookups cost over every case.
+struct LastLayerTotals {
+    std::size_t states = 0;
+    std::size_t oll_moves = 0;
+    std::size_t pll_moves = 0;
+    std::size_t oll_longest = 0;
+    std::size_t pll_longest = 0;
+    bool only_urf = true;
+};
+
+// Runs one state through the two lookups exactly as solve_cfop() does, on the
+// cubie model; it must come out as the identity.
+void solve_and_total(CubieCube state, LastLayerTotals& totals) {
+    ++totals.states;
+
+    const std::optional<std::span<const Move>> oll = oll_algorithm(state);
+    const auto& oll_value = ::cube::test::must_have(oll);
+    state = apply_all(state, oll_value);
+
+    const std::optional<std::span<const Move>> pll = pll_algorithm(state);
+    const auto& pll_value = ::cube::test::must_have(pll);
+    state = apply_all(state, pll_value);
+
+    REQUIRE(cube::solver::detail::is_identity(state));
+
+    totals.oll_moves += oll_value.size();
+    totals.pll_moves += pll_value.size();
+    totals.oll_longest = std::max(totals.oll_longest, oll_value.size());
+    totals.pll_longest = std::max(totals.pll_longest, pll_value.size());
+    for (const std::span<const Move> word : {oll_value, pll_value}) {
+        const bool urf_only = std::ranges::all_of(word, [](const Move& m) {
+            return m.face == Face::U || m.face == Face::R || m.face == Face::F;
+        });
+        totals.only_urf = totals.only_urf && urf_only;
+    }
+}
+
+}  // namespace
+
 TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states", "[cfop]") {
     // Every arrangement of the four top corners and edges with the first two
     // layers solved: 4! corner orders x 3^3 twists (the fourth is forced) x
@@ -121,83 +198,39 @@ TEST_CASE("the last-layer tables solve every one of the 62,208 last-layer states
     // model, and must come out as the identity.
     const std::array<std::array<std::uint8_t, 4>, 24> perms = all_orders_of_four();
 
-    std::size_t states = 0;
-    std::size_t oll_moves = 0;
-    std::size_t pll_moves = 0;
-    std::size_t oll_longest = 0;
-    std::size_t pll_longest = 0;
-    bool only_urf = true;
-
+    LastLayerTotals totals;
     for (const auto& corners : perms) {
         for (const auto& edges : perms) {
-            if (cube::solver::detail::parity_of_four(corners.data()) !=
-                cube::solver::detail::parity_of_four(edges.data())) {
+            if (cube::solver::detail::parity_of_four(corners) !=
+                cube::solver::detail::parity_of_four(edges)) {
                 continue;
             }
             for (int ct = 0; ct < 27; ++ct) {
                 for (int et = 0; et < 8; ++et) {
-                    CubieCube state;
-                    int twist_sum = 0;
-                    int flip_sum = 0;
-                    int c = ct;
-                    int e = et;
-                    for (std::size_t i = 0; i < 3; ++i) {
-                        state.co.at(i) = static_cast<std::uint8_t>(c % 3);
-                        twist_sum += c % 3;
-                        c /= 3;
-                        state.eo.at(i) = static_cast<std::uint8_t>(e % 2);
-                        flip_sum += e % 2;
-                        e /= 2;
-                    }
-                    state.co.at(3) = static_cast<std::uint8_t>((3 - (twist_sum % 3)) % 3);
-                    state.eo.at(3) = static_cast<std::uint8_t>(flip_sum % 2);
-                    for (std::size_t i = 0; i < 4; ++i) {
-                        state.cp.at(i) = corners.at(i);
-                        state.ep.at(i) = edges.at(i);
-                    }
-                    ++states;
-
-                    const std::optional<std::span<const Move>> oll = oll_algorithm(state);
-                    REQUIRE(oll.has_value());
-                    state = apply_all(state, *oll);
-
-                    const std::optional<std::span<const Move>> pll = pll_algorithm(state);
-                    REQUIRE(pll.has_value());
-                    state = apply_all(state, *pll);
-
-                    REQUIRE(cube::solver::detail::is_identity(state));
-
-                    oll_moves += oll->size();
-                    pll_moves += pll->size();
-                    oll_longest = std::max(oll_longest, oll->size());
-                    pll_longest = std::max(pll_longest, pll->size());
-                    for (const std::span<const Move> word : {*oll, *pll}) {
-                        for (const Move& m : word) {
-                            only_urf = only_urf && (m.face == Face::U || m.face == Face::R ||
-                                                    m.face == Face::F);
-                        }
-                    }
+                    solve_and_total(
+                        last_layer_state(corners, edges, {.corner_twists = ct, .edge_flips = et}),
+                        totals);
                 }
             }
         }
     }
 
-    CHECK(states == 62'208);
+    CHECK(totals.states == 62'208);
 
     // Every sequence is one a learner can practise with a right hand and the
     // odd F: <U, R, F> only.
-    CHECK(only_urf);
+    CHECK(totals.only_urf);
 
     // The tables hold the shortest sequences over that alphabet: about ten
     // moves to orient and thirteen to permute, against the beginner
     // method's twenty-one and twenty-nine for the same two jobs. The means
     // are over uniformly distributed cases, so they are what a random cube
     // costs on average.
-    const auto n = static_cast<double>(states);
-    CHECK(static_cast<double>(oll_moves) / n < 10.5);
-    CHECK(static_cast<double>(pll_moves) / n < 14.0);
-    CHECK(oll_longest <= 13);
-    CHECK(pll_longest <= 16);
+    const auto n = static_cast<double>(totals.states);
+    CHECK(static_cast<double>(totals.oll_moves) / n < 10.5);
+    CHECK(static_cast<double>(totals.pll_moves) / n < 14.0);
+    CHECK(totals.oll_longest <= 13);
+    CHECK(totals.pll_longest <= 16);
 }
 
 TEST_CASE("the permutation lookup refuses a last layer that is not oriented or not legal",
@@ -229,8 +262,8 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
     auto same = [](std::optional<std::span<const Move>> got, std::string_view text) {
         const auto expected = parse_algorithm(text);
         REQUIRE(expected.has_value());
-        REQUIRE(got.has_value());
-        CHECK(std::vector<Move>(got->begin(), got->end()) == *expected);
+        const auto& got_value = ::cube::test::must_have(got);
+        CHECK(std::vector<Move>(got_value.begin(), got_value.end()) == *expected);
     };
 
     // An OLL case is read off the top corners' twists and edges' flips by
@@ -268,8 +301,8 @@ TEST_CASE("the compiler's parse of the generated words is parse_algorithm's", "[
                 state.ep.at(i) = edge_order.at(i);
             }
             const std::size_t slot = cube::solver::detail::pll_slot(state);
-            if (cube::solver::detail::parity_of_four(corner_order.data()) !=
-                cube::solver::detail::parity_of_four(edge_order.data())) {
+            if (cube::solver::detail::parity_of_four(corner_order) !=
+                cube::solver::detail::parity_of_four(edge_order)) {
                 CHECK_FALSE(pll_algorithm(state).has_value());
                 continue;
             }
@@ -295,7 +328,7 @@ TEST_CASE("cfop takes the four stages in order and each one finishes its job", "
     // move into the stage before it, which is right for the finished
     // solution but blurs the boundary this test is about.
     for (unsigned seed = 1; seed <= 40; ++seed) {
-        const Cube scrambled = random_scramble(seed, 100);
+        const Cube scrambled = random_scramble(seed, MoveCount{100});
         const auto stages = solve_cfop_stages(scrambled);
         REQUIRE(stages.has_value());
         REQUIRE(stages->steps.size() == 4);
@@ -324,7 +357,7 @@ TEST_CASE("cfop's cross is as short as any cross can be", "[cfop][slow]") {
     // build the cross; cfop's meet-in-the-middle search must find the same
     // number, never a longer one.
     for (unsigned seed = 1; seed <= 15; ++seed) {
-        const Cube scrambled = random_scramble(seed, 100);
+        const Cube scrambled = random_scramble(seed, MoveCount{100});
         const auto cfop = solve_cfop_stages(scrambled);
         const auto optimum = cube::solver::solve_cross(scrambled);
         REQUIRE(cfop.has_value());
@@ -339,7 +372,7 @@ TEST_CASE("cfop solves a corpus in about fifty-five moves, far fewer than the be
     double total = 0;
     std::size_t longest = 0;
     for (unsigned seed = 1; seed <= kCount; ++seed) {
-        const Cube cube = random_scramble(seed, 100);
+        const Cube cube = random_scramble(seed, MoveCount{100});
         const auto solution = solve_cfop(cube);
         REQUIRE(solution.has_value());
 
@@ -359,7 +392,7 @@ TEST_CASE("cfop copes with cubes that are barely scrambled", "[cfop][slow]") {
     // A short scramble leaves pairs already built, pieces already home and
     // whole stages empty - paths a full scramble never takes.
     for (unsigned seed = 1; seed <= 60; ++seed) {
-        const Cube cube = random_scramble(1000 + seed, 1 + static_cast<int>(seed % 10));
+        const Cube cube = random_scramble(1000 + seed, MoveCount{1 + static_cast<int>(seed % 10)});
         const auto solution = solve_cfop(cube);
         REQUIRE(solution.has_value());
         CHECK(apply_all(cube, flatten(*solution)).is_solved());
@@ -400,7 +433,7 @@ TEST_CASE("cfop reports a valid but unreachable cube as unsolvable", "[cfop]") {
 }
 
 TEST_CASE("cfop gives the same solution every time and from several threads", "[cfop][slow]") {
-    const Cube cube = random_scramble(77, 100);
+    const Cube cube = random_scramble(77, MoveCount{100});
     const auto reference = solve_cfop(cube);
     REQUIRE(reference.has_value());
 
@@ -422,7 +455,7 @@ TEST_CASE("cfop gives the same solution every time and from several threads", "[
 }
 
 TEST_CASE("solve() runs the intermediate method through the same entry point", "[cfop][slow]") {
-    const Cube cube = random_scramble(12, 100);
+    const Cube cube = random_scramble(12, MoveCount{100});
     const auto direct = solve_cfop(cube);
     const auto via_solve = solve(cube, SolveMethod::Intermediate);
     REQUIRE(direct.has_value());

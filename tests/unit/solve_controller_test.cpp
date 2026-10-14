@@ -14,6 +14,7 @@
 #include <vector>
 
 using cube::solver::Cube;
+using cube::solver::MoveCount;
 using cube::solver::random_scramble;
 
 namespace {
@@ -111,7 +112,7 @@ TEST_CASE("SolveController solves the way it is asked to, and keeps to that meth
     SolveController controller;
     CHECK(controller.method() == SolveController::Beginner);
 
-    const Cube scrambled = random_scramble(41, 100);
+    const Cube scrambled = random_scramble(41, MoveCount{100});
     struct Case {
         SolveController::Method method;
         std::vector<int> stages;
@@ -166,7 +167,7 @@ TEST_CASE("changing the method part-way solves on from the cube as it stands",
     QObject::connect(&controller, &SolveController::solutionChanged,
                      [&solutions]() { ++solutions; });
 
-    const Cube scrambled = random_scramble(17, 100);
+    const Cube scrambled = random_scramble(17, MoveCount{100});
     controller.solveCube(scrambled);
     REQUIRE(wait_until_solved(controller));
     REQUIRE(stage_values(controller).size() == 5);
@@ -208,7 +209,7 @@ TEST_CASE("changing the method while a solve is still being worked out replaces 
           "[qt][controllers][solve-method]") {
     SolveController controller;
 
-    const Cube scrambled = random_scramble(23, 100);
+    const Cube scrambled = random_scramble(23, MoveCount{100});
     controller.solveCube(scrambled);  // the beginner method: the slow one
     REQUIRE(controller.isSolving());
     controller.setMethod(SolveController::Intermediate);
@@ -233,13 +234,13 @@ TEST_CASE("changing the method while a solve is still being worked out replaces 
 TEST_CASE("a cube scanned after a swap is a new cube, not a continuation",
           "[qt][controllers][solve-method]") {
     SolveController controller;
-    controller.solveCube(random_scramble(5, 100));
+    controller.solveCube(random_scramble(5, MoveCount{100}));
     REQUIRE(wait_until_solved(controller));
     controller.setMethod(SolveController::Advanced);
     REQUIRE(wait_until_solved(controller));
     REQUIRE(controller.solutionContinuesCube());
 
-    const Cube next = random_scramble(6, 100);
+    const Cube next = random_scramble(6, MoveCount{100});
     controller.solveCube(next);
     REQUIRE(wait_until_solved(controller));
     CHECK_FALSE(controller.solutionContinuesCube());

@@ -99,9 +99,13 @@ enum class SolveMethod : std::uint8_t {
 // number of times; the other methods have nothing to prepare.
 void prepare(SolveMethod method);
 
+// How many random face turns a scramble is made of. A type of its own so that
+// random_scramble(seed, moves) cannot be called with the two swapped.
+enum class MoveCount : int {};
+
 // A pseudo-random scramble, deterministic for a given seed - used both by
 // tests and (until a real vision pipeline exists) as the app's stand-in
 // scramble source.
-[[nodiscard]] Cube random_scramble(unsigned seed, int move_count = 25) noexcept;
+[[nodiscard]] Cube random_scramble(unsigned seed, MoveCount move_count = MoveCount{25}) noexcept;
 
 }  // namespace cube::solver

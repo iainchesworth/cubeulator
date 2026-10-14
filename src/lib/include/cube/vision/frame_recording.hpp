@@ -27,9 +27,11 @@
 #include <charconv>
 #include <cstdint>
 #include <istream>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace cube::vision::recording {
@@ -61,7 +63,7 @@ struct RecordedFrameInfo {
         slot += kRecordRingFrames;
     }
     for (int digit = 9; slot > 0; --digit, slot /= 10) {
-        name[static_cast<std::size_t>(digit)] = static_cast<char>('0' + slot % 10);
+        name.at(static_cast<std::size_t>(digit)) = static_cast<char>('0' + (slot % 10));
     }
     return name;
 }
@@ -76,6 +78,43 @@ struct RecordedFrameInfo {
 // downstream metric without any size mismatch to betray it.
 [[nodiscard]] inline bool frame_overwritten(int pass, int max_pass) {
     return max_pass - pass >= kRecordRingFrames;
+}
+
+// A whole field as a decimal integer: an optional '-', then digits, nothing
+// else (no '+', no spaces) - what std::from_chars accepts - and false on an
+// empty field or a value `T` cannot hold. Read digit by digit so that no
+// pointer arithmetic is needed to hand a string_view to from_chars.
+template <typename T>
+[[nodiscard]] constexpr bool parse_decimal(std::string_view text, T& out) noexcept {
+    static_assert(std::is_signed_v<T> && std::is_integral_v<T>);
+    const bool negative = !text.empty() && text.front() == '-';
+    if (negative) {
+        text.remove_prefix(1);
+    }
+    if (text.empty()) {
+        return false;
+    }
+    // Accumulated below zero, which can hold every magnitude T can (its minimum
+    // is one further from zero than its maximum).
+    T value = 0;
+    for (const char ch : text) {
+        if (ch < '0' || ch > '9') {
+            return false;
+        }
+        const T digit = static_cast<T>(ch - '0');
+        if (value < (std::numeric_limits<T>::min() + digit) / 10) {
+            return false;
+        }
+        value = static_cast<T>((value * 10) - digit);
+    }
+    if (!negative) {
+        if (value == std::numeric_limits<T>::min()) {
+            return false;
+        }
+        value = static_cast<T>(-value);
+    }
+    out = value;
+    return true;
 }
 
 // Parses one CSV row; nullopt for the header row, blank lines, or anything
@@ -102,8 +141,7 @@ struct RecordedFrameInfo {
         const std::size_t comma = line.find(',');
         const std::string_view field = line.substr(0, comma);
         line.remove_prefix(comma == std::string_view::npos ? line.size() : comma + 1);
-        const auto [ptr, ec] = std::from_chars(field.data(), field.data() + field.size(), out);
-        return ec == std::errc{} && ptr == field.data() + field.size();
+        return parse_decimal(field, out);
     };
     if (!parse_field(info.pass) || !parse_field(info.t_ms) || !parse_field(info.w) ||
         !parse_field(info.h) || !parse_field(info.full_w) || !parse_field(info.full_h) ||

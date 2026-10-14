@@ -224,7 +224,8 @@ inline constexpr std::array<std::string_view, 216> kOllWords = {{
     "R' U2 R U R' F U R U' R' F' R",
     "U R' F' U' F2 R' F' R2 U' R' U2 R",
     "U' R' F2 R2 U2 R' F R U2 R2 F2 R",
-}};
+},
+};
 
 inline constexpr std::array<std::string_view, 576> kPllWords = {{
     "",
@@ -803,4 +804,5 @@ inline constexpr std::array<std::string_view, 576> kPllWords = {{
     "",
     "",
     "U2 R U' R2 F2 U' R F2 R' U F2 R2 U R'",
-}};
+},
+};

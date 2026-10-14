@@ -11,6 +11,7 @@
 using cube::solver::Cube;
 using cube::solver::merge_adjacent_moves;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::parse_algorithm;
 using cube::solver::random_scramble;
 using cube::solver::Solution;
@@ -24,7 +25,7 @@ using cube::solver::to_string;
 namespace {
 
 SteppedSolution stepped_for(unsigned seed) {
-    const Cube scrambled = random_scramble(seed, 25);
+    const Cube scrambled = random_scramble(seed, MoveCount{25});
     const auto solution = solve(scrambled);
     REQUIRE(solution.has_value());
     return SteppedSolution::from(scrambled, *solution);
@@ -36,8 +37,9 @@ SteppedSolution stepped_for(unsigned seed) {
 // gap or overlap, each move's stage is the stage of the range it falls in,
 // and no two neighbouring moves share a face.
 void require_well_formed(SteppedSolution stepped) {
-    const std::vector<Stage> stages = {Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges,
-                                       Stage::Oll, Stage::Pll};
+    const std::vector<Stage> stages = {
+        Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges, Stage::Oll, Stage::Pll,
+    };
     const std::vector<StageRange>& ranges = stepped.stage_ranges();
 
     REQUIRE(ranges.size() == stages.size());
@@ -150,8 +152,9 @@ TEST_CASE("stage_ranges still tile the move list when a merge empties stages",
     // stays with MiddleEdges; Oll's R is cancelled by Pll's R', leaving Oll
     // empty between them.
     const std::vector<std::string> algorithms = {"R U F2", "F2 U' R'", "D", "D R", "R' L"};
-    const std::vector<Stage> stages = {Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges,
-                                       Stage::Oll, Stage::Pll};
+    const std::vector<Stage> stages = {
+        Stage::Cross, Stage::WhiteCorners, Stage::MiddleEdges, Stage::Oll, Stage::Pll,
+    };
     Solution solution;
     for (std::size_t i = 0; i < algorithms.size(); ++i) {
         const auto moves = parse_algorithm(algorithms.at(i));
@@ -159,7 +162,7 @@ TEST_CASE("stage_ranges still tile the move list when a merge empties stages",
         solution.steps.push_back(SolveStep{.stage = stages.at(i), .moves = *moves});
     }
 
-    const Cube start = random_scramble(3, 10);
+    const Cube start = random_scramble(3, MoveCount{10});
     const SteppedSolution untidied = SteppedSolution::from(start, solution);
     REQUIRE(untidied.move_count() == 11);
 
@@ -214,7 +217,7 @@ TEST_CASE("stage ranges tile the move list for short scrambles with empty stages
     for (const int move_count : {1, 2, 3}) {
         for (unsigned seed = 0; seed < 3; ++seed) {
             CAPTURE(move_count, seed);
-            const Cube scrambled = random_scramble(seed, move_count);
+            const Cube scrambled = random_scramble(seed, MoveCount{move_count});
             const auto solution = solve(scrambled);
             REQUIRE(solution.has_value());
 

@@ -144,7 +144,8 @@ int main(int argc, char** argv) {
 
     for (unsigned i = 0; i < options.count; ++i) {
         const unsigned seed = options.seed + i;
-        const cube::solver::Cube scrambled = cube::solver::random_scramble(seed, options.moves);
+        const cube::solver::Cube scrambled =
+            cube::solver::random_scramble(seed, cube::solver::MoveCount{options.moves});
 
         const auto start = Clock::now();
         const auto solution = cube::solver::solve(scrambled, options.method);

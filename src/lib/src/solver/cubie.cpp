@@ -11,33 +11,37 @@ namespace {
 // The faces each corner position touches, in clockwise order as seen from
 // outside the cube, starting with its U or D face. A corner's orientation is
 // the index in this list of the face its U/D-coloured sticker is on.
-constexpr std::array<std::array<Face, 3>, kCornerCount> kCornerFaces = {{
-    {Face::U, Face::R, Face::F},  // URF
-    {Face::U, Face::F, Face::L},  // UFL
-    {Face::U, Face::L, Face::B},  // ULB
-    {Face::U, Face::B, Face::R},  // UBR
-    {Face::D, Face::F, Face::R},  // DFR
-    {Face::D, Face::L, Face::F},  // DLF
-    {Face::D, Face::B, Face::L},  // DBL
-    {Face::D, Face::R, Face::B},  // DRB
-}};
+constexpr std::array<std::array<Face, 3>, kCornerCount> kCornerFaces = {
+    {
+        {Face::U, Face::R, Face::F},  // URF
+        {Face::U, Face::F, Face::L},  // UFL
+        {Face::U, Face::L, Face::B},  // ULB
+        {Face::U, Face::B, Face::R},  // UBR
+        {Face::D, Face::F, Face::R},  // DFR
+        {Face::D, Face::L, Face::F},  // DLF
+        {Face::D, Face::B, Face::L},  // DBL
+        {Face::D, Face::R, Face::B},  // DRB
+    },
+};
 
 // The faces each edge position touches, primary face first (U/D for the
 // eight U/D-layer edges, F/B for the four slice edges).
-constexpr std::array<std::array<Face, 2>, kEdgeCount> kEdgeFaces = {{
-    {Face::U, Face::R},  // UR
-    {Face::U, Face::F},  // UF
-    {Face::U, Face::L},  // UL
-    {Face::U, Face::B},  // UB
-    {Face::D, Face::R},  // DR
-    {Face::D, Face::F},  // DF
-    {Face::D, Face::L},  // DL
-    {Face::D, Face::B},  // DB
-    {Face::F, Face::R},  // FR
-    {Face::F, Face::L},  // FL
-    {Face::B, Face::L},  // BL
-    {Face::B, Face::R},  // BR
-}};
+constexpr std::array<std::array<Face, 2>, kEdgeCount> kEdgeFaces = {
+    {
+        {Face::U, Face::R},  // UR
+        {Face::U, Face::F},  // UF
+        {Face::U, Face::L},  // UL
+        {Face::U, Face::B},  // UB
+        {Face::D, Face::R},  // DR
+        {Face::D, Face::F},  // DF
+        {Face::D, Face::L},  // DL
+        {Face::D, Face::B},  // DB
+        {Face::F, Face::R},  // FR
+        {Face::F, Face::L},  // FL
+        {Face::B, Face::L},  // BL
+        {Face::B, Face::R},  // BR
+    },
+};
 
 // The position whose three faces are exactly {a, b, c}, or -1.
 int corner_position_of(Face a, Face b, Face c) noexcept {
@@ -91,10 +95,10 @@ std::optional<CubieCube> to_cubie(const Cube& cube) noexcept {
         corner_seen.at(static_cast<std::size_t>(pos)) = true;
 
         const auto& faces = kCornerFaces.at(static_cast<std::size_t>(pos));
-        const auto turned = std::ranges::find(faces, loc.face_a);  // where the U/D sticker is
         result.cp.at(static_cast<std::size_t>(pos)) = static_cast<std::uint8_t>(piece);
-        result.co.at(static_cast<std::size_t>(pos)) =
-            static_cast<std::uint8_t>(std::distance(faces.begin(), turned));
+        // Where the U/D sticker is: its index among the corner's faces.
+        result.co.at(static_cast<std::size_t>(pos)) = static_cast<std::uint8_t>(
+            std::distance(faces.begin(), std::ranges::find(faces, loc.face_a)));
     }
 
     for (std::size_t piece = 0; piece < kEdgeCount; ++piece) {

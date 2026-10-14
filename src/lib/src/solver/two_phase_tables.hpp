@@ -52,8 +52,9 @@ inline constexpr int kSlicePermCount = 24;
 // 18-move scheme (face * 3 + turns - 1, faces in the order U D L R F B):
 // U, U2, U', D, D2, D', L2, R2, F2, B2.
 inline constexpr int kPhase2MoveCount = 10;
-inline constexpr std::array<std::uint8_t, kPhase2MoveCount> kPhase2Moves = {0, 1, 2,  3,  4,
-                                                                            5, 7, 10, 13, 16};
+inline constexpr std::array<std::uint8_t, kPhase2MoveCount> kPhase2Moves = {
+    0, 1, 2, 3, 4, 5, 7, 10, 13, 16,
+};
 
 // ---------------------------------------------------------------------------
 // Coordinates
@@ -62,7 +63,7 @@ inline constexpr std::array<std::uint8_t, kPhase2MoveCount> kPhase2Moves = {0, 1
 [[nodiscard]] constexpr int twist_of(const CubieCube& c) noexcept {
     int value = 0;
     for (std::size_t i = 0; i < 7; ++i) {
-        value = value * 3 + c.co[i];
+        value = (value * 3) + c.co.at(i);
     }
     return value;
 }
@@ -70,7 +71,7 @@ inline constexpr std::array<std::uint8_t, kPhase2MoveCount> kPhase2Moves = {0, 1
 [[nodiscard]] constexpr int flip_of(const CubieCube& c) noexcept {
     int value = 0;
     for (std::size_t i = 0; i < 11; ++i) {
-        value = value * 2 + c.eo[i];
+        value = (value * 2) + c.eo.at(i);
     }
     return value;
 }
@@ -88,8 +89,8 @@ struct SliceNumbering {
     int next = 0;
     for (int mask = 4095; mask >= 0; --mask) {  // 0xF00 is the largest 4-bit mask: index 0
         if (std::popcount(static_cast<unsigned>(mask)) == 4) {
-            n.index_of_mask[static_cast<std::size_t>(mask)] = static_cast<std::uint16_t>(next);
-            n.mask_of_index[static_cast<std::size_t>(next)] = static_cast<std::uint16_t>(mask);
+            n.index_of_mask.at(static_cast<std::size_t>(mask)) = static_cast<std::uint16_t>(next);
+            n.mask_of_index.at(static_cast<std::size_t>(next)) = static_cast<std::uint16_t>(mask);
             ++next;
         }
     }
@@ -102,42 +103,44 @@ struct SliceNumbering {
 [[nodiscard]] inline int slice_of(const CubieCube& c) noexcept {
     unsigned mask = 0;
     for (std::size_t pos = 0; pos < 12; ++pos) {
-        if (c.ep[pos] >= 8) {
-            mask |= 1u << pos;
+        if (c.ep.at(pos) >= 8) {
+            mask |= 1U << pos;
         }
     }
-    return slice_numbering().index_of_mask[mask];
+    return slice_numbering().index_of_mask.at(mask);
 }
 
 // Rank of a permutation of 0..n-1 among all n! of them in lexicographic
 // order, identity = 0 (n <= 8). Each digit of the factorial-base number is the
 // count of values still to come that are smaller than this one, which is the
 // number of unplaced values below it.
-[[nodiscard]] constexpr int rank_permutation(const std::uint8_t* p, std::size_t n) noexcept {
-    unsigned unplaced = (1u << n) - 1u;
+template <std::size_t N>
+[[nodiscard]] constexpr int rank_permutation(const std::array<std::uint8_t, N>& p,
+                                             std::size_t n) noexcept {
+    unsigned unplaced = (1U << n) - 1U;
     int rank = 0;
     for (std::size_t i = 0; i < n; ++i) {
-        const unsigned bit = 1u << p[i];
-        rank = rank * static_cast<int>(n - i) + std::popcount(unplaced & (bit - 1u));
+        const unsigned bit = 1U << p.at(i);
+        rank = (rank * static_cast<int>(n - i)) + std::popcount(unplaced & (bit - 1U));
         unplaced &= ~bit;
     }
     return rank;
 }
 
 [[nodiscard]] constexpr int cperm_of(const CubieCube& c) noexcept {
-    return rank_permutation(c.cp.data(), 8);
+    return rank_permutation(c.cp, 8);
 }
 
 [[nodiscard]] constexpr int uedge_of(const CubieCube& c) noexcept {
-    return rank_permutation(c.ep.data(), 8);  // phase 2 only: pieces 0..7 sit in positions 0..7
+    return rank_permutation(c.ep, 8);  // phase 2 only: pieces 0..7 sit in positions 0..7
 }
 
 [[nodiscard]] constexpr int sperm_of(const CubieCube& c) noexcept {
     std::array<std::uint8_t, 4> p{};
     for (std::size_t i = 0; i < 4; ++i) {
-        p[i] = static_cast<std::uint8_t>(c.ep[8 + i] - 8);
+        p.at(i) = static_cast<std::uint8_t>(c.ep.at(8 + i) - 8);
     }
-    return rank_permutation(p.data(), 4);
+    return rank_permutation(p, 4);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,95 +162,105 @@ struct SliceNumbering {
 // per-entry multiply() gives; tests/unit/solver/two_phase_test.cpp checks
 // every entry against exactly that.
 
-constexpr void fill_twist_moves(std::uint16_t* out) noexcept {
+template <std::size_t N>
+constexpr void fill_twist_moves(std::array<std::uint16_t, N>& out) noexcept {
     // The eighth corner's twist is whatever makes the total 0 mod 3.
     std::array<std::uint8_t, static_cast<std::size_t>(kTwistCount) * 8> digit{};
     for (int v = 0; v < kTwistCount; ++v) {
-        unsigned rest = static_cast<unsigned>(v);
+        auto rest = static_cast<unsigned>(v);
         unsigned sum = 0;
-        std::uint8_t* const d = digit.data() + static_cast<std::size_t>(v) * 8;
-        for (int i = 6; i >= 0; --i) {
-            d[i] = static_cast<std::uint8_t>(rest % 3);
-            sum += rest % 3;
-            rest /= 3;
+        const std::size_t base = static_cast<std::size_t>(v) * 8;
+        for (std::size_t i = 7; i > 0; --i) {  // corners 6 down to 0
+            digit.at(base + i - 1) = static_cast<std::uint8_t>(rest % 3U);
+            sum += rest % 3U;
+            rest /= 3U;
         }
-        d[7] = static_cast<std::uint8_t>((3 - sum % 3) % 3);
+        digit.at(base + 7) = static_cast<std::uint8_t>((3U - (sum % 3U)) % 3U);
     }
     for (std::size_t face = 0; face < kQuarterTurns.size(); ++face) {
-        const std::uint8_t* const from = kQuarterTurns[face].cp.data();
-        const std::uint8_t* const plus = kQuarterTurns[face].co.data();
+        const auto& from = kQuarterTurns.at(face).cp;
+        const auto& plus = kQuarterTurns.at(face).co;
         for (int v = 0; v < kTwistCount; ++v) {
             // multiply(): the corner at position i afterwards is the one that
             // was at from[i] before, twisted by plus[i] more.
-            const std::uint8_t* const d = digit.data() + static_cast<std::size_t>(v) * 8;
-            out[static_cast<std::size_t>(v) * kMoveCount + face * 3] = static_cast<std::uint16_t>(
-                ((d[from[0]] + plus[0]) % 3) * 729 + ((d[from[1]] + plus[1]) % 3) * 243 +
-                ((d[from[2]] + plus[2]) % 3) * 81 + ((d[from[3]] + plus[3]) % 3) * 27 +
-                ((d[from[4]] + plus[4]) % 3) * 9 + ((d[from[5]] + plus[5]) % 3) * 3 +
-                ((d[from[6]] + plus[6]) % 3));
+            const std::size_t base = static_cast<std::size_t>(v) * 8;
+            const auto twisted = [&](std::size_t i) -> unsigned {
+                return (static_cast<unsigned>(digit.at(base + from.at(i))) + plus.at(i)) % 3U;
+            };
+            out.at((static_cast<std::size_t>(v) * kMoveCount) + (face * 3)) =
+                static_cast<std::uint16_t>((twisted(0) * 729U) + (twisted(1) * 243U) +
+                                           (twisted(2) * 81U) + (twisted(3) * 27U) +
+                                           (twisted(4) * 9U) + (twisted(5) * 3U) + twisted(6));
         }
     }
 }
 
-constexpr void fill_flip_moves(std::uint16_t* out) noexcept {
+template <std::size_t N>
+constexpr void fill_flip_moves(std::array<std::uint16_t, N>& out) noexcept {
     // The twelfth edge's flip is whatever makes the total 0 mod 2.
     std::array<std::uint8_t, static_cast<std::size_t>(kFlipCount) * 12> bit{};
     for (int v = 0; v < kFlipCount; ++v) {
-        unsigned rest = static_cast<unsigned>(v);
+        auto rest = static_cast<unsigned>(v);
         unsigned sum = 0;
-        std::uint8_t* const b = bit.data() + static_cast<std::size_t>(v) * 12;
-        for (int i = 10; i >= 0; --i) {
-            b[i] = static_cast<std::uint8_t>(rest & 1u);
-            sum += rest & 1u;
-            rest >>= 1;
+        const std::size_t base = static_cast<std::size_t>(v) * 12;
+        for (std::size_t i = 11; i > 0; --i) {  // edges 10 down to 0
+            bit.at(base + i - 1) = static_cast<std::uint8_t>(rest & 1U);
+            sum += rest & 1U;
+            rest >>= 1U;
         }
-        b[11] = static_cast<std::uint8_t>(sum & 1u);
+        bit.at(base + 11) = static_cast<std::uint8_t>(sum & 1U);
     }
     for (std::size_t face = 0; face < kQuarterTurns.size(); ++face) {
-        const std::uint8_t* const from = kQuarterTurns[face].ep.data();
-        const std::uint8_t* const plus = kQuarterTurns[face].eo.data();
+        const auto& from = kQuarterTurns.at(face).ep;
+        const auto& plus = kQuarterTurns.at(face).eo;
         for (int v = 0; v < kFlipCount; ++v) {
-            const std::uint8_t* const b = bit.data() + static_cast<std::size_t>(v) * 12;
-            out[static_cast<std::size_t>(v) * kMoveCount + face * 3] = static_cast<std::uint16_t>(
-                ((b[from[0]] ^ plus[0]) << 10) | ((b[from[1]] ^ plus[1]) << 9) |
-                ((b[from[2]] ^ plus[2]) << 8) | ((b[from[3]] ^ plus[3]) << 7) |
-                ((b[from[4]] ^ plus[4]) << 6) | ((b[from[5]] ^ plus[5]) << 5) |
-                ((b[from[6]] ^ plus[6]) << 4) | ((b[from[7]] ^ plus[7]) << 3) |
-                ((b[from[8]] ^ plus[8]) << 2) | ((b[from[9]] ^ plus[9]) << 1) |
-                (b[from[10]] ^ plus[10]));
+            const std::size_t base = static_cast<std::size_t>(v) * 12;
+            const auto flipped = [&](std::size_t i) -> unsigned {
+                return static_cast<unsigned>(bit.at(base + from.at(i))) ^
+                       static_cast<unsigned>(plus.at(i));
+            };
+            out.at((static_cast<std::size_t>(v) * kMoveCount) + (face * 3)) =
+                static_cast<std::uint16_t>((flipped(0) << 10U) | (flipped(1) << 9U) |
+                                           (flipped(2) << 8U) | (flipped(3) << 7U) |
+                                           (flipped(4) << 6U) | (flipped(5) << 5U) |
+                                           (flipped(6) << 4U) | (flipped(7) << 3U) |
+                                           (flipped(8) << 2U) | (flipped(9) << 1U) | flipped(10));
         }
     }
 }
 
-constexpr void fill_slice_moves(std::uint16_t* out, const SliceNumbering& n) noexcept {
+template <std::size_t N>
+constexpr void fill_slice_moves(std::array<std::uint16_t, N>& out,
+                                const SliceNumbering& n) noexcept {
     for (std::size_t face = 0; face < kQuarterTurns.size(); ++face) {
-        const std::uint8_t* const from = kQuarterTurns[face].ep.data();
+        const auto& from = kQuarterTurns.at(face).ep;
         for (int v = 0; v < kSliceCount; ++v) {
             // A position holds a slice edge afterwards if the position it
             // takes its piece from did.
-            const unsigned mask = n.mask_of_index[static_cast<std::size_t>(v)];
-            const unsigned moved =
-                ((mask >> from[0]) & 1u) | (((mask >> from[1]) & 1u) << 1) |
-                (((mask >> from[2]) & 1u) << 2) | (((mask >> from[3]) & 1u) << 3) |
-                (((mask >> from[4]) & 1u) << 4) | (((mask >> from[5]) & 1u) << 5) |
-                (((mask >> from[6]) & 1u) << 6) | (((mask >> from[7]) & 1u) << 7) |
-                (((mask >> from[8]) & 1u) << 8) | (((mask >> from[9]) & 1u) << 9) |
-                (((mask >> from[10]) & 1u) << 10) | (((mask >> from[11]) & 1u) << 11);
-            out[static_cast<std::size_t>(v) * kMoveCount + face * 3] = n.index_of_mask[moved];
+            const unsigned mask = n.mask_of_index.at(static_cast<std::size_t>(v));
+            const auto held = [&](std::size_t i) -> unsigned { return (mask >> from.at(i)) & 1U; };
+            const unsigned moved = held(0) | (held(1) << 1U) | (held(2) << 2U) | (held(3) << 3U) |
+                                   (held(4) << 4U) | (held(5) << 5U) | (held(6) << 6U) |
+                                   (held(7) << 7U) | (held(8) << 8U) | (held(9) << 9U) |
+                                   (held(10) << 10U) | (held(11) << 11U);
+            out.at((static_cast<std::size_t>(v) * kMoveCount) + (face * 3)) =
+                n.index_of_mask.at(moved);
         }
     }
 }
 
 // Completes the table from its quarter-turn columns: X2 is X then X, X' is X
 // then X then X. `count` rows of kMoveCount.
-constexpr void fill_derived_turns(std::uint16_t* table, std::size_t count) noexcept {
+template <std::size_t N>
+constexpr void fill_derived_turns(std::array<std::uint16_t, N>& table, std::size_t count) noexcept {
     for (std::size_t v = 0; v < count; ++v) {
-        std::uint16_t* const row = table + v * kMoveCount;
+        const std::size_t row = v * kMoveCount;
         for (std::size_t face = 0; face < 6; ++face) {
             const std::size_t quarter = face * 3;
-            row[quarter + 1] = table[static_cast<std::size_t>(row[quarter]) * kMoveCount + quarter];
-            row[quarter + 2] =
-                table[static_cast<std::size_t>(row[quarter + 1]) * kMoveCount + quarter];
+            table.at(row + quarter + 1) = table.at(
+                (static_cast<std::size_t>(table.at(row + quarter)) * kMoveCount) + quarter);
+            table.at(row + quarter + 2) = table.at(
+                (static_cast<std::size_t>(table.at(row + quarter + 1)) * kMoveCount) + quarter);
         }
     }
 }
@@ -260,12 +273,12 @@ struct Phase1MoveTables {
     std::array<std::uint16_t, static_cast<std::size_t>(kSliceCount) * kMoveCount> slice{};
 
     constexpr explicit Phase1MoveTables(const SliceNumbering& numbering) noexcept {
-        fill_twist_moves(twist.data());
-        fill_derived_turns(twist.data(), kTwistCount);
-        fill_flip_moves(flip.data());
-        fill_derived_turns(flip.data(), kFlipCount);
-        fill_slice_moves(slice.data(), numbering);
-        fill_derived_turns(slice.data(), kSliceCount);
+        fill_twist_moves(twist);
+        fill_derived_turns(twist, kTwistCount);
+        fill_flip_moves(flip);
+        fill_derived_turns(flip, kFlipCount);
+        fill_slice_moves(slice, numbering);
+        fill_derived_turns(slice, kSliceCount);
     }
 };
 
@@ -291,19 +304,19 @@ template <std::size_t N>
     static_assert(N >= 1 && N <= 8, "the factorials below stop at 8!");
     constexpr std::array<std::size_t, 9> kFactorial = {1, 1, 2, 6, 24, 120, 720, 5040, 40320};
     std::array<std::uint8_t, N> p{};
-    unsigned unplaced = (1u << N) - 1u;
+    unsigned unplaced = (1U << N) - 1U;
     for (std::size_t i = 0; i < N; ++i) {
-        const std::size_t place = kFactorial[N - 1 - i];
+        const std::size_t place = kFactorial.at(N - 1 - i);
         // The digit is how many unplaced values come before this one.
         std::size_t before = rank / place;
         rank %= place;
         unsigned bits = unplaced;
         for (; before > 0; --before) {
-            bits &= bits - 1u;  // drop the lowest set bit
+            bits &= bits - 1U;  // drop the lowest set bit
         }
         const auto value = static_cast<unsigned>(std::countr_zero(bits));
-        p[i] = static_cast<std::uint8_t>(value);
-        unplaced &= ~(1u << value);
+        p.at(i) = static_cast<std::uint8_t>(value);
+        unplaced &= ~(1U << value);
     }
     return p;
 }
@@ -313,42 +326,111 @@ template <std::size_t N>
 // ten moves keep the U/D edges among positions 0..7, so both are the same
 // computation on a different half of the cubie. Only U, D and the four half
 // turns need a rank taken; U2, U', D2 and D' are U and D composed.
-inline void fill_perm_moves(std::uint16_t* out, bool edges) noexcept {
+template <std::size_t N>
+inline void fill_perm_moves(std::array<std::uint16_t, N>& out, bool edges) noexcept {
     constexpr std::array<std::size_t, 6> kBase = {0, 3, 6, 7, 8, 9};  // U D L2 R2 F2 B2
     std::array<std::uint8_t, 8> q{};
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kPermCount); ++rank) {
         const std::array<std::uint8_t, 8> p = permutation_of_rank<8>(rank);
         for (const std::size_t i : kBase) {
-            const CubieCube& move = move_cubie(kPhase2Moves[i]);
-            const std::uint8_t* const from = edges ? move.ep.data() : move.cp.data();
+            const CubieCube& move = move_cubie(kPhase2Moves.at(i));
             for (std::size_t pos = 0; pos < 8; ++pos) {
-                q[pos] = p[from[pos]];  // multiply(): `pos` takes the piece that was at from[pos]
+                // multiply(): `pos` takes the piece that was at from[pos]
+                const std::size_t from = edges ? move.ep.at(pos) : move.cp.at(pos);
+                q.at(pos) = p.at(from);
             }
-            out[rank * kPhase2MoveCount + i] =
-                static_cast<std::uint16_t>(rank_permutation(q.data(), 8));
+            out.at((rank * kPhase2MoveCount) + i) =
+                static_cast<std::uint16_t>(rank_permutation(q, 8));
         }
     }
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kPermCount); ++rank) {
-        std::uint16_t* const row = out + rank * kPhase2MoveCount;
+        const std::size_t row = rank * kPhase2MoveCount;
         for (const std::size_t i : {std::size_t{0}, std::size_t{3}}) {  // U, D
-            row[i + 1] = out[std::size_t{row[i]} * kPhase2MoveCount + i];
-            row[i + 2] = out[std::size_t{row[i + 1]} * kPhase2MoveCount + i];
+            out.at(row + i + 1) = out.at((std::size_t{out.at(row + i)} * kPhase2MoveCount) + i);
+            out.at(row + i + 2) = out.at((std::size_t{out.at(row + i + 1)} * kPhase2MoveCount) + i);
         }
     }
 }
 
 // The middle-layer edges' permutation (4! = 24) over the ten moves.
-inline void fill_sperm_moves(std::uint16_t* out) noexcept {
+template <std::size_t N>
+inline void fill_sperm_moves(std::array<std::uint16_t, N>& out) noexcept {
     std::array<std::uint8_t, 4> q{};
     for (std::size_t rank = 0; rank < static_cast<std::size_t>(kSlicePermCount); ++rank) {
         const std::array<std::uint8_t, 4> p = permutation_of_rank<4>(rank);
         for (std::size_t i = 0; i < static_cast<std::size_t>(kPhase2MoveCount); ++i) {
-            const CubieCube& move = move_cubie(kPhase2Moves[i]);
+            const CubieCube& move = move_cubie(kPhase2Moves.at(i));
             for (std::size_t k = 0; k < 4; ++k) {
-                q[k] = p[move.ep[8 + k] - 8u];
+                q.at(k) = p.at(move.ep.at(8 + k) - 8U);
             }
-            out[rank * kPhase2MoveCount + i] =
-                static_cast<std::uint16_t>(rank_permutation(q.data(), 4));
+            out.at((rank * kPhase2MoveCount) + i) =
+                static_cast<std::uint16_t>(rank_permutation(q, 4));
+        }
+    }
+}
+
+// The exact distance from the goal (both coordinates 0) to every pair of
+// coordinates, [first * SecondCount + second], by breadth-first search. The
+// move set is closed under inversion, so distance *from* the goal is
+// distance *to* it, and every pair is reachable, so the table fills
+// completely; the empty-frontier exit is a guard, not the normal ending.
+//
+// A level can be found two ways: expand every pair at the current depth
+// (cost: frontier x moves), or ask every still-unfilled pair whether any
+// neighbour is at the current depth (cost: unfilled x a few probes). The
+// first wins while the frontier is small and the second once most of the table
+// is filled, where the frontier is hundreds of thousands of pairs and the
+// unfilled few; this picks the cheaper at each depth. Either way the pairs
+// found are exactly those at depth + 1 - a pair's distance is a property of the
+// pair - so the table is the same whichever is chosen.
+// Distances in a pruning table that has not been reached yet.
+inline constexpr std::uint8_t kPruneUnset = 0xFF;
+
+// One level found by expanding every pair at the current depth: each of the
+// frontier's neighbours that is still unset is at depth + 1.
+template <std::size_t SecondCount, std::size_t MoveCount>
+void expand_frontier(auto& table, const auto& first_move, const auto& second_move,
+                     const std::vector<std::uint32_t>& frontier, std::uint8_t mark,
+                     std::vector<std::uint32_t>& next) {
+    for (const std::uint32_t index : frontier) {
+        const std::size_t first_base = (index / SecondCount) * MoveCount;
+        const std::size_t second_base = (index % SecondCount) * MoveCount;
+        for (std::size_t m = 0; m < MoveCount; ++m) {
+            const std::size_t to =
+                (static_cast<std::size_t>(first_move.at(first_base + m)) * SecondCount) +
+                second_move.at(second_base + m);
+            if (table.at(to) == kPruneUnset) {
+                table.at(to) = mark;
+                next.push_back(static_cast<std::uint32_t>(to));
+            }
+        }
+    }
+}
+
+// One level found the other way: ask every still-unset pair whether any
+// neighbour is at the current depth.
+template <std::size_t FirstCount, std::size_t SecondCount, std::size_t MoveCount>
+void probe_unfilled(auto& table, const auto& first_move, const auto& second_move,
+                    std::uint8_t depth, std::vector<std::uint32_t>& next) {
+    const auto mark = static_cast<std::uint8_t>(depth + 1);
+    for (std::size_t first = 0; first < FirstCount; ++first) {
+        const std::size_t first_base = first * MoveCount;
+        const std::size_t row = first * SecondCount;
+        for (std::size_t second = 0; second < SecondCount; ++second) {
+            if (table.at(row + second) != kPruneUnset) {
+                continue;
+            }
+            const std::size_t second_base = second * MoveCount;
+            for (std::size_t m = 0; m < MoveCount; ++m) {
+                const std::size_t to =
+                    (static_cast<std::size_t>(first_move.at(first_base + m)) * SecondCount) +
+                    second_move.at(second_base + m);
+                if (table.at(to) == depth) {
+                    table.at(row + second) = mark;
+                    next.push_back(static_cast<std::uint32_t>(row + second));
+                    break;
+                }
+            }
         }
     }
 }
@@ -368,57 +450,28 @@ inline void fill_sperm_moves(std::uint16_t* out) noexcept {
 // found are exactly those at depth + 1 - a pair's distance is a property of the
 // pair - so the table is the same whichever is chosen.
 template <std::size_t FirstCount, std::size_t SecondCount, std::size_t MoveCount>
-inline void fill_prune(std::uint8_t* table, const std::uint16_t* first_move,
-                       const std::uint16_t* second_move) {
+inline void fill_prune(auto& table, const auto& first_move, const auto& second_move) {
     constexpr std::size_t kTotal = FirstCount * SecondCount;
-    constexpr std::uint8_t kUnset = 0xFF;
     // Probes an unfilled pair typically needs before it finds a neighbour at
     // the current depth (measured: 3 to 5 on these tables).
     constexpr std::size_t kProbesPerUnfilled = 4;
 
-    std::fill_n(table, kTotal, kUnset);
-    table[0] = 0;
+    table.fill(kPruneUnset);
+    table.at(0) = 0;
     std::vector<std::uint32_t> frontier{0};
     std::vector<std::uint32_t> next;
     frontier.reserve(kTotal / 2);
     next.reserve(kTotal / 2);
     std::size_t filled = 1;
-    for (std::uint8_t depth = 0; filled < kTotal && depth < kUnset - 1; ++depth) {
+    for (std::uint8_t depth = 0; filled < kTotal && depth < kPruneUnset - 1; ++depth) {
         const auto mark = static_cast<std::uint8_t>(depth + 1);
         next.clear();
         if (frontier.size() * MoveCount <= (kTotal - filled) * kProbesPerUnfilled) {
-            for (const std::uint32_t index : frontier) {
-                const std::size_t first = index / SecondCount;
-                const std::size_t second = index % SecondCount;
-                const std::uint16_t* const first_to = first_move + first * MoveCount;
-                const std::uint16_t* const second_to = second_move + second * MoveCount;
-                for (std::size_t m = 0; m < MoveCount; ++m) {
-                    const std::size_t to = first_to[m] * SecondCount + second_to[m];
-                    if (table[to] == kUnset) {
-                        table[to] = mark;
-                        next.push_back(static_cast<std::uint32_t>(to));
-                    }
-                }
-            }
+            expand_frontier<SecondCount, MoveCount>(table, first_move, second_move, frontier, mark,
+                                                    next);
         } else {
-            for (std::size_t first = 0; first < FirstCount; ++first) {
-                const std::uint16_t* const first_to = first_move + first * MoveCount;
-                std::uint8_t* const row = table + first * SecondCount;
-                for (std::size_t second = 0; second < SecondCount; ++second) {
-                    if (row[second] != kUnset) {
-                        continue;
-                    }
-                    const std::uint16_t* const second_to = second_move + second * MoveCount;
-                    for (std::size_t m = 0; m < MoveCount; ++m) {
-                        if (table[first_to[m] * SecondCount + second_to[m]] == depth) {
-                            row[second] = mark;
-                            next.push_back(
-                                static_cast<std::uint32_t>(first * SecondCount + second));
-                            break;
-                        }
-                    }
-                }
-            }
+            probe_unfilled<FirstCount, SecondCount, MoveCount>(table, first_move, second_move,
+                                                               depth, next);
         }
         if (next.empty()) {
             break;
@@ -437,24 +490,27 @@ inline void run_concurrently(const std::vector<std::function<void()>>& tasks) {
     std::vector<std::exception_ptr> failures(tasks.size());
     auto guarded = [&tasks, &failures](std::size_t i) {
         try {
-            tasks[i]();
+            tasks.at(i)();
         } catch (...) {
-            failures[i] = std::current_exception();
+            failures.at(i) = std::current_exception();
         }
     };
     std::vector<std::thread> workers;
     workers.reserve(tasks.size());
     const bool can_overlap = std::thread::hardware_concurrency() != 1;
     for (std::size_t i = 1; i < tasks.size(); ++i) {
+        bool started = false;
         if (can_overlap) {
             try {
                 workers.emplace_back(guarded, i);
-                continue;
+                started = true;
             } catch (...) {
-                // Out of threads: fall through and do the work here.
+                started = false;  // out of threads: do the work here instead
             }
         }
-        guarded(i);
+        if (!started) {
+            guarded(i);
+        }
     }
     guarded(0);
     for (std::thread& worker : workers) {
@@ -489,25 +545,25 @@ struct Phase2Tables {
     // equal pieces of work.
     Phase2Tables() {
         const Phase1MoveTables& p1 = phase1_move_tables();
-        fill_sperm_moves(sperm_move.data());  // 24 x 10 entries; both phase 2 tables read it
+        fill_sperm_moves(sperm_move);  // 24 x 10 entries; both phase 2 tables read it
         run_concurrently({
             [this, &p1] {
-                fill_prune<kTwistCount, kSliceCount, kMoveCount>(twist_slice_prune.data(),
-                                                                 p1.twist.data(), p1.slice.data());
+                fill_prune<kTwistCount, kSliceCount, kMoveCount>(twist_slice_prune, p1.twist,
+                                                                 p1.slice);
             },
             [this, &p1] {
-                fill_prune<kFlipCount, kSliceCount, kMoveCount>(flip_slice_prune.data(),
-                                                                p1.flip.data(), p1.slice.data());
+                fill_prune<kFlipCount, kSliceCount, kMoveCount>(flip_slice_prune, p1.flip,
+                                                                p1.slice);
             },
             [this] {
-                fill_perm_moves(cperm_move.data(), false);
-                fill_prune<kPermCount, kSlicePermCount, kPhase2MoveCount>(
-                    cperm_sperm_prune.data(), cperm_move.data(), sperm_move.data());
+                fill_perm_moves(cperm_move, false);
+                fill_prune<kPermCount, kSlicePermCount, kPhase2MoveCount>(cperm_sperm_prune,
+                                                                          cperm_move, sperm_move);
             },
             [this] {
-                fill_perm_moves(uedge_move.data(), true);
-                fill_prune<kPermCount, kSlicePermCount, kPhase2MoveCount>(
-                    uedge_sperm_prune.data(), uedge_move.data(), sperm_move.data());
+                fill_perm_moves(uedge_move, true);
+                fill_prune<kPermCount, kSlicePermCount, kPhase2MoveCount>(uedge_sperm_prune,
+                                                                          uedge_move, sperm_move);
             },
         });
     }

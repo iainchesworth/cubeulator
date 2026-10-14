@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -90,13 +91,42 @@ void append_json_string(std::string& out, const std::string& text) {
     out.push_back('"');
 }
 
+// The manifest's string fields, by name: a type of its own so that the text
+// and the key cannot be passed the wrong way round.
+enum class ManifestField : std::uint8_t {
+    state,
+    lighting,
+    motion_script,
+    camera,
+    intrinsics,
+    cube,
+};
+
+constexpr std::string_view field_name(ManifestField field) noexcept {
+    switch (field) {
+        case ManifestField::state:
+            return "state";
+        case ManifestField::lighting:
+            return "lighting";
+        case ManifestField::motion_script:
+            return "motion_script";
+        case ManifestField::camera:
+            return "camera";
+        case ManifestField::intrinsics:
+            return "intrinsics";
+        case ManifestField::cube:
+            return "cube";
+    }
+    return {};
+}
+
 // Tiny flat-object JSON value reader: given the raw file text, finds
 // "key" and returns its string value, std::nullopt for null/absent.
 // Tolerant by design (unknown keys ignored, ordering free); NOT a general
 // JSON parser - the manifest is a flat object of string-or-null values
 // per docs/recording-format.md.
-std::optional<std::string> json_string_field(const std::string& text, const std::string& key) {
-    const std::string needle = "\"" + key + "\"";
+std::optional<std::string> json_string_field(const std::string& text, ManifestField field) {
+    const std::string needle = "\"" + std::string(field_name(field)) + "\"";
     std::size_t pos = text.find(needle);
     if (pos == std::string::npos) {
         return std::nullopt;
@@ -224,24 +254,21 @@ std::optional<Manifest> read_manifest(const std::string& dir) {
         return std::nullopt;
     }
     Manifest manifest;
-    manifest.state = json_string_field(text, "state");
-    manifest.lighting = json_string_field(text, "lighting").value_or("");
-    manifest.motion_script = json_string_field(text, "motion_script").value_or("");
-    manifest.camera = json_string_field(text, "camera").value_or("");
-    manifest.intrinsics = json_string_field(text, "intrinsics");
-    manifest.cube = json_string_field(text, "cube").value_or("");
+    manifest.state = json_string_field(text, ManifestField::state);
+    manifest.lighting = json_string_field(text, ManifestField::lighting).value_or("");
+    manifest.motion_script = json_string_field(text, ManifestField::motion_script).value_or("");
+    manifest.camera = json_string_field(text, ManifestField::camera).value_or("");
+    manifest.intrinsics = json_string_field(text, ManifestField::intrinsics);
+    manifest.cube = json_string_field(text, ManifestField::cube).value_or("");
     return manifest;
 }
 
-std::optional<std::string> check_recording(const std::string& dir) {
-    std::ifstream index_stream(fs::path(dir) / std::string(kIndexCsvName));
-    if (!index_stream) {
-        return "no " + std::string(kIndexCsvName) + " under " + dir;
-    }
-    const auto rows = read_index(index_stream);
-    if (rows.empty()) {
-        return "index has no rows";
-    }
+namespace {
+
+// The index rows are one pass each, in order, with time not going backwards,
+// and every frame that was not overwritten is on disk.
+std::optional<std::string> index_problem(const std::string& dir,
+                                         const std::vector<RecordedFrameInfo>& rows) {
     int max_pass = 0;
     for (const auto& row : rows) {
         max_pass = std::max(max_pass, row.pass);
@@ -270,33 +297,69 @@ std::optional<std::string> check_recording(const std::string& dir) {
             return "missing full-res frame " + std::string(kFullResSubdir) + "/" + name;
         }
     }
+    return std::nullopt;
+}
+
+// Recorder-side drop audit (recording_stats.json, written by stop()). Absent
+// file = pre-v2 or externally-assembled recording: no verdict.
+std::optional<std::string> recorder_drop_problem(const std::string& dir) {
+    std::ifstream stats_file(fs::path(dir) / "recording_stats.json");
+    if (!stats_file) {
+        return std::nullopt;
+    }
+    std::stringstream buffer;
+    buffer << stats_file.rdbuf();
+    const std::string text = buffer.str();
+    const auto pos = text.find("\"dropped\"");
+    if (pos == std::string::npos) {
+        return std::nullopt;
+    }
+    const auto colon = text.find(':', pos);
+    if (colon == std::string::npos) {
+        return std::nullopt;
+    }
+    // The number after the colon; a stream reads it without atoi's silent
+    // zero for text and without pointer arithmetic.
+    int dropped = 0;
+    std::istringstream{text.substr(colon + 1)} >> dropped;
+    if (dropped <= 0) {
+        return std::nullopt;
+    }
+    return "recorder dropped " + std::to_string(dropped) + " frame(s) (queue overflow)";
+}
+
+}  // namespace
+
+std::optional<std::string> check_recording(const std::string& dir) {
+    std::ifstream index_stream(fs::path(dir) / std::string(kIndexCsvName));
+    if (!index_stream) {
+        return "no " + std::string(kIndexCsvName) + " under " + dir;
+    }
+    const auto rows = read_index(index_stream);
+    if (rows.empty()) {
+        return "index has no rows";
+    }
+    if (auto problem = index_problem(dir, rows)) {
+        return problem;
+    }
     if (const auto manifest = read_manifest(dir); manifest && manifest->state) {
         if (auto problem = state_string_problem(*manifest->state)) {
             return "manifest state invalid: " + *problem;
         }
     }
-    // Recorder-side drop audit (recording_stats.json, written by stop()).
-    // Absent file = pre-v2 or externally-assembled recording: no verdict.
-    if (std::ifstream stats_file(fs::path(dir) / "recording_stats.json"); stats_file) {
-        std::stringstream buffer;
-        buffer << stats_file.rdbuf();
-        const std::string text = buffer.str();
-        if (const auto pos = text.find("\"dropped\""); pos != std::string::npos) {
-            if (const auto colon = text.find(':', pos); colon != std::string::npos) {
-                const int dropped = std::atoi(text.c_str() + colon + 1);
-                if (dropped > 0) {
-                    return "recorder dropped " + std::to_string(dropped) +
-                           " frame(s) (queue overflow)";
-                }
-            }
-        }
-    }
-    return std::nullopt;
+    return recorder_drop_problem(dir);
 }
 
 AsyncRecorder::~AsyncRecorder() {
-    if (running_) {
+    if (!running_) {
+        return;
+    }
+    // A destructor must not throw (joining the writer can, in principle), and
+    // there is no caller to tell: say so on stderr and carry on.
+    try {
         (void)stop();
+    } catch (...) {
+        std::fputs("AsyncRecorder: stopping the writer failed during destruction\n", stderr);
     }
 }
 
