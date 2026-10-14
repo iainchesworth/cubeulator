@@ -3,11 +3,12 @@
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/solver/solver.hpp>
 
+#include "platform/web/app_lookup_web.hpp"
+
 #include <emscripten.h>
 
 #include <QCoreApplication>
 #include <QEvent>
-#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -16,13 +17,11 @@
 #include <QMetaProperty>
 #include <QObject>
 #include <QPointF>
-#include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QString>
 #include <QStringList>
 #include <QVariant>
-#include <QWindow>
 
 #include <array>
 #include <cstddef>
@@ -54,6 +53,9 @@ void cube_web_driver_install();
 
 namespace {
 
+using cube::platform::web::engine_of;
+using cube::platform::web::main_window;
+using cube::platform::web::singleton;
 using cube::solver::Color;
 using cube::solver::Face;
 
@@ -74,47 +76,6 @@ const char* hold(const QJsonValue& value) {
     const std::scoped_lock lock(g_text_mutex);
     g_text.assign(bytes.constData(), static_cast<std::size_t>(bytes.size()));
     return g_text.c_str();
-}
-
-QQuickWindow* main_window() {
-    for (QWindow* window : QGuiApplication::topLevelWindows()) {
-        if (auto* quick = qobject_cast<QQuickWindow*>(window)) {
-            return quick;
-        }
-    }
-    return nullptr;
-}
-
-// The engine that loaded the app. The window and the items Qt Quick Controls
-// make for it are made from C++ and have none; the app's own items, made from
-// its QML, do.
-QQmlEngine* engine_of_item(const QQuickItem* item) {
-    if (QQmlEngine* engine = qmlEngine(item)) {
-        return engine;
-    }
-    for (const QQuickItem* child : item->childItems()) {
-        if (QQmlEngine* engine = engine_of_item(child)) {
-            return engine;
-        }
-    }
-    return nullptr;
-}
-
-QQmlEngine* engine_of(QQuickWindow* window) {
-    if (window == nullptr) {
-        return nullptr;
-    }
-    if (QQmlEngine* engine = qmlEngine(window)) {
-        return engine;
-    }
-    return engine_of_item(window->contentItem());
-}
-
-QObject* singleton(QQmlEngine* engine, const QString& name) {
-    if (engine == nullptr) {
-        return nullptr;
-    }
-    return engine->singletonInstance<QObject*>("Cubeulator", name.toLatin1().constData());
 }
 
 // Every readable property that has a JSON form. A colour becomes "#rrggbb"; an

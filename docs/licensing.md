@@ -129,7 +129,7 @@ same for Quick 3D and Shader Tools (see section 3).
 | module (as linked or imported) | linked by | offered under | ships |
 |---|---|---|---|
 | Qt Core, GUI, Concurrent, Network, OpenGL | `cube_app*`; Network and OpenGL are dependencies of Qml and Quick | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W M L A I |
-| Qt Qml, Quick, Quick Controls 2 (+ Templates 2), Labs Settings | `cube_app`, QML imports | same | W M L A I |
+| Qt Qml, Quick, Quick Controls 2 (+ Templates 2), QmlCore (`QtCore`'s `Settings`) | `cube_app`, QML imports | same | W M L A I |
 | **Qt Quick 3D** (Quick3D, Quick3DRuntimeRender, Quick3DUtils, Quick3DHelpers, Quick3DHelpersImpl) | `cube_app`; `import QtQuick3D`, `QtQuick3D.Helpers` in `Cube3DView.qml` | **Commercial OR GPL-3.0-only** | W M L A I |
 | Qt Shader Tools (runtime library) | pulled in by Quick 3D (`Quick3DRuntimeRender` DEPENDS_ON `ShaderTools`) [V: SBOM]; the custom materials bake `*.frag` at run time | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W M L A I |
 | `qsb` (the shader baker), `moc`, `rcc`, `uic`, `lrelease`, `lupdate`, `windeployqt`, `androiddeployqt` | build tools (`lrelease` and `lupdate` through `find_package(Qt6 ... LinguistTools)` for the translations) | Commercial OR GPL-3.0 **with the Qt GPL exception 1.0** | no - build time only; the exception covers their output |
