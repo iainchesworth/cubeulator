@@ -45,7 +45,8 @@ namespace cube::diagnostics {
 //  "confidence": [9]}]} - the sides indexed as ScanDiagnosis::sides is.
 [[nodiscard]] Json to_json(const cube::vision::ColorResolution& resolution);
 // {"path", "candidates", "corner_reads", "corner_fits", "chosen",
-//  "direct_error", "exchange", "error"}.
+//  "settling_corner", "direct_error", "exchange", "error"}. `settling_corner`
+// is the three centre colours of the corner to show, or null.
 [[nodiscard]] Json to_json(const cube::vision::AssemblyTrace& trace);
 // The whole evaluation: {"groups", "captured", "corner_reads", "sides":
 // [{"first_seen", "reads", "roll", "in_view", "lab": [9 of [L, a, b]]}],

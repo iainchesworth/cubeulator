@@ -77,6 +77,9 @@ public:
         REQUIRE(found.size() == 1);
         return found.front();
     }
+    [[nodiscard]] QString settling_text() const {
+        return item_->property("settlingText").toString();
+    }
     [[nodiscard]] bool mirrored() const { return item_->property("mirrored").toBool(); }
     void set_mirrored(bool mirrored) { REQUIRE(item_->setProperty("mirrored", mirrored)); }
 
@@ -160,6 +163,34 @@ TEST_CASE("the scan screen's picture and its dots flip together, and nothing els
             REQUIRE(screen.on_screen(item, {item->width(), 0.0}).x() == item->x() + item->width());
         }
     }
+}
+
+TEST_CASE("an ambiguous scan has the screen name the corner to show", "[qml][direct-scan]") {
+    cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
+    camera.setWatching(false);
+    camera.restart();
+
+    const auto patterned = cube::test::patterned_cube();
+    REQUIRE(patterned.has_value());
+    for (const Face face : cube::solver::kAllFaces) {
+        const cv::Mat frame =
+            draw_side(cube::test::outside_view(*patterned, face), cube::test::Pose{});
+        for (std::size_t i = 0; i < cube::vision::SideScan::kMinReads + 2; ++i) {
+            camera.processFrame(frame);
+        }
+        camera.processFrame(cube::test::room({640, 360}));
+    }
+    REQUIRE(camera.ambiguous());
+    REQUIRE(camera.settlingCorner().size() == 3);
+
+    Screen screen;
+    // The string for it - its own id when no catalogue is installed, as here -
+    // and not the generic instruction that does not say which corner.
+    const QString text = screen.settling_text();
+    CHECK_FALSE(text.isEmpty());
+
+    camera.restart();
+    CHECK(camera.settlingCorner().isEmpty());
 }
 
 // Pictures of the scan screen, for looking at rather than for checking.

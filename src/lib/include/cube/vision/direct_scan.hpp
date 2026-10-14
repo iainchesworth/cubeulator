@@ -131,6 +131,14 @@ struct AssemblyTrace {
     std::size_t corner_reads = 0;
     // The candidate the corner reads chose.
     std::optional<std::size_t> chosen;
+    // When the scan is ambiguous: the colours of the centres of the three sides
+    // that meet at the corner whose view would tell the most of the cubes still
+    // possible apart (those the corner reads so far fit best), in the order of
+    // solver::Color. Showing that corner - two or
+    // three sides in one view - is what settles the scan; a view of sides the
+    // candidates agree on, however long held, does not. Empty when nothing
+    // would, or when the scan is not ambiguous.
+    std::optional<std::array<solver::Color, 3>> settling_corner;
     // Why assembling the naming as it stands failed, when it was tried.
     std::optional<CubeError> direct_error;
     std::optional<NameExchange> exchange;
@@ -195,20 +203,30 @@ public:
     void reset();
 
     // Feed the frame's corner read - two or three sides in one view - when
-    // it has one. Square-on reads cannot say which way up each side is
-    // relative to its neighbours; a corner read can, and it is what settles
-    // the cubes that six flat sides put together two ways (R5 in
-    // docs/recovery-plan.md). Nothing is counted towards a side.
+    // it has one, and only for a frame that had no square-on read.
+    //
+    // Two things come of it. Square-on reads cannot say which way up each
+    // side is relative to its neighbours; a corner read can, and it is what
+    // settles the cubes that six flat sides put together two ways (R5 in
+    // docs/recovery-plan.md). And a cube held on a corner shows up to three
+    // sides at once, so each side of the read that was seen whole enough
+    // counts as a read of that side, as a square-on read does, subject to the
+    // same rule that it has held still: three sides are captured in the time
+    // it takes one. A side seen at an angle is lit a little differently from
+    // one seen square-on, so once a side has kMinReads square-on reads of its
+    // own its colours come from those alone.
     void add_corner(const std::optional<CornerRead>& read);
     // Corner reads kept so far; the newest few dozen.
     [[nodiscard]] std::size_t corner_reads() const noexcept { return corners_.size(); }
 
     // True when the frame just added counted as a read of some side, whether
     // or not that side has enough reads to be captured yet.
-    [[nodiscard]] bool reading() const noexcept { return in_view_.has_value(); }
+    [[nodiscard]] bool reading() const noexcept { return !in_view_.empty(); }
     // How many reads the side in the frame just added has, captured or not;
-    // zero when that frame was not a read. Against kMinReads this is how far
-    // a side being held is towards counting.
+    // zero when that frame was not a read. With several sides in view (a
+    // corner), the one with the fewest: the side that is still holding the
+    // capture up. Against kMinReads this is how far the sides being held are
+    // towards counting.
     [[nodiscard]] std::size_t reads_in_view() const noexcept;
 
     // The captured sides, in the order they were first seen. At most six: if
@@ -237,11 +255,20 @@ public:
 private:
     struct Group {
         std::array<cv::Vec3f, 9> fused{};
+        // Every read of the side, square-on or from a corner view.
         std::vector<std::array<cv::Vec3f, 9>> reads;
+        // The square-on ones among them, which the colours come from once
+        // there are enough.
+        std::vector<std::array<cv::Vec3f, 9>> flat_reads;
         int roll = 0;
     };
 
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
+    // Counts one read of nine colours towards the side it is, or starts a
+    // side with it, and puts that side among those in view. A read from a
+    // corner view that could be either of two sides is not counted, and
+    // nothing is started. Says whether it was counted.
+    bool count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
     // Joins groups that have turned out to be one side.
     void merge_alike_groups();
     // Bounds the groups kept, dropping the least-supported stray.
@@ -250,7 +277,11 @@ private:
     std::vector<Group> groups_;
     std::vector<CornerRead> corners_;
     std::optional<cv::Point2f> previous_centre_;
-    std::optional<std::size_t> in_view_;
+    // Where each side's centre was in the previous corner frame, for the rule
+    // that a side counts only if it has held still.
+    std::vector<cv::Point2f> previous_corner_centres_;
+    // The sides the frame just added counted towards.
+    std::vector<std::size_t> in_view_;
 };
 
 }  // namespace cube::vision

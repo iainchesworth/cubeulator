@@ -52,10 +52,7 @@ constexpr float kMaxLatticeRms = 0.12F;
 constexpr float kPatchHalfWidth = 0.30F;
 
 // Which side a read belongs to is decided by its CENTRE sticker, because the
-// centre never moves and a cube's six centres are six distinct colours:
-// resolve_colors refuses a scan whose centres sit closer than
-// kMinCentreSeedSeparationLab, so that is the least two real centres can be
-// apart. Everything below is derived from it rather than stated afresh.
+// centre never moves and a cube's six centres are six distinct colours.
 //
 // This used to be a mean over all nine stickers of colour_distance, under
 // 12. Two sides of one cube can differ in nothing but which of red and
@@ -65,44 +62,53 @@ constexpr float kPatchHalfWidth = 0.30F;
 // the two sides of the cube this was found on differed in three, 3 to 6 over
 // the nine, so they were fused into one: its medians were a blend of both,
 // the colours seemed to flip as either was shown, and the scan waited for a
-// sixth side it had already swallowed. Their centres were 16 Lab units apart
-// in plain Lab.
+// sixth side it had already swallowed. Their centres were 16 to 20 Lab units
+// apart in plain Lab.
 
-// Two stickers further apart than this are two colours: the floor
-// resolve_colors holds centres to.
-constexpr float kDifferentColourLab = kMinCentreSeedSeparationLab;
+// Two stickers within this of each other, in plain Lab with lightness at full
+// weight (it is the lightness that separates the closest pair), are one
+// colour. Below kMinCentreSeedSeparationLab on purpose: resolve_colors will
+// not name two centres closer than that, and it reports it. Grouping them as
+// one side down to there would hide that report behind a scan that waits for
+// a sixth side it is never given; held apart to just under it, they are two
+// sides and the colour naming says why they cannot be told. Replayed over
+// every recorded session the grouping is identical for any value from 8 to
+// 12 and from 10 to 16 for the centre alone. The closest two centres on a
+// real cube read 13.6 apart under tungsten light (live-demo-p6-retry) and 16
+// to 20 apart under the lamp of the cube this was found on.
+constexpr float kSameColourLab = 10.0F;
+static_assert(kSameColourLab < kMinCentreSeedSeparationLab,
+              "two centres resolve_colors refuses as one colour must not be one side here");
 
-// A read's centre within this of a side's centre is that side: close enough
-// that no other side's centre can be there. Plain Lab with lightness at
-// full weight - it is the lightness that separates the closest pair.
-// Replayed over every recorded session the grouping is identical for any
-// value from 10 to 16. The closest two centres on a real cube read 13.6 apart
-// under tungsten light (live-demo-p6-retry) and 16 to 20 apart under the lamp
-// of the cube this was found on.
-constexpr float kSameCentreLab = 10.0F;
-static_assert(kSameCentreLab < kDifferentColourLab,
-              "a centre that could be another side's must not be taken for this one");
-
-// Beyond that the centre cannot vouch - it may be glare on this side's
-// centre or another side's - and the other eight stickers must: every one
-// still within kDifferentColourLab of the side's. Two look-alike sides can
-// differ in nothing but the centre and one sticker, and allowing a sticker to
-// differ joins them; replayed on the pair this was found on that left a
-// margin of 1.3 Lab, against 7.7 holding all eight to the match. The cost is
-// a stray group now and then when a finger covers a sticker while the centre
-// is read through glare, and a stray is not a side until it is held for
-// kMinReads.
+// A read's centre within kSameColourLab of a side's is that side, however
+// much of it a hand covers. Beyond that the centre cannot vouch - it may be
+// glare on this side's centre or another side's - and the other eight
+// stickers must: every one within kSameColourLab of the side's. Two
+// look-alike sides can differ in nothing but the centre and one sticker, and
+// allowing a sticker to differ joins them; replayed on the pair this was
+// found on that left a margin of 1.3 Lab, against 7.7 holding all eight to
+// the match. The cost is a stray group now and then when a finger covers a
+// sticker while the centre is read through glare, and a stray is not a side
+// until it is held for kMinReads.
+//
+// But a centre that matches is not the end of it. Two sides can look the
+// same colour at the centre - orange lit to read as red - and then it is
+// the rest that says they are two. A hand can leave no more than this many
+// of the eight stickers other than the centre unlike the side's: the reader
+// needs six of the nine in the lattice, so at most three are covered, and one
+// more is noise. More than that is another side whatever its centre reads.
+constexpr int kMostStickersAHandCovers = 4;
 
 // Cost of laying a read on a side is the summed distance of the eight
 // stickers other than the centre, each capped so one finger cannot decide a
 // quarter-turn.
-constexpr float kRollCostCap = 2.0F * kDifferentColourLab;
+constexpr float kRollCostCap = 2.0F * kSameColourLab;
 
 // A side keeps the quarter-turn it last had unless another explains the
 // read by more than one differing sticker's worth. A held side's pattern is
 // the same from frame to frame; without this its turn flapped between
 // nearly-tied choices and the median fused them.
-constexpr float kRollPriorMargin = kDifferentColourLab;
+constexpr float kRollPriorMargin = kSameColourLab;
 
 // Groups kept. A read that is no side seen so far starts a group of its own,
 // and every read is compared with every group, so a scene full of lattices
@@ -114,6 +120,17 @@ constexpr std::size_t kMaxGroups = 24;
 // Lightness and chroma carry shading; hue does not. Down-weighting the
 // first two keeps a shaded sticker close to its own colour.
 constexpr float kShadingWeight = 0.25F;
+
+// A side of a corner view counts as a read of its side only if it was seen
+// whole enough and not too foreshortened. The ten sides the recorded sessions
+// show in two-side views (cube_scan corner-colours) sat 3 to 7 Lab units from
+// their side but one: a strip with six of nine found and a step under half the
+// other, at 12, the same-side distance. Another six-of-nine strip sat at 6, so
+// these are a margin and not a measured edge: a sticker the fit placed is what
+// a finger looks like, and ten sides are too few to say where the line is.
+constexpr int kMinCornerFound = 7;
+constexpr float kMinCornerAspect = 0.45F;
+
 
 struct Blob {
     cv::Point2f centre;
@@ -436,9 +453,9 @@ struct SideFit {
 // pattern was laid down at whichever turn the noise preferred.
 //
 // Then the judgement. The centre is the side's identity (see
-// kSameCentreLab). When it agrees the read is the side, however many
-// stickers a hand covers. When it does not, it may be glare on the centre or
-// another side; the other eight say which.
+// kSameColourLab). When it agrees the read is the side, however many
+// stickers a hand covers (up to kMostStickersAHandCovers). When it does not,
+// it may be glare on the centre or another side; the other eight say which.
 [[nodiscard]] SideFit fit_to_side(const std::array<cv::Vec3f, 9>& read,
                                   const std::array<cv::Vec3f, 9>& side, int prior_roll) {
     const auto cost_of = [&](int roll) {
@@ -466,15 +483,18 @@ struct SideFit {
     }
 
     const std::array<cv::Vec3f, 9> turned = rolled(read, fit.roll);
-    if (lab_gap(turned.at(4), side.at(4)) <= kSameCentreLab) {
-        fit.same = true;
-        return fit;
-    }
-    fit.same = true;
+    int differing = 0;
     for (std::size_t i = 0; i < 9; ++i) {
-        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kDifferentColourLab) {
-            fit.same = false;
+        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kSameColourLab) {
+            ++differing;
         }
+    }
+    if (differing > kMostStickersAHandCovers) {
+        fit.same = false;
+    } else if (lab_gap(turned.at(4), side.at(4)) <= kSameColourLab) {
+        fit.same = true;
+    } else {
+        fit.same = differing == 0;
     }
     return fit;
 }
@@ -571,6 +591,63 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
         return std::nullopt;
     }
     return static_cast<std::size_t>(best - fits.begin());
+}
+
+// The corner of the cube whose view tells the most of the cubes still possible
+// apart: of the candidates, those the corner reads fit best (all of them when
+// none fits), and of the eight corners the one at which the most pairs of them
+// differ on a side the corner shows. A corner shows all nine stickers of each of
+// its three sides, so two cubes are told apart there when any of those three
+// sides is not the same on both. The centres are the same on every candidate
+// (they are what names the sides), so the corner is said by their colours.
+[[nodiscard]] std::optional<std::array<solver::Color, 3>> settling_corner_of(
+    const std::vector<solver::Cube>& candidates, const std::vector<std::size_t>& fits) {
+    std::size_t most = 0;
+    for (const std::size_t count : fits) {
+        most = std::max(most, count);
+    }
+    std::vector<const solver::Cube*> remaining;
+    for (std::size_t i = 0; i < candidates.size(); ++i) {
+        if (i >= fits.size() || fits.at(i) == most) {
+            remaining.push_back(&candidates.at(i));
+        }
+    }
+    if (remaining.size() < 2) {
+        return std::nullopt;
+    }
+
+    using solver::Face;
+    std::size_t best_told = 0;
+    std::optional<std::array<Face, 3>> best;
+    for (const Face vertical : {Face::U, Face::D}) {
+        for (const Face depth : {Face::F, Face::B}) {
+            for (const Face side : {Face::L, Face::R}) {
+                const std::array<Face, 3> corner = {vertical, depth, side};
+                std::size_t told = 0;
+                for (std::size_t a = 0; a < remaining.size(); ++a) {
+                    for (std::size_t b = a + 1; b < remaining.size(); ++b) {
+                        const bool differ = std::ranges::any_of(corner, [&](Face face) {
+                            return remaining.at(a)->face(face) != remaining.at(b)->face(face);
+                        });
+                        told += differ ? 1U : 0U;
+                    }
+                }
+                if (told > best_told) {
+                    best_told = told;
+                    best = corner;
+                }
+            }
+        }
+    }
+    if (!best.has_value()) {
+        return std::nullopt;
+    }
+    std::array<solver::Color, 3> colours{};
+    for (std::size_t i = 0; i < 3; ++i) {
+        colours.at(i) = remaining.front()->face(best->at(i)).at(4);
+    }
+    std::ranges::sort(colours);
+    return colours;
 }
 
 // `named` with two colour names traded wherever they appear.
@@ -678,6 +755,7 @@ struct Assembled {
         }
         trace.path = AssemblyPath::ambiguous;
         trace.error = CubeError::ambiguous_scan;
+        trace.settling_corner = settling_corner_of(candidates, trace.corner_fits);
         out.result = std::unexpected(CubeError::ambiguous_scan);
         return out;
     }
@@ -800,43 +878,81 @@ void SideScan::reset() {
     groups_.clear();
     corners_.clear();
     previous_centre_.reset();
-    in_view_.reset();
+    previous_corner_centres_.clear();
+    in_view_.clear();
+}
+
+bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
+    // Which sides this read is: those it fits (fit_to_side), the cheapest
+    // laying winning.
+    std::optional<std::size_t> nearest;
+    SideFit nearest_fit;
+    std::size_t claiming = 0;
+    for (std::size_t i = 0; i < groups_.size(); ++i) {
+        const SideFit fit = fit_to_side(lab, groups_.at(i).fused, groups_.at(i).roll);
+        if (!fit.same) {
+            continue;
+        }
+        ++claiming;
+        if (!nearest.has_value() || fit.cost < nearest_fit.cost) {
+            nearest = i;
+            nearest_fit = fit;
+        }
+    }
+    // A side seen at an angle sits several Lab units from its own colours, so
+    // one that two sides each claim has not said which it is, and counting it
+    // for the cheaper is a coin toss. A square-on read is held to no such
+    // standard: its colours are the side's own.
+    if (!square_on && claiming > 1) {
+        return false;
+    }
+
+    std::size_t index = 0;
+    if (nearest.has_value()) {
+        index = *nearest;
+        Group& group = groups_.at(index);
+        const std::array<cv::Vec3f, 9> aligned = rolled(lab, nearest_fit.roll);
+        group.reads.push_back(aligned);
+        if (square_on) {
+            group.flat_reads.push_back(aligned);
+        }
+        // A side seen at an angle is lit a little differently, so once a side
+        // has been read square-on as often as it takes to count, those reads
+        // alone give its colours.
+        group.fused = fuse(group.flat_reads.size() >= kMinReads ? group.flat_reads : group.reads);
+        group.roll = nearest_fit.roll;
+    } else {
+        Group group{.fused = lab, .reads = {lab}, .flat_reads = {}, .roll = 0};
+        if (square_on) {
+            group.flat_reads.push_back(lab);
+        }
+        groups_.push_back(std::move(group));
+        index = groups_.size() - 1;
+    }
+    if (std::ranges::find(in_view_, index) == in_view_.end()) {
+        in_view_.push_back(index);
+    }
+    // These renumber the groups and, with them, the sides in view.
+    merge_alike_groups();
+    drop_weakest_stray();
+    return true;
 }
 
 void SideScan::add(const std::optional<SideRead>& read) {
     CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
-    in_view_.reset();
+    in_view_.clear();
     if (!read.has_value()) {
         previous_centre_.reset();
         return;
     }
+    // A side square to the camera: whatever corner view came before is over.
+    previous_corner_centres_.clear();
     const bool steady = previous_centre_.has_value() && held_still(*read, *previous_centre_);
     previous_centre_ = read->centres.at(4);
     if (!steady) {
         return;
     }
-
-    std::optional<std::size_t> nearest;
-    SideFit nearest_fit;
-    for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const SideFit fit = fit_to_side(read->lab, groups_.at(i).fused, groups_.at(i).roll);
-        if (fit.same && (!nearest.has_value() || fit.cost < nearest_fit.cost)) {
-            nearest = i;
-            nearest_fit = fit;
-        }
-    }
-    if (nearest.has_value()) {
-        Group& group = groups_.at(*nearest);
-        group.reads.push_back(rolled(read->lab, nearest_fit.roll));
-        group.fused = fuse(group.reads);
-        group.roll = nearest_fit.roll;
-        in_view_ = nearest;
-    } else {
-        groups_.push_back(Group{.fused = read->lab, .reads = {read->lab}, .roll = 0});
-        in_view_ = groups_.size() - 1;
-    }
-    merge_alike_groups();
-    drop_weakest_stray();
+    count_read(read->lab, true);
 }
 
 // Keeps the groups to kMaxGroups by dropping the one with the fewest reads,
@@ -847,7 +963,7 @@ void SideScan::drop_weakest_stray() {
     }
     std::optional<std::size_t> weakest;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        if (in_view_ == i) {
+        if (std::ranges::find(in_view_, i) != in_view_.end()) {
             continue;
         }
         if (!weakest.has_value() ||
@@ -859,8 +975,10 @@ void SideScan::drop_weakest_stray() {
         return;
     }
     groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(*weakest));
-    if (in_view_.has_value() && *in_view_ > *weakest) {
-        --*in_view_;
+    for (std::size_t& viewed : in_view_) {
+        if (viewed > *weakest) {
+            --viewed;
+        }
     }
 }
 
@@ -885,21 +1003,49 @@ void SideScan::merge_alike_groups() {
                 for (const auto& read : groups_.at(other).reads) {
                     kept.reads.push_back(rolled(read, fit.roll));
                 }
-                kept.fused = fuse(kept.reads);
-                groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
-                if (in_view_ == other) {
-                    in_view_ = keep;
-                } else if (in_view_.has_value() && *in_view_ > other) {
-                    --*in_view_;
+                for (const auto& read : groups_.at(other).flat_reads) {
+                    kept.flat_reads.push_back(rolled(read, fit.roll));
                 }
+                kept.fused =
+                    fuse(kept.flat_reads.size() >= kMinReads ? kept.flat_reads : kept.reads);
+                groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
+                for (std::size_t& viewed : in_view_) {
+                    if (viewed == other) {
+                        viewed = keep;
+                    } else if (viewed > other) {
+                        --viewed;
+                    }
+                }
+                std::ranges::sort(in_view_);
+                const auto duplicates = std::ranges::unique(in_view_);
+                in_view_.erase(duplicates.begin(), duplicates.end());
                 merged = true;
             }
         }
     }
 }
 
+namespace {
+
+// Whether a side of a corner view was seen well enough to count: most of its
+// stickers found, and not so foreshortened that it is a strip.
+[[nodiscard]] bool seen_whole_enough(const ObliqueSide& side) {
+    const auto found = std::ranges::count(side.found, true);
+    if (found < kMinCornerFound) {
+        return false;
+    }
+    const float along_columns = length((side.centres.at(2) - side.centres.at(0)) * 0.5F);
+    const float along_rows = length((side.centres.at(6) - side.centres.at(0)) * 0.5F);
+    const float longer = std::max(along_columns, along_rows);
+    return longer > 0.0F && std::min(along_columns, along_rows) >= kMinCornerAspect * longer;
+}
+
+}  // namespace
+
 void SideScan::add_corner(const std::optional<CornerRead>& read) {
+    in_view_.clear();
     if (!read.has_value()) {
+        previous_corner_centres_.clear();
         return;
     }
     // Bounded: the newest are the ones worth having, and each is a few
@@ -909,10 +1055,36 @@ void SideScan::add_corner(const std::optional<CornerRead>& read) {
         corners_.erase(corners_.begin());
     }
     corners_.push_back(*read);
+
+    // Each side that was seen whole and held still is a read of its side.
+    std::vector<cv::Point2f> centres;
+    for (const ObliqueSide& side : read->sides) {
+        const cv::Point2f centre = side.centres.at(4);
+        centres.push_back(centre);
+        if (!seen_whole_enough(side)) {
+            continue;
+        }
+        const float reach = kSteadyFraction * side.pitch;
+        const bool steady = std::ranges::any_of(
+            previous_corner_centres_,
+            [&](const cv::Point2f& before) { return length(centre - before) < reach; });
+        if (!steady) {
+            continue;
+        }
+        count_read(side.lab, false);
+    }
+    previous_corner_centres_ = std::move(centres);
 }
 
 std::size_t SideScan::reads_in_view() const noexcept {
-    return in_view_.has_value() ? groups_.at(*in_view_).reads.size() : 0;
+    if (in_view_.empty()) {
+        return 0;
+    }
+    std::size_t fewest = std::numeric_limits<std::size_t>::max();
+    for (const std::size_t i : in_view_) {
+        fewest = std::min(fewest, groups_.at(i).reads.size());
+    }
+    return fewest;
 }
 
 std::vector<SideScan::Side> SideScan::sides() const {
@@ -927,7 +1099,8 @@ std::vector<SideScan::Side> SideScan::sides() const {
         const Group& group = groups_.at(i);
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
-        Side side{.reads = group.reads.size(), .in_view = in_view_ == i};
+        Side side{.reads = group.reads.size(),
+                  .in_view = std::ranges::find(in_view_, i) != in_view_.end()};
         for (std::size_t cell = 0; cell < 9; ++cell) {
             side.lab.at(static_cast<std::size_t>(
                 kRoll.at(static_cast<std::size_t>(group.roll)).at(cell))) = group.fused.at(cell);
@@ -944,8 +1117,17 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
             captured.push_back(i);
         }
     }
+    // A side that was read square-on is ahead of one that only a corner view
+    // has shown: a side at an angle can start a group of its own when its
+    // colours sit far from its side's, and that stray must not take the place
+    // of a real side however many frames it was held for.
     std::ranges::stable_sort(captured, [this](std::size_t l, std::size_t r) {
-        return groups_.at(l).reads.size() > groups_.at(r).reads.size();
+        const Group& left = groups_.at(l);
+        const Group& right = groups_.at(r);
+        if (left.flat_reads.empty() != right.flat_reads.empty()) {
+            return !left.flat_reads.empty();
+        }
+        return left.reads.size() > right.reads.size();
     });
     return captured;
 }
@@ -990,7 +1172,7 @@ ScanDiagnosis SideScan::diagnose() const {
             .reads = group.reads.size(),
             .lab = group.fused,
             .roll = group.roll,
-            .in_view = in_view_ == captured.at(i),
+            .in_view = std::ranges::find(in_view_, captured.at(i)) != in_view_.end(),
         });
     }
     if (captured.size() < 6) {
