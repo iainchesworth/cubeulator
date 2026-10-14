@@ -275,6 +275,7 @@ Json to_json(const Result<cube::vision::ScannedCube>& scanned) {
     if (scanned.has_value()) {
         out.set("state", cube_json(scanned->cube));
         out.set("colours", to_json(scanned->colours));
+        out.set("cast", scanned->cast);
     } else {
         out.set("error", code_of(scanned.error()));
     }
@@ -298,6 +299,23 @@ Json to_json(const cube::vision::ScanDiagnosis& diagnosis) {
         sides.push(std::move(entry));
     }
     out.set("sides", std::move(sides));
+
+    if (diagnosis.white.has_value()) {
+        // The light the sides were named in: `side` indexes `sides`, `cast`
+        // is the white centre's chroma, `gain` the linear (red, green, blue)
+        // factors that took it out.
+        Json white = Json::object();
+        white.set("side", diagnosis.white->side);
+        white.set("cast", diagnosis.white->cast);
+        Json gain = Json::array();
+        for (const float channel : diagnosis.white->gain) {
+            gain.push(Json(channel));
+        }
+        white.set("gain", std::move(gain));
+        out.set("white", std::move(white));
+    } else {
+        out.set("white", Json());
+    }
 
     if (diagnosis.naming.has_value()) {
         out.set("naming", to_json(*diagnosis.naming));

@@ -567,6 +567,24 @@ TEST_CASE("an assembly trace says which path was taken and why it failed", "[dia
     CHECK_THAT(ambiguous_line, ContainsSubstring(R"("error":"ambiguous_scan")"));
 }
 
+TEST_CASE("a scan says what light it was named in", "[diagnostics]") {
+    cube::vision::ScanDiagnosis diagnosis;
+    diagnosis.groups = 6;
+    diagnosis.captured = 6;
+    const std::string without = cube::diagnostics::to_json(diagnosis).dump();
+    CHECK(is_json(without));
+    CHECK_THAT(without, ContainsSubstring(R"("white":null)"));
+
+    cube::vision::WhiteReference white;
+    white.side = 2;
+    white.cast = 28.7F;
+    white.gain = {0.5F, 1.25F, 2.0F};
+    diagnosis.white = white;
+    const std::string with = cube::diagnostics::to_json(diagnosis).dump();
+    CHECK(is_json(with));
+    CHECK_THAT(with, ContainsSubstring(R"("white":{"side":2,"cast":28.7,"gain":[0.5,1.25,2]})"));
+}
+
 TEST_CASE("a scan result is the cube's state and colours, or the reason there is none",
           "[diagnostics]") {
     cube::vision::ScannedCube scanned;
@@ -578,6 +596,7 @@ TEST_CASE("a scan result is the cube's state and colours, or the reason there is
     CHECK(is_json(ok));
     CHECK_THAT(ok, ContainsSubstring(R"("ok":true)"));
     CHECK_THAT(ok, ContainsSubstring(R"("red":[41,66,49])"));
+    CHECK_THAT(ok, ContainsSubstring(R"("cast":0)"));
 
     const std::string failed =
         cube::diagnostics::to_json(cube::Result<cube::vision::ScannedCube>(

@@ -215,10 +215,35 @@ test.describe('language', () => {
     });
   }
 
+  // The five drafts (docs/i18n.md) show their own words, in their own script.
+  // What the browser draws them with (Qt's bundled face; there are no system
+  // fonts) is not in the page's text and is looked at in a screenshot, as
+  // docs/i18n.md says.
+  const DRAFTS = [
+    [5, 'ja', /^[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u],
+    [7, 'he', /^\p{Script=Hebrew}/u],
+    [8, 'ar', /^\p{Script=Arabic}/u],
+    [9, 'yi', /^\p{Script=Hebrew}/u],
+  ];
+  for (const [chip, code, script] of DRAFTS) {
+    test(`${code} shows its own words and nothing of the English`, async ({ app }) => {
+      await openSettings(app);
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.click('settings.back');
+      await app.waitForScreen('launch');
+      const scan = (await app.find('launch.startScan')).text;
+      expect(scan, 'the main button, in the language').toMatch(script);
+      expect(scan).not.toBe('Scan a cube');
+      // And the product name is still the product name.
+      expect(await app.texts()).toContain('Cubeulator');
+    });
+  }
+
   test('shows a string no catalogue has translated in English, never as its id', async ({ app }) => {
-    // The catalogues are drafts today (every entry unfinished, which the build
-    // leaves out), so a chosen language shows English. When translations land
-    // the text changes and this still holds: what is on screen is words.
+    // German, French and Spanish have no translation yet, so a chosen one shows
+    // English. When translations land the text changes and this still holds:
+    // what is on screen is words.
     await openSettings(app);
     await app.click('settings.language.2');
     await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('de');

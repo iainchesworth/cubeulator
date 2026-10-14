@@ -191,11 +191,23 @@ TEST_CASE("the language switches live: English, the pseudo-locale, Hebrew, and b
     CHECK(QGuiApplication::layoutDirection() == Qt::LeftToRight);
     app.shot("language_launch_pseudo");
 
-    // Hebrew: no translation yet, so the English; and the layout mirrors.
-    switch_to(app, "he");
+    // German has no translation yet, so the English; the layout stays.
+    switch_to(app, "de");
     scan = app.find("launch.startScan");
     REQUIRE(scan != nullptr);
     CHECK(scan->property("text").toString() == english);
+    CHECK(QGuiApplication::layoutDirection() == Qt::LeftToRight);
+
+    // Hebrew is a draft: its own words, in its own script; and the layout
+    // mirrors.
+    switch_to(app, "he");
+    scan = app.find("launch.startScan");
+    REQUIRE(scan != nullptr);
+    const QString hebrew = scan->property("text").toString();
+    CHECK(hebrew != english);
+    REQUIRE_FALSE(hebrew.isEmpty());
+    CHECK(hebrew.front().unicode() >= 0x0590);
+    CHECK(hebrew.front().unicode() <= 0x05FF);
     CHECK(QGuiApplication::layoutDirection() == Qt::RightToLeft);
     CHECK(language(app).rtl());
     const double hebrew_x = scan->mapToScene(QPointF(scan->width() / 2, 0)).x();
@@ -323,7 +335,8 @@ namespace {
 
 // The converted screens of the real window, in `language` at one layout:
 // nothing cut off, off the window or out of its pane. The pseudo-locale is the
-// proxy for a real translation; the real Japanese and Chinese run the same.
+// proxy for a real translation; the real drafts (Japanese, Chinese, Hebrew,
+// Arabic, Yiddish) run the same.
 void nothing_is_cut_off_in(const char* language, Layout layout) {
     App& app = App::fresh();
     LanguageGuard guard(app);
@@ -370,9 +383,13 @@ TEST_CASE("the pseudo-locale cuts nothing off on the converted screens",
     }
 }
 
-TEST_CASE("the real Japanese and Chinese cut nothing off on the converted screens",
-          "[system][language][cjk]") {
-    const char* language = GENERATE("ja", "zh-CN");
+TEST_CASE(
+    "the real Japanese, Chinese, Hebrew, Arabic and Yiddish cut nothing off on the "
+    "converted screens",
+    "[system][language][cjk]") {
+    // The drafts, not their proxy. The three right-to-left ones are mirrored
+    // as well, which the pseudo-locale (left to right) never is.
+    const char* language = GENERATE("ja", "zh-CN", "he", "ar", "yi");
     const Layout layout = GENERATE(Layout::wide, Layout::narrow);
     DYNAMIC_SECTION(language << " in the " << cube::systest::to_string(layout) << " layout") {
         nothing_is_cut_off_in(language, layout);
@@ -420,12 +437,16 @@ TEST_CASE("choosing a language in Settings switches it at once and keeps it",
     CHECK(app.screen() == "settings");
 }
 
-TEST_CASE("in Hebrew every control on every screen is inside the window, bar the known few",
-          "[system][language][rtl][layout]") {
+TEST_CASE(
+    "in Hebrew, Arabic and Yiddish every control on every screen is inside the window, bar the "
+    "known few",
+    "[system][language][rtl][layout]") {
     // tests/system/layout_test.cpp's rule, in a right-to-left language, where
     // what was pushed past the right edge is now pushed past the left. A
     // screen that was laid out with `left` and `right` written into its
-    // anchors, or a number worked out for one direction, shows here.
+    // anchors, or a number worked out for one direction, shows here. Each of
+    // the three drafts is its own run: Arabic is the widest of them.
+    const char* language = GENERATE("he", "ar", "yi");
     //
     // The known few are listed as they are, so that a new one fails and so
     // does the day one of these is fixed. Owner of each is named.
@@ -458,7 +479,7 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
                                   ? App::Start::launch
                                   : App::Start::elsewhere);
         LanguageGuard guard(app);
-        switch_to(app, "he");
+        switch_to(app, language);
         if (QString::fromLatin1(name) == QLatin1String("solve") ||
             QString::fromLatin1(name) == QLatin1String("solution")) {
             have_a_solution(app);
@@ -495,7 +516,8 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
     }
 
     for (const std::string& key : overflowing) {
-        INFO("a control outside the window, in Hebrew, that is not in the known list: " << key);
+        INFO("a control outside the window, in " << language
+                                                 << ", that is not in the known list: " << key);
         CHECK(known.count(key) == 1);
     }
     for (const std::string& key : known) {

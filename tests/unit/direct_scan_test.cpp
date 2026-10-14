@@ -1,6 +1,7 @@
 #include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include "deterministic_rng.hpp"
 #include "drawn_cube.hpp"
 
 #include <cube/error.hpp>
@@ -25,7 +26,6 @@
 #include <random>
 #include <string_view>
 #include <vector>
-#include "deterministic_rng.hpp"
 #include "must_have.hpp"
 
 using cube::CubeError;
@@ -152,11 +152,14 @@ void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& d
 // apart there and differ mostly in lightness - not enough to say which is
 // which, and colour naming alone gets them backwards. Only one of the two
 // namings is a cube that can exist.
-Drawing tungsten_lamp() {
+// `pale_green` lifts the green from L 17 to 30: as pale as the lamp's white
+// is pink, which leaves find_white_reference no margin to tell the white by
+// and so no light to take out.
+Drawing tungsten_lamp(bool pale_green = false) {
     return Drawing{
         .paint =
-            [](Color colour) {
-                const auto measured = [colour] -> cv::Vec3f {
+            [pale_green](Color colour) {
+                const auto measured = [colour, pale_green] -> cv::Vec3f {
                     switch (colour) {
                         case Color::White:
                             return {46.2F, 16.6F, 5.9F};
@@ -167,7 +170,7 @@ Drawing tungsten_lamp() {
                         case Color::Orange:
                             return {34.3F, 53.5F, 45.4F};
                         case Color::Green:
-                            return {17.4F, -12.5F, 15.0F};
+                            return {pale_green ? 30.0F : 17.4F, -12.5F, 15.0F};
                         case Color::Blue:
                             return {11.3F, 12.1F, -25.8F};
                     }
@@ -616,6 +619,29 @@ TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are c
     }
 }
 
+TEST_CASE("a scan says how far the light was from neutral, read from the cube's own white",
+          "[direct-scan]") {
+    SECTION("under a warm lamp the white measures pink") {
+        const Cube cube = cube::test::scramble(21);
+        SideScan scan;
+        show_cube(scan, cube, 21, lamp_drawing());
+        const auto whole = scan.scanned();
+        REQUIRE(whole.has_value());
+        CHECK(whole->cube == cube);
+        // The white of the lamp palette is (65.5, 22.5, 16.5): chroma 27.9.
+        CHECK(whole->cast == Catch::Approx(27.9).margin(3.0));
+    }
+    SECTION("in even light it measures neutral") {
+        const Cube cube = cube::test::scramble(22);
+        SideScan scan;
+        show_cube(scan, cube, 22);
+        const auto whole = scan.scanned();
+        REQUIRE(whole.has_value());
+        CHECK(whole->cube == cube);
+        CHECK(whole->cast < 4.0F);
+    }
+}
+
 TEST_CASE("two sides whose centres read as one colour are still two sides", "[direct-scan]") {
     // Orange lit to read as red: the centre of one side is the colour of the
     // centre of another, and only the rest says they are two. A hand covers
@@ -947,7 +973,13 @@ TEST_CASE("diagnose lists the sides captured so far when there are fewer than si
 
 TEST_CASE("diagnose names the pair of colours that were exchanged to make the cube",
           "[direct-scan]") {
-    const Drawing lamp_lit = tungsten_lamp();
+    // Under the plain tungsten lamp the cube's own white now says what the
+    // light did, the colours are named right, and nothing is exchanged (the
+    // test after this one). The exchange stays as the backstop for a scene
+    // in which the white cannot be told, which this lamp with a pale green
+    // is: nothing is taken out of the light and red and orange come out
+    // traded, as they always did.
+    const Drawing lamp_lit = tungsten_lamp(true);
     for (const unsigned seed : {21U, 22U, 23U}) {
         const Cube cube = cube::test::scramble(seed);
         SideScan scan;
@@ -975,6 +1007,32 @@ TEST_CASE("diagnose names the pair of colours that were exchanged to make the cu
         CHECK(exchange.first_side < 6);
         CHECK(exchange.second_side < 6);
         CHECK(exchange.centre_distance >= 0.0F);
+    }
+}
+
+TEST_CASE("diagnose shows the light taken out and a cube that needed no exchange",
+          "[direct-scan]") {
+    const Drawing lamp_lit = tungsten_lamp();
+    for (const unsigned seed : {21U, 22U, 23U}) {
+        const Cube cube = cube::test::scramble(seed);
+        SideScan scan;
+        show_cube(scan, cube, seed, lamp_lit);
+
+        const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+        REQUIRE(diagnosis.result.has_value());
+        CHECK(diagnosis.result->cube == cube);
+
+        // The white is the tungsten lamp's, chroma 17.6, and was taken out.
+        const cube::vision::WhiteReference& white = cube::test::must_have(diagnosis.white);
+        CHECK(white.cast == Catch::Approx(17.6).margin(2.0));
+        CHECK(diagnosis.result->cast == white.cast);
+        CHECK(white.gain.at(0) < 1.0F);  // red is taken down
+        CHECK(white.gain.at(2) > 1.0F);  // blue is brought up
+
+        // Named right at the first attempt: no exchange, no failed assembly.
+        const cube::vision::AssemblyTrace& assembly = cube::test::must_have(diagnosis.assembly);
+        CHECK(assembly.path == cube::vision::AssemblyPath::single_candidate);
+        CHECK_FALSE(assembly.exchange.has_value());
     }
 }
 

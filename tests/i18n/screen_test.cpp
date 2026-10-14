@@ -242,14 +242,17 @@ void in_language(const char* code) {
 
 // The permission screen words itself by whether the camera was refused, which
 // is the machine's state, not the test's: ask the screen which it is showing.
+// The words are ids, read in whatever language is installed when asked.
 struct PermissionWords {
-    QString title;
-    QString act;
+    const char* title_id;
+    const char* act_id;
     explicit PermissionWords(const Screen& screen) {
         const bool denied = screen.item()->property("denied").toBool();
-        title = denied ? QStringLiteral("Camera access is off") : QStringLiteral("Camera access");
-        act = denied ? QStringLiteral("Try again") : QStringLiteral("Allow camera");
+        title_id = denied ? "permission.refused.title" : "permission.title";
+        act_id = denied ? "common.tryAgain" : "permission.allow";
     }
+    [[nodiscard]] QString title() const { return qtTrId(title_id); }
+    [[nodiscard]] QString act() const { return qtTrId(act_id); }
 };
 
 TEST_CASE("a screen that is up changes language without being made again",
@@ -257,8 +260,9 @@ TEST_CASE("a screen that is up changes language without being made again",
     in_language("en");
     Screen screen("PermissionScreen", 900, 640);
     const PermissionWords words(screen);
-    REQUIRE(screen.texts().contains(words.title));
-    REQUIRE(screen.button(words.act) != nullptr);
+    const QString english_title = words.title();
+    REQUIRE(screen.texts().contains(english_title));
+    REQUIRE(screen.button(words.act()) != nullptr);
 
     // The pseudo-locale: every string is the bracketed, accented one.
     in_language("xx");
@@ -271,20 +275,27 @@ TEST_CASE("a screen that is up changes language without being made again",
         CHECK(text.startsWith(QLatin1Char('[')));
         CHECK(text.endsWith(QLatin1Char(']')));
     }
-    CHECK_FALSE(screen.texts().contains(words.title));
+    CHECK_FALSE(screen.texts().contains(english_title));
 
-    // Hebrew has no translation yet: the English shows, the direction flips.
+    // German has no translation yet: the English shows, and the direction
+    // stays what it was.
+    in_language("de");
+    CHECK_FALSE(t::language().rtl());
+    CHECK(screen.texts().contains(english_title));
+
+    // Hebrew is a draft: its own words show, and the direction flips.
     in_language("he");
     CHECK(t::language().rtl());
     CHECK(QGuiApplication::layoutDirection() == Qt::RightToLeft);
-    CHECK(screen.texts().contains(words.title));
+    CHECK_FALSE(screen.texts().contains(english_title));
+    CHECK(screen.texts().contains(words.title()));
     CHECK(screen.mirrored_under(screen.item()));
 
     // And back: the same screen, the same item, English and left to right.
     in_language("en");
     CHECK_FALSE(t::language().rtl());
     CHECK(QGuiApplication::layoutDirection() == Qt::LeftToRight);
-    CHECK(screen.texts().contains(words.title));
+    CHECK(screen.texts().contains(english_title));
     CHECK_FALSE(screen.mirrored_under(screen.item()));
 }
 
@@ -386,6 +397,19 @@ TEST_CASE("every converted screen holds the real Japanese and Chinese without cu
     }
 }
 
+TEST_CASE(
+    "every converted screen holds the real Hebrew, Arabic and Yiddish without cutting a "
+    "string off",
+    "[i18n][screen][rtl-real]") {
+    // The right-to-left drafts, and not the pseudo-locale in their direction:
+    // Arabic is joined and set wider than its English, Hebrew narrower, and
+    // Yiddish carries points. Whatever the machine draws them with, a
+    // translated string must fit the box the English was given, mirrored.
+    for (const char* language : {"he", "ar", "yi"}) {
+        holds_the_layout_in(language);
+    }
+}
+
 TEST_CASE("the face follows the app's language for Japanese and Chinese, and back",
           "[i18n][screen][face]") {
     // Japanese and Chinese share code points and not shapes. A family left to
@@ -438,8 +462,10 @@ TEST_CASE("the face follows the app's language for Japanese and Chinese, and bac
         CHECK(ja != zh);
     }
 
-    // Every other language keeps Archivo, and a switch back is live.
-    for (const char* code : {"de", "he", "xx", "en"}) {
+    // Every other language keeps Archivo, and a switch back is live. (Hebrew,
+    // Arabic and Yiddish have no Han-style unification to guard against: the
+    // platform's glyph fallback draws them in the face that has the script.)
+    for (const char* code : {"de", "he", "ar", "yi", "xx", "en"}) {
         INFO(code);
         CHECK(face(code) == QLatin1String("Archivo"));
     }
@@ -452,7 +478,7 @@ TEST_CASE("right to left mirrors the layout, and left to right puts it back",
     in_language("en");
     Screen screen("PermissionScreen", 900, 640);
     const PermissionWords words(screen);
-    QQuickItem* act = screen.button(words.act);
+    QQuickItem* act = screen.button(words.act());
     REQUIRE(act != nullptr);
     CHECK(screen.left_of(act) < screen.item()->width() / 2);
 
@@ -460,14 +486,14 @@ TEST_CASE("right to left mirrors the layout, and left to right puts it back",
         INFO(code);
         in_language(code);
         screen.settle();
-        act = screen.button(words.act);
+        act = screen.button(words.act());
         REQUIRE(act != nullptr);
         CHECK(screen.left_of(act) > screen.item()->width() / 2);
     }
 
     in_language("de");
     screen.settle();
-    act = screen.button(words.act);
+    act = screen.button(words.act());
     REQUIRE(act != nullptr);
     CHECK(screen.left_of(act) < screen.item()->width() / 2);
 }

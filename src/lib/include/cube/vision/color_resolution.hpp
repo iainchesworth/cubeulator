@@ -7,7 +7,9 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace cube::vision {
 
@@ -64,6 +66,52 @@ static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
               "the seed floor must sit strictly inside the closest legitimate centre pair, or "
               "resolve_colors would reject physically valid cubes");
 
+// ---------------------------------------------------------------------------
+// The light a scan was made in
+// ---------------------------------------------------------------------------
+//
+// A cube carries its own white: the centre of the white side. Under neutral
+// light it measures a* and b* near 0. Under a warm lamp it measures pink or
+// orange, and every other colour is pulled the same way - on the cube this
+// was found on, a warm-white LED made yellow read at hue 64 (an orange's
+// band) and left red and orange 6 degrees of hue apart. Nothing about the
+// light needs to be known in advance: once the white centre is found, what
+// it measures says what the light did to everything.
+struct WhiteReference {
+    // Which of the six faces passed in is the white one.
+    std::size_t side = 0;
+    // Linear-RGB gains (red, green, blue) that make the white centre grey at
+    // its own luminance. All 1 when the light is neutral enough that nothing
+    // is worth correcting.
+    std::array<float, 3> gain{1.0F, 1.0F, 1.0F};
+    // Chroma of the white centre as measured: how far from neutral the light
+    // is. 3 to 5 by morning daylight, about 18 under tungsten, 29 under a
+    // warm-white LED.
+    float cast = 0.0F;
+};
+
+// A cast below this is not corrected. Daylight whites measure 3 to 5; the
+// correction is a few percent there and changes no name, and leaving it out
+// keeps a well-lit scan exactly as it was.
+inline constexpr float kMinCorrectedCast = 8.0F;
+
+// The white centre of a complete set of six sides, or nothing when none of
+// them is plausibly white. The white is the least chromatic of the centres
+// that are not dark - a warm-lit white is pink, but a dark blue is less
+// chromatic still and not white - and it has to beat the next candidate by a
+// margin and need gains that a real light could ask for, so a set without a
+// white (or a yellow or green mistaken for one) is refused rather than
+// "corrected". Refusing leaves the scan named exactly as it would have been.
+//
+// Needs all six: with fewer, the white may simply not have been shown yet,
+// and a green seen first would pass for it.
+[[nodiscard]] std::optional<WhiteReference> find_white_reference(
+    const std::array<CapturedFace, 6>& faces);
+
+// What `lab` would have measured under neutral light, the reference's gains
+// applied in linear RGB.
+[[nodiscard]] cv::Vec3f neutralised(const WhiteReference& reference, const cv::Vec3f& lab);
+
 // Which rule of classify_lab decided a sample's name.
 enum class LabRule : std::uint8_t {
     // Near-neutral and below kWhiteLightnessFloor: unknown, at confidence zero.
@@ -115,8 +163,13 @@ struct LabClassification {
 // centre-separation guard and then leave the clustering with no cluster to
 // commit a sample to - which was an out-of-bounds write and a
 // non-terminating loop, not a wrong answer.
+//
+// `white_side`, when the caller has found the white centre (see
+// find_white_reference), names that cluster white outright instead of asking
+// a lightness floor to - a dim white (L 55 on a cloudy morning) is otherwise
+// "unknown" and costs the hue naming of every other cluster.
 [[nodiscard]] Result<std::array<std::array<cube::model::Facelet, 9>, 6>> resolve_colors(
-    const std::array<CapturedFace, 6>& faces);
+    const std::array<CapturedFace, 6>& faces, std::optional<std::size_t> white_side = std::nullopt);
 
 // What decided the final names, once the clusters were named by distance to
 // the palette: the hue names either replaced them or were set aside.
@@ -171,6 +224,6 @@ struct ColorResolution {
 // resolve_colors with its working shown. Fails exactly where resolve_colors
 // does.
 [[nodiscard]] Result<ColorResolution> resolve_colors_explained(
-    const std::array<CapturedFace, 6>& faces);
+    const std::array<CapturedFace, 6>& faces, std::optional<std::size_t> white_side = std::nullopt);
 
 }  // namespace cube::vision

@@ -3,6 +3,8 @@
 #include <cube/profiling.hpp>
 #include <cube/vision/color_classification.hpp>
 
+#include <opencv2/imgproc.hpp>
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -10,6 +12,8 @@
 #include <expected>
 #include <limits>
 #include <numbers>
+#include <optional>
+#include <utility>
 
 namespace cube::vision {
 
@@ -499,6 +503,124 @@ Facelet classify_lab(const cv::Vec3f& lab) {
 
 namespace {
 
+// The white is picked from the centres that are not dark: a warm-lit white
+// measures L 46 to 66 and chroma 18 to 29, while a blue sticker under the
+// same LED measures L 9 and chroma 15 - less chromatic, and not white.
+constexpr float kWhiteCandidateLightness = 0.55F;  // of the lightest centre
+// The strongest cast a real light has put on a white in any recording: 29,
+// a warm-white LED. A yellow is 57 to 59 and nothing paler is a cube's own
+// colour, so 40 sits well clear of both.
+constexpr float kMaxCastChroma = 40.0F;
+// How much more chromatic the next candidate must be. The nearest across
+// the recordings is a dim green at 11.5 more than a daylight white; the
+// next candidate under a warm LED is 30 more.
+constexpr float kWhiteMargin = 8.0F;
+// What a real light can ask of a channel: gains of 0.56 to 1.99 across the
+// recordings. A yellow taken for white would ask for a blue gain above 4.
+constexpr float kMinGain = 0.4F;
+constexpr float kMaxGain = 2.5F;
+constexpr std::array<float, 3> kLuminance = {0.2126F, 0.7152F, 0.0722F};
+
+[[nodiscard]] float chroma_of(const cv::Vec3f& lab) {
+    return std::hypot(lab(1), lab(2));
+}
+
+[[nodiscard]] float to_linear(float encoded) {
+    const float v = std::clamp(encoded, 0.0F, 1.0F);
+    return v <= 0.04045F ? v / 12.92F : std::pow((v + 0.055F) / 1.055F, 2.4F);
+}
+
+[[nodiscard]] float to_encoded(float linear) {
+    const float v = std::clamp(linear, 0.0F, 1.0F);
+    return v <= 0.0031308F ? v * 12.92F : (1.055F * std::pow(v, 1.0F / 2.4F)) - 0.055F;
+}
+
+// Linear sRGB (red, green, blue) of a Lab colour.
+[[nodiscard]] std::array<float, 3> linear_rgb_of(const cv::Vec3f& lab) {
+    const cv::Mat3f source(1, 1, lab);
+    cv::Mat3f bgr;
+    cv::cvtColor(source, bgr, cv::COLOR_Lab2BGR);
+    const cv::Vec3f encoded = bgr(0, 0);
+    return {to_linear(encoded(2)), to_linear(encoded(1)), to_linear(encoded(0))};
+}
+
+[[nodiscard]] cv::Vec3f lab_of(const std::array<float, 3>& rgb) {
+    const cv::Mat3f source(
+        1, 1, cv::Vec3f(to_encoded(rgb.at(2)), to_encoded(rgb.at(1)), to_encoded(rgb.at(0))));
+    cv::Mat3f lab;
+    cv::cvtColor(source, lab, cv::COLOR_BGR2Lab);
+    return lab(0, 0);
+}
+
+}  // namespace
+
+std::optional<WhiteReference> find_white_reference(const std::array<CapturedFace, 6>& faces) {
+    float lightest = 0.0F;
+    for (const CapturedFace& face : faces) {
+        const cv::Vec3f& centre = face.lab.at(center_facelet_index);
+        if (!std::isfinite(centre(0)) || !std::isfinite(centre(1)) || !std::isfinite(centre(2))) {
+            return std::nullopt;
+        }
+        lightest = std::max(lightest, centre(0));
+    }
+
+    std::optional<std::size_t> white;
+    float white_chroma = std::numeric_limits<float>::max();
+    float runner_up = std::numeric_limits<float>::max();
+    for (std::size_t side = 0; side < face_count; ++side) {
+        const cv::Vec3f& centre = faces.at(side).lab.at(center_facelet_index);
+        if (centre(0) < kWhiteCandidateLightness * lightest) {
+            continue;
+        }
+        const float chroma = chroma_of(centre);
+        if (chroma < white_chroma) {
+            runner_up = white_chroma;
+            white_chroma = chroma;
+            white = side;
+        } else if (chroma < runner_up) {
+            runner_up = chroma;
+        }
+    }
+    if (!white.has_value() || white_chroma > kMaxCastChroma ||
+        runner_up - white_chroma < kWhiteMargin) {
+        return std::nullopt;
+    }
+
+    WhiteReference reference{.side = *white, .cast = white_chroma};
+    if (white_chroma < kMinCorrectedCast) {
+        return reference;
+    }
+    const std::array<float, 3> rgb = linear_rgb_of(faces.at(*white).lab.at(center_facelet_index));
+    float luminance = 0.0F;
+    for (std::size_t channel = 0; channel < 3; ++channel) {
+        luminance += kLuminance.at(channel) * rgb.at(channel);
+    }
+    if (luminance <= 1.0e-4F) {
+        return std::nullopt;
+    }
+    for (std::size_t channel = 0; channel < 3; ++channel) {
+        const float gain = luminance / std::max(rgb.at(channel), 1.0e-4F);
+        if (gain < kMinGain || gain > kMaxGain) {
+            return std::nullopt;
+        }
+        reference.gain.at(channel) = gain;
+    }
+    return reference;
+}
+
+cv::Vec3f neutralised(const WhiteReference& reference, const cv::Vec3f& lab) {
+    if (std::ranges::all_of(reference.gain, [](float gain) { return gain == 1.0F; })) {
+        return lab;
+    }
+    std::array<float, 3> rgb = linear_rgb_of(lab);
+    for (std::size_t channel = 0; channel < 3; ++channel) {
+        rgb.at(channel) = std::min(rgb.at(channel) * reference.gain.at(channel), 1.0F);
+    }
+    return lab_of(rgb);
+}
+
+namespace {
+
 // Finiteness first, before ANY comparison is made on this data. Every
 // subsequent gate in resolve_colors is an inequality, and an inequality
 // against NaN is false - so a single NaN does not merely produce a bad
@@ -623,6 +745,55 @@ struct PaletteMatch {
     return {.permutation = best_permutation, .total = best_total};
 }
 
+// Hue in degrees, signed so that red either side of 0 stays one run: the
+// order along the wheel of red, orange and yellow is the order of this number.
+[[nodiscard]] float signed_hue(const cv::Vec3f& lab) {
+    return std::atan2(lab(2), lab(1)) * 180.0F / std::numbers::pi_v<float>;
+}
+
+// Two clusters that hue classification puts in ONE band, when the band beside
+// it is empty, are the two neighbours and not twins: a cast or a washed
+// sticker moved both into the same band, and which is which is the one thing
+// the light cannot change - the orange is the yellower. Measured: the orange
+// centre reads at a hue of 28 to 41 degrees against classify_lab's edge at 44
+// in every recording, daylight included, so the two arrive in the red band
+// together and the distance matching was left to tell them apart; under
+// tungsten light it named them backwards.
+void split_neighbouring_bands(const MeanArray& means, std::array<FacetColor, face_count>& names) {
+    constexpr std::array<std::pair<FacetColor, FacetColor>, 2> kNeighbours = {
+        {
+            {FacetColor::red, FacetColor::orange},
+            {FacetColor::orange, FacetColor::yellow},
+        },
+    };
+    for (const auto& [lower, upper] : kNeighbours) {
+        std::array<std::size_t, face_count> in_lower{};
+        std::array<std::size_t, face_count> in_upper{};
+        std::size_t lowers = 0;
+        std::size_t uppers = 0;
+        for (std::size_t c = 0; c < face_count; ++c) {
+            if (names.at(c) == lower) {
+                in_lower.at(lowers++) = c;
+            } else if (names.at(c) == upper) {
+                in_upper.at(uppers++) = c;
+            }
+        }
+        if (lowers == 2 && uppers == 0) {
+            const std::size_t yellower =
+                signed_hue(means.at(in_lower.at(0))) > signed_hue(means.at(in_lower.at(1)))
+                    ? in_lower.at(0)
+                    : in_lower.at(1);
+            names.at(yellower) = upper;
+        } else if (uppers == 2 && lowers == 0) {
+            const std::size_t redder =
+                signed_hue(means.at(in_upper.at(0))) < signed_hue(means.at(in_upper.at(1)))
+                    ? in_upper.at(0)
+                    : in_upper.at(1);
+            names.at(redder) = lower;
+        }
+    }
+}
+
 // What classify_lab made of each cluster mean, and which of the three
 // outcomes the override came to.
 struct HueNaming {
@@ -636,19 +807,26 @@ struct HueNaming {
 // a strong wash even with the global 1-1 constraint. When hue classification
 // names the six clusters DISTINCTLY, trust it outright; on any collision (two
 // washed clusters in one hue band) keep the exact global-distance
-// permutation instead.
+// permutation instead - except for the one collision that has an answer
+// independent of the light, two neighbours in one band (see
+// split_neighbouring_bands). The cluster `white_side` names, when the caller
+// has found the white, is white outright.
 [[nodiscard]] HueNaming apply_hue_names(const MeanArray& means, const ColorPalette& palette,
-                                        std::array<std::size_t, face_count>& permutation) {
+                                        std::array<std::size_t, face_count>& permutation,
+                                        std::optional<std::size_t> white_side) {
     HueNaming naming;
-    std::array<std::size_t, face_count> hue_names{};
-    std::array<int, face_count + 1> name_counts{};
+    std::array<FacetColor, face_count> names{};
     bool any_unknown = false;
     for (std::size_t c = 0; c < face_count; ++c) {
         naming.readings.at(c) = classify_lab_explained(means.at(c));
-        const auto color = naming.readings.at(c).facelet.color;
-        any_unknown = any_unknown || color == FacetColor::unknown;
-        hue_names.at(c) = static_cast<std::size_t>(color);
-        ++name_counts.at(static_cast<std::size_t>(color));
+        names.at(c) = white_side == c ? FacetColor::white : naming.readings.at(c).facelet.color;
+        any_unknown = any_unknown || names.at(c) == FacetColor::unknown;
+    }
+    split_neighbouring_bands(means, names);
+
+    std::array<int, face_count + 1> name_counts{};
+    for (const FacetColor name : names) {
+        ++name_counts.at(static_cast<std::size_t>(name));
     }
     const bool all_distinct =
         std::ranges::all_of(name_counts, [](int count) { return count <= 1; });
@@ -670,7 +848,7 @@ struct HueNaming {
     }
     for (std::size_t c = 0; c < face_count; ++c) {
         for (std::size_t p = 0; p < face_count; ++p) {
-            if (static_cast<std::size_t>(palette.entries.at(p).color) == hue_names.at(c)) {
+            if (palette.entries.at(p).color == names.at(c)) {
                 permutation.at(c) = p;
                 break;
             }
@@ -707,15 +885,16 @@ struct HueNaming {
 }  // namespace
 
 Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
-    const std::array<CapturedFace, 6>& faces) {
-    const auto explained = resolve_colors_explained(faces);
+    const std::array<CapturedFace, 6>& faces, std::optional<std::size_t> white_side) {
+    const auto explained = resolve_colors_explained(faces, white_side);
     if (!explained) {
         return std::unexpected(explained.error());
     }
     return explained->faces;
 }
 
-Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 6>& faces) {
+Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 6>& faces,
+                                                 std::optional<std::size_t> white_side) {
     CUBE_ZONE_SCOPED_N("vision.resolve_colors");
     SampleArray samples{};
     for (std::size_t face = 0; face < face_count; ++face) {
@@ -746,7 +925,7 @@ Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 
     const ColorPalette palette = default_palette();
     const PaletteMatch match = best_palette_permutation(means, palette);
     std::array<std::size_t, face_count> permutation = match.permutation;
-    const HueNaming hue = apply_hue_names(means, palette, permutation);
+    const HueNaming hue = apply_hue_names(means, palette, permutation, white_side);
     resolution.match_cost = match.total;
     resolution.hue_override = hue.result;
     resolution.hue_changed_names = permutation != match.permutation;
