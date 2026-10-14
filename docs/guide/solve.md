@@ -82,6 +82,11 @@ On a wide window every stage is listed on the right, the finished ones ticked
 and the current one opened out; on a narrow window only the current stage is
 shown.
 
+<figure markdown="span">
+  ![The solve screen in the narrow layout: the cube, the method buttons, the current stage and Previous and Next move.](img/solve-middle-narrow-light.webp){ loading=lazy width="320" }
+  <figcaption>The narrow layout, which is also what a phone's browser shows.</figcaption>
+</figure>
+
 ## Three ways to solve it
 
 The row of buttons at the top of the right-hand panel picks the method:
@@ -139,9 +144,34 @@ the screen says **Solved**, with the number of turns and the time it took.
   <figcaption>The solved screen. The numbers here are from a test run.</figcaption>
 </figure>
 
-**Scan another cube** goes straight back to the scan. The other button, *Review
-the solution*, does not do anything yet.
+**Scan another cube** goes straight back to the scan. **Review the solution**
+opens [the whole solution](#reviewing-the-solution). Either way the solve is
+kept in your [history](history.md).
+
+## Reviewing the solution
+
+**Review the solution** on the solved screen (or a finished solve in your
+[history](history.md)) lists every turn, grouped by stage, with what each
+stage does and why, beside a cube that shows the position *before* the turn
+you have selected.
+
+<figure markdown="span">
+  ![The solution screen: the stages and every turn in a list, with a 3D cube and Previous, Play and Next.](img/solution-middle-wide-light.webp#only-light){ loading=lazy }
+  ![The solution screen: the stages and every turn in a list, with a 3D cube and Previous, Play and Next.](img/solution-middle-wide-dark.webp#only-dark){ loading=lazy }
+  <figcaption>The solution, part-way through.</figcaption>
+</figure>
+
+- **Previous** and **Next** step one turn, and the cube turns the layer so
+  you can see it. **Play** runs the turns one after another; it becomes
+  **Pause**, and **Start again** at the end.
+- **Tap a row** to jump to that turn.
+- The keys do the same: the arrow keys, <kbd>Space</kbd> to play and pause,
+  <kbd>Home</kbd> and <kbd>End</kbd> for the first turn and the solved cube.
+- **Back** (or <kbd>Esc</kbd>) returns to where you came from.
+
+It keeps its own place, so looking back over a solve never moves the solve
+you are in the middle of.
 
 ## Next
 
-[Settings and shortcuts](settings.md).
+[Past solves](history.md), then [Settings and shortcuts](settings.md).

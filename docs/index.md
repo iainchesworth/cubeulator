@@ -10,8 +10,8 @@ nothing to install. New here? Start with the **[user guide](guide/index.md)**.
 !!! note "Status: pre-release"
     For Windows, macOS and Linux, and in a browser; native phone apps are not a
     target of this release. The scan has been checked on recorded sessions and a
-    webcam, not yet across cameras, rooms and cubes, and there is no review
-    screen yet. The
+    webcam, not yet across cameras, rooms and cubes, and a sticker read wrongly
+    cannot yet be corrected by hand. The
     [changelog](https://github.com/iainchesworthlabs/cubeulator/blob/main/CHANGELOG.md)
     says what each release does and what is not yet proven.
 

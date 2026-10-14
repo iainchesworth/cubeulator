@@ -7,9 +7,10 @@ progress starts again from the first side, because the camera is closed while
 Settings is open.
 
 <figure markdown="span">
-  ![Settings: Camera, Solving, Appearance, Language, Cube style, Cube motion and Rendering, with a 3D cube beside them.](img/settings-wide-light.webp#only-light){ loading=lazy }
-  ![Settings: Camera, Solving, Appearance, Language, Cube style, Cube motion and Rendering, with a 3D cube beside them.](img/settings-wide-dark.webp#only-dark){ loading=lazy }
-  <figcaption>Settings in a tall window. In a normal one the list scrolls.</figcaption>
+  ![Settings: Camera, Solving, Appearance, Language, History, Cube style and Cube motion, with a 3D cube beside them.](img/settings-wide-light.webp#only-light){ loading=lazy }
+  ![Settings: Camera, Solving, Appearance, Language, History, Cube style and Cube motion, with a 3D cube beside them.](img/settings-wide-dark.webp#only-dark){ loading=lazy }
+  <figcaption>The top of Settings on a desktop window. The list goes on, to
+  Rendering, About and the Developer rows, and scrolls.</figcaption>
 </figure>
 
 ## What is there
@@ -20,11 +21,13 @@ Settings is open.
 | **Solving** | The method: *Beginner*, *Intermediate* or *Advanced*. The same buttons are on the solve screen. See [Following the solution](solve.md#three-ways-to-solve-it). | Yes |
 | **Appearance** | *Same as this device*, *Light* or *Dark*. It applies at once. | Yes |
 | **Language** | *Same as this device*, or one of nine languages. It applies at once. See below. | Yes |
+| **History** | *Keep a history of solves*, on by default, and **Clear history**. Both are described in [Past solves](history.md). | Yes |
 | **Cube style** | How the 3D cube is shaded: *Physically-Based Realism* (the default), *Instructional Glow* or *Borderlands Cel-Shading*. | No |
 | **Cube motion** | Whether the cube on the start and settings screens turns by itself when left alone, and how fast. | No |
 | **Rendering** | Which graphics system draws the window (Automatic, Direct3D 11 or 12, Vulkan, OpenGL; what is offered depends on the system). Automatic is right unless the cube does not draw. A change takes effect the next time Cubeulator starts. | Yes |
 | **About Cubeulator** | The name and version. (On a Mac it is in the app menu.) | |
 | **Show frame rate** | A small counter over the 3D cube, for people measuring performance. | No |
+| **Write diagnostics to a file**, **Also keep camera frames**, **Snapshot now** | For people debugging a scan: write what the scan reads and decides to a file on your device. Off every time the app starts. See [Privacy](privacy.md#developer-recording-and-diagnostics). | No |
 
 A wide window also has a **Test turn** button under the cube, which turns a
 random layer so you can see the cube style at work.
@@ -67,9 +70,12 @@ carries its own). On Linux, install a CJK font such as Noto Sans CJK.
 | Close window, Minimise | | <kbd>⌘</kbd>+<kbd>W</kbd>, <kbd>⌘</kbd>+<kbd>M</kbd> | Anywhere |
 | Next move | <kbd>→</kbd>, <kbd>Space</kbd>, <kbd>Enter</kbd> | the same | The solve screen |
 | Previous move | <kbd>←</kbd> | the same | The solve screen |
+| Play or pause, first turn, solved cube | <kbd>Space</kbd>, <kbd>Home</kbd>, <kbd>End</kbd> | the same | The solution screen ([Following the solution](solve.md#reviewing-the-solution)) |
+| Back | <kbd>Esc</kbd> | the same | The history and solution screens, and a question asking before it deletes |
+| Diagnostics on or off, snapshot | <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>D</kbd>, <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | <kbd>⌘</kbd> in place of <kbd>Ctrl</kbd> | Anywhere ([Privacy](privacy.md#developer-recording-and-diagnostics)) |
 
-There is no *Esc* or back key yet: use the **Back**, **Cancel** and **Finish**
-buttons.
+*Esc* goes back on the history and solution screens; elsewhere use the
+**Back**, **Cancel** and **Finish** buttons.
 
 On a Mac the same actions are in the menu bar (File, View, Window, Help). The
 Help item is greyed out: there is no help screen in this release.

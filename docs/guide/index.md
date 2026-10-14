@@ -35,7 +35,8 @@ solution, and shows you the turns one at a time on a 3D cube.
    that turn on your cube, and press *Next move* (or let the camera see it and
    it steps on by itself). See [Following the solution](solve.md).
 4. **Finish.** The screen says *Solved* with the number of turns and the time,
-   and offers another scan.
+   and offers another scan, or a review of the whole solution. The solve is
+   kept in [your history](history.md).
 
 ## In this guide
 
@@ -44,6 +45,7 @@ solution, and shows you the turns one at a time on a 3D cube.
 | [Installing](install.md) | The package for each system, the first-run prompts, and uninstalling |
 | [Scanning a cube](scan.md) | How to hold the cube, what the screen is telling you, and what to do when it asks again |
 | [Following the solution](solve.md) | The solve screen, the three methods, and how the camera follows your turns |
+| [Past solves](history.md) | The list of cubes you have solved, and carrying on one you left |
 | [Settings and shortcuts](settings.md) | Camera, method, appearance, language, and the keyboard |
 | [Privacy](privacy.md) | What the camera picture is used for, and what is kept |
 | [Troubleshooting](troubleshooting.md) | When it will not start, will not read a side, or will not agree with your cube |
@@ -57,10 +59,9 @@ solution, and shows you the turns one at a time on a 3D cube.
       checked on recorded sessions of one cube in tungsten light and in backlit
       daylight, and on a webcam by hand. Other cameras, rooms and cubes are what
       the beta is for.
-    - **There is no review screen.** If a sticker is read wrongly, the scan will
-      say the six sides do not make a cube, and you start the scan again.
-    - **Two buttons do not do anything yet:** *History* on the start screen and
-      *Review the solution* on the solved screen.
+    - **A sticker cannot be corrected by hand yet.** If one is read wrongly, the
+      scan will say the six sides do not make a cube, and you start the scan
+      again.
     - **Some of the wording is English whatever language you choose:** the scan
       screen's guidance and most of the words around the solution. See
       [Settings and shortcuts](settings.md#language).

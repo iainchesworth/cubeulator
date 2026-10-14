@@ -25,7 +25,12 @@ Notes for whoever does step 2:
   (130, 136, 142) at the bottom, and no boxes. Do not commit that change: the
   unit tests want the clutter.
 * The tour runs at 900x640 (wide) and 390x844 (narrow), light and dark. The
-  Settings page scrolls, so its pictures show the top of it.
+  guide's Settings pictures were taken with the window made about twice as
+  tall for that one shot (a scratch edit in tour_test.cpp, like the other two),
+  and the wide one is then cropped (CROP_HEIGHT below).
+* A scratch run for the pictures also renames the fake camera in
+  tests/system/fake_camera.cpp to something a person would own ("Integrated
+  Webcam"), because "Test camera (drawn frames)" is not what a user sees.
 * Needs Pillow (`pip install pillow`); nothing else in the repository does.
 
 Usage:
@@ -51,10 +56,22 @@ USED = [
     ("solve-start", "wide", ("light", "dark")),
     ("solve-middle", "wide", ("light", "dark")),
     ("solve-end", "wide", ("light", "dark")),
-    ("complete", "wide", ("light",)),
+    ("solve-middle", "narrow", ("light",)),
+    ("solution-middle", "wide", ("light", "dark")),
+    ("complete", "wide", ("light", "dark")),
+    ("history", "wide", ("light", "dark")),
+    ("history-empty", "wide", ("light",)),
     ("settings", "wide", ("light", "dark")),
     ("settings", "narrow", ("light",)),
 ]
+
+
+# Pictures cut to a height, so that one does not end on a heading with nothing
+# under it: Settings in the wide tour is taller than the tour's window made for
+# it, and stops part-way down the Rendering section. The narrow one is whole.
+CROP_HEIGHT = {
+    ("settings", "wide"): 1115,
+}
 
 
 def find_source(tour: Path, screen: str, layout: str, theme: str) -> Path | None:
@@ -99,9 +116,11 @@ def main() -> int:
                 continue
             target = args.out / f"{screen}-{layout}-{theme}.webp"
             with Image.open(source) as picture:
-                picture.convert("RGB").save(
-                    target, "WEBP", quality=args.quality, method=6
-                )
+                image = picture.convert("RGB")
+                height = CROP_HEIGHT.get((screen, layout))
+                if height is not None and image.height > height:
+                    image = image.crop((0, 0, image.width, height))
+                image.save(target, "WEBP", quality=args.quality, method=6)
             print(f"{target.name}  {target.stat().st_size // 1024} KB")
             written += 1
 
