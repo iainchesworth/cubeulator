@@ -1,0 +1,53 @@
+name: Changelog fragment
+
+# Does a pull request that changes what a person using the app can see carry a
+# changelog fragment (changelog.d/README.md), or the `no-changelog` label? And is
+# every fragment it adds well formed?
+#
+# ADVISORY: it is not one of develop's required checks (docs/branch-protection.md),
+# so it has no merge_group trigger and never blocks the queue. It marks the pull
+# request, and the line a person was going to write in CHANGELOG.md is written
+# where it cannot conflict with anyone else's. It becomes required when the habit
+# has held for a while.
+#
+# Plain bash and git (tools/release/check-fragment.sh), so that it runs on the
+# shared self-hosted runners that have little else.
+
+on:
+  pull_request:
+    branches: [develop]
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+
+permissions: {}
+
+concurrency:
+  group: changelog-fragment-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  fragment:
+    name: Changelog fragment
+    # Not a change a reader of the changelog is told about: a release is
+    # prepared (it consumes the fragments), Dependabot, and the back-merge.
+    if: >-
+      ${{ !startsWith(github.head_ref, 'release/')
+      && !startsWith(github.head_ref, 'dependabot/')
+      && !startsWith(github.head_ref, 'support/back-merge-') }}
+    # Routed by the CONTROL_RUNNER_JSON repository variable, like the other
+    # seconds-long checks; a fork PR is pinned to the hosted image (docs/ci.md).
+    runs-on: ${{ (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository) && fromJSON('["ubuntu-24.04"]') || fromJSON(vars.CONTROL_RUNNER_JSON || '["ubuntu-24.04"]') }}
+    permissions:
+      contents: read
+    steps:
+      # The whole history: the pull request is diffed against its base.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check the fragments
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          NO_CHANGELOG: ${{ contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
+        run: bash tools/release/check-fragment.sh "origin/${BASE_REF}" HEAD "$NO_CHANGELOG"

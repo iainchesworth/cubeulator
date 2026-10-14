@@ -123,6 +123,14 @@ One paragraph saying what this release is. It is the summary line of the notes.
 > **Pre-release.** What is not yet proven. Pre-releases only.
 ```
 
+- **A change adds a fragment, not a line here.** A file
+  `changelog.d/<slug>.<type>.md` holds one item
+  ([`changelog.d/README.md`](https://github.com/iainchesworthlabs/cubeulator/blob/develop/changelog.d/README.md)).
+  Pull requests that are open at once would otherwise all edit `[Unreleased]`
+  and conflict. `prepare_release.py` merges the fragments into it, under their
+  types, and deletes them; a release with any left over fails
+  `check_release.py`, because its notes would miss them. What is written in
+  `[Unreleased]` by hand (the summary, the pre-release caveat) stays there.
 - Newest section first; one `## [Unreleased]` at the top.
 - Subsections are `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`,
   `Security`, nothing else.

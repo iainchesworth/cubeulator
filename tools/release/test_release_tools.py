@@ -8,6 +8,8 @@ wrong is not a tag.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import sys
 import tempfile
 import textwrap
@@ -18,6 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import changelog  # noqa: E402
 import check_release  # noqa: E402
+import fragments  # noqa: E402
 import make_sbom  # noqa: E402
 import prepare_release  # noqa: E402
 import render_release_notes as notes  # noqa: E402
@@ -418,6 +421,213 @@ class Sbom(unittest.TestCase):
         extra.write_text("x")
         doc = self.make(files=files + [extra])
         self.assertEqual(len(doc["documentDescribes"]), 1)
+
+
+class Fragments(unittest.TestCase):
+    def write(self, root: Path, name: str, text: str):
+        d = root / "changelog.d"
+        d.mkdir(exist_ok=True)
+        (d / name).write_text(text, encoding="utf-8", newline="")
+
+    def tree(self, log: str = UNRELEASED):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        (root / "CHANGELOG.md").write_text(log, encoding="utf-8", newline="")
+        (root / "CMakeLists.txt").write_text(Prepare.CMAKE, encoding="utf-8", newline="")
+        return root
+
+    def test_a_good_fragment_has_no_problems(self):
+        self.assertEqual(
+            fragments.problems_in("scan-review.added.md", "**A review screen.** Fix a sticker.\n"), []
+        )
+
+    def test_each_mistake_is_named(self):
+        cases = {
+            "wrong type": ("a.tweaked.md", "**A.** b", "one of"),
+            "no suffix": ("a.md", "**A.** b", "name must be"),
+            "empty": ("a.added.md", "\n", "empty"),
+            "no lead-in": ("a.added.md", "It does a thing.", "bold lead-in"),
+            "dash": ("a.added.md", "- **A.** b", "leading dash"),
+            "two paragraphs": ("a.added.md", "**A.** b\n\nAnd c.", "blank line"),
+            "heading": ("a.added.md", "**A.** b\n### Fixed\nc", "heading"),
+        }
+        for label, (name, text, fragment) in cases.items():
+            with self.subTest(label):
+                found = fragments.problems_in(name, text)
+                self.assertTrue(any(fragment in p for p in found), found)
+
+    def test_they_are_read_in_changelog_order_and_readme_is_not_one(self):
+        root = self.tree()
+        self.write(root, "README.md", "How to write one.")
+        self.write(root, "b.fixed.md", "**B.** x")
+        self.write(root, "a.added.md", "**A.** x")
+        self.write(root, "c.added.md", "**C.** x")
+        found, problems = fragments.read(root / "changelog.d")
+        self.assertEqual(problems, [])
+        self.assertEqual([f.name for f in found], ["a.added.md", "c.added.md", "b.fixed.md"])
+
+    def test_merging_adds_to_the_subsection_and_keeps_what_was_written(self):
+        frag = [fragments.Fragment("n.added.md", "added", "**New.** It does a thing.")]
+        out = fragments.merge(UNRELEASED, frag)
+        body = changelog.split_body(changelog.get(out, "Unreleased").body)
+        added = dict(body.subsections)["Added"]
+        self.assertIn("- **Something.** It does a thing.", added)
+        self.assertIn("- **New.** It does a thing.", added)
+        self.assertLess(added.index("Something"), added.index("New"))
+        self.assertEqual(body.intro, "A summary.")
+        self.assertEqual(body.caveat, "> **Pre-release.** Unproven.")
+
+    def test_merging_makes_a_missing_subsection_in_the_changelog_order(self):
+        frags = [
+            fragments.Fragment("s.security.md", "security", "**S.** x"),
+            fragments.Fragment("f.fixed.md", "fixed", "**F.** x"),
+        ]
+        out = fragments.merge(UNRELEASED, frags)
+        body = changelog.split_body(changelog.get(out, "Unreleased").body)
+        self.assertEqual([t for t, _ in body.subsections], ["Added", "Fixed", "Security"])
+        self.assertEqual(body.caveat, "> **Pre-release.** Unproven.")
+
+    def test_a_long_item_keeps_its_lines_in_the_list(self):
+        frag = [fragments.Fragment("n.added.md", "added", "**New.** It does\na thing over\nthree lines.")]
+        out = fragments.merge("## [Unreleased]\n", frag)
+        self.assertIn("- **New.** It does\n  a thing over\n  three lines.", out)
+
+    def test_nothing_to_merge_changes_nothing(self):
+        self.assertEqual(fragments.merge(UNRELEASED, []), changelog.normalise(UNRELEASED))
+
+    def test_preparing_a_release_takes_the_fragments_in_and_removes_them(self):
+        root = self.tree()
+        self.write(root, "a.fixed.md", "**Fixed it.** It was broken.")
+        rc = prepare_release.main(["0.3.0-beta.1", "--root", str(root), "--date", "2026-12-01"])
+        self.assertEqual(rc, 0)
+        log = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn("## [0.3.0-beta.1] - 2026-12-01", log)
+        self.assertIn("- **Fixed it.** It was broken.", log)
+        self.assertEqual(list((root / "changelog.d").glob("*.fixed.md")), [])
+
+    def test_check_keeps_the_fragments(self):
+        root = self.tree()
+        self.write(root, "a.fixed.md", "**Fixed it.** It was broken.")
+        prepare_release.main(["0.3.0-beta.1", "--root", str(root), "--check"])
+        self.assertTrue((root / "changelog.d" / "a.fixed.md").exists())
+        self.assertNotIn("Fixed it", (root / "CHANGELOG.md").read_text(encoding="utf-8"))
+
+    def test_a_malformed_fragment_stops_the_cut_and_changes_nothing(self):
+        root = self.tree()
+        self.write(root, "a.fixed.md", "no lead-in here")
+        before = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+        rc = prepare_release.main(["0.3.0-beta.1", "--root", str(root)])
+        self.assertEqual(rc, 1)
+        self.assertEqual((root / "CHANGELOG.md").read_text(encoding="utf-8"), before)
+
+    def test_a_dry_run_reads_them_and_a_release_refuses_to_leave_them(self):
+        root = self.tree()
+        root_cmake = Prepare.CMAKE.replace("VERSION 0.1.0", "VERSION 0.2.0").replace(
+            'set(CUBEULATOR_VERSION_PRERELEASE "" CACHE INTERNAL "pre-release label")',
+            'set(CUBEULATOR_VERSION_PRERELEASE "beta.1")',
+        )
+        (root / "CMakeLists.txt").write_text(root_cmake, encoding="utf-8", newline="")
+        self.write(root, "a.fixed.md", "**Fixed it.** It was broken.")
+        dry = check_release.check(root, dry_run=True)
+        self.assertEqual(dry.problems, [])
+        # the same tree, cut by hand with its fragment left behind
+        cut = changelog.cut(UNRELEASED, "0.2.0-beta.1", date(2026, 10, 20))
+        (root / "CHANGELOG.md").write_text(cut, encoding="utf-8", newline="")
+        strict = check_release.check(root)
+        self.assertTrue(any("fragment" in p for p in strict.problems), strict.problems)
+
+    def test_the_repository_fragments_are_well_formed(self):
+        found, problems = fragments.read(prepare_release.ROOT / fragments.DIRECTORY)
+        self.assertEqual(problems, [])
+
+
+def _bash() -> str | None:
+    """A bash that can run the script: on Windows, Git's, not the WSL stub on PATH."""
+    git = shutil.which("git")
+    if sys.platform == "win32" and git:
+        candidate = Path(git).resolve().parent.parent / "bin" / "bash.exe"
+        if candidate.exists():
+            return str(candidate)
+    return shutil.which("bash")
+
+
+@unittest.skipUnless(_bash() and shutil.which("git"), "needs bash and git")
+class FragmentCheckScript(unittest.TestCase):
+    SCRIPT = Path(__file__).resolve().parent / "check-fragment.sh"
+
+    def repo(self):
+        tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.addCleanup(tmp.cleanup)
+        root = Path(tmp.name)
+        self.git(root, "init", "-q", "-b", "develop")
+        self.git(root, "config", "user.email", "t@example.invalid")
+        self.git(root, "config", "user.name", "t")
+        self.git(root, "config", "commit.gpgsign", "false")
+        (root / "README.md").write_text("x\n", encoding="utf-8")
+        self.git(root, "add", "-A")
+        self.git(root, "commit", "-qm", "base")
+        self.git(root, "switch", "-qc", "topic")
+        return root
+
+    def git(self, root: Path, *args: str):
+        subprocess.run(["git", *args], cwd=root, check=True, capture_output=True)
+
+    def commit(self, root: Path, files: dict[str, str]):
+        for name, text in files.items():
+            path = root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8", newline="")
+        self.git(root, "add", "-A")
+        self.git(root, "commit", "-qm", "change")
+
+    def run_check(self, root: Path, label: str = "false"):
+        proc = subprocess.run(
+            [_bash(), self.SCRIPT.as_posix(), "develop", "HEAD", label],
+            cwd=root,
+            capture_output=True,
+            text=True,
+        )
+        return proc.returncode, proc.stdout + proc.stderr
+
+    def test_a_visible_change_without_a_fragment_is_flagged(self):
+        root = self.repo()
+        self.commit(root, {"src/app/x.cpp": "int x;\n"})
+        rc, out = self.run_check(root)
+        self.assertEqual(rc, 1)
+        self.assertIn("no changelog fragment", out)
+
+    def test_the_label_opts_out(self):
+        root = self.repo()
+        self.commit(root, {"src/app/x.cpp": "int x;\n"})
+        rc, out = self.run_check(root, "true")
+        self.assertEqual(rc, 0, out)
+
+    def test_a_fragment_satisfies_it(self):
+        root = self.repo()
+        self.commit(root, {"src/app/x.cpp": "int x;\n", "changelog.d/x.fixed.md": "**Fixed.** Why.\n"})
+        rc, out = self.run_check(root)
+        self.assertEqual(rc, 0, out)
+
+    def test_a_change_nobody_reads_about_needs_none(self):
+        root = self.repo()
+        self.commit(root, {"tests/unit/x_test.cpp": "int x;\n", "docs/page.md": "x\n"})
+        rc, out = self.run_check(root)
+        self.assertEqual(rc, 0, out)
+
+    def test_a_bad_fragment_is_flagged_even_when_none_was_needed(self):
+        root = self.repo()
+        for name, text in {
+            "a.tweaked.md": "**A.** b\n",
+            "b.added.md": "no lead-in\n",
+            "c.added.md": "**C.** b\n\nsecond paragraph\n",
+        }.items():
+            self.commit(root, {f"changelog.d/{name}": text})
+        rc, out = self.run_check(root)
+        self.assertEqual(rc, 1)
+        self.assertIn("the name must be", out)
+        self.assertIn("bold lead-in", out)
+        self.assertIn("blank line", out)
 
 
 class Check(unittest.TestCase):

@@ -2,7 +2,9 @@
 
 *For people following what has shipped. How a release is cut and numbered is
 [docs/releasing.md](docs/releasing.md); the project overview is the
-[README](README.md).*
+[README](README.md). A change adds a small file under
+[`changelog.d/`](changelog.d/README.md) rather than editing this one; they are
+merged in when a release is prepared.*
 
 All notable changes to this project are documented in this file, in the
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format. This
