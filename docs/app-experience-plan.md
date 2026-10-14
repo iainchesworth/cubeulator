@@ -84,7 +84,8 @@ Read from `feature/direct-scan` at `fa81b2e`.
 - *Journey.* The solve screen's last step goes to Complete, and **Rescan**
   leaves the solve screen for the scan; Complete's **Scan another cube**
   works. The Home **History** button and Complete's **Review the solution**
-  still do nothing. There is still no back handling: Esc and the Android back
+  did nothing at that date; both are built since (`HistoryScreen.qml`,
+  `SolutionScreen.qml`). There is still no back handling: Esc and the Android back
   key are not bound, and the desktop shell (`DesktopShell.qml`) adds the
   shortcuts for Settings, a new scan, full screen and quit.
 - *Settings.* *Detect hands with AI* and *Auto-advance* went with
@@ -390,16 +391,16 @@ follows it.
 
 ### Where the phases stand
 
-As of 2026-10-14, `develop` at 1644b058, from the code.
+As of 2026-10-14, `develop` at 7e764eef, from the code.
 
 | phase | state |
 |---|---|
 | E0a System tests | Landed (18). `tests/system` boots the real `Main.qml`, walks the journey and takes the screenshot tour; `src/app/qt` coverage is reported, not gated |
 | E0b Licences | Landed (27). Notices are generated from the build and ship with the desktop packages; no screen shows them yet |
-| E1 Design | Landed: `docs/design/`. The prototype page is one string behind `strings.json` until `build.py` is run |
+| E1 Design | Landed: `docs/design/`. The prototype page is built from `strings.json` by `build.py`; run it after the strings change |
 | E2a Kit | Not landed. `Theme.qml` is the legacy one; `AppButton` is still an item and a mouse area; only `installBundledFonts()` is there |
 | E2b Translations | Landed (20), with ja and zh-CN machine drafts (96). See [i18n.md](i18n.md) |
-| E3a-E3d Screens | Nothing on `develop`. The legacy Launch, Permission, Scan, Solve, Settings and Complete screens remain, some converted to ids |
+| E3a-E3d Screens | Mostly not on `develop`: the legacy Launch, Permission, Scan, Solve, Settings and Complete screens remain, some converted to ids. The solution and History screens are built (`SolutionScreen.qml`, `HistoryScreen.qml`) |
 | E4a Desktop | Landed (3): icon, version resource, installers, shortcuts, remembered window, macOS menu bar (`platforms.md` says it has not been run on a Mac). Nothing calls the keep-awake helper yet |
 | E4b Mobile | Nothing on `develop`. No mobile capture, so a phone build cannot scan |
 | E5 Languages | Not reviewed. ja and zh-CN are complete drafts; de, fr, es, he, ar and yi are empty |

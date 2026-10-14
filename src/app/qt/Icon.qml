@@ -85,6 +85,10 @@ Canvas {
         case "check":
             polyline([[20, 6], [9, 17], [4, 12]]);
             break;
+        case "cross":
+            line(6, 6, 18, 18);
+            line(18, 6, 6, 18);
+            break;
         case "globe":
             circle(12, 12, 9);
             line(3, 12, 21, 12);

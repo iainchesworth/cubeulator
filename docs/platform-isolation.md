@@ -56,6 +56,8 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | The name in the version block | `CUBEULATOR_PLATFORM_DISPLAY_NAME` | `src/lib` (`build_target`) |
 | Default Qt plugin for the test binaries | `CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM` | `tests/` |
 | Whether the system tests' window is made invisible (transparent, click-through, never activated) | `CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` | `tests/system/app.cpp`, through `cube_test_platform_facts.hpp` |
+| What a test binary has to be told at link time (the browser: threads, stack, memory, Node) | `CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS` | `tests/` (`cube_test_platform`) |
+| Whether the camera is a native device the test program can open from its own thread (the camera cases under `tests/integration`) | `CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA` | `tests/CMakeLists.txt` |
 | Work before packages are found | `cube_platform_prepare_dependencies()` | `cmake/MobileDependencies.cmake` |
 | Qt runtime next to the app (windeployqt) | `cube_platform_deploy_qt_runtime()` | `src/app/CMakeLists.txt` |
 | One more Qt library next to a binary (QtTest, for the system tests) | `cube_platform_deploy_qt_library()` | `tests/system/CMakeLists.txt` |

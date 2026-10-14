@@ -74,6 +74,7 @@ nav:
       - Vision pipeline: vision-pipeline.md
       - Solve methods: solver-methods.md
       - Recording format: recording-format.md
+      - Live diagnostics: diagnostics.md
       - Platform isolation: platform-isolation.md
       - Dependency strategy: dependency-strategy.md
   - Project:

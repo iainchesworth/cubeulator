@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <cstddef>
 #include <vector>
 
 #include <cube/solver/solver.hpp>
@@ -51,6 +53,14 @@ public:
     // should currently be drawn.
     [[nodiscard]] const Cube& current_cube() const noexcept {
         return cubes_.at(static_cast<std::size_t>(index_));
+    }
+
+    // The cube state after `index` moves have been applied, wherever
+    // current_index() is: what a second view of the same solution needs
+    // (the screen that reviews it) without stepping the first. `index` is
+    // clamped to [0, move_count()].
+    [[nodiscard]] const Cube& cube_at(int index) const noexcept {
+        return cubes_.at(static_cast<std::size_t>(std::clamp(index, 0, move_count())));
     }
 
     // Applies current_move() and advances; a no-op at_end().

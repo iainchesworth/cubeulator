@@ -240,6 +240,27 @@
       "name": "web-emscripten-release",
       "displayName": "Web (WebAssembly, Release)",
       "inherits": ["web-emscripten-base", "release"]
+    },
+    {
+      "name": "web-emscripten-tests",
+      "displayName": "Web (WebAssembly, Release) - unit, integration and performance tests, run under Node",
+      "description": "The window-free test binaries (cube_unit_tests, cube_integration_tests, cube_perf_tests) built for WebAssembly and run by ctest under Node, with the in-process recorder behind the zone macros. The app itself is tests/web's, through a browser.",
+      "inherits": ["web-emscripten-base", "release"],
+      "cacheVariables": {
+        "CUBEULATOR_BUILD_TESTS": "ON",
+        "CUBEULATOR_BUILD_APP": "OFF",
+        "CUBEULATOR_ENABLE_PROFILE_RECORDER": "ON"
+      }
+    },
+    {
+      "name": "web-emscripten-diagnostics",
+      "displayName": "Web (WebAssembly, Release + recorder + test driver)",
+      "description": "Release, with function names kept, the in-process recorder behind the zone macros (window.cubeulatorProfile: a Chrome trace, a CSV, a summary) and the read-only driver the Playwright suite uses (window.cubeulatorDriver). For measuring and for tests/web, not for publishing; docs/profiling.md, \"In the browser\".",
+      "inherits": ["web-emscripten-base", "release"],
+      "cacheVariables": {
+        "CUBEULATOR_ENABLE_PROFILE_RECORDER": "ON",
+        "CUBEULATOR_WEB_TEST_DRIVER": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -261,7 +282,9 @@
     { "name": "ios-clang-debug", "configurePreset": "ios-clang-debug" },
     { "name": "ios-clang-release", "configurePreset": "ios-clang-release" },
     { "name": "web-emscripten-debug", "configurePreset": "web-emscripten-debug" },
-    { "name": "web-emscripten-release", "configurePreset": "web-emscripten-release" }
+    { "name": "web-emscripten-release", "configurePreset": "web-emscripten-release" },
+    { "name": "web-emscripten-diagnostics", "configurePreset": "web-emscripten-diagnostics" },
+    { "name": "web-emscripten-tests", "configurePreset": "web-emscripten-tests" }
   ],
   "testPresets": [
     {

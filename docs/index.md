@@ -55,5 +55,6 @@ yourself, see [Getting started](getting-started.md).
 | [Architecture](architecture.md) | What is implemented, and how it fits together |
 | [Dependency strategy](dependency-strategy.md) | vcpkg on desktop, mobile and WebAssembly |
 | [Testing & coverage](testing.md) | Test layers, and the 80% coverage gate |
+| [Live diagnostics](diagnostics.md) | Seeing what the running app reads and decides, without a restart |
 | [Contributing](CONTRIBUTING.md) | The branching model, code style, the PR process |
 | [Cutting a release](releasing.md) | How a version becomes packages on a GitHub Release |

@@ -20,6 +20,22 @@ string(APPEND VCPKG_C_FLAGS " -pthread")
 string(APPEND VCPKG_CXX_FLAGS " -pthread")
 string(APPEND VCPKG_LINKER_FLAGS " -pthread")
 
+# C++ exceptions, in the mode Qt's kit uses (JavaScript-based, -fexceptions).
+# Emscripten compiles them out by default: a `throw` becomes a call that aborts
+# the program and a `catch` is never entered, so the app's own handlers (a
+# degenerate camera frame is to drop one frame, not the scan; the solver's table
+# build joins its workers behind a catch) would not be there, an OpenCV error
+# would end the page rather than the call, and Catch2 - which reports a failed
+# check by throwing - would abort on the first one. The mode has to be Qt's: the
+# kit is built with -fexceptions, and an object built with -fwasm-exceptions
+# cannot be linked with it (the two use different C++ ABIs for unwinding:
+# "undefined symbol: __resumeException"). Every object that throws or catches
+# must be built with it, which is why this is here as well as in the platform
+# fragment.
+string(APPEND VCPKG_C_FLAGS " -fexceptions")
+string(APPEND VCPKG_CXX_FLAGS " -fexceptions")
+string(APPEND VCPKG_LINKER_FLAGS " -fexceptions")
+
 # Two options only OpenCV reads (every other port ignores them):
 #
 #  WITH_PTHREADS_PF=OFF   OpenCV's own thread pool. Left on (its default under

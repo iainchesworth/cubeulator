@@ -171,6 +171,27 @@ std::optional<std::string> json_string_field(const std::string& text, ManifestFi
 
 }  // namespace
 
+std::string state_string(const cube::solver::Cube& cube) {
+    constexpr std::array<char, 6> kLetters{'U', 'R', 'F', 'D', 'L', 'B'};
+    std::string out;
+    out.reserve(54);
+    for (const cube::solver::Face face : kManifestFaceOrder) {
+        for (int index = 0; index < 9; ++index) {
+            // A sticker shows the colour that is some face's centre; that
+            // face's letter is the character.
+            const cube::solver::Color colour = cube.at(face, index);
+            char letter = '?';
+            for (std::size_t f = 0; f < kManifestFaceOrder.size(); ++f) {
+                if (cube::solver::canonical_color(kManifestFaceOrder.at(f)) == colour) {
+                    letter = kLetters.at(f);
+                }
+            }
+            out.push_back(letter);
+        }
+    }
+    return out;
+}
+
 std::optional<std::string> state_string_problem(const std::string& state) {
     if (state.size() != 54) {
         return "state must be 54 characters, got " + std::to_string(state.size());

@@ -146,6 +146,20 @@
           }
         }
 
+        // A page that embeds this one for testing (tests/web, through
+        // Playwright's addInitScript) can set window.cubeulatorEnvironment
+        // before the app starts, to pass it the CUBEULATOR_* switches its
+        // diagnostics build reads. Names and values are held to a safe shape.
+        const extra = window.cubeulatorEnvironment;
+        if (extra && typeof extra === 'object') {
+          Object.keys(extra).forEach(function (name) {
+            const value = String(extra[name]);
+            if (/^CUBEULATOR_[A-Z_]{1,40}$/.test(name) && /^[0-9A-Za-z_.-]{0,64}$/.test(value)) {
+              environment[name] = value;
+            }
+          });
+        }
+
         // The Emscripten module (defines cube_app_entry), then Qt's loader.
         load('cube_app.js', function () {
           load('qtloader.js', function () {

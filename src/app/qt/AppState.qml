@@ -9,7 +9,7 @@ import Cubeulator
 QtObject {
     id: state
 
-    property string screen: "launch" // launch | permission | scan | solve | settings | complete
+    property string screen: "launch" // launch | permission | scan | solve | settings | history | complete | solution
 
     // Camera-access screens exist only for mobile platforms, where the OS
     // requires an explicit in-app permission prompt. Desktop platforms grant
@@ -41,7 +41,16 @@ QtObject {
             scanComplete = false;
             completeBeat.stop();
         }
+        // The solve is over: the history entry for it is finished, with the
+        // time this screen is about to show.
+        if (screen === "complete") {
+            SolveHistory.finish();
+        }
         if (screen === "scan") {
+            // A scan precedes whatever solve follows, so the camera has
+            // something to be matched against again (resumeSolve turned it
+            // off, having none).
+            solveCamera = true;
             DirectScan.start(CameraController.selectedDeviceId);
         } else if (screen === "solve" && solveCamera) {
             // The camera the scan used stays as it is, exposure and white
@@ -101,10 +110,24 @@ QtObject {
         onTriggered: state.elapsedSeconds += 1
     }
 
-    function elapsedLabel() {
-        var m = Math.floor(state.elapsedSeconds / 60);
-        var s = state.elapsedSeconds % 60;
+    // The clock the history entry takes its time from: what the complete
+    // screen shows is what the history lists.
+    property var historyClock: Binding {
+        target: SolveHistory
+        property: "elapsedSeconds"
+        value: state.elapsedSeconds
+    }
+
+    // A duration as minutes and seconds, "12:40": the complete screen's form,
+    // and the history's.
+    function durationLabel(seconds) {
+        var m = Math.floor(seconds / 60);
+        var s = seconds % 60;
         return (m < 10 ? "0" + m : m) + ":" + (s < 10 ? "0" + s : s);
+    }
+
+    function elapsedLabel() {
+        return durationLabel(state.elapsedSeconds);
     }
 
     function goLaunch() { screen = "launch"; }
@@ -117,6 +140,39 @@ QtObject {
 
     function closeSettings() {
         screen = previousScreen;
+    }
+
+    // The list of solves kept on this device. Entered from Home; back goes
+    // there. (Settings opened from it comes back to it: openSettings keeps
+    // where it was opened from.)
+    function openHistory() {
+        screen = "history";
+    }
+
+    function closeHistory() {
+        screen = "launch";
+    }
+
+    // Carries on the unfinished solve the history holds, from the turn it was
+    // left at. The cube is solved again with the method it was started with
+    // (which becomes the method from now on, as choosing it on the solve
+    // screen would), and the clock carries on from the time it had. There is no
+    // scan this session for the camera to be matched against, so the solve
+    // screen keeps it off, as the solve demo does. False if there is nothing
+    // that can be carried on under that id.
+    function resumeSolve(id) {
+        var entry = SolveHistory.entry(id);
+        if (!entry.carryOn) {
+            return false;
+        }
+        SettingsState.solveMethod = entry.method;
+        if (!SolveHistory.resume(id)) {
+            return false;
+        }
+        elapsedSeconds = entry.seconds;
+        solveCamera = false;
+        screen = "solve";
+        return true;
     }
 
     function beginScan() {
@@ -144,6 +200,29 @@ QtObject {
     function scanAnother() {
         elapsedSeconds = 0;
         screen = "scan";
+    }
+
+    // The solution screen reviews a solve turn by turn. It is opened for the
+    // solve just finished (SolveController), or for any object shaped like it
+    // (SolutionScreen.qml lists the shape) - the history's entry for a solve
+    // from another day. `subtitle` is a second line under its title, the
+    // date. Back goes to the screen it was opened from.
+    property var solutionSource: SolveController
+    property string solutionSubtitle: ""
+    property string solutionBack: "complete"
+
+    function openSolution(source, subtitle) {
+        solutionSource = source === undefined ? SolveController : source;
+        solutionSubtitle = subtitle === undefined ? "" : subtitle;
+        // Settings opened from the review comes back to it, and a review
+        // opened from there must not make itself the way back.
+        if (screen !== "settings")
+            solutionBack = screen;
+        screen = "solution";
+    }
+
+    function closeSolution() {
+        screen = solutionBack;
     }
 
     // Part-way through a solve the cube and the solution no longer agree:

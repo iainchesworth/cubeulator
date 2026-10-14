@@ -3,10 +3,11 @@
 > **Status in 0.1.0-beta.1:** These are specifications, not descriptions of
 > the app. The app has six screens, all of them the legacy ones in
 > `src/app/qt`, not the kit's: Home, Permission, Scan, Solve, Complete and
-> Settings are each partly what their spec says, and First run, Review and
-> hand entry, The solution, History, Licences, Privacy and Help are not built
-> (About is a placeholder dialog). Each page opens with its own status, and
-> the table at the foot says it at a glance.
+> Settings are each partly what their spec says, The solution and History are
+> built (`SolutionScreen.qml`, `HistoryScreen.qml`), and First run, Review and
+> hand entry, Licences, Privacy and Help are not built (About is a
+> placeholder dialog). Each page opens with its own status, and the table at
+> the foot says it at a glance.
 
 One file per screen. Each follows the same order:
 
@@ -48,8 +49,8 @@ wins and the prototype is wrong.
 | Review and hand entry | [review.md](review.md) | scan (proposal) | Not built |
 | Solve | [solve.md](solve.md) | solve (proposal) | Partly: `SolveScreen.qml` |
 | Complete | [complete.md](complete.md) | solve; chrome by experience | Partly: `CompleteScreen.qml` |
-| The solution | [solution.md](solution.md) | experience | Not built |
-| History | [history.md](history.md) | experience | Not built |
+| The solution | [solution.md](solution.md) | experience | Built, as `SolutionScreen.qml` |
+| History | [history.md](history.md) | experience | Built, as `HistoryScreen.qml` |
 | Settings | [settings.md](settings.md) | experience | Partly: `SettingsScreen.qml` |
 | About | [about.md](about.md) | experience | A placeholder dialog |
 | Licences | [licences.md](licences.md) | experience | Not built (the notices are generated and ship in the packages) |

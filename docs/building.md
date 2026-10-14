@@ -20,6 +20,8 @@ Naming convention: `<os>-<compiler>-<config>`. A preset configures into
 | `android-clang-{debug,release}` | CI builds `release` only; builds the Qt/QML app via Qt for Android |
 | `ios-clang-{debug,release}` | Xcode generator, so macOS only; CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
 | `web-emscripten-{debug,release}` | CI builds `release` only; the Qt/QML app as WebAssembly for a browser — see [WebAssembly (browser)](#webassembly-browser) |
+| `web-emscripten-diagnostics` | Release + the in-process recorder + the browser tests' read-only driver (`window.cubeulatorProfile`, `window.cubeulatorDriver`); built by the `web-test` and `web-perf` legs. For measuring and for `tests/web`, not for publishing |
+| `web-emscripten-tests` | The library and its unit, integration and performance binaries as WebAssembly, run under Node by `ctest` (`CUBEULATOR_BUILD_APP=OFF`); built by the `web-test` leg |
 
 **CI only builds the `release` preset per platform** — that's what would
 actually ship, and vcpkg builds both debug/release variants of every
@@ -112,8 +114,24 @@ cmake --build --preset web-emscripten-release
 
 `QT_ROOT_DIR` is the variable `jurplel/install-qt-action` exports, which is
 what the preset reads to chainload the kit's `qt.toolchain.cmake` (which in
-turn chainloads Emscripten's). The tests are not built for the browser
-(`CUBEULATOR_BUILD_TESTS=OFF`).
+turn chainloads Emscripten's). The app presets do not build the test binaries
+(`CUBEULATOR_BUILD_TESTS=OFF`): a Catch2 program has no page to run in. They
+are the `web-emscripten-tests` preset's, run under Node, and the app itself is
+tested in a browser by `tests/web`; both are described in
+[Browser tests](testing.md#browser-tests).
+
+Two properties of the whole build, because every object in it has to agree:
+
+- **Threads** (`-pthread`): atomics and bulk memory on every object, or
+  `wasm-ld` refuses the shared memory.
+- **Exceptions** (`-fexceptions`): on for this project's code, the vcpkg ports
+  and the link line, as they are in Qt's kit. Emscripten's default is to compile
+  a `throw` to an abort and a `catch` to nothing, which would silently disable
+  the handlers the app has (and fail every Catch2 check). It has to be the
+  kit's mode: an object built with `-fwasm-exceptions` does not link against it.
+
+Both are set in the triplet and in `src/app/platform/web/platform.cmake`; a
+change to either rebuilds every port.
 
 Serve the output directory with any static server - a `file://` URL will not
 do, since the page needs `https://` or `localhost`:
@@ -145,6 +163,16 @@ worker that adds the two headers and reloads the page once.
   supplies the Tracy client and its command-line tools; off is a no-op that
   needs none of it. The `*-profiling` presets turn it on. See
   [Profiling](profiling.md).
+- `CUBEULATOR_ENABLE_PROFILE_RECORDER` (default `OFF`) — the same zone macros
+  recorded in-process (`cmake/ProfileRecorder.cmake`) and exported as a Chrome
+  trace, a CSV and a summary, for where Tracy's client cannot run: a browser.
+  Exclusive with `CUBEULATOR_ENABLE_TRACY`. The `web-emscripten-diagnostics`
+  and `web-emscripten-tests` presets turn it on. See
+  [Profiling](profiling.md#in-the-browser).
+- `CUBEULATOR_WEB_TEST_DRIVER` (default `OFF`, web only) — links the read-only
+  driver (`window.cubeulatorDriver`) that `tests/web` reads the app through.
+  The `web-emscripten-diagnostics` preset turns it on; the published build has
+  none of it.
 
 ## Packaging
 

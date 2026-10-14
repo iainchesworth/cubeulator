@@ -24,6 +24,9 @@ namespace cube::profiling {
 // True in this variant, false in the sibling. A test pins it against the
 // CMake option so the wrong directory cannot be selected unnoticed.
 inline constexpr bool enabled = true;
+// False here: this variant hands events to Tracy, not to the in-process
+// recorder (the profiling-recorder sibling).
+inline constexpr bool to_recorder = false;
 
 inline void app_info(std::string_view text) {
     TracyAppInfo(text.data(), text.size());

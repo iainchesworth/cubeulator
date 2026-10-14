@@ -1332,16 +1332,26 @@ In your hands.</source>
         <translation>还原步骤</translation>
     </message>
     <message id="solution.summary" numerus="yes">
-        <source>%Ln turns in 5 stages</source>
-        <extracomment>Line under the title.</extracomment>
+        <source>%Ln turns in %1 stages</source>
+        <extracomment>Line under the title: how many turns the whole solution has, and how many stages. %1 is the number of stages, which depends on the method: five, four or two. Write it so that it reads for any of them.</extracomment>
         <translation>
-            <numerusform>共 5 个阶段，%Ln 步</numerusform>
+            <numerusform>共 %1 个阶段，%Ln 步</numerusform>
         </translation>
     </message>
-    <message id="solution.method">
+    <message id="solution.method.beginner">
         <source>Method: layer by layer, the one most people learn first.</source>
-        <extracomment>One line for learners.</extracomment>
+        <extracomment>One line for learners under the summary, shown when the solution is the Beginner method's.</extracomment>
         <translation>方法：逐层还原，大多数人最先学的方法。</translation>
+    </message>
+    <message id="solution.method.intermediate">
+        <source>Method: the way fast solvers do it.</source>
+        <extracomment>See solution.method.beginner. Shown for the Intermediate method.</extracomment>
+        <translation>方法：速拧高手常用的方法。</translation>
+    </message>
+    <message id="solution.method.advanced">
+        <source>Method: the fewest turns there are, found by search rather than learnt.</source>
+        <extracomment>See solution.method.beginner. Shown for the Advanced method.</extracomment>
+        <translation>方法：步数最少，由计算得出，不需要学习。</translation>
     </message>
     <message id="solution.play">
         <source>Play</source>
@@ -1473,6 +1483,26 @@ In your hands.</source>
         <source>Clear</source>
         <extracomment>Dialog button.</extracomment>
         <translation>清除</translation>
+    </message>
+    <message id="history.a11y.row">
+        <source>%1. %2</source>
+        <extracomment>Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary.</extracomment>
+        <translation>%1。%2</translation>
+    </message>
+    <message id="history.a11y.delete">
+        <source>Delete, %1</source>
+        <extracomment>Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart.</extracomment>
+        <translation>删除，%1</translation>
+    </message>
+    <message id="history.a11y.deleted">
+        <source>Solve deleted.</source>
+        <extracomment>Announced by a screen reader after one solve is deleted from the list.</extracomment>
+        <translation>已删除还原记录。</translation>
+    </message>
+    <message id="history.a11y.cleared">
+        <source>History cleared.</source>
+        <extracomment>Announced by a screen reader after every solve is deleted from the list.</extracomment>
+        <translation>已清除历史记录。</translation>
     </message>
     <message id="settings.section.language">
         <source>Language</source>
@@ -1718,6 +1748,31 @@ In your hands.</source>
         <source>This developer build records failed scans on this device.</source>
         <extracomment>Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so.</extracomment>
         <translation>此开发者版本会在这台设备上记录失败的扫描。</translation>
+    </message>
+    <message id="settings.dev.diagnostics">
+        <source>Write diagnostics to a file</source>
+        <extracomment>Developer builds only. A switch in Settings. While it is on, the app writes what it reads and decides - colours, how they were named, how the cube was put together - to a file a developer can open while the app runs. Off at every start.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="settings.dev.diagnosticsFrames">
+        <source>Also keep camera frames</source>
+        <extracomment>Developer builds only. A switch in Settings, under the diagnostics switch; it only takes effect while that one is on. The frames show whatever the camera sees, which can be a person.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="settings.dev.diagnosticsSnapshot">
+        <source>Snapshot now</source>
+        <extracomment>Developer builds only. A button in Settings. Writes the scan and the solve as they stand, in one record, to the diagnostics file.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="diagnostics.marker">
+        <source>Writing diagnostics to %1</source>
+        <extracomment>Developer builds only. A strip on every screen while the diagnostics file is being written, so that it is never silent. %1 is the file's path.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="diagnostics.markerFrames">
+        <source>Writing diagnostics and camera frames to %1</source>
+        <extracomment>Developer builds only. As diagnostics.marker, when camera frames are being kept as well. %1 is the folder the diagnostics are written to.</extracomment>
+        <translation type="unfinished"></translation>
     </message>
     <message id="about.title">
         <source>About Cubeulator</source>

@@ -5,6 +5,8 @@
 
 #include <QQmlApplicationEngine>
 
+#include <filesystem>
+
 class QQuickWindow;
 
 namespace cube::app {
@@ -25,6 +27,11 @@ namespace cube::app {
 class AppRuntime {
 public:
     AppRuntime();
+    // The same, with the diagnostics channel writing to `diagnostics_dir`
+    // rather than to the user's own, and nothing read from the environment
+    // (AppControllers): for the system tests, which press every control the
+    // Settings screen has, the channel's switches included.
+    explicit AppRuntime(std::filesystem::path diagnostics_dir);
     AppRuntime(const AppRuntime&) = delete;
     AppRuntime& operator=(const AppRuntime&) = delete;
 
@@ -43,8 +50,12 @@ public:
     [[nodiscard]] DirectScan& directScan() noexcept { return controllers_.directScan; }
     [[nodiscard]] SolveController& solve() noexcept { return controllers_.solve; }
     [[nodiscard]] HeldCube& held() noexcept { return controllers_.held; }
+    [[nodiscard]] SolveHistory& history() noexcept { return controllers_.history; }
 
 private:
+    // What both constructors do once the members are there.
+    void wire();
+
     // Declared after the controllers, and so destroyed before them: the
     // engine's image provider borrows directScan.
     AppControllers controllers_;

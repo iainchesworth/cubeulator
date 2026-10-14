@@ -1,10 +1,8 @@
 # The solution
 
-> **Status in 0.1.0-beta.1:** Not built. **Review the solution** on Complete
-> is present and does nothing, and no solved cube is kept to review.
-
-Lane: experience, drawing the solve lane's cube. New. This is what the
-**Review the solution** button was meant to open.
+Lane: experience, drawing the solve lane's cube. This is what the
+**Review the solution** button opens (`SolutionScreen.qml`; what is built
+and what waits for another lane is under [Built](#built)).
 
 Every turn of a finished solve, grouped by stage, with the explanations in
 full. Hands are free here, so it is where someone learning the method
@@ -37,8 +35,8 @@ is left, caption, buttons. Trailing: the list.
 |---|---|---|---|
 | Back | icon button | `common.back` | `solution.back` |
 | Title | top bar title, heading level 1 | `solution.title` | `solution.title` |
-| Summary | `bodyStrong` | `solution.summary` | `solution.summary` |
-| Method | `small`, `inkSecondary` | `solution.method` | `solution.method` |
+| Summary | `bodyStrong`; the number of stages is the method's: five, four or two | `solution.summary` | `solution.summary` |
+| Method | `small`, `inkSecondary` | `solution.method.beginner`, `solution.method.intermediate`, `solution.method.advanced` | `solution.method` |
 | Cube | The solve lane's cube view, showing the cube before the selected turn. Role: graphic; its name is the caption | - | `solution.cube` |
 | Caption | `numeral`, `inkSecondary` | `solution.atStart`, `solve.progress`, `solution.atEnd` | `solution.caption` |
 | Previous | button, secondary, thumb | `solution.previous` | `solution.previous` |
@@ -102,4 +100,38 @@ again**, which goes back to `solution.overview`.
 The same cube view as the solve screen, driven by a second, independent
 position: stepping here must not disturb a solve in progress. It needs
 the list of turns (`SolveController.moves`), the stage ranges, and a way
-to show the cube at any turn.
+to show the cube at any turn: `SolveController.stickersAt(turn)`, which is
+`stickers` for any position and moves nothing.
+
+## Built
+
+`SolutionScreen.qml`, opened by **Review the solution** on Complete
+(`AppState.openSolution()`; back is `AppState.closeSolution()`, to the
+screen it was opened from). What is the same as above is not repeated;
+what is not:
+
+- **What it reviews** is `AppState.solutionSource`, which is
+  `SolveController` for the solve just finished. Anything with its shape
+  can be put there, which is how a finished entry in History opens this
+  screen: an object with `moves`, `stageRanges`, `method`,
+  `stickersAt(turn)` and a `solutionChanged` signal, and the date as the
+  second argument of `openSolution(source, subtitle)`. The screen's header
+  says the same.
+- **Layout classes.** The app has two (`Theme.wideBreakpoint`, 720), not
+  the three of `system.md`, so: one column under 720 wide, two panes from
+  720 or when the window is under 480 high. Short and expanded are the
+  same two panes, the cube taking what the summary, caption and buttons
+  leave.
+- **The cube is looked at, not handled**: it cannot be dragged, and it
+  does not nudge the layer of the selected turn, because a nudge never
+  stops. It is seen from behind for a turn of the back side, as on the
+  solve screen. It is shown as held at the start of the solve (yellow on
+  top, green facing), which is the hold every turn's words are written for.
+- **Reduced motion and Show cube notation** are properties of the screen
+  (`reducedMotion`, `showNotation`), false until the settings rebuild has
+  the two settings to bind them to: the app has neither today.
+- **Escape and the back key** do what the back button does. The rest of
+  the navigation stack is E2a's.
+- **A solve whose method was changed part-way** is reviewed from where the
+  change was made: the controller keeps the solution it is on, not the
+  turns made before it, which is also what Complete counts.

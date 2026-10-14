@@ -718,3 +718,178 @@ TEST_CASE("resolve_colors rejects an infinite sample instead of hanging", "[visi
     REQUIRE_FALSE(resolved.has_value());
     REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
 }
+
+// ---------------------------------------------------------------------------
+// resolve_colors_explained and classify_lab_explained: the same answers with
+// their working shown, for the developer diagnostics channel
+// (docs/diagnostics.md). Nothing is computed twice; these hold that what is
+// reported is what decided the result.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// `lab` with its hue turned by `degrees` and its lightness and chroma kept:
+// what a warm light does to a red.
+cv::Vec3f hue_turned(const cv::Vec3f& lab, float degrees) {
+    const float chroma = std::hypot(lab(1), lab(2));
+    const float hue = std::atan2(lab(2), lab(1)) + (degrees * std::numbers::pi_v<float> / 180.0F);
+    return {lab(0), chroma * std::cos(hue), chroma * std::sin(hue)};
+}
+
+}  // namespace
+
+TEST_CASE("classify_lab_explained says which rule decided and from what", "[vision]") {
+    const ColorPalette palette = default_palette();
+
+    // A saturated red goes by its hue band; the numbers are the ones the band
+    // was chosen from.
+    const cv::Vec3f red = palette.entries.at(2).lab;
+    const LabClassification band = classify_lab_explained(red);
+    CHECK(band.rule == LabRule::hue_band);
+    CHECK(band.facelet.color == FacetColor::red);
+    CHECK(std::abs(band.chroma - std::hypot(red(1), red(2))) < 1e-3F);
+    CHECK(band.hue_degrees > 0.0F);
+    CHECK(band.hue_degrees < 44.0F);
+
+    // A bright neutral is white by the neutral rule, a dark one is unknown,
+    // and a light warm-cast sample is white by the warm-cast rule.
+    CHECK(classify_lab_explained({92.0F, 0.0F, 0.0F}).rule == LabRule::neutral_white);
+    const LabClassification dark = classify_lab_explained({30.0F, 0.0F, 0.0F});
+    CHECK(dark.rule == LabRule::dark_neutral);
+    CHECK(dark.facelet.color == FacetColor::unknown);
+    CHECK(dark.facelet.confidence == 0.0F);
+    const LabClassification warm = classify_lab_explained({75.0F, 10.0F, 17.0F});
+    CHECK(warm.rule == LabRule::warm_cast_white);
+    CHECK(warm.facelet.color == FacetColor::white);
+
+    // classify_lab is this with the rest dropped.
+    const std::array<cv::Vec3f, 4> samples = {red, cv::Vec3f(92.0F, 0.0F, 0.0F),
+                                              cv::Vec3f(30.0F, 0.0F, 0.0F),
+                                              cv::Vec3f(75.0F, 10.0F, 17.0F)};
+    for (const cv::Vec3f& lab : samples) {
+        CHECK(classify_lab(lab).color == classify_lab_explained(lab).facelet.color);
+        CHECK(classify_lab(lab).confidence == classify_lab_explained(lab).facelet.confidence);
+    }
+}
+
+TEST_CASE("resolve_colors_explained returns the answer of resolve_colors and its working",
+          "[vision]") {
+    const SyntheticScan scan = make_scan();
+    const auto plain = resolve_colors(scan.faces);
+    const auto explained = resolve_colors_explained(scan.faces);
+    REQUIRE(plain.has_value());
+    REQUIRE(explained.has_value());
+
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            CAPTURE(face, cell);
+            CHECK(explained->faces.at(face).at(cell).color == plain->at(face).at(cell).color);
+            CHECK(explained->faces.at(face).at(cell).confidence ==
+                  plain->at(face).at(cell).confidence);
+        }
+    }
+
+    // Six distinct hues: the hue names were taken, and they were the names
+    // distance had already given.
+    const ColorPalette palette = default_palette();
+    CHECK(explained->hue_override == HueOverride::applied);
+    CHECK_FALSE(explained->hue_changed_names);
+    CHECK(explained->iterations >= 1);
+    CHECK(explained->match_cost >= 0.0F);
+
+    std::array<int, 6> members{};
+    for (std::size_t c = 0; c < 6; ++c) {
+        CAPTURE(c);
+        const ClusterNaming& cluster = explained->clusters.at(c);
+        CHECK((cluster.seed == scan.faces.at(c).lab.at(4)));
+        // The six clusters are the six palette colours, face by face.
+        CHECK(cluster.name == palette.entries.at(c).color);
+        CHECK(cluster.by_distance == cluster.name);
+        CHECK(cluster.hue.facelet.color == cluster.name);
+    }
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            const std::size_t cluster = explained->cluster_of.at(face).at(cell);
+            REQUIRE(cluster < 6);
+            ++members.at(cluster);
+            CHECK(explained->clusters.at(cluster).name == scan.truth.at(face).at(cell));
+        }
+    }
+    // Exactly nine stickers in each.
+    for (const int count : members) {
+        CHECK(count == 9);
+    }
+}
+
+TEST_CASE("resolve_colors_explained says when two clusters share a hue band", "[vision]") {
+    // A warm light turns every red sticker's hue by 14 degrees, into the band
+    // orange lives in. Hue alone now names two clusters orange, which is a
+    // collision: the distance matching has to stand, and it names them right.
+    SyntheticScan scan = make_scan();
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            if (scan.truth.at(face).at(cell) == FacetColor::red) {
+                scan.faces.at(face).lab.at(cell) =
+                    hue_turned(scan.faces.at(face).lab.at(cell), 14.0F);
+            }
+        }
+    }
+
+    const auto explained = resolve_colors_explained(scan.faces);
+    REQUIRE(explained.has_value());
+    CHECK(explained->hue_override == HueOverride::collision);
+    CHECK_FALSE(explained->hue_changed_names);
+
+    // The palette's face index 2 is red and 3 is orange (make_scan).
+    const ClusterNaming& red = explained->clusters.at(2);
+    const ClusterNaming& orange = explained->clusters.at(3);
+    CHECK(red.hue.facelet.color == FacetColor::orange);
+    CHECK(orange.hue.facelet.color == FacetColor::orange);
+    CHECK(red.hue.hue_degrees >= 44.0F);
+    CHECK(red.name == FacetColor::red);
+    CHECK(orange.name == FacetColor::orange);
+
+    // And the answer is the right one.
+    require_recovered(scan);
+}
+
+TEST_CASE("resolve_colors_explained says when the hue names replaced a swapped matching",
+          "[vision]") {
+    // Red lifted 45 L and orange darkened 40: by lightness they have traded
+    // places, so matching by distance alone calls the red cluster orange and
+    // the orange one red. Their hues are untouched, and name them right.
+    SyntheticScan scan = make_scan();
+    for (std::size_t face = 0; face < 6; ++face) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            if (scan.truth.at(face).at(cell) == FacetColor::red) {
+                scan.faces.at(face).lab.at(cell)(0) += 45.0F;
+            } else if (scan.truth.at(face).at(cell) == FacetColor::orange) {
+                scan.faces.at(face).lab.at(cell)(0) -= 40.0F;
+            }
+        }
+    }
+
+    const auto explained = resolve_colors_explained(scan.faces);
+    REQUIRE(explained.has_value());
+    CHECK(explained->hue_override == HueOverride::applied);
+    CHECK(explained->hue_changed_names);
+    CHECK(explained->clusters.at(2).by_distance == FacetColor::orange);
+    CHECK(explained->clusters.at(2).name == FacetColor::red);
+    CHECK(explained->clusters.at(3).by_distance == FacetColor::red);
+    CHECK(explained->clusters.at(3).name == FacetColor::orange);
+    require_recovered(scan);
+}
+
+TEST_CASE("resolve_colors_explained fails exactly where resolve_colors does", "[vision]") {
+    SyntheticScan scan = make_scan();
+    scan.faces.at(1).lab.at(4) = scan.faces.at(0).lab.at(4);
+    const auto plain = resolve_colors(scan.faces);
+    const auto explained = resolve_colors_explained(scan.faces);
+    REQUIRE_FALSE(plain.has_value());
+    REQUIRE_FALSE(explained.has_value());
+    CHECK(explained.error() == plain.error());
+
+    SyntheticScan not_finite = make_scan();
+    not_finite.faces.at(2).lab.at(0)(1) = std::numeric_limits<float>::quiet_NaN();
+    REQUIRE_FALSE(resolve_colors_explained(not_finite.faces).has_value());
+}

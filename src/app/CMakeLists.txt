@@ -75,12 +75,21 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/app_controllers.cpp
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
+        qt/controllers/diagnostic_records.hpp
+        qt/controllers/diagnostic_records.cpp
+        qt/controllers/diagnostics.hpp
+        qt/controllers/diagnostics.cpp
         qt/controllers/direct_scan.hpp
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp
         qt/controllers/held_cube.cpp
         qt/controllers/platform_facts.hpp
         qt/controllers/platform_facts.cpp
+        qt/controllers/solve_history_store.hpp
+        qt/controllers/solve_history_store.cpp
+        qt/controllers/solve_history.hpp
+        qt/controllers/solve_history.cpp
+        qt/colour_name.hpp
         qt/controllers/frame_image_provider.hpp
         qt/controllers/frame_image_provider.cpp
         qt/solve_controller.hpp
@@ -138,6 +147,10 @@ if(CUBEULATOR_BUILD_APP)
             qt/SolveMethodPicker.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml
+            qt/HistoryScreen.qml
+            qt/ConfirmDialog.qml
+            qt/SolutionScreen.qml
+            qt/TurnArrow.qml
         SOURCES
             qt/CameraPermission.hpp
             qt/CameraPermission.cpp

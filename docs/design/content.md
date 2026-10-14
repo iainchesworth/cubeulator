@@ -180,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-406 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+417 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -536,8 +536,10 @@ Review the solution.
 | key | English | note for translators |
 |---|---|---|
 | `solution.title` | The solution | Screen title. |
-| `solution.summary` | *one:* %n turn in 5 stages<br>*other:* %n turns in 5 stages | Line under the title. |
-| `solution.method` | Method: layer by layer, the one most people learn first. | One line for learners. |
+| `solution.summary` | *one:* %n turn in %1 stages<br>*other:* %n turns in %1 stages | Line under the title: how many turns the whole solution has, and how many stages. %1 is the number of stages, which depends on the method: five, four or two. Write it so that it reads for any of them. |
+| `solution.method.beginner` | Method: layer by layer, the one most people learn first. | One line for learners under the summary, shown when the solution is the Beginner method's. |
+| `solution.method.intermediate` | Method: the way fast solvers do it. | See solution.method.beginner. Shown for the Intermediate method. |
+| `solution.method.advanced` | Method: the fewest turns there are, found by search rather than learnt. | See solution.method.beginner. Shown for the Advanced method. |
 | `solution.play` | Play | Button. Plays the turns one after another. |
 | `solution.pause` | Pause | Button. |
 | `solution.next` | Next | Button. Next turn. |
@@ -568,6 +570,10 @@ Review the solution.
 | `history.clear.body` | *one:* %n solve will be deleted from this device.<br>*other:* %n solves will be deleted from this device. | Dialog body. |
 | `history.clear.keep` | Keep them | Dialog button: the safe choice. |
 | `history.clear.confirm` | Clear | Dialog button. |
+| `history.a11y.row` | %1. %2 | Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary. |
+| `history.a11y.delete` | Delete, %1 | Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart. |
+| `history.a11y.deleted` | Solve deleted. | Announced by a screen reader after one solve is deleted from the list. |
+| `history.a11y.cleared` | History cleared. | Announced by a screen reader after every solve is deleted from the list. |
 
 #### `settings`
 
@@ -622,6 +628,16 @@ Review the solution.
 | `settings.dev.cubeStyle` | Cube style | Developer builds only. |
 | `settings.dev.stats` | Show frame rate | Developer builds only. |
 | `settings.dev.recording` | This developer build records failed scans on this device. | Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so. |
+| `settings.dev.diagnostics` | Write diagnostics to a file | Developer builds only. A switch in Settings. While it is on, the app writes what it reads and decides - colours, how they were named, how the cube was put together - to a file a developer can open while the app runs. Off at every start. |
+| `settings.dev.diagnosticsFrames` | Also keep camera frames | Developer builds only. A switch in Settings, under the diagnostics switch; it only takes effect while that one is on. The frames show whatever the camera sees, which can be a person. |
+| `settings.dev.diagnosticsSnapshot` | Snapshot now | Developer builds only. A button in Settings. Writes the scan and the solve as they stand, in one record, to the diagnostics file. |
+
+#### `diagnostics`
+
+| key | English | note for translators |
+|---|---|---|
+| `diagnostics.marker` | Writing diagnostics to %1 | Developer builds only. A strip on every screen while the diagnostics file is being written, so that it is never silent. %1 is the file's path. |
+| `diagnostics.markerFrames` | Writing diagnostics and camera frames to %1 | Developer builds only. As diagnostics.marker, when camera frames are being kept as well. %1 is the folder the diagnostics are written to. |
 
 #### `about`
 

@@ -22,6 +22,7 @@
 #include <QtTest/QTest>
 
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 
 namespace cube::systest {
@@ -109,7 +110,8 @@ App::~App() {
 }
 
 void App::boot() {
-    runtime_ = std::make_unique<cube::app::AppRuntime>();
+    runtime_ = std::make_unique<cube::app::AppRuntime>(
+        std::filesystem::path(diagnostics_dir_.filePath("diagnostics").toStdU16String()));
     // Main.qml says `visible: true`, so the window is shown by load() itself:
     // what it is to look like has to be said before then, the way the real app
     // hands the engine the position it was last at (main.cpp).
@@ -221,6 +223,10 @@ void App::reset(Start start, Scene3D scene) {
 
     reset_language();
     mark("language");
+    // Nothing kept, and keeping: the history is a file in the process's data
+    // folder, which every case shares.
+    runtime_->history().clear();
+    runtime_->history().setKeep(true);
     settings_state_->setProperty("themeMode", "light");
     settings_state_->setProperty("shaderStyleIndex", 0);
     // Still, not spinning: a spinning cube is a scene that changes every
@@ -229,6 +235,10 @@ void App::reset(Start start, Scene3D scene) {
     settings_state_->setProperty("cubeAutoRotate", false);
     settings_state_->setProperty("rotateSpeedIndex", 1);
     settings_state_->setProperty("statsForNerds", false);
+    // The diagnostics channel is off at every start; a case that pressed its
+    // switches leaves it as it found it.
+    runtime_->controllers().diagnostics.setFramesEnabled(false);
+    runtime_->controllers().diagnostics.setEnabled(false);
     mark("settings");
     // Putting the method back solves on from the cube in hand; let that land
     // here, not part-way through the next case.
@@ -347,9 +357,22 @@ QList<QQuickItem*> App::visible_controls() const {
 }
 
 QString App::control_key(QQuickItem* item) const {
+    QQuickItem* const root = screen_item();
+    // A row of a named list is "<list>.row", whichever row: a list scrolls,
+    // so the rows that exist depend on where it has got to, and a key for
+    // each would make a gap of every row some case happened to scroll past.
+    // What the gate asks - that a row can be pressed, in each layout - is the
+    // same question for all of them.
+    for (QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
+        if (up->inherits("QQuickListView") && !up->objectName().isEmpty()) {
+            return up->objectName() + ".row";
+        }
+        if (up == root) {
+            break;
+        }
+    }
     // The nearest name up the tree: a toggle's pointer area is anonymous but
     // the toggle that holds it is not.
-    QQuickItem* const root = screen_item();
     for (QQuickItem* up = item; up != nullptr; up = up->parentItem()) {
         if (!up->objectName().isEmpty()) {
             return up->objectName();
@@ -384,11 +407,12 @@ QQuickItem* click_target(QQuickItem* item) {
     return inner != nullptr ? inner : item;
 }
 
-// A control inside a Flickable (the narrow settings list) may be scrolled out
-// of the viewport; scroll it in, as a person's finger would.
+// A control inside a Flickable (the narrow settings list, the solution's
+// list: a ListView is one) may be scrolled out of the viewport; scroll it in,
+// as a person's finger would.
 void scroll_into_view(QQuickItem* item) {
     for (QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
-        if (!class_is(up, "QQuickFlickable")) {
+        if (!up->inherits("QQuickFlickable")) {
             continue;
         }
         QQuickItem* content = qvariant_cast<QQuickItem*>(up->property("contentItem"));

@@ -2,7 +2,7 @@
 
 > **Status in 0.1.0-beta.1:** Partly built, still as the legacy
 > `LaunchScreen.qml`: the eyebrow, the 3D cube, the headline and lede (wide
-> layout only), **Scan a cube**, **History** (which does nothing) and a
+> layout only), **Scan a cube**, **History** (the list of solves) and a
 > language button and **Settings** that both open Settings. Not built: Enter
 > colours by hand, Help, the unfinished-solve card, the camera notices, the
 > short layout and the size classes; its `objectName`s are `launch.*`, not the

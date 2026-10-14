@@ -1,13 +1,20 @@
 #include "solve_controller.hpp"
 
+#include "colour_name.hpp"
+
 #include <QVariantMap>
 #include <QtConcurrentRun>
 
+#include <cube/diagnostics/describe.hpp>
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
 
 using cube::solver::Cube;
 using cube::solver::Face;
@@ -16,24 +23,6 @@ using cube::solver::SolveMethod;
 using cube::solver::SteppedSolution;
 
 namespace {
-
-QString color_name(cube::solver::Color color) {
-    switch (color) {
-        case cube::solver::Color::White:
-            return QStringLiteral("White");
-        case cube::solver::Color::Yellow:
-            return QStringLiteral("Yellow");
-        case cube::solver::Color::Green:
-            return QStringLiteral("Green");
-        case cube::solver::Color::Blue:
-            return QStringLiteral("Blue");
-        case cube::solver::Color::Orange:
-            return QStringLiteral("Orange");
-        case cube::solver::Color::Red:
-            return QStringLiteral("Red");
-    }
-    return QStringLiteral("White");
-}
 
 QString face_letter(Face face) {
     switch (face) {
@@ -57,9 +46,24 @@ QVariantList face_colors(const Cube& cube, Face face) {
     QVariantList colors;
     colors.reserve(9);
     for (cube::solver::Color color : cube.face(face)) {
-        colors.append(color_name(color));
+        colors.append(colour_name(color));
     }
     return colors;
+}
+
+// Every sticker of `cube`: side letter -> nine colour names, each side as
+// seen from outside it.
+QVariantMap stickers_of(const Cube& cube) {
+    QVariantMap sides;
+    for (const Face face : cube::solver::kAllFaces) {
+        QVariantList colors;
+        colors.reserve(9);
+        for (const cube::solver::Color color : cube::solver::outside_view(cube, face)) {
+            colors.append(colour_name(color));
+        }
+        sides.insert(face_letter(face), colors);
+    }
+    return sides;
 }
 
 SolveMethod to_solver_method(SolveController::Method method) {
@@ -106,7 +110,20 @@ SolveController::SolveController(QObject* parent) : QObject(parent) {
 }
 
 void SolveController::solveCube(const Cube& cube) {
+    scanned_ = cube;
     beginSolve(cube);
+}
+
+void SolveController::resumeCube(const Cube& scanned, const Cube& from, Method method, int turn) {
+    scanned_ = scanned;
+    if (method != method_) {
+        // Recorded, not acted on through setMethod(): the cube to solve is
+        // `from`, not the one a method change would carry on from.
+        method_ = method;
+        emit methodChanged();
+    }
+    beginSolve(from);
+    resume_turn_ = std::max(0, turn);
 }
 
 void SolveController::setMethod(Method method) {
@@ -138,6 +155,7 @@ void SolveController::beginSolve(const Cube& scrambled, bool continuation) {
     // AppState.qml), but a method change can: it replaces the solve.
     pending_ = scrambled;
     solving_continuation_ = continuation;
+    resume_turn_ = 0;
     isSolving_ = true;
     CUBE_MESSAGE("solve.started");
     emit stateChanged();
@@ -149,6 +167,11 @@ void SolveController::applySolveResult() {
     CUBE_ZONE_SCOPED_N("app.solve.apply_result");
     CUBE_MESSAGE("solve.finished");
     stepped_ = solveWatcher_.result();
+    // A solve picked up from the history lands on the turn it was left at.
+    for (int i = 0; i < resume_turn_ && !stepped_.at_end(); ++i) {
+        stepped_.next();
+    }
+    resume_turn_ = 0;
     isSolving_ = false;
     continuation_ = solving_continuation_;
     emit solutionChanged();
@@ -166,17 +189,11 @@ QVariantList SolveController::leftColors() const {
 }
 
 QVariantMap SolveController::stickers() const {
-    QVariantMap sides;
-    for (const Face face : cube::solver::kAllFaces) {
-        QVariantList colors;
-        colors.reserve(9);
-        for (const cube::solver::Color color :
-             cube::solver::outside_view(stepped_.current_cube(), face)) {
-            colors.append(color_name(color));
-        }
-        sides.insert(face_letter(face), colors);
-    }
-    return sides;
+    return stickers_of(stepped_.current_cube());
+}
+
+QVariantMap SolveController::stickersAt(int turn) const {
+    return stickers_of(stepped_.cube_at(turn));
 }
 
 QVariantList SolveController::moves() const {
@@ -245,6 +262,26 @@ int SolveController::currentStageIndex() const {
 
 bool SolveController::isSolving() const {
     return isSolving_;
+}
+
+cube::diagnostics::Json SolveController::diagnosticState() const {
+    using cube::diagnostics::Json;
+    constexpr std::array<const char*, 3> kMethods = {"beginner", "intermediate", "advanced"};
+    Json state = Json::object();
+    state.set("method", kMethods.at(static_cast<std::size_t>(method_)));
+    state.set("is_solving", isSolving_);
+    state.set("continuation", continuation_);
+    state.set("move_index", stepped_.current_index());
+    state.set("total_moves", stepped_.move_count());
+    state.set("at_end", stepped_.at_end());
+    state.set("current_move", cube::diagnostics::move_json(currentMove()));
+    state.set("moves", cube::diagnostics::moves_json(stepped_.moves()));
+    state.set("cube", cube::diagnostics::cube_json(stepped_.current_cube()));
+    state.set("solved", stepped_.current_cube().is_solved());
+    state.set("started_from",
+              pending_.has_value() ? cube::diagnostics::cube_json(*pending_) : Json());
+    state.set("stage", currentStageIndex());
+    return state;
 }
 
 void SolveController::nextMove() {

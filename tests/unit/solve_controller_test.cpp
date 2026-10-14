@@ -142,6 +142,51 @@ TEST_CASE("SolveController solves the way it is asked to, and keeps to that meth
     CHECK(totals[2] < totals[1]);
 }
 
+TEST_CASE("stickersAt reads any position of the solution without moving the solve's",
+          "[qt][controllers][review]") {
+    SolveController controller;
+    controller.solveCube(random_scramble(23, MoveCount{25}));
+    REQUIRE(wait_until_solved(controller));
+    const int total = controller.totalMoves();
+    REQUIRE(total > 2);
+
+    // The solve screen is two turns in; a review of the solution reads
+    // positions of its own.
+    controller.nextMove();
+    controller.nextMove();
+    const QVariantMap here = controller.stickers();
+    const QVariantMap start = controller.stickersAt(0);
+    const QVariantMap end = controller.stickersAt(total);
+    CHECK(controller.moveIndex() == 2);
+    CHECK(controller.stickers() == here);
+    CHECK(controller.stickersAt(2) == here);
+    CHECK(start != here);
+
+    // Each position is what stepping there gives.
+    while (controller.moveIndex() > 0) {
+        controller.previousMove();
+    }
+    CHECK(controller.stickers() == start);
+    for (int index = 0; index <= total; ++index) {
+        CAPTURE(index);
+        CHECK(controller.stickersAt(index) == controller.stickers());
+        controller.nextMove();
+    }
+
+    // The solved cube has nine of one colour on every side; outside the
+    // solution is its nearest end.
+    CHECK(controller.stickersAt(total) == end);
+    CHECK(controller.stickersAt(total + 7) == end);
+    CHECK(controller.stickersAt(-3) == start);
+    for (const QVariant& side : end) {
+        const QVariantList colours = side.toList();
+        REQUIRE(colours.size() == 9);
+        for (const QVariant& colour : colours) {
+            CHECK(colour == colours.at(4));
+        }
+    }
+}
+
 TEST_CASE("changing the method before anything is scanned only records it",
           "[qt][controllers][solve-method]") {
     SolveController controller;
