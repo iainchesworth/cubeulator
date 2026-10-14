@@ -7,6 +7,14 @@ on:
       - "docs/**"
       - "mkdocs.yml"
       - ".github/workflows/docs.yml"
+      # The site carries the web app (docs/web.md), so what builds it
+      # republishes the site as well.
+      - ".github/actions/web-build/**"
+      - "src/**"
+      - "cmake/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "vcpkg.json"
   workflow_dispatch:
 
 permissions:
@@ -17,7 +25,44 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The browser build is its own job: it is the slow one (vcpkg builds OpenCV
+  # for WebAssembly), and the documentation does not need it to render.
+  web:
+    runs-on: ubuntu-26.04
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see ci.yml.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      - name: Build the web app
+        uses: $/.github/actions/web-build
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web
+          path: build/web-emscripten-release/bin
+          if-no-files-found: error
+
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
   build:
+    needs: web
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,6 +78,17 @@ jobs:
 
       - name: Build site
         run: mkdocs build --strict
+
+      # The app goes under /app/ of the site, which is where docs/web.md links.
+      # It is static files; GitHub Pages serves .wasm as application/wasm. The
+      # app cannot get the response headers threads need from Pages, so it
+      # brings its own service worker for that (cubeulator-isolation.js) - and
+      # because that worker's scope is the directory it is served from, it
+      # affects nothing outside /app/.
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: cubeulator-web
+          path: site/app
 
       - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
 

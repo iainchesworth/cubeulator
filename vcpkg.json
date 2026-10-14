@@ -11,6 +11,7 @@
     {
       "name": "opencv4",
       "default-features": false,
+      "platform": "!emscripten",
       "features": [
         "calib3d",
         { "name": "dshow", "platform": "windows & !uwp" },
@@ -24,6 +25,14 @@
         "tiff",
         { "name": "v4l", "platform": "linux" },
         "webp"
+      ]
+    },
+    {
+      "name": "opencv4",
+      "default-features": false,
+      "platform": "emscripten",
+      "features": [
+        "intrinsics"
       ]
     }
   ],
