@@ -17,6 +17,11 @@ PlatformInfo current() {
     return PlatformInfo{
         .is_mobile = false,
         .graphics_backends = {{.key = "opengl", .label = "WebGL"}},
+        // A browser has no system fonts: these are the faces the app bundles
+        // and registers (platform/web/fonts, main.cpp), the cut-down Noto
+        // Sans JP and SC.
+        .japanese_faces = {"Noto Sans JP"},
+        .chinese_faces = {"Noto Sans SC"},
     };
 }
 
