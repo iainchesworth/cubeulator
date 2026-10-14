@@ -47,7 +47,7 @@ local storage for this site, and nowhere else.
 | **Camera permission** | The OS asks the first time a camera is opened | The browser asks the same way. It also hides the cameras' names until you have allowed one, so the list says *Back camera* and *Front camera* until then |
 | **Exposure and white balance** | Locked for a scan where the camera allows it (Windows) | Not locked: the camera's own automatics run. Colours can drift between sides under changing light, so scan under steady, even light |
 | **Settings** | Kept between launches | Kept in the browser's local storage for this site: they survive a reload and are lost with the site's data |
-| **Text** | The system's fonts | The browser build has no system fonts to fall back on, only the face Qt bundles: English, German, French, Spanish, Hebrew, Arabic and Yiddish render with it, Japanese and Simplified Chinese show as empty boxes until the app bundles a face for them |
+| **Text** | The system's fonts | A browser has no system fonts, so the app carries its own Japanese and Simplified Chinese faces (Noto Sans JP and SC, cut down to the characters the app uses: a few hundred kilobytes). Everything else is drawn with the face Qt bundles |
 | **Speed** | Native | The solver and the reader are WebAssembly. Expect the same results, somewhat slower |
 
 ## How it works

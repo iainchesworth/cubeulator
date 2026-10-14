@@ -422,8 +422,13 @@ if(CUBEULATOR_BUILD_APP)
         add_test(NAME i18n_ids_in_code_exist
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/i18n/check_ids.py"
                     --lupdate "$<TARGET_FILE:Qt6::lupdate>")
+        # The browser build bundles its own Japanese and Chinese faces, cut down
+        # to the characters the catalogues use: a translation that brings in a
+        # character they lack is found here, not as an empty box on a page.
+        add_test(NAME i18n_web_cjk_subsets_cover_catalogues
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/fonts/subset_cjk.py" --check)
         set_tests_properties(i18n_catalogues_match_strings i18n_no_unwrapped_literals
-            i18n_lint_selftest i18n_ids_in_code_exist
+            i18n_lint_selftest i18n_ids_in_code_exist i18n_web_cjk_subsets_cover_catalogues
             PROPERTIES LABELS "i18n" ENVIRONMENT "PYTHONUTF8=1")
     else()
         message(WARNING "Python 3 not found: the translation gates that are scripts are not registered")
