@@ -10,6 +10,7 @@
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/search_work.hpp>
 
 #include "bfs_search.hpp"
 
@@ -154,6 +155,7 @@ private:
 
     psd::Arena arena;
     arena.insert(psd::Node{.key = start, .parent = -1, .face = 0, .turns = 0, .depth = 0});
+    const SearchWorkScope work([&arena] { return arena.size(); });
 
     const auto reconstruct = [&arena](std::size_t leaf, const TurnOf& last) {
         std::vector<Move> path;

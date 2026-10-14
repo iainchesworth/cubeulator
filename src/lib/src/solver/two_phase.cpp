@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <cube/profiling.hpp>
+#include <cube/solver/search_work.hpp>
 
 #include "cubie.hpp"
 #include "two_phase_tables.hpp"
@@ -125,6 +126,7 @@ public:
     [[nodiscard]] bool found() const noexcept { return found_; }
     [[nodiscard]] const std::vector<std::uint8_t>& solution() const noexcept { return best_; }
     [[nodiscard]] std::size_t phase1_length() const noexcept { return best_phase1_length_; }
+    [[nodiscard]] std::uint64_t nodes() const noexcept { return nodes_; }
 
 private:
     [[nodiscard]] int prune1(int twist, int slice) const noexcept {
@@ -305,6 +307,7 @@ Result<Solution> solve_two_phase(const Cube& scrambled) {
     }
 
     TwoPhaseSearch search(detail::phase1_move_tables(), detail::phase2_tables(), *cubie);
+    const detail::SearchWorkScope work([&search] { return search.nodes(); });
     search.run();
     if (!search.found()) {
         return std::unexpected(CubeError::no_solution);

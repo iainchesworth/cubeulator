@@ -18,7 +18,8 @@ on:
         description: >-
           Comma-separated legs to run: clang-format, platform-isolation,
           clang-tidy, linux, macos, windows, coverage, system, android, ios,
-          web - or "all".
+          web, perf - or "all" (which does not include perf, the wall-time
+          performance checks: name it).
         type: string
         default: all
 
@@ -232,8 +233,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, all)"
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web|perf) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, perf, all)"
                  exit 1 ;;
             esac
           done
@@ -993,6 +994,73 @@ jobs:
       # package vcpkg had already built and the next attempt starts from nothing
       # (an hour or more on Windows and macOS). Only saves when packages were
       # added since the restore - see .github/actions/vcpkg-cache.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: x64-linux
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The wall-time half of the performance tier (docs/testing.md, "Performance
+  # tests"), on the Linux Release build. Dispatch only, and only when it is
+  # named - legs=all does not include it - because a stopwatch on a shared
+  # runner is the one check that can fail for no reason of its own. The work
+  # budgets (search nodes, pixel buffers) are exact, and run in every build
+  # leg's plain ctest above.
+  #
+  #   gh workflow run ci.yml --ref <branch> -f legs=perf
+  #
+  # Only cube_perf_tests is built: it links cube::lib and nothing else, so this
+  # leg installs no Qt and builds no app, like the coverage leg.
+  performance:
+    name: dispatch - Performance (Linux, GCC, wall time)
+    if: ${{ github.event_name == 'workflow_dispatch' && contains(format(',{0},', inputs.legs), ',perf,') }}
+    runs-on: ubuntu-26.04
+    # See the equivalent comment on build-and-test.
+    env:
+      VCPKG_MAX_CONCURRENCY: "2"
+
+    steps:
+      # fetch-depth: 0 for the same reason as build-and-test.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet (x64-linux), shared with the other Linux legs.
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: x64-linux
+
+      - name: Install CMake 4 + Ninja
+        uses: lukka/get-cmake@fffaaafeea488556c2c12dad60690008bc1caacb # v4.4.2
+        with:
+          cmakeVersion: "4.4.2"
+          ninjaVersion: "1.13.2"
+
+      # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
+      # build-and-test.
+      - name: Install vcpkg build dependencies
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+
+      - name: Configure
+        run: >
+          cmake --preset linux-gcc-release
+          -DCMAKE_CXX_COMPILER=g++-15
+          -DCUBEULATOR_BUILD_APP=OFF
+
+      - name: Build
+        run: cmake --build --preset linux-gcc-release --target cube_perf_tests
+
+      # The *-perf test preset selects the `perf` label and sets
+      # CUBE_PERF_TIMING, which is what turns the wall-time cases on.
+      - name: Performance tests
+        run: ctest --preset linux-gcc-perf
+
+      # Saved even when a later step fails - see build-and-test.
       - name: Save vcpkg binaries
         if: ${{ always() }}
         uses: $/.github/actions/vcpkg-cache/save

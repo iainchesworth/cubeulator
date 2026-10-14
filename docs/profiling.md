@@ -179,6 +179,17 @@ Rules that keep it honest:
 - **A manual zone is for the one function that needs it.** Prefer the scoped
   form, and wrap a statement in a lambda or block when you need to isolate it.
 
+## Holding a zone to a baseline
+
+The zone names above are the interface two more things read. The performance
+tier's budgets count what the solver and the reader *do* (search nodes, pixel
+buffers) with no profiler in the loop, and `tools/perf/tracy_check.py` runs the
+headless `cube_perf_tests` under `tracy-capture` and compares each zone's call
+count and fastest call, as a multiple of the test binary's own
+`perf.calibration` zone, with `tools/perf/tracy_baseline.json`. Renaming a zone
+is therefore a deliberate act that updates that file as well. Both are
+described in [Performance tests](testing.md#performance-tests).
+
 ## Licence
 
 Tracy is BSD-3-Clause. It is present only in a profiling build, which is a

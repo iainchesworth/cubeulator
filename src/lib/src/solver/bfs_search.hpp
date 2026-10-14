@@ -11,6 +11,7 @@
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/search_work.hpp>
 
 namespace cube::solver::detail {
 
@@ -96,6 +97,7 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
     std::unordered_set<SignatureKey, SignatureKeyHash> visited;
     nodes.push_back(Node{start, -1, Move{.face = Face::U, .turns = 1}, 0});
     visited.insert(signature(start));
+    const SearchWorkScope work([&visited] { return visited.size(); });
 
     auto reconstruct = [&nodes](std::size_t leaf, Move last) {
         std::vector<Move> path;

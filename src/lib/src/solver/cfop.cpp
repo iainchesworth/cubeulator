@@ -12,6 +12,7 @@
 #include <vector>
 
 #include <cube/profiling.hpp>
+#include <cube/solver/search_work.hpp>
 
 #include "cfop_last_layer.hpp"
 #include "cfop_stages.hpp"
@@ -262,6 +263,8 @@ std::optional<std::vector<std::uint8_t>> shortest_sequence(const CubieCube& cube
     Frontier backward;
     forward.add(start, {.from = -1, .move = 0});
     backward.add(goal, {.from = -1, .move = 0});
+    const detail::SearchWorkScope work(
+        [&forward, &backward] { return forward.state.size() + backward.state.size(); });
 
     while (forward.depth < max_side || backward.depth < max_side) {
         // Grow whichever side is smaller; that keeps both near the square
