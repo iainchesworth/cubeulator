@@ -1,8 +1,20 @@
 # Design brief
 
+> **Status in 0.1.0-beta.1:** The brief is the design the app is being built
+> towards, and most of "What the first release holds" is not built. The app
+> scans with a camera on desktop, follows the solve one turn at a time and
+> can rescan when the cube and the picture part, and offers three solve
+> methods and nine languages that switch live (only English and the two
+> machine drafts, Japanese and Chinese, have any words). It cannot
+> yet take colours by hand, check or correct them, carry on an unfinished
+> solve, review a solution or keep a history; it has no Help, About,
+> Licences or Privacy screens, no marks on cube colours and no text-size or
+> motion settings, and cube style and the graphics backend are still Settings
+> rows in every build.
+
 Workstream E1 of the [app experience plan](../app-experience-plan.md).
-Status: **draft for Iain's sign-off.** Decisions below marked *(Iain,
-2026-10-13)* are his; the rest are proposals.
+Status, as written on 2026-10-13: **draft for Iain's sign-off.** Decisions
+below marked *(Iain, 2026-10-13)* are his; the rest are proposals.
 
 ## What Cubeulator is
 
@@ -100,7 +112,7 @@ how-to-hold in; solve history in.)*
 | Cube sizes other than 3x3 | - |
 | Timed solving, scramble generation, statistics | A different product |
 | Cube style, graphics backend, frame-rate display as user settings | Moved to developer builds. They change nothing a person solving a cube needs |
-| "Detect hands with AI", "Auto-advance between faces" | They drive `ScanSession`, which no screen starts and R6 removes |
+| "Detect hands with AI", "Auto-advance between faces" | They drove `ScanSession`, which no screen started and R6 has removed |
 
 ## Decisions taken in this phase
 

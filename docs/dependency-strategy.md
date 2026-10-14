@@ -7,17 +7,21 @@ fmt and OpenCV. Qt is a separate prebuilt install
 same reasons CountdownSolver keeps it out of vcpkg (build size, Windows
 `MAX_PATH`).
 
-OpenCV is an unscoped entry in `vcpkg.json`: it resolves the same
-way on every triplet vcpkg supports, `arm64-android`/`arm64-ios` included
-(`opencv4` pins an explicit feature list rather than taking the port's
-defaults, but carries no platform restriction of its own). The
+OpenCV has one entry in `vcpkg.json` for every triplet but the browser's
+(`"platform": "!emscripten"`; the browser has an entry of its own, see
+[WebAssembly](#webassembly)): it resolves the same way on every triplet vcpkg
+supports, `arm64-android`/`arm64-ios` included (`opencv4` pins an explicit
+feature list rather than taking the port's defaults, but carries no mobile
+restriction of its own). The
 `android-clang-*`/`ios-clang-*` presets chainload vcpkg's toolchain on top of
 the NDK/iOS toolchain (`VCPKG_CHAINLOAD_TOOLCHAIN_FILE`) so every dependency
 resolves the same way everywhere.
 `cube::lib`'s `version.cpp` uses `fmt::format` rather than `std::format`
-because the Android NDK's `libc++` doesn't implement `<format>` (it needs
-locale support the NDK's minimal libc doesn't provide) — this was discovered
-via a real CI failure, not anticipated in advance.
+because the Android NDK's `libc++` didn't implement `<format>` when this was
+written (NDK r26b; it needs locale support the NDK's minimal libc doesn't
+provide) — this was discovered via a real CI failure, not anticipated in
+advance. The NDK CI uses now (r28c) has `std::format`, so `fmt` is a choice
+kept, not a constraint.
 
 ## What was removed, and why
 
@@ -134,7 +138,8 @@ the linker refuses an object that was not. Where it differs from the rest:
 `arm64-android`/`arm64-ios` through vcpkg. Both cap `VCPKG_MAX_CONCURRENCY`
 at 2, mirroring the desktop jobs' mitigation - the dependency builds are
 large, and the cap was set when ONNX Runtime, now gone, made them larger.
-See [CI & dependencies](ci.md) for which legs are required.
+The `web-build` job does the same for `wasm32-emscripten-threads` (its cap
+is 4). See [CI & dependencies](ci.md) for which legs are required.
 
 ## Fallback: native SDKs per platform
 

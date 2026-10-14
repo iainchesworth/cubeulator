@@ -4,16 +4,24 @@
 
 ```
 src/
-  lib/            cube:: — GUI-free core (solver, vision, i18n)
+  lib/            cube:: — GUI-free core (solver, vision; i18n is a placeholder)
+    variants/       the two cube/profiling.hpp variants CMake chooses between
   app/
-    qt/            Qt 6 Quick/QML desktop shell
+    qt/            Qt 6 Quick/QML shell, shared by every platform
+    desktop/        the shell's desktop-only code (window geometry, keep-awake)
+    i18n/           the language list and the translation catalogues
     platform/       one directory per OS: its implementations of each
                     interfaces/ header, and the platform.cmake that selects them
-    interfaces/     camera.hpp, paths.hpp,
-                    platform_info.hpp, crash_handler.hpp
+    interfaces/     camera.hpp, paths.hpp, platform_info.hpp,
+                    crash_handler.hpp, desktop_shell.hpp
 tests/
   unit/
   integration/
+  system/         draws the real app in a window
+  perf/           budgets on the solver and the reader
+  i18n/
+  platform/       test cases only one OS can run
+tools/            cube_scan, cube_solve_bench, the generators and the CI checks
 ```
 
 `src/lib/` is Qt-free and platform-free by design: independently unit-testable,
@@ -40,7 +48,8 @@ browser (WebAssembly) — shares the same Qt 6 Quick/QML shell
 (`src/app/qt/`). There is no native-per-platform shell split: Android is
 packaged via `androiddeployqt`, iOS via Qt's Xcode integration, and the web
 build is Qt for WebAssembly's one `.wasm` module, all loading the same
-`Main.qml`.
+`Main.qml`. (That is the design; the iOS app target is not built yet - iOS is
+build-only today, see the [FAQ](faq.md).)
 
 ## What's implemented today vs. planned
 
@@ -61,8 +70,9 @@ described, with their measurements, in [Solve methods](solver-methods.md). `cube
 `read_side` finds the sticker lattice of whichever side is held square to
 the camera and samples its nine colours, `SideScan` groups the reads into
 sides by their own content, and `resolve_colors` and
-`assemble_scanned_faces` turn six sides into a cube (see
-`src/lib/src/vision/`). There is no pose tracker and no learned model.
+`cube::solver::assemble_scanned_faces` turn six sides into a cube (see
+`src/lib/src/vision/` and `src/lib/src/solver/scan_assembly.cpp`). There is no
+pose tracker and no learned model.
 The image pipeline end to end - capture, the photometry lock, the reader,
 the side grouping, and where colour decisions are made - is described in
 [Vision pipeline](vision-pipeline.md), together with its known limits.
@@ -77,26 +87,28 @@ the cube as it stands, off the UI thread, and keeps the hold the camera has
 seen (`solutionContinuesCube`). The screens word each stage by its
 `cube::solver::Stage` value, since the methods have different stages. A scan
 that does not yet make a valid cube is never solved: the scan
-screen keeps asking for the sides again. `CubeView.qml` draws a per-move arrow (face + direction) accurate to
-the solver's actual output, with a hidden-face badge for moves on faces
-this fixed 3-face iso view doesn't show. `i18n` remains a stub target that
-compiles and links but contains no real logic.
+screen keeps asking for the sides again. The solve screen draws the cube in 3D
+(`Cube3DView.qml`): the layer the next move turns nudges a little way in the
+direction it has to go and back (`guideFace`), and stepping turns it all the way
+(`playMove()`). `CubeView.qml`, the flat technical-drawing cube, is what the
+completion screen draws. `cube::i18n` in `src/lib` is still a placeholder
+(`not_yet_implemented()`); translations are loaded by the app shell's
+`LanguageManager` (`src/app/qt/i18n/`), described in [Translations](i18n.md).
 
-Planned, in order:
+Planned, in the order of the [Recovery plan](recovery-plan.md):
 
-1. A trained ML-based cube/sticker detector, as a more robust alternative
-   to the classical OpenCV lattice fit under messier backgrounds/lighting
-   than it was designed to tolerate.
-2. Real (not snap/no-op) `CubeView.qml` move animation, now that the
-   separate fully-rendered 3D cube work has landed - it already has a
-   single seam (`animateMove()`) for this to plug into.
-3. i18n locale resource loading.
+1. A review screen showing all 54 stickers, with tap to correct, which is also
+   hand entry for a cube the camera cannot read.
+2. The live gate: fresh scrambles at the desk, from camera to correct solve
+   steps with no manual fix.
+3. Reading a side held up to about 35 degrees off square-on, so that nobody
+   has to hold still.
 
 ## GPU rendering
 
 There is one renderer, and it is Qt's. The app shell's own 3D cube
-(`src/app/qt/Cube3DView.qml`, shown on the launch screen and in Settings) and
-its three render styles — Physically-Based Realism, Instructional Glow,
+(`src/app/qt/Cube3DView.qml`, shown on the launch screen, in Settings and on the
+solve screen) and its three render styles — Physically-Based Realism, Instructional Glow,
 Borderlands Cel-Shading — are implemented entirely in Qt Quick3D. Quick3D's
 own `CustomMaterial`/`Effect`/`ExtendedSceneEnvironment` extensibility covered
 all three (hard-banded cel shading, inverted-hull ink outlines via a front-face-
@@ -106,8 +118,8 @@ API runs underneath (Direct3D 11/12, Vulkan, OpenGL, Metal) is Qt's RHI
 choice, surfaced through `platform_info`.
 
 The progress overlay and step animation that were once pencilled in for a
-separate bgfx pipeline are UI animation, which belongs in QML (the seam for
-move animation is `animateMove()`). bgfx itself was a declared vcpkg dependency that nothing
+separate bgfx pipeline are UI animation, which belongs in QML (move animation is
+`Cube3DView.playMove()`). bgfx itself was a declared vcpkg dependency that nothing
 linked, behind a stub target with no rendering code; it was removed so that
 every CI leg, including the mobile ones, stops building seven ports for it.
 If custom GPU drawing is ever needed inside the Qt Quick scene, the supported

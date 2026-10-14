@@ -3,6 +3,8 @@
 What the developer-only scan recorder writes, and what `cube_scan` reads. The
 code is `src/lib/include/cube/vision/recording_v2.hpp` (recorder, manifest,
 integrity check) and `frame_recording.hpp` (file names and the index rows).
+`cube_scan` itself uses only the frame files and `truth.txt`; the index, the
+manifest and the integrity check are for `check_recording` and for people.
 
 ## When anything is written
 
@@ -10,7 +12,10 @@ Never by default. The app stores nothing unless a developer sets
 `CUBE_SCAN_RECORD_DIR` to a folder before starting it; the scan screen then
 shows a recording marker so a recording is never silent. Each scan gets its own
 sub-folder, named for when it began (`yyyyMMdd-HHmmss-zzz`), and the solve
-screen's camera never records.
+screen's camera never records. Only the frames the scan is built from are
+written: none while the camera is still settling (see
+[Camera photometry](vision-pipeline.md#camera-photometry)) and none once the
+cube has been read.
 
 Recordings show whatever the camera sees, which can be the person holding the
 cube. They stay out of the repository (`/tests/data/captures/` and
@@ -25,12 +30,14 @@ described in [diagnostics.md](diagnostics.md).
 
 ## Directory layout
 
+One scan's sub-folder of `CUBE_SCAN_RECORD_DIR`:
+
 ```
 <recording-dir>/
   index.csv          # one row per recorded frame
   rec_000000.jpg ... # the frames, at the reader's analysis scale
   manifest.json      # per-clip metadata
-  recording_stats.json  # written when the recorder stops: pushed/written/dropped
+  recording_stats.json  # written when the recorder stops: pushed/written/dropped/queue_peak
   fullres/           # only if full-resolution frames were asked for
     rec_000000.jpg
   truth.txt          # optional, added by hand for scoring (see below)
@@ -46,7 +53,10 @@ more of the room and nothing the reader uses.
 - The file for pass `n` is `rec_%06d.jpg` of `n % 3600`: the files wrap at a
   3600-frame ring so a recorder left on bounds its disk use, while `index.csv`
   keeps growing. A row whose file has since been overwritten is detected from
-  the index (`frame_overwritten`) and ignored.
+  the index (`frame_overwritten`) and ignored. `cube_scan` does not read the
+  index: it replays the `rec_*.jpg` files in file-name order, which is
+  chronological only for a scan shorter than 3600 frames (about two minutes
+  at 30 Hz).
 
 ### `index.csv`
 
@@ -89,8 +99,9 @@ Consumers ignore unknown keys.
 
 `check_recording(dir)` returns the first problem or nothing: the index parses,
 passes are contiguous, `t_ms` does not decrease, every row that has not been
-overwritten has its frame (and `fullres/` file when that stream exists), and no
-recorder-side drops were flagged. The recorder's queue holds 256 frames (about
+overwritten has its frame (and `fullres/` file when that stream exists), the
+manifest's `state`, if it has one, still validates, and no recorder-side drops
+were flagged. The recorder's queue holds 256 frames (about
 8.5 s at 30 Hz); a frame pushed to a full queue is dropped and counted, the
 count is written to `recording_stats.json` when the recorder stops, and
 `check_recording` fails a clip that has any.

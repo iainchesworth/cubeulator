@@ -1,15 +1,21 @@
 # Testing & coverage
 
-Four layers, all Catch2:
+Four layers, all Catch2 (a few script gates sit beside them, listed below):
 
 - **`tests/unit/`** — fast, isolated, one behaviour each. Currently exercises
   `cube::error` (`Result<T>`/`CubeError`), `cube::version`, the solver, the
-  direct-scan reader and its sides, the recorder, and the held-cube fit.
-- **`tests/integration/`** — exercises several components together; the
-  current test drives the CMake-selected platform implementations
-  (`cube::platform::paths`, `cube::platform::platform_info`,
+  direct-scan reader and its sides, the corner reader, colour resolution, the
+  recorder, and the held-cube fit. The Qt-side tests live here too, each in a
+  binary of its own because it needs a Qt application object:
+  `cube_qt_controller_tests` (the controllers), `cube_qml_tests` (the app's own
+  QML, see [QML tests](#qml-tests-the-solve-screen)) and `cube_desktop_tests`
+  (window geometry, keep-awake). The rest is `cube_unit_tests`.
+- **`tests/integration/`** — exercises several components together
+  (`cube_integration_tests`); the current tests drive the CMake-selected
+  platform implementations (`cube::platform::platform_info`,
   `cube::platform::camera`) end to end rather than any single interface in
-  isolation.
+  isolation. What only one OS can run (Linux's XDG `cube::platform::paths`, the
+  desktop shell's keep-awake) is in `tests/platform/<name>/`.
 - **`tests/system/`** — the whole application, from `Main.qml`, driven by
   mouse, touch and key events in a real window. See
   [System tests](#system-tests).
@@ -27,6 +33,14 @@ desktop session reaches the process), and a test case only one platform can run
 lives in `tests/platform/<name>/`. The `platform_fragments_satisfy_contract`
 test holds every platform's `platform.cmake` to the contract on whichever host
 it runs, so the platforms a build does not target are still checked.
+
+The other ctest entries that are scripts rather than Catch2 cases: the `i18n_*`
+gates (label `i18n`, [Translation tests](#translation-tests)),
+`perf_tracy_check_selftest` (label `perf`, [Tracy](#tracy-per-zone-local-and-nightly-optional)),
+`release_tools_selftest` (label `release`: the changelog and release tooling,
+see [Cutting a release](releasing.md)) and `third_party_notices_complete` (label
+`licensing`: fails when something that ships has no notice, see
+[Licensing](licensing.md)). The last needs the app build.
 
 Run them with `ctest --preset <preset>` after building. Tests are
 independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
@@ -61,10 +75,12 @@ you actually want ASan/UBSan coverage.
 ## Slow tests
 
 The solver's corpus tests (`solve_cross`, `solve_corners`,
-`solve_middle_edges`, `solve_oll`, `solve_pll`), both `solve` cases, and
-the `SteppedSolution` tests (each of the latter runs a full solve) are
-tagged `[slow]` - every one drives one or more random scrambles through
-the searched first-two-layer stages. (The last layer itself is fixed-algorithm and takes
+`solve_middle_edges`, `solve_oll`, `solve_pll`), the `solve` cases that run
+whole solves (`solve_test.cpp`), the piece search's comparisons with the search
+it replaced, and the `SteppedSolution` tests (each of the latter runs a full
+solve) are tagged `[slow]` - every one drives one or more random scrambles
+through the searched first-two-layer stages. (The last layer itself is
+fixed-algorithm and takes
 milliseconds - see [last_layer.hpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/src/lib/src/solver/last_layer.hpp) -
 so the corpus cost is the cross/corners/middle-edges searches.) The
 intermediate and advanced solvers' corpus tests (`cfop_test.cpp`,
@@ -80,14 +96,16 @@ ctest --preset <preset> -L slow    # just the slow solver corpus tests
 
 ## QML tests (the solve screen)
 
-`cube_qml_tests` loads the app's own QML - `Cube3DView.qml` and
-`SolveScreen.qml`, with the app's own controllers behind them - and reads the
-3D cube back out of its scene: where each sticker sits and which way it
-faces, taken from the nodes' transforms. That is held to
+`cube_qml_tests` loads the app's own QML - `Cube3DView.qml`, `SolveScreen.qml`
+and `DirectScanScreen.qml`, with the app's own controllers behind them - and
+reads the 3D cube back out of its scene: where each sticker sits and which way
+it faces, taken from the nodes' transforms. That is held to
 `cube::solver::Cube`, so the direction of every animated turn is checked
-against `Cube::apply` on what is actually drawn. No window is shown and
-nothing is rendered; it runs headless (offscreen platform off Windows) and
-is part of `ctest`.
+against `Cube::apply` on what is actually drawn. The camera previews on the
+scan and solve screens are held to being mirrored as a picture only: the
+picture and the dots on it flip together, and the status, chips and buttons
+never do. No window is shown and nothing is rendered; it runs headless
+(offscreen platform off Windows) and is part of `ctest`.
 
 `solution_screen_test.cpp` does the same for `SolutionScreen.qml`, the review
 of a finished solve: the cube it draws is the solver's cube at every position,
@@ -121,7 +139,10 @@ cube_qml_tests "[.gallery]"
 
 The shot names are in
 [solve_screen_gallery_test.cpp](https://github.com/iainchesworthlabs/cubeulator/blob/main/tests/unit/solve_screen_gallery_test.cpp).
-It needs a GPU, so `ctest` never selects it.
+It needs a GPU, so `ctest` never selects it. The scan screen has a hidden case
+of its own under the same tag and directory variable (`scan-mirrored.png` and
+`scan-unmirrored.png`, in `direct_scan_screen_test.cpp`; `"[.gallery][direct-scan]"`
+runs it alone), so the command above writes those too.
 
 To *use* the solve screen without scanning a cube first, start the app with
 `CUBE_SOLVE_DEMO=<seed>`: it opens on the solve screen with a cube scrambled
@@ -227,11 +248,12 @@ minimised window never gets its size (every click lands outside it), and a
 window outside every monitor is never sent an expose, so the app never counts
 as shown.
 
-It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
-`tour/<layout>/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
-with `.txt` beside each (what that shard visited; a whole walk run by hand
-writes `reach.json`). CI uploads that directory as the `system-test-output`
-artifact.
+It writes `<build>/system-test-output/` (under ctest; run by hand it is
+`system-test-output/` beside the executable, or `$CUBE_SYSTEM_TEST_OUT` when
+that is set): `tour/<layout>/screens/*.png` (the screenshot tour) and
+`reach-shard-<n>-of-<count>.json` with `.txt` beside each (what that shard
+visited; a whole walk run by hand writes `reach.json`). CI uploads that
+directory as the `system-test-output` artifact.
 
 While it runs it prints a line to stderr as each case and section starts and
 ends, with the seconds since the process began (`[system +  12.3s] case: ...`,
@@ -245,7 +267,10 @@ case's time they are.
 
 The `system` label keeps it out of the plain `ctest` runs - the committed
 presets exclude it, and CI's build legs say `-LE system` as well: it needs
-somewhere to draw.
+somewhere to draw. CI runs it in its own Linux job (`System tests (Linux, Xvfb
++ software GL)`, the command above, on the Qt the app ships on), and the
+Windows and macOS build legs run `<preset>-system` as a step that reports but
+does not block.
 
 ### How it works
 
@@ -276,6 +301,12 @@ somewhere to draw.
   with no test change, and what it does is for a case of its own.
 - **QML warnings are failures.** `diagnostics.cpp` collects what the app's own
   QML printed; the journey cases assert it is nothing.
+- **Two files are added from `tests/CMakeLists.txt`**, not listed in
+  `tests/system/CMakeLists.txt`: `tests/i18n/system/language_test.cpp` (the
+  language switched live in the real window; see
+  [Translation tests](#translation-tests)) and, where the platform has a
+  desktop shell, `tests/system/desktop_shell_test.cpp` (the placeholder About).
+  They are in the walk like any other case.
 - **Nothing of a person's is read or written.** The settings store is a
   temporary directory (`QSettings::setPath`), and so is the app's data folder,
   where the history of solves is kept: `system_test_main.cpp` points
@@ -327,7 +358,10 @@ All entries of `-L system` with the CI preset, Qt 6.8.3, pinned to four cores
 (a hosted runner's four vCPUs): 55 minutes, five shards and a tour, before the
 changes below; 8.7 minutes one entry at a time and 4.4 minutes three at a time
 after them (the shards 26-79 s each, the tour halves 120 and 133 s). A runner
-is slower than that machine by something like a third to a half.
+is slower than that machine by something like a third to a half. Those
+figures, and the 66 of 82 seconds above, are from Qt 6.8.3, which the Linux
+job ran when they were taken; it now runs Qt 6.12.0 and they have not been
+taken again.
 
 Seven choices keep each entry short, and each is worth keeping when a case is
 added:
@@ -457,6 +491,12 @@ Names are
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
 
+The pictures in the [user guide](guide/index.md) (`docs/guide/img`) are these.
+`python tools/docs/update_guide_screenshots.py <build>/system-test-output`
+copies the ones the guide uses out of a tour run and saves them as WebP; its
+docstring says how to get a plain wall behind the drawn cube instead of the
+tour's cluttered room. Refresh them when a screen the guide shows changes.
+
 It is two ctest entries of its own (`system.tour.narrow` and `.wide`, writing
 to `<build>/system-test-output/tour/<layout>`) because it is the slowest part
 by far - 68 grabs of a window that is being rendered in software on Linux CI
@@ -504,11 +544,15 @@ inventory in `reach.cpp` can be replaced by its ids as screens are rebuilt.
 
 `layout_test.cpp` checks that every control is inside the window at six
 sizes (375x667 to 1280x800). It found two screens that still size by
-subtraction (plan, "What was found"): on the permission screen "Not now" is
+subtraction (plan, "What was found"): on the permission screen "Not now" was
 below the window on a phone and at 719x640 (and "Open settings", when the
 platform reports camera access as denied), and on the complete screen both
-buttons are below a 1280x800 window. They are listed in the test as they
-are; a new overflow fails it, and so does the day one of these is fixed.
+buttons are below a 1280x800 window. The permission screen has since been
+rebuilt and fits; the complete screen's two buttons (`complete.review`,
+`complete.scanAnother`) are still listed in the test as they are. A new
+overflow fails it; the day one of these is fixed the test says so as a warning
+rather than failing, because the list was written from the Windows and Linux
+fonts and a control that fits on another platform is not a fix.
 
 A control inside the window can still sit on another, which that check cannot
 see. On the solve screen the camera's preview (`solve.frame`), its words
@@ -654,7 +698,7 @@ is a second here and one that is ten. The solver's own header says a solve
 must be seconds on a phone, always; this is what holds it, on the machine that
 is running the tests rather than on a phone nobody has to hand.
 
-Budgets are measured, then set a quarter to a half above what the corpus gives
+Work budgets are measured, then set about a quarter above what the corpus gives
 (the report prints the room each metric has left). Wall-time budgets are the
 loose part.
 
@@ -690,7 +734,7 @@ own.
 ### Reading a failure
 
 ```
-check.hpp(51): FAILED:
+check.hpp(55): FAILED:
   CHECK( m.measured <= m.budget )
 with expansion:
   1148612.0 <= 1000000.0
@@ -698,7 +742,9 @@ with message:
   metric beginner.middle_edges.nodes.max (nodes), worst corpus seed 5
 ```
 
-(That is the real output with the middle-edge budget lowered to a million.)
+(That is the real output with the middle-edge budget lowered to a million, from
+before the corpus was widened to 28 seeds; over today's corpus the same
+experiment reports 1,270,904 and may name another seed.)
 
 - **The metric name** is `<group>.<thing>.<statistic>`; the seed is the corpus
   scramble that gave a maximum. Reproduce it with `"[.perf-report]"`, which
@@ -706,14 +752,16 @@ with message:
 - **A count that doubled or tenfolded** is a lost reduction: a signature that
   no longer collapses states, a search with a wider face set, an algorithm
   alphabet that stopped preserving the first two layers. Look at the diff of
-  `bfs_search.hpp` and the stage's `make_signature`.
+  `piece_search.hpp`, `bfs_search.hpp` and the stage's `signature` (in
+  `cross.cpp`, `corners.cpp` or `middle_edges.cpp`).
 - **`...search.max` near its cap** (the budgets are held at most half of the
   solver's own hard caps by a `static_assert` in `metrics.cpp`) means the cap is
   about to turn the search into `no_solution`: the answer is never "raise the
   budget".
 - **`read.*.buffers` or `.bytes`** up means the reader allocates more per frame:
   a conversion of the whole frame, a buffer per sticker. `*.bytes_vs_640x360`
-  above 1 means a bigger camera frame is no longer reduced first.
+  above 1.1 (it measures 1.00) means a bigger camera frame is no longer reduced
+  first.
 - **A `timing.*` failure** with the work budgets green is a constant-factor
   slowdown (a copy where there was a reference, an allocation per node, a lost
   inline). The message carries the fastest run of the task and of the
@@ -766,8 +814,9 @@ make a red run green:
 - **Generous.** Each budget is three to ten times what the ratio measured, or
   more, across the runs made on one busy 32-core machine (the ranges are in
   `budgets.hpp`), and GCC 15 on Linux measured 7.8 for the beginner solve where
-  MSVC measured 9 to 13. They are order-of-magnitude detectors for what a node count
-  cannot see; they are not 10% gates and must not be tightened into being one.
+  MSVC measured 9 to 13 (both on the facelet search). They are
+  order-of-magnitude detectors for what a node count cannot see; they are not
+  10% gates and must not be tightened into being one.
 - **Not Catch2's `BENCHMARK`.** It runs a hundred samples and bootstraps a
   confidence interval, which for an 0.8 s solve is a minute and a half for a
   figure that goes to the reporter and is not a value an assertion can read. A
@@ -814,7 +863,8 @@ way on a busy shared machine:
   for `CUBE_PERF_PROFILER_SETTLE_MS` before its first case and
   `CUBE_PERF_PROFILER_DRAIN_MS` after its last, when they are set
   (`tests/perf/profiler_listener.cpp`; nothing happens otherwise), and a capture
-  that still has a nameless zone is run again, up to four times.
+  that still has a nameless zone is run again, four attempts in all
+  (`--attempts`).
 
 CI does not run it and nothing depends on it: no CI leg builds Tracy, and the
 Tracy-on build's `system.walk` has been seen failing intermittently. The
@@ -1004,20 +1054,35 @@ columns), which CI uploads.
 `ctest -L i18n` (or `-R i18n` plus the `[i18n]` Catch cases) runs the
 translation gates: the catalogues against `docs/design/strings.json`, a lint
 for user-visible literals, the ids the code asks for, what each catalogue
-holds, a raw id never reaching the screen, the language manager, and the
-converted screens switched live between English, the pseudo-locale and Hebrew.
-They need Python 3 and Qt's Linguist tools, which the Qt install has. What
-each one is for, and what to do when it fails, is in [Translations](i18n.md).
+holds, a raw id never reaching the screen, the language manager, the browser
+build's Japanese and Chinese font subsets against the catalogues, and the
+converted screens switched live between English, the pseudo-locale and Hebrew
+(and checked in the real Japanese and Chinese). The Catch cases are in
+`cube_i18n_tests` and `cube_i18n_screen_tests`; the system tests add the same
+switch in the real window (`tests/i18n/system/language_test.cpp`, tagged
+`[language]`). They need Python 3 and Qt's Linguist tools, which the Qt install
+has, and are part of the app build, so a `CUBEULATOR_BUILD_APP=OFF` configure
+has none of them. What each one is for, and what to do when it fails, is in
+[Translations](i18n.md).
 
 ## Coverage gate
 
-CI's `Coverage (Linux, GCC)` job builds the `linux-gcc-coverage` preset
-(`CUBEULATOR_ENABLE_COVERAGE=ON`, `CUBEULATOR_BUILD_APP=OFF`) and runs:
+CI's `Coverage (Linux, GCC)` job builds the `linux-gcc-coverage` preset (which
+sets `CUBEULATOR_ENABLE_COVERAGE=ON`; the job adds `-DCUBEULATOR_BUILD_APP=OFF`
+and installs no Qt) and runs `ctest --preset linux-gcc-coverage`, then holds
+the result to:
 
 ```
 gcovr --root . --filter 'src/.*' \
   --fail-under-line 80 --fail-under-branch 80
 ```
+
+(The job's real command line also excludes throw and unreachable branches and
+reads past gcc's negative-counter bug, 68080; see `ci.yml`.) So the gate is the
+library and the selected platform's code, not the Qt app. The system-tests job
+builds the same preset with the app and reports the coverage of `src/app/qt/`
+from the controller and system tests - not gated, and QML is not in it (see
+[Reach](#reach-the-stand-in-for-qml-coverage)).
 
 New behaviour should come with a test in the same PR (TDD by convention);
 `src/lib/` in particular has no platform/GUI dependency to complicate

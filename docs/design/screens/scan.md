@@ -1,5 +1,18 @@
 # Scan
 
+> **Status in 0.1.0-beta.1:** Partly built, as `DirectScanScreen.qml`: the
+> camera picture with a dot on each sticker, a status panel, six chips in the
+> measured colours with a bar that fills while a side is held, **Cancel** and
+> **Start over**, and the wording of the guidance, which is all still a literal
+> in English. Not built: the leave and restart dialogs (both buttons act at
+> once), More, the camera picker, hand entry, the stuck hint, resuming after
+> the camera was lost, marks on the chips, and most of the spec's
+> `objectName`s. The app differs from the spec in two ways: the picture and
+> its dots are shown mirrored when the camera faces the user (the chips are
+> not), and it has a state the spec lacks, when six sides fit together in two
+> ways and it asks for two sides in one view (`scan.guide.ambiguous`,
+> recovery plan R5).
+
 Lane: **scan** (`feature/direct-scan`). This is a proposal for the chrome
 and the states of `DirectScanScreen.qml`. How the cube is read is theirs.
 

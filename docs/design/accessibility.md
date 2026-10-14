@@ -1,5 +1,14 @@
 # Accessibility
 
+> **Status in 0.1.0-beta.1:** Almost none of this is built. The screens have
+> no accessible names or roles, the buttons are not focusable and there is no
+> focus ring, and the cube colours carry no marks. What exists is
+> `DesktopShell.qml`'s shortcuts (Ctrl+, for Settings, Ctrl+N for a new scan,
+> F11 or Ctrl+Cmd+F for full screen, Ctrl+Q to quit; F1 is bound and disabled
+> until there is Help), the solve screen's Space, Enter, Right and Left keys,
+> a dialog role on the placeholder About, and mirroring of the layout, but
+> not the cube, in right-to-left languages. Esc and Alt+Left do not go back.
+
 ## The target
 
 **WCAG 2.2 level AA is the reference.** It is written for the web;
@@ -7,15 +16,16 @@ Cubeulator is a native app, so each criterion is read the way WCAG2ICT
 reads it for software. Where a platform asks for more (48 px targets on
 Android), the stricter rule is the kit's rule everywhere.
 
-The app today has no accessible names, no keyboard focus and state carried
-by colour alone (plan, "What was found"). So this is the design for the
-first accessible version, not a refinement.
+The app on 2026-10-13 had no accessible names, no keyboard focus and state
+carried by colour alone (plan, "What was found"), and it still has none of
+the three, bar the desktop shell. So this is the design for the first
+accessible version, not a refinement.
 
 What "done" means, and who checks it:
 
 | check | by |
 |---|---|
-| Contrast of every token pairing | `tools/check_tokens.py`, on every change |
+| Contrast of every token pairing | `docs/design/tools/check_tokens.py`, on every change |
 | Every interactive item has a name, a role and a big enough target | System tests (E0a), walking the journey |
 | The whole journey by keyboard alone | System tests |
 | Nothing truncated at 200% text or in the pseudo-locale | System tests, from the screenshot tour |

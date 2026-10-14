@@ -1,13 +1,23 @@
+# Literals not yet converted
+
+The English literals the QML still shows without a string id (78 at
+0.1.0-beta.1), grouped by the lane that owns each file, with the id in
+`strings.json` to use where the design has one. It is the output of
+`python tools/i18n/lint_strings.py --report`, whose allowlist is
+`tools/i18n/lint_allowlist.json`: regenerate it rather than editing it, as the
+line numbers drift. The lane names are the branches the work was split across
+when the lint was written; most have since merged.
+
 ### experience lane (feature/app-experience)
 
 | file | line | literal | id in strings.json |
 |---|---|---|---|
 | `CompleteScreen.qml` | 153 | METHOD | none: needs a string |
-| `SettingsScreen.qml` | 195 | Shader style for the 3D cube shown around the app. | none: needs a string |
-| `SettingsScreen.qml` | 211 | CUBE MOTION | none: needs a string |
-| `SettingsScreen.qml` | 215 | Auto-rotate when idle | none: needs a string |
-| `SettingsScreen.qml` | 231 | RENDERING | none: needs a string |
-| `SettingsScreen.qml` | 341 | Test turn | none: needs a string |
+| `SettingsScreen.qml` | 199 | Shader style for the 3D cube shown around the app. | none: needs a string |
+| `SettingsScreen.qml` | 215 | CUBE MOTION | none: needs a string |
+| `SettingsScreen.qml` | 219 | Auto-rotate when idle | none: needs a string |
+| `SettingsScreen.qml` | 235 | RENDERING | none: needs a string |
+| `SettingsScreen.qml` | 360 | Test turn | none: needs a string |
 | `StatsOverlay.qml` | 63 | FPS  | none: needs a string |
 
 ### kit session (feature/ax-kit)

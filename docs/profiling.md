@@ -66,11 +66,11 @@ changes between releases). The pin is whatever `tracy` resolves to in
 Headless, from the tools vcpkg built into the build tree:
 
 ```sh
-TOOLS=build/windows-msvc-profiling/vcpkg_installed/x64-windows/tools/tracy
+TOOLS=build/windows-msvc-profiling/vcpkg_installed/x64-windows/tools/tracy   # x64-linux, arm64-osx elsewhere
 
 # start the capture first; it waits for the application to appear
 $TOOLS/tracy-capture -o scan.tracy -a 127.0.0.1 -f &
-build/windows-msvc-profiling/bin/cube_app
+build/windows-msvc-profiling/bin/Cubeulator.exe   # cubeulator on Linux, Cubeulator.app on macOS
 
 # the capture ends when the application exits; then export it
 $TOOLS/tracy-csvexport scan.tracy > zones.csv         # per-zone statistics
@@ -119,10 +119,10 @@ solve keep their default name - they are shared, and a name is written once.
 | Layer | Zones |
 | --- | --- |
 | **capture** | `capture.read` (the blocking device read: its length *is* the camera's frame interval), `capture.publish`, `capture.start`, `capture.stop`, `capture.enumerate_devices`, `capture.photometry_lock`, `capture.photometry_restore` |
-| **direct scan** | `direct_scan.poll_frame`, `direct_scan.process_frame`, `direct_scan.record`; `vision.prepare_frame` (the working-width reduction, threshold and outlines both readers start from, once per frame), `vision.direct_scan.read_side` (the per-frame sticker read), `vision.corner_view.read_corner` (the two-sides read, only on a frame with no square-on side), `vision.direct_scan.add` (fusing a read into the scan), `vision.direct_scan.scanned` (colour resolution and assembly, once per completed scan) |
+| **direct scan** | `direct_scan.poll_frame`, `direct_scan.process_frame`, `direct_scan.record`; `vision.prepare_frame` (the working-width reduction, threshold and outlines both readers start from, once per frame), `vision.direct_scan.read_side` (the per-frame sticker read), `vision.corner_view.read_corner` (the two-sides read, only on a frame with no square-on side), `vision.corner_view.fit_corner` (one such read held against one candidate cube, only when the six sides make more than one), `vision.direct_scan.add` (fusing a read into the scan), `vision.direct_scan.scanned` (colour resolution and assembly, once per completed scan) |
 | **held cube** | `held_cube.on_frame_watched`, `held_cube.judge`, `vision.held_cube.fit` |
 | **colour and recording** | `vision.resolve_colors`, `vision.analysis_downscale`, `vision.recorder.push` (the GUI-thread clone) and `vision.recorder.write_job` (the writer thread's disk write) |
-| **solver** | `solver.solve`; per stage `solver.cross`, `.corners`, `.middle_edges`, `.oll`, `.pll`, then `solver.merge_adjacent_moves`; the other two methods are `solver.cfop` and `solver.two_phase` (the latter's lookup tables are built once: in `solver.two_phase.prepare` when asked for ahead of time, otherwise inside the first `solver.two_phase`); underneath, `solver.piece_search` (the first-two-layer searches, run on piece positions) and `solver.algorithm_search` (a template, so each stage's instantiation is its own row in the statistics) carry the **visited-node count** as a zone value (the first-two-layer searches' real cost, which is why the [slow tests](testing.md#slow-tests) are slow); `solver.bfs_search` is the same search over whole cubes, which only a cube that cannot be turned from solved ever reaches; `solver.assemble_scan` |
+| **solver** | `solver.solve`; per stage `solver.cross`, `.corners`, `.middle_edges`, `.oll`, `.pll`, then `solver.merge_adjacent_moves`; the other two methods are `solver.cfop` and `solver.two_phase` (the latter's lookup tables are built once: in `solver.two_phase.prepare` when asked for ahead of time, otherwise inside the first `solver.two_phase`); underneath, `solver.piece_search` (the first-two-layer searches, run on piece positions) and `solver.algorithm_search` (a template, so each stage's instantiation is its own row in the statistics) carry the **visited-node count** as a zone value (the first-two-layer searches' real cost, which is why the [slow tests](testing.md#slow-tests) are slow); `solver.bfs_search` is the same search over whole cubes, which only a cube that cannot be turned from solved ever reaches; `solver.assemble_scan` and `solver.assemble_all` (the one cube the six sides make, and every cube they make) |
 | **app** | startup: `app.i18n_install`, `app.load_qml` (the largest single startup cost); `app.solve_stepped` (the worker), `app.solve.apply_result`; `app.frame_image.request` (the preview's `cv::Mat` to `QImage` copy) |
 
 ### Messages
@@ -140,10 +140,10 @@ version, commit, branch, dirty flag), so a capture says what it measured.
 
 ### What is not instrumented
 
-The library's observation, orientation-tracking and capture-routing code
-(`observe_face`, `OrientationTracker`, `CaptureRouter` and the rest of the old
-scan pipeline) has no caller in the application any more - only tests reach
-it - so it carries no zones, which could never fire. When it is wired back in,
+Code with no caller in the application carries no zones, which could never
+fire. The old scan pipeline's observation, orientation-tracking and
+capture-routing code was of that kind until it was removed (step R6 of the
+[recovery plan](recovery-plan.md)); if something like it is wired back in,
 instrument it then.
 
 ## Adding instrumentation
@@ -291,9 +291,9 @@ shipped component.
   [architecture.md](architecture.md) already requires of platform
   differences. A unit test (`profiling_test.cpp`) pins the variant against the
   option, so the wrong directory cannot be selected unnoticed.
-- **An opt-in vcpkg feature, not a base dependency.** `opencv4` and
-  `onnxruntime` already make a cold build heavy; a normal configure never
-  resolves Tracy, and the binary cache is untouched.
+- **An opt-in vcpkg feature, not a base dependency.** `opencv4` already makes
+  a cold build heavy; a normal configure never resolves Tracy, and the binary
+  cache is untouched.
 - **Tracy's crash handler is off** (`default-features: false` drops the port's
   `crash-handler`). On Windows it installs an unhandled-exception filter *when
   a profiler connects* - after `main()` has installed the app's own minidump

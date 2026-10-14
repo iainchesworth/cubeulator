@@ -1,5 +1,11 @@
 # Review and hand entry
 
+> **Status in 0.1.0-beta.1:** Not built (recovery plan R3, still to do). There
+> is no screen to check or correct the colours or to enter a cube by hand:
+> Home has no **Enter colours by hand**, the menu's item for it is disabled,
+> and a scan that does not make a valid cube stays on the scan screen and
+> says so.
+
 Lane: **scan** (`feature/direct-scan`; recovery plan R3). This is a
 proposal for the chrome and the states. Checking that colours make a cube,
 and assembling one, are theirs.

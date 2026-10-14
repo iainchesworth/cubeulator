@@ -4,10 +4,10 @@
 
 | Workflow | Purpose | Blocking? | In the merge queue? |
 | --- | --- | --- | --- |
-| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), Web build (the same app as WebAssembly, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
-| `release.yml` | Builds the desktop packages (an installer for Windows, a disk image for macOS, a `.deb` and an `.rpm` for Linux) and the web build's zip on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run. A PR that changes it runs only the release tools' self-test | N/A (tags and manual runs) | No |
+| `ci.yml` | `clang-format`, `clang-tidy` and the `platform-isolation` check; build + test matrix (Linux/macOS/Windows, release only), system tests (Linux, under Xvfb), Android build (Qt/QML app, release only), Web build (the same app as WebAssembly, release only), iOS build-only (release only), coverage gate; a wall-time performance leg that only a manual run can name | Yes on `main`; on `develop` as each check goes green | Not yet |
+| `release.yml` | Builds the desktop packages (an installer for Windows, a disk image for macOS, a `.deb` and an `.rpm` for Linux) and the web build's zip on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run unless `dry_run` is unticked. A PR that changes it, `packaging/check-package.sh` or `tools/release/` runs only the release tools' self-test | N/A (tags and manual runs) | No |
 | `changelog-check.yml` | On a PR into `develop`: does a change a person using the app can see carry a `changelog.d/` fragment (or the `no-changelog` label), and is every fragment it adds well formed | No (advisory) | No |
-| `spike-sweep.yml` | Mondays: a `spike/*` branch whose tip is 30 days old is tagged `archive/spike-<name>` and deleted ([Investigations](investigations/README.md)). Run by hand it is a dry run | N/A (schedule and manual runs) | No |
+| `spike-sweep.yml` | Mondays: a `spike/*` branch whose tip is 30 days old is tagged `archive/spike-<name>` and deleted ([Investigations](investigations/README.md)). Run by hand it is a dry run unless `dry_run` is unticked | N/A (schedule and manual runs) | No |
 | `release-check.yml` | On a PR into `main`, two jobs: `Release readiness` (is this a release the Release workflow will accept, and what would its notes say, in the job summary) and `Commit is green` (is the PR's head green on every workflow the README has a badge for: CI, CodeQL, OSV-Scanner, Zizmor; red while CI is still running) | No (advisory) | No |
 | `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
 | `branch-name-check.yml` | Enforces gitflow branch naming | Yes | Yes (skipped, a pass) |
@@ -15,7 +15,7 @@
 | `osv-scanner.yml` | Scans `vcpkg.json` against the OSV database | No (visible only) | No |
 | `zizmor.yml` | Lints the workflow YAML itself | No (visible only) | No |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain health score. Publishes only from a run on `main` (push, weekly, or a branch-protection change), so the README badge reads "invalid repo path" until the first release has merged ([Cutting a release](releasing.md#preparing-the-release), step 10) | No (badge/score) | No |
-| `docs.yml` | Builds the mkdocs site and the web app (`.github/actions/web-build`, the same one `ci.yml`'s Web leg uses), and publishes both to GitHub Pages - the app under `/app/` | N/A (push to `main` only) | No |
+| `docs.yml` | Builds the mkdocs site and the web app (`.github/actions/web-build`, the same one `ci.yml`'s Web leg uses), and publishes both to GitHub Pages - the app under `/app/` | N/A (push to `main`, and manual runs) | No |
 | `docs-check.yml` | On a PR that touches `docs/` or `mkdocs.yml`: builds the documentation (not the web app) with `mkdocs build --strict`, so a broken link shows on the PR and not on the push to `main` that publishes the site | No (advisory) | No |
 | `dependabot-auto-merge.yml` | Enables auto-merge on Dependabot's minor/patch PRs for GitHub Actions and pip | No (acts on Dependabot PRs only) | No |
 | `cache-hygiene.yml` | Prunes the Actions cache quota: closed PRs' and deleted branches' entries, superseded vcpkg and Qt generations ([below](#the-vcpkg-binary-cache)) | No (acts on the cache only) | No |
@@ -26,9 +26,10 @@ the `merge_group` rule a workflow has to follow to be part of it.
 
 ### Running some legs by hand
 
-A push, pull request or queue entry always runs every leg of `ci.yml`. A
-manual dispatch can name just the ones it needs, which matters because the
-whole matrix is hours of hosted runners and the pool is shared:
+A push or pull request always runs every leg of `ci.yml` (a queue entry would
+too, once the workflow carries `merge_group`; it does not yet). A manual
+dispatch can name just the ones it needs, which matters because the whole
+matrix is hours of hosted runners and the pool is shared:
 
 ```sh
 gh workflow run ci.yml --ref <branch> -f legs=macos
@@ -71,7 +72,7 @@ branch's head commit.
 ### Self-hosted runners
 
 The org's hosted pool (20 jobs, 5 macOS) is shared with ICL Forge, and under
-load even a seconds-long required check queues for half an hour. Six jobs can
+load even a seconds-long required check queues for half an hour. Seven jobs can
 therefore run on the organisation's self-hosted fleet instead (the
 `iainchesworthlabs/ci-runners` repository builds it; the org's runner groups,
 not this repo, decide who may use it):
@@ -80,6 +81,7 @@ not this repo, decide who may use it):
 | --- | --- |
 | `Validate gitflow branch name` | `branch-name-check.yml` |
 | `Scan dependency diff` | `dependency-review.yml` |
+| `Changelog fragment` | `changelog-check.yml` |
 | `clang-format` | `ci.yml` |
 | `platform-isolation` | `ci.yml` |
 | `Plan build legs` | `ci.yml` |
@@ -125,11 +127,13 @@ gh variable delete CONTROL_RUNNER_JSON                                          
 
 ## The vcpkg binary cache
 
-A cold vcpkg install is the longest thing CI does: ONNX Runtime alone is 39
-minutes on the Windows leg, OpenCV 14 on Linux, and a whole macOS or iOS
-configure is over an hour. With the cache restored it is seconds (96 of 98
-Linux packages came back in 19 s; a macOS configure took 43 s instead of 67
-minutes). Every job that runs vcpkg uses the same two composite actions,
+A cold vcpkg install is the longest thing CI does: with ONNX Runtime still in
+the manifest (it has since been removed, and these figures have not been
+re-measured) ONNX Runtime alone was 39 minutes on the Windows leg, OpenCV 14 on
+Linux, and a whole macOS or iOS configure was over an hour. With the cache
+restored it is seconds (96 of 98 Linux packages came back in 19 s; a macOS
+configure took 43 s instead of 67 minutes). Every job that runs vcpkg uses the
+same two composite actions,
 [`.github/actions/vcpkg-cache/restore` and `/save`](https://github.com/iainchesworthlabs/cubeulator/tree/main/.github/actions/vcpkg-cache),
 which wrap vcpkg's `files` binary-cache provider (its `x-gha` provider was
 removed) around `actions/cache`.
@@ -202,8 +206,9 @@ Consequences worth knowing:
 The quota is 10 GB per repository. Past it GitHub evicts least-recently-used
 entries without regard to what they cost: a one-hour macOS cache was gone within
 two hours of being saved. [`cache-hygiene.yml`](https://github.com/iainchesworthlabs/cubeulator/blob/main/.github/workflows/cache-hygiene.yml)
-runs `ci/prune-actions-cache.sh` when a pull request closes and on every push to
-`develop` or `main`, and removes
+runs `ci/prune-actions-cache.sh` when a pull request is pushed to or closes, on
+every push to `develop` or `main`, and when a CI or CodeQL run on one of them
+finishes (that last trigger only works once the file is on `main`), and removes
 
 1. entries whose ref no longer exists (closed PR, deleted branch or tag, merge
    queue branch) - nothing can read them again;
@@ -222,7 +227,8 @@ gh workflow run cache-hygiene.yml -f purge=vcpkg-binary-cache-x64-windows- -f dr
 ```
 
 The next run on that triplet builds from cold and stores a clean entry.
-`./ci/prune-actions-cache.sh --dry-run` shows the same report locally.
+`./ci/prune-actions-cache.sh --dry-run --repo iainchesworthlabs/cubeulator`
+shows the same report locally (it needs `gh` and `jq`).
 
 ### Not done, and why
 
@@ -270,7 +276,7 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 
 | Component | In use | Newer exists? |
 | --- | --- | --- |
-| Qt | 6.12.0 (LTS; every fourth minor, 6.8 before it) | No - 6.12.0 is the newest release. The Windows kit is `msvc2022_64`; Qt ships no MSVC 2026 x64 kit, and it works with the VS 2026 toolset. Installing the Windows kit needs an unreleased aqtinstall (the pinned commit in `ci.yml` and `ci/install-qt.ps1`): the last release predates Qt 6.11's per-architecture repository layout. |
+| Qt | 6.12.0 (LTS; every fourth minor, 6.8 before it) | No - 6.12.0 is the newest release. The Windows kit is `msvc2022_64`; Qt ships no MSVC 2026 x64 kit, and it works with the VS 2026 toolset. Installing the Windows kit, and the WebAssembly kit, needs an unreleased aqtinstall (the pinned commit in `ci.yml`, `release.yml`, `.github/actions/web-build/action.yml` and `ci/install-qt.ps1`): the last release predates Qt 6.11's per-architecture repository layout. |
 | MSVC | Visual Studio 2026, via `windows-2025-vs2026` | No. |
 | GCC | 15.2 (`g++-15`, `gcov-15`) | Yes: GCC 16 is released upstream, but ubuntu-26.04's `gcc-16` is a March 2026 snapshot (`16-20260322`), not a release. The `Linux (GCC 15)` check name is also required on `main`. |
 | clang-format | 23.1.3, pinned PyPI wheel (`ci/requirements-lint.txt`) | No. |
@@ -280,30 +286,33 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | Playwright | 1.61.1 (`tests/web/package.json`, exact) | Maybe: the browser tests' only dependency. Pinned exactly because the Chromium it drives is the build that release names; a bump is a deliberate change to that file and the lockfile, checked by the `web-test` leg. Dependabot does not watch it (an npm entry would put test-runner bumps in the auto-merge lane). |
 | Android | NDK r28c (28.2.13676358), JDK 21, platform 36, build-tools 36.0.0 | r30 exists. r28c is newer than the r27c Qt 6.12 names and builds its libraries with: Qt recommends matching it but does not rule a newer NDK out, so this is outside Qt's tested configuration on purpose (r27c is the fallback). r28c's libc++ has `std::expected::transform`/`and_then`, `std::format`/`std::print`, `ranges::contains`/`fold_left` and `mdspan`, which r26b lacks; it still lacks float `from_chars`, `views::enumerate` and `flat_map`. |
 | CMake | 4.4.2, exact (`lukka/get-cmake`'s catalog; the project's policies go to 4.4) | Yes: Kitware has 4.4.4, which the pinned action cannot install until it is bumped (see [What CI pins](#what-ci-pins)). |
-| mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
-| vcpkg libraries | OpenCV 4.x, ONNX Runtime 1.23, Catch2, fmt, GLFW | Upstream is ahead (OpenCV 5.0, ONNX Runtime 1.31) but vcpkg's registry has no newer major of either, so these cannot move without a port of our own. A newer baseline only brings minors. |
+| mkdocs / mkdocs-material | 1.6.x / 9.7.x, exact (`docs/requirements.txt`) | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the pins stay on those lines. |
+| vcpkg libraries | OpenCV 4.x, fmt, Catch2 (the `tests` feature), Tracy (the opt-in `profiling` feature) | Upstream is ahead (OpenCV 5.0) but vcpkg's registry has no newer major, so it cannot move without a port of our own. A newer baseline only brings minors. |
 | iOS deployment target | 18.0 (`CMakePresets.json`) | No - 18 is Qt 6.12's minimum iOS (it was 16.3 for Qt 6.8), built with Xcode 16's iOS 18 SDK. iOS CI is build-only and does not build Qt, so this is the project's own floor, not something Qt exercises there. |
 
 ## What CI pins
 
-Nothing CI runs floats, so a green run is reproducible and a supply-chain
-change is a reviewed diff:
+Almost nothing CI runs floats, so a green run is reproducible and a supply-chain
+change is a reviewed diff (the exceptions are listed under the table):
 
 | | pinned to | kept current by |
 |---|---|---|
-| Every GitHub Action, and the composite actions in `.github/actions` | A full commit SHA, with the version in a trailing comment | Dependabot, weekly, grouped, with a **7-day cooldown**: a release is not proposed until it has been out a week |
-| CMake and Ninja (`lukka/get-cmake`) | `cmakeVersion` / `ninjaVersion`, exact, and one the pinned action's catalog lists: a CMake newer than the action (4.4.4 against `get-cmake` 4.4.2, in October 2026) fails with "Cannot match ... in the catalog" until the action is bumped | By hand, with the actions |
+| Every GitHub Action, and the composite actions in `.github/actions` | A full commit SHA, with the version in a trailing comment | Dependabot, weekly, grouped, with a **7-day cooldown**: a release is not proposed until it has been out a week. It reads only the directories `dependabot.yml` names (`.github/workflows` and `.github/actions/web-build`), so the `actions/cache` pin in `.github/actions/vcpkg-cache` is bumped by hand |
+| CMake and Ninja (`lukka/get-cmake`) | `cmakeVersion` / `ninjaVersion`, exact, and one the pinned action's catalog lists: a CMake newer than the action (4.4.4 against `get-cmake` 4.4.2, in October 2026) fails with "Cannot match ... in the catalog" until the action is bumped. The exception is the web build (`.github/actions/web-build`), which asks for `latest` | By hand, with the actions |
 | NSIS (`choco install nsis`) | `--version`, exact | By hand |
 | `gcovr` | `==`, exact | By hand |
 | zizmor | `ci/requirements-zizmor.txt`, exact | Dependabot (`pip`, `/ci`), weekly |
 | mkdocs and its theme | `docs/requirements.txt`, exact (their own dependencies still float) | By hand |
 | Qt (`install-qt-action`) | `6.12.0`, the LTS line (see Toolchain versions above) | By hand, deliberately: moving Qt moves the app's platform, and its minimum macOS and Windows with it |
 | vcpkg and the ports | The submodule commit and `builtin-baseline` | By hand |
-| Runner images | The label (`ubuntu-26.04`, `macos-26`, `windows-2025-vs2026`; `macos-15` for iOS) | By hand |
+| Runner images | The label (`ubuntu-26.04`, `macos-26`, `windows-2025-vs2026`; `macos-15` for iOS; `ubuntu-24.04` for the short control jobs and the scanners) | By hand |
 
-What is **not** pinned: the apt and Homebrew packages installed on a runner
-(`libglu1-mesa-dev`, `libomp`, ...), which come with the image and have no
-sensible pin short of a mirror.
+What is **not** pinned: the apt packages installed on a runner
+(`libx11-dev`, `rpm`, `xvfb`, ...), which come with the image and have no
+sensible pin short of a mirror; the documentation jobs (`docs.yml`'s `build`
+and `deploy`, and `docs-check.yml`), which run on `ubuntu-latest` and a
+`3.x` Python, though they install the pinned mkdocs; and the CMake of the web
+build, above.
 
 An action is bumped to the newest release that is at least a week old. A
 newer one is not skipped for good: Dependabot proposes it once it has aged,
@@ -311,8 +320,8 @@ and the same rule applies when bumping by hand.
 
 ## Dependencies
 
-vcpkg (vendored submodule, manifest mode) supplies Catch2, fmt, and OpenCV on every
-triplet, desktop and mobile alike, via a
+vcpkg (vendored submodule, manifest mode) supplies fmt, OpenCV and (behind the
+`tests` feature) Catch2 on every triplet, desktop and mobile alike, via a
 chainloaded toolchain on `arm64-ios`/`arm64-android` — see below. Qt is a
 separate prebuilt install (`jurplel/install-qt-action` in CI,
 `ci/install-qt.*` locally) — kept out of vcpkg for build size and Windows
@@ -332,9 +341,9 @@ is published (`cooldown`), so a compromised release has time to be caught.
 
 | Ecosystem | What it updates | Cadence | Merges itself? |
 | --- | --- | --- | --- |
-| `github-actions` | The SHA-pinned actions in `.github/workflows` | Weekly | Minor/patch, grouped in one PR. A major is its own PR and waits for a human. |
-| `pip` (`/docs`) | `mkdocs`, `mkdocs-material` within the capped ranges | Weekly | Minor/patch |
-| `pip` (`/ci`) | `zizmor` (`ci/requirements-zizmor.txt`) | Weekly | Minor/patch |
+| `github-actions` | The SHA-pinned actions in `.github/workflows` and `.github/actions/web-build` | Weekly | Minor/patch, grouped in one PR. A major is its own PR and waits for a human. |
+| `pip` (`/docs`) | `mkdocs`, `mkdocs-material` (the exact pins in `docs/requirements.txt`) | Weekly | Minor/patch |
+| `pip` (`/ci`) | `zizmor` (`ci/requirements-zizmor.txt`) and `clang-format` (`ci/requirements-lint.txt`) | Weekly | Minor/patch |
 | `vcpkg` + `gitsubmodule` | `builtin-baseline` in `vcpkg.json` and the `deps/vcpkg` checkout, as one PR | Monthly | No |
 
 "Merges itself" means `dependabot-auto-merge.yml` runs `gh pr merge --auto
@@ -355,8 +364,10 @@ required on `develop`.
 These are bumped by hand, and are the first place to look when asked "are we on
 the latest?":
 
-- **Qt** — `ci/install-qt.sh`, `ci/install-qt.ps1`, and the `version:` of both
-  `jurplel/install-qt-action` steps in `ci.yml` (desktop and Android).
+- **Qt** — `ci/install-qt.sh`, `ci/install-qt.ps1`, and the `version:` of every
+  `jurplel/install-qt-action` step: three in `ci.yml` (desktop, Android and the
+  system tests), the build job in `release.yml`, and the WebAssembly one in
+  `.github/actions/web-build/action.yml`.
 - **Android NDK / SDK / JDK** — the `sdkmanager --install` lines and
   `JAVA_HOME` in the `android-build` job. Qt pins the NDK it was built with;
   follow Qt's *Qt for Android* page, not the newest NDK.
@@ -364,9 +375,10 @@ the latest?":
   `.github/actions/web-build/action.yml`, with the Qt version in the same file
   and the `emsdk` version in `docs/building.md`. Qt names the one Emscripten
   each release is built with; follow Qt's *Qt for WebAssembly* page.
-- **Compilers** — `g++-15`/`gcov-15` in `ci.yml` and `codeql.yml`, and the
-  Clang packages the `clang-format`/`clang-tidy` jobs install.
-- **Runner images** — every `runs-on:` label, and the `matrix.os` values.
+- **Compilers** — `g++-15`/`gcov-15` in `ci.yml`, `codeql.yml` and
+  `release.yml`, and the Clang packages the `clang-tidy` job installs.
+- **Runner images** — every `runs-on:` label, and the `matrix.os` values (in
+  `ci.yml` and `release.yml`).
 - **CMake policy range** — the upper bound in `cmake_minimum_required()`.
 - **Libraries built by vcpkg** (OpenCV, ...) — these move
   only with the `builtin-baseline`, and only as far as the vcpkg registry has
