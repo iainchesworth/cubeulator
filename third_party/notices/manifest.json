@@ -53,13 +53,13 @@
         "qtquick3d/Quick3DHelpers",
         "qtquick3d/Quick3DHelpersImpl"
       ],
-      "Qt.labs.settings": [
-        "qtdeclarative/LabsSettings"
+      "QtCore": [
+        "qtdeclarative/QmlCore"
       ]
     },
     "repoNames": {
       "qtbase": "Qt Base (Core, GUI, Network, Concurrent, platform plugins)",
-      "qtdeclarative": "Qt Declarative (QML, Qt Quick, Quick Controls 2, Labs Settings)",
+      "qtdeclarative": "Qt Declarative (QML, Qt Quick, Quick Controls 2, QtCore Settings)",
       "qtquick3d": "Qt Quick 3D",
       "qtshadertools": "Qt Shader Tools",
       "qtsvg": "Qt SVG",
@@ -85,8 +85,8 @@
         "qtbase/QTlsBackendCertOnlyPlugin",
         "qtbase/QTuioTouchPlugin",
         "qtbase/QWindowsIntegrationPlugin",
-        "qtdeclarative/LabsSettings",
         "qtdeclarative/Qml",
+        "qtdeclarative/QmlCore",
         "qtdeclarative/QmlMeta",
         "qtdeclarative/QmlModels",
         "qtdeclarative/QmlWorkerScript",
@@ -112,9 +112,9 @@
         "qtdeclarative/effectsplugin",
         "qtdeclarative/modelsplugin",
         "qtdeclarative/qmlplugin",
-        "qtdeclarative/qmlsettingsplugin",
         "qtdeclarative/qmlshapesplugin",
         "qtdeclarative/qquicklayoutsplugin",
+        "qtdeclarative/qtqmlcoreplugin",
         "qtdeclarative/qtquick2plugin",
         "qtdeclarative/qtquickcontrols2basicstyleimplplugin",
         "qtdeclarative/qtquickcontrols2basicstyleplugin",

@@ -214,6 +214,12 @@ a setting already in the store). `ctest --preset <preset>-system -R
 system.walk` runs the shards; `-j` runs entries side by side, which on four
 cores took the whole set from 8.7 to 4.4 minutes (below).
 
+The relaunch case needs the settings store seeded before the app exists, which
+only its ctest entry does (`CUBE_SYSTEM_TEST_THEME`). Picked up through a tag it
+shares with other cases (`[settings]`, `[system]`) it is reported as skipped,
+with that reason; run alone without the seed, the binary exits 4, so the
+entry cannot pass without the check having been made.
+
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
 
@@ -914,6 +920,17 @@ what they find is what only WebAssembly gets wrong (a `size_t` that is 32 bits
 in a hash, a stack of 64 KB, a thread that waits for a Web Worker nobody has
 started, exceptions compiled out by default).
 
+A drawn scene (`tests/unit/drawn_cube.hpp`) is held to the same: a seed has to
+be the same picture on every compiler. `std::mt19937`'s words are specified, so
+draw from those; `std::uniform_int_distribution` and `std::normal_distribution`
+are each library's own algorithm (libc++ takes the low two bits of a word for
+`(0, 3)`, MSVC and libstdc++ the high two), and the arguments of a call are
+evaluated in whatever order the compiler picks (clang left to right, MSVC and
+GCC right to left), so a value drawn as an argument is a different value on the
+next. Draw each on a statement of its own. A side the reader cannot find in one
+compiler's picture is not found in that one, and that is how a cube of six
+sides was once read as five on WebAssembly alone.
+
 ```sh
 cmake --preset web-emscripten-tests
 cmake --build --preset web-emscripten-tests
@@ -979,7 +996,7 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload; every language, the CJK scripts, mirroring for Hebrew and Arabic |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic |
 | `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
@@ -991,8 +1008,10 @@ the two cross-origin-isolation headers the app's threads need.
 
 A page per test, with the browser's storage cleared first: the module compiles
 in about a second and the first screen is up in two, so nothing a test leaves
-in the browser's storage reaches the next. A failure attaches the page's
-console and a screenshot (and a Playwright trace on the retry).
+in the browser's storage reaches the next. (A test that needs an earlier visit's
+settings says what the storage holds when the app starts: `appOptions.storage`.)
+A failure attaches the page's console and a screenshot (and a Playwright trace
+on the retry).
 
 **The light probe.** On a headless runner the page draws in software
 (SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first

@@ -50,8 +50,10 @@ test.describe('settings', () => {
     await openSettings(app);
     await app.click('settings.theme.2'); // Dark
     await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('dark');
-    await app.waitUntilStored('dark');
 
+    // At once, not after a wait for the app to have written it: a reload the
+    // moment after the click must find the choice kept (the page flushes its
+    // settings as it is hidden, settings_web.cpp).
     await app.reload();
     expect((await app.singleton('SettingsState')).themeMode).toBe('dark');
     await openSettings(app);
@@ -68,7 +70,6 @@ test.describe('settings', () => {
     await app.click('settings.method.2'); // Advanced
     await expect.poll(async () => (await app.singleton('SettingsState')).solveMethod).toBe(2);
     expect(await note()).not.toBe(beginner);
-    await app.waitUntilStored('2');
 
     await app.reload();
     expect((await app.singleton('SettingsState')).solveMethod).toBe(2);
@@ -95,6 +96,62 @@ test.describe('settings', () => {
     await openSettings(app);
     await app.clickToggle('settings.statsForNerds');
     await expect.poll(async () => (await app.singleton('SettingsState')).statsForNerds).toBe(true);
+  });
+});
+
+// Where the app keeps a setting in the browser's localStorage: Qt's own scheme
+// (organisation, application, then the settings group and name).
+const stored = (name) => `qt-v0-Cubeulator-Cubeulator-${name}`;
+
+test.describe('settings are kept by the page', () => {
+  // A QML Settings object writes a change half a second after it is made. A
+  // page that is hidden, or left, inside that time has to write it as it goes:
+  // reloading straight after a click (above) is the case that comes with the
+  // page being left, these are the page being put away and staying.
+  for (const kind of ['visibilitychange', 'pagehide']) {
+    test(`are in the browser's storage as soon as the page is put away (${kind})`, async ({ app }) => {
+      await openSettings(app);
+      await app.click('settings.theme.2'); // Dark
+      await app.click('settings.method.2'); // Advanced
+      await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('dark');
+      await expect.poll(async () => (await app.singleton('SettingsState')).solveMethod).toBe(2);
+
+      await app.putAway(kind);
+      const kept = await app.stored();
+      expect(kept[stored('appearance/themeMode')]).toBe('dark');
+      expect(kept[stored('solving/method')]).toBe('2');
+    });
+  }
+});
+
+test.describe('settings an earlier visit left', () => {
+  // The keys and values a build that used Qt.labs.settings wrote, as read from
+  // its page. The app's Settings are QtCore's now; they have to find these.
+  test.use({
+    appOptions: {
+      storage: {
+        [stored('appearance/themeMode')]: 'dark',
+        [stored('solving/method')]: '2',
+        [stored('rendering/graphicsBackend')]: 'opengl',
+      },
+    },
+  });
+
+  test('are read when the app starts, and still the ones it keeps', async ({ app }) => {
+    const settings = await app.singleton('SettingsState');
+    expect(settings.themeMode).toBe('dark');
+    expect(settings.solveMethod).toBe(2);
+    expect(settings.graphicsBackend).toBe('opengl');
+
+    // Not read once and then written somewhere else: a reload finds them where
+    // they were, and a change is written to the same place.
+    await app.reload();
+    expect((await app.singleton('SettingsState')).themeMode).toBe('dark');
+    await openSettings(app);
+    await app.click('settings.theme.1'); // Light
+    await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('light');
+    await app.putAway();
+    expect((await app.stored())[stored('appearance/themeMode')]).toBe('light');
   });
 });
 
@@ -233,7 +290,6 @@ test.describe('language', () => {
     await openSettings(app);
     await app.click('settings.language.2');
     await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('de');
-    await app.waitUntilStored('de');
 
     await app.reload();
     expect((await manager(app)).selectedLanguage).toBe('de');

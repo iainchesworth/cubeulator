@@ -109,8 +109,21 @@ TEST_CASE("a second launch comes up with the theme the first one left",
           "[.restart][system][settings][theme]") {
     // Run by its own ctest entry with CUBE_SYSTEM_TEST_THEME=dark in the
     // environment: main() has put that into the store before the app existed,
-    // which is what a relaunch looks like to the app.
-    REQUIRE(qEnvironmentVariable("CUBE_SYSTEM_TEST_THEME") == "dark");
+    // which is what a relaunch looks like to the app. The app is booted once
+    // per process, so this case cannot make a second launch of its own.
+    //
+    // A run that picked it up through a tag it shares with the other cases
+    // ([system], [settings], [theme]) has no seed, and nothing to say about a
+    // relaunch: it is skipped, with the reason, not failed. A run of only this
+    // case that skips it still fails (Catch2 exits 4 when nothing ran), so the
+    // system.relaunch entry cannot pass without the check having been made.
+    const QString seeded = qEnvironmentVariable("CUBE_SYSTEM_TEST_THEME");
+    if (seeded.isEmpty()) {
+        SKIP(
+            "needs the store seeded before the app starts: run ctest -R relaunch, "
+            "which sets CUBE_SYSTEM_TEST_THEME=dark");
+    }
+    REQUIRE(seeded == "dark");
 
     // Not fresh(): that resets to the baseline. This is the baseline, as
     // start-up read it.
