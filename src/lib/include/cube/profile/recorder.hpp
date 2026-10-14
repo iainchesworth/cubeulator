@@ -31,10 +31,10 @@
 // which at the default capacity is 131072 events inside one writer's five
 // stores; nothing guards against it.)
 
+#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -75,10 +75,13 @@ public:
     // about 6 MB: a quarter of an hour of a scan at 30 frames a second with
     // ten zones a frame, after which the oldest events are overwritten (and
     // counted, see dropped()).
-    explicit Recorder(std::size_t capacity = std::size_t{1} << 17);
+    explicit Recorder(std::size_t capacity = std::size_t{1} << 17U);
+    ~Recorder() = default;
 
     Recorder(const Recorder&) = delete;
     Recorder& operator=(const Recorder&) = delete;
+    Recorder(Recorder&&) = delete;
+    Recorder& operator=(Recorder&&) = delete;
 
     // The process-wide recorder the macros write to.
     [[nodiscard]] static Recorder& global();
@@ -115,10 +118,12 @@ public:
 private:
     // An event is five words and a sequence number, all atomic, so a reader
     // sees either a whole event or none (the sequence is odd while a writer
-    // has the slot and holds the event's index when it is whole).
+    // has the slot and holds the event's index when it is whole). The name is
+    // the first word, held as the pointer it is.
     struct Slot {
         std::atomic<std::uint64_t> sequence{0};
-        std::atomic<std::uint64_t> words[5] = {};
+        std::atomic<const char*> name{nullptr};
+        std::array<std::atomic<std::uint64_t>, 4> words{};
     };
 
     void record(Kind kind, const char* name, double start_us, double duration_us, double value,
@@ -126,7 +131,7 @@ private:
     [[nodiscard]] static std::uint32_t this_thread() noexcept;
 
     std::size_t mask_;
-    std::unique_ptr<Slot[]> slots_;
+    std::vector<Slot> slots_;
     std::atomic<std::uint64_t> head_{0};
 
     mutable std::mutex names_mutex_;

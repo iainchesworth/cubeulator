@@ -139,7 +139,9 @@ void Diagnostics::write(std::string_view kind, cube::diagnostics::Json data) {
     }
     const std::string line =
         cube::diagnostics::make_record(
-            seq_++, cube::diagnostics::utc_timestamp(std::chrono::system_clock::now()), kind,
+            {.seq = seq_++,
+             .time = cube::diagnostics::utc_timestamp(std::chrono::system_clock::now()),
+             .kind = kind},
             std::move(data))
             .dump();
     if (!file_.write_line(line)) {
