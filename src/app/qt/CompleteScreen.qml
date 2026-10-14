@@ -64,8 +64,13 @@ Rectangle {
             SweepUnderline { fullWidth: 120 }
         }
 
+        // A Rectangle with no `color` is opaque white in every theme, which
+        // under the dark theme's near-white ink is white on white. The card is
+        // an outline on the page, so it takes the page's colour.
         Rectangle {
+            objectName: "complete.stats"
             width: parent.width; height: 76
+            color: "transparent"
             border.width: 2; border.color: Theme.divider
             anchors.topMargin: Theme.space6
             Row {
@@ -130,8 +135,10 @@ Rectangle {
             }
 
             Rectangle {
+                objectName: "complete.stats"
                 width: parent.width - 88
                 height: 96
+                color: "transparent"
                 border.width: 2; border.color: Theme.divider
                 anchors.topMargin: Theme.space8
                 Row {
