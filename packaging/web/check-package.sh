@@ -45,6 +45,11 @@ for f in index.html cube_app.js cube_app.wasm qtloader.js cubeulator-isolation.j
     require "$f is in the package"                            test -s "$dir/$f"
 done
 
+# Qt's own shell page is not the entry point and does not work without the
+# isolation worker index.html registers: it is not shipped.
+require "Qt's default page cube_app.html is not shipped"      test ! -e "$dir/cube_app.html"
+require "Qt's logo is not shipped"                            test ! -e "$dir/qtlogo.svg"
+
 # The module: WebAssembly (the magic number 0x00 'a' 's' 'm'), and a real one.
 magic="$(head -c 4 "$dir/cube_app.wasm" 2>/dev/null | od -An -tx1 | tr -d ' \n' || true)"
 require "cube_app.wasm is a WebAssembly module"               test "$magic" = "0061736d"
