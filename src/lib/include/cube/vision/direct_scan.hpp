@@ -66,6 +66,28 @@ struct SideRead {
 inline constexpr float kSteadyFraction = 0.12F;
 [[nodiscard]] bool held_still(const SideRead& read, const cv::Point2f& previous_centre);
 
+// kSteadyFraction is how far a side may move between two frames a camera's
+// nominal interval apart. A side turned at the same speed moves further between
+// frames that are further apart - a webcam in lamplight settles at 20 frames a
+// second or less, and a frame the page was late for is two - while its blur,
+// which is what the gate is for, is the same. SideScan::add is told how long it
+// was since the frame before, and the distance allowed grows with it, to at
+// most kMaxIntervalScale times the nominal one so that a long stall does not
+// let a side that was being turned count.
+inline constexpr float kNominalFrameMs = 33.0F;
+inline constexpr float kMaxIntervalScale = 4.0F;
+[[nodiscard]] float interval_scale(float interval_ms);
+
+// A side of a corner view counts as a read of its side only if it was seen
+// whole enough and not too foreshortened. The ten sides the recorded sessions
+// show in two-side views (cube_scan corner-colours) sat 3 to 7 Lab units from
+// their side but one: a strip with six of nine found and a step under half the
+// other, at 12, the same-side distance. Another six-of-nine strip sat at 6, so
+// these are a margin and not a measured edge: a sticker the fit placed is what
+// a finger looks like, and ten sides are too few to say where the line is.
+inline constexpr int kMinCornerFound = 7;
+inline constexpr float kMinCornerAspect = 0.45F;
+
 // Display colour for a fused Lab sample (8-bit BGR), for showing the user
 // what was read before the colours have been named.
 [[nodiscard]] cv::Vec3b lab_to_bgr(const cv::Vec3f& lab);
@@ -199,7 +221,10 @@ public:
 
     // Feed every analysed frame in order, including frames with no read: a
     // read only counts when the lattice has held still since the frame before.
-    void add(const std::optional<SideRead>& read);
+    //
+    // `interval_ms` is how long it was since the frame before; zero or less
+    // says nobody knows, and the nominal interval is taken (interval_scale).
+    void add(const std::optional<SideRead>& read, float interval_ms = 0.0F);
     void reset();
 
     // Feed the frame's corner read - two or three sides in one view - when
@@ -215,7 +240,7 @@ public:
     // it takes one. A side seen at an angle is lit a little differently from
     // one seen square-on, so once a side has kMinReads square-on reads of its
     // own its colours come from those alone.
-    void add_corner(const std::optional<CornerRead>& read);
+    void add_corner(const std::optional<CornerRead>& read, float interval_ms = 0.0F);
     // Corner reads kept so far; the newest few dozen.
     [[nodiscard]] std::size_t corner_reads() const noexcept { return corners_.size(); }
 

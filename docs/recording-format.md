@@ -3,8 +3,10 @@
 What the developer-only scan recorder writes, and what `cube_scan` reads. The
 code is `src/lib/include/cube/vision/recording_v2.hpp` (recorder, manifest,
 integrity check) and `frame_recording.hpp` (file names and the index rows).
-`cube_scan` itself uses only the frame files and `truth.txt`; the index, the
-manifest and the integrity check are for `check_recording` and for people.
+`cube_scan` itself uses the frame files, `truth.txt` or `layout.txt`, and the
+times in the index (the capture time of each frame, which says how far a side
+moved between frames in time and not only in frames); the manifest and the
+integrity check are for `check_recording` and for people.
 
 ## When anything is written
 
@@ -53,10 +55,12 @@ more of the room and nothing the reader uses.
 - The file for pass `n` is `rec_%06d.jpg` of `n % 3600`: the files wrap at a
   3600-frame ring so a recorder left on bounds its disk use, while `index.csv`
   keeps growing. A row whose file has since been overwritten is detected from
-  the index (`frame_overwritten`) and ignored. `cube_scan` does not read the
-  index: it replays the `rec_*.jpg` files in file-name order, which is
-  chronological only for a scan shorter than 3600 frames (about two minutes
-  at 30 Hz).
+  the index (`frame_overwritten`) and ignored. `cube_scan` replays the
+  `rec_*.jpg` files in file-name order, which is chronological only for a scan
+  shorter than 3600 frames (about two minutes at 30 Hz), and takes the time
+  since the frame before from the index's `t_ms` for the file of that name
+  (none for a session with no index, or a frame whose row has gone: the
+  nominal interval, as before).
 
 ### `index.csv`
 
@@ -112,3 +116,14 @@ Optional, for scoring with `cube_scan board`. Six words of nine letters from
 `WYROGB` (white, yellow, red, orange, green, blue), one per side, each side
 row-major as seen from outside the cube, in any orientation and any order.
 Nothing in the app writes it; it is typed from the cube in hand.
+
+## `layout.txt`
+
+Optional, instead of `truth.txt`, for a cube whose six sides make more than one
+cube: six flat sides name no single cube then, which is the whole of what makes
+the scan ambiguous. One line, the cube as `cube_scan replay` prints one -
+`U:YYWYYYWWY D:YWWWWWWYY L:RRRRRRRRR R:OOOOOOOOO F:BBGGGGGGB B:BBGBBBGGB` -
+each side as the solver lays it out (not as seen from outside). `cube_scan`
+scores a decision against it. `cube_tumble_sim` writes it with the frames it
+draws, and its `pose.csv` (`frame,seconds,U,D,L,R,F,B`: each side's angle in
+degrees to the camera axis, 0 square-on, per frame), which nothing else reads.
