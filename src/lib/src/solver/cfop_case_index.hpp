@@ -25,10 +25,10 @@ inline constexpr std::size_t kOllCaseCount = 216;
 
 [[nodiscard]] constexpr std::size_t oll_case(const CubieCube& cube) noexcept {
     const std::size_t corners =
-        (static_cast<std::size_t>(cube.co[0]) * 3 + cube.co[1]) * 3 + cube.co[2];
+        (((static_cast<std::size_t>(cube.co.at(0)) * 3) + cube.co.at(1)) * 3) + cube.co.at(2);
     const std::size_t edges =
-        (static_cast<std::size_t>(cube.eo[0]) * 2 + cube.eo[1]) * 2 + cube.eo[2];
-    return corners * 8 + edges;
+        (((static_cast<std::size_t>(cube.eo.at(0)) * 2) + cube.eo.at(1)) * 2) + cube.eo.at(2);
+    return (corners * 8) + edges;
 }
 
 // PLL (permute the last layer) depends on how the four U-layer corners and
@@ -37,31 +37,33 @@ inline constexpr std::size_t kOllCaseCount = 216;
 inline constexpr std::size_t kPllSlotCount = 576;
 
 // Rank of a permutation of 0..3, identity = 0.
-[[nodiscard]] constexpr std::size_t rank_of_four(const std::uint8_t* p) noexcept {
+template <std::size_t N>
+[[nodiscard]] constexpr std::size_t rank_of_four(const std::array<std::uint8_t, N>& p) noexcept {
     std::size_t rank = 0;
     for (std::size_t i = 0; i < 4; ++i) {
         std::size_t smaller = 0;
         for (std::size_t j = i + 1; j < 4; ++j) {
-            smaller += p[j] < p[i] ? 1 : 0;
+            smaller += (p.at(j) < p.at(i)) ? 1U : 0U;
         }
-        rank = rank * (4 - i) + smaller;
+        rank = (rank * (4 - i)) + smaller;
     }
     return rank;
 }
 
 // 0 for an even permutation of 0..3, 1 for an odd one.
-[[nodiscard]] constexpr std::size_t parity_of_four(const std::uint8_t* p) noexcept {
+template <std::size_t N>
+[[nodiscard]] constexpr std::size_t parity_of_four(const std::array<std::uint8_t, N>& p) noexcept {
     std::size_t inversions = 0;
     for (std::size_t i = 0; i < 4; ++i) {
         for (std::size_t j = i + 1; j < 4; ++j) {
-            inversions += p[i] > p[j] ? 1 : 0;
+            inversions += (p.at(i) > p.at(j)) ? 1U : 0U;
         }
     }
     return inversions % 2;
 }
 
 [[nodiscard]] constexpr std::size_t pll_slot(const CubieCube& cube) noexcept {
-    return rank_of_four(cube.cp.data()) * 24 + rank_of_four(cube.ep.data());
+    return (rank_of_four(cube.cp) * 24) + rank_of_four(cube.ep);
 }
 
 }  // namespace cube::solver::detail

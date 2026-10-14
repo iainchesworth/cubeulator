@@ -26,7 +26,7 @@ struct Hold {
 
 // The hold the solve screen asks for when it cannot see the cube: yellow on
 // top, green facing you.
-inline constexpr Hold kStatedHold{Face::U, Face::F};
+inline constexpr Hold kStatedHold{.up = Face::U, .front = Face::F};
 
 // A hold is real only if its two sides meet along an edge.
 [[nodiscard]] constexpr bool is_valid(const Hold& hold) noexcept {
@@ -36,8 +36,9 @@ inline constexpr Hold kStatedHold{Face::U, Face::F};
 // Where a side is for the person holding the cube.
 enum class Place : std::uint8_t { Top, Bottom, Left, Right, Front, Back };
 
-inline constexpr std::array<Place, 6> kAllPlaces = {Place::Top,   Place::Bottom, Place::Left,
-                                                    Place::Right, Place::Front,  Place::Back};
+inline constexpr std::array<Place, 6> kAllPlaces = {
+    Place::Top, Place::Bottom, Place::Left, Place::Right, Place::Front, Place::Back,
+};
 
 namespace detail {
 
@@ -62,19 +63,19 @@ constexpr std::array<int, 3> direction(Face face) noexcept {
 }
 
 constexpr Face face_along(const std::array<int, 3>& direction) noexcept {
-    if (direction[0] == 1) {
+    if (direction.at(0) == 1) {
         return Face::R;
     }
-    if (direction[0] == -1) {
+    if (direction.at(0) == -1) {
         return Face::L;
     }
-    if (direction[1] == 1) {
+    if (direction.at(1) == 1) {
         return Face::U;
     }
-    if (direction[1] == -1) {
+    if (direction.at(1) == -1) {
         return Face::D;
     }
-    if (direction[2] == 1) {
+    if (direction.at(2) == 1) {
         return Face::F;
     }
     return Face::B;
@@ -82,7 +83,11 @@ constexpr Face face_along(const std::array<int, 3>& direction) noexcept {
 
 constexpr std::array<int, 3> cross(const std::array<int, 3>& a,
                                    const std::array<int, 3>& b) noexcept {
-    return {a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]};
+    return {
+        (a.at(1) * b.at(2)) - (a.at(2) * b.at(1)),
+        (a.at(2) * b.at(0)) - (a.at(0) * b.at(2)),
+        (a.at(0) * b.at(1)) - (a.at(1) * b.at(0)),
+    };
 }
 
 }  // namespace detail
@@ -126,7 +131,10 @@ constexpr std::array<int, 3> cross(const std::array<int, 3>& a,
     const std::array<int, 3> right = detail::direction(side_at(hold, Place::Right));
     const std::array<int, 3> up = detail::direction(hold.up);
     const std::array<int, 3> front = detail::direction(hold.front);
-    return {right[0], right[1], right[2], up[0], up[1], up[2], front[0], front[1], front[2]};
+    return {
+        right.at(0), right.at(1), right.at(2), up.at(0),    up.at(1),
+        up.at(2),    front.at(0), front.at(1), front.at(2),
+    };
 }
 
 // All 24 holds.
@@ -135,8 +143,8 @@ constexpr std::array<int, 3> cross(const std::array<int, 3>& a,
     std::size_t count = 0;
     for (const Face up : kAllFaces) {
         for (const Face front : kAllFaces) {
-            if (is_valid(Hold{up, front})) {
-                holds[count++] = Hold{up, front};
+            if (is_valid(Hold{.up = up, .front = front})) {
+                holds.at(count++) = Hold{.up = up, .front = front};
             }
         }
     }

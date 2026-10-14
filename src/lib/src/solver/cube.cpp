@@ -1,6 +1,10 @@
 #include <cube/solver/cube.hpp>
 
+#include <algorithm>
+#include <array>
 #include <cstddef>
+#include <optional>
+#include <stdexcept>
 
 namespace cube::solver {
 
@@ -27,9 +31,11 @@ constexpr int dot(Vec3 a, Vec3 b) noexcept {
     return (a.x * b.x) + (a.y * b.y) + (a.z * b.z);
 }
 constexpr Vec3 cross(Vec3 a, Vec3 b) noexcept {
-    return {.x = (a.y * b.z) - (a.z * b.y),
-            .y = (a.z * b.x) - (a.x * b.z),
-            .z = (a.x * b.y) - (a.y * b.x)};
+    return {
+        .x = (a.y * b.z) - (a.z * b.y),
+        .y = (a.z * b.x) - (a.x * b.z),
+        .z = (a.x * b.y) - (a.y * b.x),
+    };
 }
 
 // The outward normal of `face`: R/L along X (L->R), U/D along Y (D->U), F/B
@@ -172,14 +178,17 @@ constexpr MoveTable make_move_table(Face turned, int turns) {
             if (new_face == face && new_index == index) {
                 continue;  // the turned face's own centre
             }
-            table.at(count++) = StickerMove{.dst_face = new_face,
-                                            .dst_index = static_cast<std::uint8_t>(new_index),
-                                            .src_face = face,
-                                            .src_index = static_cast<std::uint8_t>(index)};
+            table.at(count++) = StickerMove{
+                .dst_face = new_face,
+                .dst_index = static_cast<std::uint8_t>(new_index),
+                .src_face = face,
+                .src_index = static_cast<std::uint8_t>(index),
+            };
         }
     }
     if (count != table.size()) {
-        throw "a face turn must move exactly 20 stickers";  // constexpr: compile error if ever hit
+        // constexpr: a compile error if ever hit
+        throw std::logic_error("a face turn must move exactly 20 stickers");
     }
     return table;
 }
@@ -208,8 +217,8 @@ constexpr auto kFaceletMaps = [] {
                 map.at(i) = static_cast<std::uint8_t>(i);
             }
             for (const StickerMove& sticker : kMoveTables.at(face).at(turns)) {
-                map.at(static_cast<std::size_t>(sticker.src_face) * 9 + sticker.src_index) =
-                    static_cast<std::uint8_t>(static_cast<std::size_t>(sticker.dst_face) * 9 +
+                map.at((static_cast<std::size_t>(sticker.src_face) * 9) + sticker.src_index) =
+                    static_cast<std::uint8_t>((static_cast<std::size_t>(sticker.dst_face) * 9) +
                                               sticker.dst_index);
             }
         }
@@ -250,24 +259,26 @@ constexpr auto kEdgePositions = [] {
             for (int s0 : {-1, 1}) {
                 for (int s1 : {-1, 1}) {
                     Vec3 pos{};
-                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
-                    *comps[axis0] = s0;
-                    *comps[axis1] = s1;
-                    Face faces[2]{};
-                    std::uint8_t indices[2]{};
-                    int n = 0;
+                    const std::array<int*, 3> comps{&pos.x, &pos.y, &pos.z};
+                    *comps.at(static_cast<std::size_t>(axis0)) = s0;
+                    *comps.at(static_cast<std::size_t>(axis1)) = s1;
+                    std::array<Face, 2> faces{};
+                    std::array<std::uint8_t, 2> indices{};
+                    std::size_t n = 0;
                     for (Face face : kAllFaces) {
                         if (dot(face_normal(face), pos) != 1) {
                             continue;
                         }
-                        faces[n] = face;
-                        indices[n] = static_cast<std::uint8_t>(index_on_face(face, pos));
+                        faces.at(n) = face;
+                        indices.at(n) = static_cast<std::uint8_t>(index_on_face(face, pos));
                         ++n;
                     }
-                    positions.at(count++) = EdgePosition{.face_a = faces[0],
-                                                         .index_a = indices[0],
-                                                         .face_b = faces[1],
-                                                         .index_b = indices[1]};
+                    positions.at(count++) = EdgePosition{
+                        .face_a = faces.at(0),
+                        .index_a = indices.at(0),
+                        .face_b = faces.at(1),
+                        .index_b = indices.at(1),
+                    };
                 }
             }
         }
@@ -392,17 +403,121 @@ constexpr int axis_pair_of(Color color) noexcept {
 
 }  // namespace
 
-bool Cube::is_physically_valid() const noexcept {
+namespace {
+
+bool colour_counts_are_nine(const Cube& cube) noexcept {
     std::array<int, 6> color_counts{};
     for (Face face : kAllFaces) {
-        for (Color sticker : facelets_.at(static_cast<std::size_t>(face))) {
-            ++color_counts.at(static_cast<std::size_t>(sticker));
+        for (int index = 0; index < 9; ++index) {
+            ++color_counts.at(static_cast<std::size_t>(cube.at(face, index)));
         }
     }
-    for (int count : color_counts) {
-        if (count != 9) {
+    return std::ranges::all_of(color_counts, [](int count) { return count == 9; });
+}
+
+// The edge position holding the two non-zero coordinates: `sign_a` on `axis_a`
+// and `sign_b` on `axis_b`, zero on the third axis.
+struct EdgeSpec {
+    std::array<int, 2> axes{};   // the two non-zero axes, lower first
+    std::array<int, 2> signs{};  // their signs, +1 or -1
+};
+
+constexpr Vec3 edge_position(const EdgeSpec& spec) noexcept {
+    Vec3 pos{};
+    const std::array<int*, 3> comps{&pos.x, &pos.y, &pos.z};
+    *comps.at(static_cast<std::size_t>(spec.axes.at(0))) = spec.signs.at(0);
+    *comps.at(static_cast<std::size_t>(spec.axes.at(1))) = spec.signs.at(1);
+    return pos;
+}
+
+// The eight corner diagonals (every coordinate +-1).
+constexpr std::array<Vec3, 8> corner_diagonals() noexcept {
+    std::array<Vec3, 8> out{};
+    std::size_t n = 0;
+    for (int cx : {-1, 1}) {
+        for (int cy : {-1, 1}) {
+            for (int cz : {-1, 1}) {
+                out.at(n++) = Vec3{.x = cx, .y = cy, .z = cz};
+            }
+        }
+    }
+    return out;
+}
+
+// The twelve edge positions (exactly one coordinate 0).
+constexpr std::array<Vec3, 12> edge_midpoints() noexcept {
+    std::array<Vec3, 12> out{};
+    std::size_t n = 0;
+    for (int a = 0; a < 3; ++a) {
+        for (int b = a + 1; b < 3; ++b) {
+            for (int sa : {-1, 1}) {
+                for (int sb : {-1, 1}) {
+                    out.at(n++) = edge_position({.axes = {a, b}, .signs = {sa, sb}});
+                }
+            }
+        }
+    }
+    return out;
+}
+
+// The colours on the facets touching a cubie, in Face order, and how many.
+template <std::size_t N>
+struct Facets {
+    std::array<Color, N> colors{};
+    std::size_t count = 0;
+};
+
+template <std::size_t N>
+Facets<N> facets_at(const Cube& cube, Vec3 pos) noexcept {
+    Facets<N> out;
+    for (Face face : kAllFaces) {
+        if (dot(face_normal(face), pos) != 1) {
+            continue;  // this face doesn't touch this cubie
+        }
+        out.colors.at(out.count++) = cube.at(face, index_on_face(face, pos));
+    }
+    return out;
+}
+
+// No two stickers of one cubie share an axis pair, and none is a colour the
+// scheme does not name: `colors` are one per facet.
+template <std::size_t N>
+bool axis_pairs_are_distinct(const std::array<Color, N>& colors) noexcept {
+    std::array<bool, 3> seen_pair{false, false, false};
+    for (const Color color : colors) {
+        const int pair = axis_pair_of(color);
+        if (pair < 0 || seen_pair.at(static_cast<std::size_t>(pair))) {
             return false;
         }
+        seen_pair.at(static_cast<std::size_t>(pair)) = true;
+    }
+    return true;
+}
+
+// No corner carries two stickers of one colour pair (axis-pair uniqueness).
+bool corners_have_distinct_axis_pairs(const Cube& cube) noexcept {
+    return std::ranges::all_of(corner_diagonals(), [&cube](Vec3 pos) {
+        return axis_pairs_are_distinct(facets_at<3>(cube, pos).colors);
+    });
+}
+
+// No edge carries two stickers of one axis pair, or one the scheme does not
+// name.
+bool edges_have_distinct_axis_pairs(const Cube& cube) noexcept {
+    return std::ranges::all_of(edge_midpoints(), [&cube](Vec3 pos) {
+        const Facets<2> facets = facets_at<2>(cube, pos);
+        if (facets.count != 2) {
+            return true;  // this axis pair is the edge's own zero coordinate
+        }
+        return axis_pairs_are_distinct(facets.colors);
+    });
+}
+
+}  // namespace
+
+bool Cube::is_physically_valid() const noexcept {
+    if (!colour_counts_are_nine(*this)) {
+        return false;
     }
 
     // Corner/edge twist and flip PARITY (beyond "no impossible colour
@@ -417,65 +532,7 @@ bool Cube::is_physically_valid() const noexcept {
     // axis-pair-uniqueness checks already reject the vast majority of
     // malformed states - e.g. any corner or edge carrying two stickers from
     // the same colour pair, which can never happen on a real cube.
-    for (int cx : {-1, 1}) {
-        for (int cy : {-1, 1}) {
-            for (int cz : {-1, 1}) {
-                std::array<Color, 3> colors{};
-                int n = 0;
-                for (Face face : kAllFaces) {
-                    const Vec3 fn = face_normal(face);
-                    if (dot(fn, Vec3{.x = cx, .y = cy, .z = cz}) != 1) {
-                        continue;  // this face doesn't touch this corner
-                    }
-                    const int index = index_on_face(face, Vec3{.x = cx, .y = cy, .z = cz});
-                    colors.at(static_cast<std::size_t>(n)) = at(face, index);
-                    ++n;
-                }
-                std::array<bool, 3> seen_pair{false, false, false};
-                for (int i = 0; i < 3; ++i) {
-                    const int pair = axis_pair_of(colors.at(static_cast<std::size_t>(i)));
-                    if (pair < 0 || seen_pair.at(static_cast<std::size_t>(pair))) {
-                        return false;  // duplicate axis-pair on one corner: impossible
-                    }
-                    seen_pair.at(static_cast<std::size_t>(pair)) = true;
-                }
-            }
-        }
-    }
-
-    for (int a = 0; a < 3; ++a) {
-        for (int b = a + 1; b < 3; ++b) {
-            for (int sa : {-1, 1}) {
-                for (int sb : {-1, 1}) {
-                    Vec3 pos{};
-                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
-                    *comps[a] = sa;
-                    *comps[b] = sb;
-                    std::array<Color, 2> colors{};
-                    int n = 0;
-                    for (Face face : kAllFaces) {
-                        const Vec3 fn = face_normal(face);
-                        if (dot(fn, pos) != 1) {
-                            continue;
-                        }
-                        const int index = index_on_face(face, pos);
-                        colors.at(static_cast<std::size_t>(n)) = at(face, index);
-                        ++n;
-                    }
-                    if (n != 2) {
-                        continue;  // this axis pair is the edge's own zero coordinate
-                    }
-                    const int pair0 = axis_pair_of(colors.at(0));
-                    const int pair1 = axis_pair_of(colors.at(1));
-                    if (pair0 < 0 || pair1 < 0 || pair0 == pair1) {
-                        return false;  // impossible colour combination on one edge
-                    }
-                }
-            }
-        }
-    }
-
-    return true;
+    return corners_have_distinct_axis_pairs(*this) && edges_have_distinct_axis_pairs(*this);
 }
 
 namespace {
@@ -524,7 +581,7 @@ constexpr int permutation_parity(const std::array<int, N>& perm) noexcept {
             ++length;
         }
         if (length != 0) {
-            parity ^= (length - 1) & 1;
+            parity = (parity + (length - 1)) % 2;  // a k-cycle is k - 1 transpositions
         }
     }
     return parity;
@@ -532,171 +589,186 @@ constexpr int permutation_parity(const std::array<int, N>& perm) noexcept {
 
 }  // namespace
 
-bool Cube::is_solvable() const noexcept {
-    // Piece identity below is looked up through canonical_color's fixed
-    // centre scheme, so that scheme must actually hold. A physically valid
-    // cube always has one centre of each colour but possibly permuted vs
-    // canonical - e.g. a free-form scan whose six faces were assembled
-    // into the wrong slots. Centres never move under face turns, so such a
-    // state is unreachable from solved() and is rightly "not solvable" -
-    // exactly the rejection the free-form assembly search relies on.
+namespace {
+
+// Piece identity below is looked up through canonical_color's fixed centre
+// scheme, so that scheme must actually hold. A physically valid cube always
+// has one centre of each colour but possibly permuted vs canonical - e.g. a
+// free-form scan whose six faces were assembled into the wrong slots.
+// Centres never move under face turns, so such a state is unreachable from
+// solved() and is rightly "not solvable" - exactly the rejection the
+// free-form assembly search relies on.
+bool centres_are_canonical(const Cube& cube) noexcept {
+    return std::ranges::all_of(
+        kAllFaces, [&cube](Face face) { return cube.at(face, 4) == canonical_color(face); });
+}
+
+// The orientation sum and the slot -> home-slot permutation of a set of
+// cubies; nullopt when one cubie appears twice (no real cube has that).
+template <std::size_t N>
+struct PieceCensus {
+    int orientation_sum = 0;
+    std::array<int, N> permutation{};
+};
+
+// --- Corners: twist sum and permutation ------------------------------------
+//
+// Twist convention: the corner at diagonal d (all coordinates +-1) has its
+// three stickers on the facets whose outward normals are the three axis
+// components of d. Its twist is how many CLOCKWISE 120-degree steps - viewed
+// from outside, i.e. looking back along d at the corner - separate the facet
+// carrying the cubie's White/Yellow sticker from the U/D (y-axis) facet: 0
+// when it is already there. "Facet m is one clockwise step from facet n" is
+// detected by the sign of the scalar triple product dot(cross(n, m), d):
+// positive means n -> m is a counter-clockwise step about d by the
+// right-hand rule, negative means clockwise. Cross-checked by hand at corner
+// (1, 1, 1): the 120-degree counter-clockwise rotation about (1,1,1) is the
+// cyclic axis map x -> y -> z (its matrix is the cyclic permutation, and the
+// initial velocity cross((1,1,1), e_x) = (0,1,-1) does point from e_x
+// towards e_y), so U's clockwise neighbour there is R - and indeed
+// dot(cross(e_y, e_x), (1,1,1)) = dot(-e_z, (1,1,1)) = -1 < 0.
+//
+// Invariance: U/D turns keep every White/Yellow sticker on a y facet and
+// rotate the other two facets with the piece, preserving each corner's twist
+// individually; each of the other faces' quarter turns changes the four
+// moved corners' twists by amounts summing to 0 mod 3 (hand-checked for F on
+// solved(): URF/ULF/DLF/DRF pick up 2+1+2+1 = 6). So the sum mod 3 is
+// invariant, and it is 0 on solved() - the first classical invariant.
+// Axis-pair uniqueness (already enforced by is_physically_valid) guarantees
+// exactly one White/Yellow sticker per corner, so the lookup is total.
+// What the corner at `pos` shows: the facet holding White/Yellow, and the sum
+// of its three colours' canonical-face normals.
+struct CornerReading {
+    Vec3 ud_facet{};  // outward normal of the facet holding White/Yellow
+    Vec3 home{};      // sum of the three colours' canonical-face normals
+};
+
+CornerReading read_corner(const Cube& cube, Vec3 pos) noexcept {
+    CornerReading reading;
     for (Face face : kAllFaces) {
-        if (at(face, 4) != canonical_color(face)) {
-            return false;
+        const Vec3 fn = face_normal(face);
+        if (dot(fn, pos) != 1) {
+            continue;  // this face doesn't touch this corner
+        }
+        const Color color = cube.at(face, index_on_face(face, pos));
+        reading.home = reading.home + face_normal(canonical_face_of(color));
+        if (axis_pair_of(color) == 1) {
+            reading.ud_facet = fn;
         }
     }
-    if (!is_physically_valid()) {
+    return reading;
+}
+
+std::optional<PieceCensus<8>> corner_census(const Cube& cube) noexcept {
+    PieceCensus<8> census;
+    std::array<bool, 8> home_seen{};
+    for (const Vec3 pos : corner_diagonals()) {
+        const CornerReading reading = read_corner(cube, pos);
+        if (reading.ud_facet.y == 0) {  // not already on the U/D facet
+            census.orientation_sum +=
+                dot(cross(Vec3{.x = 0, .y = pos.y, .z = 0}, reading.ud_facet), pos) < 0 ? 1 : 2;
+        }
+
+        // The three canonical normals are mutually orthogonal (axis-pair
+        // uniqueness again), so their sum is exactly the corner position
+        // this cubie occupies on a solved cube: its home slot.
+        const int target = corner_slot(reading.home);
+        if (home_seen.at(static_cast<std::size_t>(target))) {
+            return std::nullopt;  // the same cubie twice: no real cube has that
+        }
+        home_seen.at(static_cast<std::size_t>(target)) = true;
+        census.permutation.at(static_cast<std::size_t>(corner_slot(pos))) = target;
+    }
+    return census;
+}
+
+// --- Edges: flip sum and permutation ---------------------------------------
+//
+// Flip convention (the classic ZZ/EO definition, phrased for this
+// representation): an edge's "primary" facet is its U/D (y-axis) facet if it
+// has one, otherwise its F/B (z-axis) facet (the E-layer case). The edge is
+// unflipped iff the primary facet shows a White/Yellow sticker, or shows a
+// Green/Blue sticker while the other facet shows Orange/Red - the usual
+// "placeable without F/B quarter turns" rule. Invariance was hand-checked
+// against one representative edge per interesting move class: F sends good
+// UF to bad (Green primary, Yellow secondary at FR) and good FR to bad
+// (Orange primary at DF); B sends good UB to bad; L preserves good UL
+// (Yellow lands on FL's primary z facet) and good FL (Green lands on DL's
+// primary y facet with Red secondary); R preserves good UR; F2 trivially
+// preserves (stickers return to same-axis facets). So U/D/L/R turns and
+// F2/B2 preserve every edge's flip while F/B quarter turns flip exactly the
+// four edges they move: the sum mod 2 is invariant and 0 on solved() - the
+// second classical invariant.
+struct EdgeReading {
+    Color primary{};
+    Color secondary{};
+    Vec3 home{};  // sum of the two colours' canonical-face normals
+};
+
+EdgeReading read_edge(const Cube& cube, Vec3 pos) noexcept {
+    EdgeReading reading;
+    for (Face face : kAllFaces) {
+        const Vec3 fn = face_normal(face);
+        if (dot(fn, pos) != 1) {
+            continue;
+        }
+        const Color color = cube.at(face, index_on_face(face, pos));
+        reading.home = reading.home + face_normal(canonical_face_of(color));
+        const bool is_primary = (pos.y != 0) ? (fn.y != 0) : (fn.z != 0);
+        (is_primary ? reading.primary : reading.secondary) = color;
+    }
+    return reading;
+}
+
+std::optional<PieceCensus<12>> edge_census(const Cube& cube) noexcept {
+    PieceCensus<12> census;
+    std::array<bool, 12> home_seen{};
+    for (const Vec3 pos : edge_midpoints()) {
+        const EdgeReading reading = read_edge(cube, pos);
+        if (axis_pair_of(reading.primary) != 1 && axis_pair_of(reading.secondary) != 0) {
+            ++census.orientation_sum;
+        }
+
+        // As for corners: the two canonical normals lie on different axes,
+        // so their sum is the cubie's solved position.
+        const int target = edge_slot(reading.home);
+        if (home_seen.at(static_cast<std::size_t>(target))) {
+            return std::nullopt;  // duplicated edge cubie
+        }
+        home_seen.at(static_cast<std::size_t>(target)) = true;
+        census.permutation.at(static_cast<std::size_t>(edge_slot(pos))) = target;
+    }
+    return census;
+}
+
+}  // namespace
+
+bool Cube::is_solvable() const noexcept {
+    if (!centres_are_canonical(*this) || !is_physically_valid()) {
         return false;
     }
 
-    // --- Corners: twist sum and permutation --------------------------------
-    //
-    // Twist convention: the corner at diagonal d (all coordinates +-1) has
-    // its three stickers on the facets whose outward normals are the three
-    // axis components of d. Its twist is how many CLOCKWISE 120-degree
-    // steps - viewed from outside, i.e. looking back along d at the corner
-    // - separate the facet carrying the cubie's White/Yellow sticker from
-    // the U/D (y-axis) facet: 0 when it is already there. "Facet m is one
-    // clockwise step from facet n" is detected by the sign of the scalar
-    // triple product dot(cross(n, m), d): positive means n -> m is a
-    // counter-clockwise step about d by the right-hand rule, negative
-    // means clockwise. Cross-checked by hand at corner (1, 1, 1): the
-    // 120-degree counter-clockwise rotation about (1,1,1) is the cyclic
-    // axis map x -> y -> z (its matrix is the cyclic permutation, and the
-    // initial velocity cross((1,1,1), e_x) = (0,1,-1) does point from e_x
-    // towards e_y), so U's clockwise neighbour there is R - and indeed
-    // dot(cross(e_y, e_x), (1,1,1)) = dot(-e_z, (1,1,1)) = -1 < 0.
-    //
-    // Invariance: U/D turns keep every White/Yellow sticker on a y facet
-    // and rotate the other two facets with the piece, preserving each
-    // corner's twist individually; each of the other faces' quarter turns
-    // changes the four moved corners' twists by amounts summing to 0 mod 3
-    // (hand-checked for F on solved(): URF/ULF/DLF/DRF pick up 2+1+2+1 =
-    // 6). So the sum mod 3 is invariant, and it is 0 on solved() - the
-    // first classical invariant. Axis-pair uniqueness (already enforced by
-    // is_physically_valid) guarantees exactly one White/Yellow sticker per
-    // corner, so the lookup is total.
-    int twist_sum = 0;
-    std::array<int, 8> corner_perm{};
-    std::array<bool, 8> corner_home_seen{};
-    for (int cx : {-1, 1}) {
-        for (int cy : {-1, 1}) {
-            for (int cz : {-1, 1}) {
-                const Vec3 pos{.x = cx, .y = cy, .z = cz};
-                Vec3 ud_facet{};  // outward normal of the facet holding White/Yellow
-                Vec3 home{};      // sum of the three colours' canonical-face normals
-                for (Face face : kAllFaces) {
-                    const Vec3 fn = face_normal(face);
-                    if (dot(fn, pos) != 1) {
-                        continue;  // this face doesn't touch this corner
-                    }
-                    const Color color = at(face, index_on_face(face, pos));
-                    home = home + face_normal(canonical_face_of(color));
-                    if (axis_pair_of(color) == 1) {
-                        ud_facet = fn;
-                    }
-                }
-
-                if (ud_facet.y == 0) {  // not already on the U/D facet
-                    twist_sum +=
-                        dot(cross(Vec3{.x = 0, .y = cy, .z = 0}, ud_facet), pos) < 0 ? 1 : 2;
-                }
-
-                // The three canonical normals are mutually orthogonal
-                // (axis-pair uniqueness again), so their sum is exactly
-                // the corner position this cubie occupies on a solved
-                // cube: its home slot.
-                const int target = corner_slot(home);
-                if (corner_home_seen.at(static_cast<std::size_t>(target))) {
-                    return false;  // the same cubie twice: no real cube has that
-                }
-                corner_home_seen.at(static_cast<std::size_t>(target)) = true;
-                corner_perm.at(static_cast<std::size_t>(corner_slot(pos))) = target;
-            }
-        }
-    }
-    if (twist_sum % 3 != 0) {
+    const std::optional<PieceCensus<8>> corners = corner_census(*this);
+    if (!corners || corners->orientation_sum % 3 != 0) {
         return false;
     }
-
-    // --- Edges: flip sum and permutation -----------------------------------
-    //
-    // Flip convention (the classic ZZ/EO definition, phrased for this
-    // representation): an edge's "primary" facet is its U/D (y-axis) facet
-    // if it has one, otherwise its F/B (z-axis) facet (the E-layer case).
-    // The edge is unflipped iff the primary facet shows a White/Yellow
-    // sticker, or shows a Green/Blue sticker while the other facet shows
-    // Orange/Red - the usual "placeable without F/B quarter turns" rule.
-    // Invariance was hand-checked against one representative edge per
-    // interesting move class: F sends good UF to bad (Green primary,
-    // Yellow secondary at FR) and good FR to bad (Orange primary at DF); B
-    // sends good UB to bad; L preserves good UL (Yellow lands on FL's
-    // primary z facet) and good FL (Green lands on DL's primary y facet
-    // with Red secondary); R preserves good UR; F2 trivially preserves
-    // (stickers return to same-axis facets). So U/D/L/R turns and F2/B2
-    // preserve every edge's flip while F/B quarter turns flip exactly the
-    // four edges they move: the sum mod 2 is invariant and 0 on solved() -
-    // the second classical invariant.
-    int flip_sum = 0;
-    std::array<int, 12> edge_perm{};
-    std::array<bool, 12> edge_home_seen{};
-    for (int axis0 = 0; axis0 < 3; ++axis0) {
-        for (int axis1 = axis0 + 1; axis1 < 3; ++axis1) {
-            for (int s0 : {-1, 1}) {
-                for (int s1 : {-1, 1}) {
-                    Vec3 pos{};
-                    int* comps[3] = {&pos.x, &pos.y, &pos.z};
-                    *comps[axis0] = s0;
-                    *comps[axis1] = s1;
-
-                    Color primary{};
-                    Color secondary{};
-                    Vec3 home{};
-                    for (Face face : kAllFaces) {
-                        const Vec3 fn = face_normal(face);
-                        if (dot(fn, pos) != 1) {
-                            continue;
-                        }
-                        const Color color = at(face, index_on_face(face, pos));
-                        home = home + face_normal(canonical_face_of(color));
-                        const bool is_primary = (pos.y != 0) ? (fn.y != 0) : (fn.z != 0);
-                        (is_primary ? primary : secondary) = color;
-                    }
-
-                    if (axis_pair_of(primary) != 1 && axis_pair_of(secondary) != 0) {
-                        ++flip_sum;
-                    }
-
-                    // As for corners: the two canonical normals lie on
-                    // different axes, so their sum is the cubie's solved
-                    // position.
-                    const int target = edge_slot(home);
-                    if (edge_home_seen.at(static_cast<std::size_t>(target))) {
-                        return false;  // duplicated edge cubie
-                    }
-                    edge_home_seen.at(static_cast<std::size_t>(target)) = true;
-                    edge_perm.at(static_cast<std::size_t>(edge_slot(pos))) = target;
-                }
-            }
-        }
-    }
-    if (flip_sum % 2 != 0) {
+    const std::optional<PieceCensus<12>> edges = edge_census(*this);
+    if (!edges || edges->orientation_sum % 2 != 0) {
         return false;
     }
 
     // --- Permutation parity ------------------------------------------------
     //
-    // Every quarter turn 4-cycles four corners and 4-cycles four edges,
-    // and a 4-cycle is an odd permutation - so the corner and edge
-    // permutation parities always flip together and their EQUALITY is
-    // invariant (both are the even identity on solved()). The third
-    // classical invariant, and with the previous two it is sufficient:
-    // the duplicate checks above ensured all 8 corner colour-triples and
-    // all 12 edge colour-pairs are distinct, and since a valid triple/pair
-    // draws at most one colour per axis-pair there are exactly 8 and 12
-    // possible ones - every real cubie is present exactly once, which is
-    // when the classical theorem applies.
-    return permutation_parity(corner_perm) == permutation_parity(edge_perm);
+    // Every quarter turn 4-cycles four corners and 4-cycles four edges, and
+    // a 4-cycle is an odd permutation - so the corner and edge permutation
+    // parities always flip together and their EQUALITY is invariant (both
+    // are the even identity on solved()). The third classical invariant,
+    // and with the previous two it is sufficient: the duplicate checks above
+    // ensured all 8 corner colour-triples and all 12 edge colour-pairs are
+    // distinct, and since a valid triple/pair draws at most one colour per
+    // axis-pair there are exactly 8 and 12 possible ones - every real cubie
+    // is present exactly once, which is when the classical theorem applies.
+    return permutation_parity(corners->permutation) == permutation_parity(edges->permutation);
 }
 
 Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
@@ -704,16 +776,20 @@ Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
         const Color c0 = at(position.face_a, position.index_a);
         const Color c1 = at(position.face_b, position.index_b);
         if (c0 == a && c1 == b) {
-            return {.face_a = position.face_a,
-                    .index_a = position.index_a,
-                    .face_b = position.face_b,
-                    .index_b = position.index_b};
+            return {
+                .face_a = position.face_a,
+                .index_a = position.index_a,
+                .face_b = position.face_b,
+                .index_b = position.index_b,
+            };
         }
         if (c0 == b && c1 == a) {
-            return {.face_a = position.face_b,
-                    .index_a = position.index_b,
-                    .face_b = position.face_a,
-                    .index_b = position.index_a};
+            return {
+                .face_a = position.face_b,
+                .index_a = position.index_b,
+                .face_b = position.face_a,
+                .index_b = position.index_a,
+            };
         }
     }
     return {};  // unreachable for a physically valid cube
@@ -721,9 +797,11 @@ Cube::EdgeLocation Cube::locate_edge(Color a, Color b) const noexcept {
 
 Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexcept {
     for (const CornerPosition& position : kCornerPositions) {
-        const std::array<Color, 3> colors = {at(position.faces.at(0), position.indices.at(0)),
-                                             at(position.faces.at(1), position.indices.at(1)),
-                                             at(position.faces.at(2), position.indices.at(2))};
+        const std::array<Color, 3> colors = {
+            at(position.faces.at(0), position.indices.at(0)),
+            at(position.faces.at(1), position.indices.at(1)),
+            at(position.faces.at(2), position.indices.at(2)),
+        };
         auto slot_of = [&](Color target) -> int {
             for (int i = 0; i < 3; ++i) {
                 if (colors.at(static_cast<std::size_t>(i)) == target) {
@@ -739,12 +817,14 @@ Cube::CornerLocation Cube::locate_corner(Color a, Color b, Color c) const noexce
             const auto fa = static_cast<std::size_t>(ia);
             const auto fb = static_cast<std::size_t>(ib);
             const auto fc = static_cast<std::size_t>(ic);
-            return {.face_a = position.faces.at(fa),
-                    .index_a = position.indices.at(fa),
-                    .face_b = position.faces.at(fb),
-                    .index_b = position.indices.at(fb),
-                    .face_c = position.faces.at(fc),
-                    .index_c = position.indices.at(fc)};
+            return {
+                .face_a = position.faces.at(fa),
+                .index_a = position.indices.at(fa),
+                .face_b = position.faces.at(fb),
+                .index_b = position.indices.at(fb),
+                .face_c = position.faces.at(fc),
+                .index_c = position.indices.at(fc),
+            };
         }
     }
     return {};  // unreachable for a physically valid cube

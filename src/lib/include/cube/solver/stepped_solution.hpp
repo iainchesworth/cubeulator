@@ -39,18 +39,18 @@ public:
     // The move about to be performed from the current state. Only valid
     // when !at_end().
     [[nodiscard]] Move current_move() const noexcept {
-        return moves_[static_cast<std::size_t>(index_)];
+        return moves_.at(static_cast<std::size_t>(index_));
     }
 
     // Which stage current_move() belongs to. Only valid when !at_end().
     [[nodiscard]] Stage current_stage() const noexcept {
-        return stage_per_move_[static_cast<std::size_t>(index_)];
+        return stage_per_move_.at(static_cast<std::size_t>(index_));
     }
 
     // The cube state after current_index() moves have been applied - what
     // should currently be drawn.
     [[nodiscard]] const Cube& current_cube() const noexcept {
-        return cubes_[static_cast<std::size_t>(index_)];
+        return cubes_.at(static_cast<std::size_t>(index_));
     }
 
     // Applies current_move() and advances; a no-op at_end().

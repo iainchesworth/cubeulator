@@ -4,7 +4,6 @@
 #include <cube/profiling.hpp>
 #include <cube/vision/color_classification.hpp>
 
-#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -84,11 +83,11 @@ constexpr float kShadingAxisWeight = 0.2F;
 // no information (near-neutral samples), which is the only case that
 // needs them.
 [[nodiscard]] float assignment_distance(const cv::Vec3f& sample, const cv::Vec3f& mean) {
-    const float dl = sample[0] - mean[0];
-    const float da = sample[1] - mean[1];
-    const float db = sample[2] - mean[2];
-    const float chroma_sample = std::hypot(sample[1], sample[2]);
-    const float chroma_mean = std::hypot(mean[1], mean[2]);
+    const float dl = sample(0) - mean(0);
+    const float da = sample(1) - mean(1);
+    const float db = sample(2) - mean(2);
+    const float chroma_sample = std::hypot(sample(1), sample(2));
+    const float chroma_mean = std::hypot(mean(1), mean(2));
     const float dc = chroma_sample - chroma_mean;
     // |dc| <= sqrt(da^2+db^2) by the reverse triangle inequality, so the
     // hue residual is non-negative up to rounding; the clamp guards the
@@ -97,87 +96,86 @@ constexpr float kShadingAxisWeight = 0.2F;
     return std::sqrt((kShadingAxisWeight * ((dl * dl) + (dc * dc))) + dh_squared);
 }
 
-// Exactly-9-per-cluster assignment of the 54 samples to the 6 cluster
-// means, with each face's centre pinned to its own seed cluster (the seeds
-// *are* the centres, so re-assigning one would let a noisy off-centre
-// sticker hijack a cluster's identity). Greedy by margin - the sample with
-// the most to lose by missing its nearest open cluster commits first - then
-// pairwise-swap descent to a local optimum. 54x6 is small enough that being
-// exhaustive at every step is cheaper than being clever.
-[[nodiscard]] std::array<int, kSampleCount> assign_clusters(
-    const std::array<cv::Vec3f, kSampleCount>& samples,
-    const std::array<cv::Vec3f, face_count>& means) {
+using SampleArray = std::array<cv::Vec3f, kSampleCount>;
+using MeanArray = std::array<cv::Vec3f, face_count>;
+using LoadArray = std::array<std::size_t, face_count>;
+
+// The open cluster nearest to one sample, and how much worse its next choice
+// is (infinite with one open cluster left: the sample has no alternative, so
+// it commits immediately). `cluster` stays -1 when no open cluster produced a
+// finite comparison.
+struct Preference {
+    int cluster = -1;
+    float margin = 0.0F;
+};
+
+[[nodiscard]] Preference nearest_open_cluster(const cv::Vec3f& sample, const MeanArray& means,
+                                              const LoadArray& load) {
     constexpr float kInf = std::numeric_limits<float>::infinity();
-
-    std::array<int, kSampleCount> cluster{};
-    cluster.fill(-1);
-    std::array<std::size_t, face_count> load{};
-
-    for (std::size_t face = 0; face < face_count; ++face) {
-        cluster.at((face * facelets_per_face) + center_facelet_index) = static_cast<int>(face);
-        ++load.at(face);
-    }
-
-    // Margins shift as clusters fill, so re-scan all unassigned samples for
-    // the current best margin on every pass rather than sorting once.
-    for (;;) {
-        std::size_t best_sample = kSampleCount;
-        int best_cluster = -1;
-        float best_margin = -1.0F;
-        for (std::size_t s = 0; s < kSampleCount; ++s) {
-            if (cluster.at(s) >= 0) {
-                continue;
-            }
-            float nearest = kInf;
-            float second = kInf;
-            int nearest_cluster = -1;
-            for (std::size_t c = 0; c < face_count; ++c) {
-                if (load.at(c) >= facelets_per_face) {
-                    continue;
-                }
-                const float distance = assignment_distance(samples.at(s), means.at(c));
-                if (distance < nearest) {
-                    second = nearest;
-                    nearest = distance;
-                    nearest_cluster = static_cast<int>(c);
-                } else if (distance < second) {
-                    second = distance;
-                }
-            }
-            // No open cluster produced a finite comparison. resolve_colors
-            // rejects non-finite input before calling this, so this is
-            // defence in depth rather than a live path - but the failure it
-            // guards is severe enough to be structural: with
-            // nearest_cluster still -1 the sample would win the margin
-            // argmax below with kInf, and the loop would then execute
-            // `++load[static_cast<std::size_t>(-1)]` (an out-of-bounds
-            // increment at index SIZE_MAX of a six-element array) and
-            // re-select the same sample forever, because `cluster[s]` was
-            // never set. Skipping it here means the loop can only ever
-            // commit a real cluster, and terminates because every
-            // iteration assigns exactly one sample.
-            if (nearest_cluster < 0) {
-                continue;
-            }
-            // With one open cluster left the margin is effectively infinite:
-            // the sample has no alternative, so it commits immediately.
-            const float margin = (second == kInf) ? kInf : second - nearest;
-            if (margin > best_margin) {
-                best_margin = margin;
-                best_sample = s;
-                best_cluster = nearest_cluster;
-            }
+    float nearest = kInf;
+    float second = kInf;
+    int nearest_cluster = -1;
+    for (std::size_t c = 0; c < face_count; ++c) {
+        if (load.at(c) >= facelets_per_face) {
+            continue;
         }
-        if (best_sample == kSampleCount) {
-            break;
+        const float distance = assignment_distance(sample, means.at(c));
+        if (distance < nearest) {
+            second = nearest;
+            nearest = distance;
+            nearest_cluster = static_cast<int>(c);
+        } else if (distance < second) {
+            second = distance;
         }
-        cluster.at(best_sample) = best_cluster;
-        ++load.at(static_cast<std::size_t>(best_cluster));
     }
+    return {.cluster = nearest_cluster, .margin = (second == kInf) ? kInf : second - nearest};
+}
 
-    // Pairwise swaps preserve the exactly-9 loads by construction; each swap
-    // strictly lowers the total cost by at least epsilon, so the descent
-    // terminates.
+// The next sample to commit and the cluster it takes: the unassigned one with
+// the most to lose by missing its nearest open cluster. `sample` is
+// kSampleCount when there is none left.
+struct Commitment {
+    std::size_t sample = kSampleCount;
+    int cluster = -1;
+};
+
+[[nodiscard]] Commitment next_commitment(const SampleArray& samples, const MeanArray& means,
+                                         const std::array<int, kSampleCount>& cluster,
+                                         const LoadArray& load) {
+    Commitment best;
+    float best_margin = -1.0F;
+    for (std::size_t s = 0; s < kSampleCount; ++s) {
+        if (cluster.at(s) >= 0) {
+            continue;
+        }
+        const Preference preference = nearest_open_cluster(samples.at(s), means, load);
+        // No open cluster produced a finite comparison. resolve_colors
+        // rejects non-finite input before calling this, so this is defence
+        // in depth rather than a live path - but the failure it guards is
+        // severe enough to be structural: with the cluster still -1 the
+        // sample would win the margin argmax below with kInf, and the loop
+        // would then execute `++load[static_cast<std::size_t>(-1)]` (an
+        // out-of-bounds increment at index SIZE_MAX of a six-element array)
+        // and re-select the same sample forever, because `cluster[s]` was
+        // never set. Skipping it here means the loop can only ever commit a
+        // real cluster, and terminates because every iteration assigns
+        // exactly one sample.
+        if (preference.cluster < 0) {
+            continue;
+        }
+        if (preference.margin > best_margin) {
+            best_margin = preference.margin;
+            best = {.sample = s, .cluster = preference.cluster};
+        }
+    }
+    return best;
+}
+
+// Pairwise swaps preserve the exactly-9 loads by construction; each swap
+// strictly lowers the total cost by at least epsilon, so the descent
+// terminates. Centres stay where they are pinned.
+void descend_by_swaps(const SampleArray& samples, const MeanArray& means,
+                      std::array<int, kSampleCount>& cluster) {
     constexpr float kMinImprovement = 1e-3F;
     bool improved = true;
     while (improved) {
@@ -204,7 +202,38 @@ constexpr float kShadingAxisWeight = 0.2F;
             }
         }
     }
+}
 
+// Exactly-9-per-cluster assignment of the 54 samples to the 6 cluster
+// means, with each face's centre pinned to its own seed cluster (the seeds
+// *are* the centres, so re-assigning one would let a noisy off-centre
+// sticker hijack a cluster's identity). Greedy by margin - the sample with
+// the most to lose by missing its nearest open cluster commits first - then
+// pairwise-swap descent to a local optimum. 54x6 is small enough that being
+// exhaustive at every step is cheaper than being clever.
+[[nodiscard]] std::array<int, kSampleCount> assign_clusters(const SampleArray& samples,
+                                                            const MeanArray& means) {
+    std::array<int, kSampleCount> cluster{};
+    cluster.fill(-1);
+    LoadArray load{};
+
+    for (std::size_t face = 0; face < face_count; ++face) {
+        cluster.at((face * facelets_per_face) + center_facelet_index) = static_cast<int>(face);
+        ++load.at(face);
+    }
+
+    // Margins shift as clusters fill, so re-scan all unassigned samples for
+    // the current best margin on every pass rather than sorting once.
+    for (;;) {
+        const Commitment next = next_commitment(samples, means, cluster, load);
+        if (next.sample == kSampleCount) {
+            break;
+        }
+        cluster.at(next.sample) = next.cluster;
+        ++load.at(static_cast<std::size_t>(next.cluster));
+    }
+
+    descend_by_swaps(samples, means, cluster);
     return cluster;
 }
 
@@ -222,9 +251,9 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // name the rest, with band edges placed midway between the hues
     // measured on real washed tiles: red ~25, orange ~49, yellow ~97, green
     // ~135 saturated / ~226 washed-teal, blue ~281.
-    const float chroma = std::hypot(lab[1], lab[2]);
+    const float chroma = std::hypot(lab(1), lab(2));
 
-    float hue = std::atan2(lab[2], lab[1]) * 180.0F / std::numbers::pi_v<float>;
+    float hue = std::atan2(lab(2), lab(1)) * 180.0F / std::numbers::pi_v<float>;
     if (hue < 0.0F) {
         hue += 360.0F;
     }
@@ -383,10 +412,10 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // unknown-cell gate that depends on it. Below the lightness floor the
     // answer stays unknown at confidence zero no matter which way the sample
     // points.
-    if (near_neutral && lab[0] <= kWhiteLightnessFloor) {
+    if (near_neutral && lab(0) <= kWhiteLightnessFloor) {
         return Facelet{.color = FacetColor::unknown, .confidence = 0.0F};
     }
-    if (near_neutral && lab[1] > kNeutralWhiteMinA) {
+    if (near_neutral && lab(1) > kNeutralWhiteMinA) {
         const float confidence =
             std::clamp(1.0F - (chroma / (2.0F * kWhiteChromaFloor)), 0.0F, 1.0F);
         return Facelet{.color = FacetColor::white, .confidence = confidence};
@@ -399,7 +428,7 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     // 0.2 floor rather than at zero, because a hue this far from the warm
     // axis is a real measurement and not noise.
     const bool warm_cast_white = chroma < kWhiteChromaSoftCeiling &&
-                                 lab[0] > kWhiteLightnessFloor && hue >= kOrangeHueMinDeg &&
+                                 lab(0) > kWhiteLightnessFloor && hue >= kOrangeHueMinDeg &&
                                  hue < kOrangeHueMaxDeg;
     if (warm_cast_white) {
         // Confidence from BOTH admitting conditions, weakest-link, because
@@ -419,9 +448,11 @@ Facelet classify_lab(const cv::Vec3f& lab) {
                                   (kWhiteChromaSoftCeiling - chroma) /
                                   (kWhiteChromaSoftCeiling - kWhiteChromaFloor);
         const float lightness_term =
-            std::clamp((lab[0] - kWhiteLightnessFloor) / kWhiteLightnessConfidenceSpan, 0.0F, 1.0F);
-        return Facelet{.color = FacetColor::white,
-                       .confidence = std::clamp(std::min(chroma_term, lightness_term), 0.0F, 1.0F)};
+            std::clamp((lab(0) - kWhiteLightnessFloor) / kWhiteLightnessConfidenceSpan, 0.0F, 1.0F);
+        return Facelet{
+            .color = FacetColor::white,
+            .confidence = std::clamp(std::min(chroma_term, lightness_term), 0.0F, 1.0F),
+        };
     }
 
     FacetColor color = FacetColor::red;  // [340, 44)
@@ -442,104 +473,103 @@ Facelet classify_lab(const cv::Vec3f& lab) {
     return Facelet{.color = color, .confidence = confidence};
 }
 
-Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
-    const std::array<CapturedFace, 6>& faces) {
-    CUBE_ZONE_SCOPED_N("vision.resolve_colors");
-    std::array<cv::Vec3f, kSampleCount> samples{};
-    for (std::size_t face = 0; face < face_count; ++face) {
-        for (std::size_t i = 0; i < facelets_per_face; ++i) {
-            samples.at((face * facelets_per_face) + i) = faces.at(face).lab.at(i);
-        }
-    }
+namespace {
 
-    // Finiteness first, before ANY comparison is made on this data. Every
-    // subsequent gate in this function is an inequality, and an inequality
-    // against NaN is false - so a single NaN does not merely produce a bad
-    // answer, it silently passes the centre-separation guard below (whose
-    // whole job is to reject implausible seeds) and then defeats the
-    // clustering: see assign_clusters' note for the out-of-bounds write and
-    // non-terminating loop that follow. inf reaches the same state because
-    // `inf < inf` is false too.
-    //
-    // These 54 values are caller-supplied on a public entry point and the
-    // producers upstream include divisions by sample counts and homography
-    // projections, either of which can emit a non-finite mean without any
-    // caller doing something unreasonable. Refusing the whole scan is the
-    // right answer rather than dropping the offending cell: a cell whose
-    // colour could not be measured is not evidence that can be clustered,
-    // and the exactly-9-per-cluster constraint has no meaning without all
-    // 54.
-    for (const cv::Vec3f& sample : samples) {
-        if (!std::isfinite(sample[0]) || !std::isfinite(sample[1]) || !std::isfinite(sample[2])) {
-            return std::unexpected(CubeError::no_valid_cube_detected);
-        }
-    }
+// Finiteness first, before ANY comparison is made on this data. Every
+// subsequent gate in resolve_colors is an inequality, and an inequality
+// against NaN is false - so a single NaN does not merely produce a bad
+// answer, it silently passes the centre-separation guard (whose whole job is
+// to reject implausible seeds) and then defeats the clustering: see
+// assign_clusters' note for the out-of-bounds write and non-terminating loop
+// that follow. inf reaches the same state because `inf < inf` is false too.
+//
+// These 54 values are caller-supplied on a public entry point and the
+// producers upstream include divisions by sample counts and homography
+// projections, either of which can emit a non-finite mean without any caller
+// doing something unreasonable. Refusing the whole scan is the right answer
+// rather than dropping the offending cell: a cell whose colour could not be
+// measured is not evidence that can be clustered, and the exactly-9-per-
+// cluster constraint has no meaning without all 54.
+[[nodiscard]] bool all_finite(const SampleArray& samples) {
+    return std::ranges::all_of(samples, [](const cv::Vec3f& sample) {
+        return std::isfinite(sample(0)) && std::isfinite(sample(1)) && std::isfinite(sample(2));
+    });
+}
 
-    // The six centres seed the clusters, so they must be pairwise distinct.
-    // The floor and the closest-pair measurement backing it are now declared
-    // in the header (kMinCentreSeedSeparationLab / kClosestCentrePairLab) so
-    // capture routing's same-face radii can be derived from the same
-    // numbers instead of restating an independent absolute - which is how
-    // verify_centre_lab_radius came to sit ABOVE the red/orange pair and let
-    // a different physical face verify into an occupied slot.
+// The six centres seed the clusters, so they must be pairwise distinct. The
+// floor and the closest-pair measurement backing it are declared in the
+// header (kMinCentreSeedSeparationLab / kClosestCentrePairLab) so capture
+// routing's same-face radii can be derived from the same numbers instead of
+// restating an independent absolute - which is how verify_centre_lab_radius
+// came to sit ABOVE the red/orange pair and let a different physical face
+// verify into an occupied slot.
+[[nodiscard]] bool seeds_are_distinct(const MeanArray& means) {
     constexpr float kMinSeedSeparation = kMinCentreSeedSeparationLab;
-    std::array<cv::Vec3f, face_count> means{};
-    for (std::size_t face = 0; face < face_count; ++face) {
-        means.at(face) = faces.at(face).lab.at(center_facelet_index);
-    }
     for (std::size_t a = 0; a < face_count; ++a) {
         for (std::size_t b = a + 1; b < face_count; ++b) {
             if (lab_distance(means.at(a), means.at(b)) < kMinSeedSeparation) {
-                return std::unexpected(CubeError::no_valid_cube_detected);
+                return false;
             }
         }
     }
+    return true;
+}
 
-    // Lloyd-style refinement under the exactly-9 constraint. Each round's
-    // assignment is a deterministic function of the means, so a repeated
-    // assignment is a fixed point and iteration can stop; the cap guards
-    // against a rare 2-cycle rather than being the expected exit.
+// The mean of each cluster under an assignment. assign_clusters assigns every
+// sample given finite input, which all_finite has established; a negative
+// entry is skipped rather than assumed away because the cost of being wrong
+// is an out-of-bounds write at index SIZE_MAX, not a wrong mean.
+[[nodiscard]] MeanArray cluster_means(const SampleArray& samples,
+                                      const std::array<int, kSampleCount>& assignment) {
+    MeanArray sums{};
+    for (std::size_t s = 0; s < kSampleCount; ++s) {
+        if (assignment.at(s) < 0) {
+            continue;
+        }
+        sums.at(static_cast<std::size_t>(assignment.at(s))) += samples.at(s);
+    }
+    for (cv::Vec3f& sum : sums) {
+        sum = sum * (1.0F / static_cast<float>(facelets_per_face));
+    }
+    return sums;
+}
+
+// Lloyd-style refinement under the exactly-9 constraint. Each round's
+// assignment is a deterministic function of the means, so a repeated
+// assignment is a fixed point and iteration can stop; the cap guards against
+// a rare 2-cycle rather than being the expected exit. Leaves the final means
+// in `means` and returns the assignment.
+[[nodiscard]] std::array<int, kSampleCount> refine_clusters(const SampleArray& samples,
+                                                            MeanArray& means) {
     constexpr int kMaxIterations = 10;
     std::array<int, kSampleCount> assignment{};
     assignment.fill(-1);
     for (int iteration = 0; iteration < kMaxIterations; ++iteration) {
         const std::array<int, kSampleCount> next = assign_clusters(samples, means);
-
-        std::array<cv::Vec3f, face_count> sums{};
-        for (std::size_t s = 0; s < kSampleCount; ++s) {
-            // assign_clusters assigns every sample given finite input, which
-            // the sweep above has established. Checked rather than assumed
-            // because the cost of being wrong here is an out-of-bounds write
-            // at index SIZE_MAX, not a wrong mean.
-            if (next.at(s) < 0) {
-                continue;
-            }
-            sums.at(static_cast<std::size_t>(next.at(s))) += samples.at(s);
-        }
-        for (std::size_t c = 0; c < face_count; ++c) {
-            means.at(c) = sums.at(c) * (1.0F / static_cast<float>(facelets_per_face));
-        }
-
+        means = cluster_means(samples, next);
         const bool stable = next == assignment;
         assignment = next;
         if (stable) {
             break;
         }
     }
+    return assignment;
+}
 
-    // Naming is a one-to-one matching, not six independent nearest-lookups:
-    // under a global cast the nearest reference to a shifted cluster can be
-    // a *different* colour (red lifted ~25 L sits nearer the orange
-    // reference than the red one), but the matching that must name every
-    // cluster at once still prefers the consistent labelling because the
-    // displaced colour would leave its own reference unpaired at a far
-    // larger cost. 6! = 720 permutations - brute force is exact and trivial.
-    const ColorPalette palette = default_palette();
+// Naming is a one-to-one matching, not six independent nearest-lookups: under
+// a global cast the nearest reference to a shifted cluster can be a
+// *different* colour (red lifted ~25 L sits nearer the orange reference than
+// the red one), but the matching that must name every cluster at once still
+// prefers the consistent labelling because the displaced colour would leave
+// its own reference unpaired at a far larger cost. 6! = 720 permutations -
+// brute force is exact and trivial. Returns, per cluster, the palette entry.
+[[nodiscard]] std::array<std::size_t, face_count> best_palette_permutation(
+    const MeanArray& means, const ColorPalette& palette) {
     std::array<std::size_t, face_count> permutation{};
     std::ranges::iota(permutation, std::size_t{0});
     std::array<std::size_t, face_count> best_permutation = permutation;
     float best_total = std::numeric_limits<float>::max();
-    do {
+    for (bool more = true; more; more = std::ranges::next_permutation(permutation).found) {
         float total = 0.0F;
         for (std::size_t c = 0; c < face_count; ++c) {
             total += lab_distance(means.at(c), palette.entries.at(permutation.at(c)).lab);
@@ -548,75 +578,111 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
             best_total = total;
             best_permutation = permutation;
         }
-    } while (std::ranges::next_permutation(permutation).found);
+    }
+    return best_permutation;
+}
 
-    // Hue-first override of the distance matching: washed cluster means
-    // suffer the same distortion classify_lab() was rebuilt around (chroma
-    // shrinks, hue survives), and distance matching can swap the red and
-    // orange clusters under a strong wash even with the global 1-1
-    // constraint. When hue classification names the six clusters
-    // DISTINCTLY, trust it outright; on any collision (two washed clusters
-    // in one hue band) keep the exact global-distance permutation instead.
-    {
-        std::array<std::size_t, face_count> hue_names{};
-        std::array<int, face_count + 1> name_counts{};
-        bool any_unknown = false;
-        for (std::size_t c = 0; c < face_count; ++c) {
-            const auto color = classify_lab(means.at(c)).color;
-            any_unknown = any_unknown || color == FacetColor::unknown;
-            hue_names.at(c) = static_cast<std::size_t>(color);
-            ++name_counts.at(static_cast<std::size_t>(color));
-        }
-        const bool all_distinct =
-            std::ranges::all_of(name_counts, [](int count) { return count <= 1; });
-        // An UNKNOWN cluster mean disqualifies the whole override, even
-        // when the six names are formally distinct. The palette has no
-        // `unknown` entry, so the lookup below would find no match for that
-        // cluster and silently leave it on the distance permutation while
-        // every other cluster moved to its hue name - which can land two
-        // clusters on the SAME palette colour and break the exactly-9
-        // census the assembler relies on. The exact global-distance
-        // matching is a complete answer; fall back to it wholesale.
-        if (all_distinct && !any_unknown) {
-            for (std::size_t c = 0; c < face_count; ++c) {
-                for (std::size_t p = 0; p < face_count; ++p) {
-                    if (static_cast<std::size_t>(palette.entries.at(p).color) == hue_names.at(c)) {
-                        best_permutation.at(c) = p;
-                        break;
-                    }
-                }
+// Hue-first override of the distance matching: washed cluster means suffer
+// the same distortion classify_lab() was rebuilt around (chroma shrinks, hue
+// survives), and distance matching can swap the red and orange clusters under
+// a strong wash even with the global 1-1 constraint. When hue classification
+// names the six clusters DISTINCTLY, trust it outright; on any collision (two
+// washed clusters in one hue band) keep the exact global-distance
+// permutation instead.
+void apply_hue_names(const MeanArray& means, const ColorPalette& palette,
+                     std::array<std::size_t, face_count>& permutation) {
+    std::array<std::size_t, face_count> hue_names{};
+    std::array<int, face_count + 1> name_counts{};
+    bool any_unknown = false;
+    for (std::size_t c = 0; c < face_count; ++c) {
+        const auto color = classify_lab(means.at(c)).color;
+        any_unknown = any_unknown || color == FacetColor::unknown;
+        hue_names.at(c) = static_cast<std::size_t>(color);
+        ++name_counts.at(static_cast<std::size_t>(color));
+    }
+    const bool all_distinct =
+        std::ranges::all_of(name_counts, [](int count) { return count <= 1; });
+    // An UNKNOWN cluster mean disqualifies the whole override, even when the
+    // six names are formally distinct. The palette has no `unknown` entry, so
+    // the lookup below would find no match for that cluster and silently
+    // leave it on the distance permutation while every other cluster moved
+    // to its hue name - which can land two clusters on the SAME palette
+    // colour and break the exactly-9 census the assembler relies on. The
+    // exact global-distance matching is a complete answer; fall back to it
+    // wholesale.
+    if (!all_distinct || any_unknown) {
+        return;
+    }
+    for (std::size_t c = 0; c < face_count; ++c) {
+        for (std::size_t p = 0; p < face_count; ++p) {
+            if (static_cast<std::size_t>(palette.entries.at(p).color) == hue_names.at(c)) {
+                permutation.at(c) = p;
+                break;
             }
         }
     }
+}
+
+// How safely sample `s` sits in the cluster the assignment chose: 1 when it
+// sits on its mean far from any rival, 0 when a rival is as close - or
+// closer, which the exactly-9 constraint can legitimately force for a
+// borderline sticker.
+//
+// Priced in the ASSIGNMENT metric, necessarily: pricing it in a different
+// metric would zero out exactly the cells the metric exists for - a freerot
+// shade-darkened orange cell sits 22.8 plain-Lab from the red mean against
+// 41.2 from its own orange mean, so plain-Lab pricing calls a correct,
+// hue-unambiguous assignment confidence zero.
+[[nodiscard]] float assignment_confidence(const cv::Vec3f& sample, const MeanArray& means,
+                                          std::size_t own) {
+    const float own_distance = assignment_distance(sample, means.at(own));
+    float rival_distance = std::numeric_limits<float>::max();
+    for (std::size_t c = 0; c < face_count; ++c) {
+        if (c != own) {
+            rival_distance = std::min(rival_distance, assignment_distance(sample, means.at(c)));
+        }
+    }
+    return rival_distance > 0.0F
+               ? std::clamp((rival_distance - own_distance) / rival_distance, 0.0F, 1.0F)
+               : 0.0F;
+}
+
+}  // namespace
+
+Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
+    const std::array<CapturedFace, 6>& faces) {
+    CUBE_ZONE_SCOPED_N("vision.resolve_colors");
+    SampleArray samples{};
+    for (std::size_t face = 0; face < face_count; ++face) {
+        for (std::size_t i = 0; i < facelets_per_face; ++i) {
+            samples.at((face * facelets_per_face) + i) = faces.at(face).lab.at(i);
+        }
+    }
+    if (!all_finite(samples)) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+
+    MeanArray means{};
+    for (std::size_t face = 0; face < face_count; ++face) {
+        means.at(face) = faces.at(face).lab.at(center_facelet_index);
+    }
+    if (!seeds_are_distinct(means)) {
+        return std::unexpected(CubeError::no_valid_cube_detected);
+    }
+
+    const std::array<int, kSampleCount> assignment = refine_clusters(samples, means);
+
+    const ColorPalette palette = default_palette();
+    std::array<std::size_t, face_count> permutation = best_palette_permutation(means, palette);
+    apply_hue_names(means, palette, permutation);
 
     std::array<std::array<Facelet, 9>, 6> resolved{};
     for (std::size_t s = 0; s < kSampleCount; ++s) {
         const auto own = static_cast<std::size_t>(assignment.at(s));
-        // Priced in the ASSIGNMENT metric, necessarily: the margin reports
-        // how safely the sample sits in the cluster the assignment chose,
-        // and pricing it in a different metric would zero out exactly the
-        // cells the metric exists for - a freerot shade-darkened orange
-        // cell sits 22.8 plain-Lab from the red mean against 41.2 from its
-        // own orange mean, so plain-Lab pricing calls a correct,
-        // hue-unambiguous assignment confidence zero.
-        const float own_distance = assignment_distance(samples.at(s), means.at(own));
-        float rival_distance = std::numeric_limits<float>::max();
-        for (std::size_t c = 0; c < face_count; ++c) {
-            if (c != own) {
-                rival_distance =
-                    std::min(rival_distance, assignment_distance(samples.at(s), means.at(c)));
-            }
-        }
-        // Relative margin between the sample's own cluster and the nearest
-        // rival: 1 when the sample sits on its mean far from any rival, 0
-        // when a rival is as close - or closer, which the exactly-9
-        // constraint can legitimately force for a borderline sticker.
-        const float confidence =
-            rival_distance > 0.0F
-                ? std::clamp((rival_distance - own_distance) / rival_distance, 0.0F, 1.0F)
-                : 0.0F;
         resolved.at(s / facelets_per_face).at(s % facelets_per_face) = Facelet{
-            .color = palette.entries.at(best_permutation.at(own)).color, .confidence = confidence};
+            .color = palette.entries.at(permutation.at(own)).color,
+            .confidence = assignment_confidence(samples.at(s), means, own),
+        };
     }
     return resolved;
 }

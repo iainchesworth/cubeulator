@@ -59,12 +59,14 @@ struct Blob {
 
 // kRoll[k][i] is the cell of a read that lands at cell i once the read is
 // turned k quarter-turns.
-constexpr std::array<std::array<int, 9>, 4> kRoll = {{
-    {0, 1, 2, 3, 4, 5, 6, 7, 8},
-    {2, 5, 8, 1, 4, 7, 0, 3, 6},
-    {8, 7, 6, 5, 4, 3, 2, 1, 0},
-    {6, 3, 0, 7, 4, 1, 8, 5, 2},
-}};
+constexpr std::array<std::array<int, 9>, 4> kRoll = {
+    {
+        {0, 1, 2, 3, 4, 5, 6, 7, 8},
+        {2, 5, 8, 1, 4, 7, 0, 3, 6},
+        {8, 7, 6, 5, 4, 3, 2, 1, 0},
+        {6, 3, 0, 7, 4, 1, 8, 5, 2},
+    },
+};
 
 template <typename T>
 [[nodiscard]] T median_of(std::vector<T> values) {
@@ -156,102 +158,145 @@ struct Lattice {
     return lattice;
 }
 
+// The blobs of a size and distance near enough to `seed` to be on its side.
+[[nodiscard]] std::vector<cv::Point2f> neighbours_of(const std::vector<Blob>& blobs,
+                                                     const Blob& seed) {
+    std::vector<cv::Point2f> points;
+    for (const Blob& blob : blobs) {
+        const float ratio = blob.side / seed.side;
+        const cv::Point2f offset = blob.centre - seed.centre;
+        if (ratio > kMinSizeRatio && ratio < kMaxSizeRatio &&
+            std::hypot(offset.x, offset.y) < kReachInSides * seed.side) {
+            points.push_back(blob.centre);
+        }
+    }
+    return points;
+}
+
+// A grid's spacing and the direction of its axes.
+struct GridFrame {
+    float pitch = 0.0F;
+    cv::Point2f axis_a;
+    cv::Point2f axis_b;
+};
+
+// Spacing and direction from each member's nearest neighbour. The direction
+// is folded onto a quarter-turn so that neighbours along either axis, in
+// either sense, vote for the same grid angle. Nothing when the spacing is too
+// small to be a side's stickers.
+[[nodiscard]] std::optional<GridFrame> grid_frame(const std::vector<cv::Point2f>& points) {
+    std::vector<float> nearest_distance;
+    double sum_sin = 0.0;
+    double sum_cos = 0.0;
+    for (std::size_t i = 0; i < points.size(); ++i) {
+        float nearest = std::numeric_limits<float>::max();
+        cv::Point2f step;
+        for (std::size_t j = 0; j < points.size(); ++j) {
+            if (i == j) {
+                continue;
+            }
+            const cv::Point2f offset = points.at(j) - points.at(i);
+            const float distance = std::hypot(offset.x, offset.y);
+            if (distance < nearest) {
+                nearest = distance;
+                step = offset;
+            }
+        }
+        nearest_distance.push_back(nearest);
+        const double folded =
+            std::atan2(static_cast<double>(step.y), static_cast<double>(step.x)) * 4.0;
+        sum_sin += std::sin(folded);
+        sum_cos += std::cos(folded);
+    }
+    const float pitch = median_of(nearest_distance);
+    if (pitch < 4.0F) {
+        return std::nullopt;
+    }
+    const double theta = std::atan2(sum_sin, sum_cos) / 4.0;
+    GridFrame frame;
+    frame.pitch = pitch;
+    frame.axis_a =
+        cv::Point2f(static_cast<float>(std::cos(theta)), static_cast<float>(std::sin(theta)));
+    frame.axis_b = cv::Point2f(-frame.axis_a.y, frame.axis_a.x);
+    return frame;
+}
+
+// The points that sit on the frame's grid, with the cell each one snaps to.
+struct SnappedPoints {
+    std::vector<cv::Point2f> on_grid;
+    std::vector<cv::Point> cells;
+};
+
+[[nodiscard]] SnappedPoints snap_to_grid(const std::vector<cv::Point2f>& points,
+                                         const GridFrame& frame) {
+    SnappedPoints snapped;
+    for (const cv::Point2f& point : points) {
+        const cv::Point2f relative = point - points.front();
+        const float a = relative.dot(frame.axis_a) / frame.pitch;
+        const float b = relative.dot(frame.axis_b) / frame.pitch;
+        const float cell_a = std::round(a);
+        const float cell_b = std::round(b);
+        if (std::abs(a - cell_a) < kMaxCellResidual && std::abs(b - cell_b) < kMaxCellResidual) {
+            snapped.on_grid.push_back(point);
+            snapped.cells.emplace_back(static_cast<int>(cell_a), static_cast<int>(cell_b));
+        }
+    }
+    return snapped;
+}
+
+// Moves `cells` so the lattice starts at (0, 0) and returns which of the nine
+// cells are taken - or nothing unless they span exactly three by three with no
+// cell used twice. Anything other than a full three-by-three span leaves the
+// lattice's position on the side unknown by a row or a column.
+[[nodiscard]] std::optional<std::array<bool, 9>> normalise_cells(std::vector<cv::Point>& cells) {
+    const auto [min_a, max_a] =
+        std::ranges::minmax_element(cells, [](const auto& l, const auto& r) { return l.x < r.x; });
+    const auto [min_b, max_b] =
+        std::ranges::minmax_element(cells, [](const auto& l, const auto& r) { return l.y < r.y; });
+    const cv::Point low(min_a->x, min_b->y);
+    if (max_a->x - low.x != 2 || max_b->y - low.y != 2) {
+        return std::nullopt;
+    }
+    std::array<bool, 9> taken{};
+    bool duplicate = false;
+    for (cv::Point& cell : cells) {
+        cell -= low;
+        bool& slot =
+            taken.at((static_cast<std::size_t>(cell.y) * 3) + static_cast<std::size_t>(cell.x));
+        duplicate = duplicate || slot;
+        slot = true;
+    }
+    if (duplicate) {
+        return std::nullopt;
+    }
+    return taken;
+}
+
 // The best 3x3 lattice through the blobs: most blobs on it, then tightest.
 // Each blob in turn seeds a group of similar-sized neighbours; the group's
 // nearest-neighbour spacing and direction give a grid to snap its members to.
 [[nodiscard]] std::optional<Lattice> fit_lattice(const std::vector<Blob>& blobs) {
     std::optional<Lattice> best;
     for (const Blob& seed : blobs) {
-        std::vector<cv::Point2f> points;
-        for (const Blob& blob : blobs) {
-            const float ratio = blob.side / seed.side;
-            const cv::Point2f offset = blob.centre - seed.centre;
-            if (ratio > kMinSizeRatio && ratio < kMaxSizeRatio &&
-                std::hypot(offset.x, offset.y) < kReachInSides * seed.side) {
-                points.push_back(blob.centre);
-            }
-        }
+        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed);
         if (points.size() < kMinLatticeBlobs) {
             continue;
         }
-
-        // Spacing and direction from each member's nearest neighbour. The
-        // direction is folded onto a quarter-turn so that neighbours along
-        // either axis, in either sense, vote for the same grid angle.
-        std::vector<float> nearest_distance;
-        double sum_sin = 0.0;
-        double sum_cos = 0.0;
-        for (std::size_t i = 0; i < points.size(); ++i) {
-            float nearest = std::numeric_limits<float>::max();
-            cv::Point2f step;
-            for (std::size_t j = 0; j < points.size(); ++j) {
-                if (i == j) {
-                    continue;
-                }
-                const cv::Point2f offset = points.at(j) - points.at(i);
-                const float distance = std::hypot(offset.x, offset.y);
-                if (distance < nearest) {
-                    nearest = distance;
-                    step = offset;
-                }
-            }
-            nearest_distance.push_back(nearest);
-            const double folded =
-                std::atan2(static_cast<double>(step.y), static_cast<double>(step.x)) * 4.0;
-            sum_sin += std::sin(folded);
-            sum_cos += std::cos(folded);
-        }
-        const float pitch = median_of(nearest_distance);
-        if (pitch < 4.0F) {
+        const std::optional<GridFrame> frame = grid_frame(points);
+        if (!frame) {
             continue;
         }
-        const double theta = std::atan2(sum_sin, sum_cos) / 4.0;
-        const cv::Point2f axis_a(static_cast<float>(std::cos(theta)),
-                                 static_cast<float>(std::sin(theta)));
-        const cv::Point2f axis_b(-axis_a.y, axis_a.x);
-
-        std::vector<cv::Point2f> on_grid;
-        std::vector<cv::Point> cells;
-        for (const cv::Point2f& point : points) {
-            const cv::Point2f relative = point - points.front();
-            const float a = relative.dot(axis_a) / pitch;
-            const float b = relative.dot(axis_b) / pitch;
-            const float cell_a = std::round(a);
-            const float cell_b = std::round(b);
-            if (std::abs(a - cell_a) < kMaxCellResidual &&
-                std::abs(b - cell_b) < kMaxCellResidual) {
-                on_grid.push_back(point);
-                cells.emplace_back(static_cast<int>(cell_a), static_cast<int>(cell_b));
-            }
+        SnappedPoints snapped = snap_to_grid(points, *frame);
+        if (snapped.on_grid.size() < kMinLatticeBlobs) {
+            continue;
         }
-        if (on_grid.size() < kMinLatticeBlobs) {
+        const std::optional<std::array<bool, 9>> taken = normalise_cells(snapped.cells);
+        if (!taken) {
             continue;
         }
 
-        const auto [min_a, max_a] = std::ranges::minmax_element(
-            cells, [](const auto& l, const auto& r) { return l.x < r.x; });
-        const auto [min_b, max_b] = std::ranges::minmax_element(
-            cells, [](const auto& l, const auto& r) { return l.y < r.y; });
-        const cv::Point low(min_a->x, min_b->y);
-        // Anything other than a full three-by-three span leaves the lattice's
-        // position on the side unknown by a row or a column.
-        if (max_a->x - low.x != 2 || max_b->y - low.y != 2) {
-            continue;
-        }
-        std::array<bool, 9> taken{};
-        bool duplicate = false;
-        for (cv::Point& cell : cells) {
-            cell -= low;
-            bool& slot = taken.at(static_cast<std::size_t>((cell.y * 3) + cell.x));
-            duplicate = duplicate || slot;
-            slot = true;
-        }
-        if (duplicate) {
-            continue;
-        }
-
-        Lattice candidate = fit_affine(on_grid, cells, pitch);
-        candidate.found = taken;
+        Lattice candidate = fit_affine(snapped.on_grid, snapped.cells, frame->pitch);
+        candidate.found = *taken;
         if (!best.has_value() ||
             std::tuple(candidate.blobs, -candidate.rms) > std::tuple(best->blobs, -best->rms)) {
             best = candidate;
@@ -315,10 +360,10 @@ struct Upright {
         values.reserve(static_cast<std::size_t>(patch.area()));
         for (int row = 0; row < lab.rows; ++row) {
             for (int col = 0; col < lab.cols; ++col) {
-                values.push_back(lab.at<cv::Vec3f>(row, col)[channel]);
+                values.push_back(lab.at<cv::Vec3f>(row, col)(channel));
             }
         }
-        median[channel] = median_of(std::move(values));
+        median(channel) = median_of(std::move(values));
     }
     return median;
 }
@@ -360,9 +405,9 @@ struct Upright {
     for (std::size_t cell = 0; cell < 9; ++cell) {
         for (int channel = 0; channel < 3; ++channel) {
             for (std::size_t i = 0; i < reads.size(); ++i) {
-                values.at(i) = reads.at(i).at(cell)[channel];
+                values.at(i) = reads.at(i).at(cell)(channel);
             }
-            fused.at(cell)[channel] = median_of(values);
+            fused.at(cell)(channel) = median_of(values);
         }
     }
     return fused;
@@ -404,7 +449,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
             for (std::size_t channel = 0; channel < 3; ++channel) {
                 samples.at(static_cast<std::size_t>(*colour))
                     .at(channel)
-                    .push_back(faces.at(side).lab.at(cell)[static_cast<int>(channel)]);
+                    .push_back(faces.at(side).lab.at(cell)(static_cast<int>(channel)));
             }
         }
     }
@@ -412,7 +457,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     for (std::size_t colour = 0; colour < 6; ++colour) {
         for (std::size_t channel = 0; channel < 3; ++channel) {
             if (!samples.at(colour).at(channel).empty()) {
-                colours.at(colour)[static_cast<int>(channel)] =
+                colours.at(colour)(static_cast<int>(channel)) =
                     median_of(samples.at(colour).at(channel));
             }
         }
@@ -430,16 +475,56 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     std::vector<std::size_t> fits(candidates.size(), 0);
     for (const CornerRead& read : corners) {
         for (std::size_t i = 0; i < candidates.size(); ++i) {
-            if (fit_corner(read, candidates[i], colours).fits) {
-                ++fits[i];
+            if (fit_corner(read, candidates.at(i), colours).fits) {
+                ++fits.at(i);
             }
         }
     }
-    const auto best = std::max_element(fits.begin(), fits.end());
+    const auto best = std::ranges::max_element(fits);
     if (best == fits.end() || *best == 0 || std::count(fits.begin(), fits.end(), *best) != 1) {
         return std::nullopt;
     }
-    return candidates[static_cast<std::size_t>(best - fits.begin())];
+    return candidates.at(static_cast<std::size_t>(best - fits.begin()));
+}
+
+// `named` with two colour names traded wherever they appear.
+[[nodiscard]] NamedSides with_names_exchanged(NamedSides named, model::FacetColor first,
+                                              model::FacetColor second) {
+    for (auto& side : named) {
+        for (model::Facelet& facelet : side) {
+            if (facelet.color == first) {
+                facelet.color = second;
+            } else if (facelet.color == second) {
+                facelet.color = first;
+            }
+        }
+    }
+    return named;
+}
+
+// The cube that trading the names of the two closest-looking centres makes,
+// when any trade does - else `failure`.
+[[nodiscard]] Result<ScannedCube> assemble_with_closest_exchange(
+    const NamedSides& named, const std::array<CapturedFace, 6>& faces, CubeError failure) {
+    Result<ScannedCube> best = std::unexpected(failure);
+    float best_distance = std::numeric_limits<float>::max();
+    for (std::size_t a = 0; a < 6; ++a) {
+        for (std::size_t b = a + 1; b < 6; ++b) {
+            const float distance = colour_distance(faces.at(a).lab.at(4), faces.at(b).lab.at(4));
+            if (distance >= best_distance) {
+                continue;
+            }
+            // Side a's centre carries one name and side b's the other.
+            const NamedSides exchanged =
+                with_names_exchanged(named, named.at(a).at(4).color, named.at(b).at(4).color);
+            if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
+                cube.has_value()) {
+                best = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
+                best_distance = distance;
+            }
+        }
+    }
+    return best;
 }
 
 // Assembles the cube, letting physical validity settle which colour is which
@@ -466,13 +551,13 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
     // views can say which.
     const std::vector<solver::Cube> candidates = solver::assemble_all_scanned_faces(named);
     if (candidates.size() == 1) {
-        return ScannedCube{candidates.front(), colours_of(named, faces)};
+        return ScannedCube{.cube = candidates.front(), .colours = colours_of(named, faces)};
     }
     if (candidates.size() > 1) {
         const SessionColours colours = colours_of(named, faces);
         if (const auto chosen = choose_by_corners(candidates, corners, colours);
             chosen.has_value()) {
-            return ScannedCube{*chosen, colours};
+            return ScannedCube{.cube = *chosen, .colours = colours};
         }
         return std::unexpected(CubeError::ambiguous_scan);
     }
@@ -481,35 +566,7 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
         return ScannedCube{.cube = *direct, .colours = colours_of(named, faces)};
     }
 
-    Result<ScannedCube> best = std::unexpected(direct.error());
-    float best_distance = std::numeric_limits<float>::max();
-    for (std::size_t a = 0; a < 6; ++a) {
-        for (std::size_t b = a + 1; b < 6; ++b) {
-            const float distance = colour_distance(faces.at(a).lab.at(4), faces.at(b).lab.at(4));
-            if (distance >= best_distance) {
-                continue;
-            }
-            // Side a's centre carries one name and side b's the other.
-            const model::FacetColor first = named.at(a).at(4).color;
-            const model::FacetColor second = named.at(b).at(4).color;
-            NamedSides exchanged = named;
-            for (auto& side : exchanged) {
-                for (model::Facelet& facelet : side) {
-                    if (facelet.color == first) {
-                        facelet.color = second;
-                    } else if (facelet.color == second) {
-                        facelet.color = first;
-                    }
-                }
-            }
-            if (const Result<solver::Cube> cube = solver::assemble_scanned_faces(exchanged);
-                cube.has_value()) {
-                best = ScannedCube{.cube = *cube, .colours = colours_of(exchanged, faces)};
-                best_distance = distance;
-            }
-        }
-    }
-    return best;
+    return assemble_with_closest_exchange(named, faces, direct.error());
 }
 
 }  // namespace
@@ -561,10 +618,10 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
 }
 
 float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
-    const float d_lightness = a[0] - b[0];
-    const float d_chroma = std::hypot(a[1], a[2]) - std::hypot(b[1], b[2]);
-    const float d_a = a[1] - b[1];
-    const float d_b = a[2] - b[2];
+    const float d_lightness = a(0) - b(0);
+    const float d_chroma = std::hypot(a(1), a(2)) - std::hypot(b(1), b(2));
+    const float d_a = a(1) - b(1);
+    const float d_b = a(2) - b(2);
     const float hue_squared = std::max((d_a * d_a) + (d_b * d_b) - (d_chroma * d_chroma), 0.0F);
     return std::sqrt((kShadingWeight * ((d_lightness * d_lightness) + (d_chroma * d_chroma))) +
                      hue_squared);
@@ -579,8 +636,11 @@ cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
     cv::Mat3f bgr;
     cv::cvtColor(source, bgr, cv::COLOR_Lab2BGR);
     const cv::Vec3f value = bgr(0, 0) * 255.0F;
-    return {cv::saturate_cast<uchar>(value[0]), cv::saturate_cast<uchar>(value[1]),
-            cv::saturate_cast<uchar>(value[2])};
+    return {
+        cv::saturate_cast<uchar>(value(0)),
+        cv::saturate_cast<uchar>(value(1)),
+        cv::saturate_cast<uchar>(value(2)),
+    };
 }
 
 void SideScan::reset() {
