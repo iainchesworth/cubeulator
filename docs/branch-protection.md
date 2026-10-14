@@ -145,8 +145,8 @@ workflow the README has a badge for (CI, CodeQL, OSV-Scanner, Zizmor). The
 nine required checks already hold the build, test, coverage, clang and CodeQL
 legs of the PR's own run, but not OSV-Scanner or Zizmor, and not the push runs
 on `develop` that the badges on `main` come to show, so a release can pass
-them and still arrive with a red badge. It is red while CI is still running on
-the commit.
+them and still arrive with a red badge. It waits (up to three hours) for a
+workflow that has not finished and fails at once on a red one.
 Making `Commit is green` a required check on `main` is the one change that
 would make "do not release from a red `develop`" a rule of the repository
 rather than of the maintainer; the check has to have reported on a pull request

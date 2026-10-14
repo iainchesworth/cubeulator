@@ -17,8 +17,10 @@ name: Release readiness
 # listed in docs/branch-protection.md), so they need no merge_group trigger.
 # They exist so that a release PR says, before the merge, what the tag would
 # fail on after it. The preview of the notes, and the table of workflows, are
-# in the job summaries. The second job is red while CI is still running on the
-# commit (CI is hours): re-run it when CI has finished.
+# in the job summaries. The second job waits for a workflow that has not
+# finished (CI on develop is an hour or more, and the push runs queue one at a
+# time) rather than failing for it: it fails at once on a red workflow or check
+# run, and after the wait if something is still unfinished.
 
 on:
   pull_request:
@@ -67,6 +69,8 @@ jobs:
   health:
     name: Commit is green
     runs-on: ubuntu-26.04
+    # The wait below, with room for the checkout and the last poll.
+    timeout-minutes: 190
     permissions:
       actions: read
       checks: read
@@ -90,4 +94,5 @@ jobs:
           python3 tools/release/check_health.py \
             --repo "$REPO" --ref "$HEAD_SHA" \
             --ignore "Release readiness" --ignore "Commit is green" \
+            --wait 180 --interval 90 \
             --summary "$GITHUB_STEP_SUMMARY"

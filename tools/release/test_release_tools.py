@@ -893,6 +893,70 @@ class Health(unittest.TestCase):
         self.assertIn("| `codeql.yml` | ✅ |", text)
         self.assertIn("**Not green:**", text)
 
+    @staticmethod
+    def report(*states, checks_red=()):
+        rows = [check_health.Row(f"w{i}.yml", state, "", "") for i, state in enumerate(states)]
+        return check_health.Report("o/r", "a" * 40, "subject", rows, checks_red=list(checks_red))
+
+    def waiting(self, reports, wait_minutes=30, interval=60):
+        """assess_waiting over a made-up sequence of reports and a clock that
+        moves `interval` seconds per sleep; returns (final report, polls)."""
+        queue = list(reports)
+        clock = [0.0]
+        said: list[str] = []
+
+        def once():
+            return queue.pop(0) if len(queue) > 1 else queue[0]
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        final = check_health.assess_waiting(
+            once,
+            wait_minutes=wait_minutes,
+            interval=interval,
+            sleep=sleep,
+            now=lambda: clock[0],
+            say=said.append,
+        )
+        return final, said
+
+    def test_a_workflow_that_has_not_finished_is_waited_for_not_failed(self):
+        final, said = self.waiting(
+            [self.report("running", "green"), self.report("running", "green"), self.report("green", "green")]
+        )
+        self.assertTrue(final.ok, final.problems())
+        self.assertEqual(len(said), 2)
+
+    def test_a_failure_ends_the_wait_at_once(self):
+        final, said = self.waiting([self.report("running", "red"), self.report("green", "green")])
+        self.assertFalse(final.ok)
+        self.assertEqual(said, [])
+
+    def test_a_red_check_run_ends_the_wait_too(self):
+        final, said = self.waiting([self.report("running", checks_red=["Build (Windows) (failure)"])])
+        self.assertFalse(final.ok)
+        self.assertEqual(said, [])
+
+    def test_the_wait_has_an_end_and_says_how_long_it_was(self):
+        final, said = self.waiting([self.report("running", "green")], wait_minutes=5, interval=60)
+        self.assertFalse(final.ok)
+        self.assertEqual(final.gave_up_after, 5)
+        self.assertIn("had still not finished", final.problems()[0])
+        self.assertIn("after 5 minutes", final.problems()[0])
+        self.assertGreaterEqual(len(said), 4)
+
+    def test_without_a_wait_unfinished_is_judged_at_once(self):
+        final, said = self.waiting([self.report("running", "green")], wait_minutes=0)
+        self.assertFalse(final.ok)
+        self.assertEqual(said, [])
+        self.assertIn("has not finished", final.problems()[0])
+
+    def test_a_workflow_with_no_run_yet_is_waited_for_too(self):
+        final, said = self.waiting([self.report("none", "green"), self.report("green", "green")])
+        self.assertTrue(final.ok, final.problems())
+        self.assertEqual(len(said), 1)
+
     def test_scorecard_without_a_result_says_why_the_badge_is_red(self):
         ok, text = check_health.scorecard("o/r", lambda url: (404, ""))
         self.assertFalse(ok)
