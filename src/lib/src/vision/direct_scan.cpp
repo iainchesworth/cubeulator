@@ -455,6 +455,9 @@ struct SideFit {
 // kSameColourLab). When it agrees the read is the side, however many
 // stickers a hand covers (up to kMostStickersAHandCovers). When it does not,
 // it may be glare on the centre or another side; the other eight say which.
+// The two arrays are not interchangeable - the read is laid on the side, and the
+// turn is the read's - and every caller names them at the call.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 [[nodiscard]] SideFit fit_to_side(const std::array<cv::Vec3f, 9>& read,
                                   const std::array<cv::Vec3f, 9>& side, int prior_roll) {
     const auto cost_of = [&](int roll) {
@@ -1001,46 +1004,52 @@ void SideScan::drop_weakest_stray() {
     }
 }
 
+std::optional<SideScan::AlikePair> SideScan::alike_pair() const {
+    for (std::size_t keep = 0; keep < groups_.size(); ++keep) {
+        for (std::size_t other = keep + 1; other < groups_.size(); ++other) {
+            // Two groups are each in the turn their side was first seen in, so
+            // no turn is more likely than another.
+            const SideFit fit = fit_to_side(groups_.at(other).fused, groups_.at(keep).fused, 0);
+            if (fit.same) {
+                return AlikePair{.keep = keep, .other = other, .roll = fit.roll};
+            }
+        }
+    }
+    return std::nullopt;
+}
+
+void SideScan::absorb(const AlikePair& pair) {
+    const auto [keep, other, roll] = pair;
+    Group& kept = groups_.at(keep);
+    for (const auto& read : groups_.at(other).reads) {
+        kept.reads.push_back(rolled(read, roll));
+    }
+    for (const auto& read : groups_.at(other).flat_reads) {
+        kept.flat_reads.push_back(rolled(read, roll));
+    }
+    kept.fused = fuse(kept.flat_reads.size() >= kMinReads ? kept.flat_reads : kept.reads);
+    groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
+    for (std::size_t& viewed : in_view_) {
+        if (viewed == other) {
+            viewed = keep;
+        } else if (viewed > other) {
+            --viewed;
+        }
+    }
+    std::ranges::sort(in_view_);
+    const auto duplicates = std::ranges::unique(in_view_);
+    in_view_.erase(duplicates.begin(), duplicates.end());
+}
+
 // A group begun while its side was only a read or two old is judged on a
 // noisy colour, and a side whose light changed part way through can start a
 // second. Neither is a different side, and two groups of one side leave the
 // scan a side short. Joined here, the earlier group surviving so the sides
-// keep the order they were first seen in.
+// keep the order they were first seen in; one pair at a time, because joining
+// two moves the fused colours the others are compared with.
 void SideScan::merge_alike_groups() {
-    bool merged = true;
-    while (merged) {
-        merged = false;
-        for (std::size_t keep = 0; keep < groups_.size() && !merged; ++keep) {
-            for (std::size_t other = keep + 1; other < groups_.size() && !merged; ++other) {
-                Group& kept = groups_.at(keep);
-                // Two groups are each in the turn their side was first seen
-                // in, so no turn is more likely than another.
-                const SideFit fit = fit_to_side(groups_.at(other).fused, kept.fused, 0);
-                if (!fit.same) {
-                    continue;
-                }
-                for (const auto& read : groups_.at(other).reads) {
-                    kept.reads.push_back(rolled(read, fit.roll));
-                }
-                for (const auto& read : groups_.at(other).flat_reads) {
-                    kept.flat_reads.push_back(rolled(read, fit.roll));
-                }
-                kept.fused =
-                    fuse(kept.flat_reads.size() >= kMinReads ? kept.flat_reads : kept.reads);
-                groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
-                for (std::size_t& viewed : in_view_) {
-                    if (viewed == other) {
-                        viewed = keep;
-                    } else if (viewed > other) {
-                        --viewed;
-                    }
-                }
-                std::ranges::sort(in_view_);
-                const auto duplicates = std::ranges::unique(in_view_);
-                in_view_.erase(duplicates.begin(), duplicates.end());
-                merged = true;
-            }
-        }
+    while (const std::optional<AlikePair> pair = alike_pair()) {
+        absorb(*pair);
     }
 }
 

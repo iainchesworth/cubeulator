@@ -760,10 +760,12 @@ struct PaletteMatch {
 // together and the distance matching was left to tell them apart; under
 // tungsten light it named them backwards.
 void split_neighbouring_bands(const MeanArray& means, std::array<FacetColor, face_count>& names) {
-    constexpr std::array<std::pair<FacetColor, FacetColor>, 2> kNeighbours = {{
-        {FacetColor::red, FacetColor::orange},
-        {FacetColor::orange, FacetColor::yellow},
-    }};
+    constexpr std::array<std::pair<FacetColor, FacetColor>, 2> kNeighbours = {
+        {
+            {FacetColor::red, FacetColor::orange},
+            {FacetColor::orange, FacetColor::yellow},
+        },
+    };
     for (const auto& [lower, upper] : kNeighbours) {
         std::array<std::size_t, face_count> in_lower{};
         std::array<std::size_t, face_count> in_upper{};

@@ -279,6 +279,15 @@ private:
     bool count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
     // Joins groups that have turned out to be one side.
     void merge_alike_groups();
+    // Two groups that are one side, and the turn that lays `other` on `keep`.
+    struct AlikePair {
+        std::size_t keep = 0;
+        std::size_t other = 0;
+        int roll = 0;
+    };
+    [[nodiscard]] std::optional<AlikePair> alike_pair() const;
+    // Folds the pair's `other` into its `keep` and takes it out.
+    void absorb(const AlikePair& pair);
     // Bounds the groups kept, dropping the least-supported stray.
     void drop_weakest_stray();
 
