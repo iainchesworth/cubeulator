@@ -13,6 +13,7 @@ Naming convention: `<os>-<compiler>-<config>`.
 | `macos-clang-{debug,release}` | CI builds+tests `release` only |
 | `android-clang-{debug,release}` | CI builds `release` only; builds the Qt/QML app via Qt for Android |
 | `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
+| `web-emscripten-{debug,release}` | CI builds `release` only; the Qt/QML app as WebAssembly for a browser — see [WebAssembly (browser)](#webassembly-browser) |
 
 **CI only builds the `release` preset per platform** — that's what would
 actually ship, and vcpkg builds both debug/release variants of every
@@ -60,6 +61,52 @@ NDK toolchain, which hides both Qt kits from `find_package()` since neither
 lives under `CMAKE_FIND_ROOT_PATH` (vcpkg's own install tree is unaffected —
 its toolchain file adds itself to `CMAKE_FIND_ROOT_PATH` already). All four
 were confirmed necessary against a real local Android build, not just CI.
+
+## WebAssembly (browser)
+
+`web-emscripten-*` builds the same Qt/QML app as WebAssembly, which is what
+[Try it in your browser](web.md) serves. The output is a directory of static
+files - `index.html`, `cube_app.js`, `cube_app.wasm`, `qtloader.js`, the
+isolation worker and the icon - and nothing else: there is no installer.
+
+What it needs, all of it fixed by the Qt version:
+
+| | |
+| --- | --- |
+| Qt | The `wasm_multithread` kit of the same version as the desktop one (6.12.0), plus a desktop kit of that version for its host tools (`moc`, `rcc`, `qsb`, `lrelease`) |
+| Emscripten | **Exactly** the version Qt names for its release - 5.0.5 for Qt 6.12.0 (see [Qt for WebAssembly](https://doc.qt.io/qt-6/wasm.html)). Qt's toolchain file stops the configure on any other |
+| Threads | The build is threaded throughout: Qt's kit, this project and every vcpkg port are built with `-pthread` (the triplet `cmake/triplets/wasm32-emscripten-threads.cmake`). The single-threaded kit cannot run the app, which uses `QtConcurrent` and `std::thread` |
+
+```sh
+# once: the SDK and the kit
+git clone https://github.com/emscripten-core/emsdk && cd emsdk
+./emsdk install 5.0.5 && ./emsdk activate 5.0.5 && source ./emsdk_env.sh
+python -m aqt install-qt all_os wasm 6.12.0 wasm_multithread -m qtquick3d qtshadertools --outputdir ~/Qt
+
+# configure and build (EMSDK comes from emsdk_env; QT_ROOT_DIR is the wasm kit)
+export QT_ROOT_DIR=$HOME/Qt/6.12.0/wasm_multithread
+cmake --preset web-emscripten-release   -DQT_HOST_PATH=$HOME/Qt/6.12.0/gcc_64   -DQT_HOST_PATH_CMAKE_DIR=$HOME/Qt/6.12.0/gcc_64/lib/cmake
+cmake --build --preset web-emscripten-release
+```
+
+`QT_ROOT_DIR` is the variable `jurplel/install-qt-action` exports, which is
+what the preset reads to chainload the kit's `qt.toolchain.cmake` (which in
+turn chainloads Emscripten's). The tests are not built for the browser
+(`CUBEULATOR_BUILD_TESTS=OFF`).
+
+Serve the output directory with any static server - a `file://` URL will not
+do, since the page needs `https://` or `localhost`:
+
+```sh
+python -m http.server 8000 --directory build/web-emscripten-release/bin
+# then open http://localhost:8000/
+```
+
+The page needs cross-origin isolation for threads. A server that sends
+`Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy:
+require-corp` gives it; one that does not (`python -m http.server`, GitHub
+Pages) is covered by `cubeulator-isolation.js`, which registers a service
+worker that adds the two headers and reloads the page once.
 
 ## Options
 

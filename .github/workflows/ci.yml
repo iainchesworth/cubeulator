@@ -17,8 +17,8 @@ on:
       legs:
         description: >-
           Comma-separated legs to run: clang-format, platform-isolation,
-          clang-tidy, linux, macos, windows, coverage, system, android, ios -
-          or "all".
+          clang-tidy, linux, macos, windows, coverage, system, android, ios,
+          web - or "all".
         type: string
         default: all
 
@@ -232,8 +232,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, all)"
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, all)"
                  exit 1 ;;
             esac
           done
@@ -244,7 +244,7 @@ jobs:
           fi
           count=$(jq 'length' <<<"$selected")
           # Only the desktop legs are chosen here; a dispatch that names just
-          # clang-format, platform-isolation, android, ios or coverage
+          # clang-format, platform-isolation, android, ios, web or coverage
           # legitimately selects none.
           echo "legs: $LEGS -> $count desktop leg(s)"
           echo "matrix=$selected" >> "$GITHUB_OUTPUT"
@@ -638,6 +638,59 @@ jobs:
         uses: $/.github/actions/vcpkg-cache/save
         with:
           triplet: arm64-android
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The browser (docs/web.md): the same Qt/QML app, as WebAssembly. Built here
+  # to prove it still builds; docs.yml builds it again for the site, from the
+  # same composite action, because that publish only runs for main.
+  web-build:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web (WebAssembly)' || 'Web (WebAssembly)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',web,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md).
+    continue-on-error: true
+    # Caps vcpkg's internal build parallelism - see the equivalent comment on
+    # build-and-test above. Only fmt and opencv4 (core, imgproc, imgcodecs and
+    # the image codecs) are built for this triplet.
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Keyed per vcpkg triplet, like every other leg (see build-and-test).
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      - name: Build the web app
+        uses: $/.github/actions/web-build
+
+      # The whole site: index.html, cube_app.js/.wasm, qtloader.js and the
+      # isolation worker. Unzipped, any static server can host it.
+      - name: Upload the web app
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web
+          path: build/web-emscripten-release/bin
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
           restored: ${{ steps.vcpkg-cache.outputs.listing }}
 
   ios-build:

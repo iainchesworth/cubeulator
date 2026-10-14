@@ -4,7 +4,7 @@
 
 | Workflow | Purpose | Blocking? | In the merge queue? |
 | --- | --- | --- | --- |
-| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
+| `ci.yml` | Build + test matrix (Linux/macOS/Windows, release only), Android build (Qt/QML app, release only), Web build (the same app as WebAssembly, release only), iOS build-only (release only), coverage gate | Yes on `main`; on `develop` as each check goes green | Not yet |
 | `release.yml` | Builds the three desktop packages on a version tag, signs and attests them, and attaches them to a **draft** GitHub Release with notes rendered from `CHANGELOG.md` ([Cutting a release](releasing.md)). Run by hand it is a dry run. A PR that changes it runs only the release tools' self-test | N/A (tags and manual runs) | No |
 | `release-check.yml` | On a PR into `main`: is this a release the Release workflow will accept, and what would its notes say (in the job summary) | No (advisory) | No |
 | `codeql.yml` | Static analysis (C++) | Yes on `main`; on `develop` once green | Not yet |
@@ -13,7 +13,7 @@
 | `osv-scanner.yml` | Scans `vcpkg.json` against the OSV database | No (visible only) | No |
 | `zizmor.yml` | Lints the workflow YAML itself | No (visible only) | No |
 | `scorecard.yml` | OpenSSF Scorecard supply-chain health score | No (badge/score) | No |
-| `docs.yml` | Builds and publishes the mkdocs site to GitHub Pages | N/A (push to `main` only) | No |
+| `docs.yml` | Builds the mkdocs site and the web app (`.github/actions/web-build`, the same one `ci.yml`'s Web leg uses), and publishes both to GitHub Pages - the app under `/app/` | N/A (push to `main` only) | No |
 | `dependabot-auto-merge.yml` | Enables auto-merge on Dependabot's minor/patch PRs for GitHub Actions and pip | No (acts on Dependabot PRs only) | No |
 | `cache-hygiene.yml` | Prunes the Actions cache quota: closed PRs' and deleted branches' entries, superseded vcpkg and Qt generations ([below](#the-vcpkg-binary-cache)) | No (acts on the cache only) | No |
 
@@ -34,7 +34,7 @@ gh workflow run ci.yml --ref <branch> -f legs=clang-format,linux
 
 `legs` is a comma-separated list (no spaces) of `clang-format`,
 `platform-isolation`, `clang-tidy`, `linux`, `macos`, `windows`, `coverage`,
-`system`, `android`, `ios`, or `all` (the default). An unknown name fails the
+`system`, `android`, `ios`, `web`, or `all` (the default). An unknown name fails the
 run rather than running nothing. `platform-isolation` is the no-`#ifdef` check
 ([platform-isolation.md](platform-isolation.md)): fast, and independent of the
 build legs.
@@ -142,6 +142,7 @@ compiler it is built with are not in that hash: `fmt:x64-linux` has ABI
 | `arm64-osx` | macOS (AppleClang) |
 | `arm64-ios` | iOS (also holds the `arm64-osx` host tools it builds) |
 | `arm64-android` | Android |
+| `wasm32-emscripten-threads` | Web (`ci.yml`'s Web leg, and `docs.yml`'s `web` job); an overlay triplet, `cmake/triplets/`, that is vcpkg's `wasm32-emscripten` plus `-pthread` |
 
 Keying finer than that would not make a restore any more correct; it would only
 multiply the 10 GB quota's consumption.
@@ -206,7 +207,10 @@ The next run on that triplet builds from cold and stores a clean entry.
 
 - **Release-only triplets** (`VCPKG_BUILD_TYPE=release`) would halve both the
   archives and the build time, but the Coverage and clang-tidy legs build Debug
-  and the Windows Debug runtime does not mix with release libraries.
+  and the Windows Debug runtime does not mix with release libraries. The one
+  exception is `wasm32-emscripten-threads`, which is release-only: there is no
+  debug C runtime to mix, and the web app links release libraries in every
+  configuration.
 - **A per-package remote store** (vcpkg's `nuget` provider on GitHub Packages,
   or S3) uploads each archive the moment it is built - so a cancel loses
   seconds, not a 39-minute build - has no quota, and is readable from every
@@ -251,6 +255,7 @@ are bumped by hand are listed under [Dependabot](#pins-dependabot-cannot-see).
 | clang-format | 23.1.3, pinned PyPI wheel (`ci/requirements-lint.txt`) | No. |
 | clang-tidy and its compiler | Clang 23.x from apt.llvm.org | No, but it is a snapshot of `release/23.x` rebuilt as the branch moves, not a frozen version; there is no clang-tidy 23 wheel on PyPI yet. |
 | AppleClang | Xcode 26 on `macos-26` (desktop); `macos-15` (iOS) | iOS stays on `macos-15` for the open vcpkg pkg-config issue [microsoft/vcpkg#50681](https://github.com/microsoft/vcpkg/issues/50681). |
+| Emscripten | 5.0.5 (`.github/actions/web-build`) | **No: Qt decides.** Qt 6.12.0 requires exactly 5.0.5 and its toolchain file stops the configure on any other (doc.qt.io/qt-6/wasm.html). Qt 6.11 and 6.10 named 4.0.7. Move it when Qt moves, to the version Qt names for that release. |
 | Android | NDK r28c (28.2.13676358), JDK 21, platform 36, build-tools 36.0.0 | r30 exists. r28c is newer than the r27c Qt 6.12 names and builds its libraries with: Qt recommends matching it but does not rule a newer NDK out, so this is outside Qt's tested configuration on purpose (r27c is the fallback). r28c's libc++ has `std::expected::transform`/`and_then`, `std::format`/`std::print`, `ranges::contains`/`fold_left` and `mdspan`, which r26b lacks; it still lacks float `from_chars`, `views::enumerate` and `flat_map`. |
 | CMake | 4.4.2, exact (`lukka/get-cmake`'s catalog; the project's policies go to 4.4) | Yes: Kitware has 4.4.4, which the pinned action cannot install until it is bumped (see [What CI pins](#what-ci-pins)). |
 | mkdocs / mkdocs-material | 1.6.x / 9.7.x | mkdocs 2.0 is still only a development release and mkdocs-material has no series newer than 9, so the range caps stay. |
@@ -333,6 +338,10 @@ the latest?":
 - **Android NDK / SDK / JDK** — the `sdkmanager --install` lines and
   `JAVA_HOME` in the `android-build` job. Qt pins the NDK it was built with;
   follow Qt's *Qt for Android* page, not the newest NDK.
+- **Emscripten** — `version:` of `emscripten-core/setup-emsdk` in
+  `.github/actions/web-build/action.yml`, with the Qt version in the same file
+  and the `emsdk` version in `docs/building.md`. Qt names the one Emscripten
+  each release is built with; follow Qt's *Qt for WebAssembly* page.
 - **Compilers** — `g++-15`/`gcov-15` in `ci.yml` and `codeql.yml`, and the
   Clang packages the `clang-format`/`clang-tidy` jobs install.
 - **Runner images** — every `runs-on:` label, and the `matrix.os` values.

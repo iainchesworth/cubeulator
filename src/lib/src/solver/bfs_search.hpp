@@ -30,8 +30,11 @@ struct SignatureKey {
 
 struct SignatureKeyHash {
     std::size_t operator()(const SignatureKey& key) const noexcept {
-        return std::hash<std::uint64_t>{}(key.cross) ^
-               (std::hash<std::uint64_t>{}(key.rest) * 0x9E3779B97F4A7C15ULL);
+        // Explicit because std::size_t is 32 bits on a 32-bit target
+        // (WebAssembly): there the low 32 bits of the mix are the hash.
+        return static_cast<std::size_t>(
+            std::hash<std::uint64_t>{}(key.cross) ^
+            (std::hash<std::uint64_t>{}(key.rest) * 0x9E3779B97F4A7C15ULL));
     }
 };
 
