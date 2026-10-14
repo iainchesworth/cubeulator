@@ -215,8 +215,8 @@ TEST_CASE("a logo on a white centre does not tint it by lamplight", "[direct-sca
     const cv::Vec3f centre = side.lab.at(4);
     const cv::Vec3f beside = side.lab.at(8);
     CHECK(cv::norm(centre - beside) < 3.0);
-    CHECK(std::abs(centre(1) - beside(1)) < 2.0);
-    CHECK(std::abs(centre(2) - beside(2)) < 2.0);
+    CHECK(std::abs(centre(1) - beside(1)) < 2.0F);
+    CHECK(std::abs(centre(2) - beside(2)) < 2.0F);
 }
 
 TEST_CASE("a logo on a centre does not stop six sides making the cube", "[direct-scan]") {
