@@ -123,17 +123,6 @@
       "literals": [
         "FPS "
       ]
-    },
-    {
-      "file": "src/app/qt/controllers/held_cube.cpp",
-      "owner": "solve lane (feature/solve-guidance)",
-      "reason": "A developer log line, written to the file named by CUBE_HELD_LOG and never shown to a person. Nothing to change; listed so that the lint's C++ heuristic does not report it.",
-      "shown": false,
-      "literals": [
-        "%1 move %2 asked %3 -> %4",
-        " | after the move %1 (%2 off)",
-        " | turned instead: %1"
-      ]
     }
   ]
 }

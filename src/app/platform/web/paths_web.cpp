@@ -13,6 +13,9 @@ AppPaths current() {
     AppPaths paths;
     paths.data_dir = home / ".local" / "share" / "cubeulator";
     paths.cache_dir = home / ".cache" / "cubeulator";
+    // Session-long like the rest: another process cannot read it, but the
+    // page can, and the channel's records are the same.
+    paths.diagnostics_dir = home / ".local" / "state" / "cubeulator" / "diagnostics";
     return paths;
 }
 

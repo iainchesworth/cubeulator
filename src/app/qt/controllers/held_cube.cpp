@@ -1,16 +1,13 @@
 #include "controllers/held_cube.hpp"
 
+#include "controllers/diagnostics.hpp"
 #include "controllers/direct_scan.hpp"
 #include "solve_controller.hpp"
 
+#include <cube/diagnostics/describe.hpp>
 #include <cube/profiling.hpp>
 
-#include <QDateTime>
-#include <QFile>
-#include <QIODevice>
 #include <QMatrix3x3>
-#include <QTextStream>
-#include <QtGlobal>
 
 #include <array>
 #include <cstddef>
@@ -59,6 +56,13 @@ using cube::vision::HoldReading;
             return QStringLiteral("back");
     }
     return QStringLiteral("top");
+}
+
+[[nodiscard]] cube::diagnostics::Json hold_json(const Hold& hold) {
+    cube::diagnostics::Json out = cube::diagnostics::Json::object();
+    out.set("up", cube::diagnostics::letter_of(hold.up));
+    out.set("front", cube::diagnostics::letter_of(hold.front));
+    return out;
 }
 
 }  // namespace
@@ -205,44 +209,71 @@ bool HeldCube::half_way_there(const cube::vision::SideRead& read,
 
 void HeldCube::note(const cube::vision::SideRead& read, const cube::vision::SessionColours& colours,
                     const Verdict& verdict) const {
-    static const QString path = qEnvironmentVariable("CUBE_HELD_LOG");
-    if (path.isEmpty()) {
+    if (diagnostics_ == nullptr || !diagnostics_->enabled()) {
         return;
     }
-    QFile file(path);
-    if (!file.open(QIODevice::Append | QIODevice::Text)) {
-        return;
-    }
-    static const char* const kKinds[] = {"nothing", "held", "moved", "unsure", "wrong", "unknown"};
+    using cube::diagnostics::Json;
+    constexpr std::array<const char*, 6> kKinds = {"nothing", "held",  "moved",
+                                                   "unsure",  "wrong", "unknown"};
     const Cube& now = solve_.currentCube();
     const auto asked = solve_.currentMove();
     const HoldReading here = cube::vision::read_hold(read, now, colours);
-    QString line = QStringLiteral("%1 move %2 asked %3 -> %4")
-                       .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs))
-                       .arg(solve_.moveIndex())
-                       .arg(solve_.currentMoveNotation(),
-                            QString::fromLatin1(kKinds[static_cast<int>(verdict.kind)]));
-    line +=
-        QStringLiteral(
-            " | shown as up %1 front %2 seen %3 | found %4/9 | as it stood %5 "
-            "(%6 off)")
-            .arg(side_letter(hold_.up), side_letter(hold_.front))
-            .arg(seen_)
-            .arg(read.stickers_found)
-            .arg(static_cast<double>(here.distance), 0, 'f', 2)
-            .arg(cube::vision::stickers_off(read, cube::solver::camera_view(now, hold_), colours));
+
+    Json data = Json::object();
+    data.set("verdict", kKinds.at(static_cast<std::size_t>(verdict.kind)));
+    data.set("move_index", solve_.moveIndex());
+    data.set("asked", cube::diagnostics::move_json(asked));
+    // The hold the screen is showing, and the one this frame says.
+    data.set("shown_hold", hold_json(hold_));
+    data.set("verdict_hold", hold_json(verdict.hold));
+    data.set("seen", seen_);
+    data.set("turned_instead", verdict.kind == Verdict::Kind::Wrong
+                                   ? Json(cube::diagnostics::letter_of(verdict.side))
+                                   : Json());
+
+    // What was read: the nine colours and which stickers were found, as the
+    // verdict's numbers came from them.
+    data.set("stickers_found", read.stickers_found);
+    Json found = Json::array();
+    Json lab = Json::array();
+    for (std::size_t i = 0; i < read.found.size(); ++i) {
+        found.push(read.found.at(i));
+        lab.push(cube::diagnostics::to_json(read.lab.at(i)));
+    }
+    data.set("found", std::move(found));
+    data.set("lab", std::move(lab));
+
+    // How far the side in view sits from the cube as it stood, and from the
+    // cube after the move, and how many stickers disagree with each.
+    Json as_it_stood = Json::object();
+    as_it_stood.set("distance", here.distance);
+    as_it_stood.set("stickers_off", cube::vision::stickers_off(
+                                        read, cube::solver::camera_view(now, hold_), colours));
+    data.set("as_it_stood", std::move(as_it_stood));
     if (asked.has_value()) {
         const Cube next = now.apply(*asked);
-        line += QStringLiteral(" | after the move %1 (%2 off)")
-                    .arg(static_cast<double>(cube::vision::read_hold(read, next, colours).distance),
-                         0, 'f', 2)
-                    .arg(cube::vision::stickers_off(read, cube::solver::camera_view(next, hold_),
-                                                    colours));
+        Json after = Json::object();
+        after.set("distance", cube::vision::read_hold(read, next, colours).distance);
+        after.set("stickers_off", cube::vision::stickers_off(
+                                      read, cube::solver::camera_view(next, hold_), colours));
+        data.set("after_move", std::move(after));
+    } else {
+        data.set("after_move", Json());
     }
-    if (verdict.kind == Verdict::Kind::Wrong) {
-        line += QStringLiteral(" | turned instead: %1").arg(side_letter(verdict.side));
-    }
-    QTextStream(&file) << line << '\n';
+    diagnostics_->write("held", std::move(data));
+}
+
+cube::diagnostics::Json HeldCube::diagnosticState() const {
+    using cube::diagnostics::Json;
+    Json state = Json::object();
+    state.set("hold", hold_json(hold_));
+    state.set("seen", seen_);
+    state.set("sight", sight().toStdString());
+    state.set("wrong_side", wrongSide().toStdString());
+    state.set("streak", streak_);
+    state.set("move_announced", move_announced_);
+    state.set("matched_this_move", matched_this_move_);
+    return state;
 }
 
 void HeldCube::forget() {

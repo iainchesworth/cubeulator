@@ -147,9 +147,9 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   (`SideRead::found`). On the same five recordings that took steady reads
   fitting no hold from 62 of 1,716 to 20. A mistake is now only called on a
   side seen whole, with at least two stickers plainly the wrong colour, held
-  for most of a second; `CUBE_HELD_LOG` records what the camera made of each
-  change, for the next time it gets one wrong. The scan itself still counts
-  all nine.
+  for most of a second; the diagnostics channel's `held` records
+  ([diagnostics.md](diagnostics.md)) say what the camera made of each change,
+  for the next time it gets one wrong. The scan itself still counts all nine.
 - **Proved on what is drawn.** `cube_qml_tests` loads the real
   `Cube3DView.qml` and `SolveScreen.qml` and reads every sticker's place
   back out of the 3D scene: all 18 moves land where `Cube::apply` puts

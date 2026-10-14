@@ -7,6 +7,7 @@
 #include <opencv2/core.hpp>
 
 #include <array>
+#include <cstdint>
 
 namespace cube::vision {
 
@@ -63,10 +64,35 @@ static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
               "the seed floor must sit strictly inside the closest legitimate centre pair, or "
               "resolve_colors would reject physically valid cubes");
 
+// Which rule of classify_lab decided a sample's name.
+enum class LabRule : std::uint8_t {
+    // Near-neutral and below kWhiteLightnessFloor: unknown, at confidence zero.
+    dark_neutral,
+    // Near-neutral, light enough and not green-ward: white.
+    neutral_white,
+    // Chromatic enough to leave the neutral floor but light and warm: white.
+    warm_cast_white,
+    // Named by hue angle: red, orange, yellow, green or blue.
+    hue_band,
+};
+
+// What classify_lab made of one sample, and the two numbers it made it from.
+struct LabClassification {
+    cube::model::Facelet facelet;
+    // atan2(b*, a*) in degrees, folded to [0, 360).
+    float hue_degrees = 0.0F;
+    // hypot(a*, b*).
+    float chroma = 0.0F;
+    LabRule rule = LabRule::hue_band;
+};
+
 // Single-sticker classification against the fixed reference palette. The
 // authoritative classification is resolve_colors(), which runs once all six
 // sides are captured; this is what it falls back on to name a cluster.
 [[nodiscard]] cube::model::Facelet classify_lab(const cv::Vec3f& lab);
+// The same classification with the hue, the chroma and the rule that decided
+// it: the values classify_lab computes anyway, kept instead of dropped.
+[[nodiscard]] LabClassification classify_lab_explained(const cv::Vec3f& lab);
 
 // Final, global colour assignment for a completed scan: clusters all 54
 // captured sticker colours into exactly 6 groups of exactly 9, seeded from
@@ -90,6 +116,61 @@ static_assert(kMinCentreSeedSeparationLab < kClosestCentrePairLab,
 // commit a sample to - which was an out-of-bounds write and a
 // non-terminating loop, not a wrong answer.
 [[nodiscard]] Result<std::array<std::array<cube::model::Facelet, 9>, 6>> resolve_colors(
+    const std::array<CapturedFace, 6>& faces);
+
+// What decided the final names, once the clusters were named by distance to
+// the palette: the hue names either replaced them or were set aside.
+enum class HueOverride : std::uint8_t {
+    // The six cluster means fell in six different hue bands, and those names
+    // were taken.
+    applied,
+    // Two means fell in one band (a strong wash puts red and orange together,
+    // say): the distance matching stood.
+    collision,
+    // A mean classified as unknown, which the palette has no entry for: the
+    // distance matching stood.
+    unknown_cluster,
+};
+
+// One of the six clusters, which the face whose centre seeded it indexes.
+struct ClusterNaming {
+    // The centre that seeded the cluster, and its mean once it settled.
+    cv::Vec3f seed{};
+    cv::Vec3f mean{};
+    // classify_lab's reading of the mean: the hue and chroma the hue naming
+    // used, and the name it gave.
+    LabClassification hue;
+    // The palette colour best_palette_permutation matched the mean to.
+    cube::model::FacetColor by_distance = cube::model::FacetColor::unknown;
+    // What the cluster was finally called: by_distance, or hue.facelet.color
+    // when the hue names were taken.
+    cube::model::FacetColor name = cube::model::FacetColor::unknown;
+};
+
+// resolve_colors' answer together with how it got there, read-only. Every
+// value is one the algorithm already held when it finished - building this
+// adds no computation, and resolve_colors is this with the rest dropped.
+struct ColorResolution {
+    // What resolve_colors returns: [face][cell], each with the confidence the
+    // assignment had in its cluster (0 when a rival was as close).
+    std::array<std::array<cube::model::Facelet, 9>, 6> faces{};
+    // Indexed by the face whose centre seeded the cluster.
+    std::array<ClusterNaming, 6> clusters{};
+    // [face][cell]: the cluster each of the 54 samples went to.
+    std::array<std::array<std::uint8_t, 9>, 6> cluster_of{};
+    // Refinement rounds the clustering ran before its assignment repeated.
+    int iterations = 0;
+    // The summed Lab distance of the palette matching that by_distance names.
+    float match_cost = 0.0F;
+    HueOverride hue_override = HueOverride::collision;
+    // Whether taking the hue names changed any cluster's name from
+    // by_distance's. False for an override that agreed.
+    bool hue_changed_names = false;
+};
+
+// resolve_colors with its working shown. Fails exactly where resolve_colors
+// does.
+[[nodiscard]] Result<ColorResolution> resolve_colors_explained(
     const std::array<CapturedFace, 6>& faces);
 
 }  // namespace cube::vision

@@ -1756,6 +1756,31 @@ In your hands.</source>
         <extracomment>Developer builds only. Shown on the scan screen and in Settings so that a build that keeps pictures always says so.</extracomment>
         <translation>[Thîs dévélõpér bûîld récõrds fàîléd scàns õn thîs dévîcé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~]</translation>
     </message>
+    <message id="settings.dev.diagnostics">
+        <source>Write diagnostics to a file</source>
+        <extracomment>Developer builds only. A switch in Settings. While it is on, the app writes what it reads and decides - colours, how they were named, how the cube was put together - to a file a developer can open while the app runs. Off at every start.</extracomment>
+        <translation>[Wrîté dîàgnõstîcs tõ à fîlé ~~~~~ ~~~~~ ~]</translation>
+    </message>
+    <message id="settings.dev.diagnosticsFrames">
+        <source>Also keep camera frames</source>
+        <extracomment>Developer builds only. A switch in Settings, under the diagnostics switch; it only takes effect while that one is on. The frames show whatever the camera sees, which can be a person.</extracomment>
+        <translation>[Àlsõ kéép càmérà fràmés ~~~~~ ~~~~]</translation>
+    </message>
+    <message id="settings.dev.diagnosticsSnapshot">
+        <source>Snapshot now</source>
+        <extracomment>Developer builds only. A button in Settings. Writes the scan and the solve as they stand, in one record, to the diagnostics file.</extracomment>
+        <translation>[Snàpshõt nõw ~~~~~]</translation>
+    </message>
+    <message id="diagnostics.marker">
+        <source>Writing diagnostics to %1</source>
+        <extracomment>Developer builds only. A strip on every screen while the diagnostics file is being written, so that it is never silent. %1 is the file's path.</extracomment>
+        <translation>[Wrîtîng dîàgnõstîcs tõ %1 ~~~~~ ~~~~~]</translation>
+    </message>
+    <message id="diagnostics.markerFrames">
+        <source>Writing diagnostics and camera frames to %1</source>
+        <extracomment>Developer builds only. As diagnostics.marker, when camera frames are being kept as well. %1 is the folder the diagnostics are written to.</extracomment>
+        <translation>[Wrîtîng dîàgnõstîcs ànd càmérà fràmés tõ %1 ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
+    </message>
     <message id="about.title">
         <source>About Cubeulator</source>
         <extracomment>Screen title, and the macOS menu item.</extracomment>
