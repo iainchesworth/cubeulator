@@ -332,6 +332,31 @@ std::vector<Metric> scan_metrics() {
                     {.max = number(b::kEmptyCornerBuffers), .mean = number(b::kEmptyCornerBytes)});
     }
 
+    // The placement of the blobs through the fit, which read_side makes on
+    // every frame with six or more blobs and no side held square - a cube
+    // turned between two sides is most of them, every quarter-turn - and which
+    // allocates a matrix or two for each distinct lattice it weighs. One frame
+    // where it finds nothing (a side just past the gate, with the same nine
+    // blobs to weigh) and one where it finds the side (at the edge of it).
+    {
+        const SceneSize& size = kSceneSizes.front();
+        const cv::Mat past = gate_edge_frame(corner_cube, size, 32.0F);
+        std::optional<vision::SideRead> none;
+        const BufferWork missed = count_buffers([&] { none = vision::read_side(past); });
+        out.push_back(expected_read("read.640x360.past_gate_read", none.has_value(), false));
+        add_buffers(
+            out, "read.640x360.past_gate", missed,
+            {.max = number(b::kThroughFitMissBuffers), .mean = number(b::kThroughFitMissBytes)});
+
+        const cv::Mat edge = gate_edge_frame(corner_cube, size);
+        std::optional<vision::SideRead> found;
+        const BufferWork read = count_buffers([&] { found = vision::read_side(edge); });
+        out.push_back(expected_read("read.640x360.gate_edge_missed", found.has_value(), true));
+        add_buffers(
+            out, "read.640x360.gate_edge", read,
+            {.max = number(b::kThroughFitReadBuffers), .mean = number(b::kThroughFitReadBytes)});
+    }
+
     // Feeding a scan and finishing it work on Lab triples, not pictures.
     const solver::Cube cube = test::scramble(1);
     vision::SideScan scan;

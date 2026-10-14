@@ -56,6 +56,13 @@ stage="$work/$name"
 mkdir -p "$stage"
 
 cp -R "$site/." "$stage/"
+# Qt writes its own default shell page and logo beside the app's. They are not
+# the entry point (index.html is: it registers the isolation worker that
+# threads need), and opening cube_app.html on a static host starts the app
+# without it and fails. The hosted copy serves them too, harmlessly, because
+# nobody links there; a package someone unpacks and browses should not hold a
+# page that does not work.
+rm -f "$stage/cube_app.html" "$stage/qtlogo.svg"
 cp "$root/LICENSE" "$stage/LICENSE.txt"
 cp "$notices_dir/THIRD-PARTY-NOTICES.txt" "$stage/THIRD-PARTY-NOTICES.txt"
 sed "s/@VERSION@/${version}/g" "$root/packaging/web/HOSTING.txt.in" > "$stage/HOSTING.txt"

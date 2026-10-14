@@ -51,6 +51,13 @@ struct SideRead {
 // the stickers; returns nothing for a side seen at an angle, a partial
 // lattice that does not span three rows and three columns, or no cube.
 //
+// A frame with six or more sticker-sized outlines in it and no side among them
+// is looked at a second time, against a narrower block (narrow_contours,
+// prepared_frame.hpp): a dark sticker beside a bright one is clipped by the
+// first, and a lattice the second finds is kept only if it sits on plastic
+// darker than its darkest sticker. A side the first look reads is read as it
+// was.
+//
 // `bgr` is an 8-bit BGR frame of any size; frames wider than the working
 // width are reduced first, so the cost beyond that reduction does not grow
 // with camera resolution.
@@ -65,6 +72,28 @@ struct SideRead {
 // A side still moving is blurred, and its colours are not to be trusted.
 inline constexpr float kSteadyFraction = 0.12F;
 [[nodiscard]] bool held_still(const SideRead& read, const cv::Point2f& previous_centre);
+
+// kSteadyFraction is how far a side may move between two frames a camera's
+// nominal interval apart. A side turned at the same speed moves further between
+// frames that are further apart - a webcam in lamplight settles at 20 frames a
+// second or less, and a frame the page was late for is two - while its blur,
+// which is what the gate is for, is the same. SideScan::add is told how long it
+// was since the frame before, and the distance allowed grows with it, to at
+// most kMaxIntervalScale times the nominal one so that a long stall does not
+// let a side that was being turned count.
+inline constexpr float kNominalFrameMs = 33.0F;
+inline constexpr float kMaxIntervalScale = 4.0F;
+[[nodiscard]] float interval_scale(float interval_ms);
+
+// A side of a corner view counts as a read of its side only if it was seen
+// whole enough and not too foreshortened. The ten sides the recorded sessions
+// show in two-side views (cube_scan corner-colours) sat 3 to 7 Lab units from
+// their side but one: a strip with six of nine found and a step under half the
+// other, at 12, the same-side distance. Another six-of-nine strip sat at 6, so
+// these are a margin and not a measured edge: a sticker the fit placed is what
+// a finger looks like, and ten sides are too few to say where the line is.
+inline constexpr int kMinCornerFound = 7;
+inline constexpr float kMinCornerAspect = 0.45F;
 
 // Display colour for a fused Lab sample (8-bit BGR), for showing the user
 // what was read before the colours have been named.
@@ -86,6 +115,10 @@ using SessionColours = std::array<cv::Vec3f, 6>;
 struct ScannedCube {
     solver::Cube cube;
     SessionColours colours{};
+    // How far from neutral the light was, read from the cube's own white
+    // centre (WhiteReference::cast); 0 when no white could be told. 3 to 5 by
+    // daylight, 29 under a warm-white LED.
+    float cast = 0.0F;
 };
 
 // Which way the named sides were put together into a cube (or not).
@@ -172,6 +205,10 @@ struct ScanDiagnosis {
     // The captured sides, at most six, in the order resolve_colors takes them
     // (most reads first) - which is the order `naming` and `assembly` use.
     std::vector<Side> sides;
+    // The cube's own white, which the sides were named by: how far from
+    // neutral the light was (white->cast) and the gains that took it out.
+    // Empty until six sides are captured, and when none was plausibly white.
+    std::optional<WhiteReference> white;
     // How the colours were named; empty until six sides are captured, and
     // when naming failed.
     std::optional<ColorResolution> naming;
@@ -181,8 +218,28 @@ struct ScanDiagnosis {
     Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
 };
 
+// Six sides that make no cube are not put together again while nothing the
+// attempt rested on has changed. Naming the 54 stickers costs about 0.3 ms and
+// is done every time; assembling the names costs 55 ms on average where no cube
+// can be made (15 pairs of name exchanges of 4,096 roll combinations each, up
+// to 104 ms native on the tumbles measured) and 6 ms where there are several.
+// The colours of the side in view move a little with every read, so a failure
+// that persisted was assembled afresh for every frame that counted.
+//
+// What assembling rests on, by how the naming came out:
+//   - no cube to be made: the names alone. A new name on any sticker is a new
+//     assembly; colours that moved without changing a name are not.
+//   - several cubes: the names, the corner reads (any added or replaced), and
+//     what each of the six colours measured, which the corner reads are
+//     fitted in. Those must be within this many Lab units (plain Euclidean) of
+//     what they were at the last assembly.
+inline constexpr float kRejudgeLabDistance = 1.0F;
+
 // Accumulates reads over one scan and reports the sides seen so far and,
 // once six are in, the cube.
+//
+// Not safe to share between threads, const calls included: scanned(), cube()
+// and diagnose() keep the last failed assembly (kRejudgeLabDistance).
 class SideScan {
 public:
     // Reads a side needs before it counts as captured. One read is a single
@@ -199,7 +256,10 @@ public:
 
     // Feed every analysed frame in order, including frames with no read: a
     // read only counts when the lattice has held still since the frame before.
-    void add(const std::optional<SideRead>& read);
+    //
+    // `interval_ms` is how long it was since the frame before; zero or less
+    // says nobody knows, and the nominal interval is taken (interval_scale).
+    void add(const std::optional<SideRead>& read, float interval_ms = 0.0F);
     void reset();
 
     // Feed the frame's corner read - two or three sides in one view - when
@@ -215,9 +275,15 @@ public:
     // it takes one. A side seen at an angle is lit a little differently from
     // one seen square-on, so once a side has kMinReads square-on reads of its
     // own its colours come from those alone.
-    void add_corner(const std::optional<CornerRead>& read);
+    void add_corner(const std::optional<CornerRead>& read, float interval_ms = 0.0F);
     // Corner reads kept so far; the newest few dozen.
     [[nodiscard]] std::size_t corner_reads() const noexcept { return corners_.size(); }
+    // How many times named sides have been put together into a cube since the
+    // scan began: the costly half of judging them. scanned(), cube() and
+    // diagnose() ask for the same judgement, and an assembly that failed is not
+    // made again while what it rested on is as it was (kRejudgeLabDistance):
+    // that answer is the last one, and is not counted here.
+    [[nodiscard]] std::size_t assemblies() const noexcept { return assemblies_; }
 
     // True when the frame just added counted as a read of some side, whether
     // or not that side has enough reads to be captured yet.
@@ -263,12 +329,41 @@ private:
         int roll = 0;
     };
 
+    // The last assembly that failed, with what it rested on.
+    struct FailedAssembly {
+        // The name each sticker was given, side by side in the order the sides
+        // were named in.
+        std::array<std::array<model::FacetColor, 9>, 6> names{};
+        // What each colour measured, and the corner reads there were: what
+        // choosing among several cubes rests on.
+        SessionColours colours{};
+        std::uint64_t corner_revision = 0;
+        AssemblyTrace trace;
+        CubeError error = CubeError::invalid_cube_state;
+    };
+
     [[nodiscard]] std::vector<std::size_t> captured_by_support() const;
+    // Names six sides and puts them together, or answers as the last failed
+    // assembly did when nothing it rested on has changed
+    // (kRejudgeLabDistance). Only naming, assembly and result are filled.
+    [[nodiscard]] ScanDiagnosis judge(const std::array<CapturedFace, 6>& faces) const;
     // Counts one read of nine colours towards the side it is, or starts a
     // side with it, and puts that side among those in view. A read from a
     // corner view that could be either of two sides is not counted, and
     // nothing is started. Says whether it was counted.
     bool count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on);
+    // Two groups that have turned out to be one side: the earlier one, the
+    // later one, and the quarter-turn that lays the later on the earlier.
+    struct AlikePair {
+        std::size_t keep = 0;
+        std::size_t other = 0;
+        int roll = 0;
+    };
+    // The first such pair, in the order the groups were begun.
+    [[nodiscard]] std::optional<AlikePair> first_alike_pair() const;
+    // Joins the later group of `pair` into the earlier and renumbers the
+    // sides in view.
+    void absorb(const AlikePair& pair);
     // Joins groups that have turned out to be one side.
     void merge_alike_groups();
     // Bounds the groups kept, dropping the least-supported stray.
@@ -276,6 +371,13 @@ private:
 
     std::vector<Group> groups_;
     std::vector<CornerRead> corners_;
+    // Counts every change to corners_ (a read added, an old one dropped), so
+    // that "the same corner reads" is one comparison.
+    std::uint64_t corner_revision_ = 0;
+    // Kept by const calls: what they answer is a function of the scan, and
+    // this is only how often it is worked out.
+    mutable std::optional<FailedAssembly> failed_;
+    mutable std::size_t assemblies_ = 0;
     std::optional<cv::Point2f> previous_centre_;
     // Where each side's centre was in the previous corner frame, for the rule
     // that a side counts only if it has held still.

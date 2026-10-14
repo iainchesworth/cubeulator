@@ -50,7 +50,7 @@ target_link_libraries(cube_platform
 # other preset, android-clang included, builds this block.
 # ---------------------------------------------------------------------------
 if(CUBEULATOR_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Quick Qml Gui QuickControls2 Quick3D ShaderTools LabsSettings)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Quick Qml Gui QuickControls2 Quick3D ShaderTools QmlCore)
     qt_standard_project_setup(REQUIRES 6.5)
 
     # The Qt libraries the platform's own implementations need (Android's
@@ -159,7 +159,8 @@ if(CUBEULATOR_BUILD_APP)
         RESOURCES
             qt/shaders/toon.frag
             qt/shaders/cel.frag
-            qt/shaders/celshade_post.frag)
+            qt/shaders/celshade_post.frag
+            qt/lightprobe/sky.ktx)
 
     # Qt6::Gui: SystemTheme.cpp uses QGuiApplication/QStyleHints, which live
     # in Gui, not Core (unlike QCameraPermission, added to Core specifically
@@ -201,7 +202,7 @@ if(CUBEULATOR_BUILD_APP)
             Qt6::Gui
             Qt6::QuickControls2
             Qt6::Quick3D
-            Qt6::LabsSettings)
+            Qt6::QmlCore)
 
     add_dependencies(cube_app cube_version)
 

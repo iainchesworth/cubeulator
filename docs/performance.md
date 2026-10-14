@@ -92,6 +92,16 @@ same resize, threshold and contours again, which is why it cost about what
 0.007 ms; assembling a cube (`vision.direct_scan.scanned`) 1 to 3 ms but only
 when the sides change, with 0.5 ms for each of up to 16 assembly attempts.
 
+A frame with six or more sticker-sized outlines that make no side takes a
+second look (`read_side`: the threshold and the contours again against a
+narrower block, `narrow_contours`). In the 1449-frame warm-lamp session that is
+173 frames (12%): those frames' `read_side` went from 0.15 ms to 1.4 to 1.6 ms
+at p50 (2.0 to 2.4 ms at p90), and the session's mean `read_side` from 0.38 to
+0.57 ms (the shared `prepare_frame` before it is 1.7 ms), at 640 wide with
+nothing else on the machine. A frame with no cube in a room with that many
+outlines (the 1080p `empty_frame` of `tests/perf`) allocates 113 buffers where
+it did 36.
+
 In the application, with the fake camera's 640x360 frames
 (`direct_scan.process_frame`, 2085 frames): p50 2.2 ms, p99 2.9 ms. About 0.4 ms
 of that is not the vision pass: the signals to the screen, the preview, the
@@ -142,6 +152,76 @@ When the solve finishes, `app.solve.apply_result` (the result landing on the GUI
 thread, which includes creating the solve screen and its cube) was 57 ms and
 168 ms in two solves: a hitch of three to ten frames as the screen appears.
 
+### The light probe
+
+The cube is lit by six lights and by a sky used as an image-based light - a
+*light probe*. Qt Quick 3D wants a probe as a **prefiltered** cube map, one mip
+level for each roughness, and given a plain image it makes that itself, on the
+first frame of every `View3D`: 512 x 512 faces, six levels, 1024 samples a texel
+(`QSSGBufferManager::createEnvironmentMap`; the face is `max(512, height / 2)`,
+so a smaller image is not cheaper, and neither is `ProceduralSkyTextureData`'s
+`Low` quality). Every return to a screen with the cube is a new `View3D`.
+
+Where a GPU draws it that is not noticed. Where the CPU draws, it is most of
+the first frame. The time from showing the launch screen to its fifth swapped
+frame, for each time a screen with the cube comes up
+(`cube_system_tests "[probe-cost]"`, three repetitions, two or three rounds):
+
+| Renderer | Probe prefiltered at run time (as it was) | No probe | Prefiltered file (as it is) |
+|---|---|---|---|
+| Direct3D 11 on a GPU (RTX 4090) | 0.25 to 0.35 s; 1.0 to 1.5 s for the first cube of the process | the same | the same |
+| Mesa llvmpipe, Qt's bundled `opengl32sw` (what CI draws with) | 10 to 16 s | 3.4 to 5.8 s | 3.3 to 6.0 s (once 0.3 s) |
+
+(The process's own CPU time for the same interval was 18 to 23 s with the probe
+prefiltered at run time and 3 to 5 s in the other two.)
+
+And in a browser without a GPU - headless Chromium on SwiftShader, the
+`diagnostics` build, three runs, on a 32-thread machine shared with other
+builds:
+
+| | Prefiltered at run time | No probe | Prefiltered file |
+|---|---|---|---|
+| The 30th UI frame after navigation | 34 to 38 s (48 s pinned to four cores) | 2.2 to 2.3 s | 2.2 to 3.8 s (4.6 s on four cores) |
+| The next page, after this one is closed | 35 s; the GPU process spends 315 to 321 CPU-seconds | 0.9 s (7.5 CPU-seconds) | 1.2 to 1.5 s (9 to 10) |
+
+The page paints its first five frames in about two seconds either way and then,
+with the probe prefiltered at run time, stands still for half a minute; closing
+it costs the same again, and what is waiting behind it (the next test of the
+suite) waits too. That is where `tests/web`'s thirty seconds a test came from:
+its `perf` project, which runs the app as shipped, took 3.9 minutes with one case
+failed (a press the stalled page did not answer in 30 s) and takes 56 seconds
+with the file, every case passing: start-up 30 s to 2.4 s, scan and solve 39 s
+to 11 s, the three methods 60 s to 4 s, walking a solution 96 s to 35 s.
+
+**What was done.** `src/app/qt/lightprobe/sky.ktx` is the prefiltering's
+result - Qt's own baker over the same sky the cube made at run time - and a KTX
+file with the baker's key is used by Qt as it is. `tools/lightprobe` makes it,
+and says why it is 128 x 128 texels a face and not 512: 1 MB, not 17. Qt then
+does no prefiltering at all.
+
+**The look is kept.** The pictures of the screenshot tour in the three styles
+(Physically-Based Realism, Instructional Glow, Borderlands Cel-Shading), light
+and dark, with the file and with the probe made at run time: at 512 and 256
+texels a face they differ by one level of one channel at most; at 128 by two,
+in under 0.01 % of the picture's pixels, mean 0.02 to 0.04 of 255. A picture
+taken twice of the same cube differs by one. The unit test `the light probe is
+a prefiltered cube map with the sky above and the ground below` holds the file
+to being what Qt takes as prefiltered (without the key it would be prefiltered
+again, silently) and the right way up (the first bake was upside down, which
+only a picture showed).
+
+**What is left, and not the probe.** With no probe at all, the first frames of a
+cube still take 3 to 6 s on llvmpipe and 2 s to the 30th frame in the browser:
+the cube's materials and its MSAA on a CPU rasteriser. It is the same with and
+without the probe, so it is not looked into here.
+
+**The harness.** `App::Scene3D::cheap` in `tests/system` takes the probe off for
+the cases that are not about how the cube looks. With the probe a file it saves
+nothing measurable (the llvmpipe row), so the walk could ask for the cube the
+app ships and the distinction could go: `app.hpp`, `app.cpp`, three callers and
+the time-budget part of [testing](testing.md). Not done here; `tests/web` no
+longer takes the probe out.
+
 ## Ranking
 
 By what a person waits for, and how far it is from its budget, as found:
@@ -164,6 +244,7 @@ By what a person waits for, and how far it is from its budget, as found:
 | The first-two-layers searches follow pieces, not cubes | 1.77 to 1.86 s a solve, 3.0 s worst | **0.12 s**, 0.21 to 0.24 s worst; the same 985 000 visits and the same solutions (digest `1bc470006f988409`) | [#75](https://github.com/iainchesworthlabs/cubeulator/pull/75) |
 | An unsolvable cube is answered at once | 2.5 to 6 s | under 0.1 ms, the same `no_solution` | [#74](https://github.com/iainchesworthlabs/cubeulator/pull/74) |
 | A frame is prepared once for both readers | 4.2 ms turned, 8.2 ms at 1080p | 2.2 ms, 3.6 ms; the same reads | [#78](https://github.com/iainchesworthlabs/cubeulator/pull/78) |
+| The cube's light probe is prefiltered once, not on every `View3D`'s first frame | llvmpipe 10 to 16 s a screen with the cube; a browser without a GPU stands still for 35 s at the start and 35 s at the close | 3 to 6 s (the cube itself); the 30th frame in 2 to 4 s; the close 1 s | this change, [above](#the-light-probe) |
 
 The solver's cost per visit fell from 1.7 to 3.4 us to 0.15 to 0.29 us; what it
 did not change is the number of visits, and that is the one lever left (below).
@@ -234,6 +315,14 @@ $BIN/cube_system_tests "[journey]"
 
 # Qt's own frame timings: launch the app with
 #   QSG_RENDER_TIMING=1  QT_LOGGING_RULES=qt.scenegraph.time.renderloop=true
+
+# the light probe: the time to the fifth frame of a screen with the cube,
+# with the probe and without it, on the software renderer the CI uses (Mesa)
+CUBE_PROBE_COST=1 QT_OPENGL=software QSG_RHI_BACKEND=opengl \
+    $BIN/cube_system_tests "[probe-cost]"
+# and in a browser: window.cubeulatorProfile.summary().frames.UI is the
+# count of frames drawn (testing.md, "Browser tests"); read it every 50 ms
+# from navigation, and time the next page after one is closed
 ```
 
 Startup is read from the `app.load_qml` zone of a capture of the application

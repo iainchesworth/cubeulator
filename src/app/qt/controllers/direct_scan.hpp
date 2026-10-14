@@ -13,6 +13,7 @@
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
+#include <QVariantMap>
 
 #include <opencv2/core.hpp>
 
@@ -70,6 +71,22 @@ class DirectScan : public QObject {
     // Nothing is read meanwhile: a colour sampled while the balance is still
     // moving would not match the same sticker a second later.
     Q_PROPERTY(bool settingUp READ settingUp NOTIFY frameUpdated)
+    // What the camera's exposure and white balance came to, as the lock
+    // reported it - the record the diagnostics channel's `camera` event carries
+    // as `lock`, in the words a screen or a test can use:
+    //   reported      the camera has said (false from camera start until then)
+    //   supported     the platform claims a lock on this camera
+    //                 (photometry_control_supported(): only where one was
+    //                 read back as holding)
+    //   exposure, whiteBalance
+    //                 "applied", "rejected", "unsupported" or "not_requested";
+    //                 only "applied" is a control that was held
+    //   summary       PhotometryLockReport::summary(), the one sentence that
+    //                 never claims a control it did not verify. English and
+    //                 for a developer: a screen that wants to tell the person
+    //                 builds its own text from the two outcomes (docs/i18n.md)
+    // exposure, whiteBalance and summary are absent until reported.
+    Q_PROPERTY(QVariantMap lock READ lock NOTIFY frameUpdated)
 
     // One entry per side read so far, in the order first shown:
     // { colors: nine "#rrggbb" strings row-major as last shown,
@@ -118,6 +135,7 @@ public:
     [[nodiscard]] bool reading() const noexcept { return reading_; }
     [[nodiscard]] qreal captureProgress() const noexcept { return capture_progress_; }
     [[nodiscard]] bool settingUp() const noexcept { return awaiting_lock_; }
+    [[nodiscard]] QVariantMap lock() const;
     [[nodiscard]] QVariantList sides() const;
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
@@ -219,6 +237,9 @@ private:
     mutable std::mutex frame_mutex_;
     cv::Mat latest_frame_;
     int frame_seq_ = 0;
+    // When the frame before was captured; the scan's rule that a side must have
+    // held still is scaled by how long ago that was.
+    std::optional<std::int64_t> previous_frame_ms_;
     int frame_width_ = 0;
     int frame_height_ = 0;
 

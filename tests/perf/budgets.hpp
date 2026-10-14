@@ -125,11 +125,16 @@ inline constexpr MethodBudget kAdvanced = {
 // working width before it does anything else, so its buffers do not depend on
 // the camera: that is the contract in direct_scan.hpp, and it is what these
 // hold. Measured: 101 to 115 buffers, 1.92 MB (2.8 working-width frames) at
-// every size; a frame with no cube in it 36 to 54 buffers, 1.85 MB.
+// every size; a frame with no cube in it 36 to 54 buffers, 1.85 MB - except
+// the 1080p room, 113 buffers and 2.32 MB. That one has seven sticker-sized
+// outlines in it and no side, which is what earns a second look (outlines
+// taken against a narrower block, read_side in direct_scan.cpp): the
+// threshold, the contours and the shape filter again, and a second lattice
+// search through what they found.
 inline constexpr std::uint64_t kReadBuffers = 145;
 inline constexpr std::uint64_t kReadBytes = 2'400'000;
-inline constexpr std::uint64_t kEmptyReadBuffers = 70;
-inline constexpr std::uint64_t kEmptyReadBytes = 2'320'000;
+inline constexpr std::uint64_t kEmptyReadBuffers = 140;
+inline constexpr std::uint64_t kEmptyReadBytes = 2'900'000;
 // Bytes a read of the larger sizes may allocate, as a multiple of what the
 // working-width read did: they pay for the one reduction, and nothing else.
 // Measured 1.00.
@@ -143,6 +148,20 @@ inline constexpr std::uint64_t kCornerBuffers = 1300;
 inline constexpr std::uint64_t kCornerBytes = 2'520'000;
 inline constexpr std::uint64_t kEmptyCornerBuffers = 45;
 inline constexpr std::uint64_t kEmptyCornerBytes = 2'320'000;
+// The placement through the fit that read_side makes of the blobs when no side
+// is held square (a lattice placed through the one the blobs already on a
+// square grid make, fit_lattice_through_fit in direct_scan.cpp), on the same
+// terms: a side just past the gate that it finds nothing in (nine blobs for it
+// to weigh, so the frame also goes to the second look, where it is made again),
+// and a side at the edge of the gate that it finds. It allocates a matrix or
+// two for each distinct lattice it weighs. Measured: 205 buffers, 2.32 MB for
+// the side past the gate (the two looks without it, 175), and 119, 1.97 MB for
+// the side it finds (113, 1.99 MB for a side held square; 177 without it,
+// where the second look reads nothing).
+inline constexpr std::uint64_t kThroughFitMissBuffers = 260;
+inline constexpr std::uint64_t kThroughFitMissBytes = 2'900'000;
+inline constexpr std::uint64_t kThroughFitReadBuffers = 150;
+inline constexpr std::uint64_t kThroughFitReadBytes = 2'460'000;
 // SideScan::add() works on nine Lab triples and a few vectors, not pictures:
 // no pixel buffer at all (measured 0). SideScan::scanned() converts a handful
 // of single colours through cv::cvtColor on the way to naming them (measured

@@ -1,10 +1,27 @@
 // Settings, as a person changes them: through the controls, and read back from
 // the app's own state and from what it shows.
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { test, expect } from '../support/fixtures.mjs';
 
 async function openSettings(app) {
   await app.click('launch.settings');
   await app.waitForScreen('settings');
+}
+
+// A picture of the page for a person to read: attached to the report, and, when
+// CUBEULATOR_WEB_SHOTS names a directory, written there as <name>.png (a
+// passing test's attachments are not kept, and this is how a translation is
+// looked at in the browser build).
+async function picture(app, testInfo, name) {
+  const body = await app.page.screenshot();
+  await testInfo.attach(name, { body, contentType: 'image/png' });
+  const dir = process.env.CUBEULATOR_WEB_SHOTS;
+  if (dir) {
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${name}.png`), body);
+  }
 }
 
 test.describe('settings', () => {
@@ -33,8 +50,10 @@ test.describe('settings', () => {
     await openSettings(app);
     await app.click('settings.theme.2'); // Dark
     await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('dark');
-    await app.waitUntilStored('dark');
 
+    // At once, not after a wait for the app to have written it: a reload the
+    // moment after the click must find the choice kept (the page flushes its
+    // settings as it is hidden, settings_web.cpp).
     await app.reload();
     expect((await app.singleton('SettingsState')).themeMode).toBe('dark');
     await openSettings(app);
@@ -51,7 +70,6 @@ test.describe('settings', () => {
     await app.click('settings.method.2'); // Advanced
     await expect.poll(async () => (await app.singleton('SettingsState')).solveMethod).toBe(2);
     expect(await note()).not.toBe(beginner);
-    await app.waitUntilStored('2');
 
     await app.reload();
     expect((await app.singleton('SettingsState')).solveMethod).toBe(2);
@@ -78,6 +96,62 @@ test.describe('settings', () => {
     await openSettings(app);
     await app.clickToggle('settings.statsForNerds');
     await expect.poll(async () => (await app.singleton('SettingsState')).statsForNerds).toBe(true);
+  });
+});
+
+// Where the app keeps a setting in the browser's localStorage: Qt's own scheme
+// (organisation, application, then the settings group and name).
+const stored = (name) => `qt-v0-Cubeulator-Cubeulator-${name}`;
+
+test.describe('settings are kept by the page', () => {
+  // A QML Settings object writes a change half a second after it is made. A
+  // page that is hidden, or left, inside that time has to write it as it goes:
+  // reloading straight after a click (above) is the case that comes with the
+  // page being left, these are the page being put away and staying.
+  for (const kind of ['visibilitychange', 'pagehide']) {
+    test(`are in the browser's storage as soon as the page is put away (${kind})`, async ({ app }) => {
+      await openSettings(app);
+      await app.click('settings.theme.2'); // Dark
+      await app.click('settings.method.2'); // Advanced
+      await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('dark');
+      await expect.poll(async () => (await app.singleton('SettingsState')).solveMethod).toBe(2);
+
+      await app.putAway(kind);
+      const kept = await app.stored();
+      expect(kept[stored('appearance/themeMode')]).toBe('dark');
+      expect(kept[stored('solving/method')]).toBe('2');
+    });
+  }
+});
+
+test.describe('settings an earlier visit left', () => {
+  // The keys and values a build that used Qt.labs.settings wrote, as read from
+  // its page. The app's Settings are QtCore's now; they have to find these.
+  test.use({
+    appOptions: {
+      storage: {
+        [stored('appearance/themeMode')]: 'dark',
+        [stored('solving/method')]: '2',
+        [stored('rendering/graphicsBackend')]: 'opengl',
+      },
+    },
+  });
+
+  test('are read when the app starts, and still the ones it keeps', async ({ app }) => {
+    const settings = await app.singleton('SettingsState');
+    expect(settings.themeMode).toBe('dark');
+    expect(settings.solveMethod).toBe(2);
+    expect(settings.graphicsBackend).toBe('opengl');
+
+    // Not read once and then written somewhere else: a reload finds them where
+    // they were, and a change is written to the same place.
+    await app.reload();
+    expect((await app.singleton('SettingsState')).themeMode).toBe('dark');
+    await openSettings(app);
+    await app.click('settings.theme.1'); // Light
+    await expect.poll(async () => (await app.singleton('SettingsState')).themeMode).toBe('light');
+    await app.putAway();
+    expect((await app.stored())[stored('appearance/themeMode')]).toBe('light');
   });
 });
 
@@ -158,24 +232,91 @@ test.describe('language', () => {
     });
   }
 
-  test('shows a string no catalogue has translated in English, never as its id', async ({ app }) => {
-    // The catalogues are drafts today (every entry unfinished, which the build
-    // leaves out), so a chosen language shows English. When translations land
-    // the text changes and this still holds: what is on screen is words.
+  // The five drafts (docs/i18n.md) show their own words, in their own script.
+  // What the browser draws them with (Qt's bundled face; there are no system
+  // fonts) is not in the page's text and is looked at in a screenshot, as
+  // docs/i18n.md says.
+  const DRAFTS = [
+    [5, 'ja', /^[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u],
+    [7, 'he', /^\p{Script=Hebrew}/u],
+    [8, 'ar', /^\p{Script=Arabic}/u],
+    [9, 'yi', /^\p{Script=Hebrew}/u],
+  ];
+  for (const [chip, code, script] of DRAFTS) {
+    test(`${code} shows its own words and nothing of the English`, async ({ app }) => {
+      await openSettings(app);
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.click('settings.back');
+      await app.waitForScreen('launch');
+      const scan = (await app.find('launch.startScan')).text;
+      expect(scan, 'the main button, in the language').toMatch(script);
+      expect(scan).not.toBe('Scan a cube');
+      // And the product name is still the product name.
+      expect(await app.texts()).toContain('Cubeulator');
+    });
+  }
+
+  test('shows no string as its raw id, in any language', async ({ app }) => {
+    // Every language has a draft, so a string missing from one (one added
+    // since) shows its English and never its id. What is on screen is words,
+    // in each of the eight.
     await openSettings(app);
-    await app.click('settings.language.2');
-    await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('de');
-    await app.settle();
-    for (const text of await app.texts()) {
-      expect(text, 'a raw string id on screen').not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+    for (const [chip, code] of [[2, 'de'], [3, 'fr'], [4, 'es'], [5, 'ja'], [6, 'zh-CN'],
+                                [7, 'he'], [8, 'ar'], [9, 'yi']]) {
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.settle();
+      for (const text of await app.texts()) {
+        expect(text, `a raw string id on screen in ${code}`)
+          .not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+      }
     }
   });
+
+  // German, French and Spanish are complete drafts: what the person reads is
+  // their text, with its accents, and never the English or an id. The words
+  // are not asserted (a reviewer will change some). What is: the English is
+  // not what shows, the letters each language needs reach the page, and a
+  // picture of the screen is attached to the report, because whether the
+  // browser build draws them (it carries no system font; Qt's own face is what
+  // the Latin text is set in) is a thing to look at.
+  for (const [chip, code, name, accents] of [
+    [2, 'de', 'Deutsch', /[äöüß]/],
+    [3, 'fr', 'Français', /[éèêàç]/],
+    [4, 'es', 'Español', /[áéíóúñ]/],
+  ]) {
+    test(`${name} shows its own text with its accents, not the English`, async ({ app }, testInfo) => {
+      await openSettings(app);
+      await app.click(`settings.language.${chip}`);
+      await expect.poll(async () => (await manager(app)).selectedLanguage).toBe(code);
+      await app.settle();
+
+      const texts = await app.texts();
+      expect(texts, 'the English, under a translated language').not.toContain('Camera');
+      expect(texts, 'the English, under a translated language').not.toContain('Settings');
+      expect(texts.join(' '), `accented letters of ${name}`).toMatch(accents);
+      for (const text of texts) {
+        expect(text, 'a raw string id on screen').not.toMatch(/^[a-z][A-Za-z0-9]*(\.[A-Za-z0-9]+)+$/);
+        // A face with no glyph for a letter draws U+FFFD or a box in its place.
+        expect(text, 'a replacement character').not.toContain('\uFFFD');
+      }
+      await picture(app, testInfo, `settings-${code}`);
+
+      // The launch screen, with the language's name on its button.
+      await app.click('settings.back');
+      await app.waitForScreen('launch');
+      await app.settle();
+      expect((await app.find('launch.startScan')).text).not.toBe('Scan a cube');
+      expect((await app.find('launch.language')).text).toBe(name);
+      await picture(app, testInfo, `launch-${code}`);
+    });
+  }
 
   test('is kept through a reload', async ({ app }) => {
     await openSettings(app);
     await app.click('settings.language.2');
     await expect.poll(async () => (await manager(app)).selectedLanguage).toBe('de');
-    await app.waitUntilStored('de');
 
     await app.reload();
     expect((await manager(app)).selectedLanguage).toBe('de');

@@ -1,10 +1,12 @@
 #include <cube/profile/recorder.hpp>
 
+#include <fmt/format.h>
+
 #include <algorithm>
+#include <array>
 #include <bit>
 #include <chrono>
 #include <cmath>
-#include <cstdio>
 #include <map>
 #include <string_view>
 #include <utility>
@@ -14,10 +16,10 @@ namespace cube::profile {
 namespace {
 
 // Word 4 of a slot: the thread, the kind and whether a value is attached.
-constexpr std::uint64_t kHasValue = std::uint64_t{1} << 40;
+constexpr std::uint64_t kHasValue = std::uint64_t{1} << 40U;
 
 std::uint64_t pack_meta(std::uint32_t thread, Kind kind, bool has_value) noexcept {
-    return static_cast<std::uint64_t>(thread) | (static_cast<std::uint64_t>(kind) << 32) |
+    return static_cast<std::uint64_t>(thread) | (static_cast<std::uint64_t>(kind) << 32U) |
            (has_value ? kHasValue : 0U);
 }
 
@@ -30,9 +32,14 @@ double real(std::uint64_t word) noexcept {
 }
 
 std::string number(double value) {
-    char buffer[64];
-    std::snprintf(buffer, sizeof buffer, "%.3f", value);
-    return buffer;
+    return fmt::format("{:.3f}", value);
+}
+
+// Appends each of `parts` in turn: the chain of `+` it replaces built a
+// temporary string per link.
+template <typename... Parts>
+void append_all(std::string& out, const Parts&... parts) {
+    (out.append(std::string_view(parts)), ...);
 }
 
 void append_escaped(std::string& out, std::string_view text) {
@@ -55,10 +62,8 @@ void append_escaped(std::string& out, std::string_view text) {
                 break;
             default:
                 if (static_cast<unsigned char>(c) < 0x20U) {
-                    char buffer[8];
-                    std::snprintf(buffer, sizeof buffer, "\\u%04x",
-                                  static_cast<unsigned>(static_cast<unsigned char>(c)));
-                    out += buffer;
+                    out += fmt::format("\\u{:04x}",
+                                       static_cast<unsigned>(static_cast<unsigned char>(c)));
                 } else {
                     out += c;
                 }
@@ -100,8 +105,7 @@ std::string csv_field(std::string_view text) {
 }  // namespace
 
 Recorder::Recorder(std::size_t capacity)
-    : mask_(std::bit_ceil(std::max<std::size_t>(capacity, 2U)) - 1U),
-      slots_(std::make_unique<Slot[]>(mask_ + 1U)) {
+    : mask_(std::bit_ceil(std::max<std::size_t>(capacity, 2U)) - 1U), slots_(mask_ + 1U) {
     (void)epoch();
 }
 
@@ -124,19 +128,18 @@ std::uint32_t Recorder::this_thread() noexcept {
 void Recorder::record(Kind kind, const char* name, double start_us, double duration_us,
                       double value, bool has_value) noexcept {
     const std::uint64_t index = head_.fetch_add(1, std::memory_order_relaxed);
-    Slot& slot = slots_[index & mask_];
+    Slot& slot = slots_.at(index & mask_);
 
     // A seqlock whose data words are atomic: the sequence is odd while this
     // thread is writing and holds 2 * index + 2 when the event is whole.
-    slot.sequence.store(2U * index + 1U, std::memory_order_relaxed);
+    slot.sequence.store((2U * index) + 1U, std::memory_order_relaxed);
     std::atomic_thread_fence(std::memory_order_release);
-    slot.words[0].store(static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(name)),
-                        std::memory_order_relaxed);
-    slot.words[1].store(bits(start_us), std::memory_order_relaxed);
-    slot.words[2].store(bits(duration_us), std::memory_order_relaxed);
-    slot.words[3].store(bits(value), std::memory_order_relaxed);
-    slot.words[4].store(pack_meta(this_thread(), kind, has_value), std::memory_order_relaxed);
-    slot.sequence.store(2U * index + 2U, std::memory_order_release);
+    slot.name.store(name, std::memory_order_relaxed);
+    slot.words.at(0).store(bits(start_us), std::memory_order_relaxed);
+    slot.words.at(1).store(bits(duration_us), std::memory_order_relaxed);
+    slot.words.at(2).store(bits(value), std::memory_order_relaxed);
+    slot.words.at(3).store(pack_meta(this_thread(), kind, has_value), std::memory_order_relaxed);
+    slot.sequence.store((2U * index) + 2U, std::memory_order_release);
 }
 
 void Recorder::zone(const char* name, double start_us, double end_us) noexcept {
@@ -185,14 +188,15 @@ std::vector<Event> Recorder::snapshot() const {
     std::vector<Event> events;
     events.reserve(static_cast<std::size_t>(count));
     for (std::uint64_t index = head - count; index < head; ++index) {
-        const Slot& slot = slots_[index & mask_];
+        const Slot& slot = slots_.at(index & mask_);
         const std::uint64_t before = slot.sequence.load(std::memory_order_acquire);
-        if (before != 2U * index + 2U) {
+        if (before != (2U * index) + 2U) {
             continue;  // being written, or already overwritten by a later lap
         }
-        std::uint64_t words[5];
-        for (std::size_t i = 0; i < 5; ++i) {
-            words[i] = slot.words[i].load(std::memory_order_relaxed);
+        const char* const name = slot.name.load(std::memory_order_relaxed);
+        std::array<std::uint64_t, 4> words{};
+        for (std::size_t i = 0; i < words.size(); ++i) {
+            words.at(i) = slot.words.at(i).load(std::memory_order_relaxed);
         }
         std::atomic_thread_fence(std::memory_order_acquire);
         if (slot.sequence.load(std::memory_order_relaxed) != before) {
@@ -200,13 +204,14 @@ std::vector<Event> Recorder::snapshot() const {
         }
 
         Event event;
-        event.name = reinterpret_cast<const char*>(static_cast<std::uintptr_t>(words[0]));
-        event.start_us = real(words[1]);
-        event.duration_us = real(words[2]);
-        event.value = real(words[3]);
-        event.thread = static_cast<std::uint32_t>(words[4] & 0xFFFFFFFFU);
-        event.kind = static_cast<Kind>((words[4] >> 32) & 0xFFU);
-        event.has_value = (words[4] & kHasValue) != 0;
+        event.name = name;
+        event.start_us = real(words.at(0));
+        event.duration_us = real(words.at(1));
+        event.value = real(words.at(2));
+        const std::uint64_t meta = words.at(3);
+        event.thread = static_cast<std::uint32_t>(meta & 0xFFFFFFFFU);
+        event.kind = static_cast<Kind>((meta >> 32U) & 0xFFU);
+        event.has_value = (meta & kHasValue) != 0;
         events.push_back(event);
     }
     std::ranges::stable_sort(events, {}, &Event::start_us);
@@ -293,33 +298,27 @@ std::string Recorder::zones_csv() const {
         "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns\n";
     for (const ZoneStats& zone : zone_stats()) {
         const double percent = span > 0.0 ? zone.total_us / span * 100.0 : 0.0;
-        char row[256];
-        std::snprintf(row, sizeof row, ",0,%.0f,%.2f,%llu,%.0f,%.0f,%.0f,%.0f\n",
-                      zone.total_us * 1000.0, percent, static_cast<unsigned long long>(zone.count),
-                      zone.mean_us * 1000.0, zone.min_us * 1000.0, zone.max_us * 1000.0,
-                      zone.stddev_us * 1000.0);
-        // name, then an empty src_file, then the numbers above
+        // name, then an empty src_file, then the numbers
         out += csv_field(zone.name);
         out += ',';
-        out += row;
+        out += fmt::format(",0,{:.0f},{:.2f},{},{:.0f},{:.0f},{:.0f},{:.0f}\n",
+                           zone.total_us * 1000.0, percent, zone.count, zone.mean_us * 1000.0,
+                           zone.min_us * 1000.0, zone.max_us * 1000.0, zone.stddev_us * 1000.0);
     }
     return out;
 }
 
 std::string Recorder::chrome_trace_json() const {
-    std::vector<std::pair<std::uint32_t, std::string>> names;
+    std::map<std::uint32_t, std::string> thread_label;
     std::string app;
     {
         const std::scoped_lock lock(names_mutex_);
-        names = thread_names_;
+        for (const auto& [id, name] : thread_names_) {
+            thread_label[id] = name;
+        }
         app = app_info_;
     }
     const std::vector<Event> events = snapshot();
-
-    std::map<std::uint32_t, std::string> thread_label;
-    for (const auto& [id, name] : names) {
-        thread_label[id] = name;
-    }
     for (const Event& event : events) {
         thread_label.try_emplace(event.thread, "thread " + std::to_string(event.thread));
     }
@@ -327,38 +326,39 @@ std::string Recorder::chrome_trace_json() const {
     std::string out = "{\"traceEvents\":[";
     out += R"({"ph":"M","name":"process_name","pid":1,"tid":0,"args":{"name":"Cubeulator"}})";
     for (const auto& [id, label] : thread_label) {
-        out += R"(,{"ph":"M","name":"thread_name","pid":1,"tid":)" + std::to_string(id) +
-               R"(,"args":{"name":)" + json_string(label) + "}}";
+        append_all(out, R"(,{"ph":"M","name":"thread_name","pid":1,"tid":)", std::to_string(id),
+                   R"(,"args":{"name":)", json_string(label), "}}");
     }
     for (const Event& event : events) {
         const std::string name = json_string(event.name != nullptr ? event.name : "?");
-        const std::string common = R"("pid":1,"tid":)" + std::to_string(event.thread) +
-                                   R"(,"ts":)" + number(event.start_us);
+        std::string common = R"("pid":1,"tid":)";
+        append_all(common, std::to_string(event.thread), R"(,"ts":)", number(event.start_us));
         switch (event.kind) {
             case Kind::zone:
-                out += ",{\"name\":" + name + R"(,"cat":"cube","ph":"X",)" + common + R"(,"dur":)" +
-                       number(event.duration_us);
+                append_all(out, ",{\"name\":", name, R"(,"cat":"cube","ph":"X",)", common,
+                           R"(,"dur":)", number(event.duration_us));
                 if (event.has_value) {
-                    out += R"(,"args":{"value":)" + number(event.value) + "}";
+                    append_all(out, R"(,"args":{"value":)", number(event.value), "}");
                 }
-                out += "}";
+                out += '}';
                 break;
             case Kind::frame:
-                out += ",{\"name\":" + name + R"(,"cat":"frame","ph":"i","s":"p",)" + common + "}";
+                append_all(out, ",{\"name\":", name, R"(,"cat":"frame","ph":"i","s":"p",)", common,
+                           "}");
                 break;
             case Kind::message:
-                out +=
-                    ",{\"name\":" + name + R"(,"cat":"message","ph":"i","s":"p",)" + common + "}";
+                append_all(out, ",{\"name\":", name, R"(,"cat":"message","ph":"i","s":"p",)",
+                           common, "}");
                 break;
             case Kind::plot:
-                out += ",{\"name\":" + name + R"(,"cat":"plot","ph":"C",)" + common +
-                       R"(,"args":{"value":)" + number(event.value) + "}}";
+                append_all(out, ",{\"name\":", name, R"(,"cat":"plot","ph":"C",)", common,
+                           R"(,"args":{"value":)", number(event.value), "}}");
                 break;
         }
     }
-    out += R"(],"displayTimeUnit":"ms","otherData":{"app":)" + json_string(app) +
-           R"(,"recorded":)" + std::to_string(recorded()) + R"(,"dropped":)" +
-           std::to_string(dropped()) + "}}";
+    append_all(out, R"(],"displayTimeUnit":"ms","otherData":{"app":)", json_string(app),
+               R"(,"recorded":)", std::to_string(recorded()), R"(,"dropped":)",
+               std::to_string(dropped()), "}}");
     return out;
 }
 
@@ -382,23 +382,23 @@ std::string Recorder::summary_json() const {
         }
     }
 
-    std::string out = R"({"app":)" + json_string(app) + R"(,"recorded":)" +
-                      std::to_string(recorded()) + R"(,"dropped":)" + std::to_string(dropped()) +
-                      R"(,"zones":{)";
+    std::string out = R"({"app":)";
+    append_all(out, json_string(app), R"(,"recorded":)", std::to_string(recorded()),
+               R"(,"dropped":)", std::to_string(dropped()), R"(,"zones":{)");
     bool first = true;
     for (const ZoneStats& zone : zone_stats()) {
-        out += (first ? "" : ",") + json_string(zone.name) + R"(:{"count":)" +
-               std::to_string(zone.count) + R"(,"total_ms":)" + number(zone.total_us / 1000.0) +
-               R"(,"mean_ms":)" + number(zone.mean_us / 1000.0) + R"(,"min_ms":)" +
-               number(zone.min_us / 1000.0) + R"(,"max_ms":)" + number(zone.max_us / 1000.0) +
-               R"(,"stddev_ms":)" + number(zone.stddev_us / 1000.0) + "}";
+        append_all(out, first ? "" : ",", json_string(zone.name), R"(:{"count":)",
+                   std::to_string(zone.count), R"(,"total_ms":)", number(zone.total_us / 1000.0),
+                   R"(,"mean_ms":)", number(zone.mean_us / 1000.0), R"(,"min_ms":)",
+                   number(zone.min_us / 1000.0), R"(,"max_ms":)", number(zone.max_us / 1000.0),
+                   R"(,"stddev_ms":)", number(zone.stddev_us / 1000.0), "}");
         first = false;
     }
     const auto counts = [&out](const char* key, const std::map<std::string, std::uint64_t>& map) {
-        out += std::string(R"(},")") + key + R"(":{)";
+        append_all(out, R"(},")", key, R"(":{)");
         bool first_entry = true;
         for (const auto& [name, count] : map) {
-            out += (first_entry ? "" : ",") + json_string(name) + ":" + std::to_string(count);
+            append_all(out, first_entry ? "" : ",", json_string(name), ":", std::to_string(count));
             first_entry = false;
         }
     };

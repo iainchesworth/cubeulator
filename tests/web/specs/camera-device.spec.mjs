@@ -46,6 +46,47 @@ test.describe("the browser's fake camera", () => {
     expect(scan.sidesRead).toBe(0);
   });
 
+  test('has its exposure and white balance asked for, and the app says what the track read back',
+    async ({ app }) => {
+      // What the browser says this device can do, from a second track on it: the
+      // expectation comes from the browser, not from what a version of the
+      // fake device happened to list. (Chromium fills a track's photo controls
+      // in a moment after it opens, so it is asked until it has.)
+      const listed = await app.page.evaluate(async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const [track] = stream.getVideoTracks();
+        let capabilities = track.getCapabilities();
+        for (let i = 0; i < 40 && capabilities.exposureMode === undefined; i++) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          capabilities = track.getCapabilities();
+        }
+        stream.getTracks().forEach((t) => t.stop());
+        const manual = (modes, range) =>
+          Array.isArray(modes) && modes.includes('manual') && range !== undefined;
+        return {
+          exposure: manual(capabilities.exposureMode, capabilities.exposureTime),
+          whiteBalance: manual(capabilities.whiteBalanceMode, capabilities.colorTemperature),
+        };
+      });
+      test.info().annotations.push({ type: 'listed', description: JSON.stringify(listed) });
+
+      await app.click('launch.startScan');
+      await app.waitForScreen('scan');
+      await expect.poll(async () => (await app.singleton('DirectScan')).lock.reported,
+        { timeout: 60_000 }).toBe(true);
+      const { lock } = await app.singleton('DirectScan');
+
+      // A control the device lists is held, and one it does not is said to be
+      // unsupported; nothing is claimed that the track did not read back.
+      expect(lock.exposure).toBe(listed.exposure ? 'applied' : 'unsupported');
+      expect(lock.whiteBalance).toBe(listed.whiteBalance ? 'applied' : 'unsupported');
+      expect(lock.supported).toBe(listed.exposure || listed.whiteBalance);
+      // Whatever it came to, the scan is running and has been asked for nothing.
+      const scan = await app.singleton('DirectScan');
+      expect(scan.running).toBe(true);
+      expect(scan.cameraError).toBe('');
+    });
+
   test('is let go of when the scan is left', async ({ app }) => {
     await app.click('launch.startScan');
     await app.waitForScreen('scan');

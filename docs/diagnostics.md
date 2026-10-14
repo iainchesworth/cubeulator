@@ -113,6 +113,7 @@ the evaluations that agreed with the one before. `trigger` is `sides_changed`,
 | --- | --- |
 | `groups`, `captured`, `corner_reads` | Groups of reads so far (strays included), those with enough reads to be a side, and corner reads kept. |
 | `sides` | The captured sides, at most six, in the order they were handed to colour naming (most reads first). Each: `first_seen` (its place in the order sides were first shown), `reads`, `lab` (nine fused colours, laid out as the side was *first* seen), `roll` (quarter-turns from that layout to how it was last shown), `in_view`. |
+| `white` | The light the sides were named in, read from the cube's own white centre: `side` (an index into `sides`), `cast` (that centre's chroma: 3 to 5 by daylight, about 18 under tungsten, 29 under a warm-white LED) and `gain` (the linear red, green, blue factors that took the light out; all 1 when the cast is under `kMinCorrectedCast`, 8). `null` until six sides are in and when none was plausibly white, in which case the colours were named as measured. |
 | `naming` | How the 54 colours were named - the next table. `null` until six sides are in; `{"error": ...}` if naming failed. |
 | `assembly` | How the cube was put together - the table after. `null` when there was no naming. |
 | `result` | `{"ok": true, "state", "colours"}` with the cube and what each colour measured in the session, or `{"ok": false, "error"}`. |
@@ -157,6 +158,19 @@ and `lock`: what the driver accepted, or `null` before it reported.
 
 `outcome` is `applied` (read back and confirmed), `rejected` (the driver took
 the write and kept its old value), `unsupported` or `not_requested`.
+
+In the browser the two controls are exposure and white balance
+(`brightness` and `saturation` are `not_requested`: the page does not touch
+them), and `photometry_control_supported` is true only for a camera on which a
+lock was read back as holding something, so it is `false` in `opened_lock_requested`
+and `true` from `lock_reported` on where it held. `unsupported` there means the
+browser or the camera has no manual exposure or white balance to ask for
+(Firefox and Safari offer a page none), and then `platform_supported` is
+`false`;
+`rejected` means the camera was asked and would not hold, or took the setting and
+read back something else, in which case the page put the camera's own mode back.
+`requested` and `readback` are the values the browser reported, in its own
+units (`exposureTime`, `colorTemperature`), not the desktop driver's.
 
 **`held`** - the solve screen's camera, each time what it makes of a frame
 *changes* (this is what `CUBE_HELD_LOG` used to write): `verdict` (`nothing`,

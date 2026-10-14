@@ -1,4 +1,5 @@
 #include "interfaces/camera.hpp"
+#include "platform/web/photometry_web.hpp"
 
 #include <emscripten.h>
 #include <emscripten/threading.h>
@@ -47,8 +48,16 @@ void cube_web_camera_enumerate(int request);
 // Opens a camera (`id` is `length` bytes, UTF-8); answered with
 // cube_web_camera_started(). Returns once the page has read `id`.
 void cube_web_camera_open(int request, const char* id, int length);
-// Lets go of the camera, if one is open.
+// Lets go of the camera, if one is open, having put back anything a lock
+// changed in it.
 void cube_web_camera_close();
+// Holds the open camera's exposure and white balance where its automatics have
+// put them, once it has delivered a few frames (`exposure` and `white_balance`
+// are 0 for a control that is not wanted). Returns at once; answered, always,
+// with cube_web_camera_lock_reported(). `request` is the camera's.
+void cube_web_camera_lock(int request, int exposure, int white_balance);
+// Puts back what the lock changed; the camera keeps running.
+void cube_web_camera_unlock();
 }
 
 namespace cube::platform::camera {
@@ -115,6 +124,9 @@ struct Session {
 
     std::optional<TimedFrame> latest;
     std::optional<PhotometryLockReport> report;
+    // True once a lock has been read back as holding something on this camera:
+    // the only thing photometry_control_supported() ever claims.
+    bool controls_proven = false;
 };
 
 Session& session() {
@@ -243,6 +255,34 @@ EMSCRIPTEN_KEEPALIVE void cube_web_camera_devices(int request, int length) {
     s.changed.notify_all();
 }
 
+// The answer to cube_web_camera_lock(): whether the camera listed a manual
+// mode for either control at all (`offered`) and, per control, what became of
+// it, the value asked for and the value read back. Turned into the report here
+// and nowhere else; what it says is camera_web.js's finding, from the track.
+EMSCRIPTEN_KEEPALIVE void cube_web_camera_lock_reported(
+    int request, int offered, int exposure_outcome, double exposure_requested,
+    double exposure_readback, int white_balance_outcome, double kelvin_requested,
+    double kelvin_readback) {
+    auto& s = cube::platform::camera::session();
+    const std::scoped_lock lock(s.mutex);
+    if (request != s.camera || !s.capturing) {
+        return;
+    }
+    const auto report =
+        cube::platform::camera::web::report_from_page(offered != 0,
+                                                      {.outcome = exposure_outcome,
+                                                       .requested = exposure_requested,
+                                                       .readback = exposure_readback},
+                                                      {.outcome = white_balance_outcome,
+                                                       .requested = kelvin_requested,
+                                                       .readback = kelvin_readback});
+    s.controls_proven =
+        report.exposure_locked() ||
+        report.result(cube::platform::camera::PhotometryControl::auto_white_balance).outcome ==
+            cube::platform::camera::ControlOutcome::applied;
+    s.report = report;
+}
+
 EMSCRIPTEN_KEEPALIVE void cube_web_camera_started(int request, int answer) {
     auto& s = cube::platform::camera::session();
     {
@@ -340,6 +380,7 @@ Result<void> start(const DeviceInfo& device) {
         s.start_answer = Answer::ok;
         s.latest.reset();
         s.report.reset();
+        s.controls_proven = false;
     }
     // Returns once the page has read the id, so its storage is still ours
     // while it does.
@@ -372,9 +413,11 @@ void stop() {
         s.capturing = false;
         s.latest.reset();
         s.report.reset();
+        s.controls_proven = false;
     }
     // Called from the GUI thread, which is the main thread: this runs in place
-    // and does not wait for anything.
+    // and does not wait for anything. The page puts back what a lock changed
+    // before it lets the camera go.
     cube_web_camera_close();
 }
 
@@ -395,35 +438,61 @@ bool is_capturing() noexcept {
     return s.capturing;
 }
 
-// Locking exposure and white balance is what the scan wants, and browsers have
-// a way to ask for it - MediaStreamTrack.applyConstraints() with
-// exposureMode/whiteBalanceMode, in Chrome - but it is not proven against a
-// device the way the DirectShow controls are (see the long note in
-// interfaces/camera.hpp: an unproven control reported as locked is worse than
-// a missing one). So this platform says what is true: it does not lock, and
-// the scan runs on the camera's own automatics.
+// Locking exposure and white balance is what the scan wants, and a browser has
+// a way to ask for it: MediaStreamTrack.applyConstraints() with exposureMode
+// and whiteBalanceMode, in Chromium, on a camera that lists them. Whether this
+// browser and this camera do is a fact about the open camera, and is found by
+// reading its track and then reading it back after the lock (camera_web.js),
+// not by naming a browser: Safari and Firefox offer a page no such control,
+// and in Chromium it is the camera's driver that decides.
+//
+// So this claims support only for a camera on which a lock has been read back
+// as holding something (see the long note in interfaces/camera.hpp: an
+// unproven control reported as locked is worse than a missing one). Before the
+// lock has reported, and for a camera it could not hold, the answer is no, and
+// the scan runs on the camera's own automatics - which is also what the report
+// says.
 bool photometry_control_supported() noexcept {
-    return false;
-}
-
-Result<void> request_photometry_lock(const PhotometryLockRequest& /*request*/) {
     Session& s = session();
     const std::scoped_lock lock(s.mutex);
-    if (!s.capturing) {
-        return std::unexpected(CubeError::camera_control_unavailable);
+    return s.capturing && s.controls_proven;
+}
+
+// Asks the page. It waits for the camera's automatics to settle, as the
+// desktop loop does, and answers - always, if only with "unsupported" - through
+// cube_web_camera_lock_reported(); the scan waits for that answer, not for the
+// lock. The overrides in the request are the desktop driver's units (a
+// DirectShow exposure is a power of two seconds) and mean nothing to a browser,
+// which holds only what the camera itself chose.
+Result<void> request_photometry_lock(const PhotometryLockRequest& request) {
+    Session& s = session();
+    int camera = 0;
+    {
+        const std::scoped_lock lock(s.mutex);
+        if (!s.capturing) {
+            return std::unexpected(CubeError::camera_control_unavailable);
+        }
+        // An answer to an earlier request is not this one's.
+        s.report.reset();
+        s.controls_proven = false;
+        camera = s.camera;
     }
-    // An answer, not silence: "this platform cannot" is what the caller needs
-    // to tell the person (see request_photometry_lock in camera.hpp).
-    s.report = PhotometryLockReport{};
+    cube_web_camera_lock(camera, request.lock_exposure ? 1 : 0,
+                         request.lock_auto_white_balance ? 1 : 0);
     return {};
 }
 
 Result<void> request_photometry_restore() {
     Session& s = session();
-    const std::scoped_lock lock(s.mutex);
-    if (!s.capturing) {
-        return std::unexpected(CubeError::camera_control_unavailable);
+    {
+        const std::scoped_lock lock(s.mutex);
+        if (!s.capturing) {
+            return std::unexpected(CubeError::camera_control_unavailable);
+        }
+        s.report.reset();
+        s.controls_proven = false;
     }
+    cube_web_camera_unlock();
     return {};
 }
 

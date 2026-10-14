@@ -87,17 +87,19 @@ void within(const std::vector<cv::Vec3f>& pixels, const cv::Vec3f& centre, float
 // largest part of the patch shares, which is the plastic's whenever the plastic
 // is the largest part - and that holds well past half the patch being logo,
 // because a logo is several colours and the plastic is one. `pixels` is the
-// patch row by row, `cols` wide.
-[[nodiscard]] const cv::Vec3f& densest_candidate(const std::vector<cv::Vec3f>& pixels, int rows,
-                                                 int cols) {
+// patch row by row, `size.width` wide.
+[[nodiscard]] const cv::Vec3f& densest_candidate(const std::vector<cv::Vec3f>& pixels,
+                                                 const cv::Size& size) {
     const float limit = kBallRadius * kBallRadius;
     std::size_t best = 0;
     std::size_t best_count = 0;
     for (int grid_row = 0; grid_row < kCandidatesPerSide; ++grid_row) {
         for (int grid_col = 0; grid_col < kCandidatesPerSide; ++grid_col) {
-            const int row = ((2 * grid_row + 1) * rows) / (2 * kCandidatesPerSide);
-            const int col = ((2 * grid_col + 1) * cols) / (2 * kCandidatesPerSide);
-            const auto candidate = static_cast<std::size_t>((row * cols) + col);
+            const auto row = static_cast<std::size_t>((((2 * grid_row) + 1) * size.height) /
+                                                      (2 * kCandidatesPerSide));
+            const auto col = static_cast<std::size_t>((((2 * grid_col) + 1) * size.width) /
+                                                      (2 * kCandidatesPerSide));
+            const std::size_t candidate = (row * static_cast<std::size_t>(size.width)) + col;
             std::size_t count = 0;
             for (const cv::Vec3f& pixel : pixels) {
                 if (squared_distance(pixel, pixels.at(candidate)) <= limit) {
@@ -146,7 +148,7 @@ std::optional<cv::Vec3f> sticker_lab(const cv::Mat& bgr, const cv::Point2f& cent
 
     std::vector<cv::Vec3f> kept;
     kept.reserve(pixels.size());
-    within(pixels, densest_candidate(pixels, lab.rows, lab.cols), kBallRadius, kept);
+    within(pixels, densest_candidate(pixels, lab.size()), kBallRadius, kept);
     if (kept.size() < min_cluster) {
         return channel_medians(pixels, scratch);
     }

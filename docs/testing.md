@@ -214,6 +214,12 @@ a setting already in the store). `ctest --preset <preset>-system -R
 system.walk` runs the shards; `-j` runs entries side by side, which on four
 cores took the whole set from 8.7 to 4.4 minutes (below).
 
+The relaunch case needs the settings store seeded before the app exists, which
+only its ctest entry does (`CUBE_SYSTEM_TEST_THEME`). Picked up through a tag it
+shares with other cases (`[settings]`, `[system]`) it is reported as skipped,
+with that reason; run alone without the seed, the binary exits 4, so the
+entry cannot pass without the check having been made.
+
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
 
@@ -340,10 +346,12 @@ nothing from the one before.
 
 What a case costs there is mostly **the first frame of a 3D cube**: the
 launch and solve screens (and the settings preview) are a `View3D` with MSAA, a
-procedural light probe and six lights, and the first frame of each one - which
-is every return to a screen that has it - spends eight seconds on llvmpipe
-prefiltering the probe. Measured with `QSG_RENDER_TIMING` on the CI preset
-(`linux-gcc-coverage`, Qt 6.8.3, four cores): in the cube-drag case eight such
+light probe and six lights, and the first frame of each one - which is every
+return to a screen that has it - spent eight seconds on llvmpipe prefiltering
+the probe (it is a prefiltered file now, and that is gone:
+[performance](performance.md#the-light-probe); what follows is what the
+harness's choices were made on). Measured with `QSG_RENDER_TIMING` on the CI
+preset (`linux-gcc-coverage`, Qt 6.8.3, four cores): in the cube-drag case eight such
 frames were 66 of its 82 seconds and the other 147 frames were 0.7 s in all;
 the same case with the probe left out is 16 s. (Antialiasing off changed
 nothing; a never-removed 3D view to keep Qt's caches alive changed nothing.)
@@ -380,10 +388,14 @@ added:
   hard the cube is, and the solver's own tests cover its time on a hard one.
 - **No light probe unless the case is about how the cube looks.** Before a
   view's first frame is synchronised the harness takes the probe off its
-  environment, so the cube is lit by its six lights alone and the first frame
-  is not eight seconds. `App::fresh(Start, Scene3D::full)` keeps it, and the
-  screenshot tour and the render checks ask for that. A pixel comparison
-  between two runs of the cheap cube is still a comparison of the same thing.
+  environment, so the cube is lit by its six lights alone. This was the first
+  frame not being eight seconds; the probe is a prefiltered file now and the
+  first frame is the same with it
+  ([performance](performance.md#the-light-probe)), so the choice buys nothing
+  today and `Scene3D::cheap` could go. `App::fresh(Start, Scene3D::full)` keeps
+  the probe, and the screenshot tour and the render checks ask for that. A
+  pixel comparison between two runs of the cheap cube is still a comparison of
+  the same thing.
 - **A press for each kind of move, not for each move.** The journey presses
   Next for the first and last few moves and for the first of every kind of turn
   (`R`, `U'`, `F2`...), and steps the rest through the controller; the tour
@@ -990,32 +1002,32 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload; every language, the CJK scripts, mirroring for Hebrew and Arabic |
-| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic, and that each of the five drafts shows its own script |
+| `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off; the launch and settings screens again in Hebrew, Arabic and Yiddish, mirrored |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
-| `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
-| `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
+| `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of; the exposure and white balance lock: held and given back, a camera or browser without the controls, one that refuses, one that is silently skipped, one that takes manual at a value of its own, one that never answers |
+| `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes, and the lock the real track makes of its controls |
 | `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
+| `tumble.spec.mjs` | a cube turned about one axis and then another, drawn by `cube_tumble_sim` and played to the camera at its recorded frame times; skipped unless `TUMBLE_SESSION` names the session (see [the investigation](investigations/2026-10-14-scan-tumble.md)) |
 | `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
 | `package.spec.mjs` | the `package` project: any built copy of the site, the release zip unzipped included, starts, is isolated, draws and is quiet (it needs nothing the diagnostics build adds) |
 | `perf.spec.mjs` | the journeys again, read from the recorder; see below |
 
 A page per test, with the browser's storage cleared first: the module compiles
 in about a second and the first screen is up in two, so nothing a test leaves
-in the browser's storage reaches the next. A failure attaches the page's
-console and a screenshot (and a Playwright trace on the retry).
+in the browser's storage reaches the next. (A test that needs an earlier visit's
+settings says what the storage holds when the app starts: `appOptions.storage`.)
+A failure attaches the page's console and a screenshot (and a Playwright trace
+on the retry).
 
-**The light probe.** On a headless runner the page draws in software
-(SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first
-frame of every 3D view: some twenty seconds of every core, for every page, and
-the same again when the page is closed. The suite leaves the probe out (the
-cube is still lit by its lights), as `tests/system` does natively
-(`App::Scene3D::cheap`): the context's init script sets
-`window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' }`, which the
-page passes to the app as environment and the driver reads
-(`driver_web.cpp`). `appOptions: { lightProbe: true }` keeps it, and the `perf`
-project does, so that what it measures is the app as shipped. The first
-version of the suite did not, and spent half a minute per test closing pages.
+**The light probe.** The suite runs the app as it ships, light probe included.
+On a headless runner the page draws in software (SwiftShader), and while the
+probe was prefiltered by Qt Quick 3D on the first frame of every 3D view that
+was half a minute of every core for each page, and the same again when it was
+closed - the first version of the suite spent thirty seconds a test on it and
+then left the probe out. The probe is a prefiltered file now (`tools/lightprobe`,
+[performance](performance.md#the-light-probe)): the 30th frame of a page is
+there in two or three seconds and closing it is one.
 
 **One worker.** SwiftShader's threads spin on every core they find, so two pages
 at once measured seven times slower each than one. `CUBEULATOR_WEB_WORKERS`
@@ -1026,6 +1038,16 @@ CHANGE", as in `tests/system/known_today_test.cpp`: a toggle's label does not an
 reaches no control and Escape leaves nothing on most screens, and a chosen
 language still shows English where its catalogue's entries are unfinished. They fail
 when the app is fixed, which is the prompt to update them.
+
+`settings.spec.mjs` attaches a picture of the settings and launch screens in
+each of German, French and Spanish to its report. A passing test's attachments
+are not kept, so `CUBEULATOR_WEB_SHOTS=<dir>` also writes them there:
+
+```sh
+CUBEULATOR_WEB_DIR=../../build/web-emscripten-diagnostics/bin \
+CUBEULATOR_WEB_SHOTS=shots \
+  npx playwright test --project=app specs/settings.spec.mjs -g accents
+```
 
 ### Performance in the browser
 
@@ -1047,6 +1069,63 @@ renderer string and the heap), `<journey>.trace.json` (open it in the DevTools
 Performance panel or Perfetto) and `<journey>.csv` (`tracy-csvexport`'s
 columns), which CI uploads.
 
+### The camera's exposure and white balance
+
+The scan holds the camera's exposure and white balance where its automatics
+settled (`camera_web.js`; [Differences from the desktop apps](web.md#differences-from-the-desktop-apps)),
+and says only what it read back: `applied` when `getSettings()` shows `manual`
+at the value asked for, `rejected` when the camera was asked and did not hold,
+`unsupported` when the browser or the camera has no such control. The cases for
+it are in `camera.spec.mjs`, and read the report as the app has it
+(`DirectScan.lock`, which is what the diagnostics channel's `camera` record
+carries as `lock`). The fake camera's controls are the test's to set
+(`window.__fakeCamera.controls({...})`): what it lists, what it is doing, and
+the ways a real driver lets a lock down.
+
+The camera cases under `tests/integration` are not built for the web (see the
+table above), so the claim that `photometry_control_supported()` is made only
+where it was measured has a counterpart here, not there: in
+`camera.spec.mjs` `DirectScan.lock.supported` is true only after a lock was read
+back as holding, and false for a camera with no controls, one that refused, one
+that was skipped and one that went to manual at its own value.
+`tests/platform/web/photometry_web_test.cpp` holds the half after the page: what
+a number from the page may become in the report, run under Node with the rest of
+the suite.
+
+**Measuring a real camera.** How much a real webcam's exposure and white balance
+move while a cube is held and turned is not something a drawn camera can say.
+`tools/web/camera-photometry-probe.html` is the measurement: it samples the mean
+colour of one small square on a held cube, writes numbers only (no frame is
+kept or sent), and runs the app's own lock (it loads `camera_web.js` itself, so
+a change to the lock changes what is measured) for the comparison.
+
+```sh
+node tests/web/support/serve.mjs . 8130
+# open http://localhost:8130/tools/web/camera-photometry-probe.html
+```
+
+Open the camera, click the picture to put the square on a white sticker, and
+make the four runs in order: still with the automatics, turning with the
+automatics, **Lock exposure and white balance**, still locked, turning locked.
+The table gives, per run, the range and the trend of the square's luminance and
+of its R/G and B/G ratios, and which exposure and white balance values the
+camera reported while it ran; *Copy results* and the CSV are what to keep. The
+lock's own answer is shown beside it (what the camera listed and what it read
+back), with how far the square's picture moved when it was applied.
+
+What to read from it. The bar is the synthetic drift of the scan-tumble
+investigation: a swing of 15% in exposure over seven seconds broke the naming of
+colours in 3 of 12 tumbles even with the reader fixed, so a Y' range or trend of
+that order in run A or B is what the lock is for, and a few percent is noise.
+Run C against A, and D against B, says whether holding the camera removed it.
+Two things in the table say the numbers are not what they seem: *exposureTime
+seen* a single value in an automatic run while Y' moves means the camera is not
+reporting what its automatics chose (the lock would hold a stale value: look at
+the picture's change when the lock is applied), and a *Hz* far under what the
+camera is rated for means the page is not being painted. A phone is measured the
+same way: the page needs `localhost` or `https`, so use the browser's
+remote-debugging port forwarding or an `https` host.
+
 ### What this does not cover
 
 - **Other browsers.** Chromium only. The app needs threads and WebGL 2; Firefox
@@ -1055,7 +1134,8 @@ columns), which CI uploads.
 - **A real camera and a real GPU.** The page's `getUserMedia()` path is
   exercised, with a stream the test draws and with Chromium's built-in fake
   device; neither is a lens. Colour under a real webcam is the corpus tools'
-  (`tools/scan`).
+  (`tools/scan`), and whether a real webcam's exposure and white balance can be
+  held, and what they do when they are not, is the probe's (above).
 - **The published site.** These test the diagnostics build, which differs from
   `web-emscripten-release` by the recorder and the driver only; whether the
   deployed copy is served with the right headers is the docs workflow's check.

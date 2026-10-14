@@ -20,18 +20,25 @@
 #include <cube/solver/outside_view.hpp>
 #include <cube/solver/solver.hpp>
 
+#include <QtQml/qqml.h>
+#include <QByteArray>
 #include <QColor>
+#include <QFile>
 #include <QMetaObject>
 #include <QQmlComponent>
+#include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlFile>
 #include <QQuaternion>
 #include <QQuickItem>
 #include <QString>
 #include <QUrl>
 #include <QVariant>
 
+#include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -456,4 +463,117 @@ TEST_CASE("a dragged view shows the back, and comes home when let go", "[qml][cu
     view.guide(std::nullopt);
     REQUIRE(wait_for([&]() { return !view.get("nudging").toBool(); }));
     CHECK(view.shows(cube));
+}
+
+namespace {
+
+// The object of this class, or of one derived from it, among a view's children.
+[[nodiscard]] QObject* find_of_class(const QObject* parent, const char* class_name) {
+    for (QObject* object : parent->findChildren<QObject*>()) {
+        for (const QMetaObject* type = object->metaObject(); type != nullptr;
+             type = type->superClass()) {
+            if (qstrcmp(type->className(), class_name) == 0) {
+                return object;
+            }
+        }
+    }
+    return nullptr;
+}
+
+// An IEEE half float, from its 16 bits. By hand rather than through Qt's
+// qfloat16: a memcpy into that class is -Wclass-memaccess under GCC, and what
+// the test needs of it is this.
+[[nodiscard]] double half_to_double(quint16 bits) {
+    const int sign = (bits >> 15) & 0x1;
+    const int exponent = (bits >> 10) & 0x1F;
+    const int mantissa = bits & 0x3FF;
+    double magnitude = 0.0;
+    if (exponent == 0) {
+        magnitude = std::ldexp(static_cast<double>(mantissa), -24);  // zero and denormals
+    } else if (exponent == 0x1F) {
+        magnitude = mantissa == 0 ? HUGE_VAL : std::nan("");
+    } else {
+        magnitude = std::ldexp(static_cast<double>(mantissa | 0x400), exponent - 25);
+    }
+    return sign != 0 ? -magnitude : magnitude;
+}
+
+// The mean brightness of one face of the cube map's first level (RGBA16F,
+// faces in the order +X -X +Y -Y +Z -Z; KTX 1: a 64-byte header, the key/value
+// data, then per level a size and the six faces).
+[[nodiscard]] double face_brightness(const QByteArray& file, std::size_t face, quint32 size,
+                                     quint32 key_value_bytes) {
+    const qsizetype face_bytes = qsizetype{size} * size * 8;
+    const qsizetype first = 64 + qsizetype{key_value_bytes} + 4;
+    const char* texels = file.constData() + first + static_cast<qsizetype>(face) * face_bytes;
+    double sum = 0.0;
+    for (std::size_t i = 0; i < std::size_t{size} * size; ++i) {
+        quint16 half[3];  // red, green, blue; the alpha after them is not read
+        std::memcpy(half, texels + i * 8, sizeof(half));
+        for (const quint16 bits : half) {
+            sum += half_to_double(bits);
+        }
+    }
+    return sum / (3.0 * static_cast<double>(size) * size);
+}
+
+}  // namespace
+
+TEST_CASE("the light probe is a prefiltered cube map with the sky above and the ground below",
+          "[qml][cube-view]") {
+    // Given a plain image Qt Quick 3D prefilters the probe itself on the first
+    // frame of every View3D - eight seconds of CPU on a software renderer, and
+    // some twenty in a browser, every time a screen with the cube comes up. A
+    // KTX file marked as the baker's output is used as it is, and that is what
+    // the cube loads: the sky it used to make at run time, prefiltered once.
+    // tools/lightprobe makes the file.
+    View view;
+    const QObject* viewport = find_of_class(view.item(), "QQuick3DViewport");
+    REQUIRE(viewport != nullptr);
+    const auto* environment = qvariant_cast<QObject*>(viewport->property("environment"));
+    REQUIRE(environment != nullptr);
+    const auto* probe = qvariant_cast<QObject*>(environment->property("lightProbe"));
+    REQUIRE(probe != nullptr);
+
+    // A file, and nothing the engine would have to make into one.
+    CHECK(qvariant_cast<QObject*>(probe->property("textureData")) == nullptr);
+    // The URL as the QML wrote it, relative to the file that wrote it; Qt
+    // resolves it against that file when it loads the texture, and so does this.
+    const QQmlContext* context = qmlContext(probe);
+    REQUIRE(context != nullptr);
+    const QUrl source = context->resolvedUrl(probe->property("source").toUrl());
+    REQUIRE(source.isValid());
+    INFO("source " << source.toString().toStdString());
+    QFile file(QQmlFile::urlToLocalFileOrQrc(source));
+    REQUIRE(file.open(QIODevice::ReadOnly));
+    const QByteArray bytes = file.readAll();
+    REQUIRE(bytes.size() > 64);
+
+    constexpr std::array<unsigned char, 12> kIdentifier = {0xAB, 0x4B, 0x54, 0x58, 0x20, 0x31,
+                                                           0x31, 0xBB, 0x0D, 0x0A, 0x1A, 0x0A};
+    REQUIRE(std::memcmp(bytes.constData(), kIdentifier.data(), kIdentifier.size()) == 0);
+    std::array<quint32, 13> header{};
+    std::memcpy(header.data(), bytes.constData() + 12, sizeof(header));
+    // endianness, glType, glTypeSize, glFormat, glInternalFormat,
+    // glBaseInternalFormat, width, height, depth, array elements, faces,
+    // levels, bytes of key/value data
+    CHECK(header[0] == 0x04030201U);
+    CHECK(header[1] == 0x140BU);  // GL_HALF_FLOAT
+    CHECK(header[4] == 0x881AU);  // GL_RGBA16F
+    CHECK(header[6] == header[7]);
+    CHECK(header[6] >= 16U);
+    CHECK(header[10] == 6U);  // a cube
+    // Qt asserts five, and a roughness is a level: more than the base.
+    CHECK(header[11] >= 5U);
+
+    // What marks it as prefiltered. Without the key Qt prefilters it again.
+    const QByteArray key_values = bytes.mid(64, static_cast<qsizetype>(header[12]));
+    CHECK(key_values.contains("QT_IBL_BAKER_VERSION"));
+
+    // The right way up. The first bake of this file was upside down - the
+    // underside of the cube lit by the sky - and nothing but the picture said so.
+    const double above = face_brightness(bytes, 2, header[6], header[12]);
+    const double below = face_brightness(bytes, 3, header[6], header[12]);
+    INFO("+Y " << above << ", -Y " << below);
+    CHECK(above > 4.0 * below);
 }

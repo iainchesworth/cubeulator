@@ -105,4 +105,10 @@ name.
 
 ## Closed investigations
 
-None yet.
+- [2026-10-14: does the scan catch a cube turned slowly about one axis and then
+  another?](2026-10-14-scan-tumble.md) - no: six faults in a row, each fixed and
+  tested; `cube_scan funnel` and `cube_tumble_sim` repeat it.
+- [2026-10-15: why is a side near the edge of the square-on gate unread beside
+  a much thinner one?](2026-10-15-square-on-dead-band.md) - not the thin side's
+  blobs, which are never in the fit: the square grid `read_side` lays first; a
+  second look places the blobs through their own fit.

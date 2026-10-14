@@ -16,3 +16,4 @@ CMakeLists.txt text
 *.png binary
 *.ico binary
 *.qm  binary
+*.ktx binary

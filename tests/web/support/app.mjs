@@ -49,8 +49,11 @@ export class CubeulatorApp {
    * Opens a fresh page on the app and waits until it has drawn its first screen.
    * @param {import('@playwright/test').Browser} browser
    * @param {{viewport?: {width:number,height:number}, camera?: 'fake'|'browser', query?: string,
-   *          touch?: boolean, permissions?: string[], lightProbe?: boolean,
-   *          screen?: string}} [options] `screen` is the one to wait for (launch)
+   *          touch?: boolean, permissions?: string[],
+   *          screen?: string, storage?: Record<string,string>}} [options]
+   *          `screen` is the one to wait for (launch); `storage` is what the
+   *          browser's localStorage holds when the app starts, as an earlier
+   *          visit would have left it
    */
   static async open(browser, options = {}, contexts = new Map()) {
     // One browser context per worker and option set, and a page per test. A
@@ -63,7 +66,6 @@ export class CubeulatorApp {
       touch: options.touch ?? false,
       camera: options.camera ?? 'fake',
       permissions: options.permissions ?? ['camera'],
-      lightProbe: options.lightProbe ?? false,
     });
     let context = contexts.get(key);
     if (!context) {
@@ -76,13 +78,6 @@ export class CubeulatorApp {
       });
       if ((options.camera ?? 'fake') === 'fake') {
         await context.addInitScript({ content: await readFile(fakeCameraScript, 'utf8') });
-      }
-      if (!(options.lightProbe ?? false)) {
-        // The cube's light probe is prefiltered on a software renderer in some
-        // twenty seconds of every core, for every page (driver_web.cpp says
-        // more); a case that is about how the cube looks asks for it.
-        await context.addInitScript({
-          content: "window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' };" });
       }
       contexts.set(key, context);
     }
@@ -102,10 +97,11 @@ export class CubeulatorApp {
     });
 
     // A clean origin: nothing a previous test of this context kept (the app
-    // keeps its settings in the browser's storage).
+    // keeps its settings in the browser's storage), and then only what the
+    // test says an earlier visit left.
     await context.clearCookies();
     await page.goto('/icon.svg');
-    await page.evaluate(async () => {
+    await page.evaluate(async (seed) => {
       localStorage.clear();
       sessionStorage.clear();
       if (indexedDB.databases) {
@@ -115,7 +111,10 @@ export class CubeulatorApp {
           }
         }
       }
-    });
+      for (const [key, value] of Object.entries(seed)) {
+        localStorage.setItem(key, value);
+      }
+    }, options.storage ?? {});
 
     const began = Date.now();
     await page.goto(`/index.html${options.query ?? ''}`);
@@ -313,14 +312,36 @@ export class CubeulatorApp {
   }
 
   /**
-   * Waits until the browser's storage holds `value`: the app writes its
-   * settings lazily, a moment after they change, and a reload before that
-   * would lose them.
+   * What the browser's localStorage holds for the page, key to value: where
+   * the app keeps its settings (`qt-v0-<organisation>-<application>-<group>/<name>`).
    */
-  async waitUntilStored(value, timeout = 10_000) {
-    await expect.poll(() => this.page.evaluate(
-      (v) => Object.values(localStorage).includes(v), value),
-    { timeout, message: `waiting for '${value}' to reach localStorage` }).toBe(true);
+  stored() {
+    return this.page.evaluate(() => Object.fromEntries(Object.entries(localStorage)));
+  }
+
+  /**
+   * Does to the page what the browser does when it is put away, and returns
+   * once the page's handlers have run (they are synchronous: it is the last a
+   * page that is being closed ever runs).
+   *   'visibilitychange'  the tab goes to the background: the page is hidden
+   *                       for the length of the event, then shown again
+   *   'pagehide'          the page is being left
+   * A real reload sends both; this is for the case a reload cannot show,
+   * a page that is hidden and stays.
+   */
+  async putAway(kind = 'visibilitychange') {
+    await this.page.evaluate((what) => {
+      if (what === 'pagehide') {
+        window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: true }));
+        return;
+      }
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      try {
+        document.dispatchEvent(new Event('visibilitychange'));
+      } finally {
+        delete document.visibilityState;
+      }
+    }, kind);
   }
 
   /** Reloads the page and waits for the first screen again. */
@@ -377,8 +398,8 @@ export class CubeulatorApp {
 
   /**
    * Waits until the app has presented `count` frames (the recorder's "UI"
-   * set). With its light probe on, the first frames of a page take seconds
-   * each on a software renderer; whatever is measured is measured after them.
+   * set). The first frames of a page take seconds each on a software renderer;
+   * whatever is measured is measured after them.
    */
   async waitForFrames(count = 5, timeout = 180_000) {
     await expect.poll(async () => (await this.profile()).frames.UI ?? 0,

@@ -28,6 +28,8 @@ public:
     ~JsonlFile() { close(); }
     JsonlFile(const JsonlFile&) = delete;
     JsonlFile& operator=(const JsonlFile&) = delete;
+    JsonlFile(JsonlFile&&) = delete;
+    JsonlFile& operator=(JsonlFile&&) = delete;
 
     // Creates the directory if need be and opens `path` for appending. What
     // the file already held - the last run's - is moved aside first, so that

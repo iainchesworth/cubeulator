@@ -206,6 +206,28 @@ cv::Mat DirectScan::latestFrame() const {
     return latest_frame_;
 }
 
+QVariantMap DirectScan::lock() const {
+    using cube::platform::camera::PhotometryControl;
+    const auto text = [](std::string_view value) {
+        return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
+    };
+
+    QVariantMap out;
+    out.insert(QStringLiteral("reported"), lock_report_.has_value());
+    out.insert(QStringLiteral("supported"), cube::platform::camera::photometry_control_supported());
+    if (lock_report_.has_value()) {
+        const auto& report = *lock_report_;
+        out.insert(
+            QStringLiteral("exposure"),
+            text(cube::app::records::id_of(report.result(PhotometryControl::exposure).outcome)));
+        out.insert(QStringLiteral("whiteBalance"),
+                   text(cube::app::records::id_of(
+                       report.result(PhotometryControl::auto_white_balance).outcome)));
+        out.insert(QStringLiteral("summary"), QString::fromStdString(report.summary()));
+    }
+    return out;
+}
+
 bool DirectScan::diagnosing() const noexcept {
     return diagnostics_ != nullptr && diagnostics_->enabled();
 }
@@ -400,6 +422,7 @@ void DirectScan::restart() {
     // A new scan is a new recording.
     finishRecording();
     scan_.reset();
+    previous_frame_ms_.reset();
     read_.reset();
     reading_ = false;
     capture_progress_ = 0.0;
@@ -449,6 +472,13 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     frame_width_ = bgr.cols;
     frame_height_ = bgr.rows;
     ++frame_seq_;
+    // How long since the frame before, for the scan's rule that a side must
+    // have held still: a camera that settles at 20 frames a second or less, or
+    // a frame the page was late for, moves a side further between frames that
+    // are further apart without turning it any faster.
+    const float interval_ms =
+        previous_frame_ms_.has_value() ? static_cast<float>(t_ms - *previous_frame_ms_) : 0.0F;
+    previous_frame_ms_ = t_ms;
 
     if (watching_) {
         // The solve screen's camera: say what side is in view and leave the
@@ -479,14 +509,14 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // Exactly the frames the scan is built from: none before the camera has
     // settled, none after the cube is read.
     record(bgr, t_ms);
-    scan_.add(read_);
+    scan_.add(read_, interval_ms);
     bool corner_added = false;
     if (!read_.has_value()) {
         // Not a side square to the camera. It may still be two sides in one
         // view, which is what settles a cube whose flat sides fit two ways.
         const auto corner =
             prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt;
-        scan_.add_corner(corner);
+        scan_.add_corner(corner, interval_ms);
         corner_added = corner.has_value();
     }
 
