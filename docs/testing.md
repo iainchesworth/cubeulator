@@ -28,6 +28,11 @@ independent Catch2 cases, so parallel runs are safe - pass `-j <n>` (or set
 machine-specific tuning belongs; the committed presets leave it unset so
 CI's 4-core runners aren't oversubscribed).
 
+That leaves out the **system tests**, which draw the real app in a window (see
+[System tests](#system-tests)): every committed test preset excludes the
+`system` label, so a plain `ctest` never opens a window. They are run with the
+matching `<preset>-system` preset.
+
 ## Debug is slow - use `fastdebug` for local iteration
 
 A plain `Debug` build (`windows-msvc-debug`/`linux-gcc-debug`/`macos-clang-debug`)
@@ -146,16 +151,22 @@ the way a person would. One command runs it:
 
 ```
 cmake --build --preset <preset> --target cube_system_tests
-ctest --preset <preset> -L system --output-on-failure
+ctest --preset <preset>-system --output-on-failure
 ```
+
+`<preset>-system` is the test preset that selects only the `system` label;
+`<preset>` itself excludes it, and a command-line `-L system` cannot widen a
+preset that excludes the label (ctest applies both and finds nothing). A
+personal `CMakeUserPresets.json` test preset that wants the suite inherits
+`base-system` instead of `base`.
 
 That is a handful of ctest entries: `system.walk.<n>of<count>` (the suite bar
 the tour, cut into shards, five by default - a run of the app each),
 `system.tour` (the screenshot tour, below, a run of its own), `system.reach`
 (the reach gate, below; merges what the shards saw, needs no display) and
 `system.relaunch` (a second launch with a setting already in the store).
-`ctest -R system.walk` runs the shards; `-j` runs them side by side where
-there is a CPU to spare.
+`ctest --preset <preset>-system -R system.walk` runs the shards; `-j` runs them
+side by side where there is a CPU to spare.
 
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
@@ -163,8 +174,33 @@ it a display and software GL (this is what CI does):
 ```
 QT_QPA_PLATFORM=xcb LIBGL_ALWAYS_SOFTWARE=1 \
   xvfb-run -a -s "-screen 0 1280x1024x24" \
-  ctest --preset linux-gcc-coverage -L system --output-on-failure
+  ctest --preset linux-gcc-coverage-system --output-on-failure
 ```
+
+**The window you do not see.** The window is shown, exposed and rendered for
+real - that is the point - but on a platform where that works (Windows today;
+`CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` in the platform's `platform.cmake`) it is
+created fully transparent, click-through, without a taskbar button and never
+activated. A run therefore does not flick screens across the desktop it is
+started from, and does not take the keyboard from whatever is being typed in
+(a shown window is the foreground window for the whole run). Clicks, key
+presses and `grab()` are sent to the window object, not to the screen, so none
+of it matters to them. To watch a case, set `CUBE_SYSTEM_TEST_VISIBLE=1`:
+
+```
+set CUBE_SYSTEM_TEST_VISIBLE=1
+cube_system_tests "[journey]"
+```
+
+A hidden window is never the active window, so a case about keyboard focus or a
+window-scoped shortcut should be looked at once with `CUBE_SYSTEM_TEST_VISIBLE=1`
+before it is trusted: nothing in the suite depends on activation today, but
+that is the one thing the OS no longer gives it.
+
+Do not minimise the window, or move it off every screen, to the same end: a
+minimised window never gets its size (every click lands outside it), and a
+window outside every monitor is never sent an expose, so the app never counts
+as shown.
 
 It writes `<build>/system-test-output/` (or `$CUBE_SYSTEM_TEST_OUT`):
 `tour/screens/*.png` (the screenshot tour) and `reach-shard-<n>-of-<count>.json`
@@ -182,8 +218,9 @@ the time went on. Each case also prints what its reset cost (`[system]   reset:
 a software renderer neither is small, and nothing else says how much of a
 case's time they are.
 
-The `system` label keeps it out of the plain `ctest` runs of the build legs
-(`-LE system`): it needs somewhere to draw.
+The `system` label keeps it out of the plain `ctest` runs - the committed
+presets exclude it, and CI's build legs say `-LE system` as well: it needs
+somewhere to draw.
 
 ### How it works
 

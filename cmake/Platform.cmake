@@ -41,6 +41,16 @@
 #                                      One line of advice for when none is
 #                                      set ("" when the above is). The word
 #                                      PROGRAM stands for the test binary.
+#   CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW
+#                                      ON where a test that draws the real app
+#                                      can make its window invisible to the
+#                                      developer - fully transparent, click-
+#                                      through, never activated - and still
+#                                      have it exposed and rendered, so a run
+#                                      does not flick windows across their
+#                                      desktop or take the keyboard from them.
+#                                      OFF where that is not known to work (a
+#                                      virtual display has nobody to bother).
 #   CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS, CUBEULATOR_PLATFORM_QT_ARCH_DIRS
 #                                      Where cmake/FindQt6.cmake looks for an
 #                                      aqtinstall-style Qt when none is on

@@ -53,6 +53,7 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | Where an installed Qt lives | `CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS` / `_QT_ARCH_DIRS` | `cmake/FindQt6.cmake` |
 | The name in the version block | `CUBEULATOR_PLATFORM_DISPLAY_NAME` | `src/lib` (`build_target`) |
 | Default Qt plugin for the test binaries | `CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM` | `tests/` |
+| Whether the system tests' window is made invisible (transparent, click-through, never activated) | `CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` | `tests/system/app.cpp`, through `cube_test_platform_facts.hpp` |
 | Work before packages are found | `cube_platform_prepare_dependencies()` | `cmake/MobileDependencies.cmake` |
 | Qt runtime next to the app (windeployqt) | `cube_platform_deploy_qt_runtime()` | `src/app/CMakeLists.txt` |
 | Installers (NSIS, DragNDrop, DEB/RPM) | `cube_platform_configure_packaging()` | `cmake/Packaging.cmake` |

@@ -17,6 +17,7 @@ set(CUBE_PLATFORM_CONTRACT_VARIABLES
     CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM
     CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES
     CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
+    CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW
     CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     CUBEULATOR_PLATFORM_QT_ARCH_DIRS
     CUBEULATOR_PLATFORM_NOTICES_DIR
@@ -47,7 +48,8 @@ endmacro()
 # Checks the fragment that was just included (in the caller's scope):
 #   - every contract variable is defined (an empty string is a definition);
 #   - every hook exists;
-#   - CUBEULATOR_PLATFORM_DESKTOP is a boolean;
+#   - CUBEULATOR_PLATFORM_DESKTOP and CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW are
+#     ON or OFF;
 #   - every file the fragment compiles exists under <app_dir> (src/app).
 # `fragment` only names it in the message.
 function(cube_platform_check_contract fragment app_dir)
@@ -68,11 +70,12 @@ function(cube_platform_check_contract fragment app_dir)
         endif()
     endforeach()
 
-    if(NOT CUBEULATOR_PLATFORM_DESKTOP STREQUAL "ON" AND NOT CUBEULATOR_PLATFORM_DESKTOP STREQUAL "OFF")
-        message(FATAL_ERROR
-            "${fragment}: CUBEULATOR_PLATFORM_DESKTOP must be ON or OFF, "
-            "not '${CUBEULATOR_PLATFORM_DESKTOP}'.")
-    endif()
+    foreach(_flag CUBEULATOR_PLATFORM_DESKTOP CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW)
+        if(NOT ${_flag} STREQUAL "ON" AND NOT ${_flag} STREQUAL "OFF")
+            message(FATAL_ERROR
+                "${fragment}: ${_flag} must be ON or OFF, not '${${_flag}}'.")
+        endif()
+    endforeach()
 
     foreach(_file IN LISTS CUBEULATOR_PLATFORM_SOURCES)
         if(NOT EXISTS "${app_dir}/${_file}")

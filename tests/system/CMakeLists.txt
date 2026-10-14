@@ -9,9 +9,10 @@
 #
 # Needs a platform that can draw - a desktop session, or Xvfb with software GL
 # on a headless Linux box - because Qt Quick 3D has no software fallback and
-# the screenshots have to be rendered. That is why this is not part of the
-# plain `ctest` run CI's build-and-test legs do: it carries the label
-# `system`, and those legs say -LE system.
+# the screenshots have to be rendered. That is why this is not part of a plain
+# `ctest` run: it carries the label `system`, which the committed test presets
+# exclude (and CI's build-and-test legs say -LE system as well). Run it with
+# the matching `<preset>-system` test preset.
 # ---------------------------------------------------------------------------
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D QuickControls2 LabsSettings Test)
 

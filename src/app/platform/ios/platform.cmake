@@ -9,6 +9,7 @@ set(CUBEULATOR_PLATFORM_DESKTOP OFF)
 set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "offscreen")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
 
 # Qt is a cross-compiled kit here and always comes from CMAKE_PREFIX_PATH;
 # the host-side install roots the desktop platforms search are meaningless.

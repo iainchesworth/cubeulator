@@ -40,6 +40,10 @@ cmake --build --preset linux-gcc-debug
 ctest --preset linux-gcc-debug
 ```
 
+`ctest --preset <preset>` leaves out the system tests, which draw the real app
+in a window; `ctest --preset <preset>-system` runs them
+([testing.md](testing.md#system-tests)).
+
 Just want the core library, no Qt/GUI?
 
 ```sh

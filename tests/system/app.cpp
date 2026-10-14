@@ -5,6 +5,7 @@
 
 #include "app_runtime.hpp"
 #include "i18n/language_manager.hpp"
+#include "test_platform.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -16,6 +17,7 @@
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
+#include <QVariant>
 #include <QtTest/QTest>
 
 #include <cstdio>
@@ -26,6 +28,20 @@ namespace cube::systest {
 namespace {
 
 std::unique_ptr<App> g_app;
+
+// A run of the suite is a person's desktop for as long as it takes, and the
+// window is shown for real (Qt Quick 3D draws nothing otherwise), so on a
+// platform where that works the window is shown but made invisible to whoever
+// is at the machine: fully transparent, click-through, no taskbar button and
+// never activated. It is still exposed and rendered, and clicks, key presses
+// and grab() reach it as before - they are sent to the QWindow, not to the
+// screen. (Placing it outside every screen does not do: nothing is then sent
+// an expose event, and the window never counts as shown.)
+// CUBE_SYSTEM_TEST_VISIBLE=1 shows it as any window is, for watching a case.
+[[nodiscard]] bool window_is_hidden() {
+    return cube::test::platform::hide_window &&
+           !qEnvironmentVariableIsSet("CUBE_SYSTEM_TEST_VISIBLE");
+}
 
 [[nodiscard]] bool class_is(const QObject* object, const char* prefix) {
     return object != nullptr && QByteArray(object->metaObject()->className()).startsWith(prefix);
@@ -93,6 +109,20 @@ App::~App() {
 
 void App::boot() {
     runtime_ = std::make_unique<cube::app::AppRuntime>();
+    // Main.qml says `visible: true`, so the window is shown by load() itself:
+    // what it is to look like has to be said before then, the way the real app
+    // hands the engine the position it was last at (main.cpp).
+    if (window_is_hidden()) {
+        // Tool: no taskbar button. WindowDoesNotAcceptFocus: never takes the
+        // foreground from what the developer is typing in. WindowTransparent-
+        // ForInput: a click that lands where the window is goes to what is
+        // behind it.
+        constexpr Qt::WindowFlags kHiddenFlags = Qt::Tool | Qt::FramelessWindowHint |
+                                                 Qt::WindowDoesNotAcceptFocus |
+                                                 Qt::WindowTransparentForInput;
+        runtime_->engine().setInitialProperties(
+            {{"opacity", 0.0}, {"flags", QVariant::fromValue(kHiddenFlags)}});
+    }
     if (!runtime_->load()) {
         throw std::runtime_error("Main.qml produced no root object; see the QML errors above");
     }

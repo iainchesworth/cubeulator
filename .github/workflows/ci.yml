@@ -431,7 +431,7 @@ jobs:
       - name: System tests (experimental off Linux)
         if: ${{ !cancelled() && runner.os != 'Linux' && steps.build.outcome == 'success' }}
         continue-on-error: true
-        run: ctest --preset ${{ matrix.preset }} -L system --output-on-failure
+        run: ctest --preset ${{ matrix.preset }}-system --output-on-failure
 
       - name: Upload system-test pictures
         if: always() && runner.os != 'Linux'
@@ -814,7 +814,7 @@ jobs:
       - name: System tests
         run: >
           xvfb-run -a -s "-screen 0 1280x1024x24"
-          ctest --preset linux-gcc-coverage -L system --output-on-failure
+          ctest --preset linux-gcc-coverage-system --output-on-failure
 
       # The controller tests drive the same classes without a window; their
       # lines count toward the same report.
