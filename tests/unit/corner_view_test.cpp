@@ -28,6 +28,7 @@ using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::test::draw_corner;
 using cube::test::draw_side;
+using cube::test::Drawing;
 using cube::test::Pose;
 using cube::test::room;
 using cube::vision::CornerRead;
@@ -243,4 +244,36 @@ TEST_CASE("a corner view of the wrong cube does not settle it", "[corner]") {
     const auto read = scan.cube();
     REQUIRE_FALSE(read.has_value());
     CHECK(read.error() == cube::CubeError::ambiguous_scan);
+}
+
+TEST_CASE("corner views settle a cube whose red and orange sides are each the other's colours",
+          "[corner]") {
+    // Half-turns of the top, bottom and front leave only red and orange on
+    // the left and right, each exactly the other's colours, and the six flat
+    // sides put together more than one way. In the colours a warm lamp gave a
+    // real cube, red and orange sit 16 Lab apart and nearly all of it is
+    // lightness, so the corners have to tell them apart too.
+    const Drawing lamp = cube::test::warm_lamp_drawing();
+    const Cube cube = after("F2 D2 U2");
+
+    SideScan scan;
+    constexpr int kFrames = static_cast<int>(SideScan::kMinReads) + 4;
+    for (const Face face : kAllFaces) {
+        const cv::Mat frame = draw_side(cube::solver::outside_view(cube, face), Pose{}, lamp);
+        for (int i = 0; i < kFrames; ++i) {
+            scan.add(cube::vision::read_side(frame));
+        }
+        scan.add(cube::vision::read_side(room({640, 360})));
+    }
+    REQUIRE(scan.sides().size() == 6);
+    const auto flat = scan.cube();
+    REQUIRE_FALSE(flat.has_value());
+    CHECK(flat.error() == cube::CubeError::ambiguous_scan);
+
+    for (const Face left : kAllFaces) {
+        scan.add_corner(read_corner(cube::test::draw_cube_corner(cube, left, {}, lamp)));
+    }
+    const auto settled = scan.cube();
+    REQUIRE(settled.has_value());
+    CHECK(*settled == cube);
 }

@@ -51,10 +51,65 @@ constexpr float kMaxLatticeRms = 0.12F;
 // lightness, where this patch and sticker_lab's robust estimate read 2.
 constexpr float kPatchHalfWidth = 0.30F;
 
-// Two reads are the same side when their nine colours agree this closely
-// under some quarter-turn. Recorded scans give the same cube anywhere from
-// 4 to 26, so the value is not delicate.
-constexpr float kSameSideDistance = 12.0F;
+// Which side a read belongs to is decided by its CENTRE sticker, because the
+// centre never moves and a cube's six centres are six distinct colours:
+// resolve_colors refuses a scan whose centres sit closer than
+// kMinCentreSeedSeparationLab, so that is the least two real centres can be
+// apart. Everything below is derived from it rather than stated afresh.
+//
+// This used to be a mean over all nine stickers of colour_distance, under
+// 12. Two sides of one cube can differ in nothing but which of red and
+// orange sits where - a partly solved cube has that - and under a warm cast
+// red and orange differ almost only in lightness, the axis colour_distance
+// counts for a quarter. Each sticker with red and orange traded scored 9.5;
+// the two sides of the cube this was found on differed in three, 3 to 6 over
+// the nine, so they were fused into one: its medians were a blend of both,
+// the colours seemed to flip as either was shown, and the scan waited for a
+// sixth side it had already swallowed. Their centres were 16 Lab units apart
+// in plain Lab.
+
+// Two stickers further apart than this are two colours: the floor
+// resolve_colors holds centres to.
+constexpr float kDifferentColourLab = kMinCentreSeedSeparationLab;
+
+// A read's centre within this of a side's centre is that side: close enough
+// that no other side's centre can be there. Plain Lab with lightness at
+// full weight - it is the lightness that separates the closest pair.
+// Replayed over every recorded session the grouping is identical for any
+// value from 10 to 16. The closest two centres on a real cube read 13.6 apart
+// under tungsten light (live-demo-p6-retry) and 16 to 20 apart under the lamp
+// of the cube this was found on.
+constexpr float kSameCentreLab = 10.0F;
+static_assert(kSameCentreLab < kDifferentColourLab,
+              "a centre that could be another side's must not be taken for this one");
+
+// Beyond that the centre cannot vouch - it may be glare on this side's
+// centre or another side's - and the other eight stickers must: every one
+// still within kDifferentColourLab of the side's. Two look-alike sides can
+// differ in nothing but the centre and one sticker, and allowing a sticker to
+// differ joins them; replayed on the pair this was found on that left a
+// margin of 1.3 Lab, against 7.7 holding all eight to the match. The cost is
+// a stray group now and then when a finger covers a sticker while the centre
+// is read through glare, and a stray is not a side until it is held for
+// kMinReads.
+
+// Cost of laying a read on a side is the summed distance of the eight
+// stickers other than the centre, each capped so one finger cannot decide a
+// quarter-turn.
+constexpr float kRollCostCap = 2.0F * kDifferentColourLab;
+
+// A side keeps the quarter-turn it last had unless another explains the
+// read by more than one differing sticker's worth. A held side's pattern is
+// the same from frame to frame; without this its turn flapped between
+// nearly-tied choices and the median fused them.
+constexpr float kRollPriorMargin = kDifferentColourLab;
+
+// Groups kept. A read that is no side seen so far starts a group of its own,
+// and every read is compared with every group, so a scene full of lattices
+// that are not a cube (a chessboard, a patterned shirt) must not grow them
+// without bound. Six are sides; the rest are strays that rarely reach two
+// reads. When there are more than this the least-supported stray goes.
+constexpr std::size_t kMaxGroups = 24;
 
 // Lightness and chroma carry shading; hue does not. Down-weighting the
 // first two keeps a shaded sticker close to its own colour.
@@ -346,27 +401,6 @@ struct Upright {
     return best;
 }
 
-// Mean cell distance between a read and a side under the read's best
-// quarter-turn, and that turn.
-[[nodiscard]] std::pair<float, int> side_distance(const std::array<cv::Vec3f, 9>& read,
-                                                  const std::array<cv::Vec3f, 9>& side) {
-    float best = std::numeric_limits<float>::max();
-    int best_roll = 0;
-    for (int roll = 0; roll < 4; ++roll) {
-        float total = 0.0F;
-        for (std::size_t i = 0; i < 9; ++i) {
-            total += colour_distance(
-                read.at(static_cast<std::size_t>(kRoll.at(static_cast<std::size_t>(roll)).at(i))),
-                side.at(i));
-        }
-        if (total / 9.0F < best) {
-            best = total / 9.0F;
-            best_roll = roll;
-        }
-    }
-    return {best, best_roll};
-}
-
 [[nodiscard]] std::array<cv::Vec3f, 9> rolled(const std::array<cv::Vec3f, 9>& read, int roll) {
     std::array<cv::Vec3f, 9> out{};
     for (std::size_t i = 0; i < 9; ++i) {
@@ -374,6 +408,75 @@ struct Upright {
             read.at(static_cast<std::size_t>(kRoll.at(static_cast<std::size_t>(roll)).at(i)));
     }
     return out;
+}
+
+// Plain Lab distance, lightness at full weight. colour_distance is for
+// sticker colours that shading has moved; here two colours that differ only
+// in lightness must still be two.
+[[nodiscard]] float lab_gap(const cv::Vec3f& a, const cv::Vec3f& b) {
+    const cv::Vec3f difference = a - b;
+    return std::sqrt(difference.dot(difference));
+}
+
+// How a read lays on a side, and whether it is that side.
+struct SideFit {
+    int roll = 0;
+    // Summed distance of the eight stickers other than the centre.
+    float cost = 0.0F;
+    bool same = false;
+};
+
+// Lays `read` on `side` under whichever quarter-turn fits best, `prior_roll`
+// winning any near-tie, and judges whether the two are one side.
+//
+// The quarter-turn is chosen from the eight stickers other than the centre,
+// which every turn leaves where it was, in plain Lab with each capped: a
+// finger over one sticker must not turn the side. It was chosen by
+// colour_distance, which barely sees red against orange, so a red and orange
+// pattern was laid down at whichever turn the noise preferred.
+//
+// Then the judgement. The centre is the side's identity (see
+// kSameCentreLab). When it agrees the read is the side, however many
+// stickers a hand covers. When it does not, it may be glare on the centre or
+// another side; the other eight say which.
+[[nodiscard]] SideFit fit_to_side(const std::array<cv::Vec3f, 9>& read,
+                                  const std::array<cv::Vec3f, 9>& side, int prior_roll) {
+    const auto cost_of = [&](int roll) {
+        float cost = 0.0F;
+        const std::array<cv::Vec3f, 9> turned = rolled(read, roll);
+        for (std::size_t i = 0; i < 9; ++i) {
+            if (i != 4) {
+                cost += std::min(lab_gap(turned.at(i), side.at(i)), kRollCostCap);
+            }
+        }
+        return cost;
+    };
+
+    SideFit fit{.roll = 0, .cost = std::numeric_limits<float>::max()};
+    for (int roll = 0; roll < 4; ++roll) {
+        const float cost = cost_of(roll);
+        if (cost < fit.cost) {
+            fit.roll = roll;
+            fit.cost = cost;
+        }
+    }
+    if (const float prior_cost = cost_of(prior_roll); prior_cost <= fit.cost + kRollPriorMargin) {
+        fit.roll = prior_roll;
+        fit.cost = prior_cost;
+    }
+
+    const std::array<cv::Vec3f, 9> turned = rolled(read, fit.roll);
+    if (lab_gap(turned.at(4), side.at(4)) <= kSameCentreLab) {
+        fit.same = true;
+        return fit;
+    }
+    fit.same = true;
+    for (std::size_t i = 0; i < 9; ++i) {
+        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kDifferentColourLab) {
+            fit.same = false;
+        }
+    }
+    return fit;
 }
 
 // Per-cell, per-channel median over every read of a side.
@@ -714,25 +817,84 @@ void SideScan::add(const std::optional<SideRead>& read) {
     }
 
     std::optional<std::size_t> nearest;
-    float nearest_distance = std::numeric_limits<float>::max();
-    int nearest_roll = 0;
+    SideFit nearest_fit;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
-        const auto [distance, roll] = side_distance(read->lab, groups_.at(i).fused);
-        if (distance < nearest_distance) {
+        const SideFit fit = fit_to_side(read->lab, groups_.at(i).fused, groups_.at(i).roll);
+        if (fit.same && (!nearest.has_value() || fit.cost < nearest_fit.cost)) {
             nearest = i;
-            nearest_distance = distance;
-            nearest_roll = roll;
+            nearest_fit = fit;
         }
     }
-    if (nearest.has_value() && nearest_distance < kSameSideDistance) {
+    if (nearest.has_value()) {
         Group& group = groups_.at(*nearest);
-        group.reads.push_back(rolled(read->lab, nearest_roll));
+        group.reads.push_back(rolled(read->lab, nearest_fit.roll));
         group.fused = fuse(group.reads);
-        group.roll = nearest_roll;
+        group.roll = nearest_fit.roll;
         in_view_ = nearest;
     } else {
         groups_.push_back(Group{.fused = read->lab, .reads = {read->lab}, .roll = 0});
         in_view_ = groups_.size() - 1;
+    }
+    merge_alike_groups();
+    drop_weakest_stray();
+}
+
+// Keeps the groups to kMaxGroups by dropping the one with the fewest reads,
+// the oldest of them, but never the side in view.
+void SideScan::drop_weakest_stray() {
+    if (groups_.size() <= kMaxGroups) {
+        return;
+    }
+    std::optional<std::size_t> weakest;
+    for (std::size_t i = 0; i < groups_.size(); ++i) {
+        if (in_view_ == i) {
+            continue;
+        }
+        if (!weakest.has_value() ||
+            groups_.at(i).reads.size() < groups_.at(*weakest).reads.size()) {
+            weakest = i;
+        }
+    }
+    if (!weakest.has_value()) {
+        return;
+    }
+    groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(*weakest));
+    if (in_view_.has_value() && *in_view_ > *weakest) {
+        --*in_view_;
+    }
+}
+
+// A group begun while its side was only a read or two old is judged on a
+// noisy colour, and a side whose light changed part way through can start a
+// second. Neither is a different side, and two groups of one side leave the
+// scan a side short. Joined here, the earlier group surviving so the sides
+// keep the order they were first seen in.
+void SideScan::merge_alike_groups() {
+    bool merged = true;
+    while (merged) {
+        merged = false;
+        for (std::size_t keep = 0; keep < groups_.size() && !merged; ++keep) {
+            for (std::size_t other = keep + 1; other < groups_.size() && !merged; ++other) {
+                Group& kept = groups_.at(keep);
+                // Two groups are each in the turn their side was first seen
+                // in, so no turn is more likely than another.
+                const SideFit fit = fit_to_side(groups_.at(other).fused, kept.fused, 0);
+                if (!fit.same) {
+                    continue;
+                }
+                for (const auto& read : groups_.at(other).reads) {
+                    kept.reads.push_back(rolled(read, fit.roll));
+                }
+                kept.fused = fuse(kept.reads);
+                groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(other));
+                if (in_view_ == other) {
+                    in_view_ = keep;
+                } else if (in_view_.has_value() && *in_view_ > other) {
+                    --*in_view_;
+                }
+                merged = true;
+            }
+        }
     }
 }
 
