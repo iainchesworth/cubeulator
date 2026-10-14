@@ -28,10 +28,9 @@ inline bool have_jpeg_codec() {
 
 // A macro because SKIP ends the test case it is called from.
 // NOLINTBEGIN(cppcoreguidelines-macro-usage)
-#define CUBE_SKIP_WITHOUT_JPEG_CODEC()                      \
-    do {                                                    \
-        if (!::cube::test::have_jpeg_codec()) {             \
-            SKIP("this build of OpenCV has no JPEG codec"); \
-        }                                                   \
-    } while (false)
+#define CUBE_SKIP_WITHOUT_JPEG_CODEC()                  \
+    if (!::cube::test::have_jpeg_codec()) {             \
+        SKIP("this build of OpenCV has no JPEG codec"); \
+    }                                                   \
+    static_assert(true)
 // NOLINTEND(cppcoreguidelines-macro-usage)

@@ -214,6 +214,12 @@ a setting already in the store). `ctest --preset <preset>-system -R
 system.walk` runs the shards; `-j` runs entries side by side, which on four
 cores took the whole set from 8.7 to 4.4 minutes (below).
 
+The relaunch case needs the settings store seeded before the app exists, which
+only its ctest entry does (`CUBE_SYSTEM_TEST_THEME`). Picked up through a tag it
+shares with other cases (`[settings]`, `[system]`) it is reported as skipped,
+with that reason; run alone without the seed, the binary exits 4, so the
+entry cannot pass without the check having been made.
+
 On a desktop that opens a window and drives it; on a headless Linux box give
 it a display and software GL (this is what CI does):
 
@@ -990,20 +996,23 @@ the two cross-origin-isolation headers the app's threads need.
 | File | What it holds |
 |---|---|
 | `boot.spec.mjs` | isolation, title, the first screen, no console error while starting, the diagnostics |
-| `settings.spec.mjs` | each setting through its control and kept through a reload; every language, the CJK scripts, mirroring for Hebrew and Arabic |
+| `settings.spec.mjs` | each setting through its control and kept through a reload made at once (the page writes what the app is still holding as it is hidden or left); what an earlier visit stored is read; every language, the CJK scripts, mirroring for Hebrew and Arabic |
 | `layout.spec.mjs` | each screen in a phone and a desktop viewport: which layout it chose, nothing cut off |
 | `journey.spec.mjs` | launch, scan a scrambled cube, solve it, walk the solution to the end; abandon, start over and rescan |
 | `camera.spec.mjs` | a camera that is refused, absent or busy, and the recovery; the camera is let go of |
 | `camera-device.spec.mjs` | the browser's own path, with Chromium's built-in fake device: a real `getUserMedia()` and `enumerateDevices()`, frames the browser makes |
 | `demo.spec.mjs` | `?demo=<seed>&move=<n>`: stepping, switching method, the completion screen |
+| `tumble.spec.mjs` | a cube turned about one axis and then another, drawn by `cube_tumble_sim` and played to the camera at its recorded frame times; skipped unless `TUMBLE_SESSION` names the session (see [the investigation](investigations/2026-10-14-scan-tumble.md)) |
 | `input.spec.mjs` | a mouse drag of the cube, a finger, the keyboard |
 | `package.spec.mjs` | the `package` project: any built copy of the site, the release zip unzipped included, starts, is isolated, draws and is quiet (it needs nothing the diagnostics build adds) |
 | `perf.spec.mjs` | the journeys again, read from the recorder; see below |
 
 A page per test, with the browser's storage cleared first: the module compiles
 in about a second and the first screen is up in two, so nothing a test leaves
-in the browser's storage reaches the next. A failure attaches the page's
-console and a screenshot (and a Playwright trace on the retry).
+in the browser's storage reaches the next. (A test that needs an earlier visit's
+settings says what the storage holds when the app starts: `appOptions.storage`.)
+A failure attaches the page's console and a screenshot (and a Playwright trace
+on the retry).
 
 **The light probe.** On a headless runner the page draws in software
 (SwiftShader), and Qt Quick 3D prefilters the cube's light probe on the first

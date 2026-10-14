@@ -16,13 +16,22 @@ using cube::vision::sticker_lab;
 namespace {
 
 constexpr int kSide = 61;
-const cv::Point2f kCentre(30.0F, 30.0F);
 constexpr int kHalf = 12;
 
+cv::Point2f frame_centre() {
+    return {30.0F, 30.0F};
+}
+
 // Plastic and a few things that are not: BGR.
-const cv::Scalar kWhite(235, 235, 235);
-const cv::Scalar kRed(40, 40, 200);
-const cv::Scalar kGap(16, 16, 16);
+cv::Scalar plastic_white() {
+    return {235, 235, 235};
+}
+cv::Scalar plastic_red() {
+    return {40, 40, 200};
+}
+cv::Scalar dark_gap() {
+    return {16, 16, 16};
+}
 
 cv::Vec3f lab_of(const cv::Scalar& bgr) {
     const cv::Mat3f source(
@@ -43,7 +52,7 @@ cv::Mat frame_with(const cv::Scalar& ground, const cv::Rect& patch, const cv::Sc
 
 // The patch the tests sample is columns 18..42, rows 18..42.
 constexpr int kLeft = 18;
-constexpr int kWidth = 2 * kHalf + 1;
+constexpr int kWidth = (2 * kHalf) + 1;
 
 double distance_from(const cv::Mat& frame, const cv::Scalar& expected, const cv::Point2f& centre,
                      int half) {
@@ -55,25 +64,26 @@ double distance_from(const cv::Mat& frame, const cv::Scalar& expected, const cv:
 }  // namespace
 
 TEST_CASE("a sticker of one colour reads as that colour", "[sticker-colour]") {
-    const cv::Mat frame(kSide, kSide, CV_8UC3, kWhite);
-    CHECK(distance_from(frame, kWhite, kCentre, kHalf) < 0.5);
+    const cv::Mat frame(kSide, kSide, CV_8UC3, plastic_white());
+    CHECK(distance_from(frame, plastic_white(), frame_centre(), kHalf) < 0.5);
 }
 
 TEST_CASE("noise on the plastic does not move the colour", "[sticker-colour]") {
     cv::Mat noise(kSide, kSide, CV_32FC3);
     cv::RNG rng(99);
     rng.fill(noise, cv::RNG::NORMAL, cv::Scalar::all(0), cv::Scalar::all(4));
-    cv::Mat frame(kSide, kSide, CV_32FC3, kWhite);
+    cv::Mat frame(kSide, kSide, CV_32FC3, plastic_white());
     frame += noise;
     frame.convertTo(frame, CV_8UC3);
-    CHECK(distance_from(frame, kWhite, kCentre, kHalf) < 1.5);
+    CHECK(distance_from(frame, plastic_white(), frame_centre(), kHalf) < 1.5);
 }
 
 TEST_CASE("something else across the middle of a patch is left out", "[sticker-colour]") {
     // A third of the patch in another colour: a wordmark across a centre
     // sticker. A plain median is carried part of the way towards it.
-    const cv::Mat frame = frame_with(kWhite, cv::Rect(kLeft, kLeft + 8, kWidth, 9), kRed);
-    CHECK(distance_from(frame, kWhite, kCentre, kHalf) < 1.0);
+    const cv::Mat frame =
+        frame_with(plastic_white(), cv::Rect(kLeft, kLeft + 8, kWidth, 9), plastic_red());
+    CHECK(distance_from(frame, plastic_white(), frame_centre(), kHalf) < 1.0);
 }
 
 TEST_CASE("a wordmark over more than half of a patch is still left out", "[sticker-colour]") {
@@ -83,35 +93,40 @@ TEST_CASE("a wordmark over more than half of a patch is still left out", "[stick
     // per-channel median is white any longer: the middle value of lightness
     // belongs to a letter. White is still the largest single colour in the
     // patch, though, and that is what its colour is.
-    cv::Mat frame(kSide, kSide, CV_8UC3, kWhite);
-    const std::array<cv::Scalar, 4> letters = {cv::Scalar(70, 160, 40), cv::Scalar(170, 80, 20),
-                                               cv::Scalar(40, 210, 235), kRed};
+    cv::Mat frame(kSide, kSide, CV_8UC3, plastic_white());
+    const std::array<cv::Scalar, 4> letters = {
+        cv::Scalar(70, 160, 40),
+        cv::Scalar(170, 80, 20),
+        cv::Scalar(40, 210, 235),
+        plastic_red(),
+    };
     for (int i = 0; i < 4; ++i) {
         const int corner = kLeft + (5 * i);
         cv::rectangle(frame, cv::Rect(corner, corner, 12, 12),
                       letters.at(static_cast<std::size_t>(i)), cv::FILLED);
     }
-    CHECK(distance_from(frame, kWhite, kCentre, kHalf) < 1.0);
+    CHECK(distance_from(frame, plastic_white(), frame_centre(), kHalf) < 1.0);
 }
 
 TEST_CASE("the dark gap at a sticker's edge is left out", "[sticker-colour]") {
     // A patch placed a little off its sticker takes in the plastic between
     // stickers: here ten of its 25 columns, 40% of it.
-    const cv::Mat frame = frame_with(kWhite, cv::Rect(kLeft, 0, 10, kSide), kGap);
-    CHECK(distance_from(frame, kWhite, kCentre, kHalf) < 1.0);
+    const cv::Mat frame = frame_with(plastic_white(), cv::Rect(kLeft, 0, 10, kSide), dark_gap());
+    CHECK(distance_from(frame, plastic_white(), frame_centre(), kHalf) < 1.0);
 }
 
 TEST_CASE("a patch that is mostly something else reads as that", "[sticker-colour]") {
     // The limit, stated: the colour is the larger part of the patch, and a
     // sticker the patch sits wrongly on is not made white by being asked.
-    const cv::Mat frame = frame_with(kWhite, cv::Rect(kLeft, kLeft, kWidth, 17), kRed);
-    CHECK(distance_from(frame, kRed, kCentre, kHalf) < 1.5);
+    const cv::Mat frame =
+        frame_with(plastic_white(), cv::Rect(kLeft, kLeft, kWidth, 17), plastic_red());
+    CHECK(distance_from(frame, plastic_red(), frame_centre(), kHalf) < 1.5);
 }
 
 TEST_CASE("a patch off the edge of the frame is clipped to it", "[sticker-colour]") {
-    const cv::Mat frame(kSide, kSide, CV_8UC3, kWhite);
+    const cv::Mat frame(kSide, kSide, CV_8UC3, plastic_white());
     // Half of this patch is outside the picture.
-    CHECK(distance_from(frame, kWhite, cv::Point2f(2.0F, 30.0F), kHalf) < 0.5);
+    CHECK(distance_from(frame, plastic_white(), cv::Point2f(2.0F, 30.0F), kHalf) < 0.5);
 
     // And one wholly outside has no colour to give.
     const std::optional<cv::Vec3f> none = sticker_lab(frame, cv::Point2f(-40.0F, -40.0F), kHalf);
