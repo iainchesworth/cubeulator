@@ -5,8 +5,12 @@
 //   cube_scan replay <session-dir>   one session: the cube and its solution
 //   cube_scan board <root-dir>       every session under root against truth
 //   cube_scan holds <session-dir>    how the cube was held, frame by frame
-//   cube_scan corners <session-dir>  frames showing two sides at once, and
+//   cube_scan corners <dir> [dist]   frames showing two sides at once, and
 //                                    whether they fit the true cube
+//   cube_scan corner-colours <dir>   how the sides of those frames compare
+//                                    with the sides read square-on
+//   cube_scan ambiguity <dir>        the cubes six sides make, and how the corner
+//                                    reads of the session vote among them
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -146,7 +150,10 @@ struct Outcome {
     std::optional<cube::vision::SessionColours> colours;  // what each colour measured
     std::optional<std::size_t> read_at;                   // first frame at which the cube was known
     std::optional<Cube> cube;                             // the cube at that frame
-    std::size_t changes_after = 0;                        // later frames whose cube differed
+    std::optional<cube::CubeError> failure;               // why the last frame had none
+    // The corner the scan would ask to be shown, when it is ambiguous.
+    std::optional<std::array<Color, 3>> settling_corner;
+    std::size_t changes_after = 0;  // later frames whose cube differed
 };
 
 [[nodiscard]] Outcome replay(const fs::path& session) {
@@ -179,6 +186,11 @@ struct Outcome {
     outcome.corner_reads = scan.corner_reads();
     if (const auto whole = scan.scanned(); whole.has_value()) {
         outcome.colours = whole->colours;
+    } else {
+        outcome.failure = whole.error();
+        if (const auto diagnosis = scan.diagnose(); diagnosis.assembly.has_value()) {
+            outcome.settling_corner = diagnosis.assembly->settling_corner;
+        }
     }
     return outcome;
 }
@@ -249,8 +261,12 @@ void explain(const Outcome& outcome) {
         fmt::print("  colour naming failed: {}\n", to_string(named.error()));
         return;
     }
-    const auto cube = cube::solver::assemble_scanned_faces(*named);
-    fmt::print("  assembly: {}\n", cube.has_value() ? "ok" : to_string(cube.error()));
+    const std::size_t fitting = cube::solver::assemble_all_scanned_faces(*named, 64).size();
+    fmt::print("  assembly: {}\n",
+               fitting == 0 ? "no cube fits these sides"
+                            : fmt::format("{} cube{} fit{} these sides{}", fitting,
+                                          fitting == 1 ? "" : "s", fitting == 1 ? "s" : "",
+                                          fitting > 1 ? " (cube_scan ambiguity)" : ""));
 }
 
 int run_replay(const fs::path& session) {
@@ -259,8 +275,19 @@ int run_replay(const fs::path& session) {
                session.filename().string(), outcome.frames, outcome.reads, outcome.corner_reads,
                outcome.sides);
     if (!outcome.cube.has_value()) {
-        fmt::print("  no cube: {} of 6 sides captured\n", outcome.sides);
+        fmt::print("  no cube: {} of 6 sides captured{}\n", outcome.sides,
+                   outcome.failure.has_value() ? fmt::format(" ({})", to_string(*outcome.failure))
+                                               : std::string());
         explain(outcome);
+        if (outcome.settling_corner.has_value()) {
+            std::string colours;
+            for (const Color colour : *outcome.settling_corner) {
+                colours += colours.empty() ? "" : ", ";
+                colours += letter_of(colour);
+            }
+            fmt::print("  it would ask for the corner where the sides with centres {} meet\n",
+                       colours);
+        }
         return 1;
     }
     fmt::print("  cube known at frame {} ({} later frames disagreed)\n", *outcome.read_at,
@@ -361,7 +388,7 @@ int run_board(const fs::path& root) {
 // it rule out? A read that rules out none says nothing about those turns
 // (they changed stickers it did not show); one that fits the true cube and
 // rules out most is what settles an ambiguous scan.
-int run_corners(const fs::path& session) {
+int run_corners(const fs::path& session, float max_distance) {
     const auto truth = truth_of(session);
     if (!truth.has_value()) {
         fmt::print("{}: no truth.txt, or it does not make a cube\n", session.string());
@@ -396,10 +423,12 @@ int run_corners(const fs::path& session) {
         }
         ++seen;
         const cube::vision::CornerFit fit =
-            cube::vision::fit_corner(*read, *truth, *outcome.colours);
+            cube::vision::fit_corner(*read, *truth, *outcome.colours, max_distance);
         std::size_t rejected = 0;
         for (const Cube& other : neighbours) {
-            rejected += cube::vision::fit_corner(*read, other, *outcome.colours).fits ? 0U : 1U;
+            rejected += cube::vision::fit_corner(*read, other, *outcome.colours, max_distance).fits
+                            ? 0U
+                            : 1U;
         }
         fmt::print(
             "  {}: {} sides, {} edges  true cube {} (distance {:.1f})  "
@@ -427,6 +456,217 @@ int run_corners(const fs::path& session) {
             "(on average {:.1f} of {})\n",
             informative, static_cast<double>(rejected_total) / static_cast<double>(informative),
             neighbours.size());
+    }
+    return 0;
+}
+
+// How the sides of a corner view compare with the sides the square-on reads of
+// the same session captured. Whether a corner read can be counted towards a
+// side depends on its colours landing near that side's, so this prints, for
+// every side of every corner read, which captured side it is nearest under the
+// best quarter-turn and how near - beside how many of its nine stickers were
+// found and how foreshortened it is.
+int run_corner_colours(const fs::path& session) {
+    // kRoll[k][i] is the cell of a read that lands at cell i once the read is
+    // turned k quarter-turns; the scan's own table, which is file-local.
+    constexpr std::array<std::array<std::size_t, 9>, 4> kRoll = {{
+        {0, 1, 2, 3, 4, 5, 6, 7, 8},
+        {2, 5, 8, 1, 4, 7, 0, 3, 6},
+        {8, 7, 6, 5, 4, 3, 2, 1, 0},
+        {6, 3, 0, 7, 4, 1, 8, 5, 2},
+    }};
+
+    // Two reads are one side under this (direct_scan.cpp keeps it to itself).
+    constexpr float kSameSideDistance = 12.0F;
+
+    const Outcome outcome = replay(session);
+    fmt::print("{}: {} frames, {} square-on reads, {} sides captured\n",
+               session.filename().string(), outcome.frames, outcome.reads, outcome.sides);
+    if (outcome.captured.empty()) {
+        return 1;
+    }
+
+    std::size_t corner_frames = 0;
+    std::array<std::size_t, 4> by_sides{};
+    std::vector<float> distances;
+    std::vector<float> margins;
+    std::size_t unmatched = 0;
+    for (const fs::path& frame : frames_of(session)) {
+        const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
+        if (cube::vision::read_side(bgr).has_value()) {
+            continue;
+        }
+        const auto read = cube::vision::read_corner(bgr);
+        if (!read.has_value()) {
+            continue;
+        }
+        ++corner_frames;
+        ++by_sides.at(std::min<std::size_t>(read->sides.size(), 3));
+        for (std::size_t s = 0; s < read->sides.size(); ++s) {
+            const cube::vision::ObliqueSide& side = read->sides.at(s);
+            std::size_t found = 0;
+            for (const bool f : side.found) {
+                found += f ? 1U : 0U;
+            }
+            const cv::Point2f column = side.centres.at(1) - side.centres.at(0);
+            const cv::Point2f row = side.centres.at(3) - side.centres.at(0);
+            const float c = std::hypot(column.x, column.y);
+            const float r = std::hypot(row.x, row.y);
+            const float shear = std::abs(column.x * row.y - column.y * row.x) / (c * r);
+
+            float best = std::numeric_limits<float>::max();
+            float second = std::numeric_limits<float>::max();
+            std::size_t best_side = 0;
+            for (std::size_t g = 0; g < outcome.captured.size(); ++g) {
+                float nearest = std::numeric_limits<float>::max();
+                for (const auto& roll : kRoll) {
+                    float total = 0.0F;
+                    for (std::size_t i = 0; i < 9; ++i) {
+                        total += cube::vision::colour_distance(side.lab.at(roll.at(i)),
+                                                               outcome.captured.at(g).lab.at(i));
+                    }
+                    nearest = std::min(nearest, total / 9.0F);
+                }
+                if (nearest < best) {
+                    second = best;
+                    best = nearest;
+                    best_side = g;
+                } else if (nearest < second) {
+                    second = nearest;
+                }
+            }
+            distances.push_back(best);
+            if (second < std::numeric_limits<float>::max()) {
+                margins.push_back(second - best);
+            }
+            unmatched += best >= kSameSideDistance ? 1U : 0U;
+            fmt::print(
+                "  {} side {}/{}: found {}/9  steps {:.0f}x{:.0f}px  sin(shear) {:.2f}  nearest "
+                "side {}  distance {:.1f}  next {:.1f}\n",
+                frame.filename().string(), s + 1, read->sides.size(), found, static_cast<double>(c),
+                static_cast<double>(r), static_cast<double>(shear), best_side,
+                static_cast<double>(best),
+                static_cast<double>(second < std::numeric_limits<float>::max() ? second : -1.0F));
+        }
+    }
+    fmt::print(
+        "{} corner-read frames: {} with two sides, {} with three; {} sides read, {} further than "
+        "the same-side distance ({:.0f}) from every captured side\n",
+        corner_frames, by_sides.at(2), by_sides.at(3), distances.size(), unmatched,
+        static_cast<double>(kSameSideDistance));
+    if (!distances.empty()) {
+        fmt::print("  distance to the nearest side: median {:.1f}  90% {:.1f}  max {:.1f}\n",
+                   static_cast<double>(percentile(distances, 0.5)),
+                   static_cast<double>(percentile(distances, 0.9)),
+                   static_cast<double>(percentile(distances, 1.0)));
+    }
+    if (!margins.empty()) {
+        fmt::print("  clear of the next side: min {:.1f}  10% {:.1f}  median {:.1f}\n",
+                   static_cast<double>(percentile(margins, 0.0)),
+                   static_cast<double>(percentile(margins, 0.1)),
+                   static_cast<double>(percentile(margins, 0.5)));
+    }
+    return 0;
+}
+
+[[nodiscard]] std::optional<Color> solver_colour_of(FacetColor colour) {
+    switch (colour) {
+        case FacetColor::white:
+            return Color::White;
+        case FacetColor::yellow:
+            return Color::Yellow;
+        case FacetColor::red:
+            return Color::Red;
+        case FacetColor::orange:
+            return Color::Orange;
+        case FacetColor::green:
+            return Color::Green;
+        case FacetColor::blue:
+            return Color::Blue;
+        case FacetColor::unknown:
+            break;
+    }
+    return std::nullopt;
+}
+
+// Why six captured sides that make more than one cube were not settled: the
+// cubes they make, and how every corner read in the session votes among them
+// at several distances (kCornerFitDistance is 8). A read that fits some and
+// not others is what settles an ambiguous scan; one that fits none, at any
+// distance, was blurred or is a side this cube does not have.
+int run_ambiguity(const fs::path& session) {
+    const Outcome outcome = replay(session);
+    fmt::print("{}: {} frames, {} square-on reads, {} sides captured\n",
+               session.filename().string(), outcome.frames, outcome.reads, outcome.sides);
+    if (outcome.captured.size() < 6) {
+        return 1;
+    }
+    std::array<cube::vision::CapturedFace, 6> faces{};
+    for (std::size_t i = 0; i < 6; ++i) {
+        faces[i].lab = outcome.captured[i].lab;
+    }
+    const auto named = cube::vision::resolve_colors(faces);
+    if (!named.has_value()) {
+        fmt::print("  colour naming failed: {}\n", to_string(named.error()));
+        return 1;
+    }
+    const std::vector<Cube> candidates = cube::solver::assemble_all_scanned_faces(*named, 64);
+    fmt::print("  {} cube{} fit the six sides\n", candidates.size(),
+               candidates.size() == 1 ? "" : "s");
+    if (candidates.size() < 2) {
+        return 0;
+    }
+
+    // What each colour measured: the per-channel median of the stickers the
+    // naming gave that colour, as the scan itself takes it.
+    cube::vision::SessionColours colours{};
+    for (std::size_t colour = 0; colour < 6; ++colour) {
+        std::array<std::vector<float>, 3> values;
+        for (std::size_t side = 0; side < 6; ++side) {
+            for (std::size_t cell = 0; cell < 9; ++cell) {
+                const std::optional<Color> own = solver_colour_of((*named)[side][cell].color);
+                if (own.has_value() && static_cast<std::size_t>(*own) == colour) {
+                    for (std::size_t channel = 0; channel < 3; ++channel) {
+                        values[channel].push_back(faces[side].lab[cell](static_cast<int>(channel)));
+                    }
+                }
+            }
+        }
+        for (std::size_t channel = 0; channel < 3; ++channel) {
+            colours[colour](static_cast<int>(channel)) = percentile(values[channel], 0.5);
+        }
+    }
+
+    std::vector<cube::vision::CornerRead> reads;
+    for (const fs::path& frame : frames_of(session)) {
+        const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
+        if (cube::vision::read_side(bgr).has_value()) {
+            continue;
+        }
+        if (auto read = cube::vision::read_corner(bgr); read.has_value()) {
+            reads.push_back(std::move(*read));
+        }
+    }
+    fmt::print("  {} corner reads\n", reads.size());
+
+    constexpr std::array<float, 5> kDistances = {8.0F, 10.0F, 12.0F, 14.0F, 18.0F};
+    fmt::print("  reads fitting each cube, by the distance a side may sit at:\n");
+    fmt::print("    {:>3}", "");
+    for (const float distance : kDistances) {
+        fmt::print("  <={:>4.0f}", static_cast<double>(distance));
+    }
+    fmt::print("   layout\n");
+    for (std::size_t c = 0; c < candidates.size(); ++c) {
+        fmt::print("    #{:<2}", c);
+        for (const float distance : kDistances) {
+            std::size_t fits = 0;
+            for (const auto& read : reads) {
+                fits +=
+                    cube::vision::fit_corner(read, candidates[c], colours, distance).fits ? 1U : 0U;
+            }
+            fmt::print("  {:>6}", fits);
+        }
+        fmt::print("   {}\n", layout_of(candidates[c]));
     }
     return 0;
 }
@@ -556,11 +796,21 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "holds") {
         return run_holds(fs::path(args[1]));
     }
-    if (args.size() == 2 && args[0] == "corners") {
-        return run_corners(fs::path(args[1]));
+    if ((args.size() == 2 || args.size() == 3) && args[0] == "corners") {
+        // How far a side may sit from the cube's: the app's own unless asked.
+        const float max_distance =
+            args.size() == 3 ? std::stof(std::string(args[2])) : cube::vision::kCornerFitDistance;
+        return run_corners(fs::path(args[1]), max_distance);
+    }
+    if (args.size() == 2 && args[0] == "ambiguity") {
+        return run_ambiguity(fs::path(args[1]));
+    }
+    if (args.size() == 2 && args[0] == "corner-colours") {
+        return run_corner_colours(fs::path(args[1]));
     }
     fmt::print(
         "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
-        "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir>\n");
+        "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir> [max-distance]\n"
+        "  cube_scan corner-colours <session-dir>\n  cube_scan ambiguity <session-dir>\n");
     return 2;
 }

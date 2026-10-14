@@ -14,7 +14,7 @@
 # exclude (and CI's build-and-test legs say -LE system as well). Run it with
 # the matching `<preset>-system` test preset.
 # ---------------------------------------------------------------------------
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D QuickControls2 LabsSettings Test)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D QuickControls2 QmlCore Test)
 
 add_executable(cube_system_tests
     system_test_main.cpp
@@ -31,6 +31,7 @@ add_executable(cube_system_tests
     tour_test.cpp
     probe_cost_test.cpp
     known_today_test.cpp
+    history_test.cpp
     progress_listener.cpp)
 
 target_include_directories(cube_system_tests PRIVATE
@@ -57,7 +58,7 @@ target_link_libraries(cube_system_tests
         Qt6::Quick
         Qt6::Quick3D
         Qt6::QuickControls2
-        Qt6::LabsSettings
+        Qt6::QmlCore
         Qt6::Test
         Catch2::Catch2)
 

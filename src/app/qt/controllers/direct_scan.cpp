@@ -34,6 +34,38 @@ constexpr int kLockWaitFrames = 240;
     return QColor(bgr[2], bgr[1], bgr[0]).name();
 }
 
+// The colours of the corner the scan would like to see, as the names the
+// screen looks up (settlingCorner).
+[[nodiscard]] QStringList settling_corner_of(const cube::vision::ScanDiagnosis& diagnosis) {
+    QStringList names;
+    if (!diagnosis.assembly.has_value() || !diagnosis.assembly->settling_corner.has_value()) {
+        return names;
+    }
+    for (const cube::solver::Color colour : *diagnosis.assembly->settling_corner) {
+        switch (colour) {
+            case cube::solver::Color::White:
+                names.append(QStringLiteral("white"));
+                break;
+            case cube::solver::Color::Yellow:
+                names.append(QStringLiteral("yellow"));
+                break;
+            case cube::solver::Color::Green:
+                names.append(QStringLiteral("green"));
+                break;
+            case cube::solver::Color::Blue:
+                names.append(QStringLiteral("blue"));
+                break;
+            case cube::solver::Color::Orange:
+                names.append(QStringLiteral("orange"));
+                break;
+            case cube::solver::Color::Red:
+                names.append(QStringLiteral("red"));
+                break;
+        }
+    }
+    return names;
+}
+
 [[nodiscard]] bool same_sides(const std::vector<cube::vision::SideScan::Side>& a,
                               const std::vector<cube::vision::SideScan::Side>& b) {
     if (a.size() != b.size()) {
@@ -136,7 +168,13 @@ void DirectScan::record(const cv::Mat& bgr, std::int64_t t_ms) {
 
 void DirectScan::finishRecording() {
     if (recorder_.running()) {
-        (void)recorder_.stop();
+        // A recording the writer could not finish says so in its stats file,
+        // which nobody opens unless they know to: tell the developer who
+        // turned recording on.
+        if (const auto stats = recorder_.stop(); stats.failed > 0) {
+            qWarning("DirectScan: the recording is incomplete, %d frame(s) were not written: %s",
+                     stats.failed, stats.error.c_str());
+        }
     }
     recording_refused_ = false;
 }
@@ -221,10 +259,13 @@ cube::diagnostics::Json DirectScan::diagnosticState() const {
 }
 
 cube::Result<cube::vision::ScannedCube> DirectScan::evaluateScan(std::string_view trigger) {
-    if (!diagnosing()) {
-        return scan_.scanned();
-    }
+    // One evaluation answers both what the cube is and, when the sides fit
+    // together in more than one way, which corner to ask the person for.
     cube::vision::ScanDiagnosis diagnosis = scan_.diagnose();
+    settling_corner_ = settling_corner_of(diagnosis);
+    if (!diagnosing()) {
+        return std::move(diagnosis.result);
+    }
     std::string digest = digest_of(diagnosis);
     if (digest == last_scan_digest_) {
         ++scans_unchanged_;
@@ -365,6 +406,7 @@ void DirectScan::restart() {
     sides_.clear();
     conflicted_ = false;
     ambiguous_ = false;
+    settling_corner_.clear();
     scanned_.reset();
     if (diagnosing()) {
         diagnostics_->write("scan", cube::diagnostics::Json::object().set("trigger", "restart"));

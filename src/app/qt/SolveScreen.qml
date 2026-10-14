@@ -301,19 +301,62 @@ Rectangle {
         anchors.top: header.bottom
         anchors.left: parent.left
         width: root.wide ? parent.width - panel.width : parent.width
+        // Narrow, what the panel under the stage needs (the method row, the
+        // stage's name and what it asks, the way out and the stepping
+        // buttons) is kept, and the cube is given the rest - up to the most
+        // it can use, which is its own width and what sits above and below.
+        // On a short window that is what the stage always had (55%).
+        readonly property real panelNeed: 240
         height: root.wide ? parent.height - header.height
-                          : Math.max(230, Math.min(parent.width, (parent.height - header.height) * 0.55))
+                          : Math.max(230, Math.min(Math.max((parent.height - header.height) * 0.55,
+                                                            parent.height - header.height - panelNeed),
+                                                   cubeTop + width + corner + 44))
+
+        // ---- the corners, and so the room the cube has -------------------
+        // The move label is top left with the camera's words under it, and
+        // the camera's preview top right. The cube is a square that has to
+        // be clear of all of them, whatever the move or the words say, so
+        // what they take is reserved rather than read off the text: a cube
+        // that resized with every move would not be a cube anyone could
+        // follow. (The cube's box has air round the cube itself, which it
+        // needs to turn a layer in; a box that is clear is a cube that is.)
+        readonly property real corner: Theme.space4
+        readonly property bool cameraOn: AppState.solveCamera
+        readonly property real insetWidth: root.wide ? 184 : 124
+        readonly property real insetHeight: Math.round(insetWidth * 3 / 4)
+        // The label's column, and the words wrap in it. Room is kept for
+        // the words at three lines, the most there are of them at this
+        // width in English.
+        readonly property real labelMax: 220
+        readonly property real labelWidth: Math.max(0, Math.min(labelMax,
+            width - (cameraOn ? insetWidth : 0) - 3 * corner))
+        readonly property real wordsLineHeight: 14
+        readonly property real wordsRoom: 3 * wordsLineHeight
+        readonly property real cornersBottom: corner + Math.max(
+            cameraOn ? insetHeight : 0,
+            moveLabel.implicitHeight + (cameraOn ? Theme.space1 + wordsRoom : 0))
+        // Under the corners, full width...
+        readonly property real cubeTop: cornersBottom + Theme.space1
+        // ...or, where the stage is wide enough for it, between them, which
+        // is where the cube was before it was asked to keep clear of them.
+        readonly property real sideRoom: corner + Math.max(labelMax, cameraOn ? insetWidth : 0) + Theme.space2
+        // Under the cube: wide, the hint in the bottom corner; narrow, the
+        // note about a turned view, which gives way when the stage is so
+        // short that the cube would be left under 150 for it.
+        readonly property real footRoom: root.wide
+            ? 2 * corner
+            : corner + Math.max(0, Math.min(44, height - cubeTop - corner - 150))
+        readonly property real underSide: Math.min(width, height - cubeTop - footRoom)
+        readonly property real betweenSide: Math.min(width - 2 * sideRoom, height - corner - footRoom)
 
         Cube3DView {
             id: cube
-            // Narrow, the note about a turned view sits under the cube, so
-            // room is kept for it there; wide, it sits in a corner the cube
-            // does not reach.
-            readonly property real noteRoom: root.wide ? 0 : 64
-            readonly property real side: Math.min(parent.width, parent.height - noteRoom) * (root.wide ? 0.86 : 0.94)
+            readonly property bool between: stage.betweenSide > stage.underSide
+            readonly property real side: Math.max(0, between ? stage.betweenSide : stage.underSide)
+            readonly property real boxTop: between ? stage.corner : stage.cubeTop
             width: side; height: side
-            anchors.centerIn: parent
-            anchors.verticalCenterOffset: root.wide ? 6 : 14 - noteRoom / 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: boxTop + (parent.height - stage.footRoom - boxTop - side) / 2
 
             // Drag it to look round the back; let go and it comes home. The
             // layer about to move keeps nudging all the while.
@@ -341,7 +384,10 @@ Rectangle {
         }
 
         Column {
+            id: moveLabel
+            objectName: "solve.move"
             anchors.top: parent.top; anchors.left: parent.left; anchors.margins: Theme.space4
+            width: stage.labelWidth
             spacing: 4
 
             Text {
@@ -354,9 +400,13 @@ Rectangle {
                 color: Theme.ink
             }
             // The move in words: which side, named by where it is and by the
-            // colour of its centre, and how far.
+            // colour of its centre, and how far. It keeps its place when
+            // there is no move to say (at the end), so the cube does not
+            // move for it; and it shrinks to its column rather than run
+            // under the preview ("Right side" is the longest name).
             Row {
-                visible: root.moveWords !== ""
+                opacity: root.moveWords !== "" ? 1 : 0
+                height: 20
                 spacing: Theme.space2
                 Rectangle {
                     width: 14; height: 14
@@ -365,11 +415,36 @@ Rectangle {
                     border.width: 1; border.color: Theme.divider
                 }
                 Text {
+                    width: Math.max(0, stage.labelWidth - 14 - Theme.space2)
+                    anchors.verticalCenter: parent.verticalCenter
                     text: root.moveWords
+                    elide: Text.ElideRight
+                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 10
                     font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.DemiBold
                     color: Theme.ink
                 }
             }
+        }
+
+        // What the camera makes of what it sees, in words: under the move
+        // label, where the preview does not reach and the cube is kept
+        // clear of. (It was under the preview, a column 124 wide on a phone,
+        // and ran across the cube.) At most three lines; room is kept for
+        // all three whatever it says.
+        Text {
+            objectName: "solve.words"
+            anchors.top: moveLabel.bottom; anchors.topMargin: Theme.space1
+            anchors.left: moveLabel.left
+            width: stage.labelWidth
+            visible: text !== "" && stage.cameraOn
+            text: root.cameraWords
+            wrapMode: Text.WordWrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+            lineHeight: stage.wordsLineHeight; lineHeightMode: Text.FixedHeight
+            font.family: Theme.fontHeading; font.pixelSize: 11
+            color: HeldCube.sight === "unknown" || HeldCube.sight === "wrong"
+                ? Theme.accent : Theme.inkMuted(0.75)
         }
 
         // That the cube can be picked up and looked round is not obvious
@@ -400,8 +475,8 @@ Rectangle {
             id: inset
             visible: AppState.solveCamera
             anchors.top: parent.top; anchors.right: parent.right
-            anchors.margins: Theme.space4
-            width: root.wide ? 184 : 124
+            anchors.margins: stage.corner
+            width: stage.insetWidth
             height: preview.height
 
             readonly property var points: DirectScan.stickerPoints
@@ -564,21 +639,6 @@ Rectangle {
                     border.color: root.sightColor
                     Behavior on border.color { ColorAnimation { duration: 180 } }
                 }
-            }
-            // Beside the preview where there is room, so it does not run
-            // down into the cube; under it on a narrow screen.
-            Text {
-                objectName: "solve.words"
-                x: root.wide ? -width - Theme.space2 : 0
-                y: root.wide ? 0 : preview.height + Theme.space1
-                width: root.wide ? 150 : parent.width
-                visible: text !== ""
-                text: root.cameraWords
-                wrapMode: Text.WordWrap
-                horizontalAlignment: Text.AlignRight
-                font.family: Theme.fontHeading; font.pixelSize: 11
-                color: HeldCube.sight === "unknown" || HeldCube.sight === "wrong"
-                    ? Theme.accent : Theme.inkMuted(0.75)
             }
         }
 

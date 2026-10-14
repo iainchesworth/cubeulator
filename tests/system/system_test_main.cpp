@@ -155,6 +155,12 @@ int main(int argc, char* argv[]) {
     QSettings::setDefaultFormat(QSettings::IniFormat);
     QTemporaryDir settings_dir;
     QSettings::setPath(QSettings::IniFormat, QSettings::UserScope, settings_dir.path());
+    // And the history of solves, a file in the app's data folder: this
+    // process's own, for the same reason.
+    QTemporaryDir data_dir;
+    if (!qEnvironmentVariableIsSet("CUBEULATOR_DATA_DIR")) {
+        qputenv("CUBEULATOR_DATA_DIR", data_dir.path().toLocal8Bit());
+    }
 
     // A run that begins with a setting already in the store: how a second
     // launch is tested (the [restart] case). The first launch's own change is

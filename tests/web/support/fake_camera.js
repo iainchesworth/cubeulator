@@ -65,6 +65,8 @@
   let denied = null;
   let devices = [{ deviceId: 'fake-camera-0', kind: 'videoinput', label: 'Fake camera', groupId: 'fake' }];
   let opened = 0;
+  // Every getUserMedia() call, refused or not: what the page asked for.
+  let attempts = 0;
   let stream = null;
 
   function drawRoom() {
@@ -137,6 +139,7 @@
   const fake = {
     enumerateDevices: async () => devices,
     getUserMedia: async () => {
+      attempts++;
       if (denied) {
         throw error(denied.name, denied.message);
       }
@@ -173,6 +176,7 @@
       devices = list.map((d) => ({ deviceId: d.deviceId, kind: 'videoinput', label: d.label, groupId: 'fake' }));
     },
     opened: () => opened,
+    attempts: () => attempts,
     live: () => !!stream && stream.getTracks().some((t) => t.readyState === 'live'),
   };
 })();

@@ -36,10 +36,13 @@ spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainer via a
-[GitHub security advisory](https://github.com/iainchesworthlabs/cubeulator/security/advisories/new)
-or by opening a private channel of contact with the repository owner. All
-complaints will be reviewed and investigated promptly and fairly.
+reported privately to the project maintainer through the same
+[private reporting form](https://github.com/iainchesworthlabs/cubeulator/security/advisories/new)
+that security reports use (it is labelled for vulnerabilities; say that it is a
+conduct report). If you cannot use it, open an issue that says only that you
+have a conduct concern, with no details, and the maintainer will reply there to
+arrange a private channel. All complaints will be reviewed and investigated
+promptly and fairly.
 
 ## Attribution
 

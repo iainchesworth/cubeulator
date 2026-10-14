@@ -15,11 +15,18 @@ you the solution turn by turn on a 3D cube.
 
 > **Status: pre-release.** For Windows, macOS and Linux, and in a browser. The scan has been
 > checked on recorded sessions and a webcam, not yet across cameras, rooms and
-> cubes, and there is no review screen yet. [CHANGELOG.md](CHANGELOG.md) says
+> cubes, and a sticker read wrongly cannot yet be corrected by hand.
+> [CHANGELOG.md](CHANGELOG.md) says
 > what each release does and what is not yet proven.
 
-Full docs live at
+Full docs, including a
+[user guide](https://iainchesworthlabs.github.io/cubeulator/guide/) with
+pictures of every screen, live at
 **[iainchesworthlabs.github.io/cubeulator](https://iainchesworthlabs.github.io/cubeulator/)**.
+
+<p align="center">
+  <img src="docs/guide/img/solve-middle-wide-light.webp" alt="The solve screen: a 3D cube with the layer to turn nudged, the stage list, and Next move." width="720">
+</p>
 
 ## Install
 
@@ -43,17 +50,23 @@ and a build-provenance attestation for every file; how to check them is in the
 
 ## Using it
 
-1. Open Cubeulator and, when it asks, **Allow camera**.
-2. Choose **Scan a cube**, then hold each side of the cube square to the camera
-   until its chip on the screen fills.
-3. With six sides read, it solves the cube. Pick *Beginner* (layer by layer,
-   about 100 moves), *Intermediate* (CFOP, about 52) or *Advanced* (the fewest,
-   about 20).
+1. Open Cubeulator and choose **Scan a cube**. The first time, your system
+   asks whether it may use the camera: allow it.
+2. Hold each side of the cube square to the camera, one after another, in any
+   order, until its chip along the bottom of the screen fills. Six chips, six
+   sides.
+3. With six sides read, it solves the cube. The method is *Beginner* (layer by
+   layer, about 100 moves) unless you changed it; switch to *Intermediate*
+   (CFOP, about 50) or *Advanced* (the fewest, about 20) on the solve screen at
+   any time.
 4. Follow the 3D cube one turn at a time. The camera stays on, so it sees the
-   side you turned and steps on by itself.
+   side you turned and steps on by itself; **Next move** (or the right arrow)
+   steps when it cannot.
+
+The [user guide](https://iainchesworthlabs.github.io/cubeulator/guide/) goes
+through each screen, and says what to do when a side will not read.
 
 ## Build from source
-
 
 ```sh
 git clone --recurse-submodules https://github.com/iainchesworthlabs/cubeulator
@@ -73,8 +86,8 @@ ctest --preset linux-gcc-debug
 ```
 
 See [Getting started](https://iainchesworthlabs.github.io/cubeulator/getting-started/)
-for every platform's preset, including Windows/macOS, the (currently
-build-only) Android/iOS targets and WebAssembly.
+for every platform's preset, including Windows/macOS, the Android/iOS targets
+(build-only: neither can scan with a camera yet) and WebAssembly.
 
 **Try it without building anything:**
 [open Cubeulator in your browser](https://iainchesworthlabs.github.io/cubeulator/web/) -
@@ -84,12 +97,13 @@ the same app as WebAssembly, running entirely on your device.
 
 | | |
 | --- | --- |
+| [User guide](https://iainchesworthlabs.github.io/cubeulator/guide/) | Installing, scanning, following the solution, settings, privacy, troubleshooting |
 | [Try it in your browser](https://iainchesworthlabs.github.io/cubeulator/web/) | The app as WebAssembly: what it needs, how it differs, how it works |
-| [Getting started](https://iainchesworthlabs.github.io/cubeulator/getting-started/) | Requirements, cloning, first build |
+| [Getting started](https://iainchesworthlabs.github.io/cubeulator/getting-started/) | Building from source: requirements, cloning, first build |
 | [Building & packaging](https://iainchesworthlabs.github.io/cubeulator/building/) | Every preset, sanitizers, `cpack` |
 | [Testing & coverage](https://iainchesworthlabs.github.io/cubeulator/testing/) | TDD, test layers, the 80% coverage gate |
 | [Architecture](https://iainchesworthlabs.github.io/cubeulator/architecture/) | C++23 highlights, source layout |
-| [Dependency strategy](https://iainchesworthlabs.github.io/cubeulator/dependency-strategy/) | vcpkg on desktop vs. the mobile gap |
+| [Dependency strategy](https://iainchesworthlabs.github.io/cubeulator/dependency-strategy/) | vcpkg on desktop, mobile and WebAssembly |
 | [Contributing](https://iainchesworthlabs.github.io/cubeulator/CONTRIBUTING/) | Branching model, code style, PR process |
 
 ## Contributing
@@ -105,5 +119,6 @@ get reviewed. Please also read the
 ## License
 
 GPL-3.0-or-later. See [LICENSE](LICENSE) — and
-[LICENSE-NOTE.md](LICENSE-NOTE.md) for an open question about app store
-distribution that's flagged, not yet resolved.
+[LICENSE-NOTE.md](LICENSE-NOTE.md) for the question of app store
+distribution: the Apple stores are deferred, and it is settled before any
+Apple submission.

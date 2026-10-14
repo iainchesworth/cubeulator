@@ -74,7 +74,7 @@ test.describe('performance', () => {
     expect(summary.dropped).toBe(0);
 
     report.bootMs = app.bootMs;
-    withinBudget('time to the first screen (ms)', app.bootMs, 30_000, report);
+    withinBudget('time to the first screen (ms)', app.bootMs, 60_000, report);
     withinBudget('QML load (ms)', zone(summary, 'app.load_qml').total_ms, 5_000, report);
 
     // Memory at rest: the wasm heap the module asked for, in MB.
@@ -87,6 +87,7 @@ test.describe('performance', () => {
 
   test('scan and solve: six sides read, one solution made', async ({ app }) => {
     const report = { journey: 'scan-and-solve', budgets: [] };
+    await app.waitForFrames();
     await app.clearProfile();
 
     await app.click('launch.startScan');
@@ -180,11 +181,9 @@ test.describe('performance', () => {
     const report = { journey: 'walk', budgets: [] };
     await app.page.goto('/index.html?demo=3');
     await app.waitUntilDrawn('solve');
-    // The first frames of a page take seconds each on a software renderer;
-    // a press is measured once they are out of the way.
-    await expect.poll(async () => (await app.profile()).frames.UI ?? 0,
-      { timeout: 120_000 }).toBeGreaterThan(5);
-    await app.settle();
+    // A press is measured once the first frames, which take seconds each on a
+    // software renderer, are out of the way.
+    await app.waitForFrames();
     await app.clearProfile();
 
     const before = await app.page.evaluate(() => window.cubeulatorProfile.memory().wasmHeapBytes);

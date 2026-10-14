@@ -1,5 +1,13 @@
 # Design system
 
+> **Status in 0.1.0-beta.1:** A specification that has not been ported.
+> `Theme.qml` is still the legacy one: the brand red used for text,
+> `inkMuted(opacity)`, the old sticker colours, a single 720 breakpoint, no
+> focus ring and no marks, and none of the components below exist as kit
+> types (`AppButton` is an item with a mouse area). Archivo and IBM Plex Mono
+> are named and not bundled. The measured tables are computed from
+> `tokens.json`; they say what the tokens do, not what the app draws.
+
 The existing look made into rules. Machine-readable values are in
 [`tokens.json`](tokens.json); this page says what they are for. E2a ports
 them into `Theme.qml` and builds the components listed here. After that, a
@@ -7,7 +15,7 @@ colour or a pixel size written into a screen is a defect (plan, E3 gate).
 
 ## The direction
 
-Kept from the app as it stands *(Iain, 2026-10-13)*. The original design
+Kept from the app as it stands *(the maintainer, 2026-10-13)*. The original design
 handoff is gone, so this is reconstructed from the QML.
 
 - **Flat.** Fills and rules. No shadows, gradients, blurs or glows.
@@ -210,7 +218,7 @@ OKLab distance x 100 between two swatches as seen with each kind of colour visio
 | The system's own | Japanese, Simplified Chinese | Not bundled; see `platforms.md` |
 
 The fonts are loaded from the app's resources at start-up. A machine
-without Archivo installed still shows Archivo (plan, E2 gate).
+without Archivo installed still shows Archivo (plan, E2 gate; not yet met).
 
 Sizes are in **rem**. One rem is `16 px x Theme.textScale`.
 `textScale` is the operating system's text-size setting multiplied by the

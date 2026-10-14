@@ -1,6 +1,10 @@
 # Help
 
-Lane: experience. New (E3a). In the first release by Iain's decision.
+> **Status in 0.1.0-beta.1:** Not built. The desktop shell has a Help action
+> bound to F1 and to the macOS Help menu, and it is disabled until a Help
+> screen exists.
+
+Lane: experience. New (E3a). In the first release by the maintainer's decision.
 
 Short answers to the things that go wrong, written to be read with a cube
 in the other hand. Each topic is one screen of plain text; none needs the

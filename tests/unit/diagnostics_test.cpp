@@ -13,6 +13,8 @@
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/recording_v2.hpp>
 
+#include "must_have.hpp"
+
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -51,7 +53,7 @@ public:
 
 private:
     [[nodiscard]] bool at_end() const { return pos_ >= text_.size(); }
-    [[nodiscard]] char peek() const { return at_end() ? '\0' : text_[pos_]; }
+    [[nodiscard]] char peek() const { return at_end() ? '\0' : text_.at(pos_); }
     void skip_space() {
         while (!at_end() && (peek() == ' ' || peek() == '\t' || peek() == '\n' || peek() == '\r')) {
             ++pos_;
@@ -64,43 +66,59 @@ private:
         pos_ += word.size();
         return true;
     }
+    // The four hex digits of a \uXXXX escape, after its `u`.
+    [[nodiscard]] bool four_hex_digits() {
+        for (int i = 0; i < 4; ++i) {
+            const char hex = peek();
+            const bool digit = (hex >= '0' && hex <= '9') || (hex >= 'a' && hex <= 'f') ||
+                               (hex >= 'A' && hex <= 'F');
+            if (!digit) {
+                return false;
+            }
+            ++pos_;
+        }
+        return true;
+    }
+    // What follows a backslash in a string, consumed.
+    [[nodiscard]] bool escape_sequence() {
+        const char escape = peek();
+        if (escape == 'u') {
+            ++pos_;
+            return four_hex_digits();
+        }
+        if (!std::string_view("\"\\/bfnrt").contains(escape)) {
+            return false;
+        }
+        ++pos_;
+        return true;
+    }
     [[nodiscard]] bool string() {
         if (peek() != '"') {
             return false;
         }
         ++pos_;
         while (!at_end()) {
-            const auto c = static_cast<unsigned char>(text_[pos_]);
+            const auto c = static_cast<unsigned char>(text_.at(pos_));
+            ++pos_;
             if (c == '"') {
-                ++pos_;
                 return true;
             }
             if (c < 0x20) {
                 return false;  // control characters must be escaped
             }
-            if (c == '\\') {
-                ++pos_;
-                const char escape = peek();
-                if (escape == 'u') {
-                    ++pos_;
-                    for (int i = 0; i < 4; ++i) {
-                        const char hex = peek();
-                        const bool digit = (hex >= '0' && hex <= '9') ||
-                                           (hex >= 'a' && hex <= 'f') || (hex >= 'A' && hex <= 'F');
-                        if (!digit) {
-                            return false;
-                        }
-                        ++pos_;
-                    }
-                    continue;
-                }
-                if (std::string_view("\"\\/bfnrt").find(escape) == std::string_view::npos) {
-                    return false;
-                }
+            if (c == '\\' && !escape_sequence()) {
+                return false;
             }
-            ++pos_;
         }
         return false;
+    }
+    // Consumes a run of digits; says whether there was at least one.
+    bool digits() {
+        const std::size_t from = pos_;
+        while (peek() >= '0' && peek() <= '9') {
+            ++pos_;
+        }
+        return pos_ > from;
     }
     [[nodiscard]] bool number() {
         const std::size_t start = pos_;
@@ -110,19 +128,14 @@ private:
         if (peek() == '0') {
             ++pos_;
         } else if (peek() >= '1' && peek() <= '9') {
-            while (peek() >= '0' && peek() <= '9') {
-                ++pos_;
-            }
+            static_cast<void>(digits());
         } else {
             return false;
         }
         if (peek() == '.') {
             ++pos_;
-            if (!(peek() >= '0' && peek() <= '9')) {
+            if (!digits()) {
                 return false;
-            }
-            while (peek() >= '0' && peek() <= '9') {
-                ++pos_;
             }
         }
         if (peek() == 'e' || peek() == 'E') {
@@ -130,11 +143,8 @@ private:
             if (peek() == '+' || peek() == '-') {
                 ++pos_;
             }
-            if (!(peek() >= '0' && peek() <= '9')) {
+            if (!digits()) {
                 return false;
-            }
-            while (peek() >= '0' && peek() <= '9') {
-                ++pos_;
             }
         }
         return pos_ > start;
@@ -238,6 +248,8 @@ public:
     }
     ScratchDir(const ScratchDir&) = delete;
     ScratchDir& operator=(const ScratchDir&) = delete;
+    ScratchDir(ScratchDir&&) = delete;
+    ScratchDir& operator=(ScratchDir&&) = delete;
     [[nodiscard]] const fs::path& path() const { return path_; }
 
 private:
@@ -302,7 +314,7 @@ TEST_CASE("a value that is not a number is null, so the line stays JSON", "[diag
 TEST_CASE("strings are escaped, and never carry a newline", "[diagnostics]") {
     const Json text(std::string("quote \" backslash \\ newline \n tab \t bell \x07 end"));
     const std::string line = text.dump();
-    CHECK(line.find('\n') == std::string::npos);
+    CHECK_FALSE(line.contains('\n'));
     CHECK_THAT(line, ContainsSubstring(R"(\")"));
     CHECK_THAT(line, ContainsSubstring(R"(\\)"));
     CHECK_THAT(line, ContainsSubstring(R"(\n)"));
@@ -317,8 +329,12 @@ TEST_CASE("UTF-8 passes through, and bytes that are not UTF-8 become U+FFFD", "[
 
     // A lone continuation byte, a truncated sequence, an overlong NUL and a
     // surrogate: none is text.
-    for (const std::string& bad : {std::string("a\x80z"), std::string("a\xE2\x82"),
-                                   std::string("a\xC0\x80z"), std::string("a\xED\xA0\x80z")}) {
+    for (const std::string& bad : {
+             std::string("a\x80z"),
+             std::string("a\xE2\x82"),
+             std::string("a\xC0\x80z"),
+             std::string("a\xED\xA0\x80z"),
+         }) {
         const std::string line = Json(bad).dump();
         CHECK_THAT(line, ContainsSubstring("\xEF\xBF\xBD"));
         CHECK(is_json(line));
@@ -339,8 +355,9 @@ TEST_CASE("the checker the tests rely on rejects what is not JSON", "[diagnostic
 // ---------------------------------------------------------------------------
 
 TEST_CASE("a record is one line with a sequence number, a time, a kind and data", "[diagnostics]") {
-    const Json record = cube::diagnostics::make_record(12, "2026-10-14T20:11:03.412Z", "scan",
-                                                       Json::object().set("sides", 3));
+    const Json record = cube::diagnostics::make_record(
+        {.seq = 12, .time = "2026-10-14T20:11:03.412Z", .kind = "scan"},
+        Json::object().set("sides", 3));
     CHECK(record.dump() ==
           R"({"seq":12,"time":"2026-10-14T20:11:03.412Z","kind":"scan","data":{"sides":3}})");
     CHECK(is_json(record.dump()));
@@ -455,8 +472,7 @@ TEST_CASE("a file that cannot be created says why", "[diagnostics]") {
 
     cube::diagnostics::JsonlFile writer;
     const auto problem = writer.open(blocker / "diagnostics.jsonl");
-    REQUIRE(problem.has_value());
-    CHECK_FALSE(problem->empty());
+    CHECK_FALSE(::cube::test::must_have(problem).empty());
     CHECK_FALSE(writer.is_open());
 }
 
@@ -485,7 +501,7 @@ TEST_CASE("a cube's state is the manifest's 54-character string", "[diagnostics]
     CHECK_FALSE(cube::vision::recording::state_string_problem(state).has_value());
     CHECK(cube::diagnostics::cube_json(solved).dump() == "\"" + state + "\"");
 
-    const cube::solver::Cube turned = solved.apply(cube::solver::Move{cube::solver::Face::R, 1});
+    const cube::solver::Cube turned = solved.apply({.face = cube::solver::Face::R, .turns = 1});
     const std::string turned_state = cube::vision::recording::state_string(turned);
     CHECK(turned_state != state);
     CHECK_FALSE(cube::vision::recording::state_string_problem(turned_state).has_value());
@@ -529,7 +545,8 @@ TEST_CASE("an assembly trace says which path was taken and why it failed", "[dia
     CHECK(is_json(line));
     CHECK(line ==
           R"({"path":"names_exchanged","candidates":0,"corner_reads":4,"corner_fits":[],)"
-          R"("chosen":null,"direct_error":"invalid_cube_state","exchange":{"first_side":2,)"
+          R"("chosen":null,"settling_corner":null,"direct_error":"invalid_cube_state",)"
+          R"("exchange":{"first_side":2,)"
           R"("second_side":5,"first_name":"red","second_name":"orange","centre_distance":9.5},)"
           R"("error":null})");
 
@@ -538,9 +555,15 @@ TEST_CASE("an assembly trace says which path was taken and why it failed", "[dia
     ambiguous.candidates = 2;
     ambiguous.corner_fits = {3, 3};
     ambiguous.error = cube::CubeError::ambiguous_scan;
+    ambiguous.settling_corner = std::array<cube::solver::Color, 3>{
+        cube::solver::Color::Yellow,
+        cube::solver::Color::Green,
+        cube::solver::Color::Red,
+    };
     const std::string ambiguous_line = cube::diagnostics::to_json(ambiguous).dump();
     CHECK(is_json(ambiguous_line));
     CHECK_THAT(ambiguous_line, ContainsSubstring(R"("corner_fits":[3,3])"));
+    CHECK_THAT(ambiguous_line, ContainsSubstring(R"("settling_corner":["yellow","green","red"])"));
     CHECK_THAT(ambiguous_line, ContainsSubstring(R"("error":"ambiguous_scan")"));
 }
 

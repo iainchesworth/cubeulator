@@ -73,7 +73,9 @@ the issue or the `feature/*` branch that carries it.
 
 A page that says "no, and here is why" is worth as much as one that says yes: it
 is the thing that stops the same idea being investigated again in three weeks.
-Land it as a small docs-only pull request; it needs no changelog fragment.
+Land it as a small docs-only pull request that also adds it to the list at the
+end of this page (the site's navigation lists only this page); it needs no
+changelog fragment.
 
 ## What happens to the branch
 
@@ -100,3 +102,7 @@ A spike is a branch on a public repository like any other. It must not hold
 camera frames that show a person, the corpus, keys or tokens. A recording of a
 cube goes in the private corpus, and the spike's page says which clip it used by
 name.
+
+## Closed investigations
+
+None yet.

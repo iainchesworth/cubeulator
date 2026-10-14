@@ -3,6 +3,8 @@
 What the developer-only scan recorder writes, and what `cube_scan` reads. The
 code is `src/lib/include/cube/vision/recording_v2.hpp` (recorder, manifest,
 integrity check) and `frame_recording.hpp` (file names and the index rows).
+`cube_scan` itself uses only the frame files and `truth.txt`; the index, the
+manifest and the integrity check are for `check_recording` and for people.
 
 ## When anything is written
 
@@ -10,7 +12,10 @@ Never by default. The app stores nothing unless a developer sets
 `CUBE_SCAN_RECORD_DIR` to a folder before starting it; the scan screen then
 shows a recording marker so a recording is never silent. Each scan gets its own
 sub-folder, named for when it began (`yyyyMMdd-HHmmss-zzz`), and the solve
-screen's camera never records.
+screen's camera never records. Only the frames the scan is built from are
+written: none while the camera is still settling (see
+[Camera photometry](vision-pipeline.md#camera-photometry)) and none once the
+cube has been read.
 
 Recordings show whatever the camera sees, which can be the person holding the
 cube. They stay out of the repository (`/tests/data/captures/` and
@@ -25,12 +30,15 @@ described in [diagnostics.md](diagnostics.md).
 
 ## Directory layout
 
+One scan's sub-folder of `CUBE_SCAN_RECORD_DIR`:
+
 ```
 <recording-dir>/
   index.csv          # one row per recorded frame
   rec_000000.jpg ... # the frames, at the reader's analysis scale
   manifest.json      # per-clip metadata
-  recording_stats.json  # written when the recorder stops: pushed/written/dropped
+  recording_stats.json  # written when the recorder stops: pushed/written/dropped/queue_peak
+                        # (and failed/error, only if a write failed)
   fullres/           # only if full-resolution frames were asked for
     rec_000000.jpg
   truth.txt          # optional, added by hand for scoring (see below)
@@ -46,7 +54,10 @@ more of the room and nothing the reader uses.
 - The file for pass `n` is `rec_%06d.jpg` of `n % 3600`: the files wrap at a
   3600-frame ring so a recorder left on bounds its disk use, while `index.csv`
   keeps growing. A row whose file has since been overwritten is detected from
-  the index (`frame_overwritten`) and ignored.
+  the index (`frame_overwritten`) and ignored. `cube_scan` does not read the
+  index: it replays the `rec_*.jpg` files in file-name order, which is
+  chronological only for a scan shorter than 3600 frames (about two minutes
+  at 30 Hz).
 
 ### `index.csv`
 
@@ -87,13 +98,35 @@ Consumers ignore unknown keys.
 
 ## Integrity
 
-`check_recording(dir)` returns the first problem or nothing: the index parses,
-passes are contiguous, `t_ms` does not decrease, every row that has not been
-overwritten has its frame (and `fullres/` file when that stream exists), and no
-recorder-side drops were flagged. The recorder's queue holds 256 frames (about
-8.5 s at 30 Hz); a frame pushed to a full queue is dropped and counted, the
-count is written to `recording_stats.json` when the recorder stops, and
-`check_recording` fails a clip that has any.
+`check_recording(dir)` returns the first problem or nothing: the recorder did
+not fail to write a frame, the index parses, passes are contiguous, `t_ms` does
+not decrease, every row that has not been overwritten has its frame (and
+`fullres/` file when that stream exists), the manifest's `state`, if it has one,
+still validates, and no recorder-side drops were flagged. The recorder's queue
+holds 256 frames (about 8.5 s at 30 Hz); a frame pushed to a full queue is
+dropped and counted, the count is written to `recording_stats.json` when the
+recorder stops, and `check_recording` fails a clip that has any.
+
+### A frame that cannot be written
+
+The disk can fill, the folder can vanish, and a build of OpenCV may have no JPEG
+encoder (the browser's has none: the web app never records). The writer then
+does not retry and does not skip ahead:
+
+- The frame is not indexed. A row is appended only after the frame's files are
+  written, so `index.csv` never claims a frame that is not on disk.
+- The writer stops at the first failure. That frame, every frame still queued,
+  and every frame pushed afterwards are counted as `failed` (so
+  `pushed == written + dropped + failed`), and the first error message is kept.
+- `recording_stats.json` gains `"failed": <n>` and `"error": "<message>"`. They
+  are present only when something failed, so a recording that wrote every frame
+  has the same file as before.
+- `check_recording` reports it before anything else, with the message, because
+  it is the cause of an index with no rows or too few: `recorder failed to
+  write 4 frame(s): cannot write <path>`.
+
+What was written before the failure stays on disk and its rows stay in the
+index; the clip as a whole fails the audit.
 
 ## `truth.txt`
 

@@ -709,6 +709,11 @@ In your hands.</source>
         <extracomment>Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which.</extracomment>
         <translation type="unfinished"></translation>
     </message>
+    <message id="scan.guide.ambiguousCorner">
+        <source>Turn the cube slowly to show the corner where %1, %2 and %3 meet.</source>
+        <extracomment>Guidance when six sides are read and fit together in more than one way, and showing one particular corner (two or three sides in one view) would tell the cubes they make apart. %1, %2 and %3 are the colours of the centres of the three sides that meet there - colour.white and the like, in no particular order. Shown in place of scan.guide.ambiguous, which says only that two sides should show at once.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="scan.guide.complete">
         <source>All six sides make a valid cube. Working out the solution…</source>
         <extracomment>Guidance when the scan has finished.</extracomment>
@@ -1488,6 +1493,26 @@ In your hands.</source>
     <message id="history.clear.confirm">
         <source>Clear</source>
         <extracomment>Dialog button.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="history.a11y.row">
+        <source>%1. %2</source>
+        <extracomment>Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="history.a11y.delete">
+        <source>Delete, %1</source>
+        <extracomment>Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="history.a11y.deleted">
+        <source>Solve deleted.</source>
+        <extracomment>Announced by a screen reader after one solve is deleted from the list.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="history.a11y.cleared">
+        <source>History cleared.</source>
+        <extracomment>Announced by a screen reader after every solve is deleted from the list.</extracomment>
         <translation type="unfinished"></translation>
     </message>
     <message id="settings.section.language">

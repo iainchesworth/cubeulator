@@ -315,6 +315,8 @@ CUBE_PROBE_COST=1 QT_OPENGL=software QSG_RHI_BACKEND=opengl \
 # from navigation, and time the next page after one is closed
 ```
 
-Startup is read from the `app.load_qml` zone of a capture of `cube_app`. The
-pieces of it in the table above need timestamps inside QML, which the
-experiment builds added and the tree does not carry.
+Startup is read from the `app.load_qml` zone of a capture of the application
+itself (`Cubeulator.exe` on Windows; see
+[profiling.md](profiling.md#capturing-a-trace)). The pieces of it in the table
+above need timestamps inside QML, which the experiment builds added and the
+tree does not carry.

@@ -76,12 +76,35 @@ test.describe('?demo=', () => {
       expect(texts).toContain('Solved');
       expect(texts).toContain('Beginner');
 
-      // EXPECTED TO CHANGE (tests/system/known_today_test.cpp says the same
-      // of the desktop build): "Review the solution" is on the screen and does
-      // nothing yet.
+    });
+
+    test('opens the solution for review from the completion screen, and comes back', async ({ app }) => {
+      for (let guard = 0; guard < 400; guard++) {
+        if ((await app.singleton('SolveController')).atEnd) {
+          break;
+        }
+        await app.click('solve.next');
+      }
+      await app.click('solve.next');
+      await app.waitForScreen('complete');
+
       await app.click('complete.review');
-      await app.page.waitForTimeout(500);
-      expect(await app.screen()).toBe('complete');
+      await app.waitForScreen('solution');
+      for (const name of ['solution.back', 'solution.cube', 'solution.list']) {
+        expect(await app.find(name), `${name} is on show`).not.toBeNull();
+      }
+      // It is the solution that was made: its length and its stages.
+      const total = (await app.singleton('SolveController')).totalMoves;
+      expect((await app.texts()).join(' ')).toContain(`${total} turns in`);
+
+      // Back, and Escape (the review is a screen that handles keys): both
+      // return to where it was opened from.
+      await app.click('solution.back');
+      await app.waitForScreen('complete');
+      await app.click('complete.review');
+      await app.waitForScreen('solution');
+      await app.key('Escape');
+      await app.waitForScreen('complete');
     });
 
     test('goes back to scanning from the completion screen', async ({ app }) => {

@@ -1,9 +1,21 @@
 # App experience plan
 
-Written 2026-10-13. Status: **in effect.** E0a, E0b and E1 have reported;
-E2a and E4a are running. `feature/app-experience` holds the design and the
-accepted solve work; no `ax` code branch has landed on it yet. See
-[Integration](#integration).
+> **Status in 0.1.0-beta.1:** This is the plan the app is being built to, not
+> a description of it. On `develop` are the system tests (E0a), the generated
+> licence notices (E0b), the translations plumbing (E2b), the desktop shell's
+> shortcuts, window memory, icon and packaging (E4a) and the design documents
+> (E1). Not there: the component kit (E2a), and with it the E3 screens (first
+> run, About, Licences, Privacy, Help, History, review and hand entry), the
+> mobile shell (E4b), reviewed translations (E5) and release readiness (E6);
+> the screens the app has are the six legacy ones in `src/app/qt`.
+
+Written 2026-10-13. Status: **in effect.** On 2026-10-13 E0a, E0b and E1 had
+reported, E2a and E4a were running, `feature/app-experience` held the design
+and the accepted solve work, and no `ax` code branch had landed on it. Since
+then the solve work (pull request 4), E0a (18), E2b (20), E0b (27) and E4a
+(3) have landed on `develop` by pull request; E2a, the kit, has not. See
+[Integration](#integration) and ["Where the phases
+stand"](#where-the-phases-stand).
 
 This covers everything a person meets in Cubeulator apart from the two things
 already in flight - reading the cube ([recovery-plan.md](recovery-plan.md))
@@ -13,6 +25,9 @@ the about box and licences, platform conventions, app identity and
 packaging, and tests that drive the whole app from its UI.
 
 ## Verdict
+
+*As written on 2026-10-13, about `feature/direct-scan` at `fa81b2e`. What has
+changed since is listed under "What was found", below.*
 
 The app has a look but not a system, and the journey is not closed.
 
@@ -64,6 +79,39 @@ Read from `feature/direct-scan` at `fa81b2e`.
 | Docs | README and CHANGELOG still say "repository skeleton, no solver" | `README.md:16` |
 | Tests | The coverage job builds with the app off, so nothing under `src/app/qt` counts toward the 80% gate | `ci.yml:495` |
 
+**Since then**, to `develop` at 1644b058 (2026-10-14):
+
+- *Journey.* The solve screen's last step goes to Complete, and **Rescan**
+  leaves the solve screen for the scan; Complete's **Scan another cube**
+  works. The Home **History** button and Complete's **Review the solution**
+  did nothing at that date; both are built since (`HistoryScreen.qml`,
+  `SolutionScreen.qml`). There is still no back handling: Esc and the Android back
+  key are not bound, and the desktop shell (`DesktopShell.qml`) adds the
+  shortcuts for Settings, a new scan, full screen and quit.
+- *Settings.* *Detect hands with AI* and *Auto-advance* went with
+  `ScanSession` (R6). The theme, the language, the solve method and the
+  graphics backend persist. *Rendering* and *Developer* rows still sit beside
+  the user's settings, in every build.
+- *Languages.* Linguist is in the build, strings are keyed by id, nine
+  languages are listed and switch live, and 74 strings are asked for by id.
+  78 literals remain (`i18n-lanes.md`), most of them on the scan and solve
+  screens, and `DirectScan.cameraError` is still text made in C++.
+- *Accessibility.* Unchanged but for the desktop shell: no `Accessible` names
+  or roles on the screens, and the buttons are still not focusable.
+- *Type.* Archivo and IBM Plex Mono are still named and not bundled. The
+  browser build bundles Japanese and Chinese subsets.
+- *Identity.* The app has an icon, a version resource and installers
+  (E4a), and its identifier and publisher are `com.iainchesworthlabs.cubeulator`
+  and Iain Chesworth Labs. The Android manifest's package is still
+  `org.qtproject.example`, the Android and iOS camera backends are still
+  stubs, and iOS builds in CI (device, build-only, unsigned).
+- *Legal.* Third-party notices are generated and ship in the desktop
+  packages. There is no About or Licences screen: only a placeholder About
+  (name and version) in the desktop shell.
+- *Docs.* README and CHANGELOG no longer say "repository skeleton". The 80%
+  coverage gate still excludes `src/app/qt`; the system tests' leg reports its
+  coverage without gating on it.
+
 ## The person using it
 
 Four facts decide most of the design. They are assumptions until E6 tests
@@ -98,7 +146,7 @@ Principles that follow:
 - **Each platform's manners.** Back, menus, about, insets and installers
   behave the way that platform's users expect, from one shared QML shell.
 
-## Decisions for Iain
+## Decisions for the maintainer
 
 None of these blocks E0. The defaults are what the plan assumes until told
 otherwise.
@@ -132,18 +180,17 @@ default above, the answer stands.
 - Translations are keyed by id, as `strings.json` already is, not by the
   English text (`design/family.md` D5).
 - The repository moved to `iainchesworthlabs/cubeulator` on 2026-10-13.
-  Publisher and identifier follow the account, and Iain confirmed both
+  Publisher and identifier follow the account, and the maintainer confirmed both
   after the move: the publisher is written "Iain Chesworth Labs" in About
-  and the packages, the copyright line stays "Copyright © 2026 Iain
-  Chesworth", and the identifier is `com.iainchesworthlabs.cubeulator`,
+  and the packages, the copyright line stays in the person's name, and the identifier is `com.iainchesworthlabs.cubeulator`,
   the form ICL Forge's macOS apps use under the same account
   (`design/family.md` D1 and D9, `brief.md` D12). Before the move the
-  answers were "Iain Chesworth" and `org.iainchesworth.cubeulator`. For
+  answers were the person's own name and `org.iainchesworth.cubeulator`. For
   about an hour on 2026-10-13 this plan said `org.iainchesworthlabs.`; that
   came from a question that did not offer the `com.` form, and is withdrawn.
 
-**On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
-own terms are his to change. But the app links Qt Quick 3D and Qt Shader
+**On 5.** Cubeulator is GPL-3.0-or-later and the maintainer is its only author, so its
+own terms are the maintainer's to change. But the app links Qt Quick 3D and Qt Shader
 Tools, which Qt publishes under GPLv3 or a commercial licence, not LGPL. If
 that reading holds, an App Store exception on Cubeulator's own code would
 not settle the Apple question, because the same terms arrive through Qt. The
@@ -166,7 +213,7 @@ branch.
 | **Scan** - `feature/direct-scan` | `DirectScanScreen.qml`, `direct_scan.*`, the scan flow in `AppState.qml`, `ScanSession` and `ScanScreen.qml` (removed in R6), the review and hand-entry screen (R3), `src/app/platform` | read. After R4, E3c restyles the chrome; reading behaviour stays theirs |
 | **Experience** - `feature/app-experience` | `Theme.qml`, `AppButton.qml`, `Icon.qml`, `Main.qml`, Launch, Permission, Settings and Complete screens, new About and Licences screens, `SettingsState.qml`, translations, packaging, identity, `tests/system/`, `docs/design/` | - |
 
-The solve lane crossed into the scan lane, because Iain asked for the
+The solve lane crossed into the scan lane, because the maintainer asked for the
 camera on the solve screen: `direct_scan.{hpp,cpp}` in both the app and the
 library (watching a held cube, and `start()` closing a running camera
 first), and `AppState.qml` (`solveCamera`, `rescan()`, the camera kept for
@@ -210,12 +257,19 @@ Found in the audit, belonging to the active lanes:
 
 ## Integration
 
+*Resolved, except for the kit, by 2026-10-14: the solve work landed as pull
+request 4 (with the scan work, 8), E0a as 18, E2b as 20, E0b as 27 and E4a as
+3. Start-up is `main.cpp` making one `AppRuntime` that owns `AppControllers`
+and the engine, with `DesktopIntegration` and `installBundledFonts()` as the
+single lines around it. `feature/ax-kit` has not landed. What follows is the
+account as written on 2026-10-13.*
+
 Added 2026-10-13. Five branches hold finished or running work. None of the
 `ax` branches contains another.
 
 | branch | lane | commits | state |
 |---|---|---|---|
-| `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by Iain 2026-10-13** and merged into `feature/app-experience` the same day |
+| `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by the maintainer 2026-10-13** and merged into `feature/app-experience` the same day |
 | `feature/ax-system-tests` | E0a | 11 | pushed; reconciling start-up, below |
 | `feature/ax-licences` | E0b | 7 | local |
 | `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
@@ -334,6 +388,24 @@ Each phase has one gate. Branches are `feature/ax-<topic>`, cut from
 `feature/app-experience`, which was cut from `feature/direct-scan` and
 follows it.
 
+### Where the phases stand
+
+As of 2026-10-14, `develop` at 7e764eef, from the code.
+
+| phase | state |
+|---|---|
+| E0a System tests | Landed (18). `tests/system` boots the real `Main.qml`, walks the journey and takes the screenshot tour; `src/app/qt` coverage is reported, not gated |
+| E0b Licences | Landed (27). Notices are generated from the build and ship with the desktop packages; no screen shows them yet |
+| E1 Design | Landed: `docs/design/`. The prototype page is built from `strings.json` by `build.py`; run it after the strings change |
+| E2a Kit | Not landed. `Theme.qml` is the legacy one; `AppButton` is still an item and a mouse area; only `installBundledFonts()` is there |
+| E2b Translations | Landed (20), with ja and zh-CN machine drafts (96). See [i18n.md](i18n.md) |
+| E3a-E3d Screens | Mostly not on `develop`: the legacy Launch, Permission, Scan, Solve, Settings and Complete screens remain, some converted to ids. The solution and History screens are built (`SolutionScreen.qml`, `HistoryScreen.qml`) |
+| E4a Desktop | Landed (3): icon, version resource, installers, shortcuts, remembered window, macOS menu bar (`platforms.md` says it has not been run on a Mac). Nothing calls the keep-awake helper yet |
+| E4b Mobile | Nothing on `develop`. No mobile capture, so a phone build cannot scan |
+| E5 Languages | Not reviewed. ja and zh-CN are complete drafts; de, fr, es, he, ar and yi are empty |
+| E6 Release readiness | Nothing on `develop`: no screen-reader pass, no sessions with people, no store listings |
+| F Family alignment | Nothing on `develop`; the decisions D1-D9 are recorded in `design/family.md` |
+
 **E0 - Safety net and inventory.** No visual change. Starts now.
 
 - *E0a System tests.* Boot the real `Main.qml` with the real controllers and
@@ -349,7 +421,7 @@ follows it.
 
 Gate: one command walks launch to solve headless on Linux in CI and uploads
 the screenshots; the coverage report includes `src/app/qt`; the notices are
-generated; the licence options are on Iain's desk.
+generated; the licence options are on the maintainer's desk.
 
 **E1 - Design.** Starts now, beside E0. Writes `docs/design/` and no app
 code.
@@ -376,7 +448,7 @@ code.
 - A click-through prototype of the whole journey, phone and desktop, light
   and dark.
 
-Gate: Iain has clicked through the prototype at both sizes and signed it
+Gate: the maintainer has clicked through the prototype at both sizes and signed it
 off; every state in `journey.md` has a spec; the string inventory is
 complete.
 
@@ -445,11 +517,11 @@ Countdown Solver and Automate. The full account, with sources, is
   mostly shared already. The gaps are small and are cheapest to close in
   the sessions that are open now.
 
-**Decided on 2026-10-13** (`family.md` section 5), all by Iain:
+**Decided on 2026-10-13** (`family.md` section 5), all by the maintainer:
 
 - D1: the publisher follows the account. The repository moved to
   `iainchesworthlabs` the same day, so it is **Iain Chesworth Labs**, with
-  the copyright line in Iain's own name. D9 follows: the identifier is
+  the copyright line in the maintainer's own name. D9 follows: the identifier is
   `com.iainchesworthlabs.cubeulator`.
 - D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
   Forge; no other app is reskinned.
@@ -485,7 +557,7 @@ and the prototype.
 | "Reviewed by" per language | said in the app, per language, once a fluent reader has looked |
 | F10 tour manifest | the screenshot tour gets a manifest and a check that documentation pictures are in it; a capture entry with `--page` and `--language` |
 | Docs skin | the documentation site skinned from `tokens.json` |
-| Dark neutrals | converge with ICL Forge's, if Iain wants it, in the direction he chooses |
+| Dark neutrals | converge with ICL Forge's, if the maintainer wants it, in the direction chosen |
 | Help points to Copy details | from **Trouble scanning** |
 | Back-ports | the list in `family.md` section 4, for the other repositories |
 
@@ -494,7 +566,7 @@ Cubeulator, or is recorded as a deliberate difference.
 
 ## Sessions
 
-Every session spawned from this plan runs on **Sonnet 5.5** (Iain,
+Every session spawned from this plan runs on **Sonnet 5.5** (the maintainer,
 2026-10-13).
 
 | id | session | branch | starts when | touches |

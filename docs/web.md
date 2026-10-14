@@ -15,6 +15,9 @@ No camera to hand? <a href="../app/?demo=7" target="_blank" rel="noopener">Open 
 scrambled cube</a> to see the solve screen, with a solution already worked
 out. Any number after `demo=` is a different scramble.
 
+What the screens are and how to use them is in the [user guide](guide/index.md);
+this page is about running it in a browser.
+
 ## What you need
 
 - A current Chrome, Edge, Firefox or Safari. The page needs WebAssembly

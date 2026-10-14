@@ -45,8 +45,11 @@ What is in it
   THIRD-PARTY-NOTICES.txt                               the licences of everything inside cube_app.wasm
                                                         (Qt, OpenCV and the libraries it uses, the fonts)
 
-These are the files that the hosted copy serves, built by the same workflow
-from the same commit as the other downloads of this release: the release's
+These are the files that the hosted copy serves (less Qt's own default page,
+cube_app.html, and its logo, which are not the app's entry point and do not
+work on a static host without the isolation worker index.html registers),
+built by the same workflow from the same commit as the other downloads of this
+release: the release's
 SHA512SUMS and provenance attestation cover the zip. The page's
 "Documentation" link points at the parent directory of the project's own site
 and means nothing elsewhere.

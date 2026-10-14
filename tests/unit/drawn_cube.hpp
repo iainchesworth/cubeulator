@@ -20,6 +20,7 @@
 #include <functional>
 #include <numbers>
 #include <optional>
+#include <string_view>
 #include <utility>
 
 namespace cube::test {
@@ -45,15 +46,27 @@ namespace cube::test {
 
 // A cluttered room: mid-grey with noise and a scatter of coloured boxes, so
 // the reader has to pick the lattice out of something.
+//
+// Every value is drawn on a statement of its own. The arguments of a call are
+// evaluated in an order the standard leaves open, MSVC and GCC take them right
+// to left and clang left to right, and `cv::Point(rng.uniform(..),
+// rng.uniform(..))` swapped its two coordinates (and the same for the box and
+// the colour) from one compiler to the next - a different room, so a side the
+// reader found on one was lost on another. The order here is the right-to-left
+// one the cases were written against, so that is the room every compiler draws.
 [[nodiscard]] inline cv::Mat room(cv::Size size) {
     cv::Mat frame(size, CV_8UC3, cv::Scalar(96, 104, 110));
     cv::RNG rng(1234);
     for (int i = 0; i < 40; ++i) {
-        const cv::Point corner(rng.uniform(0, size.width), rng.uniform(0, size.height));
-        const cv::Size box(rng.uniform(8, size.width / 6), rng.uniform(8, size.height / 5));
-        cv::rectangle(frame, cv::Rect(corner, box),
-                      cv::Scalar(rng.uniform(30, 220), rng.uniform(30, 220), rng.uniform(30, 220)),
-                      cv::FILLED);
+        const int top = rng.uniform(0, size.height);
+        const int left = rng.uniform(0, size.width);
+        const int height = rng.uniform(8, size.height / 5);
+        const int width = rng.uniform(8, size.width / 6);
+        const int red = rng.uniform(30, 220);
+        const int green = rng.uniform(30, 220);
+        const int blue = rng.uniform(30, 220);
+        cv::rectangle(frame, cv::Rect(cv::Point(left, top), cv::Size(width, height)),
+                      cv::Scalar(blue, green, red), cv::FILLED);
     }
     cv::Mat noise(size, CV_8UC3);
     rng.fill(noise, cv::RNG::NORMAL, cv::Scalar::all(0), cv::Scalar::all(6));
@@ -97,8 +110,45 @@ struct Drawing {
     // side whose centre is this colour, the way a Rubik's cube's white centre
     // carries one. It runs corner to corner and covers about a quarter of the
     // sticker, and it is painted with `paint`, so it is lit as the rest is.
-    std::optional<solver::Color> logo_on_centre;
+    std::optional<solver::Color> logo_on_centre = std::nullopt;
 };
+
+// The six colours of a real cube under a warm lamp, measured in float Lab on
+// 2026-10-14 from the scan in which two sides were fused into one. Red and
+// orange are 16 Lab apart and almost all of that is lightness - the one axis
+// colour_distance counts for a quarter - and the blue and green are nearly
+// black.
+[[nodiscard]] inline cv::Vec3f warm_lamp_lab(solver::Color colour) {
+    switch (colour) {
+        case solver::Color::White:
+            return {65.5F, 22.5F, 16.5F};
+        case solver::Color::Yellow:
+            return {54.3F, 25.9F, 53.0F};
+        case solver::Color::Red:
+            return {28.4F, 50.4F, 36.5F};
+        case solver::Color::Orange:
+            return {41.0F, 56.1F, 46.7F};
+        case solver::Color::Green:
+            return {16.8F, -12.7F, 14.8F};
+        case solver::Color::Blue:
+            return {11.0F, 5.5F, -15.5F};
+    }
+    return {};
+}
+
+// A cube drawn in those colours.
+[[nodiscard]] inline Drawing warm_lamp_drawing() {
+    Drawing drawing;
+    drawing.paint = [](solver::Color colour) {
+        const cv::Mat3f lab(1, 1, warm_lamp_lab(colour));
+        cv::Mat3f bgr;
+        cv::cvtColor(lab, bgr, cv::COLOR_Lab2BGR);
+        const cv::Vec3f value = bgr(0, 0) * 255.0F;
+        return cv::Scalar(cv::saturate_cast<uchar>(value(0)), cv::saturate_cast<uchar>(value(1)),
+                          cv::saturate_cast<uchar>(value(2)));
+    };
+    return drawing;
+}
 
 // The wordmark of Drawing::logo_on_centre: four squares stepping along the
 // sticker's diagonal.
@@ -290,6 +340,109 @@ struct CornerPose {
     // Right side: its left edge is the shared one; columns step right and up.
     fill_side({pose.edge_x, top}, pose.right_width, -pose.tilt, right);
     return frame;
+}
+
+// Three sides of a cube turned so its near corner points at the camera: the
+// hexagon a cube makes when seen from a corner, three rhombi meeting at
+// `vertex`, each cube edge `edge` pixels long and the picture turned
+// `degrees` in its plane. The edges leave the vertex up, down-left and
+// down-right; the sides, in order, lie between (down-left, up), (down-right,
+// down-left) and (up, down-right), each with its steps turning clockwise so
+// that a side's array is as it looks from outside, row-major from the corner
+// the reader would call its first. Side `i`'s cells are `sides[i]` as given.
+struct Corner3Pose {
+    cv::Point2f vertex{320.0F, 190.0F};
+    float edge = 120.0F;
+    float degrees = 0.0F;
+};
+
+[[nodiscard]] inline cv::Mat draw_corner3(const std::array<std::array<solver::Color, 9>, 3>& sides,
+                                          const Corner3Pose& pose = {},
+                                          const Drawing& drawing = {}) {
+    cv::Mat frame = room(drawing.size);
+    const float radians = pose.degrees * std::numbers::pi_v<float> / 180.0F;
+    const auto turned = [&](float x, float y) {
+        return cv::Point2f(x * std::cos(radians) - y * std::sin(radians),
+                           x * std::sin(radians) + y * std::cos(radians));
+    };
+    const cv::Point2f up = turned(0.0F, -pose.edge);
+    const cv::Point2f down_left = turned(-0.866F * pose.edge, 0.5F * pose.edge);
+    const cv::Point2f down_right = turned(0.866F * pose.edge, 0.5F * pose.edge);
+
+    // A side as the parallelogram spanned from the vertex by `columns` and
+    // `rows` (each three cells long), with gaps of plastic between stickers.
+    const auto fill_side = [&](const cv::Point2f& columns, const cv::Point2f& rows,
+                               const std::array<solver::Color, 9>& stickers) {
+        const auto at = [&](float column, float row) {
+            return cv::Point(pose.vertex + (column / 3.0F) * columns + (row / 3.0F) * rows);
+        };
+        const std::array<cv::Point, 4> backing = {at(-0.04F, -0.04F), at(3.04F, -0.04F),
+                                                  at(3.04F, 3.04F), at(-0.04F, 3.04F)};
+        cv::fillConvexPoly(frame, backing.data(), 4, cv::Scalar(16, 16, 16), cv::LINE_AA);
+        for (int row = 0; row < 3; ++row) {
+            for (int column = 0; column < 3; ++column) {
+                const float c = static_cast<float>(column);
+                const float r = static_cast<float>(row);
+                const std::array<cv::Point, 4> quad = {
+                    at(c + 0.1F, r + 0.1F), at(c + 0.9F, r + 0.1F), at(c + 0.9F, r + 0.9F),
+                    at(c + 0.1F, r + 0.9F)};
+                cv::fillConvexPoly(
+                    frame, quad.data(), 4,
+                    drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]),
+                    cv::LINE_AA);
+            }
+        }
+    };
+    fill_side(down_left, up, sides[0]);
+    fill_side(down_right, down_left, sides[1]);
+    fill_side(up, down_right, sides[2]);
+    return frame;
+}
+
+// The cube of the first scan recorded with a cube held on corners by hand: a
+// pattern with the orange and red sides solid and the green, blue, white and
+// yellow sides six and three, the three being two opposite corners and an edge.
+// Its six sides make twenty cubes, which is what makes it ambiguous; this is
+// one of them, as `cube.face(face)` lays each side out.
+[[nodiscard]] inline std::optional<solver::Cube> patterned_cube() {
+    const auto side = [](std::string_view letters) {
+        std::array<solver::Color, 9> colours{};
+        for (std::size_t i = 0; i < 9; ++i) {
+            switch (letters[i]) {
+                case 'W':
+                    colours[i] = solver::Color::White;
+                    break;
+                case 'Y':
+                    colours[i] = solver::Color::Yellow;
+                    break;
+                case 'R':
+                    colours[i] = solver::Color::Red;
+                    break;
+                case 'O':
+                    colours[i] = solver::Color::Orange;
+                    break;
+                case 'G':
+                    colours[i] = solver::Color::Green;
+                    break;
+                default:
+                    colours[i] = solver::Color::Blue;
+                    break;
+            }
+        }
+        return colours;
+    };
+    std::array<std::array<solver::Color, 9>, 6> faces{};
+    const auto set = [&faces](solver::Face face, const std::array<solver::Color, 9>& colours) {
+        faces[static_cast<std::size_t>(face)] = colours;
+    };
+    set(solver::Face::U, side("YYWYYYWWY"));
+    set(solver::Face::D, side("YWWWWWWYY"));
+    set(solver::Face::L, side("RRRRRRRRR"));
+    set(solver::Face::R, side("OOOOOOOOO"));
+    set(solver::Face::F, side("BBGGGGGGB"));
+    set(solver::Face::B, side("BBGBBBGGB"));
+    const auto cube = solver::Cube::from_facelets(faces);
+    return cube.has_value() ? std::optional<solver::Cube>(*cube) : std::nullopt;
 }
 
 }  // namespace cube::test

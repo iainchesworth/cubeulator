@@ -1,10 +1,17 @@
 # The family
 
+> **Status in 0.1.0-beta.1:** A survey and a set of decisions, not behaviour.
+> Built: the publisher and identifier (`cmake/AppIdentity.cmake`), the
+> nine-language set, ids and the ported language manager with its gates
+> ([i18n.md](../i18n.md)). Not built: the Noto faces, the build line with
+> **Copy**, **Copy details** and the named setting keys (D3, D6, F2, F4, F5,
+> F7). The sibling apps were read on 2026-10-13 and may have moved on since.
+
 Written 2026-10-13. Status: **decisions D1 to D9 taken the same day**
-*(Iain)*, recorded in section 5; everything else here is survey or
+*(the maintainer)*, recorded in section 5; everything else here is survey or
 proposal. It is not legal advice.
 
-Iain builds more than one app. This page records what the others do, so
+The maintainer builds more than one app. This page records what the others do, so
 that Cubeulator's experience plan lines up with them where that is cheap and
 right, and so that the places it should *not* copy them are written down.
 
@@ -102,13 +109,12 @@ system's own setting multiplied in; text that wraps instead of eliding.
 | machine-translation note | an in-app sentence under the language list | in `brief.md`, not in the app | in E5 |
 | pictures in the docs | generated from a manifest and checked | a screenshot tour is planned | manifest and capture entry (F10) |
 
-**6. The publisher follows the account** *(Iain, 2026-10-13, D1)*. Iain
-Chesworth Labs, ICL, is the umbrella for his personal and shared work; its
+**6. The publisher follows the account** *(the maintainer, 2026-10-13, D1)*. Iain
+Chesworth Labs, ICL, is the umbrella for personal and shared work; its
 names are `iainchesworth`, `iainchesworthlabs` and `icl` (as in ICL Forge,
 `iclforge`). Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so its
-publisher is **Iain Chesworth Labs** *(Iain, 2026-10-13, asked again after
-the move)*. While it sat under `iainchesworth` the answer was Iain
-Chesworth, by the same rule. No app shows a publisher or a copyright line
+publisher is **Iain Chesworth Labs** *(the maintainer, 2026-10-13, asked again after
+the move)*. While it sat under `iainchesworth` the answer was the person's own name, by the same rule. No app shows a publisher or a copyright line
 in its window today.
 
 ## 2. Side by side
@@ -149,9 +155,8 @@ today, and the proposal. Lane and timing are in section 6.
 
 ### F1. Publisher line and identifiers
 
-- **Family.** Copyright appears in the README ("Copyright (C) 2026 Iain
-  Chesworth.") and the macOS bundle ("Copyright (c) Iain Chesworth"). The
-  CPack vendor was "Iain Chesworth" in all of them when surveyed;
+- **Family.** Copyright appears in the README and the macOS bundle, in the person's
+  name. The CPack vendor was the same name in all of them when surveyed;
   Cubeulator's became "Iain Chesworth Labs" on `develop` with the move. No
   app shows it in a window.
 - **Identifiers.** Countdown Solver: `org.iainchesworth.countdownsolver`.
@@ -164,10 +169,9 @@ today, and the proposal. Lane and timing are in section 6.
   `<developer>`, the store listing, and the About small print. The account
   decides it. Cubeulator moved to `iainchesworthlabs` on 2026-10-13, so it
   is **Iain Chesworth Labs**; `cmake/Packaging.cmake` on `develop` already
-  says so. The copyright line stays in the person's name: "Copyright ©
-  2026 Iain Chesworth". The identifier follows the account too:
+  says so. The copyright line stays in the person's name. The identifier follows the account too:
   **`com.iainchesworthlabs.cubeulator`**, the form ICL Forge's macOS apps
-  already use. Both were put to Iain again after the move. The outlier in
+  already use. Both were put to the maintainer again after the move. The outlier in
   the suite is still ICL Forge's Android id.
 
 ### F2. Settings store and keys
@@ -224,8 +228,9 @@ today, and the proposal. Lane and timing are in section 6.
 - **Authoring.** Whole sentences, `%1` placeholders, `//:` extracomments on
   short strings, a glossary, brand terms never translated
   (`docs/crucible/localisation.md`, `docs/translations.md` in Countdown).
-- **Cubeulator.** E2b is not started. `strings.json` has stable keys and a
-  note per string.
+- **Cubeulator.** E2b is not started *(on 2026-10-13; it has landed: see
+  [i18n.md](../i18n.md))*. `strings.json` has stable keys and a note per
+  string.
 - **Proposal.**
   1. E2b **ports** the family `LanguageManager` and its gates rather than
      writing a third. It adds what the family lacks and `system.md` already
@@ -233,7 +238,7 @@ today, and the proposal. Lane and timing are in section 6.
      (Countdown never calls `QLocale::setDefault`, so they follow the
      operating system), plural coverage per language, the unwrapped-string
      lint.
-  2. **Ids** *(Iain, 2026-10-13, D5)*. The family writes
+  2. **Ids** *(the maintainer, 2026-10-13, D5)*. The family writes
      `qsTr("English text")`, so a reworded English string invalidates its
      translations; `strings.json` has ids, which keep them. Qt supports ids
      (`qsTrId`, `lupdate -idbased`). The mechanism, the manager and the
@@ -254,7 +259,8 @@ today, and the proposal. Lane and timing are in section 6.
   Noto Sans Hebrew for Yiddish too. Cubeulator's `Theme.qml` names IBM Plex
   Sans Hebrew and Arabic in `headingFamily`, with a 700-weight ceiling
   (`maxWeight`) because Plex has no ExtraBold in those scripts; no font file
-  is in the tree yet.
+  is in the tree yet. *(`develop`'s `Theme.qml` has no `headingFamily` or
+  `maxWeight` and names no Hebrew or Arabic face.)*
 - **Decided (D3, D4).** Noto Sans Hebrew and Noto Sans Arabic: the same
   files and the same OFL notices as the other three.
   - Both ICL Forge files are variable fonts with a weight axis of 100 to 900
@@ -375,10 +381,10 @@ used as text is 3.76:1.
   1. E2a records the mapping in `tokens.json` and `system.md`. No token
      is renamed: Cubeulator's names say what a thing is for.
   2. Values do not move before V1.0. Whether the dark neutrals converge, and
-     in which direction, is a look-and-feel choice for Iain with the two
+     in which direction, is a look-and-feel choice for the maintainer with the two
      side by side; the measured set is Cubeulator's.
   3. Offer `accentFill`/`accentText` to ICL Forge (section 4).
-  4. No accent palettes (Ink, Console) for Cubeulator *(Iain, 2026-10-13,
+  4. No accent palettes (Ink, Console) for Cubeulator *(the maintainer, 2026-10-13,
      D7)*. Red is the product's one accent, and the cube is the colour.
 
 ### F10. Docs and pictures
@@ -392,7 +398,7 @@ used as text is 3.76:1.
   change. Automate's docs skin (`docs/stylesheets/aqualink.css`) repeats the
   app's tokens, so docs and app cannot drift. Countdown's are by hand.
 - **Cubeulator.** E0a's tour. The docs site is stock Material teal; the
-  `CHANGELOG.md` still says "repository skeleton".
+  `CHANGELOG.md` said "repository skeleton" (it no longer does).
 - **Proposal.**
   1. Give the tour a **manifest** and a check that a documentation picture
      is in it (the ICL Forge pattern). Pictures are generated, never taken
@@ -405,7 +411,7 @@ used as text is 3.76:1.
 
 ## 4. What the others should take from Cubeulator
 
-For Iain. Not scheduled in this plan, and not this repository's to change.
+For the maintainer. Not scheduled in this plan, and not this repository's to change.
 
 | to | from Cubeulator |
 |---|---|
@@ -415,11 +421,11 @@ For Iain. Not scheduled in this plan, and not this repository's to change.
 
 ## 5. Decisions
 
-All taken by Iain on 2026-10-13.
+All taken by the maintainer on 2026-10-13.
 
 | # | decision | answer | changes |
 |---|---|---|---|
-| D1 | How the publisher is written in the app | **Iain Chesworth Labs**: the publisher follows the account, and the repository moved to `iainchesworthlabs` on 2026-10-13 *(Iain, asked again after the move; before it, "Iain Chesworth")*. Copyright line "Copyright © 2026 Iain Chesworth" | E4a: version resource, `Info.plist`, AppStream developer. E3b: About. `Packaging.cmake` on `develop` already says it |
+| D1 | How the publisher is written in the app | **Iain Chesworth Labs**: the publisher follows the account, and the repository moved to `iainchesworthlabs` on 2026-10-13 *(the maintainer, asked again after the move; before it, the person's own name)*. Copyright line stays in the person's name | E4a: version resource, `Info.plist`, AppStream developer. E3b: About. `Packaging.cmake` on `develop` already says it |
 | D2 | Is Signal the suite's look | **Two looks, shared chassis.** Cubeulator stays Signal with ICL Forge; Countdown Solver and Automate keep Calm. What is shared is behaviour and structure, not palette | no reskin of any other app |
 | D3 | Hebrew and Arabic faces | **Noto Sans Hebrew and Noto Sans Arabic**, the family's | `Theme.qml`, `system.md`, `platforms.md`, the notices |
 | D4 | Yiddish | **In V1.0.** Nine languages: en de fr es ja zh he ar yi | `brief.md` D-table, `settings.md`, `platforms.md`, `accessibility.md`, E5's set, the prototype's list; plan "decided since" amended |
@@ -427,7 +433,7 @@ All taken by Iain on 2026-10-13.
 | D6 | Copy details | **In V1.0**, not V1.1 | E3b gains the build line, its **Copy** and the **Copy details** row; `screens/about.md` says exactly what is copied; `strings.json` gains five strings |
 | D7 | Accent palettes for Cubeulator | **No** | - |
 | D8 | A shared component kit across repositories | **Not before V1.0 ships.** Align by spec; revisit when two products would use one kit; a vcpkg overlay port is the route the repository already knows | - |
-| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `com.iainchesworthlabs.cubeulator`, matching ICL Forge's macOS `com.iainchesworthlabs.*` *(Iain, 2026-10-13, after the move, chosen over `org.iainchesworthlabs.` and over keeping the old id; D12 amended)*. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | E4a: bundle id, Linux app id and desktop file name, Android package |
+| D9 | Identifiers across the suite | **Follows D1.** An identifier follows its repository's account, so with the move Cubeulator's is `com.iainchesworthlabs.cubeulator`, matching ICL Forge's macOS `com.iainchesworthlabs.*` *(the maintainer, 2026-10-13, after the move, chosen over `org.iainchesworthlabs.` and over keeping the old id; D12 amended)*. ICL Forge's Android `com.iclforge.hearth` is the outlier, for that repository | E4a: bundle id, Linux app id and desktop file name, Android package |
 
 ## 6. Where this lands
 
@@ -438,7 +444,7 @@ waits for the sessions in flight to finish.
 |---|---|---|
 | F1 publisher line | E4a (resource, `Info.plist`, AppStream), E3b (About) | before V1.0; already what E4a writes |
 | F2 setting keys | E2a ("settings that persist"), E3a | before V1.0 |
-| F3 language manager, ids and gates | E2b, which has not started: its brief says "port" and "ids" | before V1.0 |
+| F3 language manager, ids and gates | E2b, which had not started when this was written (it has landed, see [i18n.md](../i18n.md)): its brief says "port" and "ids" | before V1.0 |
 | F4 Noto faces | E2a, before it bundles fonts | before V1.0 |
 | F4 Yiddish | E5, with E2b's list | before V1.0 |
 | F5 build line and Copy | E3b | before V1.0 |
@@ -449,7 +455,7 @@ waits for the sessions in flight to finish.
 | F10 tour manifest and capture entry | E0a's successor, E5 | before E5; skin at E6 |
 | machine-translation note under the language list | E5 | before V1.0 |
 | a "reviewed by" line per language | E5, E6 | V1.1 |
-| dark neutrals converge with ICL Forge's | Iain, side by side | V1.1, if wanted |
+| dark neutrals converge with ICL Forge's | The maintainer, side by side | V1.1, if wanted |
 | back-ports to the other repositories (section 4) | their own plans | not scheduled |
 
 ## 7. The checklist
