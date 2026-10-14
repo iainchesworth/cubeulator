@@ -98,7 +98,7 @@ struct Drawing {
     // side whose centre is this colour, the way a Rubik's cube's white centre
     // carries one. It runs corner to corner and covers about a quarter of the
     // sticker, and it is painted with `paint`, so it is lit as the rest is.
-    std::optional<solver::Color> logo_on_centre{};
+    std::optional<solver::Color> logo_on_centre = std::nullopt;
 };
 
 // The six colours of a real cube under a warm lamp, measured in float Lab on

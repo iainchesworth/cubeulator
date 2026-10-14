@@ -4,7 +4,7 @@ Written 2026-10-13 for workstream E0b of the
 [app experience plan](app-experience-plan.md). Status: **reviewed; one decision
 taken, see below.**
 
-> **Decision (Iain, 2026-10-13): skip the iOS App Store and the Mac App Store
+> **Decision (the maintainer, 2026-10-13): skip the iOS App Store and the Mac App Store
 > for now and deal with them later.** Cubeulator stays GPL-3.0-or-later and
 > ships on the desktop (direct download, Linux packages) and, when mobile
 > capture exists, Google Play and F-Droid. This is Option A below. Nothing in
@@ -16,7 +16,7 @@ taken, see below.**
 This is an engineering inventory and a decision paper. It is not legal advice,
 it does not change Cubeulator's licence (GPL-3.0-or-later), and it does not
 settle the question [`LICENSE-NOTE.md`](https://github.com/iainchesworthlabs/cubeulator/blob/main/LICENSE-NOTE.md) leaves open. That
-decision is Iain's.
+decision is the maintainer's.
 
 How to read the evidence marks:
 
@@ -33,11 +33,11 @@ How to read the evidence marks:
    under LGPL-3.0 (or GPL-2.0/GPL-3.0, or commercial); only its `qsb`
    command-line tool is GPL-3.0-only, and that tool is a build-time program
    that does not ship [V]. See [section 3](#3-the-qt-question).
-2. **Cubeulator's own code is not the obstacle.** Iain is the only author in
-   the history (three identities, one person) [V: `git shortlog -sne`], so he
+2. **Cubeulator's own code is not the obstacle.** The maintainer is the only author in
+   the history (three identities, one person) [V: `git shortlog -sne`], so they
    can add a store exception, dual-license, or re-license it. The obstacle is
    that one Qt module the app links, Quick 3D, reaches the user under
-   GPL-3.0-only and its copyright is The Qt Company's, not Iain's. A store
+   GPL-3.0-only and its copyright is The Qt Company's, not the maintainer's. A store
    exception on Cubeulator's own code does not change the terms Quick 3D's
    code arrives under [I][L].
 3. **Qt is the only copyleft dependency that matters for the stores.** Every
@@ -86,7 +86,7 @@ one of the letters.
 
 | component | licence | notes |
 |---|---|---|
-| Cubeulator | GPL-3.0-or-later [V: `LICENSE`, `vcpkg.json`] | Sole author Iain Chesworth [V: `git shortlog`]. First commit 2026-07-16, so the copyright line is "Copyright (C) 2026 Iain Chesworth". Once Quick 3D is linked the *combined binary* can only be conveyed under GPL-3.0 (Quick 3D is `-only`); the source files remain "or later". |
+| Cubeulator | GPL-3.0-or-later [V: `LICENSE`, `vcpkg.json`] | Sole author: the maintainer [V: `git shortlog`]. First commit 2026-07-16, so the copyright line is "Copyright (C) 2026 Iain Chesworth". Once Quick 3D is linked the *combined binary* can only be conveyed under GPL-3.0 (Quick 3D is `-only`); the source files remain "or later". |
 | `src/app/qt/shaders/*.frag` | first-party | Written against Qt's custom-material model; no Qt code copied [V: file headers]. |
 
 ### 2.2 Qt 6.12.0
@@ -240,7 +240,7 @@ Linux plan is now the table above: no GTK, GLib, Pango or X11 ports.
 
 | platform | what differs |
 |---|---|
-| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`; vcpkg's applocal step in a development build, `cmake/InstallRuntimeDependencies.cmake` in the installer). On the 2026-10-14 Qt 6.12.0 build the deployment directory held 38 Qt modules (and QtTest, which the system tests copy there) and 40 Qt plugins and QML plugins, all attributed (13 more, the QML debugger and profiler servers, are a development build's: the installer removes them), **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which has not been sourced. Still open at 0.1.0-beta.1: the deployment call, `cube_deploy_qt_on_install(... NO_COMPILER_RUNTIME)` in `packaging/windows/ConfigureApp.cmake`, passes none of those options. The installer also carries the MSVC C++ runtime DLLs beside the exe (`InstallRequiredSystemLibraries`, redistributable under Microsoft's terms for Visual Studio [I]); the generated notices do not list them. |
+| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`; vcpkg's applocal step in a development build, `cmake/InstallRuntimeDependencies.cmake` in the installer). On the 2026-10-14 Qt 6.12.0 build the deployment directory held 38 Qt modules (and QtTest, which the system tests copy there) and 40 Qt plugins and QML plugins, all attributed (13 more, the QML debugger and profiler servers, are a development build's: the installer removes them), **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/the maintainer:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which has not been sourced. Still open at 0.1.0-beta.1: the deployment call, `cube_deploy_qt_on_install(... NO_COMPILER_RUNTIME)` in `packaging/windows/ConfigureApp.cmake`, passes none of those options. The installer also carries the MSVC C++ runtime DLLs beside the exe (`InstallRequiredSystemLibraries`, redistributable under Microsoft's terms for Visual Studio [I]); the generated notices do not list them. |
 | macOS | The `.dmg` (Apple Silicon) is built by CI and by the release workflow (`macos-clang-release`), and Qt's macOS SBOMs are read into the snapshot; the licence and `THIRD-PARTY-NOTICES.txt` are at the root of the disk image. Not run on a Mac by this paper. Mac App Store adds Apple's terms (section 4). |
 | Linux | No GTK3 chain: `opencv4[gtk]` is not requested (above). Qt is installed from `jurplel/install-qt-action` in CI, and the DEB and RPM carry it: the app, Qt, its plugins and QML modules and OpenCV sit in a private directory (`/usr/lib/cubeulator`), and the packages declare only system libraries as dependencies (`SHLIBDEPS` and `AUTOREQPROV` are off; `packaging/linux/Packaging.cmake`), so Qt's source and notice duty is the packager's, not a distribution's [I][L]. The licence and notices are in `/usr/share/doc/cubeulator/`. Qt's Linux SBOMs have not been read, so the Linux notices over-include. |
 | Android | Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
@@ -328,12 +328,12 @@ modules are the only ones without an LGPL option [V: section 2.2].
 terms, for Cubeulator's own code. The Qt finding adds a second, separate
 copyright holder to that question.
 
-- **Cubeulator's own code** is Iain's alone. GPLv3 lets a copyright holder add
+- **Cubeulator's own code** is the maintainer's alone. GPLv3 lets a copyright holder add
   additional permissions to material they own (section 7: "You may place
   additional permissions on material, added by you to a covered work, for
   which you have or can give appropriate copyright permission" [V:
   `LICENSE` lines 357-359]), and a copyright holder is not bound by their own
-  licence when distributing their own work. He can add a store exception,
+  licence when distributing their own work. The maintainer can add a store exception,
   dual-license, or re-license it [I][L].
 - **Qt Quick 3D's code** is The Qt Company's. It reaches every recipient
   under GPL-3.0-only unless they hold a commercial licence. Section 10 says
@@ -357,12 +357,12 @@ copyright holder to that question.
   extent to which that satisfies the clause is a legal question [L].
 
 **Is a store exception on Cubeulator's own code enough? No** [I][L]. The
-exception can only grant permissions over Iain's own material (section 7).
+exception can only grant permissions over the maintainer's own material (section 7).
 The binary Apple would distribute also contains Quick 3D, whose licence
-terms Iain cannot vary. The recipient receives Quick 3D's code under
+terms the maintainer cannot vary. The recipient receives Quick 3D's code under
 GPL-3.0-only, so the conflict the FSF identifies is present for those
-parts whatever Iain says about his. The exception would make Apple's
-distribution of *his* code unobjectionable to *him*; it would not stop The
+parts whatever the maintainer says about Cubeulator's own code. The exception would make Apple's
+distribution of *Cubeulator's* code unobjectionable to *its author*; it would not stop The
 Qt Company (or any Qt contributor) from objecting about *theirs*. The same
 reasoning is why a commercial Qt licence solves it: it is the instrument by
 which the owner of that code grants different terms.
@@ -415,9 +415,9 @@ the plan needs is desktop and, later, Google Play.
   commercial Qt license" [V: licensing page]. The cube stays in Quick 3D;
   nothing in `src/app/qt` changes.
 - **What it asks of the code:** nothing technical. Cubeulator's own code can
-  then be distributed under whatever terms Iain chooses for the store build:
+  then be distributed under whatever terms the maintainer chooses for the store build:
   GPL-3.0-or-later publicly, plus a store exception or a proprietary licence
-  for the store binary (he owns it). Third-party permissive components still
+  for the store binary (the maintainer owns it). Third-party permissive components still
   need their notices (the generator covers them).
 - **Catches to confirm [L]:** (1) The Qt Company's FAQ states that "moving
   code developed under an open source edition to a commercial license
@@ -597,7 +597,7 @@ Known gaps, so nobody mistakes them for done:
    provenance of every text is in `third_party/notices/licences/README.md`.
    Nine texts had to be fetched (FTL, Unicode-3.0, AML-glslang,
    Bison-exception-2.2, X11, HPND, Imlib2, MIT-open-group, HPND-sell-variant);
-   they were downloaded from the SPDX licence-list repository with Iain's
+   they were downloaded from the SPDX licence-list repository with the maintainer's
    approval on 2026-10-13. `IJG` is the "LEGAL ISSUES" section of
    libjpeg-turbo's `README.ijg`, from the source vcpkg unpacked locally.
 2. **Only Windows was exercised against a real build here.** The Windows
@@ -687,8 +687,8 @@ Rules:
   `github.com/iainchesworthlabs/cubeulator`. The **copyright line** in item 2
   is a separate matter: it names the copyright holder, it is not a rename,
   and the repository's `LICENSE` is the plain GPL text with no holder line, so
-  who is named there (Iain Chesworth, or the Labs) is Iain's decision. Until he
-  decides, the generated notices keep "Copyright (C) 2026 Iain Chesworth".
+  who is named there (the maintainer personally, or the Labs) is the maintainer's decision. Until
+  that is decided, the generated notices keep "Copyright (C) 2026 Iain Chesworth".
 - The text of items 3 and 4 is **not** to be paraphrased: it is the GPL's own
   recommended notice; changing it is a legal decision.
 - Items 1-6 must be reachable in **no more than two taps/clicks from any

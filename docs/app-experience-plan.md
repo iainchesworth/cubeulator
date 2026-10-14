@@ -146,7 +146,7 @@ Principles that follow:
 - **Each platform's manners.** Back, menus, about, insets and installers
   behave the way that platform's users expect, from one shared QML shell.
 
-## Decisions for Iain
+## Decisions for the maintainer
 
 None of these blocks E0. The defaults are what the plan assumes until told
 otherwise.
@@ -180,18 +180,17 @@ default above, the answer stands.
 - Translations are keyed by id, as `strings.json` already is, not by the
   English text (`design/family.md` D5).
 - The repository moved to `iainchesworthlabs/cubeulator` on 2026-10-13.
-  Publisher and identifier follow the account, and Iain confirmed both
+  Publisher and identifier follow the account, and the maintainer confirmed both
   after the move: the publisher is written "Iain Chesworth Labs" in About
-  and the packages, the copyright line stays "Copyright © 2026 Iain
-  Chesworth", and the identifier is `com.iainchesworthlabs.cubeulator`,
+  and the packages, the copyright line stays in the person's name, and the identifier is `com.iainchesworthlabs.cubeulator`,
   the form ICL Forge's macOS apps use under the same account
   (`design/family.md` D1 and D9, `brief.md` D12). Before the move the
-  answers were "Iain Chesworth" and `org.iainchesworth.cubeulator`. For
+  answers were the person's own name and `org.iainchesworth.cubeulator`. For
   about an hour on 2026-10-13 this plan said `org.iainchesworthlabs.`; that
   came from a question that did not offer the `com.` form, and is withdrawn.
 
-**On 5.** Cubeulator is GPL-3.0-or-later and Iain is its only author, so its
-own terms are his to change. But the app links Qt Quick 3D and Qt Shader
+**On 5.** Cubeulator is GPL-3.0-or-later and the maintainer is its only author, so its
+own terms are the maintainer's to change. But the app links Qt Quick 3D and Qt Shader
 Tools, which Qt publishes under GPLv3 or a commercial licence, not LGPL. If
 that reading holds, an App Store exception on Cubeulator's own code would
 not settle the Apple question, because the same terms arrive through Qt. The
@@ -214,7 +213,7 @@ branch.
 | **Scan** - `feature/direct-scan` | `DirectScanScreen.qml`, `direct_scan.*`, the scan flow in `AppState.qml`, `ScanSession` and `ScanScreen.qml` (removed in R6), the review and hand-entry screen (R3), `src/app/platform` | read. After R4, E3c restyles the chrome; reading behaviour stays theirs |
 | **Experience** - `feature/app-experience` | `Theme.qml`, `AppButton.qml`, `Icon.qml`, `Main.qml`, Launch, Permission, Settings and Complete screens, new About and Licences screens, `SettingsState.qml`, translations, packaging, identity, `tests/system/`, `docs/design/` | - |
 
-The solve lane crossed into the scan lane, because Iain asked for the
+The solve lane crossed into the scan lane, because the maintainer asked for the
 camera on the solve screen: `direct_scan.{hpp,cpp}` in both the app and the
 library (watching a held cube, and `start()` closing a running camera
 first), and `AppState.qml` (`solveCamera`, `rescan()`, the camera kept for
@@ -270,7 +269,7 @@ Added 2026-10-13. Five branches hold finished or running work. None of the
 
 | branch | lane | commits | state |
 |---|---|---|---|
-| `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by Iain 2026-10-13** and merged into `feature/app-experience` the same day |
+| `feature/solve-guidance` | solve | 9 on `fa81b2e` | pushed; **accepted by the maintainer 2026-10-13** and merged into `feature/app-experience` the same day |
 | `feature/ax-system-tests` | E0a | 11 | pushed; reconciling start-up, below |
 | `feature/ax-licences` | E0b | 7 | local |
 | `feature/ax-desktop` | E4a | 5, running | pushed; draft pull request 3, against `develop` |
@@ -422,7 +421,7 @@ As of 2026-10-14, `develop` at 7e764eef, from the code.
 
 Gate: one command walks launch to solve headless on Linux in CI and uploads
 the screenshots; the coverage report includes `src/app/qt`; the notices are
-generated; the licence options are on Iain's desk.
+generated; the licence options are on the maintainer's desk.
 
 **E1 - Design.** Starts now, beside E0. Writes `docs/design/` and no app
 code.
@@ -449,7 +448,7 @@ code.
 - A click-through prototype of the whole journey, phone and desktop, light
   and dark.
 
-Gate: Iain has clicked through the prototype at both sizes and signed it
+Gate: the maintainer has clicked through the prototype at both sizes and signed it
 off; every state in `journey.md` has a spec; the string inventory is
 complete.
 
@@ -518,11 +517,11 @@ Countdown Solver and Automate. The full account, with sources, is
   mostly shared already. The gaps are small and are cheapest to close in
   the sessions that are open now.
 
-**Decided on 2026-10-13** (`family.md` section 5), all by Iain:
+**Decided on 2026-10-13** (`family.md` section 5), all by the maintainer:
 
 - D1: the publisher follows the account. The repository moved to
   `iainchesworthlabs` the same day, so it is **Iain Chesworth Labs**, with
-  the copyright line in Iain's own name. D9 follows: the identifier is
+  the copyright line in the maintainer's own name. D9 follows: the identifier is
   `com.iainchesworthlabs.cubeulator`.
 - D2: two looks, one shared chassis. Cubeulator stays Signal with ICL
   Forge; no other app is reskinned.
@@ -558,7 +557,7 @@ and the prototype.
 | "Reviewed by" per language | said in the app, per language, once a fluent reader has looked |
 | F10 tour manifest | the screenshot tour gets a manifest and a check that documentation pictures are in it; a capture entry with `--page` and `--language` |
 | Docs skin | the documentation site skinned from `tokens.json` |
-| Dark neutrals | converge with ICL Forge's, if Iain wants it, in the direction he chooses |
+| Dark neutrals | converge with ICL Forge's, if the maintainer wants it, in the direction chosen |
 | Help points to Copy details | from **Trouble scanning** |
 | Back-ports | the list in `family.md` section 4, for the other repositories |
 
@@ -567,7 +566,7 @@ Cubeulator, or is recorded as a deliberate difference.
 
 ## Sessions
 
-Every session spawned from this plan runs on **Sonnet 5.5** (Iain,
+Every session spawned from this plan runs on **Sonnet 5.5** (the maintainer,
 2026-10-13).
 
 | id | session | branch | starts when | touches |

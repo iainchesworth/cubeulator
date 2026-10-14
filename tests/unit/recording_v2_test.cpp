@@ -14,10 +14,13 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include <array>
+#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include "must_have.hpp"
 
@@ -214,4 +217,165 @@ TEST_CASE("check_recording names gaps, missing frames and drops", "[recording]")
         const auto& problem_value = ::cube::test::must_have(problem);
         CHECK(problem_value.contains("dropped"));
     }
+    SECTION("a recorded write failure fails the clip, with its reason") {
+        std::ofstream stats(dir / "recording_stats.json", std::ios::trunc);
+        stats << "{\"pushed\": 6, \"written\": 4, \"dropped\": 0, \"queue_peak\": 3, "
+                 "\"failed\": 2, \"error\": \"cannot write \\\"D:\\\\rec\\\\x.jpg\\\"\"}\n";
+        stats.close();
+        const auto problem = check_recording(dir.string());
+        const auto& problem_value = ::cube::test::must_have(problem);
+        CHECK(problem_value.contains("failed to write 2 frame"));
+        CHECK(problem_value.contains("cannot write \"D:\\rec\\x.jpg\""));
+    }
+}
+
+// The writer's failure paths. None of these needs a JPEG codec, so they run on
+// every build, the browser's included, where the real encoder fails on the
+// first frame (it throws) and the first case below expects exactly that.
+
+namespace {
+
+// Pushes `count` small frames, as a scan does, and stops.
+AsyncRecorder::Stats record_frames(AsyncRecorder& recorder, int count) {
+    const cv::Mat frame(48, 64, CV_8UC3, cv::Scalar(9, 9, 9));
+    for (int i = 0; i < count; ++i) {
+        recorder.push(frame, std::int64_t{33} * i);
+    }
+    return recorder.stop();
+}
+
+std::size_t index_rows(const fs::path& dir) {
+    std::ifstream index(dir / std::string(kIndexCsvName));
+    return read_index(index).size();
+}
+
+}  // namespace
+
+TEST_CASE("a frame that cannot be written is counted and never indexed", "[recording]") {
+    const auto dir = fresh_dir("unwritable");
+    // With a JPEG codec the first two frames are written and the third is
+    // not; without one the first is not.
+    int expected_written = ::cube::test::have_jpeg_codec() ? 2 : 0;
+    bool full_res = false;
+
+    SECTION("the path of a frame's file is a directory") {
+        fs::create_directories(dir / frame_filename(2));
+    }
+    SECTION("the full-resolution directory is a file") {
+        std::ofstream blocker(dir / std::string(kFullResSubdir));
+        blocker << "in the way";
+        full_res = true;
+        expected_written = 0;  // the analysis frame is written, its pair is not
+    }
+
+    Manifest manifest;
+    AsyncRecorder recorder;
+    REQUIRE(!recorder.start(dir.string(), manifest, full_res).has_value());
+    constexpr int kPushed = 6;
+    const auto stats = record_frames(recorder, kPushed);
+
+    CHECK(stats.pushed == kPushed);
+    CHECK(stats.written == expected_written);
+    CHECK(stats.dropped == 0);
+    CHECK(stats.failed == kPushed - expected_written);
+    CHECK(!stats.error.empty());
+    // No row claims a frame that is not there.
+    CHECK(index_rows(dir) == static_cast<std::size_t>(expected_written));
+
+    // The clip fails its audit, and the file the recorder left says why.
+    const auto problem = check_recording(dir.string());
+    const auto& problem_value = ::cube::test::must_have(problem);
+    CHECK(problem_value.contains("failed to write " + std::to_string(stats.failed) + " frame"));
+    CHECK(problem_value.contains(stats.error));
+}
+
+TEST_CASE("the writer stops at the first frame it cannot write", "[recording]") {
+    const auto dir = fresh_dir("stops");
+    std::atomic<int> attempts{0};
+    AsyncRecorder recorder([&attempts](const std::string&, const cv::Mat&, int) {
+        ++attempts;
+        return false;
+    });
+    Manifest manifest;
+    REQUIRE(!recorder.start(dir.string(), manifest, true).has_value());
+    const auto stats = record_frames(recorder, 10);
+
+    // One attempt, not one per frame in a queue nothing can drain.
+    CHECK(attempts.load() == 1);
+    CHECK(stats.written == 0);
+    CHECK(stats.failed == 10);
+    CHECK(stats.dropped == 0);
+    CHECK(index_rows(dir) == 0);
+}
+
+TEST_CASE("an extension no encoder is built for fails the recording not the process",
+          "[recording]") {
+    const auto dir = fresh_dir("no-encoder");
+    const cv::Mat probe(8, 8, CV_8UC3, cv::Scalar(0, 0, 0));
+    // What the recorder has to survive: cv::imwrite throws, it does not
+    // return false, for an extension it has no encoder for. If a later OpenCV
+    // changed that, this case would no longer reach the throwing path.
+    REQUIRE_THROWS_AS(cv::imwrite((dir / "probe.no-such-format").string(), probe), cv::Exception);
+
+    AsyncRecorder recorder([](const std::string& path, const cv::Mat& frame, int) {
+        return cv::imwrite(path + ".no-such-format", frame);
+    });
+    Manifest manifest;
+    REQUIRE(!recorder.start(dir.string(), manifest, false).has_value());
+    const auto stats = record_frames(recorder, 3);
+
+    CHECK(stats.written == 0);
+    CHECK(stats.failed == 3);
+    CHECK(stats.error.contains(frame_filename(0)));
+    CHECK(index_rows(dir) == 0);
+    CHECK(check_recording(dir.string()).has_value());
+}
+
+TEST_CASE("a recorder that failed records the next scan", "[recording]") {
+    // The app starts the same recorder for every scan.
+    std::atomic<bool> disk_full{true};
+    AsyncRecorder recorder([&disk_full](const std::string& path, const cv::Mat&, int) {
+        if (disk_full) {
+            return false;
+        }
+        std::ofstream file(path);
+        file << "frame";
+        return static_cast<bool>(file);
+    });
+    Manifest manifest;
+
+    const auto failed_dir = fresh_dir("restart-failed");
+    REQUIRE(!recorder.start(failed_dir.string(), manifest, false).has_value());
+    CHECK(record_frames(recorder, 3).failed == 3);
+
+    disk_full = false;
+    const auto good_dir = fresh_dir("restart-good");
+    REQUIRE(!recorder.start(good_dir.string(), manifest, false).has_value());
+    const auto stats = record_frames(recorder, 3);
+    CHECK(stats.written == 3);
+    CHECK(stats.failed == 0);
+    CHECK(stats.error.empty());
+    CHECK(!check_recording(good_dir.string()).has_value());
+}
+
+TEST_CASE("a recording that wrote every frame keeps the stats file it always had", "[recording]") {
+    const auto dir = fresh_dir("clean-stats");
+    // Any encoder that succeeds: the stats file does not depend on the codec.
+    AsyncRecorder recorder([](const std::string& path, const cv::Mat&, int) {
+        std::ofstream file(path);
+        file << "frame";
+        return static_cast<bool>(file);
+    });
+    Manifest manifest;
+    REQUIRE(!recorder.start(dir.string(), manifest, true).has_value());
+    const auto stats = record_frames(recorder, 4);
+    CHECK(stats.written == 4);
+    CHECK(stats.failed == 0);
+    CHECK(!check_recording(dir.string()).has_value());
+
+    std::ifstream stats_file(dir / "recording_stats.json");
+    const std::string text(std::istreambuf_iterator<char>{stats_file}, {});
+    CHECK(text.starts_with("{\"pushed\": 4, \"written\": 4, \"dropped\": 0, \"queue_peak\": "));
+    CHECK(!text.contains("failed"));
+    CHECK(!text.contains("error"));
 }

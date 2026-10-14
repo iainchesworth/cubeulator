@@ -929,7 +929,7 @@ minute. What does not:
 |---|---|
 | the Qt tests (`cube_qt_controller_tests`, `cube_qml_tests`, `cube_i18n_*`, `cube_system_tests`) | they need the app, which is built as a page: the browser suite below runs the same screens |
 | the camera cases under `tests/integration` (`CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA`) | the browser's camera is `getUserMedia()`, which has to be asked for by a page; its tests are the browser suite's |
-| the recording cases that write JPEG | the browser's OpenCV has no JPEG codec (the app never records), and says so: they are skipped, with the reason |
+| the recording cases that write JPEG | the browser's OpenCV has no JPEG codec (the app never records), and says so: they are skipped, with the reason. The cases for a frame that cannot be written (`recording_v2_test.cpp`) need no codec and run |
 
 The flags a WebAssembly test program has to be given - a pool of Web Workers
 big enough that none is waited for, a stack and a heap it fits in, the host's
