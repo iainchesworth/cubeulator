@@ -346,15 +346,40 @@ jobs:
       # E4a: tools CPack's package generators need. makensis has to be present
       # at configure time (cmake/Packaging.cmake looks for it then); rpmbuild
       # and fakeroot are for the .rpm and for root-owned files in the .deb.
+      #
+      # NSIS comes from Chocolatey, whose community feed answers 504 Gateway
+      # Timeout now and then (it failed two pull requests' Windows legs within
+      # one hour on 2026-10-14, over a package that was never the problem).
+      # What it installs is a directory makensis runs from in place, so the
+      # directory is cached and only a miss goes to the feed. This workflow
+      # saves the cache; release.yml only restores it, the same split as the
+      # vcpkg binary cache (docs/ci.md). A cache a pull request saves is seen
+      # by that pull request alone, so none can plant what a release runs.
+      - name: Restore NSIS (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\Program Files (x86)\NSIS
+          key: nsis-3.13.0-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
-              -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
-            # Chocolatey's community feed answers 504 Gateway Timeout now and
-            # then; it failed two pull requests' Windows legs within one hour
-            # on 2026-10-14 over a package that was never the problem.
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          $usable = [bool](Get-Command makensis -ErrorAction SilentlyContinue)
+          if (-not $usable -and (Test-Path $makensis)) {
+            # From the cache: prove it runs where it is, or install it properly.
+            & $makensis /VERSION
+            if ($LASTEXITCODE -eq 0) {
+              $usable = $true
+            } else {
+              Write-Warning "the cached NSIS does not run; installing it from Chocolatey"
+              Remove-Item -Recurse -Force (Split-Path $makensis)
+            }
+          }
+          if (-not $usable) {
+            # A miss, or an unusable copy: the feed, with a few tries.
             foreach ($attempt in 1..4) {
               choco install nsis --version 3.13.0 --no-progress -y
               if ($LASTEXITCODE -eq 0) { break }
