@@ -1,5 +1,8 @@
 # The solution
 
+> **Status in 0.1.0-beta.1:** Not built. **Review the solution** on Complete
+> is present and does nothing, and no solved cube is kept to review.
+
 Lane: experience, drawing the solve lane's cube. New. This is what the
 **Review the solution** button was meant to open.
 

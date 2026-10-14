@@ -13,8 +13,9 @@ Cubeulator is pre-1.0 and does not yet have a stable release; fixes land on
 
 ## Scanning
 
-This repository runs CodeQL, OSV-Scanner, Zizmor, and OpenSSF Scorecard on
-every push/PR and on a weekly schedule — see [CI & dependencies](ci.md).
+This repository runs CodeQL, OSV-Scanner and Zizmor on every push and pull
+request to `develop` and `main` and on a weekly schedule, and OpenSSF Scorecard
+on pushes to `main` and weekly — see [CI & dependencies](ci.md).
 
 ## Verifying build authenticity
 
@@ -47,7 +48,7 @@ a signature beside every package and the SBOM, and the public key
 
 ```sh
 gpg --import cubeulator-signing-key.asc
-gpg --verify SHA512SUMS.asc SHA512SUMS && sha512sum -c SHA512SUMS
+gpg --verify SHA512SUMS.asc SHA512SUMS && sha512sum -c --ignore-missing SHA512SUMS
 # or one file:
 gpg --verify Cubeulator-<version>-linux-x64.deb.asc Cubeulator-<version>-linux-x64.deb
 ```
@@ -66,6 +67,10 @@ place the fingerprint appears.
 ```sh
 gpg --show-keys --fingerprint cubeulator-signing-key.asc
 ```
+
+`gpg --verify` also prints the signing key's `Primary key fingerprint`, and
+warns that the key is not certified by anyone you trust. That warning is
+expected: the fingerprint above is what to compare.
 
 The two answer different questions. Provenance ties the bytes to *this
 repository and build*; the signature ties them to *the maintainer's key*.

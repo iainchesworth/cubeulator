@@ -81,11 +81,13 @@ counts as a pass for a required check.
 
 ## Required checks
 
-`develop`'s required set is **staged**, because `develop` is not yet green:
-the build, test and static-analysis jobs in `ci.yml` and `codeql.yml` were not
-run against `develop` between 17 July and 13 October 2026 (commits went in
-without a PR), and they currently fail on `develop` itself — a required check
-that fails on the base fails every PR. The rule is therefore:
+`develop`'s required set is **staged**, because `develop` was not green: the
+build, test and static-analysis jobs in `ci.yml` and `codeql.yml` were not run
+against `develop` between 17 July and 13 October 2026 (commits went in without
+a PR), and they failed on `develop` itself when they were — a required check
+that fails on the base fails every PR. They have passed on `develop`'s tip since
+14 October 2026, so what holds a check back now is the second half of the rule,
+that its workflow has to carry `merge_group`. The rule is:
 
 > A check becomes required on `develop` when it is green on the `develop` tip
 > **and** its workflow has `merge_group` added in the same change.
@@ -102,8 +104,11 @@ that fails on the base fails every PR. The rule is therefore:
 | `Coverage (Linux, GCC)` | `ci.yml` | when green | yes |
 | `Analyze (C++)` | `codeql.yml` | when green | yes |
 
-Promoting a check only ever tightens the ruleset. Android and iOS are
-informational (`continue-on-error`) and are never required.
+Promoting a check only ever tightens the ruleset. Android, iOS and Web are
+informational (`continue-on-error`): Android and iOS are never required, and
+Web only once it has run green on `develop`.
+The system tests, `platform-isolation`, `Changelog fragment`, `Docs build
+(strict)` and `Release readiness` are not in the table either: none is required.
 
 ## `main-protection` (ruleset on `main`)
 
@@ -166,5 +171,6 @@ policy and the one place to widen it are in `dependabot-auto-merge.yml`.
 there rather than via a required status check. `scorecard.yml`'s
 branch-protection sub-check scores more completely with a fine-grained PAT
 (read-only, "Administration: read") added as a repo secret named
-`SCORECARD_READ_TOKEN`; without it, that sub-check degrades gracefully
-instead of failing.
+`SCORECARD_READ_TOKEN`, and the `repo_token` line in the workflow uncommented;
+without it, that sub-check degrades gracefully instead of failing. `scorecard.yml`
+runs on pushes to `main` and weekly, not on pull requests.

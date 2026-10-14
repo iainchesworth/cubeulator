@@ -1,5 +1,15 @@
 # Recovery plan
 
+> **Status in 0.1.0-beta.1:** The recovery is built as far as scanning and
+> solving: the side reader and assembly (`src/lib/include/cube/vision/direct_scan.hpp`),
+> the scan screen (`DirectScanScreen.qml`) and the solve screen that follows
+> the cube by camera are in the app, and the old tracking pipeline is gone
+> (R6). Not built: the review and hand-entry screen (R3, so a cube cannot be
+> entered without a camera that reads it), the live gate on fresh scrambles
+> (R4, not run) and most of free handling (R5; only two sides in one view,
+> which settles the cubes six flat sides cannot). The measurements below are
+> from recordings that are not in the repository.
+
 Status: **accepted 2026-10-13.** Supersedes the tracking-first plan
 (`pipeline-plan.md`, removed from the tree in R6; it and its phase gates are
 at the tag `archive/tracking-first`).
@@ -204,6 +214,9 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
 
 ## Why it does not work today
 
+*As of the verdict above, 2026-10-13: this describes the pipeline that R6
+has since removed from the app (see Progress).*
+
 1. **The read path depends on a tracker that cannot know which face is
    which.** A cube looks identical under 24 rotations, so pose alone never
    yields face identity. Gauges, epochs, stitching, registration,
@@ -249,6 +262,10 @@ The Jul 30 plan went the other way.
 | `ScanSession` | 3,490 | rewrite to a fraction of this |
 
 Everything removed stays reachable under an archive tag.
+
+*Done: the cascade, the track pipeline and the M3T adapter were removed in R6,
+brought forward ahead of R4 (see Progress); `ScanSession` is gone and
+`DirectScan` replaced it.*
 
 ## Milestones
 

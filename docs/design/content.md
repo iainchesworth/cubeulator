@@ -1,5 +1,11 @@
 # Content
 
+> **Status in 0.1.0-beta.1:** The voice, the glossary and the strings are the
+> app's as far as they are used: the QML asks for 74 of the 406 strings in
+> the inventory, and the rest belong to screens that are not built. The scan
+> and solve screens still show English literals of their own, most of which
+> follow the wording here.
+
 How Cubeulator talks, the words it uses, and every string it shows.
 
 The strings live in [`strings.json`](strings.json), with a stable key and
@@ -174,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-405 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+406 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -386,6 +392,7 @@ Review the solution.
 | `scan.guide.next` | Turn to a side that is not filled in below, square to the camera | Guidance between sides. 'Below' refers to the row of six small squares at the bottom of the screen. |
 | `scan.guide.seenBefore` | This side is already read. Turn to another one | Guidance when the side shown has been read before. |
 | `scan.guide.conflict` | These six sides do not make a valid cube yet. Show each side again, square to the camera. | Guidance when six sides are read but something is wrong. |
+| `scan.guide.ambiguous` | These six sides fit together in more than one way. Turn the cube slowly so that two sides show at once. | Guidance when six sides are read and fit together in two ways, so that showing them again changes nothing. Turning the cube between sides, so that two sides are in view at once, settles which. |
 | `scan.guide.complete` | All six sides make a valid cube. Working out the solution… | Guidance when the scan has finished. |
 | `scan.guide.resuming` | Starting the camera again. The sides already read are kept. | Guidance when the app comes back after being in the background. |
 | `scan.stuck.title` | Not reading? | Heading of a hint that appears after ten seconds without progress. |

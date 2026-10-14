@@ -42,8 +42,9 @@ How to read the evidence marks:
    code arrives under [I][L].
 3. **Qt is the only copyleft dependency that matters for the stores.** Every
    other shipped third-party component is permissive (MIT, BSD, Apache-2.0,
-   Zlib, ISC, libpng, IJG), file-level weak copyleft (MPL-2.0: Eigen), or
-   notice-only [V: inventory below]. Until the `highgui` and `gtk` OpenCV
+   Zlib, ISC, libpng, IJG), file-level weak copyleft (MPL-2.0: the public
+   suffix list bundled in Qt Network), or notice-only [V: inventory below].
+   Until the `highgui` and `gtk` OpenCV
    features were dropped, vcpkg's LGPL GTK3 chain reached Linux through
    them (see [section 2.4](#24-vcpkg-ports)); it no longer does.
 4. **Routes for the App Store**, in the order this paper recommends them (full
@@ -66,15 +67,20 @@ How to read the evidence marks:
 
 ## 2. Inventory
 
-Version numbers are from the Windows vcpkg install plan at the pinned baseline
-(`5b698638`, 2026-10-13) and Qt 6.8.3. "Ships" means "is part of an installed
-or distributed app on that platform"; the generated notices file is the
-authoritative per-build answer, this table explains it.
+Version numbers are from the pinned vcpkg baseline (`5b698638`, a vcpkg commit
+of 2026-07-15) as installed for a Windows build on 2026-10-14, and Qt 6.12.0.
+"Ships" means "is part of an installed or distributed app on that platform";
+the generated notices file is the authoritative per-build answer, this table
+explains it.
 
 Platform key: **W** Windows, **M** macOS, **L** Linux, **A** Android,
 **I** iOS. Today the app target does not build for iOS at all (the
 `ios-clang-*` presets set `CUBEULATOR_BUILD_APP=OFF`) [V:
-`CMakePresets.json`], so an **I** below describes what *would* ship.
+`CMakePresets.json`], so an **I** below describes what *would* ship. The
+browser build (WebAssembly, preset `web-emscripten-*`, [Try it in your
+browser](web.md)) is a sixth platform whose set is smaller; it is described in
+[section 2.5](#25-per-platform-differences-that-change-obligations) and is not
+one of the letters.
 
 ### 2.1 Cubeulator itself
 
@@ -83,19 +89,21 @@ Platform key: **W** Windows, **M** macOS, **L** Linux, **A** Android,
 | Cubeulator | GPL-3.0-or-later [V: `LICENSE`, `vcpkg.json`] | Sole author Iain Chesworth [V: `git shortlog`]. First commit 2026-07-16, so the copyright line is "Copyright (C) 2026 Iain Chesworth". Once Quick 3D is linked the *combined binary* can only be conveyed under GPL-3.0 (Quick 3D is `-only`); the source files remain "or later". |
 | `src/app/qt/shaders/*.frag` | first-party | Written against Qt's custom-material model; no Qt code copied [V: file headers]. |
 
-### 2.2 Qt 6.8.3
+### 2.2 Qt 6.12.0
 
-> **Qt 6.12.0 update.** The build now uses Qt 6.12.0, and
-> `third_party/notices/qt-modules.json` was regenerated from its SBOMs, for
-> Windows and Android as the 6.8.3 snapshot was (`tools/licences/
-> qt_sbom_manifest.py`; `--check` agrees with the live SBOMs on both). What
-> was re-read, and what was not:
+> **Qt 6.12.0 update.** The build now uses Qt 6.12.0 (this section was first
+> written against 6.8.3), and `third_party/notices/qt-modules.json` was
+> regenerated from its SBOMs, for Windows and Android as the 6.8.3 snapshot
+> was, and later for macOS as well (`tools/licences/qt_sbom_manifest.py`;
+> `--check` agrees with the live Windows and Android SBOMs). What was
+> re-read, and what was not:
 >
 > - **Licences did not move.** No existing component's licence expression
 >   changed. The module and plugin expressions are the same three as before,
 >   and Quick 3D is still `Commercial OR GPL-3.0-only`, so the GPL-3.0-only
 >   election in section 3 stands. [V: 6.12.0 SBOMs]
-> - **The component set changed**: 317 components (39 added, 9 removed).
+> - **The component set changed**: 317 components for Windows and Android
+>   (39 added, 9 removed; 337 once macOS was read in, below).
 >   `QuickEffectsPrivate`, `QuickShapesPrivate` and `QuickParticlesPrivate` lost
 >   their `Private` suffix (same DLL names), so `deployedRoots` in `manifest.json`
 >   names `QuickEffects` and `QuickShapes` now. New attributions include
@@ -113,17 +121,18 @@ Platform key: **W** Windows, **M** macOS, **L** Linux, **A** Android,
 >   were deployed under 6.8.3 too.
 
 Per-module SPDX expressions below are from the SBOMs Qt ships in its own
-install (`C:/Qt/6.8.3/msvc2022_64/sbom/*.spdx.json`) and agree with the
-`SPDX-License-Identifier` lines in the installed headers [V]. The Qt Company's
-documentation says the same for Quick 3D and Shader Tools (see section 3).
+install (`<qt>/sbom/*.spdx.json`; the 6.8.3 ones were compared with the
+`SPDX-License-Identifier` lines in the installed headers [V], the 6.12.0 ones
+are what the snapshot is built from). The Qt Company's documentation says the
+same for Quick 3D and Shader Tools (see section 3).
 
 | module (as linked or imported) | linked by | offered under | ships |
 |---|---|---|---|
 | Qt Core, GUI, Concurrent, Network, OpenGL | `cube_app*`; Network and OpenGL are dependencies of Qml and Quick | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W M L A I |
 | Qt Qml, Quick, Quick Controls 2 (+ Templates 2), Labs Settings | `cube_app`, QML imports | same | W M L A I |
-| **Qt Quick 3D** (Quick3D, Quick3DRuntimeRender, Quick3DUtils, Quick3DHelpers, Quick3DAssetImport) | `cube_app`; `import QtQuick3D`, `QtQuick3D.Helpers` in `Cube3DView.qml` | **Commercial OR GPL-3.0-only** | W M L A I |
+| **Qt Quick 3D** (Quick3D, Quick3DRuntimeRender, Quick3DUtils, Quick3DHelpers, Quick3DHelpersImpl) | `cube_app`; `import QtQuick3D`, `QtQuick3D.Helpers` in `Cube3DView.qml` | **Commercial OR GPL-3.0-only** | W M L A I |
 | Qt Shader Tools (runtime library) | pulled in by Quick 3D (`Quick3DRuntimeRender` DEPENDS_ON `ShaderTools`) [V: SBOM]; the custom materials bake `*.frag` at run time | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W M L A I |
-| `qsb` (the shader baker), `moc`, `rcc`, `uic`, `windeployqt`, `androiddeployqt` | build tools | Commercial OR GPL-3.0 **with the Qt GPL exception 1.0** | no - build time only; the exception covers their output |
+| `qsb` (the shader baker), `moc`, `rcc`, `uic`, `lrelease`, `lupdate`, `windeployqt`, `androiddeployqt` | build tools (`lrelease` and `lupdate` through `find_package(Qt6 ... LinguistTools)` for the translations) | Commercial OR GPL-3.0 **with the Qt GPL exception 1.0** | no - build time only; the exception covers their output |
 | Qt EntryPoint (`Qt6EntryPoint.lib`, Windows `WinMain` shim) | `WIN32_EXECUTABLE` | Commercial OR BSD-3-Clause | W |
 | Qt Svg (+ `qsvg`, `qsvgicon` plugins) | deployed by `windeployqt`, not linked or imported [V: found by the notices test on the real deploy directory] | Commercial OR LGPL-3.0 OR GPL-2.0 OR GPL-3.0 | W (and wherever `windeployqt`/`androiddeployqt` add it) |
 | Quick Controls 2 styles (Basic, Fusion, Imagine, Material, Universal, FluentWinUI3, Windows) and the Qt platform, image-format, TLS and network-information plugins | deployed by `windeployqt` because `QtQuick.Controls` is imported | same LGPL set; the Material style carries an MIT attribution (Angular Material shadows); the Windows platform plugin carries wintab's `LicenseRef-Lcs-Telegraphics` | W |
@@ -142,7 +151,9 @@ permission plugins and `qeventdispatcher_cf` are macOS-only; and Qt GUI
 depends on QtDBus on macOS but not on Windows [V]. Edges that exist on only
 some platforms are kept per platform (`platformDepends`) so a macOS-only
 dependency is not applied to Windows. **Linux and iOS have not been read**,
-so on those platforms the snapshot over-includes rather than guesses;
+so on those platforms the snapshot over-includes rather than guesses (the
+WebAssembly kit has not been read either; see the known gaps in
+[section 6](#6-how-the-notices-are-produced));
 `tools/licences/qt_sbom_manifest.py` re-derives it from any Qt install's
 `sbom/` directory, and maps each library file name (`libqcocoa.a`,
 `qwindows.dll`) to its component from the SBOM's own list of packaged
@@ -152,7 +163,7 @@ Obligation summary for the Qt set, *as distributed under GPL-3.0-only*: the
 combined work is conveyed under GPL-3.0 with its Corresponding Source (which
 includes the Qt libraries shipped with it, since they are not System
 Libraries) or a written offer, the licence text, and no further restrictions
-(GPLv3 sections 5(c), 6, 10 [V: `LICENSE` lines 208-260, 463]).
+(GPLv3 sections 5(c), 6, 10 [V: `LICENSE` lines 208-342, 463]).
 
 ### 2.3 Vendored, models, design assets
 
@@ -160,7 +171,8 @@ Libraries) or a written offer, the licence text, and no further restrictions
 |---|---|---|---|---|
 | Lucide icon shapes (`Icon.qml`: camera, globe, menu, sun, refresh) | ISC, (c) Lucide Icons and Contributors [V: Lucide `LICENSE`] | `licences/ISC.txt` + the copyright line | all | notice must appear in all copies |
 | Feather-derived shapes (chevron-left, chevron-right, check, alert-triangle, help-circle) | MIT, (c) 2013-present Cole Bemis [V: same file lists these as Feather-derived] | `licences/MIT.txt` + the copyright line | all | notice |
-| Archivo, IBM Plex Mono, Noto Sans Hebrew, Noto Sans Arabic (bundled by the kit under `src/app/qt/fonts/` on `feature/ax-kit`) | OFL-1.1 [V: each family's OFL text, vendored by the kit] | the kit's `OFL-<family>.txt` beside the fonts; the manifest's `licenseFile` points at it | yes, once the kit merges (the entries are dormant until the files exist) | OFL: licence text travels with the fonts, no sale of the fonts alone, reserved font names ("Plex"). Copyright lines are copied from the OFL texts: Archivo (c) 2020 The Archivo Project Authors; IBM Plex Mono (c) 2017 IBM Corp.; Noto Sans Hebrew and Arabic (c) 2022 The Noto Project Authors. **Any font file under `assets/` or `src/app/qt/` that no emitted manifest component claims is an unresolved error**, so a new font cannot ship unnoticed |
+| Archivo, IBM Plex Mono, Noto Sans Hebrew, Noto Sans Arabic (to be bundled by the kit under `src/app/qt/fonts/`; the files are on `feature/ax-kit`) | OFL-1.1 [V: each family's OFL text, vendored by the kit] | the kit's `OFL-<family>.txt` beside the fonts; the manifest's `licenseFile` points at it | **not yet**: the font files are not on `develop`, so no build bundles them (`Theme.qml` names Archivo and IBM Plex Mono and falls back to the system's face). The manifest entries are dormant until the files exist | OFL: licence text travels with the fonts, no sale of the fonts alone, reserved font names ("Plex"). Copyright lines are copied from the OFL texts: Archivo (c) 2020 The Archivo Project Authors; IBM Plex Mono (c) 2017 IBM Corp.; Noto Sans Hebrew and Arabic (c) 2022 The Noto Project Authors. **Any font file under `assets/` or `src/app/qt/` that no emitted manifest component claims is an unresolved error**, so a new font cannot ship unnoticed |
+| Noto Sans JP and Noto Sans SC, cut down to the characters the translations and the language names use (`src/app/platform/web/fonts/`; `tools/fonts/subset_cjk.py`) | OFL-1.1 [V: `OFL-NotoSansJP.txt` and `OFL-NotoSansSC.txt` there, and the licence field of each subset's own name table] | `OFL-NotoSans<JP,SC>.txt` beside the subsets; the manifest's `licenseFile` points at it | the **browser build only**, compiled in under `:/fonts` (a browser has no system fonts); the desktops use the system's faces and bundle nothing | OFL: licence text and the copyright line travel with them: (c) 2014-2021 Adobe, Reserved Font Name "Source". The subsets are modified (cut down, unhinted) and keep the names Noto Sans JP and Noto Sans SC, which do not contain the reserved name, as the OFL requires. Provenance and hashes are in `src/app/platform/web/fonts/README.md`. The manifest entries are limited to the `web` platform, so they are emitted for that build and no other |
 
 The vendored M3T tracker (MIT, with `filesystem.h`, nanoflann and
 tiny_obj_loader inside it), the corner-detector weights
@@ -170,7 +182,11 @@ OpenCV Zoo, with its unfilled licence template) were listed here until
 recovery plan R6 removed the tracking pipeline and the hand detector.
 Nothing embeds or links any of them now. The manifest holds no model. The weights stay in `.gitignore`;
 a copy left in an old checkout is a file under `assets/` that no component
-claims, which the generator reports as unresolved.
+claims, which the generator reports as unresolved. There is no `assets/`
+directory in the repository now (the models are gone, and the fonts planned
+for `assets/fonts/` went to `src/app/qt/fonts/` and `src/app/platform/web/fonts/`),
+and `third_party/` holds only the notices themselves; the checks that guard
+both stay in place for the day either grows a file.
 
 ### 2.4 vcpkg ports
 
@@ -180,7 +196,7 @@ tools/tests only.
 
 | port | version | SPDX | ships | why / obligation |
 |---|---|---|---|---|
-| opencv4 | 4.12.0#5 | Apache-2.0 (port says `null`; the copyright file is Apache-2.0 plus SoftFloat and a CHI-table notice) | W M L A | Apache: licence copy; keep the bundled notices in its copyright file. Features: calib3d, core, fs, intrinsics, jpeg, png, quirc, thread, tiff, webp, + dshow/msmf (W), v4l (L). `highgui`, `gtk` and `win32ui` are not requested (see the Linux-specific finding below) |
+| opencv4 | 4.12.0#5 | Apache-2.0 (port says `null`; the copyright file is Apache-2.0 plus SoftFloat and a CHI-table notice) | all (the browser build is smaller, see 2.5) | Apache: licence copy; keep the bundled notices in its copyright file. Features: calib3d, core, fs, intrinsics, jpeg, png, quirc, thread, tiff, webp, + dshow/msmf (W), v4l (L). `highgui`, `gtk` and `win32ui` are not requested (see the Linux-specific finding below) |
 | libjpeg-turbo | 3.2.0 | BSD-3-Clause (port); the file also carries the IJG licence | all | notice in docs |
 | libpng | 1.6.58 | libpng-2.0 | all | notice; no misrepresentation |
 | tiff | 4.7.2 | libtiff | all | notice |
@@ -189,9 +205,11 @@ tools/tests only.
 | zlib | 1.3.2#1 | Zlib | all | none for binaries beyond not misrepresenting |
 | quirc | 1.2 | ISC | all | notice |
 | fmt | 12.2.0 | MIT | all (`cube_lib`) | notice |
-| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **removed from the manifest** - it was declared but nothing linked it [V: the file API's link line of `cube_app` had no bgfx; `src/render` was a stub] | none |
+| bgfx (+ libsquish, lodepng, mgnlibs, miniz, stb, tinyexr) | 1.129.8940-496#1 | BSD-2-Clause AND CC0-1.0 | **removed from `vcpkg.json`** - it was declared but nothing linked it [V: the file API's link line of `cube_app` had no bgfx; `src/render` was a stub] | none |
+| cpu-features | 0.11.0 | Apache-2.0 [V: port manifest] | A | OpenCV's dependency on Android only; Apache: licence copy |
 | catch2 **[T]** | 3.15.2 | BSL-1.0 | no | tests only |
-| vcpkg-cmake, vcpkg-cmake-config, vcpkg-boost, boost-cmake, boost-uninstall, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
+| tracy **[T]** | 0.13.1 | BSD-3-Clause | no | the opt-in `profiling` feature (`CUBEULATOR_ENABLE_TRACY`, off in every release preset); a profiling build is a development build and is not packaged. Its command-line tools are host tools; see [Profiling](profiling.md#licence) |
+| vcpkg-cmake, vcpkg-cmake-config, vcpkg-get-python-packages | - | - | no | install nothing outside `share/`; the generator skips ports with no `include/`, `lib/` or `bin/` content |
 
 ONNX Runtime and the ports only it pulled in (onnx, abseil, flatbuffers,
 dlpack, protobuf, utf8-range, re2, cpuinfo, eigen3, the boost headers, date,
@@ -207,8 +225,9 @@ more ports (`vcpkg install --dry-run --triplet=x64-linux`: 98 ports planned,
 fribidi, gettext (all LGPL-2.0/2.1+), Cairo (LGPL-2.1 or MPL-1.1), D-Bus
 (AFL-2.1 or GPL-2.0+), plus the X11 libraries. The only code that included
 `opencv2/highgui.hpp` was the vendored M3T, which R6 removed; the app,
-`cube::lib` and the tools include only `core`, `imgproc`, `imgcodecs`,
-`calib3d` and `videoio`. The `highgui`, `gtk` and `win32ui` features were
+`cube::lib` and the tools include only `core`, `imgproc`, `imgcodecs` and
+`videoio` (`vcpkg.json` still requests `calib3d`, which nothing includes). The
+`highgui`, `gtk` and `win32ui` features were
 therefore dropped from `vcpkg.json`. `win32ui` is only a `highgui` window
 backend, and the camera backends the app opens (DirectShow and Media
 Foundation on Windows, V4L on Linux) belong to `videoio`, which depends on
@@ -220,11 +239,12 @@ Linux plan is now the table above: no GTK, GLib, Pango or X11 ports.
 
 | platform | what differs |
 |---|---|
-| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`, vcpkg applocal). On the 2026-10-13 build the deployment directory held 41 Qt modules and 45 Qt plugins and QML plugins, all attributed, **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which I could not source locally. The `windeployqt` call is not in my lane to change. |
-| macOS | Not built or verified here. Mac App Store adds Apple's terms (section 4). |
-| Linux | No GTK3 chain: `opencv4[gtk]` is not requested (above). Qt is installed from `jurplel/install-qt-action` in CI; the DEB/RPM packages set `SHLIBDEPS`/`AUTOREQPROV`, so Qt may be a dependency of the package rather than part of it - then Qt's source/notice duty moves to the distribution that provides it [I][L]. |
+| Windows | Qt DLLs and vcpkg DLLs ship beside the exe (`windeployqt`; vcpkg's applocal step in a development build, `cmake/InstallRuntimeDependencies.cmake` in the installer). On the 2026-10-14 Qt 6.12.0 build the deployment directory held 38 Qt modules (and QtTest, which the system tests copy there) and 40 Qt plugins and QML plugins, all attributed (13 more, the QML debugger and profiler servers, are a development build's: the installer removes them), **plus four binaries that are neither Qt's nor vcpkg's**: `d3dcompiler_47.dll` and `dxcompiler.dll` + `dxil.dll` (Microsoft's DirectX shader compilers, redistributable under the Windows SDK terms [I]) and `opengl32sw.dll` (Mesa llvmpipe software OpenGL, MIT-family [I]). `windeployqt` copies them by default. They are reported as a generator warning, not an error, because they are not linked dependencies. **Decision for E4a/Iain:** drop them with `windeployqt --no-opengl-sw --no-system-d3d-compiler --no-system-dxc-compiler` (the app does not need a software GL fallback or the DirectX compilers if the graphics backend is Direct3D 11/OpenGL on a real GPU), or keep them and add notices - `opengl32sw.dll` needs a Mesa notice, which has not been sourced. Still open at 0.1.0-beta.1: the deployment call, `cube_deploy_qt_on_install(... NO_COMPILER_RUNTIME)` in `packaging/windows/ConfigureApp.cmake`, passes none of those options. The installer also carries the MSVC C++ runtime DLLs beside the exe (`InstallRequiredSystemLibraries`, redistributable under Microsoft's terms for Visual Studio [I]); the generated notices do not list them. |
+| macOS | The `.dmg` (Apple Silicon) is built by CI and by the release workflow (`macos-clang-release`), and Qt's macOS SBOMs are read into the snapshot; the licence and `THIRD-PARTY-NOTICES.txt` are at the root of the disk image. Not run on a Mac by this paper. Mac App Store adds Apple's terms (section 4). |
+| Linux | No GTK3 chain: `opencv4[gtk]` is not requested (above). Qt is installed from `jurplel/install-qt-action` in CI, and the DEB and RPM carry it: the app, Qt, its plugins and QML modules and OpenCV sit in a private directory (`/usr/lib/cubeulator`), and the packages declare only system libraries as dependencies (`SHLIBDEPS` and `AUTOREQPROV` are off; `packaging/linux/Packaging.cmake`), so Qt's source and notice duty is the packager's, not a distribution's [I][L]. The licence and notices are in `/usr/share/doc/cubeulator/`. Qt's Linux SBOMs have not been read, so the Linux notices over-include. |
 | Android | Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
 | iOS | The app does not build today. Qt for iOS is normally linked statically [I - **not stated** in the Qt iOS documentation pages I read; Qt's own tracker has an open request to allow dynamic builds, QTBUG-85974]. |
+| Web (WebAssembly) | One `.wasm` module with Qt linked in statically and nothing deployed beside it (no installer, no CPack package, so no installed `THIRD-PARTY-NOTICES.txt`; the notices are embedded in the module as a resource like every build's). From vcpkg it takes fmt and a smaller OpenCV: `vcpkg.json` asks for the `intrinsics` feature alone on `emscripten`, and `cmake/triplets/wasm32-emscripten-threads.cmake` builds only `core`, `imgproc`, `imgcodecs` and `videoio`, so none of the image-codec ports (libjpeg-turbo, libpng, tiff, libwebp, quirc, liblzma) is in it; zlib comes in as OpenCV's own dependency [V: `vcpkg.json`, port manifests]. It also carries the two Noto subsets (2.3) and, from Qt's WebAssembly kit, the DejaVu Fonts 2.37 face the browser build draws Latin, Hebrew and Arabic with (Bitstream-Vera licence [V: `QWasmIntegrationPlugin_Attribution_dejayvu` in the kit's `qtbase` SBOM]). The Qt SBOMs of that kit are not in `qt-modules.json`, so that attribution is not in the generated notices; see the known gaps in [section 6](#6-how-the-notices-are-produced). |
 
 ## 3. The Qt question
 
@@ -278,12 +298,17 @@ under GPL-3.0 [V: SPDX id].
   Lesser General Public License, version 3, or the GNU General Public License,
   version 2" <https://doc.qt.io/qt-6.8/qtshadertools-index.html>].
 - **`qsb` command-line tool:** *Commercial OR GPL-3.0-only WITH
-  Qt-GPL-exception-1.0* [V: same two sources]. It is run during the build
-  (`qt_add_shaders`), not shipped; the Qt GPL exception allows the output of
-  the tool to be distributed under terms of one's choice, so long as the work
-  is not otherwise derived from the tool [I: from my recollection of the
-  exception's text; the Qt page lists "Qt GPL exception 1.0" for its tools,
-  but the exception file itself was not available locally] [L].
+  Qt-GPL-exception-1.0* [V: same two sources]. It is a build-time tool and is
+  not shipped. Cubeulator's own build does not call it (there is no
+  `qt_add_shaders`): the three `.frag` snippets in `src/app/qt/shaders/` are
+  compiled in as resources and baked at run time by the ShaderTools library,
+  which is why that library ships [V: `src/app/CMakeLists.txt`;
+  `Cube3DView.qml`]. Were a build to call `qsb`, the Qt GPL exception allows
+  the output of the tool to be distributed under terms of one's choice, so
+  long as the work is not otherwise derived from the tool [I: from my
+  recollection of the exception's text; the Qt page lists "Qt GPL exception
+  1.0" for its tools, but the exception file itself was not available
+  locally] [L].
 - It is **not** on Qt's list of GPL-only modules [V: page above].
 
 So Shader Tools adds no copyleft beyond what Quick 3D already forces. Its
@@ -306,7 +331,7 @@ copyright holder to that question.
   additional permissions to material they own (section 7: "You may place
   additional permissions on material, added by you to a covered work, for
   which you have or can give appropriate copyright permission" [V:
-  `LICENSE` line 360]), and a copyright holder is not bound by their own
+  `LICENSE` lines 357-359]), and a copyright holder is not bound by their own
   licence when distributing their own work. He can add a store exception,
   dual-license, or re-license it [I][L].
 - **Qt Quick 3D's code** is The Qt Company's. It reaches every recipient
@@ -326,7 +351,7 @@ copyright holder to that question.
   Information" - "any methods, procedures, authorization keys, or other
   information required to install and execute modified versions of a covered
   work" - when object code is conveyed in a "User Product" [V: `LICENSE`
-  lines 297-322]. A phone is a consumer product. iOS only runs code signed
+  lines 297-327]. A phone is a consumer product. iOS only runs code signed
   by a key the user does not hold unless they enrol in Apple's programme; the
   extent to which that satisfies the clause is a legal question [L].
 
@@ -350,10 +375,11 @@ LGPL-obligations page, "Modules Not Available Under LGPL"].
 
 | channel | what stands in the way, if anything | status |
 |---|---|---|
-| **Direct download** (GitHub releases; ZIP/NSIS/DMG/TGZ/DEB/RPM) | Nothing beyond GPL-3.0 itself: ship licence, notices, source or an offer | clear [I] |
+| **Direct download** (GitHub releases: NSIS installer, DMG, DEB, RPM; the packages are not yet OS code-signed or notarised, see [Cutting a release](releasing.md)) | Nothing beyond GPL-3.0 itself: ship licence, notices, source or an offer | clear [I] |
+| **Web** (the app as static files under `/app/` of the documentation site, [Try it in your browser](web.md)) | Not examined in a primary source. The program, with Qt linked in, is sent to the visitor's browser, so the same GPL-3.0 terms are assumed to apply as to a download [I][L]. Today neither the page nor the app in it shows a licence, a source link or the notices (the About screen is a placeholder, section 7), and the build's notices are embedded but unverified (sections 2.5 and 6) | **open** [L] |
 | **Microsoft Store** | Not examined in a primary source here. GPL apps appear in it [I]. MSIX packaging replaces the NSIS installer. | [L], research needed |
 | **Mac App Store** | Same Apple terms as iOS (below) plus the sandbox; a notarised DMG outside the store avoids Apple's *store* terms entirely | blocked by the same question as iOS [I][L] |
-| **Linux** (tarball, DEB, RPM, Flathub, Snap) | Nothing found. Distros that package it supply Qt themselves | clear [I] |
+| **Linux** (tarball, DEB, RPM, Flathub, Snap) | Nothing found. The project's own DEB and RPM carry Qt (section 2.5); distros that package it supply Qt themselves | clear [I] |
 | **Google Play** | No contradiction found. The FSF's objections were to Apple's Usage Rules and DRM, not to Play; Play App Signing means Google holds the signing key, but Android lets a user install their own modified build (sideload), which is what the Installation Information clause asks for [I]. I found no official Google statement on GPLv3. | probably clear [I][L] |
 | **F-Droid** | Builds from source and signs with its own key; designed for GPL apps [I] | clear [I] |
 | **Apple App Store (iOS)** | The FSF analysis above; Qt's own page warns that stores "may have rules that are in conflict with LGPL" [V]; Quick 3D is GPL-3.0-only [V]; Installation Information on a locked device [L] | **open - needs a decision** |
@@ -409,8 +435,8 @@ the plan needs is desktop and, later, Google Play.
 
 The cube is drawn today by `Cube3DView.qml` (Quick 3D) and `CubeView.qml`
 (Canvas 2D). When this paper was written a bgfx stub under `src/render` was
-listed here as a third route; it held no rendering code and was removed (see
-the change log), so there is no second renderer to switch to. Without Quick 3D
+listed here as a third route; it held no rendering code and was removed
+(pull request #53), so there is no second renderer to switch to. Without Quick 3D
 the app would link only modules that have an LGPL option [V: section 2.2].
 
 - **What it does for the licence:** the Qt set becomes available under
@@ -489,8 +515,8 @@ conclusion.
 
 ```
  vcpkg installed tree  ──┐                  third_party/notices/
- (status, info/*.list,   │                    manifest.json      hand-kept: the model,
-  share/<port>/copyright,│                                       icons, fonts, elections
+ (status, info/*.list,   │                    manifest.json      hand-kept: icons,
+  share/<port>/copyright,│                                       fonts, elections
   ports/<port>/vcpkg.json)│                   qt-modules.json   generated from Qt's SBOMs
                           ├─► cube_third_party_notices ──►      licences/<SPDX>.txt
  CMake file API: cube_app │      (cmake -P, before cube_app links)
@@ -512,9 +538,10 @@ conclusion.
   M3T, GLEW and GLFW, and bgfx went with the render scaffolding, they and
   their dependency chains disappeared.
 - **What is checked by hand** is only what the build cannot know:
-  `manifest.json` lists vendored code, models, icons and fonts, the licence
-  elections (Qt taken under GPL-3.0-only; FreeType under FTL), and a table of
-  licences for ports whose manifest says `license: null`.
+  `manifest.json` lists icons and fonts (and is where vendored code or a model
+  would be listed; there is none now), the licence elections (Qt taken under
+  GPL-3.0-only; FreeType under FTL), and a table of licences for ports whose
+  manifest says `license: null`.
 - **The test** (`third_party_notices_complete`, label `licensing`) re-runs the
   generator with the deployment directory added - every Qt module, plugin and
   vcpkg DLL beside the executable, except the test-only Qt modules named in
@@ -529,7 +556,14 @@ conclusion.
   written for.
 - **Installing** (`cmake --install`, therefore CPack) runs a check and
   refuses to package while the JSON's `unresolved` list is non-empty, so an
-  incomplete notice cannot ship even if the test was not run.
+  incomplete notice cannot ship even if the test was not run. This is the
+  desktop packages only: the browser build has no install step.
+- **The release SBOM** is made from the same JSON, not by scanning the
+  installers: the release workflow keeps each platform's
+  `third-party-notices.json` and `tools/release/make_sbom.py` turns the three
+  into one SPDX 2.3 document, refusing an inventory with anything unresolved
+  ([Cutting a release](releasing.md#what-a-release-holds)). It is only as
+  complete as these inventories are.
 
 Maintaining it:
 
@@ -540,13 +574,13 @@ Maintaining it:
 | add a QML `import` of a new Qt module | add it to `qt.qmlImports`; the module may need to be added to `qt-modules.json` |
 | a test copies another Qt module's library beside the executables | add its component id to `qt.testOnlyModules` in `manifest.json`, with the test that copies it; the deployment scan then ignores the file. The attributions bundled in that module are not components either: they ship only if the module does. |
 | upgrade Qt | `python -I tools/licences/qt_sbom_manifest.py --sbom <platform>=<qt>/sbom --out third_party/notices/qt-modules.json`, review the diff, update `qt.expectedQtVersion` |
-| add the bundled fonts | add the files under `assets/fonts/`; the planned manifest entries start emitting; verify their copyright lines against the fonts |
+| add the bundled fonts | add the files at the paths the planned manifest entries name (`src/app/qt/fonts/`; the web build's faces are in `src/app/platform/web/fonts/`); the entries start emitting; verify their copyright lines against the fonts |
 | add a platform (Linux, iOS) | run the Qt SBOM tool on that platform's Qt install and add `--sbom <platform>=<dir>`; its components are over-included until then (the JSON says `qtPlatformVerified:false`). macOS: the kit's SBOMs are inside the `qtbase`, `qtdeclarative`, ... `.7z` archives under `sbom/`; extracting only that folder avoids aqtinstall's symlink step on Windows |
 
 Known gaps, so nobody mistakes them for done:
 
-1. **Licence texts are complete for the Windows closure**, but three kinds
-   of file were *typed* rather than copied (MIT, BSD-2-Clause, BSD-3-Clause,
+1. **Licence texts are complete for the Windows closure**, but five of the
+   texts were *typed* rather than copied (MIT, BSD-2-Clause, BSD-3-Clause,
    ISC, Zlib - the standard SPDX wording without a copyright line), so a
    reviewer should diff them against <https://spdx.org/licenses/> once. The
    provenance of every text is in `third_party/notices/licences/README.md`.
@@ -556,21 +590,22 @@ Known gaps, so nobody mistakes them for done:
    approval on 2026-10-13. `IJG` is the "LEGAL ISSUES" section of
    libjpeg-turbo's `README.ijg`, from the source vcpkg unpacked locally.
 2. **Only Windows was exercised against a real build here.** The Windows
-   result (2026-10-13, Qt 6.8.3, `windows-msvc-fastdebug-d`): 102 components -
-   34 vcpkg ports, 6 Qt entries (4 repositories + Qt SVG + EntryPoint),
-   55 Qt-bundled third-party components, M3T and its three bundled headers,
-   the palm model, and the two icon sets - with 25 licence texts, nothing
-   unresolved, one generator warning (the four files above). The notices
-   file is 343 KB and the JSON 356 KB. Linux, macOS and Android use the same
-   mechanism, but `qt.deployedRoots` has no list for them yet (the generator
-   says so in a warning); CI is where they get checked. Linux has not had its
-   Qt SBOM read, so its Qt components are over-included.
-   The Windows build used a copy of an existing vcpkg installed tree, merged
-   with five ports built in this session, configured with
-   `VCPKG_MANIFEST_INSTALL=OFF`: another session held the shared
-   `D:/vcpkg-buildtrees` lock while building onnxruntime. The libraries are
-   the ones the manifest resolves to at the pinned baseline, but a clean
-   vcpkg install was not run end to end here.
+   result (2026-10-14, Qt 6.12.0, a RelWithDebInfo build): 77 components -
+   9 vcpkg ports, 6 Qt entries (4 repositories + Qt SVG + EntryPoint),
+   60 Qt-bundled third-party components and the two icon sets - with 25
+   licence texts, nothing unresolved, one generator warning (the four files
+   above). The notices file is 220 KB and the JSON 228 KB (on 2026-10-13, with
+   Qt 6.8.3 and the tracker and detector still in the tree, it was 102
+   components). Linux, macOS and Android use the same mechanism, but
+   `qt.deployedRoots` has no list for them yet (the generator says so in a
+   warning); CI is where they get checked, because the test runs on every
+   desktop leg. Linux has not had its Qt SBOM read, so its Qt components are
+   over-included.
+   The Windows build used an existing vcpkg installed tree, configured with
+   `VCPKG_MANIFEST_INSTALL=OFF`. The libraries are the ones the manifest
+   resolves to at the pinned baseline (their versions match the port
+   manifests there), but a clean vcpkg install was not run end to end for this
+   figure; CI's legs do that.
 3. **The deployment scan covers shared-library files** (`.dll`, `.so`,
    `.dylib`). It does not look inside an Android APK/AAB or a macOS bundle's
    `Frameworks/`; E4a/E4b extend it when they define those layouts.
@@ -581,12 +616,31 @@ Known gaps, so nobody mistakes them for done:
    of review: any new vector or glyph data in QML gets a manifest entry.
 5. **QML-only dependencies are by import name.** A QML module that is only
    loaded by string at run time would be missed; there are none today.
+6. **The browser build is not checked.** `qt-modules.json` was not read from
+   the WebAssembly kit (`verifiedPlatforms` is Android, macOS and Windows), and
+   the test is not built for the browser (`CUBEULATOR_BUILD_TESTS=OFF`), so
+   the notices embedded in that build are produced but nothing holds them to
+   the standard above. The kit's own SBOM names at least one bundled component
+   the snapshot does not have: DejaVu Fonts 2.37, Bitstream-Vera, under the
+   WebAssembly platform plugin. The browser's two Noto subsets are in the
+   manifest and do reach its notices (2.3).
+7. **A font outside `assets/` and `src/app/qt/` is not looked for.** The scan
+   that fails on an unclaimed font covers those two trees only; the web
+   build's faces under `src/app/platform/web/fonts/` are claimed by manifest
+   entries, but a font added anywhere else would ship unlisted.
 
 ## 7. About and Licences screens: the requirement
 
 The screens are built in E3b. This section is what they must show, with the
 reason for each. Object names follow the plan's contract (every interactive
 item has an `objectName` and an accessible name).
+
+**Status at 0.1.0-beta.1: not built.** The desktop shell has a placeholder
+About that shows the name and the version only (`src/app/qt/DesktopShell.qml`);
+there is no Licences screen. The notices travel beside the program in every
+desktop package and are embedded in the app as `:/licences/*`, which nothing in
+the app reads yet. The table below is therefore the requirement, not a
+description.
 
 ### 7.1 The About screen
 
@@ -604,7 +658,7 @@ The screen reachable from the menu, in this order:
 
 | # | content | text (English source; translatable) | why |
 |---|---|---|---|
-| 1 | Name and version | `Cubeulator <version>` and the build's commit hash (`cube::version`) | the source offer below must name *this* version |
+| 1 | Name and version | `Cubeulator <version>` and the build's commit hash (`cube/version.hpp`) | the source offer below must name *this* version |
 | 2 | Copyright | `Copyright © 2026 Iain Chesworth` | s.0 (1) |
 | 3 | No warranty | `This program comes with ABSOLUTELY NO WARRANTY; for details see the licence.` | s.0 (2); s.15-16 |
 | 4 | Licence grant | `This is free software, and you are welcome to redistribute it under the terms of the GNU General Public License, version 3 or (at your option) any later version.` | s.0 (2) |
@@ -658,7 +712,7 @@ build that can be packaged):
 {
   "schema": 1,
   "project": { "name": "...", "license": "GPL-3.0-or-later", "copyright": "...", "homepage": "...", "source": "..." },
-  "platform": "windows", "qtVersion": "6.8.3", "qtPlatformVerified": true,
+  "platform": "windows", "qtVersion": "6.12.0", "qtPlatformVerified": true,
   "components": [
     { "id": "vcpkg/fmt", "name": "fmt", "version": "12.2.0",
       "license": "MIT", "distributedUnder": "MIT",
@@ -688,11 +742,11 @@ licence reference. This list exists so a reviewer knows what to look for.
 | LGPL-3.0 (only if elected; not today) | licence text, a prominent notice that the library is used, ability to relink, source or offer |
 | MIT, BSD-2/3-Clause, ISC, libpng, libtiff, IJG | the copyright line and licence text in the documentation |
 | Apache-2.0 | licence copy, any NOTICE file, state significant changes |
-| MPL-2.0 (Eigen headers, Qt's psl-data) | notice, and say where the source of those files is |
+| MPL-2.0 (Qt's psl-data) | notice, and say where the source of those files is |
 | FTL (FreeType, if elected) | credit line in the documentation: "Portions of this software are copyright (c) <year> The FreeType Project (www.freetype.org). All rights reserved." |
 | Unicode-3.0 | the copyright and permission notice with the data |
 | Zlib, BSL-1.0, 0BSD, CC0-1.0 | nothing beyond not misrepresenting authorship (BSL-1.0: no notice in object code) |
-| OFL-1.1 (fonts, planned) | licence copy with the fonts; reserved font names |
+| OFL-1.1 (fonts: the browser build's Noto Sans JP and SC subsets today; the kit's faces planned) | licence copy with the fonts; reserved font names |
 
 ## 8. Things in the plan that were wrong or missing
 
@@ -710,9 +764,12 @@ licence reference. This list exists so a reviewer knows what to look for.
    (`src/app/CMakeLists.txt`). A developer's local copy of the AGPL-derived
    weights would have been compiled into a package without any other check.
    Closed by R6: the corner detector is gone and nothing embeds the file.
-4. **The CPack packages contain nothing today**: no `install()` rule exists
-   for `cube_app`. The notices install rule is the only one. E4a owns the
-   rest; until then a ZIP/NSIS package is just the notices and the licence.
+4. **The CPack packages contained nothing**: no `install()` rule existed for
+   `cube_app`, and the notices install rule was the only one, so a ZIP/NSIS
+   package was just the notices and the licence. Closed by E4a: the NSIS
+   installer, DMG, DEB and RPM carry the app, Qt, OpenCV, the licence and the
+   notices, and `packaging/check-package.sh` asserts it
+   ([Packaging](packaging.md)).
 5. **The licence file beside the palm model was an unfilled Apache template**
    (`Copyright [yyyy] [name of copyright owner]`) and the repository did not
    record the holder or the download URL for the model. Closed by R6: the
@@ -744,17 +801,22 @@ Not exhaustive, ordered by how much rides on it.
 4. Whether shipping Qt's official binaries inside a GPL-3.0 app requires the
    Qt source in the package, or whether a written offer pointing at
    `download.qt.io` meets GPL section 6.
-5. Whether the Qt GPL exception 1.0 on `qsb` covers the baked shaders
-   embedded in the app (I expect yes; the exception file was not available
-   locally).
-6. Whether the Linux DEB/RPM, which depend on system Qt rather than ship it,
-   change who owes the Qt source and notices.
-7. Whether the OpenCV Zoo model's licence chain (MediaPipe, converted and
-   quantised) permits redistribution as the Apache-2.0 text says, and what
-   copyright line to print.
+5. Whether the Qt GPL exception 1.0 on `qsb` matters at all: the app's shaders
+   are baked at run time by the ShaderTools library, not by `qsb` (section
+   3.2). If a build ever calls `qsb`, whether the exception covers the baked
+   shaders embedded in the app (I expect yes; the exception file was not
+   available locally).
+6. Whether the Linux DEB/RPM, which carry their own Qt under
+   `/usr/lib/cubeulator` rather than depend on the distribution's, owe the Qt
+   source and notices in the same way as the installers (item 4).
+7. (Withdrawn: this asked about the OpenCV Zoo palm model's licence chain, and
+   R6 removed the model.)
 8. Microsoft Store: policy terms for GPL software (not examined here).
 9. Whether a contributor licensing policy is needed before accepting any
    outside contribution, if Option B is chosen.
+10. Whether the browser build, which sends the program with Qt linked in to the
+    visitor's browser, owes a source offer, the licence and the notices on the
+    page itself (section 4, Web).
 
 ## 10. Sources
 
@@ -769,6 +831,9 @@ Primary, read in this work:
 - Qt FAQ (commercial licence consent), <https://www.qt.io/faq>
 - Qt 6.8.3 install: `include/*` headers' SPDX lines and
   `sbom/*.spdx.json` (local, `C:/Qt/6.8.3/msvc2022_64`, and Android)
+- Qt 6.12.0 installs: `sbom/*.spdx.json` for Windows, Android and macOS (the
+  snapshot, `third_party/notices/qt-modules.json`) and for the WebAssembly kit
+  (read for 2.5 only)
 - GPL-3.0 text: this repository's `LICENSE`; LGPL-3.0, <https://www.gnu.org/licenses/lgpl-3.0.html>
 - FSF, "More about the App Store GPL Enforcement" (B. Smith, 2010-05-26),
   <https://www.fsf.org/blogs/licensing/more-about-the-app-store-gpl-enforcement>

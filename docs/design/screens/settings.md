@@ -1,10 +1,23 @@
 # Settings
 
+> **Status in 0.1.0-beta.1:** Partly built, as `SettingsScreen.qml`: the
+> camera (a choice on desktop, the permission state on phones), the solve
+> method, the theme, the language (the device's, then the nine, applied at
+> once and kept), and desktop's **About Cubeulator** row, which opens a
+> placeholder dialog. Not built: marks, text size, motion, advancing and pace,
+> explanations, notation, sound, vibration, history, the Help row, the language
+> and camera sheets, and the state notices. The developer rows (cube style,
+> auto-rotate and its speed, the graphics backend, frame rate) are shown in
+> every build, with English literals. What persists today is `language/code`,
+> `appearance/themeMode`, `solving/method` and `rendering/graphicsBackend`;
+> the keys in the persistence table below are the design's.
+
 Lane: experience. Replaces `SettingsScreen.qml`.
 
 Every setting changes something a person solving a cube can see, applies
-at once, and is still set after a restart. Today only two of them
-persist, and two do nothing.
+at once, and is still set after a restart. When this was written only two of
+them persisted and two did nothing; the two that did nothing have since been
+removed.
 
 Entered from: Home; the scan screen's More sheet; the solve screen's
 menu; **Open Settings** on History; the macOS application menu. Back
@@ -53,7 +66,7 @@ interactive. `objectName`: `settings.markLegend`.
 **Gone** from the current screen, with reasons:
 
 - *Detect hands with AI* and *Auto-advance between faces* drove
-  `ScanSession`, which no screen starts.
+  `ScanSession`, which no screen started and R6 has removed.
 - *Cube style*, *Auto-rotate when idle* and its speed, *Graphics backend*
   and *Stats for nerds* change nothing a person solving a cube needs. The
   home cube's idle turn now follows the Motion setting. The rest are in

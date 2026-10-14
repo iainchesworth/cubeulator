@@ -10,14 +10,15 @@ tracked the cube's six-degree-of-freedom pose before reading a single sticker,
 and a cube looks identical under 24 rotations, so pose alone never says which
 side is which. A side is identified here by what is on it.
 
-Source: `src/lib/src/vision/` (platform-free, Qt-free), driven by
+Source: `src/lib/src/vision/` (platform-free, Qt-free; the cube assembly it
+calls is `src/lib/src/solver/scan_assembly.cpp`), driven by
 `src/app/qt/controllers/direct_scan.cpp` (Qt, GUI thread).
 
 ## End-to-end flow
 
 ```mermaid
 flowchart TD
-    CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV)"] --> LOCK["PhotometryLock<br/>exposure + white balance held"]
+    CAM["Camera device<br/>(DirectShow / V4L2 / AVFoundation via OpenCV;<br/>getUserMedia in the browser)"] --> LOCK["PhotometryLock<br/>exposure + white balance held<br/>(Windows only)"]
     LOCK --> LOOP["OpenCvCaptureLoop<br/>capture thread, mailbox of 1"]
     LOOP -->|BGR frame| CTRL["DirectScan::processFrame<br/>GUI thread, poll timer"]
     CTRL --> PREP["prepare_frame<br/>working width, threshold, outlines - once"]
@@ -49,16 +50,17 @@ between and around the stickers; a side seen at an angle, a lattice that does
 not span three rows and three columns, or no cube all return nothing.
 
 1. **Sticker blobs.** `prepare_frame` (`cube/vision/prepared_frame.hpp`)
-   reduces the frame to the working width, takes the maximum channel as the
-   value image, blurs it, thresholds it adaptively and traces the outlines.
-   It is done once per frame and handed to both readers, because it is most
-   of what a read costs; contours that are roughly square and roughly
-   sticker-sized survive `read_side`'s shape test.
+   reduces the frame to the working width (640 pixels), takes the maximum
+   channel as the value image, blurs it, thresholds it adaptively and traces
+   the outlines. It is done once per frame and handed to both readers,
+   because it is most of what a read costs; contours that are roughly square
+   and roughly sticker-sized survive `read_side`'s shape test.
 2. **Lattice.** The sticker pitch comes from nearest-neighbour distances and
    the direction from the folded angles. An affine least-squares fit places a
    3x3 lattice through the blobs, and the fit must span all three rows and
-   columns. Stickers that were not found as blobs (a finger across one) are
-   placed by the fit and flagged in `SideRead::found`.
+   columns, with at least six of the nine stickers found as blobs. Stickers
+   that were not found as blobs (a finger across one) are placed by the fit
+   and flagged in `SideRead::found`.
 3. **Colour.** Each of the nine places is sampled as the median of a small
    patch, in float CIELAB.
 
@@ -114,14 +116,18 @@ A cube turned between sides, or held corner-on, shows two sides at once, and
 where they meet the stickers along the shared edge are neighbours - the fact
 the flat reads lack.
 
-1. **`read_corner`** takes the same prepared outlines with a looser shape test (a side
-   at an angle is a parallelogram: a compact four-cornered contour, not a
-   square), and finds up to three 3x3 lattices by RANSAC over blob triples,
-   each fitted by least squares with its steps turning clockwise so the side
-   reads unmirrored. Two lattices share an edge when two corners of each
-   coincide; read as seen from outside, they walk that edge in opposite
-   directions, which is also a check. It runs only on frames that have no
-   square-on read, and gives up on a scene with more than 48 blobs.
+1. **`read_corner`** takes the same prepared outlines with a looser shape
+   test (a side at an angle is a parallelogram: a compact four-cornered
+   contour, not a square), and finds up to three 3x3 lattices. It tries each
+   blob as the origin with every pair of its near neighbours (at most eight)
+   as the two axes - a hypothesis-and-test search over blob triples, not
+   random sampling - and the lattice with the most blobs wins, then the
+   tightest fit. Each is fitted by least squares with its steps turning
+   clockwise so the side reads unmirrored. Two lattices share an edge when two
+   corners of each coincide; read as seen from outside, they walk that edge in
+   opposite directions, which is also a check. It runs only on frames that
+   have no square-on read, and gives up on a scene with fewer than 12 or more
+   than 48 blobs.
 2. **`fit_corner`** asks whether a candidate cube could have produced the
    read, in the session's own colours: each lattice's centre names the cube
    side it is; each side's nine colours must match that side under some
@@ -146,10 +152,11 @@ no recorded session is one.
 ## Camera photometry
 
 Colour is only comparable across frames if the camera stops adjusting itself.
-`PhotometryLock` (`src/app/platform/detail/photometry_lock.cpp`) holds exposure
-and white balance once the camera has settled, and reports what it did; the
-scan waits for that report (`kLockWaitFrames`) before counting reads. Notes
-from the workstation webcam under DirectShow and OpenCV 4.12:
+`PhotometryLock` (`src/app/platform/detail/photometry_lock.cpp`) holds white
+balance, exposure, brightness and saturation once the camera has settled, and
+reports what it did; the scan waits for that report (at most `kLockWaitFrames`,
+240 frames) before counting reads. Notes from the workstation webcam under
+DirectShow and OpenCV 4.12:
 
 - White balance in kelvin is `CAP_PROP_WHITE_BALANCE_BLUE_U`;
   `CAP_PROP_WB_TEMPERATURE` does nothing.
@@ -157,11 +164,15 @@ from the workstation webcam under DirectShow and OpenCV 4.12:
   lock reads the auto temperature first, clears auto, writes it back, and checks
   the blue/green ratio, bisecting 2800-6500 K if it did not take.
 - A temperature write takes more than twelve frames to show.
-- Writing exposure leaves auto exposure; `CAP_PROP_AUTO_EXPOSURE = 1` restores
-  it.
+- Writing exposure leaves auto exposure as a side effect, so the lock writes
+  back the value the automatics chose; `CAP_PROP_AUTO_EXPOSURE` is not
+  implemented by this backend (it reads -1 and refuses writes). When the scan
+  ends the values the lock found are written back.
 
 A platform that cannot control photometry says so in the report rather than
-claiming a lock.
+claiming a lock. Only the Windows backend (DirectShow) has been measured and
+tries; Linux (V4L2), macOS (AVFoundation) and the browser report that they
+cannot, and the scan runs on the camera's own automatics.
 
 ## While the cube is being solved: `HeldCube`
 
@@ -169,14 +180,21 @@ The camera keeps running on the solve screen and is only asked which side is
 in view. `fit_holds` compares a read against what each of the 24 ways of
 holding the (now known) cube would show, in the session's own colours; the
 hold that fits, and that no differently-looking hold fits nearly as well, turns
-the on-screen cube to match. This is not tracking: nothing is estimated between
-reads and nothing is read at an angle. Nothing is added to the scan while
-watching.
+the on-screen cube to match. The same read can show that the move asked for has
+been made (the side in view fits the cube after the move and clearly not
+before it), and the solve screen steps on by itself, or that some other side
+was turned, which the screen names (`HeldCube`,
+`src/app/qt/controllers/held_cube.hpp`). This is not tracking: nothing is
+estimated between reads and nothing is read at an angle. Nothing is added to
+the scan while watching.
 
 ## Threading
 
-- **Capture thread** (`OpenCvCaptureLoop`) owns the device and publishes the
-  newest frame into a one-deep mailbox. Old frames are dropped, never queued.
+- **Capture thread** (`OpenCvCaptureLoop`, on Windows, Linux and macOS) owns
+  the device and publishes the newest frame into a one-deep mailbox. Old
+  frames are dropped, never queued. The browser build's camera is the page's
+  `getUserMedia` (`src/app/platform/web/camera_web.cpp`); Android and iOS have
+  no capture backend yet, so `start()` fails with `camera_not_found` there.
 - **GUI thread** runs `DirectScan::processFrame`. A read is a few milliseconds,
   well inside the poll interval, so there is no analysis worker and no scan
   state to hand between threads. Only `latestFrame()` is called from elsewhere

@@ -26,7 +26,9 @@ src/app/
   platform/
     windows/ macos/ linux/ android/ ios/ web/
                      one implementation per interface, plus platform.cmake
-    posix/           implementations shared by every non-Windows platform
+    posix/           implementations shared by several platforms (the crash
+                     handler and capture scope of every non-Windows one; the
+                     do-nothing desktop shell of Android, iOS and web)
     detail/          helpers every platform links (an OpenCV capture loop, ...)
 tests/platform/<name>/   test cases only that platform can run
 ```
@@ -56,8 +58,9 @@ platform's fragment. Every other CMake file reads what the fragment declared:
 | Whether the system tests' window is made invisible (transparent, click-through, never activated) | `CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW` | `tests/system/app.cpp`, through `cube_test_platform_facts.hpp` |
 | Work before packages are found | `cube_platform_prepare_dependencies()` | `cmake/MobileDependencies.cmake` |
 | Qt runtime next to the app (windeployqt) | `cube_platform_deploy_qt_runtime()` | `src/app/CMakeLists.txt` |
-| Installers (NSIS, DragNDrop, DEB/RPM) | `cube_platform_configure_packaging()` | `cmake/Packaging.cmake` |
-| Keep awake, process identity, window traits (desktop shell) | `cube_platform_configure_desktop_shell()` adds `platform/<name>/desktop_shell_<name>.cpp`, behind `interfaces/desktop_shell.hpp` | `src/app/CMakeLists.txt` (`cube_app_desktop`), `src/app/desktop/` |
+| One more Qt library next to a binary (QtTest, for the system tests) | `cube_platform_deploy_qt_library()` | `tests/system/CMakeLists.txt` |
+| Installers (NSIS, DragNDrop, TGZ/DEB/RPM) | `cube_platform_configure_packaging()` | `cmake/Packaging.cmake` |
+| Keep awake, process identity, window traits (desktop shell) | `cube_platform_configure_desktop_shell()` adds `platform/<name>/desktop_shell_<name>.cpp` (`posix/desktop_shell_mobile.cpp` on a phone and in the browser), behind `interfaces/desktop_shell.hpp` | `src/app/CMakeLists.txt` (`cube_app_desktop`), `src/app/desktop/` |
 | The app as an installable program (file name, version resource or bundle, install rules, Qt deployment) | `cube_platform_configure_desktop_app()`, which includes `packaging/<name>/ConfigureApp.cmake` | `cmake/DesktopPackaging.cmake` |
 | Where the licence and notices install | `CUBEULATOR_PLATFORM_NOTICES_DIR` | `cmake/ThirdPartyNotices.cmake` |
 
@@ -72,7 +75,10 @@ axis and stay in `cmake/CompilerWarnings.cmake`, `Sanitizers.cmake` and
 
 1. Create `src/app/platform/<name>/` with one implementation of each
    interface (`camera_<name>.cpp`,
-   `paths_<name>.cpp`, `platform_info_<name>.cpp`)
+   `paths_<name>.cpp`, `platform_info_<name>.cpp`, a crash handler and the
+   capture-thread scope, which the `posix/` files give where nothing is
+   needed; the desktop shell comes through
+   `cube_platform_configure_desktop_shell()`)
    and `platform.cmake`. Copy the closest existing platform's and change what
    differs; use `posix/` files where the implementation is the same.
 2. Add a branch for it in `cmake/Platform.cmake`.
@@ -82,7 +88,8 @@ axis and stay in `cmake/CompilerWarnings.cmake`, `Sanitizers.cmake` and
 
 That is the source tree. Four things outside it still carry platform names,
 because their formats cannot read a CMake variable: the `platform` expressions
-on dependencies in `vcpkg.json` (they mirror `CUBEULATOR_PLATFORM_DESKTOP`),
+in `vcpkg.json` (which OpenCV camera backends are built: DirectShow and Media
+Foundation on Windows, V4L on Linux, and a reduced OpenCV for `emscripten`),
 the configure/build/test presets in `CMakePresets.json`, the vcpkg triplets in
 `cmake/triplets/` (a triplet *is* a platform's name and flags; only a platform
 that needs one of its own has one) and the CI legs in
@@ -120,7 +127,8 @@ this?"* The cases already in the tree:
 **Do**
 
 - Declare what the shell needs from the OS in `src/app/interfaces/`, in
-  `namespace cube::platform::<name>`, with a comment saying that there is one
+  `namespace cube::platform::<interface>` (`cube::platform::camera`,
+  `cube::platform::paths`, ...), with a comment saying that there is one
   definition per platform.
 - Implement it once per platform, and list each file in the `platform.cmake`
   of every platform that compiles it.
@@ -168,13 +176,14 @@ annotations so a finding lands on the line in the pull request.
 
 The CMake side has its own check, the `platform_fragments_satisfy_contract`
 test (`tests/platform/check_fragments.cmake`). A build only includes the one
-`platform.cmake` for the platform it targets, so the other four would otherwise
+`platform.cmake` for the platform it targets, so the other five would otherwise
 be exercised only by their own CI legs. This test includes every fragment it
 finds, each in a process of its own, and holds it to the contract
 (`cmake/PlatformContract.cmake`): every variable and hook defined, every file it
-compiles present, and a branch in the selector for it. It runs on every leg, so
-a typo in the macOS fragment fails the Linux build in seconds rather than the
-macOS one in an hour.
+compiles present, and a branch in the selector for it (and the other way: a
+branch with no fragment behind it). It runs on every leg that runs the tests
+(Linux, macOS and Windows), so a typo in the macOS fragment fails the Linux
+build in seconds rather than the macOS one in an hour.
 
 Deliberately not scanned: `third_party/` and `deps/` (vendored code with its
 own conventions), anything git ignores, and shader sources (GLSL has no

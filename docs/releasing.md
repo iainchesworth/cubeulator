@@ -1,7 +1,8 @@
 # Cutting a release
 
-How a version of Cubeulator becomes three downloadable packages on a GitHub
-Release, with the notes, the checksums and the signatures that go with them.
+How a version of Cubeulator becomes four downloadable packages (one each for
+Windows and macOS, a `.deb` and an `.rpm` for Linux) on a GitHub Release, with
+the notes, the checksums and the signatures that go with them.
 The workflow is `.github/workflows/release.yml`; the tools are in
 `tools/release/`; what is in the packages is
 [Packaging the desktop app](packaging.md).
@@ -63,9 +64,10 @@ inventory. [Verifying a download](#verifying-a-download) says how to check each.
 
 **The packages are not OS code-signed** (no Authenticode certificate, no Apple
 Developer ID). The notes say so and say what a person will see: SmartScreen on
-Windows, Gatekeeper on macOS. Where that plugs in is the last section of
-[packaging.md](packaging.md). The GPG signature and the attestation prove where
-a file came from; they do not stop SmartScreen from asking.
+Windows, Gatekeeper on macOS. Where that plugs in is the
+[Signing section of packaging.md](packaging.md#signing). The GPG signature and
+the attestation prove where a file came from; they do not stop SmartScreen from
+asking.
 
 ## Versions
 
@@ -89,7 +91,7 @@ set(CUBEULATOR_VERSION_PRERELEASE "beta.1")     # "" for a final release
 | | |
 |---|---|
 | Package file names | `Cubeulator-0.1.0-beta.1-windows-x64.exe`: a beta is never called by the final's name |
-| `cube::version_string`, About, `--version` | `0.1.0-beta.1` |
+| `cube::version_string`, About | `0.1.0-beta.1` |
 | Windows installer, version resource | `0.1.0-beta.1` (the resource's numeric fields are `0,1,0,0`) |
 | `.deb`, AppStream | `0.1.0~beta.1` (`~` sorts before `0.1.0`, so `apt upgrade` takes a beta to the final) |
 | `.rpm` | version `0.1.0`, release `0.beta.1` (`1` for a final) |
@@ -171,7 +173,11 @@ python tools/release/render_release_notes.py --version 0.1.0-beta.1 \
 
 1. **Be ready.** CI is green on `develop` for the commit you mean to release, and
    `python tools/release/check_release.py --dry-run` is clean (it reads
-   `[Unreleased]` as if it were cut and applies the same rules).
+   `[Unreleased]` as if it were cut and applies the same rules). The
+   [user guide](guide/index.md) still describes the app: its pictures are from
+   the [screenshot tour](testing.md#the-screenshot-tour) and are refreshed with
+   `tools/docs/update_guide_screenshots.py`, and it names what does not work
+   yet, so read the "What this release is" box against the changelog.
 2. **Rehearse.** Run the pipeline as a [dry run](#the-dry-run) from `develop`
    and read what it produced. Do this before the *first* release, and again after
    any change to the packaging or to this workflow.
@@ -295,7 +301,7 @@ says how to check them. In short:
 ```sh
 # the checksums, then the signature on them
 gpg --import cubeulator-signing-key.asc
-gpg --verify SHA512SUMS.asc SHA512SUMS && sha512sum -c SHA512SUMS
+gpg --verify SHA512SUMS.asc SHA512SUMS && sha512sum -c --ignore-missing SHA512SUMS
 
 # which repository, workflow and commit built a file
 gh attestation verify Cubeulator-0.1.0-beta.1-linux-x64.deb --repo iainchesworthlabs/cubeulator
@@ -311,6 +317,7 @@ The workflow refuses, with the reason in the log, when:
 | The tag is not `v` + the version `CMakeLists.txt` declares, label included | the packages are named for it, so `v0.1.0` would hold `Cubeulator-0.1.0-beta.1-*` |
 | `CHANGELOG.md` has no dated `## [version]` section, or it is not the newest | the notes are rendered from it and nothing else |
 | The section has no summary, an item without a bold lead-in, or (pre-release) no closing caveat | the same rules `check_release.py` states |
+| `changelog.d/` still holds fragments | they are not in the section, so the notes would miss them: run `prepare_release.py` |
 | A final release is not on `main` | it is tagged on `main`, after the release PR; a pre-release may be cut from a `release/*` branch to be tried first |
 | A dispatched release names a tag that exists | |
 | A package fails `packaging/check-package.sh` | Qt, the executable, the icon, the identifier, the camera string, the notices: the same checks `ci.yml` makes on every push |

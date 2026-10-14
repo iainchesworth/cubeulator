@@ -1,11 +1,20 @@
 # Complete
 
+> **Status in 0.1.0-beta.1:** Partly built, as `CompleteScreen.qml`, reached
+> from the solve screen's **Finish**: the bobbing solved cube, "Solved", the
+> turns and the time (the method too, on the wide layout), **Review the
+> solution**, which does nothing, and **Scan another cube**. Not built:
+> **Done**, **My cube is not solved** and its sheet, the history entry, the
+> sound. The time shown is the clock that has run since the scan began, not
+> the first-to-last-turn time the spec asks for.
+
 Lane: **solve** reaches it; the chrome is experience. Replaces
 `CompleteScreen.qml`.
 
 The end of a solve. It says so in one word, shows what it took, and
-offers what people do next. Today nothing navigates here and one of its
-two buttons does nothing.
+offers what people do next. When this was written nothing navigated here
+and one of its two buttons did nothing; the last turn now does, and **Review
+the solution** still does nothing.
 
 Entered from: the last turn of a solve, by itself.
 

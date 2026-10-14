@@ -1,14 +1,25 @@
 # Journey
 
+> **Status in 0.1.0-beta.1:** This is the journey the design describes, not
+> the one the app has. The app has the six screens of `Main.qml`: launch,
+> permission (phones only), scan, solve, complete and settings, joined by
+> `AppState.qml`. First run, review, solution, history, about, licences,
+> privacy and help do not exist, so every arrow into them below is unbuilt,
+> as are the back stack and Esc, the interruption handling and
+> `home.resume`. What the app does have is a short loop: scan goes to solve
+> by itself, solve goes to complete on **Finish** or back to scan on
+> **Rescan**, and complete goes to scan again.
+
 Every screen, every state of it, how each is entered and left, and what
 "back" does. Each state has an id of the form `screen.state`. **The ids are
-the inventory the system tests are checked against** (plan, "Testing the app
-from its UI"): a test that walks the app records the ids it visits, and a
-state nobody visits fails the reach check.
+meant to be the inventory the system tests are checked against** (plan,
+"Testing the app from its UI"). They are not yet: `tests/system/reach.cpp`
+keeps its own list of the screens and states the app has, under its own
+names, and fails when one of those is never visited.
 
 Each state is specified in `screens/<screen>.md` under a heading that is its
-id. `tools/check_design.py` fails if an id here has no spec, or a spec has
-no id here.
+id. `docs/design/tools/check_design.py` fails if an id here has no spec, or a
+spec has no id here; CI does not run it.
 
 Lanes: screens marked **scan** or **solve** belong to those lanes. What is
 written here for them is a proposal for the chrome and the states; reading

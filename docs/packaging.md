@@ -89,7 +89,7 @@ Needs, besides the build's own tools:
 | Publisher | `CUBEULATOR_PUBLISHER` in `cmake/AppIdentity.cmake`: "Iain Chesworth Labs", following the repository's account. One string in the Windows version resource, the AppStream developer and CPack's vendor and contact. The copyright line (`CUBEULATOR_COPYRIGHT_HOLDER`) stays in Iain's own name: "Copyright (C) 2026 Iain Chesworth" |
 | Windows AppUserModelID | `IainChesworthLabs.Cubeulator`, following the publisher |
 | Executable | `Cubeulator.exe`, `Cubeulator.app`, `cubeulator` |
-| Version | `project(VERSION)` in the top-level `CMakeLists.txt`, through `cmake/GenerateVersion.cmake`: in `cube/version.hpp`, the Windows version resource, `Info.plist`, the AppStream release and every package's file name |
+| Version | `project(VERSION)` and `CUBEULATOR_VERSION_PRERELEASE` in the top-level `CMakeLists.txt` (set together by `tools/release/prepare_release.py`, see [Cutting a release](releasing.md#versions)), through `cmake/GenerateVersion.cmake`: in `cube/version.hpp`, the Windows version resource, `Info.plist` (without the pre-release label), the AppStream release and every package's file name |
 
 ### Icons
 
@@ -212,8 +212,10 @@ Alt+Left, Cmd+[) belongs to the navigation stack.
 | Settings | Ctrl+, | Cmd+, | Except on Settings |
 | Help | F1 | Cmd+? | When a Help screen exists (disabled until E3a) |
 | New scan | Ctrl+N | Cmd+N | From Home and Complete |
+| Enter by hand | Shift+Ctrl+N | Shift+Cmd+N | From Home and Complete, when hand entry exists (disabled until R3) |
 | Full screen | F11 | Ctrl+Cmd+F | Always |
 | Quit | Ctrl+Q | Cmd+Q | Always |
+| Close window, Minimise | - | Cmd+W, Cmd+M | macOS only, in its menu bar |
 
 Menu items and shortcuts call the navigation functions `AppState.qml` has
 today; E2a repoints them. An action with nothing to call yet is disabled, not

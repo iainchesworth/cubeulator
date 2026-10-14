@@ -1,18 +1,24 @@
 # Building & packaging
 
+Toolchain requirements are in [Getting started](getting-started.md#requirements);
+the exact versions CI builds with, and why, are in
+[CI & dependencies](ci.md#toolchain-versions).
+
 ## Presets
 
-Naming convention: `<os>-<compiler>-<config>`.
+Naming convention: `<os>-<compiler>-<config>`. A preset configures into
+`build/<preset>/` and puts its executables in `build/<preset>/bin`.
 
 | Preset | Notes |
 | --- | --- |
 | `windows-msvc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-{debug,release}` | CI builds+tests `release` only |
 | `linux-gcc-coverage` | Debug + gcov instrumentation, 80% line/branch gate |
+| `{windows-msvc,linux-gcc,macos-clang}-fastdebug` | RelWithDebInfo, so optimised with no sanitizers: the quick build for local iteration (see [Testing](testing.md#debug-is-slow-use-fastdebug-for-local-iteration)); not built by CI |
 | `{windows-msvc,linux-gcc,macos-clang}-profiling` | RelWithDebInfo + [Tracy](profiling.md) (`CUBEULATOR_ENABLE_TRACY=ON`, sanitizers off); not built by CI |
 | `macos-clang-{debug,release}` | CI builds+tests `release` only |
 | `android-clang-{debug,release}` | CI builds `release` only; builds the Qt/QML app via Qt for Android |
-| `ios-clang-{debug,release}` | CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
+| `ios-clang-{debug,release}` | Xcode generator, so macOS only; CI builds `release` only; build-only, unsigned, `CUBEULATOR_BUILD_APP=OFF` (no Qt) — Qt for iOS packaging not yet wired up, no Mac available to validate it here |
 | `web-emscripten-{debug,release}` | CI builds `release` only; the Qt/QML app as WebAssembly for a browser — see [WebAssembly (browser)](#webassembly-browser) |
 
 **CI only builds the `release` preset per platform** — that's what would
@@ -24,6 +30,11 @@ fully defined and buildable locally (`cmake --preset linux-gcc-debug`) for
 whenever you actually need an unoptimized/more-debuggable build, or define
 your own combination in a personal `CMakeUserPresets.json` — CI just doesn't
 babysit them on every push.
+
+On Linux, CI compiles with GCC 15 (`-DCMAKE_CXX_COMPILER=g++-15`; the presets
+say plain `g++`, so pass it if yours is older) and installs the X11 and OpenGL
+development packages before the vcpkg build: `libx11-dev libgl1-mesa-dev
+libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev`.
 
 Android builds the Qt/QML shell like every other platform (see
 [Architecture](architecture.md)); iOS remains build-only,
@@ -62,6 +73,11 @@ lives under `CMAKE_FIND_ROOT_PATH` (vcpkg's own install tree is unaffected —
 its toolchain file adds itself to `CMAKE_FIND_ROOT_PATH` already). All four
 were confirmed necessary against a real local Android build, not just CI.
 
+The preset also chainloads the NDK's own toolchain file from
+`$ANDROID_NDK_HOME`, so that environment variable has to point at an NDK (CI
+uses r28c, 28.2.13676358, with JDK 21 and Android platform 36; the versions
+and why are in [Toolchain versions](ci.md#toolchain-versions)).
+
 ## WebAssembly (browser)
 
 `web-emscripten-*` builds the same Qt/QML app as WebAssembly, which is what
@@ -78,12 +94,17 @@ What it needs, all of it fixed by the Qt version:
 | Threads | The build is threaded throughout: Qt's kit, this project and every vcpkg port are built with `-pthread` (the triplet `cmake/triplets/wasm32-emscripten-threads.cmake`). The single-threaded kit cannot run the app, which uses `QtConcurrent` and `std::thread` |
 
 ```sh
-# once: the SDK and the kit
-git clone https://github.com/emscripten-core/emsdk && cd emsdk
-./emsdk install 5.0.5 && ./emsdk activate 5.0.5 && source ./emsdk_env.sh
+# once: aqtinstall at the commit CI pins (the last release, 3.3.0, cannot read
+# Qt 6.11+'s WebAssembly kits; see .github/actions/web-build/action.yml), the
+# SDK, and both kits
+python -m pip install "git+https://github.com/miurahr/aqtinstall.git@076e1659807d0b362a3ed684d54c2e9c775eb9c7"
+git clone https://github.com/emscripten-core/emsdk ~/emsdk
+~/emsdk/emsdk install 5.0.5 && ~/emsdk/emsdk activate 5.0.5 && source ~/emsdk/emsdk_env.sh
 python -m aqt install-qt all_os wasm 6.12.0 wasm_multithread -m qtquick3d qtshadertools --outputdir ~/Qt
+python -m aqt install-qt linux desktop 6.12.0 linux_gcc_64 -m qtquick3d qtshadertools --outputdir ~/Qt
 
-# configure and build (EMSDK comes from emsdk_env; QT_ROOT_DIR is the wasm kit)
+# configure and build, from the Cubeulator checkout (EMSDK comes from
+# emsdk_env; QT_ROOT_DIR is the wasm kit)
 export QT_ROOT_DIR=$HOME/Qt/6.12.0/wasm_multithread
 cmake --preset web-emscripten-release   -DQT_HOST_PATH=$HOME/Qt/6.12.0/gcc_64   -DQT_HOST_PATH_CMAKE_DIR=$HOME/Qt/6.12.0/gcc_64/lib/cmake
 cmake --build --preset web-emscripten-release
@@ -110,10 +131,11 @@ worker that adds the two headers and reloads the page once.
 
 ## Options
 
-- `CUBEULATOR_BUILD_APP` (default `ON`) — builds the Qt6 GUI shell. Off by
-  default on the mobile presets.
+- `CUBEULATOR_BUILD_APP` (default `ON`) — builds the Qt6 GUI shell. `OFF`
+  needs no Qt at all; the library, the platform layer and the tests that need
+  no Qt are still built. The `ios-clang-*` presets set it `OFF`.
 - `CUBEULATOR_BUILD_TESTS` (default `ON`) — builds the unit/integration test
-  suites.
+  suites. The Android, iOS and web presets set it `OFF`.
 - `CUBEULATOR_ENABLE_SANITIZERS` (default `ON`) — ASan+UBSan (GCC/Clang Debug)
   or ASan (real MSVC Debug); disabled automatically under clang-cl.
 - `CUBEULATOR_ENABLE_COVERAGE` (default `OFF`) — gcov instrumentation; only
@@ -127,7 +149,10 @@ worker that adds the two headers and reloads the page once.
 ## Packaging
 
 `cmake --build --preset <preset> --target package` (desktop only) produces a
-ZIP everywhere, plus a platform-native format when its packaging tool is
-available: NSIS (Windows), DragNDrop (macOS), DEB/RPM (Linux). Mobile
-packaging goes through androiddeployqt/Xcode archive+export instead, once
-those shells exist.
+ZIP everywhere (and a `.tar.gz` on Linux), plus a platform-native format when
+its packaging tool is available: NSIS (Windows), DragNDrop (macOS), DEB/RPM
+(Linux). What goes in each, and what the tools need, is
+[Packaging the desktop app](packaging.md). On Android the APK is made by
+`androiddeployqt`, which the build runs itself (CI uploads the debug-signed
+one); iOS has no packaging yet, since its preset is build-only; the web build's
+output is the directory above.
