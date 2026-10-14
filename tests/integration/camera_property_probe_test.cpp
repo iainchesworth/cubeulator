@@ -92,33 +92,51 @@ const std::vector<PropertySpec>& property_specs() {
     // DSHOW backend commonly (but not universally) exposes for auto flags.
     static const std::vector<PropertySpec> specs = {
         {.id = cv::CAP_PROP_AUTO_WB, .name = "CAP_PROP_AUTO_WB", .candidates = {0, 1}},
-        {.id = cv::CAP_PROP_WB_TEMPERATURE,
-         .name = "CAP_PROP_WB_TEMPERATURE",
-         .candidates = {2000, 2800, 3200, 4000, 5000, 6500, 10000}},
-        {.id = cv::CAP_PROP_AUTO_EXPOSURE,
-         .name = "CAP_PROP_AUTO_EXPOSURE",
-         .candidates = {0, 0.25, 0.75, 1, 2, 3}},
-        {.id = cv::CAP_PROP_EXPOSURE,
-         .name = "CAP_PROP_EXPOSURE",
-         .candidates = {-11, -9, -7, -6, -5, -4, -3, -2, -1, 0}},
-        {.id = cv::CAP_PROP_BRIGHTNESS,
-         .name = "CAP_PROP_BRIGHTNESS",
-         .candidates = {0, 32, 64, 128, 192, 255}},
-        {.id = cv::CAP_PROP_CONTRAST,
-         .name = "CAP_PROP_CONTRAST",
-         .candidates = {0, 32, 64, 128, 192, 255}},
-        {.id = cv::CAP_PROP_SATURATION,
-         .name = "CAP_PROP_SATURATION",
-         .candidates = {0, 32, 64, 128, 192, 255}},
-        {.id = cv::CAP_PROP_GAIN,
-         .name = "CAP_PROP_GAIN",
-         .candidates = {0, 32, 64, 128, 192, 255}},
-        {.id = cv::CAP_PROP_GAMMA,
-         .name = "CAP_PROP_GAMMA",
-         .candidates = {1, 2, 5, 72, 100, 150, 200, 300}},
-        {.id = cv::CAP_PROP_SHARPNESS,
-         .name = "CAP_PROP_SHARPNESS",
-         .candidates = {0, 32, 64, 128, 192, 255}},
+        {
+            .id = cv::CAP_PROP_WB_TEMPERATURE,
+            .name = "CAP_PROP_WB_TEMPERATURE",
+            .candidates = {2000, 2800, 3200, 4000, 5000, 6500, 10000},
+        },
+        {
+            .id = cv::CAP_PROP_AUTO_EXPOSURE,
+            .name = "CAP_PROP_AUTO_EXPOSURE",
+            .candidates = {0, 0.25, 0.75, 1, 2, 3},
+        },
+        {
+            .id = cv::CAP_PROP_EXPOSURE,
+            .name = "CAP_PROP_EXPOSURE",
+            .candidates = {-11, -9, -7, -6, -5, -4, -3, -2, -1, 0},
+        },
+        {
+            .id = cv::CAP_PROP_BRIGHTNESS,
+            .name = "CAP_PROP_BRIGHTNESS",
+            .candidates = {0, 32, 64, 128, 192, 255},
+        },
+        {
+            .id = cv::CAP_PROP_CONTRAST,
+            .name = "CAP_PROP_CONTRAST",
+            .candidates = {0, 32, 64, 128, 192, 255},
+        },
+        {
+            .id = cv::CAP_PROP_SATURATION,
+            .name = "CAP_PROP_SATURATION",
+            .candidates = {0, 32, 64, 128, 192, 255},
+        },
+        {
+            .id = cv::CAP_PROP_GAIN,
+            .name = "CAP_PROP_GAIN",
+            .candidates = {0, 32, 64, 128, 192, 255},
+        },
+        {
+            .id = cv::CAP_PROP_GAMMA,
+            .name = "CAP_PROP_GAMMA",
+            .candidates = {1, 2, 5, 72, 100, 150, 200, 300},
+        },
+        {
+            .id = cv::CAP_PROP_SHARPNESS,
+            .name = "CAP_PROP_SHARPNESS",
+            .candidates = {0, 32, 64, 128, 192, 255},
+        },
         {.id = cv::CAP_PROP_BACKLIGHT, .name = "CAP_PROP_BACKLIGHT", .candidates = {0, 1, 2, 3}},
         {.id = cv::CAP_PROP_ZOOM, .name = "CAP_PROP_ZOOM", .candidates = {100, 150, 200, 300, 500}},
         {.id = cv::CAP_PROP_FOCUS, .name = "CAP_PROP_FOCUS", .candidates = {0, 30, 60, 120, 250}},
@@ -160,11 +178,11 @@ Photometry measure(const cv::Mat& bgr) {
     cv::magnitude(a_signed, b_signed, chroma);
 
     Photometry out;
-    out.mean_l = cv::mean(planes.at(0))[0] * 100.0 / 255.0;
-    out.mean_chroma = cv::mean(chroma)[0];
-    out.mean_b = bgr_mean[0];
-    out.mean_g = bgr_mean[1];
-    out.mean_r = bgr_mean[2];
+    out.mean_l = cv::mean(planes.at(0))(0) * 100.0 / 255.0;
+    out.mean_chroma = cv::mean(chroma)(0);
+    out.mean_b = bgr_mean(0);
+    out.mean_g = bgr_mean(1);
+    out.mean_r = bgr_mean(2);
     return out;
 }
 
@@ -199,11 +217,13 @@ Photometry sample(cv::VideoCapture& capture) {
         return Photometry{};
     }
     const auto n = static_cast<double>(counted);
-    return Photometry{.mean_l = total.mean_l / n,
-                      .mean_chroma = total.mean_chroma / n,
-                      .mean_b = total.mean_b / n,
-                      .mean_g = total.mean_g / n,
-                      .mean_r = total.mean_r / n};
+    return Photometry{
+        .mean_l = total.mean_l / n,
+        .mean_chroma = total.mean_chroma / n,
+        .mean_b = total.mean_b / n,
+        .mean_g = total.mean_g / n,
+        .mean_r = total.mean_r / n,
+    };
 }
 
 std::string fixed2(double value) {
@@ -222,6 +242,200 @@ double set_and_read(cv::VideoCapture& capture, int prop, double value) {
 void log(const std::string& line) {
     std::cout << line << '\n';
     UNSCOPED_INFO(line);
+}
+
+// Writes each candidate of one property and keeps those the driver read back.
+// `sweep` gets one "candidate->readback[ok|no]" entry per candidate.
+std::vector<double> accepted_candidates(cv::VideoCapture& capture, const PropertySpec& spec,
+                                        std::string& sweep) {
+    std::vector<double> accepted;
+    for (const double candidate : spec.candidates) {
+        const double readback = set_and_read(capture, spec.id, candidate);
+        // Tolerance rather than equality: white-balance temperature in
+        // particular is quantised to a driver step, so an accepted
+        // 6500 can legitimately read back as 6496.
+        const bool ok = std::abs(readback - candidate) <= std::max(0.5, 0.02 * std::abs(candidate));
+        sweep += " " + fixed2(candidate) + "->" + fixed2(readback) + (ok ? "[ok]" : "[no]");
+        if (ok) {
+            accepted.push_back(candidate);
+        }
+    }
+    return accepted;
+}
+
+// Pixel evidence. A property that reads back but leaves the image
+// alone is not usable for photometric locking, and reporting it as
+// usable would be worse than reporting nothing - this is the
+// classic DirectShow trap the probe exists to catch.
+void log_pixel_evidence(cv::VideoCapture& capture, const PropertySpec& spec,
+                        const std::vector<double>& accepted, const Photometry& baseline) {
+    const double lowest = accepted.front();
+    const double highest = accepted.back();
+    for (const double target :
+         (lowest == highest ? std::vector<double>{lowest} : std::vector<double>{lowest, highest})) {
+        const double applied = set_and_read(capture, spec.id, target);
+        const Photometry after = sample(capture);
+        log("   set " + fixed2(target) + " -> readback " + fixed2(applied) +
+            " | dL=" + fixed2(after.mean_l - baseline.mean_l) +
+            " dChroma=" + fixed2(after.mean_chroma - baseline.mean_chroma) +
+            " dB=" + fixed2(after.mean_b - baseline.mean_b) +
+            " dG=" + fixed2(after.mean_g - baseline.mean_g) +
+            " dR=" + fixed2(after.mean_r - baseline.mean_r));
+    }
+}
+
+void probe_property(cv::VideoCapture& capture, const PropertySpec& spec,
+                    const Photometry& baseline) {
+    const double original = capture.get(spec.id);
+
+    std::string sweep;
+    const std::vector<double> accepted = accepted_candidates(capture, spec, sweep);
+    capture.set(spec.id, original);
+    const double restored = capture.get(spec.id);
+
+    log(std::string("\n== ") + spec.name + " default=" + fixed2(original) +
+        " restored=" + fixed2(restored) + " accepted=" + std::to_string(accepted.size()) + "/" +
+        std::to_string(spec.candidates.size()));
+    log("   sweep:" + sweep);
+
+    if (accepted.empty()) {
+        return;
+    }
+    log_pixel_evidence(capture, spec, accepted, baseline);
+
+    capture.set(spec.id, original);
+    sample(capture);
+}
+
+// Dependency ordering. On UVC hardware the manual white-balance and
+// manual exposure values are only honoured once the corresponding auto
+// flag is off, so a sweep taken with auto still running can report a
+// property as dead when it is merely being overridden. Re-sweep the two
+// properties the lock actually needs, this time with auto disabled
+// first - if the answer differs, the eventual implementation has a
+// mandatory ordering constraint.
+void probe_dependency_ordering(cv::VideoCapture& capture) {
+    const double auto_wb_readback = set_and_read(capture, cv::CAP_PROP_AUTO_WB, 0);
+    std::string wb_sweep;
+    for (const double kelvin : {2800.0, 4000.0, 5000.0, 6500.0}) {
+        wb_sweep += " " + fixed2(kelvin) + "->" +
+                    fixed2(set_and_read(capture, cv::CAP_PROP_WB_TEMPERATURE, kelvin));
+    }
+    log("\nAUTO_WB=0 readback=" + fixed2(auto_wb_readback) +
+        " then WB_TEMPERATURE sweep:" + wb_sweep);
+
+    // Pixel proof that white balance actually moves the image: warm vs
+    // cool should shift the blue and red channel means in opposite
+    // directions. This is the measurement that decides whether the
+    // white-reference calibration described in the plan is possible at
+    // all.
+    capture.set(cv::CAP_PROP_WB_TEMPERATURE, 2800);
+    const Photometry warm = sample(capture);
+    capture.set(cv::CAP_PROP_WB_TEMPERATURE, 6500);
+    const Photometry cool = sample(capture);
+    log("   WB 2800K: L=" + fixed2(warm.mean_l) + " B=" + fixed2(warm.mean_b) +
+        " R=" + fixed2(warm.mean_r) + " | WB 6500K: L=" + fixed2(cool.mean_l) +
+        " B=" + fixed2(cool.mean_b) + " R=" + fixed2(cool.mean_r) +
+        " | dB=" + fixed2(cool.mean_b - warm.mean_b) + " dR=" + fixed2(cool.mean_r - warm.mean_r));
+
+    for (const double auto_value : {0.0, 0.25, 0.75, 1.0, 3.0}) {
+        const double ae = set_and_read(capture, cv::CAP_PROP_AUTO_EXPOSURE, auto_value);
+        const double exp_after = set_and_read(capture, cv::CAP_PROP_EXPOSURE, -6);
+        log("   AUTO_EXPOSURE=" + fixed2(auto_value) + " readback=" + fixed2(ae) +
+            " then EXPOSURE=-6 readback=" + fixed2(exp_after));
+    }
+}
+
+// Monotone response curves. On a dark or covered scene an absolute
+// pixel reading proves nothing, but a monotone response across the
+// whole accepted range still does: if mean L rises step by step as
+// exposure is lengthened, the write is reaching the sensor AND nothing
+// is auto-correcting it back. That second half is the important one -
+// it is the evidence that the driver has dropped into manual exposure,
+// which on DirectShow is a side effect of writing CAP_PROP_EXPOSURE
+// rather than something CAP_PROP_AUTO_EXPOSURE has to grant us.
+void probe_response_curves(cv::VideoCapture& capture) {
+    for (const auto& [prop, name, values] :
+         std::vector<std::tuple<int, const char*, std::vector<double>>>{
+             {cv::CAP_PROP_EXPOSURE, "EXPOSURE", {-11, -9, -7, -5, -3, -2}},
+             {cv::CAP_PROP_BRIGHTNESS, "BRIGHTNESS", {0, 64, 128, 192, 255}},
+             {cv::CAP_PROP_GAIN, "GAIN", {0, 64, 128, 192, 255}},
+             {cv::CAP_PROP_SATURATION, "SATURATION", {0, 64, 128, 192, 255}},
+         }) {
+        const double original = capture.get(prop);
+        std::string curve;
+        for (const double value : values) {
+            capture.set(prop, value);
+            const Photometry p = sample(capture);
+            curve += " " + fixed2(value) + ":L=" + fixed2(p.mean_l) + ",C=" + fixed2(p.mean_chroma);
+        }
+        capture.set(prop, original);
+        sample(capture);
+        log(std::string("\nresponse curve ") + name + ":" + curve);
+    }
+}
+
+// Ordering question: several DirectShow drivers only honour property
+// writes issued after streaming has begun. If that is true here, the
+// eventual lock has to run on the capture thread after the first grab,
+// not at open time - which also matches the threading constraint that
+// property changes must not be issued from the UI thread mid-grab.
+//
+// Probed with EXPOSURE and BRIGHTNESS deliberately: an earlier version
+// asked this question with AUTO_EXPOSURE, which this device does not
+// implement at all, so the answer was "rejected either way" and told us
+// nothing about ordering.
+void probe_write_ordering() {
+    cv::VideoCapture fresh(0, kBackend);
+    REQUIRE(fresh.isOpened());
+    const double exposure_before = set_and_read(fresh, cv::CAP_PROP_EXPOSURE, -9);
+    const double brightness_before = set_and_read(fresh, cv::CAP_PROP_BRIGHTNESS, 64);
+    cv::Mat frame;
+    fresh.read(frame);
+    const double exposure_survived = fresh.get(cv::CAP_PROP_EXPOSURE);
+    const double brightness_survived = fresh.get(cv::CAP_PROP_BRIGHTNESS);
+    const double exposure_after = set_and_read(fresh, cv::CAP_PROP_EXPOSURE, -7);
+    const double brightness_after = set_and_read(fresh, cv::CAP_PROP_BRIGHTNESS, 192);
+    log("\nordering: before first grab EXPOSURE=-9->" + fixed2(exposure_before) +
+        " BRIGHTNESS=64->" + fixed2(brightness_before) + "; survived first grab as " +
+        fixed2(exposure_survived) + "/" + fixed2(brightness_survived) +
+        "; after first grab EXPOSURE=-7->" + fixed2(exposure_after) + " BRIGHTNESS=192->" +
+        fixed2(brightness_after));
+    fresh.release();
+}
+
+// Persistence across a close/open cycle. DirectShow property state
+// lives in the driver, not in the cv::VideoCapture, so a value written
+// by one run can silently outlive it - which matters both for the
+// eventual lock (we must write every setting explicitly rather than
+// assuming defaults) and for this probe (a "default" read at the top
+// may be a leftover from the previous run, not a factory value).
+void probe_persistence() {
+    cv::VideoCapture reopened(0, kBackend);
+    REQUIRE(reopened.isOpened());
+    cv::Mat frame;
+    reopened.read(frame);
+    log("persistence after reopen: EXPOSURE=" + fixed2(reopened.get(cv::CAP_PROP_EXPOSURE)) +
+        " BRIGHTNESS=" + fixed2(reopened.get(cv::CAP_PROP_BRIGHTNESS)));
+    // Leave the device as we found it so the next run and the app both
+    // start from the driver's own defaults.
+    reopened.set(cv::CAP_PROP_EXPOSURE, -5);
+    reopened.set(cv::CAP_PROP_BRIGHTNESS, 128);
+    reopened.release();
+}
+
+// CAP_PROP_SETTINGS pops the driver's own modal dialog, which would
+// hang an unattended run, so it needs its own opt-in even inside this
+// already-gated probe. It is worth knowing about only as a manual
+// fallback if programmatic control turns out to be unavailable.
+void probe_settings_dialog(cv::VideoCapture& capture) {
+    if (std::getenv("CUBE_CAMERA_PROBE_SETTINGS_DIALOG") != nullptr) {
+        const bool opened = capture.set(cv::CAP_PROP_SETTINGS, 1);
+        log("\nCAP_PROP_SETTINGS set() returned " + std::string(opened ? "true" : "false"));
+    } else {
+        log("\nCAP_PROP_SETTINGS not attempted (set CUBE_CAMERA_PROBE_SETTINGS_DIALOG=1; it opens "
+            "a modal dialog)");
+    }
 }
 
 }  // namespace
@@ -267,185 +481,17 @@ TEST_CASE("camera property probe reports real DirectShow capability", "[.camera-
     }
 
     for (const PropertySpec& spec : property_specs()) {
-        const double original = capture.get(spec.id);
-
-        std::vector<double> accepted;
-        std::string sweep;
-        for (const double candidate : spec.candidates) {
-            const double readback = set_and_read(capture, spec.id, candidate);
-            // Tolerance rather than equality: white-balance temperature in
-            // particular is quantised to a driver step, so an accepted
-            // 6500 can legitimately read back as 6496.
-            const bool ok =
-                std::abs(readback - candidate) <= std::max(0.5, 0.02 * std::abs(candidate));
-            sweep += " " + fixed2(candidate) + "->" + fixed2(readback) + (ok ? "[ok]" : "[no]");
-            if (ok) {
-                accepted.push_back(candidate);
-            }
-        }
-        capture.set(spec.id, original);
-        const double restored = capture.get(spec.id);
-
-        log(std::string("\n== ") + spec.name + " default=" + fixed2(original) +
-            " restored=" + fixed2(restored) + " accepted=" + std::to_string(accepted.size()) + "/" +
-            std::to_string(spec.candidates.size()));
-        log("   sweep:" + sweep);
-
-        if (accepted.empty()) {
-            continue;
-        }
-
-        // Pixel evidence. A property that reads back but leaves the image
-        // alone is not usable for photometric locking, and reporting it as
-        // usable would be worse than reporting nothing - this is the
-        // classic DirectShow trap the probe exists to catch.
-        const double lowest = accepted.front();
-        const double highest = accepted.back();
-        for (const double target : (lowest == highest ? std::vector<double>{lowest}
-                                                      : std::vector<double>{lowest, highest})) {
-            const double applied = set_and_read(capture, spec.id, target);
-            const Photometry after = sample(capture);
-            log("   set " + fixed2(target) + " -> readback " + fixed2(applied) +
-                " | dL=" + fixed2(after.mean_l - baseline.mean_l) +
-                " dChroma=" + fixed2(after.mean_chroma - baseline.mean_chroma) +
-                " dB=" + fixed2(after.mean_b - baseline.mean_b) +
-                " dG=" + fixed2(after.mean_g - baseline.mean_g) +
-                " dR=" + fixed2(after.mean_r - baseline.mean_r));
-        }
-
-        capture.set(spec.id, original);
-        sample(capture);
+        probe_property(capture, spec, baseline);
     }
+    probe_dependency_ordering(capture);
+    probe_response_curves(capture);
 
-    // Dependency ordering. On UVC hardware the manual white-balance and
-    // manual exposure values are only honoured once the corresponding auto
-    // flag is off, so a sweep taken with auto still running can report a
-    // property as dead when it is merely being overridden. Re-sweep the two
-    // properties the lock actually needs, this time with auto disabled
-    // first - if the answer differs, the eventual implementation has a
-    // mandatory ordering constraint.
-    {
-        const double auto_wb_readback = set_and_read(capture, cv::CAP_PROP_AUTO_WB, 0);
-        std::string wb_sweep;
-        for (const double kelvin : {2800.0, 4000.0, 5000.0, 6500.0}) {
-            wb_sweep += " " + fixed2(kelvin) + "->" +
-                        fixed2(set_and_read(capture, cv::CAP_PROP_WB_TEMPERATURE, kelvin));
-        }
-        log("\nAUTO_WB=0 readback=" + fixed2(auto_wb_readback) +
-            " then WB_TEMPERATURE sweep:" + wb_sweep);
-
-        // Pixel proof that white balance actually moves the image: warm vs
-        // cool should shift the blue and red channel means in opposite
-        // directions. This is the measurement that decides whether the
-        // white-reference calibration described in the plan is possible at
-        // all.
-        capture.set(cv::CAP_PROP_WB_TEMPERATURE, 2800);
-        const Photometry warm = sample(capture);
-        capture.set(cv::CAP_PROP_WB_TEMPERATURE, 6500);
-        const Photometry cool = sample(capture);
-        log("   WB 2800K: L=" + fixed2(warm.mean_l) + " B=" + fixed2(warm.mean_b) +
-            " R=" + fixed2(warm.mean_r) + " | WB 6500K: L=" + fixed2(cool.mean_l) +
-            " B=" + fixed2(cool.mean_b) + " R=" + fixed2(cool.mean_r) + " | dB=" +
-            fixed2(cool.mean_b - warm.mean_b) + " dR=" + fixed2(cool.mean_r - warm.mean_r));
-
-        for (const double auto_value : {0.0, 0.25, 0.75, 1.0, 3.0}) {
-            const double ae = set_and_read(capture, cv::CAP_PROP_AUTO_EXPOSURE, auto_value);
-            const double exp_after = set_and_read(capture, cv::CAP_PROP_EXPOSURE, -6);
-            log("   AUTO_EXPOSURE=" + fixed2(auto_value) + " readback=" + fixed2(ae) +
-                " then EXPOSURE=-6 readback=" + fixed2(exp_after));
-        }
-    }
-
-    // Monotone response curves. On a dark or covered scene an absolute
-    // pixel reading proves nothing, but a monotone response across the
-    // whole accepted range still does: if mean L rises step by step as
-    // exposure is lengthened, the write is reaching the sensor AND nothing
-    // is auto-correcting it back. That second half is the important one -
-    // it is the evidence that the driver has dropped into manual exposure,
-    // which on DirectShow is a side effect of writing CAP_PROP_EXPOSURE
-    // rather than something CAP_PROP_AUTO_EXPOSURE has to grant us.
-    for (const auto& [prop, name, values] :
-         std::vector<std::tuple<int, const char*, std::vector<double>>>{
-             {cv::CAP_PROP_EXPOSURE, "EXPOSURE", {-11, -9, -7, -5, -3, -2}},
-             {cv::CAP_PROP_BRIGHTNESS, "BRIGHTNESS", {0, 64, 128, 192, 255}},
-             {cv::CAP_PROP_GAIN, "GAIN", {0, 64, 128, 192, 255}},
-             {cv::CAP_PROP_SATURATION, "SATURATION", {0, 64, 128, 192, 255}}}) {
-        const double original = capture.get(prop);
-        std::string curve;
-        for (const double value : values) {
-            capture.set(prop, value);
-            const Photometry p = sample(capture);
-            curve += " " + fixed2(value) + ":L=" + fixed2(p.mean_l) + ",C=" + fixed2(p.mean_chroma);
-        }
-        capture.set(prop, original);
-        sample(capture);
-        log(std::string("\nresponse curve ") + name + ":" + curve);
-    }
-
-    // Ordering question: several DirectShow drivers only honour property
-    // writes issued after streaming has begun. If that is true here, the
-    // eventual lock has to run on the capture thread after the first grab,
-    // not at open time - which also matches the threading constraint that
-    // property changes must not be issued from the UI thread mid-grab.
-    //
-    // Probed with EXPOSURE and BRIGHTNESS deliberately: an earlier version
-    // asked this question with AUTO_EXPOSURE, which this device does not
-    // implement at all, so the answer was "rejected either way" and told us
-    // nothing about ordering.
     capture.release();
-    {
-        cv::VideoCapture fresh(0, kBackend);
-        REQUIRE(fresh.isOpened());
-        const double exposure_before = set_and_read(fresh, cv::CAP_PROP_EXPOSURE, -9);
-        const double brightness_before = set_and_read(fresh, cv::CAP_PROP_BRIGHTNESS, 64);
-        cv::Mat frame;
-        fresh.read(frame);
-        const double exposure_survived = fresh.get(cv::CAP_PROP_EXPOSURE);
-        const double brightness_survived = fresh.get(cv::CAP_PROP_BRIGHTNESS);
-        const double exposure_after = set_and_read(fresh, cv::CAP_PROP_EXPOSURE, -7);
-        const double brightness_after = set_and_read(fresh, cv::CAP_PROP_BRIGHTNESS, 192);
-        log("\nordering: before first grab EXPOSURE=-9->" + fixed2(exposure_before) +
-            " BRIGHTNESS=64->" + fixed2(brightness_before) + "; survived first grab as " +
-            fixed2(exposure_survived) + "/" + fixed2(brightness_survived) +
-            "; after first grab EXPOSURE=-7->" + fixed2(exposure_after) + " BRIGHTNESS=192->" +
-            fixed2(brightness_after));
-        fresh.release();
-    }
-
-    // Persistence across a close/open cycle. DirectShow property state
-    // lives in the driver, not in the cv::VideoCapture, so a value written
-    // by one run can silently outlive it - which matters both for the
-    // eventual lock (we must write every setting explicitly rather than
-    // assuming defaults) and for this probe (a "default" read at the top
-    // may be a leftover from the previous run, not a factory value).
-    {
-        cv::VideoCapture reopened(0, kBackend);
-        REQUIRE(reopened.isOpened());
-        cv::Mat frame;
-        reopened.read(frame);
-        log("persistence after reopen: EXPOSURE=" + fixed2(reopened.get(cv::CAP_PROP_EXPOSURE)) +
-            " BRIGHTNESS=" + fixed2(reopened.get(cv::CAP_PROP_BRIGHTNESS)));
-        // Leave the device as we found it so the next run and the app both
-        // start from the driver's own defaults.
-        reopened.set(cv::CAP_PROP_EXPOSURE, -5);
-        reopened.set(cv::CAP_PROP_BRIGHTNESS, 128);
-        reopened.release();
-    }
+    probe_write_ordering();
+    probe_persistence();
 
     capture.open(0, kBackend);
     REQUIRE(capture.isOpened());
-
-    // CAP_PROP_SETTINGS pops the driver's own modal dialog, which would
-    // hang an unattended run, so it needs its own opt-in even inside this
-    // already-gated probe. It is worth knowing about only as a manual
-    // fallback if programmatic control turns out to be unavailable.
-    if (std::getenv("CUBE_CAMERA_PROBE_SETTINGS_DIALOG") != nullptr) {
-        const bool opened = capture.set(cv::CAP_PROP_SETTINGS, 1);
-        log("\nCAP_PROP_SETTINGS set() returned " + std::string(opened ? "true" : "false"));
-    } else {
-        log("\nCAP_PROP_SETTINGS not attempted (set CUBE_CAMERA_PROBE_SETTINGS_DIALOG=1; it opens "
-            "a modal dialog)");
-    }
-
+    probe_settings_dialog(capture);
     capture.release();
 }

@@ -31,20 +31,29 @@ using cube::platform::camera::PhotometryLockRequest;
 
 namespace {
 
-PhotometryLockReport report_with(ControlOutcome auto_wb, ControlOutcome exposure,
-                                 ControlOutcome brightness, ControlOutcome saturation) {
+// What each control came to, by name: four outcomes of one type in a row would
+// be easy to put in the wrong order.
+struct Outcomes {
+    ControlOutcome auto_white_balance = ControlOutcome::not_requested;
+    ControlOutcome exposure = ControlOutcome::not_requested;
+    ControlOutcome brightness = ControlOutcome::not_requested;
+    ControlOutcome saturation = ControlOutcome::not_requested;
+};
+
+PhotometryLockReport report_with(const Outcomes& outcomes) {
     PhotometryLockReport report;
     report.platform_supported = true;
     for (std::size_t i = 0; i < kPhotometryControls.size(); ++i) {
         report.controls.at(i).control = kPhotometryControls.at(i);
     }
     report.controls.at(static_cast<std::size_t>(PhotometryControl::auto_white_balance)).outcome =
-        auto_wb;
-    report.controls.at(static_cast<std::size_t>(PhotometryControl::exposure)).outcome = exposure;
+        outcomes.auto_white_balance;
+    report.controls.at(static_cast<std::size_t>(PhotometryControl::exposure)).outcome =
+        outcomes.exposure;
     report.controls.at(static_cast<std::size_t>(PhotometryControl::brightness)).outcome =
-        brightness;
+        outcomes.brightness;
     report.controls.at(static_cast<std::size_t>(PhotometryControl::saturation)).outcome =
-        saturation;
+        outcomes.saturation;
     return report;
 }
 
@@ -60,9 +69,12 @@ TEST_CASE("photometry control ordering matches the enum", "[camera][photometry]"
         REQUIRE(static_cast<std::size_t>(kPhotometryControls.at(i)) == i);
     }
 
-    const PhotometryLockReport report =
-        report_with(ControlOutcome::applied, ControlOutcome::rejected, ControlOutcome::unsupported,
-                    ControlOutcome::not_requested);
+    const PhotometryLockReport report = report_with({
+        .auto_white_balance = ControlOutcome::applied,
+        .exposure = ControlOutcome::rejected,
+        .brightness = ControlOutcome::unsupported,
+        .saturation = ControlOutcome::not_requested,
+    });
     REQUIRE(report.result(PhotometryControl::auto_white_balance).outcome ==
             ControlOutcome::applied);
     REQUIRE(report.result(PhotometryControl::exposure).outcome == ControlOutcome::rejected);
@@ -75,17 +87,33 @@ TEST_CASE("photometry control ordering matches the enum", "[camera][photometry]"
 // within one scan) is the measured defect the lock exists to remove. It must
 // be true for 'applied' and for nothing else.
 TEST_CASE("exposure_locked is true only when exposure was verified", "[camera][photometry]") {
-    REQUIRE(report_with(ControlOutcome::applied, ControlOutcome::applied, ControlOutcome::applied,
-                        ControlOutcome::applied)
+    REQUIRE(report_with({
+                            .auto_white_balance = ControlOutcome::applied,
+                            .exposure = ControlOutcome::applied,
+                            .brightness = ControlOutcome::applied,
+                            .saturation = ControlOutcome::applied,
+                        })
                 .exposure_locked());
-    REQUIRE_FALSE(report_with(ControlOutcome::applied, ControlOutcome::rejected,
-                              ControlOutcome::applied, ControlOutcome::applied)
+    REQUIRE_FALSE(report_with({
+                                  .auto_white_balance = ControlOutcome::applied,
+                                  .exposure = ControlOutcome::rejected,
+                                  .brightness = ControlOutcome::applied,
+                                  .saturation = ControlOutcome::applied,
+                              })
                       .exposure_locked());
-    REQUIRE_FALSE(report_with(ControlOutcome::applied, ControlOutcome::unsupported,
-                              ControlOutcome::applied, ControlOutcome::applied)
+    REQUIRE_FALSE(report_with({
+                                  .auto_white_balance = ControlOutcome::applied,
+                                  .exposure = ControlOutcome::unsupported,
+                                  .brightness = ControlOutcome::applied,
+                                  .saturation = ControlOutcome::applied,
+                              })
                       .exposure_locked());
-    REQUIRE_FALSE(report_with(ControlOutcome::applied, ControlOutcome::not_requested,
-                              ControlOutcome::applied, ControlOutcome::applied)
+    REQUIRE_FALSE(report_with({
+                                  .auto_white_balance = ControlOutcome::applied,
+                                  .exposure = ControlOutcome::not_requested,
+                                  .brightness = ControlOutcome::applied,
+                                  .saturation = ControlOutcome::applied,
+                              })
                       .exposure_locked());
     REQUIRE_FALSE(PhotometryLockReport{}.exposure_locked());
 }
@@ -93,14 +121,26 @@ TEST_CASE("exposure_locked is true only when exposure was verified", "[camera][p
 // not_requested must not count as a failure - a caller that asked for
 // exposure only has a fully applied lock if exposure applied.
 TEST_CASE("fully_applied ignores controls nobody asked for", "[camera][photometry]") {
-    REQUIRE(report_with(ControlOutcome::not_requested, ControlOutcome::applied,
-                        ControlOutcome::not_requested, ControlOutcome::not_requested)
+    REQUIRE(report_with({
+                            .auto_white_balance = ControlOutcome::not_requested,
+                            .exposure = ControlOutcome::applied,
+                            .brightness = ControlOutcome::not_requested,
+                            .saturation = ControlOutcome::not_requested,
+                        })
                 .fully_applied());
-    REQUIRE_FALSE(report_with(ControlOutcome::rejected, ControlOutcome::applied,
-                              ControlOutcome::applied, ControlOutcome::applied)
+    REQUIRE_FALSE(report_with({
+                                  .auto_white_balance = ControlOutcome::rejected,
+                                  .exposure = ControlOutcome::applied,
+                                  .brightness = ControlOutcome::applied,
+                                  .saturation = ControlOutcome::applied,
+                              })
                       .fully_applied());
-    REQUIRE_FALSE(report_with(ControlOutcome::unsupported, ControlOutcome::applied,
-                              ControlOutcome::applied, ControlOutcome::applied)
+    REQUIRE_FALSE(report_with({
+                                  .auto_white_balance = ControlOutcome::unsupported,
+                                  .exposure = ControlOutcome::applied,
+                                  .brightness = ControlOutcome::applied,
+                                  .saturation = ControlOutcome::applied,
+                              })
                       .fully_applied());
 
     // A platform with no control at all is never "fully applied", however
@@ -114,39 +154,51 @@ TEST_CASE("fully_applied ignores controls nobody asked for", "[camera][photometr
 TEST_CASE("summary tells the user the truth in every outcome", "[camera][photometry]") {
     SECTION("no platform support says so, and gives the manual fallback") {
         const std::string text = PhotometryLockReport{}.summary();
-        REQUIRE(text.find("not available on this platform") != std::string::npos);
-        REQUIRE(text.find("lighting unchanged") != std::string::npos);
+        REQUIRE(text.contains("not available on this platform"));
+        REQUIRE(text.contains("lighting unchanged"));
     }
 
     SECTION("a complete lock names every control and asks nothing of the user") {
-        const std::string text = report_with(ControlOutcome::applied, ControlOutcome::applied,
-                                             ControlOutcome::applied, ControlOutcome::applied)
+        const std::string text = report_with({
+                                                 .auto_white_balance = ControlOutcome::applied,
+                                                 .exposure = ControlOutcome::applied,
+                                                 .brightness = ControlOutcome::applied,
+                                                 .saturation = ControlOutcome::applied,
+                                             })
                                      .summary();
-        REQUIRE(text.find("exposure") != std::string::npos);
-        REQUIRE(text.find("auto white balance") != std::string::npos);
-        REQUIRE(text.find("brightness") != std::string::npos);
-        REQUIRE(text.find("saturation") != std::string::npos);
-        REQUIRE(text.find("would not lock") == std::string::npos);
+        REQUIRE(text.contains("exposure"));
+        REQUIRE(text.contains("auto white balance"));
+        REQUIRE(text.contains("brightness"));
+        REQUIRE(text.contains("saturation"));
+        REQUIRE(!text.contains("would not lock"));
     }
 
     SECTION("a partial lock names the failure and still asks for fixed lighting") {
         // The realistic Windows case if AUTO_WB turns out to be refused:
         // exposure holds, white balance keeps drifting.
-        const std::string text = report_with(ControlOutcome::rejected, ControlOutcome::applied,
-                                             ControlOutcome::applied, ControlOutcome::applied)
+        const std::string text = report_with({
+                                                 .auto_white_balance = ControlOutcome::rejected,
+                                                 .exposure = ControlOutcome::applied,
+                                                 .brightness = ControlOutcome::applied,
+                                                 .saturation = ControlOutcome::applied,
+                                             })
                                      .summary();
-        REQUIRE(text.find("Camera locked") != std::string::npos);
-        REQUIRE(text.find("would not lock auto white balance") != std::string::npos);
-        REQUIRE(text.find("lighting unchanged") != std::string::npos);
+        REQUIRE(text.contains("Camera locked"));
+        REQUIRE(text.contains("would not lock auto white balance"));
+        REQUIRE(text.contains("lighting unchanged"));
     }
 
     SECTION("a total refusal never claims a lock") {
-        const std::string text = report_with(ControlOutcome::rejected, ControlOutcome::rejected,
-                                             ControlOutcome::unsupported, ControlOutcome::rejected)
+        const std::string text = report_with({
+                                                 .auto_white_balance = ControlOutcome::rejected,
+                                                 .exposure = ControlOutcome::rejected,
+                                                 .brightness = ControlOutcome::unsupported,
+                                                 .saturation = ControlOutcome::rejected,
+                                             })
                                      .summary();
-        REQUIRE(text.find("Camera locked") == std::string::npos);
-        REQUIRE(text.find("refused every setting") != std::string::npos);
-        REQUIRE(text.find("lighting unchanged") != std::string::npos);
+        REQUIRE(!text.contains("Camera locked"));
+        REQUIRE(text.contains("refused every setting"));
+        REQUIRE(text.contains("lighting unchanged"));
     }
 }
 

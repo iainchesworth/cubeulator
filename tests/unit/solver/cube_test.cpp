@@ -3,6 +3,7 @@
 #include <random>
 
 #include <cube/solver/cube.hpp>
+#include "../deterministic_rng.hpp"
 
 using cube::solver::Color;
 using cube::solver::Cube;
@@ -50,7 +51,7 @@ TEST_CASE("applying a half turn twice is the identity", "[cube]") {
 }
 
 TEST_CASE("a move followed by its inverse round-trips, from solved and from a scramble", "[cube]") {
-    std::mt19937 rng{12345};
+    std::mt19937 rng = ::cube::test::deterministic_rng(12345U);
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
 
     // A fixed pseudo-random scramble, applied once up front, so the
@@ -178,7 +179,7 @@ TEST_CASE("half and prime turns equal composed quarter turns, for every face", "
     // rotation or swapped turn variant in a future implementation change)
     // fails here rather than slipping through the direction-symmetric
     // identity/round-trip tests.
-    std::mt19937 rng{24680};
+    std::mt19937 rng = ::cube::test::deterministic_rng(24680U);
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     Cube scrambled = Cube::solved();
     for (int i = 0; i < 20; ++i) {
@@ -197,7 +198,7 @@ TEST_CASE("half and prime turns equal composed quarter turns, for every face", "
 }
 
 TEST_CASE("random move sequences stay physically valid at every step", "[cube]") {
-    std::mt19937 rng{987654};
+    std::mt19937 rng = ::cube::test::deterministic_rng(987654U);
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     std::uniform_int_distribution<int> turn_dist{1, 3};
 
@@ -221,18 +222,24 @@ TEST_CASE("locate_edge finds every edge of a solved cube on its own two faces", 
     // is to exercise locate_edge's face-pair enumeration, not re-derive the
     // full edge list.
     for (auto [a, b, face_a, face_b] : {
-             Case{.a = Color::Yellow,
-                  .b = Color::Green,
-                  .expected_face_a = Face::U,
-                  .expected_face_b = Face::F},
-             Case{.a = Color::White,
-                  .b = Color::Orange,
-                  .expected_face_a = Face::D,
-                  .expected_face_b = Face::R},
-             Case{.a = Color::Green,
-                  .b = Color::Orange,
-                  .expected_face_a = Face::F,
-                  .expected_face_b = Face::R},
+             Case{
+                 .a = Color::Yellow,
+                 .b = Color::Green,
+                 .expected_face_a = Face::U,
+                 .expected_face_b = Face::F,
+             },
+             Case{
+                 .a = Color::White,
+                 .b = Color::Orange,
+                 .expected_face_a = Face::D,
+                 .expected_face_b = Face::R,
+             },
+             Case{
+                 .a = Color::Green,
+                 .b = Color::Orange,
+                 .expected_face_a = Face::F,
+                 .expected_face_b = Face::R,
+             },
          }) {
         const auto loc = solved.locate_edge(a, b);
         REQUIRE(loc.face_a == face_a);
@@ -311,7 +318,7 @@ std::array<std::array<Color, 9>, 6> solved_facelets() {
 TEST_CASE("solved and randomly scrambled cubes are solvable", "[cube]") {
     REQUIRE(Cube::solved().is_solvable());
 
-    std::mt19937 rng{424242};
+    std::mt19937 rng = ::cube::test::deterministic_rng(424242U);
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     std::uniform_int_distribution<int> turn_dist{1, 3};
 

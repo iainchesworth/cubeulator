@@ -51,7 +51,7 @@ enum class Layout { narrow, wide };
 // optimisation on a machine that renders in software.
 inline constexpr int kScrambleMoves = 10;
 [[nodiscard]] inline solver::Cube scramble(unsigned seed) {
-    return solver::random_scramble(seed, kScrambleMoves);
+    return solver::random_scramble(seed, solver::MoveCount{kScrambleMoves});
 }
 
 // A window size on each side of the breakpoint: a phone held upright, and a

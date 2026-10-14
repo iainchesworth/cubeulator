@@ -16,12 +16,14 @@
 #include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include "must_have.hpp"
 
 using namespace cube::vision::recording;
 
@@ -58,11 +60,17 @@ class FixtureDir {
 public:
     explicit FixtureDir(std::string_view stem) : path_(claim_fixture_dir(stem)) {}
     ~FixtureDir() {
-        std::error_code ec;
-        std::filesystem::remove_all(path_, ec);
+        try {
+            std::error_code ec;
+            std::filesystem::remove_all(path_, ec);
+        } catch (...) {
+            std::fputs("FixtureDir: could not remove the fixture directory\n", stderr);
+        }
     }
     FixtureDir(const FixtureDir&) = delete;
     FixtureDir& operator=(const FixtureDir&) = delete;
+    FixtureDir(FixtureDir&&) = delete;
+    FixtureDir& operator=(FixtureDir&&) = delete;
 
     [[nodiscard]] const std::filesystem::path& path() const { return path_; }
 
@@ -84,13 +92,13 @@ TEST_CASE("recording frame filenames are zero-padded and wrap at the ring size",
 
 TEST_CASE("index rows round-trip through parse_index_line", "[replay]") {
     const auto row = parse_index_line("17,123456789012,640,360,1920,1080");
-    REQUIRE(row.has_value());
-    CHECK(row->pass == 17);
-    CHECK(row->t_ms == 123456789012LL);
-    CHECK(row->w == 640);
-    CHECK(row->h == 360);
-    CHECK(row->full_w == 1920);
-    CHECK(row->full_h == 1080);
+    const auto& row_value = ::cube::test::must_have(row);
+    CHECK(row_value.pass == 17);
+    CHECK(row_value.t_ms == 123456789012LL);
+    CHECK(row_value.w == 640);
+    CHECK(row_value.h == 360);
+    CHECK(row_value.full_w == 1920);
+    CHECK(row_value.full_h == 1080);
 }
 
 TEST_CASE("parse_index_line rejects the header, blanks, and malformed rows", "[replay]") {
@@ -108,8 +116,8 @@ TEST_CASE("parse_index_line rejects the header, blanks, and malformed rows", "[r
     CHECK_FALSE(parse_index_line("18,123456,640,360,1920,1080,\r\n").has_value());
     // Windows line endings must not poison the last field.
     const auto crlf = parse_index_line("3,99,640,360,1280,720\r\n");
-    REQUIRE(crlf.has_value());
-    CHECK(crlf->full_h == 720);
+    const auto& crlf_value = ::cube::test::must_have(crlf);
+    CHECK(crlf_value.full_h == 720);
 }
 
 TEST_CASE("rows a full ring lap behind the newest are flagged overwritten", "[replay]") {

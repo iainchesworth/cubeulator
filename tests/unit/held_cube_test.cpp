@@ -12,6 +12,7 @@
 
 #include <array>
 #include <cstddef>
+#include "must_have.hpp"
 
 using cube::solver::all_holds;
 using cube::solver::camera_view;
@@ -147,9 +148,9 @@ TEST_CASE("a sticker with a finger across it is known not to have been found",
     const cube::test::Pose pose{};
 
     const auto clear = cube::vision::read_side(cube::test::draw_side(side, pose));
-    REQUIRE(clear.has_value());
-    CHECK(clear->stickers_found == 9);
-    for (const bool found : clear->found) {
+    const auto& clear_value = ::cube::test::must_have(clear);
+    CHECK(clear_value.stickers_found == 9);
+    for (const bool found : clear_value.found) {
         CHECK(found);
     }
 
@@ -158,10 +159,10 @@ TEST_CASE("a sticker with a finger across it is known not to have been found",
         cv::Mat frame = cube::test::draw_side(side, pose);
         cube::test::lay_finger(frame, pose, covered);
         const auto read = cube::vision::read_side(frame);
-        REQUIRE(read.has_value());
-        CHECK(read->stickers_found == 8);
+        const auto& read_value = ::cube::test::must_have(read);
+        CHECK(read_value.stickers_found == 8);
         for (int cell = 0; cell < 9; ++cell) {
-            CHECK(read->found.at(static_cast<std::size_t>(cell)) == (cell != covered));
+            CHECK(read_value.found.at(static_cast<std::size_t>(cell)) == (cell != covered));
         }
     }
 }

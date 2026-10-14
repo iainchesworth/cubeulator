@@ -22,6 +22,7 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::parse_algorithm;
 using cube::solver::prepare;
 using cube::solver::prepare_two_phase;
@@ -186,19 +187,21 @@ void set_slice(CubieCube& c, int value, const SliceNumbering& n) {
     }
 }
 
-int permutation_rank(const std::uint8_t* p, std::size_t n) {
+template <std::size_t N>
+int permutation_rank(const std::array<std::uint8_t, N>& p, std::size_t n) {
     int rank = 0;
     for (std::size_t i = 0; i < n; ++i) {
         int smaller = 0;
         for (std::size_t j = i + 1; j < n; ++j) {
-            smaller += p[j] < p[i] ? 1 : 0;
+            smaller += p.at(j) < p.at(i) ? 1 : 0;
         }
         rank = (rank * static_cast<int>(n - i)) + smaller;
     }
     return rank;
 }
 
-void unrank_permutation(int rank, std::uint8_t* p, std::size_t n) {
+template <std::size_t N>
+void unrank_permutation(int rank, std::array<std::uint8_t, N>& p, std::size_t n) {
     std::array<std::uint8_t, 8> unused{};
     for (std::size_t i = 0; i < n; ++i) {
         unused.at(i) = static_cast<std::uint8_t>(i);
@@ -208,7 +211,7 @@ void unrank_permutation(int rank, std::uint8_t* p, std::size_t n) {
         const int place = kFactorial.at(n - 1 - i);
         const auto pick = static_cast<std::size_t>(rank / place);
         rank %= place;
-        p[i] = unused.at(pick);
+        p.at(i) = unused.at(pick);
         for (std::size_t j = pick; j + 1 < remaining; ++j) {
             unused.at(j) = unused.at(j + 1);
         }
@@ -240,7 +243,7 @@ std::vector<std::size_t> all_moves() {
 }
 
 std::vector<std::size_t> phase2_moves() {
-    return std::vector<std::size_t>(kPhase2Moves.begin(), kPhase2Moves.end());
+    return {kPhase2Moves.begin(), kPhase2Moves.end()};
 }
 
 std::vector<std::uint8_t> build_prune(std::size_t first_count, std::size_t second_count,
@@ -299,7 +302,7 @@ TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[
             seen |= 1U << v;
         }
         REQUIRE(seen == 0xFU);
-        CHECK(rank_permutation(p.data(), 4) == static_cast<int>(rank));
+        CHECK(rank_permutation(p, 4) == static_cast<int>(rank));
     }
 
     std::array<std::uint8_t, 8> previous{};
@@ -310,7 +313,7 @@ TEST_CASE("permutation_of_rank is rank_permutation's inverse, in rank order", "[
             seen |= 1U << v;
         }
         REQUIRE(seen == 0xFFU);
-        REQUIRE(rank_permutation(p.data(), 8) == static_cast<int>(rank));
+        REQUIRE(rank_permutation(p, 8) == static_cast<int>(rank));
         if (rank > 0) {
             REQUIRE(std::ranges::lexicographical_compare(previous, p));
         }
@@ -356,17 +359,17 @@ TEST_CASE("the first-use tables equal a direct construction, entry for entry",
     // edges, and of the four middle-layer edges.
     const auto cperm = move_table(
         kPermCount, kPhase2MoveCount, phase2_moves(),
-        [](CubieCube& c, int v) { unrank_permutation(v, c.cp.data(), 8); },
-        [](const CubieCube& c) { return permutation_rank(c.cp.data(), 8); });
+        [](CubieCube& c, int v) { unrank_permutation(v, c.cp, 8); },
+        [](const CubieCube& c) { return permutation_rank(c.cp, 8); });
     const auto uedge = move_table(
         kPermCount, kPhase2MoveCount, phase2_moves(),
-        [](CubieCube& c, int v) { unrank_permutation(v, c.ep.data(), 8); },
-        [](const CubieCube& c) { return permutation_rank(c.ep.data(), 8); });
+        [](CubieCube& c, int v) { unrank_permutation(v, c.ep, 8); },
+        [](const CubieCube& c) { return permutation_rank(c.ep, 8); });
     const auto sperm = move_table(
         kSlicePermCount, kPhase2MoveCount, phase2_moves(),
         [](CubieCube& c, int v) {
             std::array<std::uint8_t, 4> p{};
-            unrank_permutation(v, p.data(), 4);
+            unrank_permutation(v, p, 4);
             for (std::size_t k = 0; k < 4; ++k) {
                 c.ep.at(8 + k) = static_cast<std::uint8_t>(8 + p.at(k));
             }
@@ -376,7 +379,7 @@ TEST_CASE("the first-use tables equal a direct construction, entry for entry",
             for (std::size_t k = 0; k < 4; ++k) {
                 p.at(k) = static_cast<std::uint8_t>(c.ep.at(8 + k) - 8);
             }
-            return permutation_rank(p.data(), 4);
+            return permutation_rank(p, 4);
         });
     CHECK(same_contents(built.cperm_move, cperm));
     CHECK(same_contents(built.uedge_move, uedge));
@@ -432,7 +435,7 @@ TEST_CASE("two-phase solves a corpus of random scrambles in about twenty moves",
     double total = 0;
     std::size_t longest = 0;
     for (unsigned seed = 1; seed <= kCount; ++seed) {
-        const Cube cube = random_scramble(seed, 100);
+        const Cube cube = random_scramble(seed, MoveCount{100});
         const auto solution = solve_two_phase(cube);
         REQUIRE(solution.has_value());
 
@@ -457,7 +460,7 @@ TEST_CASE("two-phase solves a corpus of random scrambles in about twenty moves",
 TEST_CASE("two-phase's first phase ends exactly in the group the second phase needs",
           "[two-phase][slow]") {
     for (unsigned seed = 1; seed <= 25; ++seed) {
-        const Cube cube = random_scramble(seed, 100);
+        const Cube cube = random_scramble(seed, MoveCount{100});
         const auto solution = solve_two_phase(cube);
         REQUIRE(solution.has_value());
         REQUIRE(solution->steps.size() == 2);
@@ -497,7 +500,7 @@ TEST_CASE("two-phase handles the classic hard states", "[two-phase][slow]") {
 TEST_CASE("two-phase gives the same solution every time", "[two-phase]") {
     // The search is bounded by a node budget, not the clock, so a given cube
     // gets one answer on every device and on every run.
-    const Cube cube = random_scramble(77, 100);
+    const Cube cube = random_scramble(77, MoveCount{100});
     const auto first = solve_two_phase(cube);
     const auto second = solve_two_phase(cube);
     REQUIRE(first.has_value());
@@ -517,7 +520,7 @@ TEST_CASE("two-phase's tables can be built and used from several threads at once
             if (i % 2 == 0) {
                 prepare_two_phase();
             }
-            const Cube cube = random_scramble(static_cast<unsigned>(500 + i), 100);
+            const Cube cube = random_scramble(static_cast<unsigned>(500 + i), MoveCount{100});
             const auto solution = solve_two_phase(cube);
             ok.at(i) = solution.has_value() && apply_all(cube, flatten(*solution)).is_solved();
         });
@@ -548,7 +551,7 @@ TEST_CASE("two-phase reports a valid but unreachable cube as unsolvable", "[two-
 
 TEST_CASE("solve() dispatches on the method and defaults to the beginner method",
           "[two-phase][slow]") {
-    const Cube cube = random_scramble(31, 100);
+    const Cube cube = random_scramble(31, MoveCount{100});
 
     const auto beginner = solve(cube);
     const auto explicit_beginner = solve(cube, SolveMethod::Beginner);

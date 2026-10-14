@@ -50,9 +50,11 @@ using Vec = std::array<int, 3>;
 }
 
 [[nodiscard]] Vec times(const std::array<int, 9>& m, const Vec& v) {
-    return {(m.at(0) * v.at(0)) + (m.at(1) * v.at(1)) + (m.at(2) * v.at(2)),
-            (m.at(3) * v.at(0)) + (m.at(4) * v.at(1)) + (m.at(5) * v.at(2)),
-            (m.at(6) * v.at(0)) + (m.at(7) * v.at(1)) + (m.at(8) * v.at(2))};
+    return {
+        (m.at(0) * v.at(0)) + (m.at(1) * v.at(1)) + (m.at(2) * v.at(2)),
+        (m.at(3) * v.at(0)) + (m.at(4) * v.at(1)) + (m.at(5) * v.at(2)),
+        (m.at(6) * v.at(0)) + (m.at(7) * v.at(1)) + (m.at(8) * v.at(2)),
+    };
 }
 
 [[nodiscard]] int determinant(const std::array<int, 9>& m) {
@@ -151,7 +153,8 @@ TEST_CASE("a camera facing the holder sees the far side, the right way up", "[so
                         const int row = 1 - held.at(1);
                         const int column = 1 + held.at(0);
                         // Seen from behind, the holder's +x is on the left.
-                        expected.at(static_cast<std::size_t>((row * 3) + (2 - column))) =
+                        expected.at((static_cast<std::size_t>(row) * 3) +
+                                    static_cast<std::size_t>(2 - column)) =
                             cube.at(far, solver_index(far, at));
                         ++placed;
                     }
