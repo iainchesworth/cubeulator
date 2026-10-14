@@ -510,6 +510,19 @@ platform reports camera access as denied), and on the complete screen both
 buttons are below a 1280x800 window. They are listed in the test as they
 are; a new overflow fails it, and so does the day one of these is fixed.
 
+A control inside the window can still sit on another, which that check cannot
+see. On the solve screen the camera's preview (`solve.frame`), its words
+(`solve.words`), the move label (`solve.move`) and the cube (`solve.cube`) share
+the stage, and the cube was sized without them: on a phone the words ran across
+its edge and its top was under the move label. A case of its own scans a cube,
+goes to the solve screen and holds those four boxes clear of one another and
+inside the window at the smallest window, the phones, either side of the
+breakpoint and the desktop sizes - with the words as they are and as long as they
+get, and then at the smallest window through every move of the solution, since
+the label's width changes with the move and the cube must not answer to it. It
+compares boxes, not pixels: a cube's box has air round the cube, which it needs
+to turn a layer in, so a box that is clear is a cube that is clear at any angle.
+
 ### Known today
 
 `known_today_test.cpp` asserts, as they are, the behaviours the
