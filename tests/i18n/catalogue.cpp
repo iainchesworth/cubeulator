@@ -125,6 +125,7 @@ std::vector<Language> read_languages() {
         l.plurals = o.value(QStringLiteral("plurals")).toInt();
         l.rtl = o.value(QStringLiteral("rtl")).toBool();
         l.translated = o.value(QStringLiteral("translated")).toBool();
+        l.draft = o.value(QStringLiteral("draft")).toBool();
         l.pseudo = pseudo;
         return l;
     };

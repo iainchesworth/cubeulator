@@ -133,6 +133,9 @@ TEST_CASE("nothing is empty, unfinished or obsolete where the language says it i
         // English and the pseudo-locale are generated: always whole. Another
         // language is whole once E5 has translated it and languages.json says
         // so; until then its unfinished entries are what falls back to English.
+        // A draft (`"draft": true`: ja, zh-CN) is a whole first translation
+        // no fluent reader has been through: it is not held to this, so that a
+        // string added since falls back instead of failing every lane's tests.
         if (l.translated) {
             INFO(str(l.code) << " is marked translated and has " << unfinished
                              << " unfinished entries");
