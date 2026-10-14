@@ -25,6 +25,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const TIMING = process.env.CUBEULATOR_WEB_PERF_TIMING === '1';
+// How many times slower than this machine the page's main thread is made for
+// the journeys about a frame of the scan: 4 is about a phone. 1 is as it is.
+const CPU_THROTTLE = Number(process.env.CUBEULATOR_WEB_CPU_THROTTLE ?? 1);
 const REPORTS = resolve('reports', 'perf');
 
 // A wall-time budget: always recorded, enforced only when timing is on.
@@ -202,8 +205,11 @@ test.describe('performance', () => {
   test('six sides that make no cube, held in view: they are put together once, not on every frame',
     async ({ app }) => {
       test.setTimeout(300_000);
-      const report = { journey: 'no-cube-held', budgets: [] };
+      const report = { journey: 'no-cube-held', cpuThrottle: CPU_THROTTLE, budgets: [] };
       await app.waitForFrames();
+      if (CPU_THROTTLE > 1) {
+        await app.throttleCpu(CPU_THROTTLE);
+      }
 
       await app.click('launch.startScan');
       await app.waitForScreen('scan');
@@ -262,7 +268,7 @@ test.describe('performance', () => {
     test.skip(!process.env.TUMBLE_SESSION, 'set TUMBLE_SESSION to a directory cube_tumble_sim wrote');
     test.setTimeout(600_000);
     const session = process.env.TUMBLE_SESSION;
-    const report = { journey: 'tumble', session, budgets: [] };
+    const report = { journey: 'tumble', session, cpuThrottle: CPU_THROTTLE, budgets: [] };
     const names = readdirSync(session).filter((n) => /^rec_\d+\.jpg$/.test(n)).sort();
     const stamped = readFileSync(`${session}/index.csv`, 'utf8').trim().split('\n').slice(1)
       .map((row) => Number(row.split(',')[1]));
@@ -270,6 +276,9 @@ test.describe('performance', () => {
     const times = stamped.map((t) => t - stamped[0]);
     expect(names.length).toBeGreaterThan(0);
     await app.waitForFrames();
+    if (CPU_THROTTLE > 1) {
+      await app.throttleCpu(CPU_THROTTLE);
+    }
 
     await app.click('launch.startScan');
     await app.waitForScreen('scan');
