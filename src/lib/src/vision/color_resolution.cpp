@@ -1,16 +1,15 @@
-#include <algorithm>
 #include <cube/vision/color_resolution.hpp>
 
 #include <cube/profiling.hpp>
 #include <cube/vision/color_classification.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
 #include <expected>
 #include <limits>
 #include <numbers>
-#include <numeric>
 
 namespace cube::vision {
 
@@ -565,8 +564,13 @@ namespace {
 // brute force is exact and trivial. Returns, per cluster, the palette entry.
 [[nodiscard]] std::array<std::size_t, face_count> best_palette_permutation(
     const MeanArray& means, const ColorPalette& palette) {
+    // The identity permutation, written out: std::ranges::iota is C++23 and
+    // Apple's libc++ (Xcode 16.4) does not have it, and modernize-use-ranges
+    // rewrites std::iota into it.
     std::array<std::size_t, face_count> permutation{};
-    std::ranges::iota(permutation, std::size_t{0});
+    for (std::size_t i = 0; i < permutation.size(); ++i) {
+        permutation.at(i) = i;
+    }
     std::array<std::size_t, face_count> best_permutation = permutation;
     float best_total = std::numeric_limits<float>::max();
     for (bool more = true; more; more = std::ranges::next_permutation(permutation).found) {
