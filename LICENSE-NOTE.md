@@ -60,9 +60,9 @@ components, the check of Qt's licences (Qt Quick 3D is GPL-3.0-only or
 commercial; it matters more than the app's own code does), and the options for
 the App Store with their cost.
 
-**2026-10-13 - decision on the Apple stores.** The maintainer, Iain Chesworth,
-decided to skip the iOS App Store and the Mac App Store for now. Cubeulator
-remains GPL-3.0-or-later and ships elsewhere (desktop downloads, Linux
+**2026-10-13 - decision on the Apple stores.** The maintainer decided to skip
+the iOS App Store and the Mac App Store for now. Cubeulator remains
+GPL-3.0-or-later and ships elsewhere (desktop downloads, Linux
 packages, later Google Play and F-Droid). The Apple-store question above is
 deferred, not resolved: it returns before any Apple submission, and the
 options are in [docs/licensing.md](docs/licensing.md).
