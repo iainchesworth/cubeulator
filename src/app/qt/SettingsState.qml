@@ -1,12 +1,21 @@
 pragma Singleton
 import QtQuick
-import Qt.labs.settings
+import QtCore
 import Cubeulator
 
 // Demo/mock settings state, following the same pattern as AppState. Camera
 // device selection lives on CameraController (selectedDeviceId/
 // selectDevice()), not here - it's the same controller DirectScan.start()
 // reads from, so there's a single source of truth for which device is live.
+//
+// Every persisted value is a property of a Settings object declared in here
+// (QtCore's: the one in Qt.labs.settings is deprecated, and reads and writes
+// the same keys). A Settings object writes a change half a second after it is
+// made, which is nothing on a desktop - it writes as it is destroyed at quit -
+// but a browser tab that is closed or reloaded has no quit. The web build
+// therefore writes them all as the page is hidden or left
+// (platform/web/settings_web.cpp), and finds them as children of this object:
+// declare a new one here, as a property, as the others are.
 QtObject {
     id: settings
 
