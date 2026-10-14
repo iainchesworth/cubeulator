@@ -900,11 +900,30 @@ Result<ScannedCube> SideScan::scanned() const {
     for (std::size_t i = 0; i < 6; ++i) {
         faces.at(i).lab = groups_.at(captured.at(i)).fused;
     }
-    const auto named = resolve_colors(faces);
+    // Named in the colours the light would have given under neutral light,
+    // once the cube's own white says what the light did. The sides are only
+    // ever named here, after all six are in, so nothing seen earlier has to
+    // be taken back. The session's colours below stay as measured: a corner
+    // or a held read later is measured the same way.
+    const std::optional<WhiteReference> reference = find_white_reference(faces);
+    std::array<CapturedFace, 6> seen = faces;
+    if (reference.has_value()) {
+        for (CapturedFace& face : seen) {
+            for (cv::Vec3f& lab : face.lab) {
+                lab = neutralised(*reference, lab);
+            }
+        }
+    }
+    const auto named =
+        resolve_colors(seen, reference.has_value() ? std::optional(reference->side) : std::nullopt);
     if (!named) {
         return std::unexpected(named.error());
     }
-    return assemble(*named, faces, corners_);
+    Result<ScannedCube> whole = assemble(*named, faces, corners_);
+    if (whole.has_value() && reference.has_value()) {
+        whole->cast = reference->cast;
+    }
+    return whole;
 }
 
 }  // namespace cube::vision

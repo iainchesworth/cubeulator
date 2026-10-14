@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_message.hpp>
 #include <catch2/catch_test_macros.hpp>
 
@@ -717,4 +718,219 @@ TEST_CASE("resolve_colors rejects an infinite sample instead of hanging", "[visi
     const auto resolved = resolve_colors(scan.faces);
     REQUIRE_FALSE(resolved.has_value());
     REQUIRE(resolved.error() == cube::CubeError::no_valid_cube_detected);
+}
+
+// ---------------------------------------------------------------------------
+// The light a scan was made in
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// The six centres of three real scans, in float Lab, in the order white,
+// yellow, red, orange, green, blue.
+struct MeasuredCube {
+    const char* light;
+    std::array<cv::Vec3f, 6> centres;
+    float cast;  // the white centre's chroma
+};
+
+const std::array<FacetColor, 6> kCentreOrder = {FacetColor::white, FacetColor::yellow,
+                                                FacetColor::red,   FacetColor::orange,
+                                                FacetColor::green, FacetColor::blue};
+
+// Morning daylight, bright blue sky (direct-scan/20261013/s01).
+const MeasuredCube kDaylight{"daylight",
+                             {{{66.1F, 4.5F, -0.6F},
+                               {67.6F, 3.4F, 28.0F},
+                               {42.9F, 37.4F, 3.1F},
+                               {53.2F, 34.2F, 16.8F},
+                               {44.6F, -16.4F, 0.6F},
+                               {39.8F, 7.0F, -28.8F}}},
+                             4.6F};
+// A tungsten lamp (live-demo-p6-retry, 2026-08-07).
+const MeasuredCube kTungsten{"tungsten",
+                             {{{46.2F, 16.6F, 5.9F},
+                               {49.8F, 19.9F, 53.7F},
+                               {25.6F, 48.1F, 36.3F},
+                               {34.3F, 53.5F, 45.4F},
+                               {17.4F, -12.5F, 15.0F},
+                               {11.3F, 12.1F, -25.8F}}},
+                             17.7F};
+// An evening warm-white LED, 2026-10-14.
+const MeasuredCube kEveningLed{"warm-white LED",
+                               {{{64.9F, 21.8F, 18.6F},
+                                 {54.1F, 25.8F, 52.9F},
+                                 {27.7F, 48.0F, 32.6F},
+                                 {40.5F, 55.8F, 46.4F},
+                                 {16.8F, -12.6F, 14.8F},
+                                 {8.9F, 5.2F, -15.0F}}},
+                               28.7F};
+
+std::array<CapturedFace, 6> faces_of(const MeasuredCube& cube) {
+    std::array<CapturedFace, 6> faces{};
+    for (std::size_t face = 0; face < 6; ++face) {
+        faces.at(face).lab.fill(cube.centres.at(face));
+    }
+    // A few stickers traded across sides, as a real scramble does, so the
+    // clusters span faces; nine of each colour is kept.
+    std::swap(faces.at(0).lab.at(0), faces.at(2).lab.at(8));
+    std::swap(faces.at(1).lab.at(1), faces.at(3).lab.at(7));
+    std::swap(faces.at(4).lab.at(2), faces.at(5).lab.at(6));
+    std::swap(faces.at(2).lab.at(3), faces.at(3).lab.at(5));
+    return faces;
+}
+
+float chroma_of_centre(const std::array<CapturedFace, 6>& faces, std::size_t face) {
+    const cv::Vec3f& centre = faces.at(face).lab.at(4);
+    return std::hypot(centre(1), centre(2));
+}
+
+float hue_degrees(const cv::Vec3f& lab) {
+    const float hue = std::atan2(lab(2), lab(1)) * 180.0F / std::numbers::pi_v<float>;
+    return hue < 0.0F ? hue + 360.0F : hue;
+}
+
+}  // namespace
+
+TEST_CASE("the white centre is found, and how far the light is from neutral is read from it",
+          "[vision][white-reference]") {
+    for (const MeasuredCube* cube : {&kDaylight, &kTungsten, &kEveningLed}) {
+        INFO(cube->light);
+        const auto reference = find_white_reference(faces_of(*cube));
+        REQUIRE(reference.has_value());
+        CHECK(reference->side == 0);
+        CHECK(reference->cast == Catch::Approx(cube->cast).margin(0.2));
+    }
+}
+
+TEST_CASE("a warm light is corrected and a neutral one is left exactly alone",
+          "[vision][white-reference]") {
+    SECTION("daylight changes nothing") {
+        const auto reference = find_white_reference(faces_of(kDaylight));
+        REQUIRE(reference.has_value());
+        CHECK(reference->cast < kMinCorrectedCast);
+        for (const cv::Vec3f& centre : kDaylight.centres) {
+            CHECK(neutralised(*reference, centre) == centre);
+        }
+    }
+    for (const MeasuredCube* cube : {&kTungsten, &kEveningLed}) {
+        SECTION(cube->light) {
+            const auto reference = find_white_reference(faces_of(*cube));
+            REQUIRE(reference.has_value());
+            CHECK(reference->cast >= kMinCorrectedCast);
+            // The white is grey at the lightness it had.
+            const cv::Vec3f white = neutralised(*reference, cube->centres.at(0));
+            CHECK(std::abs(white(1)) < 1.5F);
+            CHECK(std::abs(white(2)) < 1.5F);
+            CHECK(white(0) == Catch::Approx(cube->centres.at(0)(0)).margin(1.5));
+        }
+    }
+}
+
+TEST_CASE("a warm light puts yellow in the orange band and correcting it puts it back",
+          "[vision][white-reference]") {
+    for (const MeasuredCube* cube : {&kTungsten, &kEveningLed}) {
+        INFO(cube->light);
+        const cv::Vec3f& yellow = cube->centres.at(1);
+        // The premise: as measured, hue classification calls it orange.
+        REQUIRE(classify_lab(yellow).color == FacetColor::orange);
+        const auto reference = find_white_reference(faces_of(*cube));
+        REQUIRE(reference.has_value());
+        const cv::Vec3f corrected = neutralised(*reference, yellow);
+        CHECK(hue_degrees(corrected) > 85.0F);
+        CHECK(classify_lab(corrected).color == FacetColor::yellow);
+    }
+}
+
+TEST_CASE("red and orange are further apart in hue once the light is neutralised",
+          "[vision][white-reference]") {
+    const auto reference = find_white_reference(faces_of(kEveningLed));
+    REQUIRE(reference.has_value());
+    const float before =
+        hue_degrees(kEveningLed.centres.at(3)) - hue_degrees(kEveningLed.centres.at(2));
+    const float after = hue_degrees(neutralised(*reference, kEveningLed.centres.at(3))) -
+                        hue_degrees(neutralised(*reference, kEveningLed.centres.at(2)));
+    CHECK(before < 8.0F);
+    CHECK(after > 12.0F);
+}
+
+TEST_CASE("no reference is taken from six centres none of which is plausibly white",
+          "[vision][white-reference]") {
+    // Built on the tungsten cube, whose lighter centres are all strongly
+    // coloured. (A daylight cube with no white would let its pale green
+    // through as the least chromatic - which a real cube cannot be: it
+    // always has its white centre.)
+    SECTION("every centre strongly coloured") {
+        MeasuredCube cube = kTungsten;
+        cube.centres.at(0) = {46.0F, 40.0F, -30.0F};  // a purple where the white was
+        CHECK_FALSE(find_white_reference(faces_of(cube)).has_value());
+    }
+    SECTION("the candidate would need a gain no light asks for") {
+        MeasuredCube cube = kTungsten;
+        // A yellow: chroma 36 is under the cast ceiling and clear of the
+        // runner up, so only the gain bound stands between it and "white".
+        cube.centres.at(0) = {50.0F, 2.0F, 36.0F};
+        CHECK_FALSE(find_white_reference(faces_of(cube)).has_value());
+    }
+    SECTION("a centre that is not a number") {
+        auto faces = faces_of(kEveningLed);
+        faces.at(3).lab.at(4)(1) = std::numeric_limits<float>::quiet_NaN();
+        CHECK_FALSE(find_white_reference(faces).has_value());
+    }
+}
+
+TEST_CASE("a dark blue under a warm light is not mistaken for the white",
+          "[vision][white-reference]") {
+    // Blue is the least chromatic centre of the cube under the LED (15
+    // against the white's 29) and the darkest by far.
+    const auto faces = faces_of(kEveningLed);
+    REQUIRE(chroma_of_centre(faces, 5) < chroma_of_centre(faces, 0));
+    const auto reference = find_white_reference(faces);
+    REQUIRE(reference.has_value());
+    CHECK(reference->side == 0);
+}
+
+TEST_CASE("the tungsten cube is named right once the white is known, and was not before",
+          "[vision][white-reference]") {
+    const auto faces = faces_of(kTungsten);
+
+    // As measured, the closest two colours are named backwards: this is the
+    // case the exchange of names in assembly existed to rescue.
+    const auto raw = resolve_colors(faces);
+    REQUIRE(raw.has_value());
+    REQUIRE((*raw).at(3).at(4).color != FacetColor::orange);
+
+    const auto reference = find_white_reference(faces);
+    REQUIRE(reference.has_value());
+    auto neutral = faces;
+    for (CapturedFace& face : neutral) {
+        for (cv::Vec3f& lab : face.lab) {
+            lab = neutralised(*reference, lab);
+        }
+    }
+    const auto named = resolve_colors(neutral, reference->side);
+    REQUIRE(named.has_value());
+    for (std::size_t face = 0; face < 6; ++face) {
+        INFO("face " << face);
+        CHECK((*named).at(face).at(4).color == kCentreOrder.at(face));
+    }
+}
+
+TEST_CASE("two neighbours that arrive in one hue band are told apart by which is yellower",
+          "[vision][white-reference]") {
+    // Orange at hue 29 and red at 20 degrees: both under classify_lab's edge
+    // at 44, so both come out red. Orange is the darker here (as a shaded
+    // one is), which is what the distance matching gets backwards: it pairs
+    // the lighter cluster with the orange reference.
+    MeasuredCube cube = kDaylight;
+    cube.centres.at(2) = {60.0F, 38.0F, 14.0F};  // red, hue 20, light
+    cube.centres.at(3) = {36.0F, 40.0F, 22.0F};  // orange, hue 29, dark
+    const auto faces = faces_of(cube);
+    REQUIRE(classify_lab(cube.centres.at(2)).color == FacetColor::red);
+    REQUIRE(classify_lab(cube.centres.at(3)).color == FacetColor::red);
+
+    const auto named = resolve_colors(faces);
+    REQUIRE(named.has_value());
+    CHECK((*named).at(2).at(4).color == FacetColor::red);
+    CHECK((*named).at(3).at(4).color == FacetColor::orange);
 }

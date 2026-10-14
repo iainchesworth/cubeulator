@@ -567,6 +567,29 @@ TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are c
     }
 }
 
+TEST_CASE("a scan says how far the light was from neutral, read from the cube's own white",
+          "[direct-scan]") {
+    SECTION("under a warm lamp the white measures pink") {
+        const Cube cube = cube::test::scramble(21);
+        SideScan scan;
+        show_cube(scan, cube, 21, kLamp);
+        const auto whole = scan.scanned();
+        REQUIRE(whole.has_value());
+        CHECK(whole->cube == cube);
+        // The white of the lamp palette is (65.5, 22.5, 16.5): chroma 27.9.
+        CHECK(whole->cast == Catch::Approx(27.9).margin(3.0));
+    }
+    SECTION("in even light it measures neutral") {
+        const Cube cube = cube::test::scramble(22);
+        SideScan scan;
+        show_cube(scan, cube, 22);
+        const auto whole = scan.scanned();
+        REQUIRE(whole.has_value());
+        CHECK(whole->cube == cube);
+        CHECK(whole->cast < 4.0F);
+    }
+}
+
 TEST_CASE("a flood of lattices that are no side does not cost the side being held",
           "[direct-scan]") {
     // A chessboard or a patterned shirt gives steady reads of colours no side

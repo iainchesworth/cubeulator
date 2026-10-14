@@ -83,6 +83,10 @@ using SessionColours = std::array<cv::Vec3f, 6>;
 struct ScannedCube {
     solver::Cube cube;
     SessionColours colours{};
+    // How far from neutral the light was, read from the cube's own white
+    // centre (WhiteReference::cast); 0 when no white could be told. 3 to 5 by
+    // daylight, 29 under a warm-white LED.
+    float cast = 0.0F;
 };
 
 // Accumulates reads over one scan and reports the sides seen so far and,
