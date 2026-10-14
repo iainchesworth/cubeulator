@@ -11,6 +11,7 @@
 #include <cube/error.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
+#include <cube/solver/search_work.hpp>
 
 namespace cube::solver::detail {
 
@@ -59,11 +60,17 @@ struct SignatureKeyHash {
 // this converts that failure mode into the latter.
 inline constexpr std::size_t kMaxVisitedNodes = 2'000'000;
 
+// How far a search may go: moves deep, and nodes held at most.
+struct SearchLimits {
+    int max_depth = 0;
+    std::size_t max_visited_nodes = kMaxVisitedNodes;
+};
+
 template <typename Postcondition, typename Signature>
 Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>& allowed_faces,
                                      Postcondition postcondition, Signature signature,
-                                     int max_depth,
-                                     std::size_t max_visited_nodes = kMaxVisitedNodes) {
+                                     SearchLimits limits) {
+    const auto [max_depth, max_visited_nodes] = limits;
     CUBE_ZONE_SCOPED_N("solver.bfs_search");
     if (postcondition(start)) {
         return std::vector<Move>{};
@@ -81,50 +88,55 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
     // and this solver must stay interactive on a phone.
     struct Node {
         Cube cube;
-        std::int32_t parent;
+        std::int32_t parent = -1;
         Move move;
-        std::int32_t depth;
+        std::int32_t depth = 0;
     };
 
     std::vector<Node> nodes;
     std::unordered_set<SignatureKey, SignatureKeyHash> visited;
-    nodes.push_back(Node{start, -1, Move{Face::U, 1}, 0});
+    nodes.push_back(Node{start, -1, Move{.face = Face::U, .turns = 1}, 0});
     visited.insert(signature(start));
+    const SearchWorkScope work([&visited] { return visited.size(); });
 
     auto reconstruct = [&nodes](std::size_t leaf, Move last) {
         std::vector<Move> path;
-        for (std::int32_t i = static_cast<std::int32_t>(leaf); i > 0;
-             i = nodes[static_cast<std::size_t>(i)].parent) {
-            path.push_back(nodes[static_cast<std::size_t>(i)].move);
+        for (auto i = static_cast<std::int32_t>(leaf); i > 0;
+             i = nodes.at(static_cast<std::size_t>(i)).parent) {
+            path.push_back(nodes.at(static_cast<std::size_t>(i)).move);
         }
-        std::reverse(path.begin(), path.end());
+        std::ranges::reverse(path);
         path.push_back(last);
         return path;
     };
 
     for (std::size_t head = 0; head < nodes.size(); ++head) {
-        if (nodes[head].depth >= max_depth) {
+        if (nodes.at(head).depth >= max_depth) {
             continue;
         }
         // Copies, not references: the push_back below may reallocate the
         // arena and invalidate anything pointing into it.
-        const Cube current = nodes[head].cube;
-        const std::int32_t depth = nodes[head].depth;
+        const Cube current = nodes.at(head).cube;
+        const std::int32_t depth = nodes.at(head).depth;
 
         for (Face face : allowed_faces) {
             for (int turns = 1; turns <= 3; ++turns) {
-                Cube next = current.apply(Move{face, turns});
+                Cube next = current.apply(Move{.face = face, .turns = turns});
                 if (postcondition(next)) {
                     // The F2L stages' cost is this number, not the move count.
                     CUBE_ZONE_SCOPED_VALUE(visited.size());
-                    return reconstruct(head, Move{face, turns});
+                    return reconstruct(head, Move{.face = face, .turns = turns});
                 }
                 if (visited.size() >= max_visited_nodes) {
                     return std::unexpected(CubeError::no_solution);
                 }
                 if (visited.insert(signature(next)).second) {
-                    nodes.push_back(Node{std::move(next), static_cast<std::int32_t>(head),
-                                         Move{face, turns}, depth + 1});
+                    nodes.push_back(Node{
+                        std::move(next),
+                        static_cast<std::int32_t>(head),
+                        Move{.face = face, .turns = turns},
+                        depth + 1,
+                    });
                 }
             }
         }
@@ -139,19 +151,19 @@ Result<std::vector<Move>> bfs_search(const Cube& start, const std::vector<Face>&
 // reachable state of that one piece.
 [[nodiscard]] inline std::uint64_t piece_code_edge(const Cube& cube, Color a, Color b) noexcept {
     const Cube::EdgeLocation loc = cube.locate_edge(a, b);
-    return static_cast<std::uint64_t>(loc.face_a) * 9 + static_cast<std::uint64_t>(loc.index_a);
+    return (static_cast<std::uint64_t>(loc.face_a) * 9) + static_cast<std::uint64_t>(loc.index_a);
 }
 
 [[nodiscard]] inline std::uint64_t piece_code_corner(const Cube& cube, Color a, Color b,
                                                      Color c) noexcept {
     const Cube::CornerLocation loc = cube.locate_corner(a, b, c);
-    return static_cast<std::uint64_t>(loc.face_a) * 9 + static_cast<std::uint64_t>(loc.index_a);
+    return (static_cast<std::uint64_t>(loc.face_a) * 9) + static_cast<std::uint64_t>(loc.index_a);
 }
 
 // Appends one more piece's code to a `rest`-style accumulator (see
 // SignatureKey).
 [[nodiscard]] inline std::uint64_t push_code(std::uint64_t acc, std::uint64_t code) noexcept {
-    return (acc << 6) | code;
+    return (acc << 6U) | code;
 }
 
 // The 4 cross edges' combined position, for SignatureKey::cross.

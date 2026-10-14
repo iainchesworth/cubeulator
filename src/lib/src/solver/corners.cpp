@@ -1,5 +1,6 @@
 #include <cube/solver/corners.hpp>
 
+#include <algorithm>
 #include <array>
 
 #include <cube/profiling.hpp>
@@ -22,28 +23,38 @@ struct CornerSlot {
 // D's corner index is (row=z+1)*3+(col=x+1); each side face's D-adjacent
 // corner index is (row=1-y)*3+col with y=-1, i.e. always row 2 - see
 // cube.cpp's layout derivation.
-constexpr std::array<CornerSlot, 4> kCornerSlots = {{
-    {.d_index = 6,
-     .side_a = Face::F,
-     .side_a_index = 6,
-     .side_b = Face::L,
-     .side_b_index = 8},  // DFL
-    {.d_index = 8,
-     .side_a = Face::F,
-     .side_a_index = 8,
-     .side_b = Face::R,
-     .side_b_index = 8},  // DFR
-    {.d_index = 0,
-     .side_a = Face::B,
-     .side_a_index = 6,
-     .side_b = Face::L,
-     .side_b_index = 6},  // DBL
-    {.d_index = 2,
-     .side_a = Face::B,
-     .side_a_index = 8,
-     .side_b = Face::R,
-     .side_b_index = 6},  // DBR
-}};
+constexpr std::array<CornerSlot, 4> kCornerSlots = {
+    {
+        {
+            .d_index = 6,
+            .side_a = Face::F,
+            .side_a_index = 6,
+            .side_b = Face::L,
+            .side_b_index = 8,
+        },  // DFL
+        {
+            .d_index = 8,
+            .side_a = Face::F,
+            .side_a_index = 8,
+            .side_b = Face::R,
+            .side_b_index = 8,
+        },  // DFR
+        {
+            .d_index = 0,
+            .side_a = Face::B,
+            .side_a_index = 6,
+            .side_b = Face::L,
+            .side_b_index = 6,
+        },  // DBL
+        {
+            .d_index = 2,
+            .side_a = Face::B,
+            .side_a_index = 8,
+            .side_b = Face::R,
+            .side_b_index = 6,
+        },  // DBR
+    },
+};
 
 bool slot_solved(const Cube& cube, const CornerSlot& slot) noexcept {
     return cube.at(Face::D, slot.d_index) == Color::White &&
@@ -57,12 +68,8 @@ bool first_layer_solved(const Cube& cube) noexcept {
     if (!cross_solved(cube)) {
         return false;
     }
-    for (const CornerSlot& slot : kCornerSlots) {
-        if (!slot_solved(cube, slot)) {
-            return false;
-        }
-    }
-    return true;
+    return std::ranges::all_of(kCornerSlots,
+                               [&cube](const CornerSlot& slot) { return slot_solved(cube, slot); });
 }
 
 Result<std::vector<Move>> solve_corners(const Cube& start) {

@@ -51,7 +51,11 @@ Result<std::vector<Move>> solve_oll(const Cube& start) {
     // silently returning a move list that scrambles the first two layers -
     // the U-face-only conditions alone can't tell the difference.
     const std::vector<std::vector<Move>> edge_alphabet = {
-        detail::kAdjustU, detail::kAdjustU2, detail::kAdjustUPrime, detail::kEdgeOrientFlip};
+        detail::adjust_u(),
+        detail::adjust_u2(),
+        detail::adjust_u_prime(),
+        detail::edge_orient_flip(),
+    };
     auto edges_postcondition = [](const Cube& c) { return f2l_solved(c) && u_edges_oriented(c); };
     Result<std::vector<Move>> edges_step =
         detail::algorithm_search(cube, edge_alphabet, edges_postcondition, 12);
@@ -68,9 +72,10 @@ Result<std::vector<Move>> solve_oll(const Cube& start) {
     // the emitted sequence occasionally spends a third application where
     // that saves U-alignment words (the search minimises words, and an AUF
     // costs the same as a Sune).
-    const std::vector<std::vector<Move>> corner_alphabet = {detail::kAdjustU, detail::kAdjustU2,
-                                                            detail::kAdjustUPrime, detail::kSune,
-                                                            detail::kAntiSune};
+    const std::vector<std::vector<Move>> corner_alphabet = {
+        detail::adjust_u(), detail::adjust_u2(), detail::adjust_u_prime(),
+        detail::sune(),     detail::anti_sune(),
+    };
     auto corners_postcondition = [](const Cube& c) { return oll_solved(c); };
     Result<std::vector<Move>> corners_step =
         detail::algorithm_search(cube, corner_alphabet, corners_postcondition, 12);

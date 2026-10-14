@@ -202,10 +202,10 @@ std::optional<double> blue_green_after(cv::VideoCapture& capture, int frames,
         }
     }
     const cv::Scalar mean = cv::mean(frame);
-    if (mean[1] <= 0.0) {
+    if (mean(1) <= 0.0) {
         return std::nullopt;
     }
-    return mean[0] / mean[1];
+    return mean(0) / mean(1);
 }
 
 // Turns auto white balance off AND keeps the balance it had reached.
@@ -304,23 +304,32 @@ PhotometryLockReport apply_lock(cv::VideoCapture& capture, const PhotometryLockR
     // constraint at all (writes are honoured before the first grab and
     // after it, and survive the first grab).
     struct Step {
-        PhotometryControl control;
-        bool requested;
+        PhotometryControl control = PhotometryControl::exposure;
+        bool requested = false;
         std::optional<double> override_value;
     };
     const std::array<Step, kPhotometryControls.size()> steps{
-        Step{.control = PhotometryControl::auto_white_balance,
-             .requested = request.lock_auto_white_balance,
-             .override_value = std::nullopt},
-        Step{.control = PhotometryControl::exposure,
-             .requested = request.lock_exposure,
-             .override_value = request.exposure},
-        Step{.control = PhotometryControl::brightness,
-             .requested = request.lock_brightness,
-             .override_value = request.brightness},
-        Step{.control = PhotometryControl::saturation,
-             .requested = request.lock_saturation,
-             .override_value = request.saturation}};
+        Step{
+            .control = PhotometryControl::auto_white_balance,
+            .requested = request.lock_auto_white_balance,
+            .override_value = std::nullopt,
+        },
+        Step{
+            .control = PhotometryControl::exposure,
+            .requested = request.lock_exposure,
+            .override_value = request.exposure,
+        },
+        Step{
+            .control = PhotometryControl::brightness,
+            .requested = request.lock_brightness,
+            .override_value = request.brightness,
+        },
+        Step{
+            .control = PhotometryControl::saturation,
+            .requested = request.lock_saturation,
+            .override_value = request.saturation,
+        },
+    };
 
     for (const Step& step : steps) {
         if (!step.requested) {

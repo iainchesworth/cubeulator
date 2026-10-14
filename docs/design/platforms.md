@@ -62,7 +62,7 @@ work, not a platform flag.
 | **Camera permission** | No prompt in advance: the browser asks when the camera is first opened, in its own UI, and shows its own indicator while it is on. Until it has been allowed the browser hides every camera's name, so the list says *Back camera* and *Front camera* (or just *Camera* when it can see only one). The app cannot send a person to a settings page: a refusal is changed from the address bar's site settings |
 | **Settings** | Kept in the browser's `localStorage` for the site (`QSettings`' native format on this platform), so they survive a reload and are lost with the site's data |
 | **Exposure and white balance** | Not locked: the browser has no control the app has proven (`photometry_control_supported()` is false), so the camera's automatics run during a scan |
-| **Fonts** | The browser build has no system fonts, only the face Qt bundles. The Latin, Hebrew, Arabic and Yiddish languages render with it (checked in a build); Japanese and Simplified Chinese show as empty boxes until a CJK face is bundled - a CJK face is large, so that is a decision for the family's font work (`design/family.md`), not a default |
+| **Fonts** | The browser build has no system fonts. Latin, Hebrew, Arabic and Yiddish are drawn with the face Qt bundles (checked in a build); Japanese and Simplified Chinese with Noto Sans JP and Noto Sans SC, compiled in under `:/fonts` and cut down to the characters the catalogues and the language list use (`src/app/platform/web/fonts`, `tools/fonts/subset_cjk.py`). A translation that brings in a character they lack fails `i18n_web_cjk_subsets_cover_catalogues`; regenerating is a documented one-liner |
 | **Quit** | Close the tab. There is nothing to keep running |
 | **Package** | None: a directory of static files, published under `/app/` of the documentation site |
 | **Threads** | Web Workers on shared memory, which the browser only grants to a cross-origin-isolated page: the page registers its own service worker to add the two headers on a host that cannot send them (`cubeulator-isolation.js`) |
@@ -200,8 +200,8 @@ value.
 | Hebrew | Noto Sans Hebrew (variable, weights 100-900) | In the app. About 110 KB |
 | Yiddish | Noto Sans Hebrew, the same file | In the app |
 | Arabic | Noto Sans Arabic (variable, weights 100-900) | In the app. About 825 KB |
-| Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No |
-| Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No |
+| Japanese | The system's: Yu Gothic UI on Windows, Hiragino Sans on macOS and iOS, Noto Sans CJK JP on Android and Linux | No. The browser build has no system fonts and bundles a Noto Sans JP subset |
+| Simplified Chinese | The system's: Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC | No. The browser build bundles a Noto Sans SC subset |
 
 - A Japanese or Chinese font is 5-10 MB a weight. Every target ships a
   good one except a minimal Linux install, where the `.deb` and `.rpm`
@@ -252,7 +252,9 @@ value.
 - AppStream metadata with a summary, description, screenshots from the
   system-test tour and a content rating. Software centres will not list
   it otherwise.
-- Wayland and X11 both; the window's app id matches the desktop file name.
+- X11, and Wayland through XWayland (the package carries Qt's `xcb` platform
+  plugin only; native Wayland is not packaged yet, `packaging.md`). The window's
+  app id matches the desktop file name.
 
 **Android**
 

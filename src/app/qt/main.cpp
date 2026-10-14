@@ -1,6 +1,7 @@
 #include "app_runtime.hpp"
 #include "desktop/desktop_integration.hpp"
 #include "interfaces/crash_handler.hpp"
+#include "kit/bundled_fonts.hpp"
 
 #include <cube/profiling.hpp>
 #include <cube/solver/solver.hpp>
@@ -58,6 +59,10 @@ int main(int argc, char* argv[]) {
     applyPersistedGraphicsBackend();
 
     QGuiApplication app(argc, argv);
+
+    // The fonts compiled into the app (:/fonts) are registered before any QML
+    // asks for a family. A build that has none is unaffected.
+    cube::app::kit::installBundledFonts();
 
     // Tracy names the GUI thread and carries the build's identity into every
     // trace, so a capture says which commit it measured (cube/profiling.hpp).

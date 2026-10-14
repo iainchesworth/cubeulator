@@ -295,7 +295,7 @@ int main() {
     for (const auto& corners : perms) {
         for (const auto& edges : perms) {
             using cube::solver::detail::parity_of_four;
-            if (parity_of_four(corners.data()) != parity_of_four(edges.data())) {
+            if (parity_of_four(corners) != parity_of_four(edges)) {
                 continue;
             }
             CubieCube s;
@@ -351,13 +351,13 @@ int main() {
     for (const Candidate* c : oll) {
         std::printf("    \"%s\",\n", as_text(c->moves).c_str());
     }
-    std::printf("}};\n\n");
+    std::printf("},\n};\n\n");
 
     std::printf("inline constexpr std::array<std::string_view, %zu> kPllWords = {{\n", pll.size());
     for (const Candidate* c : pll) {
         std::printf("    \"%s\",\n", c == nullptr ? "" : as_text(c->moves).c_str());
     }
-    std::printf("}};\n");
+    std::printf("},\n};\n");
 
     std::fprintf(stderr, "OLL %.0f cases mean %.2f max %.0f; PLL %zu cases mean %.2f max %.0f\n",
                  oll_stats[0], oll_stats[1], oll_stats[2], pll_cases, pll_stats[1], pll_stats[2]);

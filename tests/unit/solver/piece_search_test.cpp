@@ -20,6 +20,7 @@ using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::kAllFaces;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::parse_algorithm;
 using cube::solver::random_scramble;
 using cube::solver::solve;
@@ -47,7 +48,7 @@ bool dfl_solved(const Cube& cube) {
 TEST_CASE("facelet_map is the table apply() runs on", "[piece_search][facelet_map]") {
     for (unsigned seed = 0; seed < 5; ++seed) {
         CAPTURE(seed);
-        const Cube cube = random_scramble(seed, 25);
+        const Cube cube = random_scramble(seed, MoveCount{25});
         for (const Face face : kAllFaces) {
             for (int turns = 1; turns <= 3; ++turns) {
                 CAPTURE(face, turns);
@@ -79,14 +80,15 @@ TEST_CASE("the piece search returns what the reference search returns", "[piece_
 
     for (unsigned seed = 0; seed < 60; ++seed) {
         CAPTURE(seed);
-        const Cube scrambled = random_scramble(seed, 25);
+        const Cube scrambled = random_scramble(seed, MoveCount{25});
 
         // The cross: four edges, every face.
         const auto cross_key = [](const Cube& c) {
-            return detail::SignatureKey{detail::cross_key(c), 0};
+            return detail::SignatureKey{.cross = detail::cross_key(c), .rest = 0};
         };
         const detail::PieceGoal cross_goal{.rest_codes = 0, .keys = {cross_key(Cube::solved())}};
-        const auto cross_reference = detail::bfs_search(scrambled, all, cross_solved, cross_key, 8);
+        const auto cross_reference =
+            detail::bfs_search(scrambled, all, cross_solved, cross_key, {.max_depth = 8});
         const auto cross_fast =
             detail::search(scrambled, all, cross_solved, cross_key, 8, cross_goal);
         REQUIRE(cross_reference.has_value());
@@ -96,15 +98,16 @@ TEST_CASE("the piece search returns what the reference search returns", "[piece_
         const Cube crossed = after(scrambled, *cross_reference);
         const auto corner_key = [](const Cube& c) {
             return detail::SignatureKey{
-                detail::cross_key(c),
-                detail::piece_code_corner(c, Color::White, canonical_color(Face::F),
-                                          canonical_color(Face::L))};
+                .cross = detail::cross_key(c),
+                .rest = detail::piece_code_corner(c, Color::White, canonical_color(Face::F),
+                                                  canonical_color(Face::L)),
+            };
         };
         const auto corner_done = [](const Cube& c) { return cross_solved(c) && dfl_solved(c); };
         const detail::PieceGoal corner_goal{.rest_codes = 1, .keys = {corner_key(Cube::solved())}};
         const std::vector<Face> corner_faces = {Face::U, Face::D, Face::F, Face::L};
         const auto corner_reference =
-            detail::bfs_search(crossed, corner_faces, corner_done, corner_key, 10);
+            detail::bfs_search(crossed, corner_faces, corner_done, corner_key, {.max_depth = 10});
         const auto corner_fast =
             detail::search(crossed, corner_faces, corner_done, corner_key, 10, corner_goal);
         REQUIRE(corner_reference.has_value());
@@ -115,12 +118,15 @@ TEST_CASE("the piece search returns what the reference search returns", "[piece_
 TEST_CASE("the piece search gives up where the reference does, on the same budget",
           "[piece_search]") {
     // A budget too small for the search: both fail the same way.
-    const Cube scrambled = random_scramble(3, 25);
+    const Cube scrambled = random_scramble(3, MoveCount{25});
     const std::vector<Face> all(kAllFaces.begin(), kAllFaces.end());
-    const auto key = [](const Cube& c) { return detail::SignatureKey{detail::cross_key(c), 0}; };
+    const auto key = [](const Cube& c) {
+        return detail::SignatureKey{.cross = detail::cross_key(c), .rest = 0};
+    };
     const detail::PieceGoal goal{.rest_codes = 0, .keys = {key(Cube::solved())}};
 
-    const auto reference = detail::bfs_search(scrambled, all, cross_solved, key, 8, 50);
+    const auto reference = detail::bfs_search(scrambled, all, cross_solved, key,
+                                              {.max_depth = 8, .max_visited_nodes = 50});
     const auto fast = detail::search(scrambled, all, cross_solved, key, 8, goal, 50);
     REQUIRE_FALSE(reference.has_value());
     REQUIRE(reference.error() == cube::CubeError::no_solution);
@@ -149,8 +155,10 @@ TEST_CASE("a cube that is not a real cube keeps the reference search", "[piece_s
         CAPTURE(seed);
         Cube cube = *twisted;
         for (unsigned i = 0; i < 20; ++i) {
-            cube = cube.apply(Move{.face = kAllFaces.at((seed + i * 5) % 6),
-                                   .turns = static_cast<int>(1 + ((seed + i) % 3))});
+            cube = cube.apply(Move{
+                .face = kAllFaces.at((seed + (i * 5)) % 6),
+                .turns = static_cast<int>(1 + ((seed + i) % 3)),
+            });
         }
         REQUIRE_FALSE(cube.is_solvable());
 

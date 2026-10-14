@@ -21,6 +21,7 @@
 #include <optional>
 #include <random>
 #include <string_view>
+#include "must_have.hpp"
 
 using cube::CubeError;
 using cube::solver::Color;
@@ -43,18 +44,20 @@ using cube::vision::SideScan;
 
 namespace {
 
-constexpr std::array<Color, 6> kColours = {Color::White, Color::Yellow, Color::Green,
-                                           Color::Blue,  Color::Orange, Color::Red};
+constexpr std::array<Color, 6> kColours = {
+    Color::White, Color::Yellow, Color::Green, Color::Blue, Color::Orange, Color::Red,
+};
 
-constexpr std::array<Color, 9> kMixed = {Color::Green, Color::Orange, Color::Blue,
-                                         Color::Blue,  Color::White,  Color::Yellow,
-                                         Color::Green, Color::Red,    Color::White};
+constexpr std::array<Color, 9> kMixed = {
+    Color::Green,  Color::Orange, Color::Blue, Color::Blue,  Color::White,
+    Color::Yellow, Color::Green,  Color::Red,  Color::White,
+};
 
 cv::Vec3f lab_of(const cv::Scalar& bgr) {
     const cv::Mat3f source(
         1, 1,
-        cv::Vec3f(static_cast<float>(bgr[0]) / 255.0F, static_cast<float>(bgr[1]) / 255.0F,
-                  static_cast<float>(bgr[2]) / 255.0F));
+        cv::Vec3f(static_cast<float>(bgr(0)) / 255.0F, static_cast<float>(bgr(1)) / 255.0F,
+                  static_cast<float>(bgr(2)) / 255.0F));
     cv::Mat3f lab;
     cv::cvtColor(source, lab, cv::COLOR_BGR2Lab);
     return lab(0, 0);
@@ -81,9 +84,11 @@ Cube after(std::string_view algorithm) {
     return cube;
 }
 
+constexpr int kHeldFrames = 12;
+
 // Hold one side still in front of the camera for `frames` frames.
 void show(SideScan& scan, const std::array<Color, 9>& stickers, const Pose& pose,
-          const Drawing& drawing = {}, int frames = 12) {
+          int frames = kHeldFrames, const Drawing& drawing = {}) {
     const cv::Mat frame = draw_side(stickers, pose, drawing);
     for (int i = 0; i < frames; ++i) {
         scan.add(read_side(frame));
@@ -102,9 +107,11 @@ void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& d
             stickers = turned_clockwise(stickers);
         }
         show(scan, stickers,
-             Pose{.centre = {320.0F + shift(rng), 180.0F + (shift(rng) / 2.0F)},
-                  .degrees = tilt(rng)},
-             drawing);
+             Pose{
+                 .centre = {320.0F + shift(rng), 180.0F + (shift(rng) / 2.0F)},
+                 .degrees = tilt(rng),
+             },
+             kHeldFrames, drawing);
         scan.add(std::nullopt);  // the cube turns to its next side
     }
 }
@@ -117,15 +124,17 @@ TEST_CASE("a side held square to the camera is read row-major as the camera sees
         const Pose pose{.centre = {300.0F, 170.0F}, .pitch = 42.0F, .degrees = degrees};
         const std::optional<SideRead> read = read_side(draw_side(kMixed, pose));
 
-        REQUIRE(read.has_value());
-        CHECK(read->stickers_found == 9);
-        CHECK(std::abs(read->pitch - pose.pitch) < 1.5F);
+        const auto& read_value = ::cube::test::must_have(read);
+        CHECK(read_value.stickers_found == 9);
+        CHECK(std::abs(read_value.pitch - pose.pitch) < 1.5F);
         for (int i = 0; i < 9; ++i) {
             const auto index = static_cast<std::size_t>(i);
+            const int column = (i % 3) - 1;
+            const int row = (i / 3) - 1;
             const cv::Point2f expected =
-                place(pose, static_cast<float>((i % 3) - 1), static_cast<float>((i / 3) - 1));
-            CHECK(cv::norm(read->centres.at(index) - expected) < 2.0);
-            CHECK(cv::norm(read->lab.at(index) - lab_of(paint(kMixed.at(index)))) < 3.0);
+                place(pose, static_cast<float>(column), static_cast<float>(row));
+            CHECK(cv::norm(read_value.centres.at(index) - expected) < 2.0);
+            CHECK(cv::norm(read_value.lab.at(index) - lab_of(paint(kMixed.at(index)))) < 3.0);
         }
     }
 }
@@ -135,12 +144,12 @@ TEST_CASE("a frame larger than the working size is read in its own pixels", "[di
     const std::optional<SideRead> read =
         read_side(draw_side(kMixed, pose, Drawing{.size = {1920, 1080}}));
 
-    REQUIRE(read.has_value());
-    CHECK(std::abs(read->pitch - pose.pitch) < 4.0F);
-    CHECK(cv::norm(read->centres.at(4) - pose.centre) < 5.0);
-    CHECK(cv::norm(read->centres.at(0) - place(pose, -1.0F, -1.0F)) < 5.0);
+    const auto& read_value = ::cube::test::must_have(read);
+    CHECK(std::abs(read_value.pitch - pose.pitch) < 4.0F);
+    CHECK(cv::norm(read_value.centres.at(4) - pose.centre) < 5.0);
+    CHECK(cv::norm(read_value.centres.at(0) - place(pose, -1.0F, -1.0F)) < 5.0);
     for (std::size_t i = 0; i < 9; ++i) {
-        CHECK(nearest_colour(read->lab.at(i)) == kMixed.at(i));
+        CHECK(nearest_colour(read_value.lab.at(i)) == kMixed.at(i));
     }
 }
 
@@ -266,27 +275,30 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
     // hue apart there and differ mostly in lightness - not enough to say
     // which is which, and colour naming alone gets them backwards. Only one
     // of the two namings is a cube that can exist.
-    const Drawing lamp_lit{.paint = [](Color colour) {
-        const auto measured = [colour]() -> cv::Vec3f {
-            switch (colour) {
-                case Color::White:
-                    return {46.2F, 16.6F, 5.9F};
-                case Color::Yellow:
-                    return {49.8F, 19.9F, 53.7F};
-                case Color::Red:
-                    return {25.6F, 48.1F, 36.3F};
-                case Color::Orange:
-                    return {34.3F, 53.5F, 45.4F};
-                case Color::Green:
-                    return {17.4F, -12.5F, 15.0F};
-                case Color::Blue:
-                    return {11.3F, 12.1F, -25.8F};
-            }
-            return {};
-        }();
-        const cv::Vec3b bgr = cube::vision::lab_to_bgr(measured);
-        return cv::Scalar(bgr[0], bgr[1], bgr[2]);
-    }};
+    const Drawing lamp_lit{
+        .paint =
+            [](Color colour) {
+                const auto measured = [colour] -> cv::Vec3f {
+                    switch (colour) {
+                        case Color::White:
+                            return {46.2F, 16.6F, 5.9F};
+                        case Color::Yellow:
+                            return {49.8F, 19.9F, 53.7F};
+                        case Color::Red:
+                            return {25.6F, 48.1F, 36.3F};
+                        case Color::Orange:
+                            return {34.3F, 53.5F, 45.4F};
+                        case Color::Green:
+                            return {17.4F, -12.5F, 15.0F};
+                        case Color::Blue:
+                            return {11.3F, 12.1F, -25.8F};
+                    }
+                    return {};
+                }();
+                const cv::Vec3b bgr = cube::vision::lab_to_bgr(measured);
+                return cv::Scalar(bgr(0), bgr(1), bgr(2));
+            },
+    };
 
     for (const unsigned seed : {21U, 22U, 23U}) {
         const Cube cube = cube::test::scramble(seed);
@@ -313,7 +325,8 @@ TEST_CASE("a stray capture gives way to a side that is shown for longer", "[dire
     const Cube cube = cube::test::scramble(31);
     SideScan scan;
     // Something that looked like a side for just long enough to be captured.
-    show(scan, kMixed, Pose{}, {}, static_cast<int>(SideScan::kMinReads) + 1);
+    const Pose square_on;
+    show(scan, kMixed, square_on, static_cast<int>(SideScan::kMinReads) + 1);
     scan.add(std::nullopt);
     REQUIRE(scan.sides().size() == 1);
 
@@ -344,22 +357,23 @@ TEST_CASE("a frame is prepared once, at the working width, for every reader", "[
     const Pose pose{.centre = {960.0F, 520.0F}, .pitch = 120.0F, .degrees = 6.0F};
 
     SECTION("a wide frame comes down to the working width and remembers the factor") {
-        const auto prepared = prepare_frame(draw_side(kMixed, pose, Drawing{.size = {1920, 1080}}));
+        const auto prepared_read =
+            prepare_frame(draw_side(kMixed, pose, Drawing{.size = {1920, 1080}}));
+        const auto& prepared = ::cube::test::must_have(prepared_read);
 
-        REQUIRE(prepared.has_value());
-        CHECK(prepared->working.cols == 640);
-        CHECK(prepared->working.rows == 360);
-        CHECK(std::abs(prepared->scale - 3.0F) < 1e-4F);
+        CHECK(prepared.working.cols == 640);
+        CHECK(prepared.working.rows == 360);
+        CHECK(std::abs(prepared.scale - 3.0F) < 1e-4F);
         // Nine stickers and whatever else the drawing has bright and bounded.
-        CHECK(prepared->contours.size() >= 9);
+        CHECK(prepared.contours.size() >= 9);
     }
     SECTION("a frame no wider than that is used as it is") {
         const cv::Mat frame = draw_side(kMixed, Pose{.centre = {300.0F, 170.0F}, .pitch = 42.0F});
-        const auto prepared = prepare_frame(frame);
+        const auto prepared_read = prepare_frame(frame);
+        const auto& prepared = ::cube::test::must_have(prepared_read);
 
-        REQUIRE(prepared.has_value());
-        CHECK(prepared->working.data == frame.data);
-        CHECK(prepared->scale == 1.0F);
+        CHECK(prepared.working.data == frame.data);
+        CHECK(prepared.scale == 1.0F);
     }
     SECTION("nothing is made of a frame that is not 8-bit BGR") {
         CHECK_FALSE(prepare_frame(cv::Mat()).has_value());
@@ -367,19 +381,19 @@ TEST_CASE("a frame is prepared once, at the working width, for every reader", "[
     }
     SECTION("a read from the preparation is the read of the frame") {
         const cv::Mat frame = draw_side(kMixed, pose, Drawing{.size = {1920, 1080}});
-        const auto prepared = prepare_frame(frame);
-        REQUIRE(prepared.has_value());
+        const auto prepared_read = prepare_frame(frame);
+        const auto& prepared = ::cube::test::must_have(prepared_read);
 
-        const std::optional<SideRead> direct = read_side(frame);
-        const std::optional<SideRead> shared = read_side(*prepared);
-        REQUIRE(direct.has_value());
-        REQUIRE(shared.has_value());
-        CHECK(shared->pitch == direct->pitch);
-        CHECK(shared->stickers_found == direct->stickers_found);
-        CHECK(shared->found == direct->found);
+        const std::optional<SideRead> direct_read = read_side(frame);
+        const std::optional<SideRead> shared_read = read_side(prepared);
+        const auto& direct = ::cube::test::must_have(direct_read);
+        const auto& shared = ::cube::test::must_have(shared_read);
+        CHECK(shared.pitch == direct.pitch);
+        CHECK(shared.stickers_found == direct.stickers_found);
+        CHECK(shared.found == direct.found);
         for (std::size_t i = 0; i < 9; ++i) {
-            CHECK(shared->centres.at(i) == direct->centres.at(i));
-            CHECK(shared->lab.at(i) == direct->lab.at(i));
+            CHECK(shared.centres.at(i) == direct.centres.at(i));
+            CHECK(shared.lab.at(i) == direct.lab.at(i));
         }
     }
 }

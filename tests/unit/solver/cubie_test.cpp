@@ -8,6 +8,8 @@
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
 
+#include "../deterministic_rng.hpp"
+#include "../must_have.hpp"
 #include "cubie.hpp"
 
 using cube::solver::Color;
@@ -29,8 +31,8 @@ using cube::solver::detail::to_cubie;
 
 TEST_CASE("a solved cube is the identity cubie", "[cubie]") {
     const auto cubie = to_cubie(Cube::solved());
-    REQUIRE(cubie.has_value());
-    CHECK(is_identity(*cubie));
+    const auto& cubie_value = ::cube::test::must_have(cubie);
+    CHECK(is_identity(cubie_value));
 }
 
 // The moves are plain data and composition is constexpr, so the properties
@@ -54,9 +56,9 @@ constexpr bool four_quarter_turns_are_identity() {
 constexpr bool every_turn_undoes_its_inverse() {
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t turn = 0; turn < 3; ++turn) {
-            const CubieCube& move = kMoveCubies.at((face * 3) + turn);
-            const CubieCube& inverse = kMoveCubies.at((face * 3) + (2 - turn));
-            if (!is_identity(multiply(move, inverse))) {
+            const CubieCube& turned = kMoveCubies.at((face * 3) + turn);
+            const CubieCube& undoing = kMoveCubies.at((face * 3) + (2 - turn));
+            if (!is_identity(multiply(turned, undoing))) {
                 return false;
             }
         }
@@ -79,8 +81,8 @@ TEST_CASE("every one of the 18 move cubies is what the facelet model does to a s
     // orientation convention, fails here and nowhere subtler.
     for (std::size_t m = 0; m < kMoveCount; ++m) {
         const auto decoded = to_cubie(Cube::solved().apply(move_from_index(m)));
-        REQUIRE(decoded.has_value());
-        CHECK(*decoded == move_cubie(m));
+        const auto& decoded_value = ::cube::test::must_have(decoded);
+        CHECK(decoded_value == move_cubie(m));
         CHECK(kMoveCubies.at(m) == move_cubie(m));
     }
 }
@@ -143,16 +145,17 @@ TEST_CASE("the cubie model agrees with the facelet model on every move from rand
     // cube Cube::apply produces must decode to the cubie that multiplying
     // by the move cubie predicts. A transcription error in either model, or
     // a wrong orientation convention, fails here.
-    std::mt19937 rng(20261013);
+    std::mt19937 rng = ::cube::test::deterministic_rng(20261013U);
     for (int trial = 0; trial < 150; ++trial) {
         const Cube cube =
-            random_scramble(static_cast<unsigned>(rng()), 5 + static_cast<int>(rng() % 40));
+            random_scramble(static_cast<unsigned>(rng()),
+                            ::cube::solver::MoveCount{5 + static_cast<int>(rng() % 40)});
         const auto before = to_cubie(cube);
-        REQUIRE(before.has_value());
+        const auto& before_value = ::cube::test::must_have(before);
         for (std::size_t m = 0; m < kMoveCount; ++m) {
             const auto after = to_cubie(cube.apply(move_from_index(m)));
-            REQUIRE(after.has_value());
-            CHECK(*after == multiply(*before, move_cubie(m)));
+            const auto& after_value = ::cube::test::must_have(after);
+            CHECK(after_value == multiply(before_value, move_cubie(m)));
         }
     }
 }

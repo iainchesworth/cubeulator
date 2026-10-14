@@ -11,6 +11,7 @@
 using cube::solver::Cube;
 using cube::solver::Face;
 using cube::solver::Move;
+using cube::solver::MoveCount;
 using cube::solver::random_scramble;
 namespace detail = cube::solver::detail;
 
@@ -49,25 +50,27 @@ std::vector<std::pair<Face, int>> f2l_positions() {
 // failure three stages downstream.
 TEST_CASE("every last-layer alphabet word fixes all 33 first-two-layer facelet positions",
           "[last_layer]") {
-    const std::array<std::pair<const char*, const std::vector<Move>*>, 8> alphabet = {{
-        {"U", &detail::kAdjustU},
-        {"U2", &detail::kAdjustU2},
-        {"U'", &detail::kAdjustUPrime},
-        {"edge flip", &detail::kEdgeOrientFlip},
-        {"Sune", &detail::kSune},
-        {"Anti-Sune", &detail::kAntiSune},
-        {"A-perm", &detail::kCornerCycle},
-        {"U-perm", &detail::kEdgeCycle},
-    }};
+    const std::array<std::pair<const char*, std::vector<Move>>, 8> alphabet = {
+        {
+            {"U", detail::adjust_u()},
+            {"U2", detail::adjust_u2()},
+            {"U'", detail::adjust_u_prime()},
+            {"edge flip", detail::edge_orient_flip()},
+            {"Sune", detail::sune()},
+            {"Anti-Sune", detail::anti_sune()},
+            {"A-perm", detail::corner_cycle()},
+            {"U-perm", detail::edge_cycle()},
+        },
+    };
     const std::vector<std::pair<Face, int>> positions = f2l_positions();
 
     for (const auto& [name, moves] : alphabet) {
         CAPTURE(name);
         for (unsigned seed = 0; seed < 100; ++seed) {
             CAPTURE(seed);
-            const Cube before = random_scramble(seed, 25);
+            const Cube before = random_scramble(seed, MoveCount{25});
             Cube after = before;
-            for (const Move& move : *moves) {
+            for (const Move& move : moves) {
                 after = after.apply(move);
             }
             for (const auto& [face, index] : positions) {

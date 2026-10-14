@@ -36,12 +36,12 @@ consteval Word parse_word(std::string_view text) {
     Word word;
     std::size_t pos = 0;
     while (pos < text.size()) {
-        if (text[pos] == ' ') {
+        if (text.at(pos) == ' ') {
             ++pos;
             continue;
         }
         Face face{};
-        switch (text[pos]) {
+        switch (text.at(pos)) {
             case 'U':
                 face = Face::U;
                 break;
@@ -65,20 +65,20 @@ consteval Word parse_word(std::string_view text) {
         }
         ++pos;
         int turns = 1;
-        if (pos < text.size() && text[pos] == '\'') {
+        if (pos < text.size() && text.at(pos) == '\'') {
             turns = 3;
             ++pos;
-        } else if (pos < text.size() && text[pos] == '2') {
+        } else if (pos < text.size() && text.at(pos) == '2') {
             turns = 2;
             ++pos;
         }
-        if (pos < text.size() && text[pos] != ' ') {
+        if (pos < text.size() && text.at(pos) != ' ') {
             malformed_last_layer_word();  // e.g. "R'2" or "R3"
         }
         if (word.length == kMaxWordMoves) {
             malformed_last_layer_word();  // too long to store
         }
-        word.moves[word.length++] = Move{face, turns};
+        word.moves.at(word.length++) = Move{.face = face, .turns = turns};
     }
     return word;
 }
@@ -87,7 +87,7 @@ template <std::size_t N>
 consteval std::array<Word, N> parse_words(const std::array<std::string_view, N>& texts) {
     std::array<Word, N> words{};
     for (std::size_t i = 0; i < N; ++i) {
-        words[i] = parse_word(texts[i]);
+        words.at(i) = parse_word(texts.at(i));
     }
     return words;
 }
@@ -105,19 +105,19 @@ std::span<const Move> moves_of(const Word& word) noexcept {
 }  // namespace
 
 std::optional<std::span<const Move>> oll_algorithm(const CubieCube& cube) noexcept {
-    return moves_of(kOll[oll_case(cube)]);
+    return moves_of(kOll.at(oll_case(cube)));
 }
 
 std::optional<std::span<const Move>> pll_algorithm(const CubieCube& cube) noexcept {
     for (std::size_t pos = 0; pos < 4; ++pos) {
-        if (cube.co[pos] != 0 || cube.eo[pos] != 0) {
+        if (cube.co.at(pos) != 0 || cube.eo.at(pos) != 0) {
             return std::nullopt;
         }
     }
-    if (parity_of_four(cube.cp.data()) != parity_of_four(cube.ep.data())) {
+    if (parity_of_four(cube.cp) != parity_of_four(cube.ep)) {
         return std::nullopt;
     }
-    return moves_of(kPll[pll_slot(cube)]);
+    return moves_of(kPll.at(pll_slot(cube)));
 }
 
 }  // namespace cube::solver::detail

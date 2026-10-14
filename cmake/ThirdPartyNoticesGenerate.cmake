@@ -473,6 +473,22 @@ foreach(tok IN LISTS _link_tokens)
             set(_first_party TRUE)
         endif()
     endforeach()
+    # In a manifest-mode build vcpkg installs into the build directory
+    # (build/<preset>/vcpkg_installed), which is where CI and the release put
+    # it, so "under the build directory" does not mean "ours": a path under the
+    # vcpkg tree, or under Qt's, is theirs first. Tested the other way round
+    # this classified OpenCV, fmt, libpng, libwebp and the rest as first-party
+    # in every CI build, and the packages shipped their DLLs with no notice.
+    if(_first_party)
+        foreach(foreign IN ITEMS "${_lc_triplet}" "${_lc_qt}")
+            if(foreign)
+                string(FIND "${_lt}" "${foreign}/" _pf)
+                if(_pf EQUAL 0)
+                    set(_first_party FALSE)
+                endif()
+            endif()
+        endforeach()
+    endif()
     if(_first_party)
         cn_record_link("${tok}" "first-party" "")
         continue()
@@ -627,6 +643,21 @@ if(DEFINED CUBE_NOTICES_DEPLOY_DIR AND IS_DIRECTORY "${CUBE_NOTICES_DEPLOY_DIR}"
             list(APPEND _deployed_unknown "${_dn}")
         endif()
     endforeach()
+endif()
+
+# --- 5b. a vcpkg tree that nothing was attributed to ---------------------------
+# The project's own vcpkg.json says what it needs from vcpkg. If there is an
+# installed tree and the link line reached none of it, the classification above
+# is wrong, not the project: that is how the notices of every CI build came to
+# list no vcpkg port at all while the packages shipped opencv_core4.dll. A
+# silently empty section is the failure this script exists to prevent, so it is
+# not allowed to be silent.
+if(_triplet_dir AND IS_DIRECTORY "${_triplet_dir}" AND EXISTS "${CUBE_NOTICES_SOURCE_DIR}/vcpkg.json")
+    file(READ "${CUBE_NOTICES_SOURCE_DIR}/vcpkg.json" _project_vcpkg)
+    cn_json_get(_dep_probe "${_project_vcpkg}" dependencies 0)
+    if(_dep_probe AND NOT _ports_linked)
+        cn_unresolved("vcpkg.json declares dependencies and ${_triplet_dir} is installed, but no linked library was attributed to a vcpkg port - the link line was classified wrongly (is the vcpkg tree under the build directory?)")
+    endif()
 endif()
 
 # --- 6. closure: ports ---------------------------------------------------------

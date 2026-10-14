@@ -30,9 +30,11 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
                 colour_distance(lab.at(cell), colours.at(static_cast<std::size_t>(shown.at(cell))));
             ++cells;
         }
-        fits.at(i) = HoldFit{.hold = holds.at(i),
-                             .distance = cells > 0 ? total / static_cast<float>(cells)
-                                                   : std::numeric_limits<float>::max()};
+        fits.at(i) = HoldFit{
+            .hold = holds.at(i),
+            .distance =
+                cells > 0 ? total / static_cast<float>(cells) : std::numeric_limits<float>::max(),
+        };
     }
     // Stable, so holds that fit equally keep the order all_holds() gives
     // them and the answer does not depend on the sort.

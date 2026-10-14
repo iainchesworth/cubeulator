@@ -102,6 +102,8 @@ public:
     ~AsyncRecorder();
     AsyncRecorder(const AsyncRecorder&) = delete;
     AsyncRecorder& operator=(const AsyncRecorder&) = delete;
+    AsyncRecorder(AsyncRecorder&&) = delete;
+    AsyncRecorder& operator=(AsyncRecorder&&) = delete;
 
     // Creates the directory (and fullres/ when enabled), truncates the
     // index, writes the manifest. Returns the problem on refusal (bad

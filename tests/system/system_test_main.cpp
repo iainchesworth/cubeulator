@@ -14,6 +14,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFont>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -166,6 +167,19 @@ int main(int argc, char* argv[]) {
 
     QGuiApplication app(argc, argv);
     cube::systest::install_warning_capture();
+
+    // The app's own face (Archivo) is not installed on a test machine and the
+    // repository ships none yet, so every string is set in the machine's
+    // default: Segoe UI on Windows, DejaVu Sans - a good deal wider - on a
+    // Linux runner. CUBE_I18N_TEST_FONT=<face> substitutes a face for Archivo,
+    // so that the layout checks can be run against a wide one where the
+    // default is narrow (docs/i18n.md, "Which face the layout checks run in").
+    if (const QString family = qEnvironmentVariable("CUBE_I18N_TEST_FONT"); !family.isEmpty()) {
+        QFont::insertSubstitution(QStringLiteral("Archivo"), family);
+        QFont font = QGuiApplication::font();
+        font.setFamily(family);
+        QGuiApplication::setFont(font);
+    }
 
     Catch::Session session;
     if (const int error = session.applyCommandLine(argc, argv); error != 0) {

@@ -110,6 +110,78 @@ cube_deploy_sanitizer_runtime(cube_unit_tests)
 # own with `ctest -L slow`.
 catch_discover_tests(cube_unit_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS)
 
+# --- Performance tests: work budgets and a few relative timings -------------
+# cube_perf_tests holds the tier that fails a change that makes the app
+# meaningfully slower, the way a unit test fails a change that makes it wrong:
+# a budget on what the solver and the reader do (nodes visited, pixel buffers
+# allocated), exact on every machine, and wall-time checks against a
+# calibration workload that only run on request. Its own binary so that it can
+# be built and run alone (the dispatch-only `perf` CI leg builds nothing else)
+# and so that nothing else's static state or allocator churn is in the way of a
+# stopwatch. cube::lib only: no Qt, which is also why it runs on a leg with
+# CUBEULATOR_BUILD_APP=OFF. docs/testing.md, "Performance tests".
+add_executable(cube_perf_tests
+    perf/measure.cpp
+    perf/metrics.cpp
+    perf/solver_work_test.cpp
+    perf/scan_work_test.cpp
+    perf/timing_test.cpp
+    perf/report_test.cpp
+    perf/profiler_listener.cpp)
+
+target_link_libraries(cube_perf_tests
+    PRIVATE
+        cube::lib
+        cube_test_platform
+        cube::warnings
+        cube::sanitizers
+        cube::coverage
+        Catch2::Catch2WithMain)
+
+# drawn_cube.hpp, shared with the scan tests; and the solver's private
+# headers, for the hard caps the budgets are held under (kMaxVisitedNodes,
+# kMaxLastLayerStates) - the same white-box path last_layer_test.cpp uses.
+target_include_directories(cube_perf_tests PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/perf"
+    "${CMAKE_CURRENT_SOURCE_DIR}/unit"
+    "${CMAKE_SOURCE_DIR}/src/lib/src/solver")
+
+# What a build is, as far as a stopwatch goes (perf/perf_build.hpp). Values
+# CMake passes in, not preprocessor conditionals: the configuration is a
+# generator expression so that a multi-config generator is right per
+# configuration, and the instrumented flag is the options that put coverage
+# or a sanitizer in. The sanitizers only ever apply to Debug, which is not an
+# optimised configuration, so the coverage option is the whole of it.
+target_compile_definitions(cube_perf_tests PRIVATE
+    "CUBE_PERF_OPTIMISED=$<IF:$<CONFIG:Release,RelWithDebInfo,MinSizeRel>,1,0>"
+    "CUBE_PERF_INSTRUMENTED=$<IF:$<BOOL:${CUBEULATOR_ENABLE_COVERAGE}>,1,0>"
+    "CUBE_PERF_BUILD_TYPE=\"$<CONFIG>\"")
+
+cube_deploy_sanitizer_runtime(cube_perf_tests)
+
+# Two registrations of one binary, because a stopwatch is the one test that
+# cannot share the machine: [timing] cases are RUN_SERIAL, so `ctest -j` runs
+# them alone, and they skip themselves unless CUBE_PERF_TIMING is set (the
+# *-perf test presets set it; docs/testing.md says why they are opt-in). The
+# budget cases are plain counts and run in parallel with everything else. The
+# hidden [perf-report] case is in neither: it is a tool, not a test.
+catch_discover_tests(cube_perf_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS
+    TEST_SPEC "[perf]~[timing]")
+catch_discover_tests(cube_perf_tests DISCOVERY_MODE PRE_TEST ADD_TAGS_AS_LABELS
+    TEST_SPEC "[timing]"
+    PROPERTIES RUN_SERIAL TRUE)
+
+# The optional Tracy comparison (tools/perf/tracy_check.py) is not run by any
+# test - it needs a profiling build and a capture - but its parsing and its
+# comparison are, on a canned export, so that it cannot rot unseen.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(NAME perf_tracy_check_selftest
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/perf/test_tracy_check.py")
+    set_tests_properties(perf_tracy_check_selftest PROPERTIES
+        LABELS "perf" ENVIRONMENT "PYTHONUTF8=1")
+endif()
+
 # --- Integration tests: exercise several components together --------------
 add_executable(cube_integration_tests
     integration/platform_integration_test.cpp
@@ -350,8 +422,13 @@ if(CUBEULATOR_BUILD_APP)
         add_test(NAME i18n_ids_in_code_exist
             COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/i18n/check_ids.py"
                     --lupdate "$<TARGET_FILE:Qt6::lupdate>")
+        # The browser build bundles its own Japanese and Chinese faces, cut down
+        # to the characters the catalogues use: a translation that brings in a
+        # character they lack is found here, not as an empty box on a page.
+        add_test(NAME i18n_web_cjk_subsets_cover_catalogues
+            COMMAND "${Python3_EXECUTABLE}" "${CMAKE_SOURCE_DIR}/tools/fonts/subset_cjk.py" --check)
         set_tests_properties(i18n_catalogues_match_strings i18n_no_unwrapped_literals
-            i18n_lint_selftest i18n_ids_in_code_exist
+            i18n_lint_selftest i18n_ids_in_code_exist i18n_web_cjk_subsets_cover_catalogues
             PROPERTIES LABELS "i18n" ENVIRONMENT "PYTHONUTF8=1")
     else()
         message(WARNING "Python 3 not found: the translation gates that are scripts are not registered")

@@ -16,13 +16,13 @@
 
 namespace cube::solver {
 
-Cube random_scramble(unsigned seed, int move_count) noexcept {
+Cube random_scramble(unsigned seed, MoveCount move_count) noexcept {
     std::mt19937 rng{seed};
     std::uniform_int_distribution<std::size_t> face_dist{0, kAllFaces.size() - 1};
     std::uniform_int_distribution<int> turn_dist{1, 3};
 
     Cube cube = Cube::solved();
-    for (int i = 0; i < move_count; ++i) {
+    for (int i = 0; i < static_cast<int>(move_count); ++i) {
         cube = cube.apply(Move{.face = kAllFaces.at(face_dist(rng)), .turns = turn_dist(rng)});
     }
     return cube;

@@ -266,6 +266,38 @@
       ],
       "licenseFile": "src/app/qt/fonts/OFL-NotoSansArabic.txt",
       "notes": "Arabic. Bundled by the kit under src/app/qt/fonts/; emitted once those files exist."
+    },
+    {
+      "id": "font-noto-sans-jp",
+      "name": "Noto Sans JP (typeface, subset)",
+      "version": "2.004 (google/fonts commit 66928797f271)",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'",
+      "homepage": "https://github.com/notofonts/noto-cjk",
+      "kind": "font",
+      "planned": true,
+      "platforms": ["web"],
+      "files": [
+        "src/app/platform/web/fonts/NotoSansJP"
+      ],
+      "licenseFile": "src/app/platform/web/fonts/OFL-NotoSansJP.txt",
+      "notes": "Japanese in the browser build, which has no system fonts. The variable font cut down to the characters the Japanese catalogue and language name use (tools/fonts/subset_cjk.py); modified from the original, under a name that does not contain the Reserved Font Name. Provenance and hashes: src/app/platform/web/fonts/README.md."
+    },
+    {
+      "id": "font-noto-sans-sc",
+      "name": "Noto Sans SC (typeface, subset)",
+      "version": "2.004 (google/fonts commit 66928797f271)",
+      "license": "OFL-1.1",
+      "copyright": "Copyright 2014-2021 Adobe (http://www.adobe.com/), with Reserved Font Name 'Source'",
+      "homepage": "https://github.com/notofonts/noto-cjk",
+      "kind": "font",
+      "planned": true,
+      "platforms": ["web"],
+      "files": [
+        "src/app/platform/web/fonts/NotoSansSC"
+      ],
+      "licenseFile": "src/app/platform/web/fonts/OFL-NotoSansSC.txt",
+      "notes": "Simplified Chinese in the browser build, which has no system fonts. The variable font cut down to the characters the Simplified Chinese catalogue and language name use (tools/fonts/subset_cjk.py); modified from the original, under a name that does not contain the Reserved Font Name. Provenance and hashes: src/app/platform/web/fonts/README.md."
     }
   ],
   "ignoredFiles": {
