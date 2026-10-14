@@ -223,6 +223,10 @@ void App::reset(Start start, Scene3D scene) {
 
     reset_language();
     mark("language");
+    // Nothing kept, and keeping: the history is a file in the process's data
+    // folder, which every case shares.
+    runtime_->history().clear();
+    runtime_->history().setKeep(true);
     settings_state_->setProperty("themeMode", "light");
     settings_state_->setProperty("shaderStyleIndex", 0);
     // Still, not spinning: a spinning cube is a scene that changes every

@@ -51,6 +51,7 @@ Rectangle {
                 width: parent.width; height: 44
                 variant: "secondary"; block: true
                 objectName: "launch.solveHistory"; text: qsTrId("home.history"); trailingIcon: "chevron-right"
+                onClicked: AppState.openHistory()
             }
             Rectangle { width: parent.width; height: 1; color: Theme.divider }
             Item {
@@ -138,7 +139,7 @@ Rectangle {
                         objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
                         onClicked: AppState.beginScan()
                     }
-                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: qsTrId("home.history") }
+                    AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: qsTrId("home.history"); onClicked: AppState.openHistory() }
                 }
             }
 

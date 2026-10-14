@@ -90,6 +90,7 @@ void AppControllers::registerWithQml() {
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "PlatformFacts", &platform);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveController", &solve);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "HeldCube", &held);
+    qmlRegisterSingletonInstance("Cubeulator", 1, 0, "SolveHistory", &history);
     qmlRegisterSingletonInstance("Cubeulator", 1, 0, "Diagnostics", &diagnostics);
 }
 

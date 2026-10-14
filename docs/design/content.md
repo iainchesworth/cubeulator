@@ -174,7 +174,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-413 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+417 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -564,6 +564,10 @@ Review the solution.
 | `history.clear.body` | *one:* %n solve will be deleted from this device.<br>*other:* %n solves will be deleted from this device. | Dialog body. |
 | `history.clear.keep` | Keep them | Dialog button: the safe choice. |
 | `history.clear.confirm` | Clear | Dialog button. |
+| `history.a11y.row` | %1. %2 | Screen-reader name of one row: the date and time, then the summary (history.item.done or history.item.unfinished). %1 is the date and time, %2 the summary. |
+| `history.a11y.delete` | Delete, %1 | Screen-reader name of the delete button on one row. %1 is the row's date and time, so that a list of them can be told apart. |
+| `history.a11y.deleted` | Solve deleted. | Announced by a screen reader after one solve is deleted from the list. |
+| `history.a11y.cleared` | History cleared. | Announced by a screen reader after every solve is deleted from the list. |
 
 #### `settings`
 
