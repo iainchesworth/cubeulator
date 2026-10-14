@@ -352,7 +352,16 @@ jobs:
         run: |
           if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
               -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
-            choco install nsis --version 3.13.0 --no-progress -y
+            # Chocolatey's community feed answers 504 Gateway Timeout now and
+            # then; it failed two pull requests' Windows legs within one hour
+            # on 2026-10-14 over a package that was never the problem.
+            foreach ($attempt in 1..4) {
+              choco install nsis --version 3.13.0 --no-progress -y
+              if ($LASTEXITCODE -eq 0) { break }
+              if ($attempt -eq 4) { throw "choco install nsis failed four times" }
+              Write-Warning "choco install nsis failed (attempt $attempt of 4)"
+              Start-Sleep -Seconds (15 * $attempt)
+            }
           }
 
       - name: Install packaging tools (Linux)
