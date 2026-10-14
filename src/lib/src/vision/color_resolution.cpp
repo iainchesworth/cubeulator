@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <cube/vision/color_resolution.hpp>
 
 #include <cube/profiling.hpp>
@@ -11,7 +10,6 @@
 #include <expected>
 #include <limits>
 #include <numbers>
-#include <numeric>
 
 namespace cube::vision {
 
@@ -535,8 +533,13 @@ Result<std::array<std::array<Facelet, 9>, 6>> resolve_colors(
     // displaced colour would leave its own reference unpaired at a far
     // larger cost. 6! = 720 permutations - brute force is exact and trivial.
     const ColorPalette palette = default_palette();
+    // The identity permutation, written out: std::ranges::iota is C++23 and
+    // Apple's libc++ (Xcode 16.4) does not have it, and modernize-use-ranges
+    // rewrites std::iota into it.
     std::array<std::size_t, face_count> permutation{};
-    std::ranges::iota(permutation, std::size_t{0});
+    for (std::size_t i = 0; i < permutation.size(); ++i) {
+        permutation.at(i) = i;
+    }
     std::array<std::size_t, face_count> best_permutation = permutation;
     float best_total = std::numeric_limits<float>::max();
     do {

@@ -4,10 +4,14 @@ Cubeulator is a camera-driven, on-device Rubik's Cube solver: hold each side of
 a scrambled cube up to the camera, and it works out the cube, solves it, and
 shows you the solution turn by turn on a 3D cube.
 
+**[Try it in your browser](web.md)** - the same app, as WebAssembly, with
+nothing to install.
+
 !!! note "Status: pre-release"
-    For Windows, macOS and Linux; phones are not a target of this release. The
-    scan has been checked on recorded sessions and a webcam, not yet across
-    cameras, rooms and cubes, and there is no review screen yet. The
+    For Windows, macOS and Linux, and in a browser; native phone apps are not a
+    target of this release. The scan has been checked on recorded sessions and a
+    webcam, not yet across cameras, rooms and cubes, and there is no review
+    screen yet. The
     [changelog](https://github.com/iainchesworthlabs/cubeulator/blob/main/CHANGELOG.md)
     says what each release does and what is not yet proven.
 

@@ -9,9 +9,10 @@
 #
 # Needs a platform that can draw - a desktop session, or Xvfb with software GL
 # on a headless Linux box - because Qt Quick 3D has no software fallback and
-# the screenshots have to be rendered. That is why this is not part of the
-# plain `ctest` run CI's build-and-test legs do: it carries the label
-# `system`, and those legs say -LE system.
+# the screenshots have to be rendered. That is why this is not part of a plain
+# `ctest` run: it carries the label `system`, which the committed test presets
+# exclude (and CI's build-and-test legs say -LE system as well). Run it with
+# the matching `<preset>-system` test preset.
 # ---------------------------------------------------------------------------
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick Quick3D QuickControls2 LabsSettings Test)
 
@@ -114,14 +115,21 @@ foreach(shard RANGE 1 ${CUBE_SYSTEM_WALK_SHARDS})
 endforeach()
 
 # The screenshot tour: a picture of every screen and state, narrow and wide,
-# light and dark. Writes <build>/system-test-output/tour/screens/*.png.
-add_test(NAME system.tour
-    COMMAND cube_system_tests "[tour]"
-    WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
-set_tests_properties(system.tour PROPERTIES
-    LABELS "system"
-    TIMEOUT 1200
-    ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour")
+# light and dark, in one entry per layout so the two can run side by side.
+# Writes <build>/system-test-output/tour/<layout>/screens/*.png. They are the
+# longest entries by far, so they say so (COST) and a parallel run starts them
+# first rather than leaving one for last.
+foreach(layout narrow wide)
+    set(tour_test "system.tour.${layout}")
+    add_test(NAME ${tour_test}
+        COMMAND cube_system_tests "[tour][${layout}]"
+        WORKING_DIRECTORY "$<TARGET_FILE_DIR:cube_system_tests>")
+    set_tests_properties(${tour_test} PROPERTIES
+        LABELS "system"
+        TIMEOUT 1200
+        COST 1000
+        ENVIRONMENT "CUBE_SYSTEM_TEST_OUT=${CUBE_SYSTEM_OUT}/tour/${layout}")
+endforeach()
 
 # The reach gate: whether the walk visited every screen, state and control in
 # the inventory. Reads the reports the shards wrote and judges their union

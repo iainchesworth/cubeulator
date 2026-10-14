@@ -50,6 +50,23 @@ phone build opens in `home.camera-unsupported` and works by hand entry.
 | **Launch** | The system splash screen: the icon on `paper` (light) or its dark value | A launch screen: the mark on `paper`. No text |
 | **Package** | `.aab` for the store, `.apk` for testing | Xcode archive. The App Store question is open (plan decision 5) |
 
+### Web
+
+The same shell, as WebAssembly in a browser tab (`src/app/platform/web/`,
+[Try it in your browser](../web.md)). It is a desktop-shaped platform that
+may be on a phone, so the shell's own responsive breakpoints do the
+work, not a platform flag.
+
+| | Browser |
+|---|---|
+| **Camera permission** | No prompt in advance: the browser asks when the camera is first opened, in its own UI, and shows its own indicator while it is on. Until it has been allowed the browser hides every camera's name, so the list says *Back camera* and *Front camera* (or just *Camera* when it can see only one). The app cannot send a person to a settings page: a refusal is changed from the address bar's site settings |
+| **Settings** | Kept in the browser's `localStorage` for the site (`QSettings`' native format on this platform), so they survive a reload and are lost with the site's data |
+| **Exposure and white balance** | Not locked: the browser has no control the app has proven (`photometry_control_supported()` is false), so the camera's automatics run during a scan |
+| **Fonts** | The browser build has no system fonts, only the face Qt bundles. The Latin, Hebrew, Arabic and Yiddish languages render with it (checked in a build); Japanese and Simplified Chinese show as empty boxes until a CJK face is bundled - a CJK face is large, so that is a decision for the family's font work (`design/family.md`), not a default |
+| **Quit** | Close the tab. There is nothing to keep running |
+| **Package** | None: a directory of static files, published under `/app/` of the documentation site |
+| **Threads** | Web Workers on shared memory, which the browser only grants to a cross-origin-isolated page: the page registers its own service worker to add the two headers on a host that cannot send them (`cubeulator-isolation.js`) |
+
 ## Back
 
 The shell keeps a stack of screens and exposes one `back()` action. The

@@ -86,9 +86,10 @@ enum class SolveMethod : std::uint8_t {
 // valid (guards against a malformed read, e.g. from a vision pipeline). For
 // Intermediate and Advanced, a cube that is valid but unreachable by turning
 // the sides (a twisted corner, a flipped edge, a swapped pair, centres out of
-// order) fails with CubeError::unsolvable_state; Beginner does not check this
-// up front and reports CubeError::no_solution for such a cube. Any other
-// failure is a solver bug, not a legitimate dead end.
+// order) fails with CubeError::unsolvable_state; Beginner reports
+// CubeError::no_solution for such a cube, as it always has, but also checks
+// up front, so it says so at once rather than after its searches give up. Any
+// other failure is a solver bug, not a legitimate dead end.
 [[nodiscard]] Result<Solution> solve(const Cube& scrambled,
                                      SolveMethod method = SolveMethod::Beginner);
 

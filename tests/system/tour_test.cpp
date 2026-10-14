@@ -24,6 +24,7 @@
 #include <QQuickWindow>
 
 #include <set>
+#include <string>
 #include <vector>
 
 namespace {
@@ -57,10 +58,14 @@ struct Tour {
     }
 };
 
-}  // namespace
-
-TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[system][tour]") {
-    App& app = App::fresh();
+// One layout's pictures, light and dark. The two layouts are cases (and ctest
+// entries) of their own so that they can run side by side: the tour is the
+// longest thing in the suite on a software renderer, and half of it is a
+// third of the job's time when it is one entry.
+void tour_layout(const std::string& layout) {
+    // The pictures are the review surface: the cube as it is, light probe
+    // and all.
+    App& app = App::fresh(App::Start::launch, App::Scene3D::full);
     // Pictures that do not depend on when they were taken: the launch cube
     // holds still. (Its turning is checked in render_test.cpp.)
     app.settings_state().setProperty("cubeAutoRotate", false);
@@ -68,7 +73,12 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
     const cube::solver::Cube cube = cube::systest::scramble(3);
     std::vector<QString> all;
 
+    std::size_t variants = 0;
     for (const Variant& variant : kVariants) {
+        if (layout != variant.layout) {
+            continue;
+        }
+        ++variants;
         INFO("variant " << variant.layout << " " << variant.theme);
         app.go("launch");
         FakeCamera::instance().reset();
@@ -128,17 +138,19 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
             QString("scan-cube-read-%1-%2")
                 .arg(QString::fromUtf8(variant.layout), QString::fromUtf8(variant.theme))));
 
-        // The solution, at the start, part way and done. A press plays the
-        // turn; the step lands when it has finished.
+        // The solution, at the start, part way and done. The pictures want
+        // the cube in those places, not the press that gets it there (the
+        // journey presses every move), so the controller is stepped directly:
+        // a press plays the turn and waits for it, ninety times a variant, and
+        // on a software renderer that was most of the tour.
         REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }, 180'000));
         const int total = solve.totalMoves();
         REQUIRE(total > 0);
         const auto step_to = [&](int index) {
             while (solve.moveIndex() < index) {
-                const int before = solve.moveIndex();
-                app.click("solve.next");
-                REQUIRE(app.wait_for([&]() { return solve.moveIndex() == before + 1; }, 15'000));
+                solve.nextMove();
             }
+            app.pump(20);
         };
         tour.shoot("solve-start");
         step_to(total / 2);
@@ -172,6 +184,19 @@ TEST_CASE("the screenshot tour: every screen, both layouts, both themes", "[syst
         }
     }
 
-    // Twelve pictures a variant, four variants.
-    CHECK(all.size() == 12 * kVariants.size());
+    // Twelve pictures a variant, two variants a layout.
+    CHECK(variants == 2);
+    CHECK(all.size() == 12 * variants);
+}
+
+}  // namespace
+
+TEST_CASE("the screenshot tour: every screen in the narrow layout, light and dark",
+          "[system][tour][narrow]") {
+    tour_layout("narrow");
+}
+
+TEST_CASE("the screenshot tour: every screen in the wide layout, light and dark",
+          "[system][tour][wide]") {
+    tour_layout("wide");
 }

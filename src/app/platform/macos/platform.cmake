@@ -11,6 +11,10 @@ set(CUBEULATOR_PLATFORM_TEST_QPA_PLATFORM "offscreen")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_VARIABLES "")
 set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 
+# Not hidden: whether a transparent, click-through window is exposed and
+# rendered under AppKit has not been measured.
+set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
+
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/local/opt/qt6" "/opt/homebrew/opt/qt6")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS macos clang_64)

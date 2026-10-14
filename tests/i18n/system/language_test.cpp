@@ -414,9 +414,13 @@ TEST_CASE("in Hebrew every control on every screen is inside the window, bar the
         CHECK(known.count(key) == 1);
     }
     for (const std::string& key : known) {
-        if (on_show.count(key) == 1) {
-            INFO("no longer outside the window; remove it from the known list: " << key);
-            CHECK(overflowing.count(key) == 1);
+        // Said, not failed: see layout_test.cpp. The list is of controls that
+        // overflow somewhere; one that fits on this platform is not a fix.
+        if (on_show.count(key) == 1 && overflowing.count(key) == 0) {
+            WARN(
+                "fits in its window on this platform; remove it from the known list when it does "
+                "on all of them: "
+                << key);
         }
     }
 }

@@ -30,7 +30,7 @@
 #
 #   2. NO OS HEADERS OR OS-QUERYING APIs outside the platform section
 #      (src/app/platform/ and tests/platform/): not <windows.h>, <unistd.h>,
-#      <sys/...>, Objective-C or Android headers, and not QSysInfo,
+#      <sys/...>, Objective-C, Android or Emscripten headers, and not QSysInfo,
 #      QOperatingSystemVersion, Q_OS_*, QJniObject, platformName() or QML's
 #      Qt.platform. Code that needs an OS service declares an interface in
 #      src/app/interfaces/ and gets one implementation per platform.
@@ -41,9 +41,10 @@
 #      comment, by one of them - a file nothing compiles is a platform that
 #      was "added" in the source tree and never in CMake.
 #
-#   4. NO OS TESTS IN CMAKE outside cmake/Platform.cmake and the platform
-#      fragments: no WIN32, APPLE, ANDROID, IOS, UNIX, LINUX, MINGW, CYGWIN,
-#      CMAKE_SYSTEM_NAME or $<PLATFORM_ID:...>. (Compiler tests - MSVC,
+#   4. NO OS TESTS IN CMAKE outside cmake/Platform.cmake, the platform
+#      fragments and the vcpkg triplets in cmake/triplets/ (a triplet is a
+#      platform's name and flags): no WIN32, APPLE, ANDROID, IOS, UNIX, LINUX, MINGW, CYGWIN,
+#      EMSCRIPTEN, CMAKE_SYSTEM_NAME or $<PLATFORM_ID:...>. (Compiler tests - MSVC,
 #      CXX_COMPILER_ID - are a different axis and are not matched, nor are
 #      property names such as WIN32_EXECUTABLE.)
 #
@@ -152,8 +153,9 @@ $osHeaderPattern = '^\s*(?:/\*.*?\*/\s*)*#\s*(include|import)\s*[<"](' + (@(
         'pthread\.h', 'semaphore\.h', 'sched\.h', 'dirent\.h', 'glob\.h', 'libgen\.h',
         'netdb\.h', 'ifaddrs\.h', 'execinfo\.h', 'utime\.h', 'syslog\.h', 'jni\.h',
         'sys/[^>"]+', 'linux/[^>"]+', 'arpa/[^>"]+', 'netinet/[^>"]+', 'net/[^>"]+',
-        # Apple, Android, X11
+        # Apple, Android, X11, the browser (Emscripten)
         'mach/[^>"]+', 'mach-o/[^>"]+', 'android/[^>"]+', 'TargetConditionals\.h',
+        'emscripten\.h', 'emscripten/[^>"]+',
         'AppKit/[^>"]+', 'Cocoa/[^>"]+', 'CoreFoundation/[^>"]+', 'CoreMedia/[^>"]+',
         'AVFoundation/[^>"]+', 'Foundation/[^>"]+', 'UIKit/[^>"]+', 'objc/[^>"]+',
         'X11/[^>"]+', 'xcb/[^>"]+') -join '|') + ')[>"]'
@@ -168,7 +170,7 @@ $osApiPattern = '\b(QSysInfo|QOperatingSystemVersion|QJniObject|QJniEnvironment|
 # Rule 4. A test of the operating system in CMake. The look-arounds keep
 # CMAKE_HOST_WIN32 (the machine running CMake, not the target), WIN32_EXECUTABLE
 # and QT_ANDROID_PACKAGE_SOURCE_DIR (property names) from matching.
-$cmakeOsPattern = '(?<![A-Za-z0-9_])(WIN32|APPLE|ANDROID|IOS|UNIX|LINUX|MINGW|CYGWIN)(?![A-Za-z0-9_])|' +
+$cmakeOsPattern = '(?<![A-Za-z0-9_])(WIN32|APPLE|ANDROID|IOS|UNIX|LINUX|MINGW|CYGWIN|EMSCRIPTEN)(?![A-Za-z0-9_])|' +
     'CMAKE_SYSTEM_NAME|\$<PLATFORM_ID'
 
 $violations = [System.Collections.Generic.List[object]]::new()
@@ -224,8 +226,12 @@ foreach ($file in $candidates) {
     }
     $isCpp = Test-IsCppSource $file
     $isCMake = Test-IsCMake $file
+    # A vcpkg triplet is a platform's name and flags, in a format that cannot
+    # read a CMake variable (the same reason the presets and vcpkg.json carry
+    # platform names), so cmake/triplets/ is as exempt as the fragments.
     $isSelectorOrFragment = $relative -ieq 'cmake/Platform.cmake' -or
-        $relative -match '^src/app/platform/[^/]+/platform\.cmake$'
+        $relative -match '^src/app/platform/[^/]+/platform\.cmake$' -or
+        $relative -match '^cmake/triplets/[^/]+\.cmake$'
 
     $state = [pscustomobject]@{ InBlock = $false }
     $lineNumber = 0

@@ -72,13 +72,18 @@ ctest --preset linux-gcc-debug
 ```
 
 See [Getting started](https://iainchesworthlabs.github.io/cubeulator/getting-started/)
-for every platform's preset, including Windows/macOS and the (currently
-build-only) Android/iOS targets.
+for every platform's preset, including Windows/macOS, the (currently
+build-only) Android/iOS targets and WebAssembly.
+
+**Try it without building anything:**
+[open Cubeulator in your browser](https://iainchesworthlabs.github.io/cubeulator/web/) -
+the same app as WebAssembly, running entirely on your device.
 
 ## Documentation
 
 | | |
 | --- | --- |
+| [Try it in your browser](https://iainchesworthlabs.github.io/cubeulator/web/) | The app as WebAssembly: what it needs, how it differs, how it works |
 | [Getting started](https://iainchesworthlabs.github.io/cubeulator/getting-started/) | Requirements, cloning, first build |
 | [Building & packaging](https://iainchesworthlabs.github.io/cubeulator/building/) | Every preset, sanitizers, `cpack` |
 | [Testing & coverage](https://iainchesworthlabs.github.io/cubeulator/testing/) | TDD, test layers, the 80% coverage gate |

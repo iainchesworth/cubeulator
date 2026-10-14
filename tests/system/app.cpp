@@ -5,6 +5,7 @@
 
 #include "app_runtime.hpp"
 #include "i18n/language_manager.hpp"
+#include "test_platform.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -12,10 +13,12 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QMetaObject>
+#include <QMetaProperty>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QSGRendererInterface>
+#include <QVariant>
 #include <QtTest/QTest>
 
 #include <cstdio>
@@ -26,6 +29,20 @@ namespace cube::systest {
 namespace {
 
 std::unique_ptr<App> g_app;
+
+// A run of the suite is a person's desktop for as long as it takes, and the
+// window is shown for real (Qt Quick 3D draws nothing otherwise), so on a
+// platform where that works the window is shown but made invisible to whoever
+// is at the machine: fully transparent, click-through, no taskbar button and
+// never activated. It is still exposed and rendered, and clicks, key presses
+// and grab() reach it as before - they are sent to the QWindow, not to the
+// screen. (Placing it outside every screen does not do: nothing is then sent
+// an expose event, and the window never counts as shown.)
+// CUBE_SYSTEM_TEST_VISIBLE=1 shows it as any window is, for watching a case.
+[[nodiscard]] bool window_is_hidden() {
+    return cube::test::platform::hide_window &&
+           !qEnvironmentVariableIsSet("CUBE_SYSTEM_TEST_VISIBLE");
+}
 
 [[nodiscard]] bool class_is(const QObject* object, const char* prefix) {
     return object != nullptr && QByteArray(object->metaObject()->className()).startsWith(prefix);
@@ -69,9 +86,9 @@ App& App::launched() {
     return *g_app;
 }
 
-App& App::fresh(Start start) {
+App& App::fresh(Start start, Scene3D scene) {
     App& app = launched();
-    app.reset(start);
+    app.reset(start, scene);
     return app;
 }
 
@@ -93,6 +110,20 @@ App::~App() {
 
 void App::boot() {
     runtime_ = std::make_unique<cube::app::AppRuntime>();
+    // Main.qml says `visible: true`, so the window is shown by load() itself:
+    // what it is to look like has to be said before then, the way the real app
+    // hands the engine the position it was last at (main.cpp).
+    if (window_is_hidden()) {
+        // Tool: no taskbar button. WindowDoesNotAcceptFocus: never takes the
+        // foreground from what the developer is typing in. WindowTransparent-
+        // ForInput: a click that lands where the window is goes to what is
+        // behind it.
+        constexpr Qt::WindowFlags kHiddenFlags = Qt::Tool | Qt::FramelessWindowHint |
+                                                 Qt::WindowDoesNotAcceptFocus |
+                                                 Qt::WindowTransparentForInput;
+        runtime_->engine().setInitialProperties(
+            {{"opacity", 0.0}, {"flags", QVariant::fromValue(kHiddenFlags)}});
+    }
     if (!runtime_->load()) {
         throw std::runtime_error("Main.qml produced no root object; see the QML errors above");
     }
@@ -116,11 +147,51 @@ void App::boot() {
         throw std::runtime_error("the window was never exposed: no display to draw on?");
     }
 
+    // Qt Quick 3D prefilters a scene's light probe (the cube's procedural sky)
+    // on the first frame of every View3D, and on a software renderer that one
+    // frame is eight seconds. Every return to a screen with the cube pays it,
+    // and measured with the CI preset it was most of the suite's time: 66 of
+    // the 82 seconds of the cube-drag case were eight such frames. A case that
+    // is not about how the cube looks does without the probe - the six lights
+    // still light it - which is set before the view's first frame is
+    // synchronised. The screenshot tour and the render checks ask for the
+    // whole thing (App::Scene3D::full).
+    QObject::connect(
+        window_, &QQuickWindow::beforeSynchronizing, window_,
+        [this]() {
+            if (full_3d_) {
+                return;
+            }
+            walk(window_->contentItem(), [](QQuickItem* item) {
+                if (!QByteArray(item->metaObject()->className()).startsWith("QQuick3DViewport") ||
+                    item->property("systestWithoutProbe").toBool()) {
+                    return;
+                }
+                item->setProperty("systestWithoutProbe", true);
+                auto* environment = qvariant_cast<QObject*>(item->property("environment"));
+                if (environment == nullptr) {
+                    return;
+                }
+                const QMetaObject* meta = environment->metaObject();
+                const QMetaProperty probe = meta->property(meta->indexOfProperty("lightProbe"));
+                if (probe.isValid()) {
+                    probe.write(environment, QVariant(probe.metaType(), nullptr));
+                }
+            });
+        },
+        Qt::DirectConnection);
+
     reach_ = std::make_unique<Reach>(*this);
     reach_->start();
 }
 
-void App::reset(Start start) {
+void App::reset(Start start, Scene3D scene) {
+    // A view made while the probe was being left out stays without it, so a
+    // case that wants the whole cube leaves the screens that have one first.
+    if (scene == Scene3D::full && !full_3d_) {
+        go("permission");
+    }
+    full_3d_ = scene == Scene3D::full;
     // Each phase's cost is printed with the total: on a software renderer a
     // reset is seconds, and which part of it is not obvious from outside.
     QElapsedTimer total;

@@ -5,7 +5,7 @@
 #include <cube/profiling.hpp>
 #include <cube/solver/cross.hpp>
 
-#include "bfs_search.hpp"
+#include "piece_search.hpp"
 
 namespace cube::solver {
 
@@ -95,9 +95,13 @@ Result<std::vector<Move>> solve_corners(const Cube& start) {
             return detail::SignatureKey{.cross = detail::cross_key(c), .rest = rest};
         };
 
+        // The cross and corners 0..i all home, as on a solved cube; one code
+        // per corner in the signature's rest.
+        const detail::PieceGoal goal{.rest_codes = i + 1, .keys = {signature(Cube::solved())}};
+
         const std::vector<Face> allowed = {Face::U, Face::D, slot.side_a, slot.side_b};
         Result<std::vector<Move>> step =
-            detail::bfs_search(cube, allowed, postcondition, signature, 10);
+            detail::search(cube, allowed, postcondition, signature, 10, goal);
         if (!step.has_value()) {
             return std::unexpected(step.error());
         }
