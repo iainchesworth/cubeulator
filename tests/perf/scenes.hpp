@@ -67,6 +67,28 @@ inline constexpr std::array<SceneSize, 3> kSceneSizes = {{{640, 360}, {1280, 720
                              test::Drawing{.size = {size.width, size.height}});
 }
 
+// A side held at the edge of what read_side takes (a column step 0.86 of a
+// row's, about thirty degrees) beside a side too thin to be a blob, which is a
+// third of every quarter-turn of a cube turned between two sides. The square
+// grid read_side lays first does not hold it, and placing the blobs through
+// their own fit finds it. `column_step` is the side's, in pixels at the working
+// width: 34.5 of a 40 pixel row step is inside the gate, 32 is past it and is
+// not read, with the same nine blobs for the fit to weigh.
+[[nodiscard]] inline cv::Mat gate_edge_frame(const solver::Cube& cube, SceneSize size,
+                                             float column_step = 34.5F) {
+    const float scale = static_cast<float>(size.width) / 640.0F;
+    const test::CornerPose pose{
+        .edge_x = 320.0F * scale,
+        .edge_y = 180.0F * scale,
+        .pitch = 40.0F * scale,
+        .left_width = column_step * scale,
+        .right_width = 16.0F * scale,
+        .tilt = 0.0F,
+    };
+    return test::draw_cube_corner(cube, solver::Face::F, pose,
+                                  test::Drawing{.size = {size.width, size.height}});
+}
+
 // A frame with no cube in it: the read that finds nothing, which is most of
 // the frames of a scan that is waiting for a person to pick the cube up.
 [[nodiscard]] inline cv::Mat empty_frame(SceneSize size) {

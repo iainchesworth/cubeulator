@@ -78,6 +78,23 @@ not span three rows and three columns, or no cube all return nothing.
    columns, with at least six of the nine stickers found as blobs. Stickers
    that were not found as blobs (a finger across one) are placed by the fit
    and flagged in `SideRead::found`.
+
+   That first try lays a *square* grid at the nearest-neighbour pitch, which is
+   all a side held square needs, and it is the only one a frame that reads goes
+   through. When it leaves no side inside the gate (`is_square_on`: a step
+   ratio of 0.85 to 1.18, a cosine of 0.17, an rms of 0.12 of a step) the blobs
+   are placed again, `fit_lattice_through_fit`. A side turned about one axis
+   has its third column 2/ratio pitches out, past the 0.3 a cell may be off at a
+   ratio of 0.87, and a shear does the same from a cosine of 0.15, so the cells
+   are placed through the lattice the blobs already on the grid make. Every 3x3
+   window of it with at least eight blobs is a candidate beside the square-grid
+   ones, weighed by blobs and then fit as before, and a candidate that shares a
+   blob with a better one that fails the gate is not looked at (two columns of
+   the near side and the merged column of a much thinner one beside it pass
+   alone, and are not a side). A side at the edge of the gate, or one with a
+   blob beside it that is not part of it, is read there, at the cost of a few
+   dozen microseconds on a frame that has no side
+   ([the investigation](investigations/2026-10-15-square-on-dead-band.md)).
 3. **Colour.** Each of the nine places is sampled from a square patch 0.6 of
    a sticker spacing across, in float CIELAB, by `sticker_lab`
    (`cube/vision/sticker_colour.hpp`, shared with `read_corner`). The colour is
@@ -275,8 +292,10 @@ read exactly at 30 to 120 degrees a second at 30 frames a second and at 30 to
 60 at 10, and 63 more, whose six flat sides make 2 to 112 cubes, at 60 and 30
 ([the tumble investigation](investigations/2026-10-14-scan-tumble.md)).
 Neither reader reads for about ten degrees either side of that window, where
-a near side is within the square-on gate but the far side's stickers are
-beside it.
+the near side is just past the gate (33 to 39 degrees, a ratio of 0.76 to 0.85)
+and the far side is too thin to be a blob; it is by design, and what was lost
+inside the gate there is read since the blobs are placed through their
+own fit ([the dead-band investigation](investigations/2026-10-15-square-on-dead-band.md)).
 
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
