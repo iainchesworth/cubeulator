@@ -764,7 +764,8 @@ TEST_CASE("a side with dark stickers beside bright ones is read at every quarter
                 // and the lattice is fitted through them: the patch sampled
                 // must still land on its own sticker, which is a sixth of a
                 // spacing's room. The colours say it did.
-                CHECK(cv::norm(side.centres.at(i) - expected) < 0.15 * placement.pose.pitch);
+                CHECK(cv::norm(side.centres.at(i) - expected) <
+                      0.15 * static_cast<double>(placement.pose.pitch));
                 CHECK(cv::norm(side.lab.at(i) - cube::test::warm_lamp_lab(stickers.at(i))) < 4.0);
             }
             stickers = turned_clockwise(stickers);
