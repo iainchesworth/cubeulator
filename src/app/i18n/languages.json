@@ -6,6 +6,7 @@
     "plurals: how many forms Qt's rule for the language has (measured with lconvert, not recalled); a plural string carries exactly that many forms.",
     "rtl: the language is written right to left. The manager checks it against QLocale and a test fails if they disagree.",
     "translated: false until the language has been through E5. A language that is not translated still ships: every string falls back to the English. The translation tests require a language marked true to have no unfinished entry.",
+    "draft: true when the catalogue is a complete first translation that no fluent reader has been through yet (machine-assisted). It is installed and shown like any finished entry, so the language works; `translated` stays false until a reader has reviewed it. Nothing requires a draft to stay complete: a string added later falls back to the English until it is translated. strings_to_ts.py --status says which languages are drafts.",
     "The pseudo-locale is never in the list a person chooses from; it is reached through CUBEULATOR_LOCALE=xx only."
   ],
   "source": "en",
@@ -14,8 +15,8 @@
     { "code": "de",    "file": "de",    "tag": "de",    "name": "Deutsch",  "plurals": 2, "rtl": false, "translated": false },
     { "code": "fr",    "file": "fr",    "tag": "fr",    "name": "Français", "plurals": 2, "rtl": false, "translated": false },
     { "code": "es",    "file": "es",    "tag": "es",    "name": "Español",  "plurals": 2, "rtl": false, "translated": false },
-    { "code": "ja",    "file": "ja",    "tag": "ja",    "name": "日本語",     "plurals": 1, "rtl": false, "translated": false },
-    { "code": "zh-CN", "file": "zh_CN", "tag": "zh_CN", "name": "简体中文",   "plurals": 1, "rtl": false, "translated": false },
+    { "code": "ja",    "file": "ja",    "tag": "ja",    "name": "日本語",     "plurals": 1, "rtl": false, "translated": false, "draft": true },
+    { "code": "zh-CN", "file": "zh_CN", "tag": "zh_CN", "name": "简体中文",   "plurals": 1, "rtl": false, "translated": false, "draft": true },
     { "code": "he",    "file": "he",    "tag": "he",    "name": "עברית",    "plurals": 2, "rtl": true,  "translated": false },
     { "code": "ar",    "file": "ar",    "tag": "ar",    "name": "العربية",  "plurals": 6, "rtl": true,  "translated": false },
     { "code": "yi",    "file": "yi",    "tag": "yi",    "name": "יידיש",    "plurals": 2, "rtl": true,  "translated": false }

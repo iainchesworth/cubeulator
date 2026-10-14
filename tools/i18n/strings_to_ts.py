@@ -160,6 +160,8 @@ class Language:
     plurals: int
     pseudo: bool = False
     translated: bool = False
+    # A complete first translation no fluent reader has been through yet.
+    draft: bool = False
 
     @property
     def is_source(self) -> bool:
@@ -173,7 +175,8 @@ class Language:
 def load_languages() -> list[Language]:
     raw = json.loads(LANGUAGES.read_text(encoding="utf-8"))
     langs = [
-        Language(e["code"], e["file"], e["tag"], int(e["plurals"]), translated=bool(e.get("translated")))
+        Language(e["code"], e["file"], e["tag"], int(e["plurals"]), translated=bool(e.get("translated")),
+                 draft=bool(e.get("draft")))
         for e in raw["languages"]
     ]
     p = raw["pseudo"]
@@ -295,7 +298,9 @@ def main(argv: list[str]) -> int:
     if args.status:
         for lang, done, total in status():
             label = "pseudo" if lang.pseudo else ("source" if lang.is_source else lang.code)
-            print(f"{label:>7}  {done:4d} / {total}  {'translated' if lang.translated else 'not yet translated'}")
+            state = "translated" if lang.translated else (
+                "draft, not yet reviewed by a fluent reader" if lang.draft else "not yet translated")
+            print(f"{label:>7}  {done:4d} / {total}  {state}")
         return 0
 
     expected = build()

@@ -79,18 +79,55 @@ TEST_CASE("a raw id never reaches the screen, in any language", "[i18n][runtime]
 }
 
 TEST_CASE("a language with no translation yet shows the English", "[i18n][runtime][fallback]") {
+    // Entry by entry, not language by language: a draft language (ja, zh-CN)
+    // has a translation for every id and shows it; a string added to
+    // strings.json since, or a language with nothing finished, falls back to
+    // the English installed under it.
     const auto strings = read_strings();
     for (const Language& l : read_languages()) {
         if (l.translated || l.pseudo) {
             continue;
         }
+        const Catalogue catalogue = read_catalogue(catalogue_path(l));
         Installed installed(l.file);
         for (const Source& s : strings) {
             if (s.plural) {
                 continue;
             }
+            const Entry* entry = catalogue.find(s.id);
+            REQUIRE(entry != nullptr);
+            if (entry->type.isEmpty()) {
+                continue;  // finished: the case below holds what it shows
+            }
             INFO(str(l.code) << " / " << str(s.id));
             CHECK(tr_id(s.id) == locale_count(s.forms.front()));
+        }
+    }
+}
+
+TEST_CASE("a finished entry shows its own translation, not the English",
+          "[i18n][runtime][translated]") {
+    // What the catalogue says is what the screen says, in every language that
+    // has any. (The English is installed under all of them: this is the case
+    // that fails if a finished entry fell through to it.)
+    for (const Language& l : read_languages()) {
+        if (l.pseudo || l.file == QLatin1String("en")) {
+            continue;
+        }
+        const Catalogue catalogue = read_catalogue(catalogue_path(l));
+        Installed installed(l.file);
+        int finished = 0;
+        for (const Entry& e : catalogue.entries) {
+            if (e.plural || !e.type.isEmpty()) {
+                continue;
+            }
+            ++finished;
+            INFO(str(l.code) << " / " << str(e.id));
+            CHECK(tr_id(e.id) == e.forms.front());
+        }
+        if (l.draft || l.translated) {
+            INFO(str(l.code) << " is a draft or translated and must have finished entries");
+            CHECK(finished > 0);
         }
     }
 }
