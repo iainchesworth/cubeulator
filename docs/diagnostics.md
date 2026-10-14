@@ -136,6 +136,7 @@ lightness floor: `unknown`), `neutral_white`, `warm_cast_white` or `hue_band`.
 | --- | --- |
 | `path` | `single_candidate` (the naming makes exactly one cube), `chosen_by_corners` (several, and corner reads singled one out), `ambiguous` (several, and they could not: `ambiguous_scan`), `direct`, `names_exchanged` (the naming made no cube; trading two names did) or `failed`. |
 | `candidates`, `corner_fits`, `corner_reads`, `chosen` | How many cubes the naming makes; when several, how many corner reads fit each and which was chosen. |
+| `settling_corner` | When `path` is `ambiguous`: the three centre colours of the corner whose view would tell the most of the cubes still possible apart - what the scan screen asks the person to show. `null` otherwise. |
 | `direct_error` | Why assembling the naming as it stood failed, when it did. |
 | `exchange` | The pair traded when `path` is `names_exchanged`: `first_side`, `second_side` (indices into `sides`), `first_name`, `second_name`, `centre_distance` (the closest-looking pair wins). |
 | `error` | Why there is no cube. |

@@ -120,6 +120,45 @@ TEST_CASE("DirectScan finishes with the cube it was shown, once",
     CHECK_FALSE(scan.cube().has_value());
 }
 
+TEST_CASE("a cube held on two corners is read three sides at a time and finishes once",
+          "[qt][controllers][direct-scan]") {
+    const Cube cube = cube::test::scramble(3);
+    const auto corner = [&cube](Face a, Face b, Face c) {
+        return cube::test::draw_corner3({cube::test::outside_view(cube, a),
+                                         cube::test::outside_view(cube, b),
+                                         cube::test::outside_view(cube, c)});
+    };
+    DirectScan scan;
+    int completed = 0;
+    QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+
+    // Held on the up-right-front corner: not a side square to the camera, so
+    // nothing is marked on the picture, but it is three sides being read.
+    hold(scan, corner(Face::U, Face::R, Face::F), kFramesToCapture - 1);
+    CHECK(scan.stickerPoints().isEmpty());
+    CHECK(scan.sidesRead() == 0);
+    CHECK(scan.reading());
+    CHECK(scan.captureProgress() > 0.0);
+    CHECK(scan.captureProgress() < 1.0);
+
+    scan.processFrame(corner(Face::U, Face::R, Face::F));
+    REQUIRE(scan.sidesRead() == 3);
+    for (const QVariant& side : scan.sides()) {
+        CHECK(side.toMap().value("inView").toBool());
+    }
+    CHECK(completed == 0);
+    CHECK_FALSE(scan.conflicted());
+
+    // Turned to the corner across from it, the other three finish it.
+    scan.processFrame(room({640, 360}));
+    hold(scan, corner(Face::D, Face::L, Face::B), kFramesToCapture);
+
+    REQUIRE(completed == 1);
+    REQUIRE(scan.cube().has_value());
+    CHECK(*scan.cube() == cube);
+    CHECK(scan.sidesRead() == 6);
+}
+
 TEST_CASE("a side being held fills towards counting", "[qt][controllers][direct-scan]") {
     DirectScan scan;
     const cv::Mat frame = draw_side(kMixed, Pose{});
@@ -328,4 +367,66 @@ TEST_CASE("a scanned cube handed to SolveController is solved for stepping",
     REQUIRE_FALSE(solver.isSolving());
     CHECK(solver.totalMoves() > 0);
     CHECK(solver.atStart());
+}
+
+TEST_CASE("an ambiguous cube asks for a corner by colour and showing it finishes the scan",
+          "[qt][controllers][direct-scan]") {
+    // The first cube held on corners by hand: orange and red sides solid, the
+    // other four six and three. Its six sides make twenty cubes.
+    const auto patterned = cube::test::patterned_cube();
+    REQUIRE(patterned.has_value());
+    const Cube& cube = *patterned;
+
+    DirectScan scan;
+    int completed = 0;
+    QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+    CHECK(scan.settlingCorner().isEmpty());
+    show_cube(scan, cube);
+
+    REQUIRE(scan.sidesRead() == 6);
+    REQUIRE(scan.ambiguous());
+    CHECK(completed == 0);
+    // Ambiguous is a way of not being a cube yet, and says so.
+    CHECK(scan.conflicted());
+
+    // It names three colours, each a colour of the cube.
+    for (int ask = 0; ask < 3 && completed == 0; ++ask) {
+        const QStringList corner = scan.settlingCorner();
+        REQUIRE(corner.size() == 3);
+        std::array<Face, 3> faces{};
+        for (int i = 0; i < 3; ++i) {
+            const QString name = corner.at(i);
+            Color colour = Color::White;
+            if (name == "yellow") {
+                colour = Color::Yellow;
+            } else if (name == "green") {
+                colour = Color::Green;
+            } else if (name == "blue") {
+                colour = Color::Blue;
+            } else if (name == "orange") {
+                colour = Color::Orange;
+            } else if (name == "red") {
+                colour = Color::Red;
+            } else {
+                REQUIRE(name == "white");
+            }
+            for (const Face face : kAllFaces) {
+                if (cube.face(face).at(4) == colour) {
+                    faces.at(static_cast<std::size_t>(i)) = face;
+                }
+            }
+        }
+        scan.processFrame(room({640, 360}));
+        hold(scan, cube::test::draw_cube_corner3(cube, faces.at(0), faces.at(1), faces.at(2)),
+             kFramesToCapture + 4);
+    }
+
+    REQUIRE(completed == 1);
+    REQUIRE(scan.cube().has_value());
+    CHECK(*scan.cube() == cube);
+    CHECK(scan.settlingCorner().isEmpty());
+
+    // A new scan has asked for nothing yet.
+    scan.restart();
+    CHECK(scan.settlingCorner().isEmpty());
 }

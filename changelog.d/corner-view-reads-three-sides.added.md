@@ -1,0 +1,1 @@
+**A cube held on a corner is read three sides at a time.** When the cube is turned so that two or three sides show at once, each side that holds still now counts towards the scan, so holding one corner and then the corner across from it reads all six. Showing one side square to the camera at a time works exactly as before. See [the vision pipeline](docs/vision-pipeline.md).

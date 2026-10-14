@@ -25,7 +25,7 @@ flowchart TD
     READ -->|"std::optional&lt;SideRead&gt;"| SCAN["SideScan::add<br/>group reads into sides"]
     READ -.->|"no square-on side"| CORNER["read_corner<br/>two or three lattices that touch"]
     PREP -.-> CORNER
-    CORNER -.-> SCAN2["SideScan::add_corner"]
+    CORNER -.-> SCAN2["SideScan::add_corner<br/>counts each side held still; keeps the read"]
     SCAN --> SIX{"six captured sides?"}
     SIX -->|no| CTRL
     SIX -->|yes| NAME["resolve_colors<br/>54 stickers -> 6 groups of 9"]
@@ -162,6 +162,33 @@ the flat reads lack.
    several cubes it takes the one that most corner reads fit and more than
    any other; a read that fits all of them says nothing and one that fits
    none is a blurred frame. No pose is estimated anywhere in this.
+4. **Counting.** A cube held on a corner shows two or three sides in one
+   frame, so each side of a corner read is also a read of that side, counted
+   the way a square-on read is (`SideScan::add_corner`): the side must have
+   held still since the previous frame, have 7 or more of its 9 stickers
+   found (not placed by the fit) and not be a strip (one step at least 0.45 of
+   the other). It joins the side whose nine colours are nearest under some
+   quarter-turn, within the same-side distance, or starts one. Three sides
+   are captured in the time it takes one, and two corners - a corner and the
+   one across from it - are all six. This is in addition to the square-on
+   scan, not instead of it: the same side read both ways is one side, and once
+   a side has `kMinReads` square-on reads of its own its colours come from
+   those alone, because a side at an angle is lit a little differently.
+   `reads_in_view()` is the fewest among the sides in view, which is the one
+   the capture is waiting for.
+
+5. **Asking for the corner that settles it.** When six sides make several
+   cubes and the corner reads so far cannot choose, the scan names the corner
+   to show (`AssemblyTrace::settling_corner`). Among the candidates the corner
+   reads fit best, it takes the corner of the eight whose three sides differ
+   between the most pairs of them - a corner view shows every sticker of its
+   three sides, so two cubes are told apart there when any of them differs -
+   and says it by the colours of the three centres. The scan screen asks for
+   that (`DirectScan.settlingCorner`, `scan.guide.ambiguousCorner`: "Turn the
+   cube slowly to show the corner where Yellow, Green and Red meet") and falls
+   back to "two sides at once" when no corner would help. Following it one
+   corner at a time settles the recorded patterned cube (twenty cubes from six
+   sides) in at most three views, in the tests.
 
 Measured on the recorded sessions with `cube_scan corners`: 6 frames with
 two sides in view (the sessions hold sides square-on, so turns are quick);
@@ -171,6 +198,33 @@ stickers found, at a steep angle). An ambiguous cube drawn
 with its corner views is settled to the true cube. Whether a real person
 turning a real ambiguous cube produces a read that fits is not measured yet:
 no recorded session is one.
+
+`cube_scan corner-colours` measures what counting rests on: for every side of
+every corner read, how near it sits to the side the square-on reads of the same
+session captured. On the ten sides the recordings hold (all in two-side views;
+no recorded frame shows three) the distance is a median of 5.8 and at most
+12.0, and the next-nearest side is never closer than 11.8 more. The one at
+12.0 was a strip with six of its nine stickers found, which is where the
+gates came from; another six-of-nine strip sat at 6.1, so they are a margin
+and not a measured edge.
+
+The first corner-held scan recorded (480 frames by an evening lamp, the cube
+held tilted in one hand, two to three sides in view) is the harder case. Its
+35 corner reads are all two-sided and none is three. The sides the reader did
+find sit a median of 8.2 from their side (90% within 11.0, one at 15.5), and
+one frame had a side within 2.3 of two sides, which is why a corner side must
+be 4 clearer of the next side to count. The third side is missed before any
+lattice is fitted, in the blob step: the shared threshold compares each pixel
+with the mean of a 43 pixel window, and beside the bright white face the dark
+green, blue and red stickers fall below it and come out as shrunken, uneven
+blobs, which the size filter then drops; the third side is also seen steeply,
+foreshortened and in its own shadow. Tried on that scan alone with a finer
+threshold (window 3% of the frame height, offset 3, against 12% and 8), 29 of
+79 corner frames are three-sided, the board stays 4 of 4 exact, and square-on
+reads fall by about 4% on the tungsten session (625 to 600) - so the change
+is not made to the threshold the square-on reader shares. A corner reader with
+its own scale-aware preparation is the next step, and it needs recordings in
+more than one light before it is tuned.
 
 ## Camera photometry
 
@@ -223,7 +277,11 @@ watching.
   and any cube one turn from solved) needs a corner view to settle, and the
   corner reader is validated on six real frames and drawn ones only. A side
   seen at a steep angle, or with a finger across it, may not fit; the scan
-  keeps asking for more until a read does.
+  keeps asking for more until a read does. A scan that is ambiguous is only
+  settled by corner views that include a side the candidate cubes differ on:
+  the screen asks for two sides at once but not which two (recorded: 20 cubes
+  fit six sides of a patterned cube, and the one view that told them apart
+  was never shown).
 - **Light.** Hard backlit or glare conditions are not proven; the measured
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
@@ -258,7 +316,9 @@ path cannot disagree.
 | `cube_scan replay <session-dir>` | One session: the cube and its solution |
 | `cube_scan board <root-dir>` | Every session under the root, against its `truth.txt` |
 | `cube_scan holds <session-dir>` | How the cube was held, frame by frame |
-| `cube_scan corners <session-dir>` | Frames showing two sides at once, and whether they fit the true cube |
+| `cube_scan corners <session-dir> [max-distance]` | Frames showing two sides at once, and whether they fit the true cube (at the distance a side may sit from the cube's, the app's own unless given) |
+| `cube_scan corner-colours <session-dir>` | How the sides of corner reads compare with the sides read square-on |
+| `cube_scan ambiguity <session-dir>` | The cubes six sides make, and how the session's corner reads vote among them at several distances |
 
 The only gate is a real recorded session ending in the exact true cube.
 `truth.txt` is six words of nine letters from `WYROGB`, one per side, each side

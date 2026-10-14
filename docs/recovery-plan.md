@@ -221,6 +221,47 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   cubes still fit (1,152 to 17,280). Nothing can be filled in from it. What a
   corner view does give is three sides per frame, which is the faster scan
   that R5(b) names as not done.
+- **Corner views count towards the sides.** `SideScan::add_corner` now counts
+  each side of a corner read as a read of that side (held still, 7 of 9
+  stickers found, not a strip), so a cube held on a corner is read three
+  sides at a time and two corners are the whole cube. Square-on scanning is
+  unchanged. On drawn frames: three sides captured in nine frames, a corner
+  and the corner across from it finish a scan through the app's controller.
+  A corner side nearly as close to two sides as to one is not counted, and
+  a side only a corner has shown ranks behind one read square-on.
+  Measured (`cube_scan corner-colours`): the six two-side frames in the old
+  sessions sit 3 to 7 Lab units from their side, 12 at worst. The first
+  recording of a cube held on a corner (evening lamp, tilted in one hand)
+  has 35 corner frames, all two-sided, none three: the third side is lost in
+  the blob step (dark stickers beside the bright white face fall under the
+  shared local-mean threshold, and the steep side is foreshortened). A finer
+  threshold finds three sides in 29 of 79 frames but costs square-on reads
+  (about 4% on tungsten), so it is left for a corner reader with its own
+  preparation. The scan screen draws no dots on a corner view yet
+  (`stickerPoints` is the square-on read's nine), and its words say "this
+  side".
+- **The first ambiguous cube held on corners by hand.** That same recording is
+  of a patterned cube (orange and red sides solid; green/blue and
+  white/yellow sides six and three, the three being two opposite corners and
+  an edge). Its six sides read correctly - the pattern is as described by the
+  person holding it - and make **20 valid cubes**, so the scan is ambiguous,
+  which is the case corner views exist for; what the scan screen says is
+  right and `cube_scan replay` now says it too. Corner reads did not settle
+  it, for two reasons. (1) `kCornerFitDistance` was 8, set from six frames
+  within 7; real hand-held sides sat at a median of 8.2 (90% within 11), and
+  not one of the 35 reads fitted any cube. It is 12 now (30 fit); on the
+  older recordings that fits more of the true cube (4 of 5, up from 3, on the
+  tungsten session) and still rules out 14 to 17.5 of the 18 cubes one turn
+  away. (2) The views shown were all of faces the candidates agree on: of the
+  eight cubes left, six tied at 30 reads each. Any corner that includes the
+  yellow-centred side tells all six apart, and one view of it would have
+  settled the scan. The screen asking for "two sides at once" without saying
+  which was the gap, and it now says: `AssemblyTrace::settling_corner` is the
+  corner whose view tells the most of the cubes still possible apart, shown
+  as "Turn the cube slowly to show the corner where Yellow, Green and Red
+  meet". On the patterned cube, following it settles the scan in at most
+  three views (tests). Not yet seen on a real hand: that is the next
+  recording to make. The corner reader's own sticker-finding is still to do.
 
 ## Why it does not work today
 
