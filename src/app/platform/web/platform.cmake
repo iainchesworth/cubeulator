@@ -64,7 +64,17 @@ set(CUBEULATOR_PLATFORM_APP_PROPERTIES
     QT_WASM_PTHREAD_POOL_SIZE 8
     QT_WASM_EXTRA_EXPORTED_METHODS ENV)
 
+# The module is one shared-memory image, so every object in it has to be
+# compiled with atomics and bulk memory: wasm-ld refuses "--shared-memory"
+# otherwise ("disallowed by <object> because it was not compiled with 'atomics'
+# or 'bulk-memory' features"), and code compiled without them turns
+# std::atomic and friends into plain loads and stores that other threads then
+# race on. Qt's targets carry -pthread through the kit and the vcpkg ports get
+# it from the triplet; this is the project's own - the library and the platform
+# layer link no Qt and had none. A directory property, set here because this
+# runs before any of the project's targets exist.
 function(cube_platform_prepare_dependencies)
+    add_compile_options(-pthread)
 endfunction()
 
 # What puts the app in a page: the page itself, the worker that makes the page
