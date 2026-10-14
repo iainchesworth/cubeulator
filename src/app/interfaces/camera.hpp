@@ -176,7 +176,8 @@ struct ControlResult {
 struct PhotometryLockReport {
     std::array<ControlResult, kPhotometryControls.size()> controls{};
     // False when the platform has no photometry control at all (every
-    // non-Windows backend today) - distinct from "the device refused", and
+    // non-Windows backend today; in a browser, a camera that lists no manual
+    // exposure or white balance) - distinct from "the device refused", and
     // the two must read differently to the user.
     bool platform_supported = false;
     // The white-balance temperature the lock is holding, when the device has
@@ -222,10 +223,18 @@ struct PhotometryLockRequest {
 };
 
 // True if this platform's backend can control photometry at all. Windows
-// (CAP_DSHOW -> IAMVideoProcAmp/IAMCameraControl) is the only one proven, so
-// it is the only one that answers true; everywhere else this is an honest
-// "no" rather than an untested guess, and request_photometry_lock() there
-// still produces a report - one whose platform_supported is false.
+// (CAP_DSHOW -> IAMVideoProcAmp/IAMCameraControl) is the only OpenCV backend
+// proven, so it is the only one that answers true; everywhere else this is an
+// honest "no" rather than an untested guess, and request_photometry_lock()
+// there still produces a report - one whose platform_supported is false.
+//
+// The browser is the one platform whose answer is the open camera's, not the
+// backend's: whether a MediaStreamTrack can be held depends on the browser
+// and on the device behind it (Firefox and Safari offer a page no such
+// control; in Chromium it is the camera's driver). It answers true only for a
+// camera on which a lock has been read back as holding something, and false
+// before that and for a camera that could not be locked
+// (platform/web/camera_web.cpp).
 [[nodiscard]] bool photometry_control_supported() noexcept;
 
 // Asks for the lock. Deliberately a REQUEST, not an apply: the device is

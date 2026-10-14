@@ -257,6 +257,15 @@ TEST_CASE("locking without a capture fails without touching hardware", "[camera]
 // the "platform" flavour the summary words differently from a driver
 // refusal. Asked of the backend the platform actually opens through, so no
 // platform is named here.
+//
+// The browser is not built into this binary (the camera cases are for the
+// platforms with a native device, CUBEULATOR_PLATFORM_TEST_NATIVE_CAMERA), and
+// its camera is not one backend: whether a track can be held is a fact about
+// the browser and the device behind it, measured per camera. The same rule
+// holds there in that form, and is tested where the browser's camera is
+// (tests/web/specs/camera.spec.mjs: `DirectScan.lock.supported` is true only
+// after a lock was read back as holding; tests/platform/web: what the page's
+// answer may become in the report).
 TEST_CASE("photometry support is claimed only where it was measured", "[camera][photometry]") {
     const bool measured = cube::platform::camera::detail::capture_backend() == cv::CAP_DSHOW;
     REQUIRE(cube::platform::camera::photometry_control_supported() == measured);
