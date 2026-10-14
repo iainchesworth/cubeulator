@@ -1,3 +1,4 @@
+#include <catch2/catch_approx.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 #include "drawn_cube.hpp"
@@ -17,6 +18,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <random>
@@ -318,6 +320,221 @@ TEST_CASE("two colours that trade names under a colour cast are told apart by th
         const auto read = scan.cube();
         REQUIRE(read.has_value());
         CHECK(*read == cube);
+    }
+}
+
+namespace {
+
+using Lab9 = std::array<cv::Vec3f, 9>;
+
+// The six colours of a real cube under a warm lamp, measured on 2026-10-14
+// from the scan in which two sides were fused into one. Red and orange are
+// 16 Lab apart and almost all of that is lightness - the one axis the
+// colour distance counts for a quarter.
+const cv::Vec3f kLampWhite{65.5F, 22.5F, 16.5F};
+const cv::Vec3f kLampYellow{54.3F, 25.9F, 53.0F};
+const cv::Vec3f kLampRed{28.4F, 50.4F, 36.5F};
+const cv::Vec3f kLampOrange{41.0F, 56.1F, 46.7F};
+const cv::Vec3f kLampGreen{16.8F, -12.7F, 14.8F};
+const cv::Vec3f kLampBlue{11.0F, 5.5F, -15.5F};
+
+cv::Vec3f lamp_colour(Color colour) {
+    switch (colour) {
+        case Color::White:
+            return kLampWhite;
+        case Color::Yellow:
+            return kLampYellow;
+        case Color::Red:
+            return kLampRed;
+        case Color::Orange:
+            return kLampOrange;
+        case Color::Green:
+            return kLampGreen;
+        case Color::Blue:
+            return kLampBlue;
+    }
+    return {};
+}
+
+const Drawing kLamp{
+    .paint =
+        [](Color colour) {
+            const cv::Vec3b bgr = cube::vision::lab_to_bgr(lamp_colour(colour));
+            return cv::Scalar(bgr(0), bgr(1), bgr(2));
+        },
+};
+
+// A read as the reader gives it, from nine measured colours: the lattice
+// stays where it is, so every read after the first of a hold is steady.
+SideRead read_of(const Lab9& lab) {
+    SideRead read;
+    read.lab = lab;
+    read.pitch = 40.0F;
+    read.stickers_found = 9;
+    read.found.fill(true);
+    for (std::size_t i = 0; i < 9; ++i) {
+        read.centres.at(i) = {100.0F + (40.0F * static_cast<float>(i % 3)),
+                              100.0F + (40.0F * static_cast<float>(i / 3))};
+    }
+    return read;
+}
+
+Lab9 red_orange_side(std::initializer_list<std::size_t> orange_cells) {
+    Lab9 lab;
+    lab.fill(kLampRed);
+    for (const std::size_t cell : orange_cells) {
+        lab.at(cell) = kLampOrange;
+    }
+    return lab;
+}
+
+// The two sides of a partly solved cube that look the same but for which of
+// red and orange sits where: the orange-centred one has orange on a P of
+// five stickers and red on an L of four; the red-centred one has them the
+// other way about. They differ in three stickers, the centre one of them.
+const Lab9 kOrangeCentred = red_orange_side({1, 2, 4, 5, 8});
+const Lab9 kRedCentred = red_orange_side({0, 1, 2, 5});
+
+Lab9 turned_once(const Lab9& side) {
+    constexpr std::array<std::size_t, 9> kSource = {6, 3, 0, 7, 4, 1, 8, 5, 2};
+    Lab9 out{};
+    for (std::size_t i = 0; i < 9; ++i) {
+        out.at(i) = side.at(kSource.at(i));
+    }
+    return out;
+}
+
+// What a camera does to a held side: noise on every sticker, a lamp that
+// drifts darker, a thumb over a sticker now and then, a glare across the
+// centre now and then.
+struct Hand {
+    std::mt19937 rng{7};
+    float drift = 1.0F;
+    bool glare_and_thumbs = true;
+
+    Lab9 look(const Lab9& side) {
+        std::normal_distribution<float> noise(0.0F, 1.6F);
+        std::uniform_real_distribution<float> chance(0.0F, 1.0F);
+        std::uniform_int_distribution<int> cell(0, 8);
+        Lab9 lab = side;
+        for (cv::Vec3f& sticker : lab) {
+            sticker = cv::Vec3f(sticker(0) * drift + noise(rng), sticker(1) + noise(rng),
+                                sticker(2) + noise(rng));
+        }
+        if (glare_and_thumbs) {
+            if (chance(rng) < 0.15F) {
+                const auto at = static_cast<std::size_t>(cell(rng));
+                if (at != 4) {
+                    lab.at(at) = cv::Vec3f(62.0F, 18.0F, 22.0F);  // skin
+                }
+            }
+            if (chance(rng) < 0.06F) {
+                lab.at(4) += cv::Vec3f(8.0F, -6.0F, 14.0F);
+            }
+        }
+        return lab;
+    }
+};
+
+void hold_lab(SideScan& scan, Hand& hand, const Lab9& side, int reads) {
+    for (int i = 0; i < reads; ++i) {
+        scan.add(read_of(hand.look(side)));
+    }
+    scan.add(std::nullopt);
+}
+
+float lightness_of(const cv::Vec3f& lab) {
+    return lab(0);
+}
+
+}  // namespace
+
+TEST_CASE("two sides that differ only in where red and orange sit are two sides", "[direct-scan]") {
+    // Shown alternately, as a hand turns a partly solved cube over. Judged by
+    // the mean of colour_distance under 12 they were one side - a whole side
+    // of red and orange traded scores under 10 a sticker - and the scan's
+    // medians were a blend of both.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    for (int round = 0; round < 4; ++round) {
+        hold_lab(scan, hand, kOrangeCentred, 14);
+        hold_lab(scan, hand, kRedCentred, 14);
+    }
+
+    REQUIRE(scan.sides().size() == 2);
+    const auto& orange_side = scan.sides().at(0);
+    const auto& red_side = scan.sides().at(1);
+    CHECK(orange_side.reads == 52);
+    CHECK(red_side.reads == 52);
+    // Each keeps the layout it was shown in, not a blend of the two.
+    for (std::size_t i = 0; i < 9; ++i) {
+        CHECK(lightness_of(orange_side.lab.at(i)) ==
+              Catch::Approx(lightness_of(kOrangeCentred.at(i))).margin(3.0));
+        CHECK(lightness_of(red_side.lab.at(i)) ==
+              Catch::Approx(lightness_of(kRedCentred.at(i))).margin(3.0));
+    }
+}
+
+TEST_CASE("a side held under noise, a thumb and a drifting lamp stays the one side",
+          "[direct-scan]") {
+    SideScan scan;
+    Hand hand;
+    for (int round = 0; round < 8; ++round) {
+        hand.drift = 1.0F - (0.015F * static_cast<float>(round));
+        hold_lab(scan, hand, kOrangeCentred, 16);
+        hold_lab(scan, hand, kRedCentred, 16);
+    }
+    CHECK(scan.sides().size() == 2);
+}
+
+TEST_CASE("a side keeps the quarter-turn it was shown in when its stickers are close in colour",
+          "[direct-scan]") {
+    // The turn was picked by a metric that barely sees red against orange,
+    // so a red and orange side was laid down at whichever turn the noise
+    // preferred and the fused side was a smear of all four.
+    SideScan scan;
+    Hand hand{.glare_and_thumbs = false};
+    Lab9 shown = kOrangeCentred;
+    for (int turns = 0; turns < 4; ++turns) {
+        hold_lab(scan, hand, shown, 12);
+        hold_lab(scan, hand, kRedCentred, 12);
+        REQUIRE(scan.sides().size() == 2);
+        // Reported the way it was last shown.
+        const Lab9 side = scan.sides().at(0).lab;
+        for (std::size_t i = 0; i < 9; ++i) {
+            CHECK(lightness_of(side.at(i)) == Catch::Approx(lightness_of(shown.at(i))).margin(4.0));
+        }
+        shown = turned_once(shown);
+    }
+}
+
+TEST_CASE("a cube whose red and orange sides are each the other's colours is read as six sides",
+          "[direct-scan]") {
+    // Half-turns of the top, bottom and front leave only red and orange on
+    // the left and right and make each exactly the other's colours.
+    const Cube cube = after("F2 D2 U2");
+    REQUIRE(cube.face(Face::R) != Cube::solved().face(Face::R));
+    REQUIRE(cube.face(Face::R).at(4) != cube.face(Face::L).at(4));
+
+    SideScan scan;
+    show_cube(scan, cube, 3, kLamp);
+
+    REQUIRE(scan.sides().size() == 6);
+    // Shown in the order of kAllFaces, so side i is face i; each side's
+    // centre is the colour of its face's centre under the lamp.
+    for (std::size_t i = 0; i < 6; ++i) {
+        const Color centre = cube.face(kAllFaces.at(i)).at(4);
+        const cv::Vec3f& measured = scan.sides().at(i).lab.at(4);
+        Color nearest = Color::White;
+        float best = std::numeric_limits<float>::max();
+        for (const Color colour : kColours) {
+            const float gap = static_cast<float>(cv::norm(measured - lamp_colour(colour)));
+            if (gap < best) {
+                best = gap;
+                nearest = colour;
+            }
+        }
+        CHECK(nearest == centre);
     }
 }
 

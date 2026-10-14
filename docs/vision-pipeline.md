@@ -71,11 +71,27 @@ Nothing in the reader names a colour. It returns measured Lab.
 - A read **counts** only if the lattice has held still: the centre sticker
   moved less than `kSteadyFraction` (0.12) of a sticker spacing since the
   previous frame. A moving side is blurred and its colours are not trusted.
-- A counting read joins the **group** whose fused colours are closest under
-  the best quarter-turn roll, if that distance is under the same-side threshold;
-  otherwise it starts a new group (`kSameSideDistance`, 12 Lab units; file-local to `direct_scan.cpp`). The distance is `colour_distance`: lightness
-  and chroma count for a quarter of what hue does, because shading moves the
-  first two and leaves hue alone.
+- A counting read joins the **group** it belongs to, or starts a new one.
+  The deciding sticker is the **centre**, which never moves, and a cube's six
+  centres are six distinct colours: a read whose centre is within
+  `kSameCentreLab` (10 Lab units, plain Lab with lightness at full weight) of
+  a group's centre belongs to it, whatever a hand covers. Where the centre
+  cannot vouch, the other eight stickers must: at most `kStickersMayDiffer`
+  (1) may sit further than `kDifferentColourLab` (12, which is
+  `kMinCentreSeedSeparationLab`) from the group's. Of the groups a read could
+  join, the one it fits best takes it. Groups that turn out to be one side,
+  a side that was begun on a noisy read or lit differently for a moment, are
+  merged after each read, the earlier surviving.
+- The **quarter-turn** that lays a read on a group is the one that fits the
+  eight stickers other than the centre best, each distance capped so a finger
+  over one sticker cannot decide it, and a group keeps the turn it last had
+  unless another beats it by `kRollPriorMargin` (one differing sticker's
+  worth).
+- This replaced a mean of `colour_distance` over all nine stickers under 12.
+  `colour_distance` counts lightness and chroma for a quarter of what hue
+  does, so red and orange, which differ almost only in lightness under a warm
+  lamp, scored under 10 a sticker even with every one of them traded, and two
+  sides of a partly solved cube were fused into one (2026-10-14).
 - A group is **captured** once it has `kMinReads` (8) reads, about a third of a
   second of holding still.
 - When more than six groups are captured (a stray lattice, a side re-captured
