@@ -22,6 +22,7 @@
 #include <cstddef>
 #include <optional>
 #include <string_view>
+#include <vector>
 
 using cube::solver::Color;
 using cube::solver::Cube;
@@ -489,4 +490,103 @@ TEST_CASE("the side with the fewest reads is the one a corner is waiting for", "
     CHECK(scan.reading());
     // First has 4 + 3 reads; second 2 (it was steady on the 2nd and 3rd).
     CHECK(scan.reads_in_view() == 2);
+}
+
+TEST_CASE("a corner side nearly as close to two sides is not counted for either", "[corner]") {
+    // Two sides 17 apart in colour, and a read between them: 8.8 from one,
+    // 7.9 from the other. Within the same-side distance of both, and nothing
+    // in it says which it is.
+    const cv::Vec3f first{60.0F, 20.0F, 0.0F};
+    const cv::Vec3f second{60.0F, 20.0F, 18.0F};
+    const cv::Vec3f between{60.0F, 20.0F, 9.0F};
+    const cv::Vec3f near_first{60.0F, 20.0F, 2.0F};
+
+    SideScan scan;
+    const auto feed = [&scan](const std::vector<cube::vision::ObliqueSide>& sides, int frames) {
+        CornerRead read;
+        read.sides = sides;
+        for (int i = 0; i < frames; ++i) {
+            scan.add(std::nullopt);
+            scan.add_corner(read);
+        }
+    };
+    const auto reads_of = [&scan](const cv::Vec3f& colour) {
+        for (const SideScan::Side& side : scan.sides()) {
+            if (cube::vision::colour_distance(side.lab.at(4), colour) < 1.0F) {
+                return side.reads;
+            }
+        }
+        return std::size_t{0};
+    };
+    const auto left = [](const cv::Vec3f& colour) {
+        return made_side({100, 100}, {40, 0}, {0, 40}, 9, colour);
+    };
+    const auto right = [](const cv::Vec3f& colour) {
+        return made_side({300, 100}, {40, 0}, {0, 40}, 9, colour);
+    };
+
+    feed({left(first), right(second)}, 12);
+    REQUIRE(scan.sides().size() == 2);
+    const std::size_t first_before = reads_of(first);
+    const std::size_t second_before = reads_of(second);
+    REQUIRE(first_before > 0);
+    REQUIRE(second_before > 0);
+
+    // The left side alone, in the colour between the two: counted for neither,
+    // and no side is made of it.
+    feed({left(between)}, 6);
+    CHECK(scan.sides().size() == 2);
+    CHECK(reads_of(first) == first_before);
+    CHECK(reads_of(second) == second_before);
+    CHECK_FALSE(scan.reading());
+
+    // A read plainly nearer one of them counts, for that one.
+    feed({left(near_first)}, 3);
+    CHECK(reads_of(first) > first_before);
+    CHECK(reads_of(second) == second_before);
+}
+
+TEST_CASE("a side only a corner has shown does not take the place of one read square-on",
+          "[corner]") {
+    // Six sides read square-on, eight reads each, in six distinct colours.
+    const std::array<cv::Vec3f, 6> flat = {
+        cv::Vec3f{90.0F, 0.0F, 0.0F},    cv::Vec3f{50.0F, 60.0F, 40.0F},
+        cv::Vec3f{60.0F, -40.0F, 50.0F}, cv::Vec3f{30.0F, 20.0F, -50.0F},
+        cv::Vec3f{80.0F, -5.0F, 70.0F},  cv::Vec3f{45.0F, 50.0F, 10.0F}};
+    const cv::Vec3f stray{70.0F, 30.0F, -30.0F};
+
+    SideScan scan;
+    for (const cv::Vec3f& colour : flat) {
+        cube::vision::SideRead read;
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            read.centres.at(cell) = cv::Point2f(200.0F + 40.0F * static_cast<float>(cell % 3),
+                                                100.0F + 40.0F * static_cast<float>(cell / 3));
+            read.lab.at(cell) = colour;
+            read.found.at(cell) = true;
+        }
+        read.pitch = 40.0F;
+        read.stickers_found = 9;
+        for (int i = 0; i < static_cast<int>(SideScan::kMinReads) + 1; ++i) {
+            scan.add(read);
+        }
+        scan.add(std::nullopt);
+    }
+    REQUIRE(scan.sides().size() == 6);
+
+    // A seventh colour held on a corner for far longer than any of them.
+    const auto left = made_side({100, 100}, {40, 0}, {0, 40}, 9, stray);
+    const auto right = made_side({300, 100}, {40, 0}, {0, 40}, 9, stray);
+    CornerRead read;
+    read.sides = {left, right};
+    for (int i = 0; i < 40; ++i) {
+        scan.add(std::nullopt);
+        scan.add_corner(read);
+    }
+
+    // The six it shows are still the six read square-on.
+    const auto shown = scan.sides();
+    REQUIRE(shown.size() == 6);
+    for (const SideScan::Side& side : shown) {
+        CHECK(cube::vision::colour_distance(side.lab.at(4), stray) > 5.0F);
+    }
 }

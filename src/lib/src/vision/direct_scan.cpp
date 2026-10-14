@@ -70,6 +70,14 @@ constexpr float kShadingWeight = 0.25F;
 constexpr int kMinCornerFound = 7;
 constexpr float kMinCornerAspect = 0.45F;
 
+// A side seen at an angle sits 6 to 9 Lab units from its own side, so when two
+// sides are within 4 of each other as candidates the read has not said which
+// it is, and counting it for the nearer is a coin toss. In the first corner
+// hold recorded (cube_scan corner-colours) the reads that were counted were
+// 7 or more clear of the next side except one, at 2.3, which was a different
+// side's colours.
+constexpr float kMinCornerMargin = 4.0F;
+
 struct Blob {
     cv::Point2f centre;
     float side = 0.0F;
@@ -711,17 +719,27 @@ void SideScan::reset() {
     in_view_.clear();
 }
 
-std::size_t SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
+std::optional<std::size_t> SideScan::count_read(const std::array<cv::Vec3f, 9>& lab,
+                                                bool square_on) {
     std::optional<std::size_t> nearest;
     float nearest_distance = std::numeric_limits<float>::max();
+    float second_distance = std::numeric_limits<float>::max();
     int nearest_roll = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
         const auto [distance, roll] = side_distance(lab, groups_.at(i).fused);
         if (distance < nearest_distance) {
+            second_distance = nearest_distance;
             nearest = i;
             nearest_distance = distance;
             nearest_roll = roll;
+        } else if (distance < second_distance) {
+            second_distance = distance;
         }
+    }
+    if (!square_on && nearest.has_value() && nearest_distance < kSameSideDistance &&
+        second_distance - nearest_distance < kMinCornerMargin) {
+        // Close to two sides: a read at an angle that does not say which.
+        return std::nullopt;
     }
     if (nearest.has_value() && nearest_distance < kSameSideDistance) {
         Group& group = groups_.at(*nearest);
@@ -759,7 +777,9 @@ void SideScan::add(const std::optional<SideRead>& read) {
     if (!steady) {
         return;
     }
-    in_view_.push_back(count_read(read->lab, true));
+    if (const auto counted = count_read(read->lab, true); counted.has_value()) {
+        in_view_.push_back(*counted);
+    }
 }
 
 namespace {
@@ -808,9 +828,9 @@ void SideScan::add_corner(const std::optional<CornerRead>& read) {
         if (!steady) {
             continue;
         }
-        const std::size_t counted = count_read(side.lab, false);
-        if (std::ranges::find(in_view_, counted) == in_view_.end()) {
-            in_view_.push_back(counted);
+        const auto counted = count_read(side.lab, false);
+        if (counted.has_value() && std::ranges::find(in_view_, *counted) == in_view_.end()) {
+            in_view_.push_back(*counted);
         }
     }
     previous_corner_centres_ = std::move(centres);
@@ -857,8 +877,17 @@ std::vector<std::size_t> SideScan::captured_by_support() const {
             captured.push_back(i);
         }
     }
+    // A side that was read square-on is ahead of one that only a corner view
+    // has shown: a side at an angle can start a group of its own when its
+    // colours sit far from its side's, and that stray must not take the place
+    // of a real side however many frames it was held for.
     std::ranges::stable_sort(captured, [this](std::size_t l, std::size_t r) {
-        return groups_.at(l).reads.size() > groups_.at(r).reads.size();
+        const Group& left = groups_.at(l);
+        const Group& right = groups_.at(r);
+        if (left.flat_reads.empty() != right.flat_reads.empty()) {
+            return !left.flat_reads.empty();
+        }
+        return left.reads.size() > right.reads.size();
     });
     return captured;
 }

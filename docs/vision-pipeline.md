@@ -174,8 +174,24 @@ no recorded frame shows three) the distance is a median of 5.8 and at most
 12.0 was a strip with six of its nine stickers found, which is where the
 gates came from; another six-of-nine strip sat at 6.1, so they are a margin
 and not a measured edge.
-Three sides at once is covered by drawn frames only until a corner-held scan
-is recorded (`CUBE_SCAN_RECORD_DIR`, then `cube_scan corner-colours` on it).
+
+The first corner-held scan recorded (480 frames by an evening lamp, the cube
+held tilted in one hand, two to three sides in view) is the harder case. Its
+35 corner reads are all two-sided and none is three. The sides the reader did
+find sit a median of 8.2 from their side (90% within 11.0, one at 15.5), and
+one frame had a side within 2.3 of two sides, which is why a corner side must
+be 4 clearer of the next side to count. The third side is missed before any
+lattice is fitted, in the blob step: the shared threshold compares each pixel
+with the mean of a 43 pixel window, and beside the bright white face the dark
+green, blue and red stickers fall below it and come out as shrunken, uneven
+blobs, which the size filter then drops; the third side is also seen steeply,
+foreshortened and in its own shadow. Tried on that scan alone with a finer
+threshold (window 3% of the frame height, offset 3, against 12% and 8), 29 of
+79 corner frames are three-sided, the board stays 4 of 4 exact, and square-on
+reads fall by about 4% on the tungsten session (625 to 600) - so the change
+is not made to the threshold the square-on reader shares. A corner reader with
+its own scale-aware preparation is the next step, and it needs recordings in
+more than one light before it is tuned.
 
 ## Camera photometry
 

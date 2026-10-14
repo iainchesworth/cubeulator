@@ -227,12 +227,20 @@ holding the cube. `cube_scan board` reruns the measurement on a local copy.
   sides at a time and two corners are the whole cube. Square-on scanning is
   unchanged. On drawn frames: three sides captured in nine frames, a corner
   and the corner across from it finish a scan through the app's controller.
-  On recordings only the six two-side frames exist (`cube_scan
-  corner-colours`): they sit 3 to 7 Lab units from their side, 12 at worst.
-  Not measured: a real hand holding a real cube on a corner, which no
-  recording shows - the three-sided reader has only seen drawn frames. The
-  scan screen draws no dots on a corner view yet (`stickerPoints` is the
-  square-on read's nine), and its words say "this side".
+  A corner side nearly as close to two sides as to one is not counted, and
+  a side only a corner has shown ranks behind one read square-on.
+  Measured (`cube_scan corner-colours`): the six two-side frames in the old
+  sessions sit 3 to 7 Lab units from their side, 12 at worst. The first
+  recording of a cube held on a corner (evening lamp, tilted in one hand)
+  has 35 corner frames, all two-sided, none three: the third side is lost in
+  the blob step (dark stickers beside the bright white face fall under the
+  shared local-mean threshold, and the steep side is foreshortened). A finer
+  threshold finds three sides in 29 of 79 frames but costs square-on reads
+  (about 4% on tungsten), so it is left for a corner reader with its own
+  preparation. The scan screen draws no dots on a corner view yet
+  (`stickerPoints` is the square-on read's nine), and its words say "this
+  side". Separately, that recording's six sides do not assemble into a valid
+  cube with or without this change; its true state was not recorded.
 
 ## Why it does not work today
 
