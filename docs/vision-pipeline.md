@@ -140,22 +140,44 @@ Nothing in the reader names a colour. It returns measured Lab.
 
 Once six sides are captured:
 
+0. **The light is read from the cube's own white.** `find_white_reference`
+   takes the white centre - the least chromatic of the centres that are not
+   dark, by a margin, needing gains a real light could ask for - and from what
+   it measures works out per-channel gains in linear RGB that make it grey.
+   Under daylight the white measures a\*, b\* near 0 (chroma 3 to 5) and
+   nothing is corrected; under a warm lamp it measures pink, and every other
+   colour has been pulled the same way (chroma 18 under tungsten, 29 under a
+   warm-white LED, where yellow reads at an orange's hue). `neutralised()`
+   applies the gains to every sample before naming. It is done once, here,
+   after all six sides are in, because earlier a scan holds only measured Lab
+   and has named nothing: finding the white takes nothing back. It needs all
+   six, since with fewer the white may simply not have been shown yet and a
+   green seen first would pass for it. A set with no plausible white is named
+   exactly as before.
 1. `resolve_colors` clusters the 54 Lab samples into six groups of nine,
    seeded from the six centres (a real cube has six distinct centre colours),
    and names each cluster by nearest reference colour. Because the cube's own
    stickers define the clusters, a lighting shift that moves every sample of
-   one colour together cancels out.
+   one colour together cancels out. The white cluster is named white outright
+   when the reference found it. Hue naming trusts the clusters' hues when they
+   name six distinct colours; two neighbours (red and orange, or orange and
+   yellow) that arrive in the same band with the other empty are split by
+   which is yellower, which the light cannot change. Any other collision keeps
+   the global-distance matching.
 2. `assemble_scanned_faces` finds the slot for each side from its centre and
    tries the 4,096 roll combinations against `Cube::from_facelets` and
    `is_solvable`. Physical validity is the arbiter, not a score.
 3. If the naming does not assemble, the pairs of names are exchanged one pair
    at a time; among the exchanges that do assemble the one whose two centres
-   look most alike is taken. This repairs red/orange swaps under tungsten light,
-   which colour naming alone cannot get right.
+   look most alike is taken. With the light neutralised this is now rarely
+   what decides the red/orange pair under tungsten light, but it stays as the
+   backstop.
 
 `SideScan::scanned()` also returns what each colour measured in this session
 (`SessionColours`), which the solve screen's held-cube matching compares
-against.
+against. These stay as measured, not neutralised: a corner or a held read
+later is measured the same way. `ScannedCube::cast` is the white centre's
+chroma, how far from neutral the light was; 0 when no white could be told.
 
 ## Two sides in one view: `read_corner` and `fit_corner`
 

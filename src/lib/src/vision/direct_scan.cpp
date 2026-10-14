@@ -897,6 +897,7 @@ struct Assembled {
 
 // Naming and assembly of six sides, with the working of both.
 struct Evaluation {
+    std::optional<WhiteReference> white;
     Result<ColorResolution> naming = std::unexpected(CubeError::face_capture_incomplete);
     std::optional<AssemblyTrace> assembly;
     Result<ScannedCube> result = std::unexpected(CubeError::face_capture_incomplete);
@@ -905,7 +906,23 @@ struct Evaluation {
 [[nodiscard]] Evaluation evaluate(const std::array<CapturedFace, 6>& faces,
                                   const std::vector<CornerRead>& corners) {
     Evaluation evaluation;
-    evaluation.naming = resolve_colors_explained(faces);
+    // Named in the colours the light would have given under neutral light,
+    // once the cube's own white says what the light did. The sides are only
+    // ever named here, after all six are in, so nothing seen earlier has to
+    // be taken back. The session's colours stay as measured (assemble gets
+    // `faces`, not `seen`): a corner or a held read later is measured the
+    // same way.
+    evaluation.white = find_white_reference(faces);
+    std::array<CapturedFace, 6> seen = faces;
+    if (evaluation.white.has_value()) {
+        for (CapturedFace& face : seen) {
+            for (cv::Vec3f& lab : face.lab) {
+                lab = neutralised(*evaluation.white, lab);
+            }
+        }
+    }
+    evaluation.naming = resolve_colors_explained(
+        seen, evaluation.white.has_value() ? std::optional(evaluation.white->side) : std::nullopt);
     if (!evaluation.naming) {
         evaluation.result = std::unexpected(evaluation.naming.error());
         return evaluation;
@@ -913,6 +930,9 @@ struct Evaluation {
     Assembled assembled = assemble(evaluation.naming->faces, faces, corners);
     evaluation.result = std::move(assembled.result);
     evaluation.assembly = std::move(assembled.trace);
+    if (evaluation.result.has_value() && evaluation.white.has_value()) {
+        evaluation.result->cast = evaluation.white->cast;
+    }
     return evaluation;
 }
 
@@ -1469,6 +1489,7 @@ ScanDiagnosis SideScan::diagnose() const {
         faces.at(i).lab = diagnosis.sides.at(i).lab;
     }
     Evaluation evaluation = evaluate(faces, corners_);
+    diagnosis.white = evaluation.white;
     if (evaluation.naming.has_value()) {
         diagnosis.naming = std::move(*evaluation.naming);
     }
