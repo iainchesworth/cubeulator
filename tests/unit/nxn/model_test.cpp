@@ -177,8 +177,12 @@ TEST_CASE("a rotated move spelling does the same thing on the rotated cube", "[n
         const auto rotations = g.rotations();
         REQUIRE(rotations.size() == 24);
         for (std::size_t r = 0; r < rotations.size(); ++r) {
-            for (const SliceTurn turn : {SliceTurn{Axis::X, 0, 1}, SliceTurn{Axis::Y, size - 2, 3},
-                                         SliceTurn{Axis::Z, 1, 2}}) {
+            const std::array<SliceTurn, 3> turns = {
+                SliceTurn{.axis = Axis::X, .layer = 0, .turns = 1},
+                SliceTurn{.axis = Axis::Y, .layer = size - 2, .turns = 3},
+                SliceTurn{.axis = Axis::Z, .layer = 1, .turns = 2},
+            };
+            for (const SliceTurn turn : turns) {
                 // The turn, spelled for the rotated cube, is the original turn
                 // carried through the rotation: rotate the cube, make the
                 // rotated turn, rotate back == make the original turn.

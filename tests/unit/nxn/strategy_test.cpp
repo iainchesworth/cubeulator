@@ -14,6 +14,8 @@
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
 
+#include "../must_have.hpp"
+
 namespace {
 
 using cube::CubeError;
@@ -108,7 +110,7 @@ TEST_CASE("at size 3 the virtual 3x3 is the cube itself", "[nxn][state]") {
     CHECK(view.mapping().is_exhaustive());
     for (std::size_t face = 0; face < 6; ++face) {
         for (std::size_t i = 0; i < 9; ++i) {
-            CHECK(view[face, i / 3, i % 3] == cube.facelets()[(face * 9) + i]);
+            CHECK(view[face, i / 3, i % 3] == cube.facelet((face * 9) + i));
         }
     }
 }
@@ -117,10 +119,12 @@ TEST_CASE("a reduced cube's virtual 3x3 is the 3x3 it converts to, renamed", "[n
     // Reduce a 5x5 without its core, then compare: to_cube3 is the virtual
     // view with every colour renamed to its face's canonical one.
     const NCube scrambled = cube::nxn::random_scramble({.size = 5, .seed = 21U, .moves = 80});
-    Context context{.cube = scrambled,
-                    .steps = {},
-                    .method = cube::solver::SolveMethod::Advanced,
-                    .targets = std::nullopt};
+    Context context{
+        .cube = scrambled,
+        .steps = {},
+        .method = cube::solver::SolveMethod::Advanced,
+        .targets = std::nullopt,
+    };
     const Strategy full = cube::nxn::default_strategy(5);
     for (const auto& entry : full.stages()) {
         if (entry.name == "core") {
@@ -236,12 +240,12 @@ TEST_CASE("the parity fix can be injected, and any valid choice solves the cube"
         for (int layer = g.size() - 2; layer >= 1; --layer) {
             const SliceTurn candidate{.axis = Axis::Y, .layer = layer, .turns = 1};
             const auto& moves = g.turn(candidate);
-            const auto orbits = g.wing_orbits();
+            const auto& orbits = g.wing_orbits();
             std::size_t touched = 0;
             bool ours = false;
             for (std::size_t k = 0; k < orbits.size(); ++k) {
-                for (const auto& slot : orbits[k]) {
-                    if (moves[slot.primary] != slot.primary) {
+                for (const auto& slot : orbits.at(k)) {
+                    if (moves.at(slot.primary) != slot.primary) {
                         ++touched;
                         ours = ours || k == orbit;
                         break;
@@ -303,10 +307,12 @@ namespace {
 
 // Runs the stages of the default strategy up to (not including) `stop`.
 Context run_until(const NCube& cube, std::string_view stop) {
-    Context context{.cube = cube,
-                    .steps = {},
-                    .method = cube::solver::SolveMethod::Advanced,
-                    .targets = std::nullopt};
+    Context context{
+        .cube = cube,
+        .steps = {},
+        .method = cube::solver::SolveMethod::Advanced,
+        .targets = std::nullopt,
+    };
     for (const auto& entry : cube::nxn::default_strategy(cube.size()).stages()) {
         if (entry.name == stop) {
             break;
@@ -338,9 +344,9 @@ std::vector<int> wing_signs(const NCube& cube, const cube::nxn::EdgeDisplays& di
         }
         cube::nxn::Permutation gather(target.size());
         for (std::size_t k = 0; k < target.size(); ++k) {
-            const auto from = std::ranges::find(current, target[k]);
+            const auto from = std::ranges::find(current, target.at(k));
             REQUIRE(from != current.end());
-            gather[k] = static_cast<std::uint16_t>(from - current.begin());
+            gather.at(k) = static_cast<std::uint16_t>(from - current.begin());
         }
         signs.push_back(cube::nxn::sign(gather));
     }
@@ -354,12 +360,12 @@ TEST_CASE("after the centre stage every centre sticker shows its face's colour",
         const NCube scrambled =
             cube::nxn::random_scramble({.size = size, .seed = 31U, .moves = 80});
         const Context context = run_until(scrambled, "plan_edges");
-        REQUIRE(context.targets.has_value());
+        const auto& targets = cube::test::must_have(context.targets);
         const auto& g = context.cube.geometry();
         for (std::size_t f = 0; f < g.facelet_count(); ++f) {
             if (g.role(f) == cube::nxn::Role::Centre) {
                 CHECK(context.cube.facelet(f) ==
-                      context.targets->scheme.at(static_cast<std::size_t>(g.face_of(f))));
+                      targets.scheme.at(static_cast<std::size_t>(g.face_of(f))));
             }
         }
     }
@@ -393,14 +399,14 @@ TEST_CASE("the centre stage leaves every wing orbit's parity as it found it", "[
                 cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 90});
             const Context before = run_until(scrambled, "centres");
             const Context after = run_until(scrambled, "plan_edges");
-            REQUIRE(before.targets.has_value());
+            const auto& targets = cube::test::must_have(before.targets);
             // Same reference for both: signs are compared like with like.
-            const auto reference = before.targets->reference;
+            const auto reference = targets.reference;
             if (size % 2 == 1) {
                 // An odd size's reference is its middle edges, which the
                 // centre stage may move; compare against the ones now there.
                 const auto now =
-                    cube::nxn::FixedCentres::reference_displays(after.cube, before.targets->scheme);
+                    cube::nxn::FixedCentres::reference_displays(after.cube, targets.scheme);
                 CHECK(wing_signs(after.cube, now) == wing_signs(before.cube, reference));
             } else {
                 CHECK(wing_signs(after.cube, reference) == wing_signs(before.cube, reference));

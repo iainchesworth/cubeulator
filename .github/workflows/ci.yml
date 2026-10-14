@@ -131,6 +131,12 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
+      # Clang parses with the newest libstdc++ it can find, and <mdspan> is in
+      # 16, not the 15 the image ships. g++-16 brings that library; see
+      # .github/actions/install-gcc.
+      - name: Install GCC 16 (for its libstdc++)
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11/GL headers).
       - name: Install vcpkg build dependencies
@@ -319,14 +325,16 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # No separate GCC 16 install step needed here: ubuntu-26.04 ships
-      # GCC 14/15/16 side by side out of the box (unlike ubuntu-24.04, which
-      # needed the ppa:ubuntu-toolchain-r/test PPA). GCC 16 rather than 15
-      # because the library uses std::mdspan, which libstdc++ only has from
-      # 16. The image's gcc-16 is a snapshot of trunk (16-20260322), not a
-      # release - see docs/ci.md. The -DCMAKE_CXX_COMPILER=g++-16 reference
-      # below resolves to it.
-      #
+      # GCC 16 has a step of its own: the ubuntu-26.04 image ships GCC 13 to
+      # 15 side by side, and 16 is in the archive but not on the image. 16
+      # rather than 15 because the library uses std::mdspan, which libstdc++
+      # only has from 16. The archive's gcc-16 is a snapshot of trunk
+      # (16-20260322), not a release - see docs/ci.md. The
+      # -DCMAKE_CXX_COMPILER=g++-16 reference below resolves to it.
+      - name: Install GCC 16 (Linux)
+        if: runner.os == 'Linux'
+        uses: $/.github/actions/install-gcc
+
       # The X11/GL development headers were added when bgfx's port
       # unconditionally find_package(X11)d even with examples/tools disabled
       # ("Could NOT find X11"). bgfx has since been removed from the
@@ -997,6 +1005,9 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # The vcpkg build dependencies (see build-and-test), then what a Qt
       # window needs to open on Xvfb and render in software: the xcb platform
       # plugin's libraries, Mesa's software rasteriser, and xauth for
@@ -1130,9 +1141,10 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # No separate GCC 16 install step needed here: ubuntu-26.04 ships it
-      # out of the box - see the equivalent comment on build-and-test above.
-      #
+      # GCC 16 is installed, not shipped: see the comment on build-and-test.
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test above (X11/GL headers).
       - name: Install vcpkg build dependencies
@@ -1238,6 +1250,9 @@ jobs:
         with:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
+
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
 
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test.

@@ -41,9 +41,12 @@ concept FaceletState = requires(const S& state, Face face) {
 template <FaceletState S>
 [[nodiscard]] auto facelets_of(const S& state) {
     const int n = puzzle_size(state);
-    return std::views::iota(0, 6 * n * n) | std::views::transform([&state, n](int i) {
-               const int within = i % (n * n);
-               return state.at(static_cast<Face>(i / (n * n)), within / n, within % n);
+    // `size` is captured by value, as an init-capture, because the range
+    // outlives this function; a plain capture of `n` would be flagged as
+    // needless for a state whose size is a constant (the 3x3's).
+    return std::views::iota(0, 6 * n * n) | std::views::transform([&state, size = n](int i) {
+               const int within = i % (size * size);
+               return state.at(static_cast<Face>(i / (size * size)), within / size, within % size);
            });
 }
 
@@ -51,7 +54,7 @@ template <FaceletState S>
 template <FaceletState S>
 [[nodiscard]] bool has_uniform_faces(const S& state) {
     const int n = puzzle_size(state);
-    return std::ranges::all_of(std::views::iota(0, 6), [&state, n](int face) {
+    return std::ranges::all_of(std::views::iota(0, 6), [&](int face) {
         const Color first = state.at(static_cast<Face>(face), 0, 0);
         return std::ranges::all_of(std::views::iota(0, n * n), [&](int within) {
             return state.at(static_cast<Face>(face), within / n, within % n) == first;

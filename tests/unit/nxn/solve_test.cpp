@@ -256,8 +256,11 @@ TEST_CASE("merged() cancels and combines turns, even past commuting layers", "[n
         return LayerMove{.face = face, .depth = depth, .turns = turns};
     };
     // R R' vanishes; 2R sits between and commutes with R, so R 2R R' is 2R.
-    const std::array<LayerMove, 3> past = {layer(Face::R, 0, 1), layer(Face::R, 1, 1),
-                                           layer(Face::R, 0, 3)};
+    const std::array<LayerMove, 3> past = {
+        layer(Face::R, 0, 1),
+        layer(Face::R, 1, 1),
+        layer(Face::R, 0, 3),
+    };
     const auto reduced = cube::nxn::merged(past, size);
     REQUIRE(reduced.size() == 1);
     CHECK(reduced.front() == layer(Face::R, 1, 1));
@@ -268,8 +271,11 @@ TEST_CASE("merged() cancels and combines turns, even past commuting layers", "[n
     CHECK(cube::nxn::merged(ends, size).front().turns == 2);
 
     // Different axes do not commute, so nothing may merge across them.
-    const std::array<LayerMove, 3> blocked = {layer(Face::R, 0, 1), layer(Face::U, 0, 1),
-                                              layer(Face::R, 0, 3)};
+    const std::array<LayerMove, 3> blocked = {
+        layer(Face::R, 0, 1),
+        layer(Face::U, 0, 1),
+        layer(Face::R, 0, 3),
+    };
     CHECK(cube::nxn::merged(blocked, size).size() == 3);
 }
 
@@ -302,7 +308,7 @@ TEST_CASE("every cycle in the library does exactly what it says and nothing else
             // gather: what shows at i came from p[i]. The cycle says content
             // at cells[k] ends at cells[k+1].
             for (std::size_t k = 0; k < 3; ++k) {
-                CHECK(p[cycle.cells.at((k + 1) % 3)] == cycle.cells.at(k));
+                CHECK(p.at(cycle.cells.at((k + 1) % 3)) == cycle.cells.at(k));
             }
             // And a solved cube is moved by it nowhere else.
             for (const std::uint16_t f : moved) {
@@ -317,13 +323,13 @@ TEST_CASE("every cycle in the library does exactly what it says and nothing else
         for (std::size_t k = 0; k < geometry.centre_orbits().size(); ++k) {
             const auto cycles = library.centres(k);
             for (std::size_t i = 0; i < cycles.size(); i += 40) {
-                check(cycles[i], false);
+                check(cycles.at(i), false);
             }
         }
         for (std::size_t k = 0; k < geometry.wing_orbits().size(); ++k) {
             const auto cycles = library.wings(k);
             for (std::size_t i = 0; i < cycles.size(); i += 40) {
-                check(cycles[i], true);
+                check(cycles.at(i), true);
             }
         }
     }
@@ -353,7 +359,7 @@ TEST_CASE("arrange sorts by 3-cycles and refuses what 3-cycles cannot do", "[nxn
     // 24 distinct labels, rotated by three places among the first nine.
     cube::nxn::Labels target(24);
     for (std::size_t i = 0; i < 24; ++i) {
-        target[i] = static_cast<int>(i);
+        target.at(i) = static_cast<int>(i);
     }
     cube::nxn::Labels current = target;
     std::rotate(current.begin(), current.begin() + 3, current.begin() + 9);

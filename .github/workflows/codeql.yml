@@ -63,10 +63,11 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # No separate GCC 16 install step needed here: ubuntu-26.04 ships it
-      # out of the box - see the equivalent comment on ci.yml's build-and-test
-      # job.
-      #
+      # GCC 16 is installed, not shipped: see the comment on ci.yml's
+      # build-and-test job.
+      - name: Install GCC 16
+        uses: $/.github/actions/install-gcc
+
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
       # build-and-test in ci.yml (X11/GL headers).
       - name: Install vcpkg build dependencies
