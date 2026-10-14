@@ -30,8 +30,16 @@ dir="changelog.d"
 kinds='added|changed|deprecated|removed|fixed|security'
 name_re="^[A-Za-z0-9][A-Za-z0-9._-]*\\.(${kinds})\\.md\$"
 
-mapfile -t changed < <(git diff --name-only --diff-filter=ACMR "$base...$head")
-mapfile -t added < <(git diff --name-only --diff-filter=A "$base...$head")
+# Not mapfile, and every expansion of an array that may be empty is guarded:
+# macOS ships bash 3.2, which has neither, and the tools' self-test runs there.
+changed=()
+while IFS= read -r line; do
+    [ -n "$line" ] && changed+=("$line")
+done < <(git diff --name-only --diff-filter=ACMR "$base...$head")
+added=()
+while IFS= read -r line; do
+    [ -n "$line" ] && added+=("$line")
+done < <(git diff --name-only --diff-filter=A "$base...$head")
 
 failures=0
 fail() {
@@ -41,7 +49,7 @@ fail() {
 
 # --- 1. the fragments this change adds -----------------------------------------
 fragments_added=0
-for path in "${added[@]}"; do
+for path in ${added[@]+"${added[@]}"}; do
     case "$path" in
     "$dir"/*) ;;
     *) continue ;;
@@ -57,8 +65,7 @@ for path in "${added[@]}"; do
     fragments_added=$((fragments_added + 1))
 
     content="$(git show "$head:$path")"
-    # trailing blank lines are not part of the item
-    content="$(printf '%s' "$content" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}')"
+    # (command substitution has already dropped the trailing blank lines)
     first="${content%%$'\n'*}"
     if [ -z "$content" ]; then
         fail "$path: is empty"
@@ -75,7 +82,7 @@ done
 
 # --- 2. a change a person can see needs one --------------------------------------
 visible=()
-for path in "${changed[@]}"; do
+for path in ${changed[@]+"${changed[@]}"}; do
     case "$path" in
     src/* | packaging/* | cmake/* | third_party/* | vcpkg.json | CMakeLists.txt | docs/design/strings.json)
         visible+=("$path")
