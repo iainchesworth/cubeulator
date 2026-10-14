@@ -1,1 +1,0 @@
-**A user guide, with pictures.** Installing on each system, scanning a cube, following the solution, settings and keyboard shortcuts, what is kept and what is not, and what to do when a side will not read, each with pictures of the real screens. It is published with the documentation. See [docs/guide/index.md](docs/guide/index.md).
