@@ -637,9 +637,20 @@ Item {
             fieldOfView: 26
         }
 
+        // Qt Quick 3D draws four directional lights at most. A fifth that is
+        // visible is left out, with "Too many directional lights in scene,
+        // maximum is 4" in the log, and which one goes is Qt's doing, not
+        // ours. So no more than four are visible at once (cube_view_test
+        // counts them).
+        //
+        // evenLight had five, and the one Qt left out was this key light: of
+        // the five, hiding it was the only thing that left the picture as it
+        // was. The evenLight look was tuned without it, so it is off here
+        // under evenLight, and the picture is the one it always was.
         DirectionalLight {
+            visible: !root.evenLight
             eulerRotation: Qt.vector3d(-35, -35, 0)
-            brightness: root.evenLight ? 0.75 : 1.1
+            brightness: 1.1
         }
         DirectionalLight {
             eulerRotation: Qt.vector3d(40, 150, 0)
