@@ -87,7 +87,8 @@ on Fedora).
 
 No install: [open Cubeulator in your browser](../web.md). It is the same app,
 running on your device, and needs a current browser and a secure page for the
-camera.
+camera. Each release also carries the same site as `Cubeulator-<version>-web.zip`,
+if you would rather host it yourself ([how](../web.md#hosting-it-yourself)).
 
 ## Updating
 

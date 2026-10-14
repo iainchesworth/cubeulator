@@ -76,6 +76,24 @@ desktops is small:
 - **Nothing else** is platform code: the solver, the vision pipeline and the
   QML are the shared ones.
 
+## Hosting it yourself
+
+Each release carries the same site as `Cubeulator-<version>-web.zip`: the
+files above and nothing else, with the licence, the third-party notices and a
+`HOSTING.txt` that says what a host has to do. Unzip it behind any static
+server, over https:
+
+```sh
+unzip Cubeulator-<version>-web.zip
+python3 -m http.server 8000 --directory Cubeulator-<version>-web
+# then open http://localhost:8000/
+```
+
+The zip is built by the same workflow, from the same commit, as the
+installers, and is covered by the release's `SHA512SUMS`, GPG signatures and
+provenance attestation (see [Cutting a release](releasing.md#verifying-a-download)).
+It is what the hosted copy serves, so the two behave alike.
+
 ## Building it yourself
 
 See [Building & packaging](building.md#webassembly-browser) for the preset,

@@ -245,7 +245,7 @@ Linux plan is now the table above: no GTK, GLib, Pango or X11 ports.
 | Linux | No GTK3 chain: `opencv4[gtk]` is not requested (above). Qt is installed from `jurplel/install-qt-action` in CI, and the DEB and RPM carry it: the app, Qt, its plugins and QML modules and OpenCV sit in a private directory (`/usr/lib/cubeulator`), and the packages declare only system libraries as dependencies (`SHLIBDEPS` and `AUTOREQPROV` are off; `packaging/linux/Packaging.cmake`), so Qt's source and notice duty is the packager's, not a distribution's [I][L]. The licence and notices are in `/usr/share/doc/cubeulator/`. Qt's Linux SBOMs have not been read, so the Linux notices over-include. |
 | Android | Qt is shared (`.so` inside the APK/AAB) so LGPL relinking is mechanically possible [I]. The camera backend is a stub today. |
 | iOS | The app does not build today. Qt for iOS is normally linked statically [I - **not stated** in the Qt iOS documentation pages I read; Qt's own tracker has an open request to allow dynamic builds, QTBUG-85974]. |
-| Web (WebAssembly) | One `.wasm` module with Qt linked in statically and nothing deployed beside it (no installer, no CPack package, so no installed `THIRD-PARTY-NOTICES.txt`; the notices are embedded in the module as a resource like every build's). From vcpkg it takes fmt and a smaller OpenCV: `vcpkg.json` asks for the `intrinsics` feature alone on `emscripten`, and `cmake/triplets/wasm32-emscripten-threads.cmake` builds only `core`, `imgproc`, `imgcodecs` and `videoio`, so none of the image-codec ports (libjpeg-turbo, libpng, tiff, libwebp, quirc, liblzma) is in it; zlib comes in as OpenCV's own dependency [V: `vcpkg.json`, port manifests]. It also carries the two Noto subsets (2.3) and, from Qt's WebAssembly kit, the DejaVu Fonts 2.37 face the browser build draws Latin, Hebrew and Arabic with (Bitstream-Vera licence [V: `QWasmIntegrationPlugin_Attribution_dejayvu` in the kit's `qtbase` SBOM]). The Qt SBOMs of that kit are not in `qt-modules.json`, so that attribution is not in the generated notices; see the known gaps in [section 6](#6-how-the-notices-are-produced). |
+| Web (WebAssembly) | One `.wasm` module with Qt linked in statically and nothing deployed beside it (no installer and no CPack package; a release ships the site as `Cubeulator-<version>-web.zip`, assembled by `packaging/web/make-package.sh` with `LICENSE.txt` and `THIRD-PARTY-NOTICES.txt` beside it, and the script stops on an unresolved notice because no installer is there to refuse; the notices are also embedded in the module as a resource like every build's). From vcpkg it takes fmt and a smaller OpenCV: `vcpkg.json` asks for the `intrinsics` feature alone on `emscripten`, and `cmake/triplets/wasm32-emscripten-threads.cmake` builds only `core`, `imgproc`, `imgcodecs` and `videoio`, so none of the image-codec ports (libjpeg-turbo, libpng, tiff, libwebp, quirc, liblzma) is in it; zlib comes in as OpenCV's own dependency [V: `vcpkg.json`, port manifests]. It also carries the two Noto subsets (2.3) and, from Qt's WebAssembly kit, the DejaVu Fonts 2.37 face the browser build draws Latin, Hebrew and Arabic with (Bitstream-Vera licence [V: `QWasmIntegrationPlugin_Attribution_dejayvu` in the kit's `qtbase` SBOM]). That kit's SBOMs are in `qt-modules.json` (`web` is a verified platform), so the attribution is in the generated notices; see the known gaps in [section 6](#6-how-the-notices-are-produced). |
 
 ## 3. The Qt question
 
@@ -377,7 +377,7 @@ LGPL-obligations page, "Modules Not Available Under LGPL"].
 | channel | what stands in the way, if anything | status |
 |---|---|---|
 | **Direct download** (GitHub releases: NSIS installer, DMG, DEB, RPM; the packages are not yet OS code-signed or notarised, see [Cutting a release](releasing.md)) | Nothing beyond GPL-3.0 itself: ship licence, notices, source or an offer | clear [I] |
-| **Web** (the app as static files under `/app/` of the documentation site, [Try it in your browser](web.md)) | Not examined in a primary source. The program, with Qt linked in, is sent to the visitor's browser, so the same GPL-3.0 terms are assumed to apply as to a download [I][L]. Today neither the page nor the app in it shows a licence, a source link or the notices (the About screen is a placeholder, section 7), and the build's notices are embedded but unverified (sections 2.5 and 6) | **open** [L] |
+| **Web** (the app as static files under `/app/` of the documentation site, [Try it in your browser](web.md)) | Not examined in a primary source. The program, with Qt linked in, is sent to the visitor's browser, so the same GPL-3.0 terms are assumed to apply as to a download [I][L]. The release's zip carries the licence and the notices, but neither the hosted page nor the app in it shows a licence, a source link or the notices (the About screen is a placeholder, section 7) (sections 2.5 and 6) | **open** [L] |
 | **Microsoft Store** | Not examined in a primary source here. GPL apps appear in it [I]. MSIX packaging replaces the NSIS installer. | [L], research needed |
 | **Mac App Store** | Same Apple terms as iOS (below) plus the sandbox; a notarised DMG outside the store avoids Apple's *store* terms entirely | blocked by the same question as iOS [I][L] |
 | **Linux** (tarball, DEB, RPM, Flathub, Snap) | Nothing found. The project's own DEB and RPM carry Qt (section 2.5); distros that package it supply Qt themselves | clear [I] |
@@ -627,14 +627,15 @@ Known gaps, so nobody mistakes them for done:
    of review: any new vector or glyph data in QML gets a manifest entry.
 5. **QML-only dependencies are by import name.** A QML module that is only
    loaded by string at run time would be missed; there are none today.
-6. **The browser build is not held to the standard above by a test.** Its
-   kit's SBOMs have been read (`verifiedPlatforms` includes `web`, and the
-   snapshot has the WebAssembly platform plugin's DejaVu attribution), and
-   the generator attributes a static Qt's plugin and resource objects
-   (`notices_static_qt_selftest` runs it over such a link line). But the test
-   is not built for the browser (`CUBEULATOR_BUILD_TESTS=OFF`), so the notices
-   embedded in that build are produced and nothing fails if one is
-   unresolved. The browser's two Noto subsets are in the manifest and do
+6. **The browser build's notices are held by its packaging script, not by
+   the test above.** Its kit's SBOMs have been read (`verifiedPlatforms`
+   includes `web`, and the snapshot has the WebAssembly platform plugin's
+   DejaVu attribution), and the generator attributes a static Qt's plugin and
+   resource objects (`notices_static_qt_selftest` runs it over such a link
+   line). `third_party_notices_complete` is not built for the browser
+   (`CUBEULATOR_BUILD_TESTS=OFF`), so what stops an unresolved notice from
+   shipping is `packaging/web/make-package.sh`, which a release runs and CI's
+   Web leg does not. The browser's two Noto subsets are in the manifest and do
    reach its notices (2.3).
 7. **A font outside `assets/` and `src/app/qt/` is not looked for.** The scan
    that fails on an unclaimed font covers those two trees only; the web
