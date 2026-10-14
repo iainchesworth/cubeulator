@@ -64,8 +64,13 @@ Rectangle {
             SweepUnderline { fullWidth: 120 }
         }
 
+        // A Rectangle with no `color` is opaque white in every theme, which
+        // under the dark theme's near-white ink is white on white. The card is
+        // an outline on the page, so it takes the page's colour.
         Rectangle {
+            objectName: "complete.stats"
             width: parent.width; height: 76
+            color: "transparent"
             border.width: 2; border.color: Theme.divider
             anchors.topMargin: Theme.space6
             Row {
@@ -91,7 +96,7 @@ Rectangle {
         Column {
             width: parent.width
             spacing: Theme.space2
-            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; objectName: "complete.review"; text: qsTrId("complete.review") }
+            AppButton { width: parent.width; height: 46; variant: "primary"; block: true; objectName: "complete.review"; text: qsTrId("complete.review"); onClicked: AppState.openSolution() }
             AppButton { width: parent.width; height: 44; variant: "secondary"; block: true; objectName: "complete.scanAnother"; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
         }
     }
@@ -130,8 +135,10 @@ Rectangle {
             }
 
             Rectangle {
+                objectName: "complete.stats"
                 width: parent.width - 88
                 height: 96
+                color: "transparent"
                 border.width: 2; border.color: Theme.divider
                 anchors.topMargin: Theme.space8
                 Row {
@@ -173,7 +180,7 @@ Rectangle {
             Flow {
                 width: parent.width - parent.padding * 2
                 spacing: Theme.space3
-                AppButton { height: 48; variant: "primary"; objectName: "complete.review"; text: qsTrId("complete.review") }
+                AppButton { height: 48; variant: "primary"; objectName: "complete.review"; text: qsTrId("complete.review"); onClicked: AppState.openSolution() }
                 AppButton { height: 48; variant: "secondary"; objectName: "complete.scanAnother"; text: qsTrId("complete.scanAnother"); onClicked: AppState.scanAnother() }
             }
         }

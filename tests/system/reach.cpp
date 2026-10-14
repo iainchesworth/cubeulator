@@ -28,6 +28,7 @@ const std::vector<ScreenDef>& screen_inventory() {
         {"solve", "SolveScreen.qml", ""},
         {"settings", "SettingsScreen.qml", ""},
         {"complete", "CompleteScreen.qml", ""},
+        {"solution", "SolutionScreen.qml", ""},
     };
     return screens;
 }
@@ -46,6 +47,24 @@ const std::map<QString, QString>& unpressable_controls() {
     static const std::map<QString, QString> controls = {};
     return controls;
 }
+
+namespace {
+
+// Which of the solution screen's four states it is in (SolutionScreen.qml:
+// overview, stepping, playing, end), or "" when it is not on show. It is read
+// off the screen's own item - the review's position belongs to the screen and
+// no controller has it - and is the same value its main button's label and
+// its caption are bound to, which the journey case checks against what is
+// drawn.
+[[nodiscard]] QString solution_state(App& a) {
+    if (a.screen() != "solution") {
+        return {};
+    }
+    QQuickItem* item = a.screen_item();
+    return item == nullptr ? QString() : item->property("reviewState").toString();
+}
+
+}  // namespace
 
 const std::vector<StateDef>& state_inventory() {
     static const std::vector<StateDef> states = {
@@ -153,6 +172,11 @@ const std::vector<StateDef>& state_inventory() {
          ""},
 
         {"complete", "shown", [](App& a) { return a.screen() == "complete"; }, ""},
+
+        {"solution", "overview", [](App& a) { return solution_state(a) == "overview"; }, ""},
+        {"solution", "stepping", [](App& a) { return solution_state(a) == "stepping"; }, ""},
+        {"solution", "playing", [](App& a) { return solution_state(a) == "playing"; }, ""},
+        {"solution", "end", [](App& a) { return solution_state(a) == "end"; }, ""},
     };
     return states;
 }

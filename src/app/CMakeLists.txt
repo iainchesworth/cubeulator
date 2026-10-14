@@ -142,6 +142,8 @@ if(CUBEULATOR_BUILD_APP)
             qt/SolveMethodPicker.qml
             qt/SettingsScreen.qml
             qt/CompleteScreen.qml
+            qt/SolutionScreen.qml
+            qt/TurnArrow.qml
         SOURCES
             qt/CameraPermission.hpp
             qt/CameraPermission.cpp

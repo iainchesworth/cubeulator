@@ -15,6 +15,7 @@
 namespace cube::profiling {
 
 inline constexpr bool enabled = false;
+inline constexpr bool to_recorder = false;
 
 }  // namespace cube::profiling
 

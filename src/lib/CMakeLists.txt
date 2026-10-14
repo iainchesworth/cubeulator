@@ -68,6 +68,7 @@ target_sources(cube_lib
         src/vision/color_classification.cpp
         src/vision/recording_v2.cpp
         src/vision/prepared_frame.cpp
+        src/vision/sticker_colour.cpp
         src/vision/direct_scan.cpp
         src/vision/corner_view.cpp
         src/vision/held_cube.cpp
@@ -75,6 +76,7 @@ target_sources(cube_lib
         src/diagnostics/describe.cpp
         src/diagnostics/record.cpp
         src/diagnostics/jsonl_file.cpp
+        src/profile/recorder.cpp
         src/i18n/i18n.cpp)
 
 # Two files make the compiler build lookup tables from loops: the two-phase
@@ -106,12 +108,15 @@ set_source_files_properties(
 add_dependencies(cube_lib cube_version)
 
 # Which cube/profiling.hpp the zone macros resolve to: CMake chooses the
-# directory, not an #ifdef in the header (see cmake/Tracy.cmake). PUBLIC
-# because every layer above this one - the app's capture loop and controllers,
-# the tracker wrapper, the tools - is instrumented with the same macros, and
-# the real variant includes Tracy's own headers, which cube::tracy supplies.
+# directory, not an #ifdef in the header (see cmake/Tracy.cmake and
+# cmake/ProfileRecorder.cmake). PUBLIC because every layer above this one - the
+# app's capture loop and controllers, the tracker wrapper, the tools - is
+# instrumented with the same macros, and the real variant includes Tracy's own
+# headers, which cube::tracy supplies.
 if(CUBEULATOR_ENABLE_TRACY)
     set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_enabled")
+elseif(CUBEULATOR_ENABLE_PROFILE_RECORDER)
+    set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-recorder")
 else()
     set(CUBEULATOR_PROFILING_DIR "${CMAKE_CURRENT_SOURCE_DIR}/variants/profiling-tracy_disabled")
 endif()

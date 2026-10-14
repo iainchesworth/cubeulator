@@ -6,6 +6,7 @@
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/corner_fit.hpp>
+#include <cube/vision/sticker_colour.hpp>
 
 #include <opencv2/imgproc.hpp>
 
@@ -40,8 +41,15 @@ constexpr float kMaxAxisRatio = 1.18F;
 constexpr float kMaxAxisCosine = 0.17F;
 constexpr float kMaxLatticeRms = 0.12F;
 
-// Half-width of the sampled patch, in sticker spacings.
-constexpr float kPatchHalfWidth = 0.22F;
+// Half-width of the sampled patch, in sticker spacings: 0.6 of a spacing
+// across, three quarters of a sticker, which keeps well inside its edge for a
+// side up to 15% off square-on. It is wide on purpose. A logo is printed on
+// the middle of a centre sticker (a Rubik's cube's white centre has a
+// wordmark in four colours across it), and a patch of 0.44 spacings had
+// little else in it: measured over 84 reads of such a side, the centre read
+// 13 Lab units from the white stickers beside it, almost all of it
+// lightness, where this patch and sticker_lab's robust estimate read 2.
+constexpr float kPatchHalfWidth = 0.30F;
 
 // Two reads are the same side when their nine colours agree this closely
 // under some quarter-turn. Recorded scans give the same cube anywhere from
@@ -336,36 +344,6 @@ struct Upright {
         }
     }
     return best;
-}
-
-// Median Lab over a square patch. Nothing if the patch falls off the frame.
-[[nodiscard]] std::optional<cv::Vec3f> patch_lab(const cv::Mat& bgr, const cv::Point2f& centre,
-                                                 int half_width) {
-    const int x = static_cast<int>(std::lround(centre.x));
-    const int y = static_cast<int>(std::lround(centre.y));
-    const cv::Rect patch =
-        cv::Rect(x - half_width, y - half_width, (2 * half_width) + 1, (2 * half_width) + 1) &
-        cv::Rect(0, 0, bgr.cols, bgr.rows);
-    if (patch.area() < 9) {
-        return std::nullopt;
-    }
-    cv::Mat as_float;
-    bgr(patch).convertTo(as_float, CV_32FC3, 1.0 / 255.0);
-    cv::Mat lab;
-    cv::cvtColor(as_float, lab, cv::COLOR_BGR2Lab);
-
-    cv::Vec3f median;
-    for (int channel = 0; channel < 3; ++channel) {
-        std::vector<float> values;
-        values.reserve(static_cast<std::size_t>(patch.area()));
-        for (int row = 0; row < lab.rows; ++row) {
-            for (int col = 0; col < lab.cols; ++col) {
-                values.push_back(lab.at<cv::Vec3f>(row, col)(channel));
-            }
-        }
-        median(channel) = median_of(std::move(values));
-    }
-    return median;
 }
 
 // Mean cell distance between a read and a side under the read's best
@@ -679,7 +657,7 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
     read.stickers_found = static_cast<int>(lattice->blobs);
     read.found = upright.found;
     for (std::size_t i = 0; i < 9; ++i) {
-        const std::optional<cv::Vec3f> lab = patch_lab(working, centres.at(i), half_width);
+        const std::optional<cv::Vec3f> lab = sticker_lab(working, centres.at(i), half_width);
         if (!lab.has_value()) {
             return std::nullopt;
         }

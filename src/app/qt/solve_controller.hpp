@@ -103,6 +103,12 @@ public:
     [[nodiscard]] QVariantList rightColors() const;
     [[nodiscard]] QVariantList leftColors() const;
     [[nodiscard]] QVariantMap stickers() const;
+    // The cube as it stands after `turn` turns of this solution - `stickers`
+    // for any position, not only the one the solve screen has stepped to.
+    // For the screen that reviews the solution, which has a position of its
+    // own and must not move the solve's. 0 is the cube as the solve began;
+    // totalMoves is the cube solved. Clamped to that range.
+    Q_INVOKABLE QVariantMap stickersAt(int turn) const;
     [[nodiscard]] QVariantList moves() const;
 
     // The cube as it stands after the moves stepped through so far.

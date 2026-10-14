@@ -53,6 +53,16 @@ public:
         return cubes_.at(static_cast<std::size_t>(index_));
     }
 
+    // The cube state after `index` moves have been applied, wherever
+    // current_index() is: what a second view of the same solution needs
+    // (the screen that reviews it) without stepping the first. `index` is
+    // clamped to [0, move_count()].
+    [[nodiscard]] const Cube& cube_at(int index) const noexcept {
+        const int last = move_count();
+        const int clamped = index < 0 ? 0 : (index > last ? last : index);
+        return cubes_.at(static_cast<std::size_t>(clamped));
+    }
+
     // Applies current_move() and advances; a no-op at_end().
     void next() noexcept;
 

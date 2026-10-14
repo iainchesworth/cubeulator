@@ -16,6 +16,12 @@ PlatformFacts::PlatformFacts(QObject* parent) : QObject(parent) {
             {QStringLiteral("label"), QString::fromStdString(backend.label)},
         });
     }
+    for (const auto& face : info.japanese_faces) {
+        japanese_faces_.append(QString::fromStdString(face));
+    }
+    for (const auto& face : info.chinese_faces) {
+        chinese_faces_.append(QString::fromStdString(face));
+    }
 }
 
 bool PlatformFacts::isMobile() const noexcept {
@@ -24,6 +30,14 @@ bool PlatformFacts::isMobile() const noexcept {
 
 QVariantList PlatformFacts::graphicsBackends() const {
     return graphics_backends_;
+}
+
+QStringList PlatformFacts::japaneseFaces() const {
+    return japanese_faces_;
+}
+
+QStringList PlatformFacts::chineseFaces() const {
+    return chinese_faces_;
 }
 
 }  // namespace cube::app
