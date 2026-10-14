@@ -4,6 +4,9 @@
 #include <cube/profile/recorder.hpp>
 #include <cube/profiling.hpp>
 
+#include "must_have.hpp"
+
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstddef>
@@ -40,12 +43,12 @@ using JsonArray = std::vector<Json>;
 struct Json {
     std::variant<std::nullptr_t, bool, double, std::string, JsonArray, JsonObject> value;
 
-    const JsonObject& object() const { return std::get<JsonObject>(value); }
-    const JsonArray& array() const { return std::get<JsonArray>(value); }
-    const std::string& string() const { return std::get<std::string>(value); }
-    double number() const { return std::get<double>(value); }
-    const Json& at(const std::string& key) const { return object().at(key); }
-    bool has(const std::string& key) const { return object().contains(key); }
+    [[nodiscard]] const JsonObject& object() const { return std::get<JsonObject>(value); }
+    [[nodiscard]] const JsonArray& array() const { return std::get<JsonArray>(value); }
+    [[nodiscard]] const std::string& string() const { return std::get<std::string>(value); }
+    [[nodiscard]] double number() const { return std::get<double>(value); }
+    [[nodiscard]] const Json& at(const std::string& key) const { return object().at(key); }
+    [[nodiscard]] bool has(const std::string& key) const { return object().contains(key); }
 };
 
 class JsonReader {
@@ -64,14 +67,14 @@ public:
 
 private:
     void skip() {
-        while (pos_ < text_.size() && (text_[pos_] == ' ' || text_[pos_] == '\n' ||
-                                       text_[pos_] == '\r' || text_[pos_] == '\t')) {
+        while (pos_ < text_.size() && (text_.at(pos_) == ' ' || text_.at(pos_) == '\n' ||
+                                       text_.at(pos_) == '\r' || text_.at(pos_) == '\t')) {
             ++pos_;
         }
     }
     bool eat(char c) {
         skip();
-        if (pos_ < text_.size() && text_[pos_] == c) {
+        if (pos_ < text_.size() && text_.at(pos_) == c) {
             ++pos_;
             return true;
         }
@@ -90,7 +93,7 @@ private:
         if (pos_ >= text_.size()) {
             return std::nullopt;
         }
-        const char c = text_[pos_];
+        const char c = text_.at(pos_);
         if (c == '{') {
             return object();
         }
@@ -119,7 +122,7 @@ private:
     std::optional<Json> number() {
         const std::size_t begin = pos_;
         while (pos_ < text_.size() &&
-               (std::string_view("+-.eE0123456789").find(text_[pos_]) != std::string_view::npos)) {
+               std::string_view("+-.eE0123456789").contains(text_.at(pos_))) {
             ++pos_;
         }
         if (begin == pos_) {
@@ -134,7 +137,7 @@ private:
         }
         std::string out;
         while (pos_ < text_.size()) {
-            const char c = text_[pos_++];
+            const char c = text_.at(pos_++);
             if (c == '"') {
                 return out;
             }
@@ -148,7 +151,7 @@ private:
             if (pos_ >= text_.size()) {
                 return std::nullopt;
             }
-            const char escape = text_[pos_++];
+            const char escape = text_.at(pos_++);
             switch (escape) {
                 case '"':
                     out += '"';
@@ -196,13 +199,13 @@ private:
         if (eat(']')) {
             return Json{std::move(items)};
         }
-        do {
+        for (bool more = true; more; more = eat(',')) {
             auto item = value();
             if (!item) {
                 return std::nullopt;
             }
             items.push_back(std::move(*item));
-        } while (eat(','));
+        }
         if (!eat(']')) {
             return std::nullopt;
         }
@@ -215,7 +218,7 @@ private:
         if (eat('}')) {
             return Json{std::move(members)};
         }
-        do {
+        for (bool more = true; more; more = eat(',')) {
             skip();
             auto key = string();
             if (!key || !eat(':')) {
@@ -226,7 +229,7 @@ private:
                 return std::nullopt;
             }
             members.emplace(std::move(*key), std::move(*item));
-        } while (eat(','));
+        }
         if (!eat('}')) {
             return std::nullopt;
         }
@@ -239,8 +242,7 @@ private:
 
 Json parse(const std::string& text) {
     auto parsed = JsonReader(text).parse();
-    REQUIRE(parsed.has_value());
-    return std::move(*parsed);
+    return ::cube::test::must_have(parsed);
 }
 
 std::vector<std::string> split(const std::string& text, char separator) {
@@ -291,11 +293,11 @@ TEST_CASE("a zone is recorded with its name, start and duration", "[profile]") {
 
     const auto events = recorder.snapshot();
     REQUIRE(events.size() == 1);
-    CHECK(events[0].kind == Kind::zone);
-    CHECK(std::string_view(events[0].name) == "test.zone");
-    CHECK(events[0].start_us == 10.0);
-    CHECK(events[0].duration_us == 2.5);
-    CHECK_FALSE(events[0].has_value);
+    CHECK(events.at(0).kind == Kind::zone);
+    CHECK(std::string_view(events.at(0).name) == "test.zone");
+    CHECK(events.at(0).start_us == 10.0);
+    CHECK(events.at(0).duration_us == 2.5);
+    CHECK_FALSE(events.at(0).has_value);
     CHECK(recorder.recorded() == 1);
 }
 
@@ -305,8 +307,8 @@ TEST_CASE("a zone's attached number is kept", "[profile]") {
 
     const auto events = recorder.snapshot();
     REQUIRE(events.size() == 1);
-    CHECK(events[0].has_value);
-    CHECK(events[0].value == 123456789012.0);
+    CHECK(events.at(0).has_value);
+    CHECK(events.at(0).value == 123456789012.0);
 }
 
 TEST_CASE("frames, messages and plots are recorded as their own kinds", "[profile]") {
@@ -317,13 +319,13 @@ TEST_CASE("frames, messages and plots are recorded as their own kinds", "[profil
 
     const auto events = recorder.snapshot();
     REQUIRE(events.size() == 3);
-    CHECK(events[0].kind == Kind::frame);
-    CHECK(std::string_view(events[0].name) == "Capture");
-    CHECK(events[1].kind == Kind::message);
-    CHECK(std::string_view(events[1].name) == "scan.complete");
-    CHECK(events[2].kind == Kind::plot);
-    CHECK(events[2].has_value);
-    CHECK(events[2].value == 3.5);
+    CHECK(events.at(0).kind == Kind::frame);
+    CHECK(std::string_view(events.at(0).name) == "Capture");
+    CHECK(events.at(1).kind == Kind::message);
+    CHECK(std::string_view(events.at(1).name) == "scan.complete");
+    CHECK(events.at(2).kind == Kind::plot);
+    CHECK(events.at(2).has_value);
+    CHECK(events.at(2).value == 3.5);
 }
 
 TEST_CASE("the snapshot is in time order whatever order events were recorded in", "[profile]") {
@@ -334,9 +336,9 @@ TEST_CASE("the snapshot is in time order whatever order events were recorded in"
 
     const auto events = recorder.snapshot();
     REQUIRE(events.size() == 3);
-    CHECK(std::string_view(events[0].name) == "early");
-    CHECK(std::string_view(events[1].name) == "middle");
-    CHECK(std::string_view(events[2].name) == "late");
+    CHECK(std::string_view(events.at(0).name) == "early");
+    CHECK(std::string_view(events.at(1).name) == "middle");
+    CHECK(std::string_view(events.at(2).name) == "late");
 }
 
 TEST_CASE("the clock is monotonic and microseconds", "[profile]") {
@@ -361,15 +363,17 @@ TEST_CASE("clear forgets everything and recording carries on", "[profile]") {
     recorder.zone("after", 5.0, 6.0);
     const auto events = recorder.snapshot();
     REQUIRE(events.size() == 1);
-    CHECK(std::string_view(events[0].name) == "after");
+    CHECK(std::string_view(events.at(0).name) == "after");
 }
 
 TEST_CASE("when the ring is full the oldest events go and are counted", "[profile]") {
     Recorder recorder(8);
-    static const char* const names[] = {"z0", "z1", "z2", "z3", "z4", "z5", "z6",
-                                        "z7", "z8", "z9", "za", "zb", "zc"};
-    for (std::size_t i = 0; i < std::size(names); ++i) {
-        recorder.zone(names[i], static_cast<double>(i), static_cast<double>(i) + 0.5);
+    // Static, because the recorder keeps the pointers it is given.
+    static constexpr std::array<const char*, 13> kNames = {
+        "z0", "z1", "z2", "z3", "z4", "z5", "z6", "z7", "z8", "z9", "za", "zb", "zc",
+    };
+    for (std::size_t i = 0; i < kNames.size(); ++i) {
+        recorder.zone(kNames.at(i), static_cast<double>(i), static_cast<double>(i) + 0.5);
     }
 
     CHECK(recorder.recorded() == 13);
@@ -394,9 +398,10 @@ TEST_CASE("a capacity that is not a power of two is rounded up", "[profile]") {
 TEST_CASE("threads record into one timeline without losing events", "[profile]") {
     constexpr int kThreads = 4;
     constexpr int kPerThread = 500;
-    Recorder recorder(1 << 14);
+    Recorder recorder(std::size_t{1} << 14U);
 
     std::vector<std::thread> workers;
+    workers.reserve(kThreads);
     for (int t = 0; t < kThreads; ++t) {
         workers.emplace_back([&recorder] {
             for (int i = 0; i < kPerThread; ++i) {
@@ -457,7 +462,7 @@ TEST_CASE("zone statistics are per name", "[profile]") {
     const auto stats = recorder.zone_stats();
     REQUIRE(stats.size() == 2);
 
-    const auto& a = stats[0];
+    const auto& a = stats.at(0);
     REQUIRE(a.name == "a");
     CHECK(a.count == 2);
     CHECK(a.total_us == 6.0);
@@ -466,7 +471,7 @@ TEST_CASE("zone statistics are per name", "[profile]") {
     CHECK(a.max_us == 4.0);
     CHECK(a.stddev_us == 1.0);  // population: durations 2 and 4
 
-    const auto& b = stats[1];
+    const auto& b = stats.at(1);
     REQUIRE(b.name == "b");
     CHECK(b.count == 1);
     CHECK(b.stddev_us == 0.0);
@@ -490,22 +495,22 @@ TEST_CASE("the CSV has tracy-csvexport's columns and one row per zone", "[profil
 
     const auto lines = split(recorder.zones_csv(), '\n');
     REQUIRE(lines.size() == 3);
-    CHECK(lines[0] ==
+    CHECK(lines.at(0) ==
           "name,src_file,src_line,total_ns,total_perc,counts,mean_ns,min_ns,max_ns,std_ns");
 
-    const auto solve = split(lines[1], ',');
+    const auto solve = split(lines.at(1), ',');
     REQUIRE(solve.size() == 10);
-    CHECK(solve[0] == "solver.solve");
-    CHECK(solve[1].empty());
-    CHECK(solve[2] == "0");
-    CHECK(solve[3] == "30000");  // 30 us in nanoseconds
-    CHECK(solve[5] == "2");      // counts
-    CHECK(solve[6] == "15000");  // mean
-    CHECK(solve[7] == "10000");  // min
-    CHECK(solve[8] == "20000");  // max
-    CHECK(solve[9] == "5000");   // std
+    CHECK(solve.at(0) == "solver.solve");
+    CHECK(solve.at(1).empty());
+    CHECK(solve.at(2) == "0");
+    CHECK(solve.at(3) == "30000");  // 30 us in nanoseconds
+    CHECK(solve.at(5) == "2");      // counts
+    CHECK(solve.at(6) == "15000");  // mean
+    CHECK(solve.at(7) == "10000");  // min
+    CHECK(solve.at(8) == "20000");  // max
+    CHECK(solve.at(9) == "5000");   // std
 
-    CHECK(split(lines[2], ',')[0] == "vision.analyse");
+    CHECK(split(lines.at(2), ',').at(0) == "vision.analyse");
 }
 
 TEST_CASE("a zone name with a comma or a quote does not break its CSV row", "[profile]") {
@@ -514,7 +519,7 @@ TEST_CASE("a zone name with a comma or a quote does not break its CSV row", "[pr
 
     const auto lines = split(recorder.zones_csv(), '\n');
     REQUIRE(lines.size() == 2);
-    CHECK(lines[1].starts_with("\"odd,\"\"name\"\"\","));
+    CHECK(lines.at(1).starts_with("\"odd,\"\"name\"\"\","));
 }
 
 TEST_CASE("the Chrome trace is JSON in the Trace Event Format", "[profile]") {
@@ -589,7 +594,7 @@ TEST_CASE("the trace names threads that were not named", "[profile]") {
 
 TEST_CASE("an empty recorder exports valid, empty documents", "[profile]") {
     const Recorder recorder(64);
-    CHECK(parse(recorder.chrome_trace_json()).at("traceEvents").array().size() >= 1);  // metadata
+    CHECK(!parse(recorder.chrome_trace_json()).at("traceEvents").array().empty());  // metadata
     CHECK(parse(recorder.summary_json()).at("zones").object().empty());
     CHECK(split(recorder.zones_csv(), '\n').size() == 1);  // the header
 }
@@ -680,26 +685,27 @@ TEST_CASE("the macros of the recorder variant write to the global recorder", "[p
     REQUIRE(second.size() == 1);
 
     // The inner zone sits inside the outer one on the timeline.
-    CHECK(inner[0].start_us >= outer[0].start_us);
-    CHECK(inner[0].start_us + inner[0].duration_us <= outer[0].start_us + outer[0].duration_us);
+    CHECK(inner.at(0).start_us >= outer.at(0).start_us);
+    CHECK(inner.at(0).start_us + inner.at(0).duration_us <=
+          outer.at(0).start_us + outer.at(0).duration_us);
 
     // The value went to the innermost scoped zone open when it was set, which
     // is "macro.second", not the outer one.
-    CHECK(second[0].has_value);
-    CHECK(second[0].value == 42.0);
-    CHECK_FALSE(outer[0].has_value);
+    CHECK(second.at(0).has_value);
+    CHECK(second.at(0).value == 42.0);
+    CHECK_FALSE(outer.at(0).has_value);
 
     const auto manual_events = events_named(recorder, Kind::zone, "macro.manual");
     REQUIRE(manual_events.size() == 1);
-    CHECK(manual_events[0].has_value);
-    CHECK(manual_events[0].value == 9.0);
+    CHECK(manual_events.at(0).has_value);
+    CHECK(manual_events.at(0).value == 9.0);
 
     CHECK(events_named(recorder, Kind::message, "macro.message").size() == 1);
     CHECK(events_named(recorder, Kind::frame, "macro.frames").size() == 1);
     CHECK(events_named(recorder, Kind::frame, "frame").size() == 1);
     const auto plot = events_named(recorder, Kind::plot, "macro.plot");
     REQUIRE(plot.size() == 1);
-    CHECK(plot[0].value == 4.0);
+    CHECK(plot.at(0).value == 4.0);
 
     CHECK_THAT(recorder.chrome_trace_json(), Catch::Matchers::ContainsSubstring("\"macro-test\""));
     CHECK_THAT(recorder.chrome_trace_json(), Catch::Matchers::ContainsSubstring("macro test"));
@@ -713,11 +719,11 @@ TEST_CASE("a scoped zone is closed when an exception unwinds past it", "[profile
     Recorder& recorder = Recorder::global();
     recorder.clear();
 
-    try {
+    const auto throws_in_a_zone = [] {
         CUBE_ZONE_SCOPED_N("macro.throws");
         throw std::runtime_error("unwind");
-    } catch (const std::runtime_error&) {
-    }
+    };
+    CHECK_THROWS_AS(throws_in_a_zone(), std::runtime_error);
     {
         // Were the throwing zone still open, this one would nest beneath it and
         // the value below would land on the wrong zone.
@@ -728,7 +734,7 @@ TEST_CASE("a scoped zone is closed when an exception unwinds past it", "[profile
     CHECK(events_named(recorder, Kind::zone, "macro.throws").size() == 1);
     const auto after = events_named(recorder, Kind::zone, "macro.after");
     REQUIRE(after.size() == 1);
-    CHECK(after[0].value == 5.0);
+    CHECK(after.at(0).value == 5.0);
     recorder.clear();
 }
 
