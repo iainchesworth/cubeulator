@@ -222,14 +222,37 @@ jobs:
 
       # makensis has to be present at configure time: cmake/Packaging.cmake
       # looks for it then.
+      #
+      # Chocolatey's community feed answers 504 Gateway Timeout now and then,
+      # and a release build is too long to lose to it, so the installed
+      # directory is restored from the cache ci.yml saves (and why: see there).
+      # RESTORE-ONLY: a release run never writes a cache that another workflow
+      # trusts, the policy the vcpkg binary cache follows. A miss costs a
+      # Chocolatey install, with retries, as it always did.
+      - name: Restore NSIS (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: C:\Program Files (x86)\NSIS
+          key: nsis-3.13.0-${{ runner.os }}-${{ runner.arch }}
+
       - name: Install NSIS (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          if (-not (Get-Command makensis -ErrorAction SilentlyContinue) -and
-              -not (Test-Path "${env:ProgramFiles(x86)}\NSIS\makensis.exe")) {
-            # Chocolatey's community feed answers 504 Gateway Timeout now and
-            # then (see ci.yml); a release build is too long to lose to it.
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          $usable = [bool](Get-Command makensis -ErrorAction SilentlyContinue)
+          if (-not $usable -and (Test-Path $makensis)) {
+            # From the cache: prove it runs where it is, or install it properly.
+            & $makensis /VERSION
+            if ($LASTEXITCODE -eq 0) {
+              $usable = $true
+            } else {
+              Write-Warning "the cached NSIS does not run; installing it from Chocolatey"
+              Remove-Item -Recurse -Force (Split-Path $makensis)
+            }
+          }
+          if (-not $usable) {
             foreach ($attempt in 1..4) {
               choco install nsis --version 3.13.0 --no-progress -y
               if ($LASTEXITCODE -eq 0) { break }
