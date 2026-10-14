@@ -49,7 +49,7 @@ export class CubeulatorApp {
    * Opens a fresh page on the app and waits until it has drawn its first screen.
    * @param {import('@playwright/test').Browser} browser
    * @param {{viewport?: {width:number,height:number}, camera?: 'fake'|'browser', query?: string,
-   *          touch?: boolean, permissions?: string[], lightProbe?: boolean,
+   *          touch?: boolean, permissions?: string[],
    *          screen?: string}} [options] `screen` is the one to wait for (launch)
    */
   static async open(browser, options = {}, contexts = new Map()) {
@@ -63,7 +63,6 @@ export class CubeulatorApp {
       touch: options.touch ?? false,
       camera: options.camera ?? 'fake',
       permissions: options.permissions ?? ['camera'],
-      lightProbe: options.lightProbe ?? false,
     });
     let context = contexts.get(key);
     if (!context) {
@@ -76,13 +75,6 @@ export class CubeulatorApp {
       });
       if ((options.camera ?? 'fake') === 'fake') {
         await context.addInitScript({ content: await readFile(fakeCameraScript, 'utf8') });
-      }
-      if (!(options.lightProbe ?? false)) {
-        // The cube's light probe is prefiltered on a software renderer in some
-        // twenty seconds of every core, for every page (driver_web.cpp says
-        // more); a case that is about how the cube looks asks for it.
-        await context.addInitScript({
-          content: "window.cubeulatorEnvironment = { CUBEULATOR_NO_LIGHT_PROBE: '1' };" });
       }
       contexts.set(key, context);
     }
