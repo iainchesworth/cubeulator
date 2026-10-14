@@ -131,9 +131,9 @@ jobs:
           ninjaVersion: "1.13.2"
 
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test in ci.yml (X11/GL headers, GLU for glew).
+      # build-and-test in ci.yml (X11/GL headers).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
       # clang-tidy uses its own clang frontend to parse the compile commands
       # regardless of which compiler actually built the code, so this job
@@ -156,21 +156,13 @@ jobs:
       # clang-tidy 23 wheel exists on PyPI, move it into
       # ci/requirements-lint.txt and drop this install.
       #
-      # libomp-23-dev: the vendored M3T tracker (third_party/m3t) does
-      # find_package(OpenMP REQUIRED) for C and C++. GCC ships libgomp, but
-      # clang++ only has an OpenMP runtime with LLVM's libomp, so without it
-      # configure stops at "Could NOT find OpenMP_CXX (missing:
-      # OpenMP_CXX_FLAGS OpenMP_CXX_LIB_NAMES)" (reproduced on Ubuntu 26.04).
-      # It must match the compiler; it pins libomp5 to 23, which supersedes
-      # the libomp-21-dev this job used with Clang 21.
-      #
       # libclang-rt-23-dev: the sanitizer runtimes (libclang_rt.asan.a, ...)
       # this job's -fsanitize=address,undefined build links. The archive only
       # lists it as a Recommends of libclang-common-23-dev, and
       # install-llvm.sh installs with --no-install-recommends, so without it
       # every link fails with "cannot find .../libclang_rt.asan_static.a".
       - name: Install Clang 23
-        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libomp-23-dev libclang-rt-23-dev
+        run: bash ci/install-llvm.sh 23 clang-23 clang-tidy-23 libclang-rt-23-dev
 
       - name: Configure (library + platform only, no Qt app)
         run: >
@@ -331,17 +323,12 @@ jobs:
       # needed the ppa:ubuntu-toolchain-r/test PPA for g++-15). The
       # -DCMAKE_CXX_COMPILER=g++-15 reference below still resolves.
       #
-      # Two distinct vcpkg build gaps on a stock ubuntu-26.04 runner: (1)
-      # the X11/GL development headers were added when bgfx's port
+      # The X11/GL development headers were added when bgfx's port
       # unconditionally find_package(X11)d even with examples/tools disabled
       # ("Could NOT find X11"). bgfx has since been removed from the
       # manifest; the packages stay until a Linux leg shows that nothing
-      # else (Qt's OpenGL probe, say) wants them; (2) glew's generated
-      # glew.pc declares `Requires: glu`, and vcpkg_fixup_pkgconfig() then
-      # runs `pkg-config --exists glew`, which fails with "Package 'glu',
-      # required by 'glew', not found" (glu.pc comes from libglu1-mesa-dev,
-      # which ubuntu-26.04 does not preinstall - the build of glew:x64-linux
-      # dies with BUILD_FAILED). Both confirmed in CI.
+      # else (Qt's OpenGL probe, say) wants them. libglu1-mesa-dev went with
+      # glew, whose glew.pc declared `Requires: glu`.
       #
       # A third gap used to be listed here: the autotools chain (autoconf
       # autoconf-archive automake libtool libltdl-dev) for gperf and for the
@@ -353,7 +340,7 @@ jobs:
       # android, so this change does not alter that job's plan.
       - name: Install vcpkg build dependencies (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
       # E4a: tools CPack's package generators need. makensis has to be present
       # at configure time (cmake/Packaging.cmake looks for it then); rpmbuild
@@ -394,26 +381,12 @@ jobs:
           modules: "qtquick3d qtshadertools"
           cache: true
 
-      # AppleClang ships no OpenMP runtime, and the vendored M3T tracker
-      # (third_party/m3t) does find_package(OpenMP REQUIRED): without libomp
-      # configure fails with "Could NOT find OpenMP_C (missing:
-      # OpenMP_C_FLAGS OpenMP_C_LIB_NAMES)" (confirmed in CI). Homebrew's
-      # libomp is keg-only, so it is on no default search path; its prefix
-      # is handed to CMake via CMAKE_PREFIX_PATH below, which FindOpenMP's
-      # find_library()/find_path() honour.
-      - name: Install libomp (macOS)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          brew install libomp
-          echo "OPENMP_PREFIX=$(brew --prefix libomp)" >> "$GITHUB_ENV"
-
       - name: Configure
         shell: bash
         env:
           CMAKE_PRESET: ${{ matrix.preset }}
           EXTRA_CXX_COMPILER: ${{ runner.os == 'Linux' && '-DCMAKE_CXX_COMPILER=g++-15' || '' }}
-        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR${OPENMP_PREFIX:+;$OPENMP_PREFIX}" $EXTRA_CXX_COMPILER
+        run: cmake --preset "$CMAKE_PRESET" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR" $EXTRA_CXX_COMPILER
 
       - name: Build
         id: build
@@ -772,15 +745,14 @@ jobs:
           cmakeVersion: "4.4.2"
           ninjaVersion: "1.13.2"
 
-      # The vcpkg build dependencies (see build-and-test; libglu1-mesa-dev is
-      # glew's glu.pc, which a stock runner lacks and every Linux leg tripped
-      # over), then what a Qt window needs to open on Xvfb and render in
-      # software: the xcb platform plugin's libraries, Mesa's software
-      # rasteriser, and xauth for xvfb-run.
+      # The vcpkg build dependencies (see build-and-test), then what a Qt
+      # window needs to open on Xvfb and render in software: the xcb platform
+      # plugin's libraries, Mesa's software rasteriser, and xauth for
+      # xvfb-run.
       - name: Install build and display dependencies
         run: >
           sudo apt-get install -y
-          libx11-dev libgl1-mesa-dev libglu1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
+          libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
           xvfb xauth mesa-utils libgl1-mesa-dri libglx-mesa0 libegl1 libfontconfig1 libxkbcommon-x11-0
           libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0
           libxcb-shape0 libxcb-xkb1 libxcb-xinerama0 libxcb-xinput0
@@ -910,9 +882,9 @@ jobs:
       # out of the box - see the equivalent comment on build-and-test above.
       #
       # vcpkg build gaps on ubuntu-26.04 - see the fuller comment on
-      # build-and-test above (X11/GL headers, GLU for glew).
+      # build-and-test above (X11/GL headers).
       - name: Install vcpkg build dependencies
-        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev libglu1-mesa-dev
+        run: sudo apt-get install -y libx11-dev libgl1-mesa-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libxext-dev
 
       - name: Install gcovr
         run: pip install --quiet gcovr==8.6
