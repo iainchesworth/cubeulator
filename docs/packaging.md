@@ -158,9 +158,11 @@ icons follow.
   any system library whose package the `Depends` neither names nor pulls in.
   It found two the first dry run's package lacked: `libopengl0` and
   `libgssapi-krb5-2`. The `.rpm` list is written to match, with Fedora's names
-  (`libglvnd-opengl`, `krb5-libs`); it is not checked the same way, and it has
-  only been named for Fedora: another RPM distribution calls these packages
-  something else.
+  (`libglvnd-opengl`, `krb5-libs`). **Only the `.deb`'s `Depends` is
+  machine-checked**: nothing compares the `.rpm` list with the files (an
+  `rpm -qp --requires` comparison in a Fedora container job would), and it is
+  the list that drifts first. It has also only been named for Fedora: another
+  RPM distribution calls these packages something else.
 - **X11, and Wayland through XWayland.** The only platform plugin carried is
   `xcb`. A native Wayland session runs the app as an X client, which every
   mainstream desktop provides; a Wayland-only session without XWayland does not
