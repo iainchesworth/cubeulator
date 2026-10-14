@@ -120,6 +120,21 @@ Darwin)
     require "the version is set"                                    bash -c "/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' '$plist' | grep -q ."
     require "the app carries a signature (ad-hoc or better)"        codesign --verify --deep "$app"
     require "no QML debugger or profiler plugins"                   test ! -d "$app/Contents/PlugIns/qmltooling"
+
+    # A library the build host had and a person's Mac does not: Homebrew's
+    # libomp was one the release workflow installed, and nothing in the bundle
+    # may load a library from outside it and the system.
+    outside="$(
+        while IFS= read -r -d '' f; do
+            otool -L "$f" 2>/dev/null | tail -n +2 | awk '{print $1}' |
+                grep -E '^/(opt|usr/local|Users|private)/' || true
+        done < <(find "$app" -type f \( -name '*.dylib' -o -perm -u+x \) -print0) | sort -u
+    )"
+    if [ -n "$outside" ]; then
+        echo "libraries loaded from outside the bundle and the system:"
+        echo "$outside" | head -10
+    fi
+    require "nothing in the bundle loads a library from the build host"   test -z "$outside"
     require "the licence is on the disk image"                      test -f "$mount/LICENSE.txt"
     require "the third-party notices are on the disk image"         test -f "$mount/THIRD-PARTY-NOTICES.txt"
     /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "$plist"
