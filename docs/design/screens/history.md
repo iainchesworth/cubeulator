@@ -5,13 +5,9 @@ Lane: experience. New. In the first release by Iain's decision of
 
 **Status: built** (`HistoryScreen.qml`, `SolveHistory`). What is not yet:
 the **thumbnail has no marks** (the marks are the kit's, and the app has no
-kit yet); a **finished row has no chevron and no handler**, because
-`solution.overview` is not in the app (the solution-review branch), and an
-older unfinished row is the same, as below; and **`solve.hold-resume`** is
-not there either, so carrying on goes straight to `solve.move` on the turn
-that was reached, with the camera off (nothing was scanned this session to
-match it against). Each of those is one line in `HistoryScreen.qml` when its
-screen lands.
+kit yet), and **`solve.hold-resume`** is not in the app, so carrying on goes
+straight to `solve.move` on the turn that was reached, with the camera off
+(nothing was scanned this session to match it against).
 
 The cubes solved on this device, newest first, and a way back into an
 unfinished one.
@@ -97,8 +93,9 @@ One or more solves.
 - **Delete** on a row: to `history.confirm-delete`.
 - **Clear history**: to `history.confirm-clear`.
 - Only the newest unfinished row can be carried on. An older unfinished row
-  is listed and can be deleted; it opens `solution.overview` as a finished
-  one does, once that screen exists.
+  is listed, can be deleted, and opens `solution.overview` as a finished one
+  does: the solution to the cube as scanned, worked out again with the method
+  it was followed with, under the date of the solve. Back returns here.
 
 ### `history.off`
 

@@ -1,13 +1,12 @@
 #pragma once
 
 #include "controllers/solve_history_store.hpp"
+#include "solve_controller.hpp"
 
 #include <QObject>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
-
-class SolveController;
 
 namespace cube::app {
 
@@ -81,6 +80,14 @@ public:
     // Called when the complete screen opens; harmless when nothing is being
     // kept.
     Q_INVOKABLE void finish();
+    // What the solution screen reviews for an entry (AppState.openSolution):
+    // the solution to the cube as scanned, worked out again with the method
+    // the solve was followed with. A solve controller of its own, so the solve
+    // being followed is not touched, shaped as the screen asks (moves,
+    // stageRanges, method, stickersAt, solutionChanged); the solution lands a
+    // moment later and the screen fills in when it has. The same object for
+    // every entry, replaced by the next call. Null for an id that is not there.
+    Q_INVOKABLE QObject* reviewOf(qlonglong id);
     // Puts the newest unfinished solve back in the solve controller: its cube,
     // its method and the turn reached. The solution is worked out again from
     // the cube, so the screen opens when it lands. False for any entry that is
@@ -99,6 +106,8 @@ private:
 
     SolveController& solve_;
     SolveHistoryStore store_;
+    // reviewOf()'s: a second solve controller, parented to this.
+    SolveController review_;
     bool keep_ = true;
     int seconds_ = 0;
     // The entry the solve now being followed is written to, or 0.

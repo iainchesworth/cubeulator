@@ -8,13 +8,13 @@ import Cubeulator
 // two targets side by side: the row itself, and a 56 x 56 delete button at its
 // trailing end.
 //
-// What the rows open:
-//   - the newest unfinished solve carries on, from the turn reached;
-//   - a finished row, and an older unfinished one, have nowhere to go yet:
-//     solution.overview is not in the app, and a row that did nothing when
-//     pressed would be the thing this screen exists to get rid of. They are
-//     listed without a chevron and without a handler. See `opens` below for
-//     the one line that changes when that screen lands.
+// What a row opens:
+//   - the newest unfinished solve carries on, from the turn reached
+//     (AppState.resumeSolve);
+//   - any other - a finished one, or an unfinished one that another scan has
+//     since left behind, which cannot be carried on - opens its solution for
+//     review (solution.overview, AppState.openSolution), worked out again from
+//     the cube as it was scanned.
 Rectangle {
     id: root
     color: Theme.paper
@@ -191,125 +191,128 @@ Rectangle {
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
         }
 
-        // history.list
-        ListView {
-            id: list
+        // history.list. The list itself is not named: the test harness keys
+        // every control inside a *named* ListView as one "<list>.row", and a
+        // row and its delete button are two controls the spec names apart
+        // (history.row1, history.delete1). The name is on the item around it.
+        Item {
             objectName: "history.list"
             anchors.top: offNotice.bottom; anchors.bottom: parent.bottom
             width: parent.width
             visible: root.hasEntries
-            clip: true
-            boundsBehavior: Flickable.StopAtBounds
-            model: SolveHistory.entries
 
-            delegate: Item {
-                id: row
-                required property var modelData
-                required property int index
+            ListView {
+                id: list
+                anchors.fill: parent
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                model: SolveHistory.entries
 
-                width: ListView.view.width
-                height: 64
-                objectName: "history.row" + (index + 1)
+                delegate: Item {
+                    id: row
+                    required property var modelData
+                    required property int index
 
-                // The one row that goes anywhere today: the newest unfinished
-                // solve carries on. Once solution.overview exists this is
-                // `true` for every row, and it is the only line that changes
-                // here, with `open()` below.
-                readonly property bool opens: modelData.carryOn
-                readonly property string dateText: root.dateOf(modelData)
-                readonly property string summaryText: root.summaryOf(modelData)
+                    width: ListView.view.width
+                    height: 64
+                    objectName: "history.row" + (index + 1)
 
-                Accessible.role: opens ? Accessible.Button : Accessible.ListItem
-                Accessible.name: qsTrId("history.a11y.row").arg(dateText).arg(summaryText)
+                    readonly property string dateText: root.dateOf(modelData)
+                    readonly property string summaryText: root.summaryOf(modelData)
 
-                function open() {
-                    AppState.resumeSolve(modelData.id);
-                }
-
-                Rectangle {
-                    anchors.fill: parent
-                    visible: rowArea.visible && rowArea.containsMouse
-                    color: Theme.inkMuted(0.07)
-                }
-                Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.divider }
-
-                // The row itself: everything but the delete button.
-                MouseArea {
-                    id: rowArea
-                    visible: row.opens
-                    anchors.left: parent.left; anchors.right: deleteButton.left
-                    anchors.top: parent.top; anchors.bottom: parent.bottom
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: row.open()
-                }
-
-                SideChip {
-                    id: chip
-                    anchors.left: parent.left; anchors.leftMargin: Theme.space4
-                    anchors.verticalCenter: parent.verticalCenter
-                    colours: row.modelData.stickers
-                }
-                Column {
-                    anchors.left: chip.right; anchors.leftMargin: Theme.space3
-                    anchors.right: chevron.visible ? chevron.left : deleteButton.left
-                    anchors.rightMargin: Theme.space2
-                    anchors.verticalCenter: parent.verticalCenter
-                    spacing: 2
-                    Text {
-                        width: parent.width
-                        text: row.dateText
-                        elide: Text.ElideRight
-                        font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 15
-                        color: Theme.ink
-                        Accessible.ignored: true
-                    }
-                    Text {
-                        width: parent.width
-                        text: row.summaryText
-                        elide: Text.ElideRight
-                        font.family: Theme.fontHeading; font.pixelSize: 12
-                        color: Theme.inkMuted(0.6)
-                        Accessible.ignored: true
-                    }
-                }
-                Icon {
-                    id: chevron
-                    visible: row.opens
-                    anchors.right: deleteButton.left; anchors.rightMargin: Theme.space2
-                    anchors.verticalCenter: parent.verticalCenter
-                    name: "chevron-right"
-                    width: 18; height: 18
-                    color: Theme.ink
-                }
-
-                // 56 x 56, the cross. "Delete" and the date, so that a list of
-                // them can be told apart by a screen reader.
-                Item {
-                    id: deleteButton
-                    objectName: "history.delete" + (row.index + 1)
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 56; height: 56
                     Accessible.role: Accessible.Button
-                    Accessible.name: qsTrId("history.a11y.delete").arg(row.dateText)
+                    Accessible.name: qsTrId("history.a11y.row").arg(dateText).arg(summaryText)
+
+                    function open() {
+                        if (modelData.carryOn)
+                            AppState.resumeSolve(modelData.id);
+                        else
+                            AppState.openSolution(SolveHistory.reviewOf(modelData.id), dateText);
+                    }
+
                     Rectangle {
                         anchors.fill: parent
+                        visible: rowArea.containsMouse
                         color: Theme.inkMuted(0.07)
-                        visible: deleteArea.containsMouse
+                    }
+                    Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 1; color: Theme.divider }
+
+                    // The row itself: everything but the delete button.
+                    MouseArea {
+                        id: rowArea
+                        anchors.left: parent.left; anchors.right: deleteButton.left
+                        anchors.top: parent.top; anchors.bottom: parent.bottom
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: row.open()
+                    }
+
+                    SideChip {
+                        id: chip
+                        anchors.left: parent.left; anchors.leftMargin: Theme.space4
+                        anchors.verticalCenter: parent.verticalCenter
+                        colours: row.modelData.stickers
+                    }
+                    Column {
+                        anchors.left: chip.right; anchors.leftMargin: Theme.space3
+                        anchors.right: chevron.left
+                        anchors.rightMargin: Theme.space2
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 2
+                        Text {
+                            width: parent.width
+                            text: row.dateText
+                            elide: Text.ElideRight
+                            font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 15
+                            color: Theme.ink
+                            Accessible.ignored: true
+                        }
+                        Text {
+                            width: parent.width
+                            text: row.summaryText
+                            elide: Text.ElideRight
+                            font.family: Theme.fontHeading; font.pixelSize: 12
+                            color: Theme.inkMuted(0.6)
+                            Accessible.ignored: true
+                        }
                     }
                     Icon {
-                        anchors.centerIn: parent
-                        name: "cross"
+                        id: chevron
+                        anchors.right: deleteButton.left; anchors.rightMargin: Theme.space2
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: "chevron-right"
                         width: 18; height: 18
                         color: Theme.ink
                     }
-                    MouseArea {
-                        id: deleteArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.deleteTarget = row.modelData.id
+
+                    // 56 x 56, the cross. "Delete" and the date, so that a list of
+                    // them can be told apart by a screen reader.
+                    Item {
+                        id: deleteButton
+                        objectName: "history.delete" + (row.index + 1)
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 56; height: 56
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTrId("history.a11y.delete").arg(row.dateText)
+                        Rectangle {
+                            anchors.fill: parent
+                            color: Theme.inkMuted(0.07)
+                            visible: deleteArea.containsMouse
+                        }
+                        Icon {
+                            anchors.centerIn: parent
+                            name: "cross"
+                            width: 18; height: 18
+                            color: Theme.ink
+                        }
+                        MouseArea {
+                            id: deleteArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.deleteTarget = row.modelData.id
+                        }
                     }
                 }
             }

@@ -55,8 +55,9 @@ TEST_CASE("every control on the history screen can be pressed", "[system][sweep]
         app.resize(size_for(layout));
 
         // One finished, one left part-way: both kinds of row, and a delete on
-        // each. (The unfinished row's own press carries on to the solve
-        // screen; history_test.cpp presses it, and the sweep leaves it.)
+        // each. (A row's own press leaves for the solution or the solve
+        // screen, both 3D; history_test.cpp presses them, and the sweep
+        // leaves them.)
         auto& solve = app.runtime().solve();
         for (const unsigned seed : {51u, 52u}) {
             solve.solveCube(cube::systest::scramble(seed));
@@ -75,6 +76,7 @@ TEST_CASE("every control on the history screen can be pressed", "[system][sweep]
         cube::systest::SweepOptions options;
         options.skip.insert("history.back");
         options.skip.insert("history.row1");
+        options.skip.insert("history.row2");
         const QStringList pressed = press_every_control(app, "history", options);
         INFO("pressed " << pressed.join(", ").toStdString());
         CHECK(pressed.contains("history.delete1"));

@@ -40,7 +40,10 @@ QString SolveHistory::defaultFile() {
 }
 
 SolveHistory::SolveHistory(SolveController& solve, QString file, QObject* parent)
-    : QObject(parent), solve_(solve), store_(file.isEmpty() ? defaultFile() : std::move(file)) {
+    : QObject(parent),
+      solve_(solve),
+      store_(file.isEmpty() ? defaultFile() : std::move(file)),
+      review_(this) {
     keep_ = QSettings().value(QLatin1String(kKeepKey), true).toBool();
     connect(&solve_, &SolveController::stateChanged, this, &SolveHistory::onStateChanged);
     connect(&solve_, &SolveController::solutionChanged, this, &SolveHistory::onSolutionChanged);
@@ -146,6 +149,20 @@ void SolveHistory::finish() {
     // Over: whatever the controller does next is another solve's.
     current_ = 0;
     emit entriesChanged();
+}
+
+QObject* SolveHistory::reviewOf(qlonglong id) {
+    const HistoryEntry* kept = store_.find(id);
+    if (kept == nullptr) {
+        return nullptr;
+    }
+    // From the cube as scanned, turn 0: what the review shows is the whole
+    // solution, not the place the person got to. resumeCube() because it
+    // solves exactly this cube with exactly this method and does not carry on
+    // from anything the controller held before.
+    review_.resumeCube(kept->scanned, kept->scanned,
+                       static_cast<SolveController::Method>(kept->method), 0);
+    return &review_;
 }
 
 bool SolveHistory::resume(qlonglong id) {

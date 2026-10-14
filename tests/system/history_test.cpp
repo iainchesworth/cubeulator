@@ -136,13 +136,31 @@ TEST_CASE("solves are listed newest first, and deleted or cleared only after ask
               nullptr);
         CHECK(app.find_text(QStringLiteral("%1 turns · 12:40").arg(finished_turns)) != nullptr);
 
-        // The unfinished one carries on, so it is a control. The finished one
-        // has nowhere to go until the solution screen exists, so it is not
-        // dressed as one.
+        // Every row goes somewhere: the unfinished one carries on, the
+        // finished one opens its solution (below).
         CHECK(is_a_control(app, "history.row1"));
-        CHECK_FALSE(is_a_control(app, "history.row2"));
+        CHECK(is_a_control(app, "history.row2"));
         CHECK(is_a_control(app, "history.delete1"));
         CHECK(is_a_control(app, "history.delete2"));
+
+        // The finished one opens the solution to that cube, worked out again,
+        // under the date it was solved; back comes back to the list.
+        app.click("history.row2");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        QObject* reviewed = qvariant_cast<QObject*>(app.app_state().property("solutionSource"));
+        REQUIRE(reviewed != nullptr);
+        REQUIRE(app.wait_for([&]() { return !reviewed->property("isSolving").toBool(); }, 60'000));
+        CHECK(reviewed != &app.runtime().solve());
+        CHECK(reviewed->property("totalMoves").toInt() == finished_turns);
+        app.settle();
+        CHECK(app.find("solution.subtitle") != nullptr);
+        CHECK(app.find("solution.cube") != nullptr);
+        // The solve being followed was not touched by the review.
+        CHECK(app.runtime().solve().totalMoves() == unfinished_turns);
+        CHECK(app.runtime().solve().moveIndex() == 2);
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "history"; }));
+        CHECK(app.find("history.row2") != nullptr);
 
         // Delete asks first, and the safe choice leaves it be.
         CHECK(app.find("history.deleteDialog") == nullptr);
@@ -219,10 +237,16 @@ TEST_CASE("an unfinished solve is carried on from the turn it was left at", "[sy
         CHECK(history.count() == 2);
 
         open_history(app);
-        // Only the newest unfinished one is a way on; the older is listed.
+        // Only the newest unfinished one carries on. The older is listed, and
+        // opens its solution for review instead: another scan has left it
+        // behind.
         CHECK(is_a_control(app, "history.row1"));
-        CHECK_FALSE(is_a_control(app, "history.row2"));
-        CHECK(app.find("history.row2") != nullptr);
+        CHECK(is_a_control(app, "history.row2"));
+        app.click("history.row2");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        CHECK(solve.moveIndex() == 0);  // the controller's solve is the 99 seed's, untouched
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "history"; }));
 
         app.click("history.row1");
         REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }));
@@ -261,14 +285,15 @@ TEST_CASE("an unfinished solve is carried on from the turn it was left at", "[sy
         CHECK(done.value("turn").toInt() == total);
         CHECK(done.value("seconds").toInt() >= 125);
 
-        // Nothing is left to carry on but the older one, which cannot be.
+        // What is left to carry on is the older one, which now can be: it is
+        // the newest unfinished solve.
         CHECK(history.carryOnId() != 0);
         app.go("launch");
         open_history(app);
-        CHECK_FALSE(is_a_control(app, "history.row1"));
-        CHECK(is_a_control(app, "history.row2"));
+        CHECK(history.entries().at(0).toMap().value("carryOn").toBool() == false);
+        CHECK(history.entries().at(1).toMap().value("carryOn").toBool());
 
-        // Which is now the newest unfinished solve, and carries on.
+        // Pressing it carries on.
         app.click("history.row2");
         REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }));
         REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));

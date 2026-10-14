@@ -565,3 +565,59 @@ TEST_CASE("clearing mid-solve is not undone by the next turn", "[qt][history]") 
     solve.nextMove();
     CHECK(history.count() == 0);
 }
+
+TEST_CASE(
+    "an entry is reviewed as a solution of its own, and the solve being followed is not moved",
+    "[qt][history]") {
+    isolate_settings();
+    QTemporaryDir dir;
+    SolveController solve;
+    SolveHistory history(solve, dir.filePath(QStringLiteral("h.json")));
+
+    // A finished solve, and another being followed.
+    const Cube reviewed_cube = scrambled(22);
+    solve.setMethod(SolveController::Intermediate);
+    solve_and_wait(solve, reviewed_cube);
+    const int reviewed_turns = solve.totalMoves();
+    while (!solve.atEnd()) {
+        solve.nextMove();
+    }
+    history.finish();
+    solve.setMethod(SolveController::Beginner);
+    solve_and_wait(solve, scrambled(23));
+    solve.nextMove();
+    solve.nextMove();
+    REQUIRE(history.count() == 2);
+    const qlonglong finished = history.entries().at(1).toMap().value("id").toLongLong();
+    REQUIRE(history.entry(finished).value("finished").toBool());
+
+    QObject* source = history.reviewOf(finished);
+    REQUIRE(source != nullptr);
+    auto* review = qobject_cast<SolveController*>(source);
+    REQUIRE(review != nullptr);
+    REQUIRE(review != &solve);
+    REQUIRE(wait_until_solved(*review));
+
+    // The shape the solution screen asks of its source, for the cube as it
+    // was scanned and the method it was followed with.
+    CHECK(review->method() == SolveController::Intermediate);
+    CHECK(review->totalMoves() == reviewed_turns);
+    CHECK(review->moves().size() == reviewed_turns);
+    CHECK_FALSE(review->stageRanges().isEmpty());
+    REQUIRE(review->scannedCube().has_value());
+    CHECK(*review->scannedCube() == reviewed_cube);
+    // Turn 0 is the cube as scanned and the last turn is a solved cube.
+    CHECK(review->stickersAt(reviewed_turns) != review->stickersAt(0));
+    // At the start of the review, not where the person left it.
+    CHECK(review->moveIndex() == 0);
+
+    // The solve being followed is as it was: its cube, method, turn - and no
+    // entry was added or changed by opening a review.
+    CHECK(solve.method() == SolveController::Beginner);
+    CHECK(solve.moveIndex() == 2);
+    CHECK(history.count() == 2);
+    CHECK(history.entry(history.carryOnId()).value("turn").toInt() == 2);
+
+    // Nothing for an id that is not there.
+    CHECK(history.reviewOf(987654) == nullptr);
+}
