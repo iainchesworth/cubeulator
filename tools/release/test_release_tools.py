@@ -933,6 +933,9 @@ class WebPackage(unittest.TestCase):
         (bin_dir / "qtloader.js").write_text("qtLoad", encoding="utf-8")
         (bin_dir / "cubeulator-isolation.js").write_text("sw", encoding="utf-8")
         (bin_dir / "icon.svg").write_text("<svg/>", encoding="utf-8")
+        # what Qt writes beside the app's own page: not shipped
+        (bin_dir / "cube_app.html").write_text("<html>qt</html>", encoding="utf-8")
+        (bin_dir / "qtlogo.svg").write_text("<svg/>", encoding="utf-8")
         (bin_dir / "cube_app.wasm").write_bytes(b"\x00asm\x01\x00\x00\x00" + b"\x00" * 1_100_000)
         (notices / "THIRD-PARTY-NOTICES.txt").write_text(
             "Qt 6.12 ... OpenCV ... Noto Sans JP\n" + "\n".join(f"line {i}" for i in range(300)),
@@ -967,6 +970,13 @@ class WebPackage(unittest.TestCase):
         code, out = self.check(package)
         self.assertEqual(code, 0, out)
         self.assertIn("passes", out)
+        # the site's own files are in it and Qt's default page and logo are not
+        listing = subprocess.run(
+            ["unzip", "-Z1", package.as_posix()], capture_output=True, text=True
+        ).stdout.split()
+        self.assertIn("Cubeulator-0.1.0-beta.1-web/index.html", listing)
+        self.assertNotIn("Cubeulator-0.1.0-beta.1-web/cube_app.html", listing)
+        self.assertNotIn("Cubeulator-0.1.0-beta.1-web/qtlogo.svg", listing)
 
     def test_an_unresolved_inventory_makes_no_package(self):
         bad = dict(self.INVENTORY, unresolved=["Linked Qt library x"])
@@ -995,12 +1005,14 @@ class WebPackage(unittest.TestCase):
         # a module that is not WebAssembly, and a page that does not load the worker
         (work / "x" / "Cubeulator-0.1.0-beta.1-web" / "cube_app.wasm").write_bytes(b"MZ" + b"\x00" * 1_100_000)
         (work / "x" / "Cubeulator-0.1.0-beta.1-web" / "index.html").write_text("<html/>", encoding="utf-8")
+        (work / "x" / "Cubeulator-0.1.0-beta.1-web" / "cube_app.html").write_text("<html/>", encoding="utf-8")
         bad = work / "Cubeulator-0.1.0-beta.1-web.zip"
         shutil.make_archive(str(bad.with_suffix("")), "zip", work / "x")
         code, out = self.check(bad)
         self.assertNotEqual(code, 0)
         self.assertIn("cube_app.wasm is a WebAssembly module", out)
         self.assertIn("index.html loads the isolation worker", out)
+        self.assertIn("Qt's default page cube_app.html is not shipped", out)
 
 
 if __name__ == "__main__":
