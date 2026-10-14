@@ -20,6 +20,7 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP
 # has not been measured; if the walk is ever run on one and the flicker
 # matters, this is where to try it.
 set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW OFF)
+set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS "")
 
 set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS
     "$ENV{HOME}/Qt" "/opt/Qt" "/usr/lib/qt6" "/usr/lib/x86_64-linux-gnu/qt6")

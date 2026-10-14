@@ -52,6 +52,13 @@
 #                                      desktop or take the keyboard from them.
 #                                      OFF where that is not known to work (a
 #                                      virtual display has nobody to bother).
+#   CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS
+#                                      Link options every test binary needs on
+#                                      this platform, as a CMake list ("" on
+#                                      all but the browser, where a program has
+#                                      to be told how many threads it may start
+#                                      and how much stack and memory it has,
+#                                      and runs under Node).
 #   CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS, CUBEULATOR_PLATFORM_QT_ARCH_DIRS
 #                                      Where cmake/FindQt6.cmake looks for an
 #                                      aqtinstall-style Qt when none is on
