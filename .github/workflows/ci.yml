@@ -18,8 +18,8 @@ on:
         description: >-
           Comma-separated legs to run: clang-format, platform-isolation,
           clang-tidy, linux, macos, windows, coverage, system, android, ios,
-          web, perf - or "all" (which does not include perf, the wall-time
-          performance checks: name it).
+          web, web-test, perf, web-perf - or "all" (which includes neither perf
+          nor web-perf, the wall-time performance checks: name them).
         type: string
         default: all
 
@@ -233,8 +233,8 @@ jobs:
           ]'
           for leg in ${LEGS//,/ }; do
             case "$leg" in
-              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web|perf) ;;
-              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, perf, all)"
+              all|clang-format|platform-isolation|clang-tidy|linux|macos|windows|coverage|system|android|ios|web|web-test|perf|web-perf) ;;
+              *) echo "::error::unknown leg '$leg' (clang-format, platform-isolation, clang-tidy, linux, macos, windows, coverage, system, android, ios, web, web-test, perf, web-perf, all)"
                  exit 1 ;;
             esac
           done
@@ -245,7 +245,7 @@ jobs:
           fi
           count=$(jq 'length' <<<"$selected")
           # Only the desktop legs are chosen here; a dispatch that names just
-          # clang-format, platform-isolation, android, ios, web or coverage
+          # clang-format, platform-isolation, android, ios, web, web-test or coverage
           # legitimately selects none.
           echo "legs: $LEGS -> $count desktop leg(s)"
           echo "matrix=$selected" >> "$GITHUB_OUTPUT"
@@ -684,6 +684,151 @@ jobs:
         with:
           name: cubeulator-web
           path: build/web-emscripten-release/bin
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # The browser's tests (docs/testing.md, "Browser tests"): the library's own
+  # test binaries as WebAssembly under Node, and the app driven in Chromium.
+  web-test:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web tests (Node + Chromium)' || 'Web tests (Node + Chromium)' }}
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.legs == 'all' || contains(format(',{0},', inputs.legs), ',web-test,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md).
+    continue-on-error: true
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      # The diagnostics build is the app with the recorder and the read-only
+      # driver the browser tests use; the tests preset is the library, its
+      # unit, integration and performance binaries, as WebAssembly for Node.
+      - name: Build the diagnostics app and the Node tests
+        uses: $/.github/actions/web-build
+        with:
+          presets: web-emscripten-diagnostics web-emscripten-tests
+
+      # The same test cases as the desktop legs, compiled to WebAssembly:
+      # what they find is what only WebAssembly gets wrong (docs/testing.md,
+      # "Browser tests").
+      - name: Unit, integration and performance tests (WebAssembly, under Node)
+        shell: bash
+        run: >
+          ctest --test-dir build/web-emscripten-tests -j 4
+          --timeout 900 --output-on-failure
+
+      # Chromium is Playwright's own, with the system libraries it needs.
+      # Software WebGL (SwiftShader): the page draws with a CPU renderer here.
+      - name: Install the browser tests' dependencies
+        shell: bash
+        working-directory: tests/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Browser tests (Chromium, the app in a page)
+        shell: bash
+        working-directory: tests/web
+        env:
+          CUBEULATOR_WEB_DIR: ${{ github.workspace }}/build/web-emscripten-diagnostics/bin
+        run: npx playwright test --project=app
+
+      - name: Upload the browser tests' reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web-test-reports
+          path: |
+            tests/web/reports
+            tests/web/test-results
+          if-no-files-found: ignore
+
+      # Saved even when a later step fails - see the Android leg above.
+      - name: Save vcpkg binaries
+        if: ${{ always() }}
+        uses: $/.github/actions/vcpkg-cache/save
+        with:
+          triplet: wasm32-emscripten-threads
+          restored: ${{ steps.vcpkg-cache.outputs.listing }}
+
+  # Wall-time budgets for the browser, read from the in-process recorder. Only
+  # when it is named, as `perf` is (docs/ci.md).
+  web-perf:
+    name: ${{ github.event_name == 'workflow_dispatch' && 'dispatch - Web performance (Chromium)' || 'Web performance (Chromium)' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && contains(format(',{0},', inputs.legs), ',web-perf,') }}
+    runs-on: ubuntu-26.04
+    # Not required until it has run green on develop, like the other porting
+    # legs (docs/ci.md).
+    continue-on-error: true
+    env:
+      VCPKG_MAX_CONCURRENCY: "4"
+
+    steps:
+      # fetch-depth: 0 for vcpkg's version resolution - see the equivalent
+      # comment on the Android leg above.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Restore vcpkg binaries
+        id: vcpkg-cache
+        uses: $/.github/actions/vcpkg-cache/restore
+        with:
+          triplet: wasm32-emscripten-threads
+
+      - name: Build the diagnostics app
+        uses: $/.github/actions/web-build
+        with:
+          presets: web-emscripten-diagnostics
+
+      - name: Install the browser tests' dependencies
+        shell: bash
+        working-directory: tests/web
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # One worker, and the wall-time budgets on: a stopwatch cannot share a
+      # machine (docs/testing.md, "Performance in the browser").
+      - name: Performance journeys (Chromium)
+        shell: bash
+        working-directory: tests/web
+        env:
+          CUBEULATOR_WEB_DIR: ${{ github.workspace }}/build/web-emscripten-diagnostics/bin
+          CUBEULATOR_WEB_PERF_TIMING: "1"
+        run: npx playwright test --project=perf
+
+      # The summaries, the Chrome traces (DevTools Performance panel,
+      # Perfetto) and the tracy-csvexport-shaped CSVs of each journey.
+      - name: Upload the performance reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: cubeulator-web-perf-reports
+          path: tests/web/reports/perf
           if-no-files-found: ignore
 
       # Saved even when a later step fails - see the Android leg above.
