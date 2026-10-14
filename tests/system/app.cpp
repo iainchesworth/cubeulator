@@ -13,6 +13,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QMetaObject>
+#include <QMetaProperty>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -85,9 +86,9 @@ App& App::launched() {
     return *g_app;
 }
 
-App& App::fresh(Start start) {
+App& App::fresh(Start start, Scene3D scene) {
     App& app = launched();
-    app.reset(start);
+    app.reset(start, scene);
     return app;
 }
 
@@ -146,11 +147,51 @@ void App::boot() {
         throw std::runtime_error("the window was never exposed: no display to draw on?");
     }
 
+    // Qt Quick 3D prefilters a scene's light probe (the cube's procedural sky)
+    // on the first frame of every View3D, and on a software renderer that one
+    // frame is eight seconds. Every return to a screen with the cube pays it,
+    // and measured with the CI preset it was most of the suite's time: 66 of
+    // the 82 seconds of the cube-drag case were eight such frames. A case that
+    // is not about how the cube looks does without the probe - the six lights
+    // still light it - which is set before the view's first frame is
+    // synchronised. The screenshot tour and the render checks ask for the
+    // whole thing (App::Scene3D::full).
+    QObject::connect(
+        window_, &QQuickWindow::beforeSynchronizing, window_,
+        [this]() {
+            if (full_3d_) {
+                return;
+            }
+            walk(window_->contentItem(), [](QQuickItem* item) {
+                if (!QByteArray(item->metaObject()->className()).startsWith("QQuick3DViewport") ||
+                    item->property("systestWithoutProbe").toBool()) {
+                    return;
+                }
+                item->setProperty("systestWithoutProbe", true);
+                auto* environment = qvariant_cast<QObject*>(item->property("environment"));
+                if (environment == nullptr) {
+                    return;
+                }
+                const QMetaObject* meta = environment->metaObject();
+                const QMetaProperty probe = meta->property(meta->indexOfProperty("lightProbe"));
+                if (probe.isValid()) {
+                    probe.write(environment, QVariant(probe.metaType(), nullptr));
+                }
+            });
+        },
+        Qt::DirectConnection);
+
     reach_ = std::make_unique<Reach>(*this);
     reach_->start();
 }
 
-void App::reset(Start start) {
+void App::reset(Start start, Scene3D scene) {
+    // A view made while the probe was being left out stays without it, so a
+    // case that wants the whole cube leaves the screens that have one first.
+    if (scene == Scene3D::full && !full_3d_) {
+        go("permission");
+    }
+    full_3d_ = scene == Scene3D::full;
     // Each phase's cost is printed with the total: on a software renderer a
     // reset is seconds, and which part of it is not obvious from outside.
     QElapsedTimer total;

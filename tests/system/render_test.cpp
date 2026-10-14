@@ -87,7 +87,7 @@ struct Content {
 }  // namespace
 
 TEST_CASE("the 3D cube on the launch screen is drawn, in colour, and moves", "[system][render]") {
-    App& app = App::fresh();
+    App& app = App::fresh(App::Start::launch, App::Scene3D::full);
     // Idle spin on (the app's default; the walk's baseline has it off): the
     // picture should change by itself.
     app.settings_state().setProperty("cubeAutoRotate", true);
@@ -130,7 +130,7 @@ TEST_CASE("the 3D cube on the launch screen is drawn, in colour, and moves", "[s
 
 TEST_CASE("the 3D cube is drawn in the narrow layout and in the dark theme too",
           "[system][render]") {
-    App& app = App::fresh();
+    App& app = App::fresh(App::Start::launch, App::Scene3D::full);
     app.resize(cube::systest::kPhone);
     app.set_theme("dark");
     app.settle();
