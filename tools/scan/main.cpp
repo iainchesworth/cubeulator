@@ -154,11 +154,15 @@ struct Outcome {
     cube::vision::SideScan scan;
     for (const fs::path& frame : frames_of(session)) {
         const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
-        const auto read = cube::vision::read_side(bgr);
+        // As the app reads a frame: prepared once, the second reader only when
+        // the first found no side.
+        const auto prepared = cube::vision::prepare_frame(bgr);
+        const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
         outcome.reads += read.has_value() ? 1U : 0U;
         scan.add(read);
         if (!read.has_value()) {
-            scan.add_corner(cube::vision::read_corner(bgr));
+            scan.add_corner(prepared.has_value() ? cube::vision::read_corner(*prepared)
+                                                 : std::nullopt);
         }
         if (const auto cube = scan.cube(); cube.has_value()) {
             if (!outcome.cube.has_value()) {

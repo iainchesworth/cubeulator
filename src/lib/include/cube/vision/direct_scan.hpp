@@ -3,6 +3,7 @@
 #include <cube/error.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/corner_view.hpp>
+#include <cube/vision/prepared_frame.hpp>
 
 #include <opencv2/core.hpp>
 
@@ -48,8 +49,13 @@ struct SideRead {
 // lattice that does not span three rows and three columns, or no cube.
 //
 // `bgr` is an 8-bit BGR frame of any size; frames wider than the working
-// width are reduced first, so the cost does not grow with camera resolution.
+// width are reduced first, so the cost beyond that reduction does not grow
+// with camera resolution.
 [[nodiscard]] std::optional<SideRead> read_side(const cv::Mat& bgr);
+// The same read from a frame already prepared (prepared_frame.hpp), for a
+// caller that hands the frame to more than one reader. The result is the one
+// read_side(bgr) gives for the frame it was prepared from.
+[[nodiscard]] std::optional<SideRead> read_side(const PreparedFrame& frame);
 
 // A read counts only if the side has been held still: its centre sticker
 // within this fraction of a sticker spacing of where the frame before had it.
