@@ -7,8 +7,6 @@
 
 #include <emscripten.h>
 
-#include <QCoreApplication>
-#include <QEvent>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -239,57 +237,6 @@ bool sides_make_one_cube(const cube::solver::Cube& cube) {
     }
     return cube::solver::assemble_scanned_faces(faces).has_value();
 }
-
-// Qt Quick 3D prefilters a scene's light probe (the cube's procedural sky) on
-// the first frame of every View3D, and on a software renderer - which is what a
-// headless browser draws with - that is some twenty seconds of every core, for
-// every page: the cost of each test, and a wait for it again when the page is
-// closed. The native system tests leave the probe out for the same reason
-// (tests/system/app.cpp, App::Scene3D::cheap); the cube is still lit by its
-// lights. Asked for with CUBEULATOR_NO_LIGHT_PROBE=1 (the page's
-// window.cubeulatorEnvironment); the perf and rendering cases leave it off.
-void remove_light_probes(QQuickItem* item) {
-    if (QByteArray(item->metaObject()->className()).startsWith("QQuick3DViewport") &&
-        !item->property("driverWithoutProbe").toBool()) {
-        item->setProperty("driverWithoutProbe", true);
-        if (auto* environment = qvariant_cast<QObject*>(item->property("environment"))) {
-            const QMetaObject* meta = environment->metaObject();
-            const QMetaProperty probe = meta->property(meta->indexOfProperty("lightProbe"));
-            if (probe.isValid()) {
-                probe.write(environment, QVariant(probe.metaType(), nullptr));
-            }
-        }
-    }
-    for (QQuickItem* child : item->childItems()) {
-        remove_light_probes(child);
-    }
-}
-
-// Sees every event the application handles; the first one after the window
-// exists connects the removal to the scene graph's synchronisation, before the
-// first frame is drawn, and the filter is done.
-class ProbeRemoval : public QObject {
-public:
-    bool eventFilter(QObject* /*watched*/, QEvent* /*event*/) override {
-        if (QQuickWindow* window = main_window()) {
-            QObject::connect(
-                window, &QQuickWindow::beforeSynchronizing, window,
-                [window]() { remove_light_probes(window->contentItem()); }, Qt::DirectConnection);
-            QCoreApplication::instance()->removeEventFilter(this);
-            deleteLater();
-        }
-        return false;
-    }
-};
-
-void install_probe_removal() {
-    if (qEnvironmentVariableIntValue("CUBEULATOR_NO_LIGHT_PROBE") != 0) {
-        QCoreApplication::instance()->installEventFilter(new ProbeRemoval);
-    }
-}
-
-// Runs when the QCoreApplication is made, before the window is.
-Q_COREAPP_STARTUP_FUNCTION(install_probe_removal)
 
 }  // namespace
 

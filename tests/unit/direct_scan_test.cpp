@@ -100,7 +100,14 @@ void show(SideScan& scan, const std::array<Color, 9>& stickers, const Pose& pose
     }
 }
 
-// Show all six sides in turn, each in an arbitrary orientation and position.
+// How a side is held up to the camera by show_cube: turned a number of quarter
+// turns, and placed and tilted a little.
+struct Placement {
+    std::uint32_t turns = 0;
+    Pose pose;
+};
+
+// The next side's placement, drawn from `rng`.
 //
 // The quarter-turns are the top two bits of the engine's word. std::mt19937's
 // output is specified exactly; what std::uniform_int_distribution(0, 3) does
@@ -112,23 +119,30 @@ void show(SideScan& scan, const std::array<Color, 9>& stickers, const Pose& pose
 // white side was not read, and found five sides. The tilt and shift are
 // uniform_real_distribution: one draw of the engine and a formula the standard
 // gives, and the libraries agree on them to the last pixel.
-void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& drawing = {}) {
-    std::mt19937 rng(seed);
+Placement next_placement(std::mt19937& rng) {
     std::uniform_real_distribution<float> tilt(-9.0F, 9.0F);
     std::uniform_real_distribution<float> shift(-40.0F, 40.0F);
+    Placement placement;
+    // mt19937's result_type is a 64-bit unsigned long on LP64, and only the top
+    // two bits of a 32-bit draw are wanted: the cast says so.
+    placement.turns = static_cast<std::uint32_t>(rng() >> 30U);
+    placement.pose = Pose{
+        .centre = {320.0F + shift(rng), 180.0F + (shift(rng) / 2.0F)},
+        .degrees = tilt(rng),
+    };
+    return placement;
+}
+
+// Show all six sides in turn, each in an arbitrary orientation and position.
+void show_cube(SideScan& scan, const Cube& cube, unsigned seed, const Drawing& drawing = {}) {
+    std::mt19937 rng(seed);
     for (const Face face : kAllFaces) {
+        const Placement placement = next_placement(rng);
         std::array<Color, 9> stickers = outside_view(cube, face);
-        // mt19937's result_type is a 64-bit unsigned long on LP64, and only the
-        // top two bits of a 32-bit draw are wanted: the cast says so.
-        for (auto turns = static_cast<std::uint32_t>(rng() >> 30U); turns > 0; --turns) {
+        for (std::uint32_t turns = placement.turns; turns > 0; --turns) {
             stickers = turned_clockwise(stickers);
         }
-        show(scan, stickers,
-             Pose{
-                 .centre = {320.0F + shift(rng), 180.0F + (shift(rng) / 2.0F)},
-                 .degrees = tilt(rng),
-             },
-             kHeldFrames, drawing);
+        show(scan, stickers, placement.pose, kHeldFrames, drawing);
         scan.add(std::nullopt);  // the cube turns to its next side
     }
 }
@@ -713,6 +727,50 @@ TEST_CASE("a cube with a whole red side and a whole orange side is read as six s
     const auto flat = scan.cube();
     REQUIRE_FALSE(flat.has_value());
     CHECK(flat.error() == cube::CubeError::ambiguous_scan);
+}
+
+TEST_CASE("a side with dark stickers beside bright ones is read at every quarter-turn",
+          "[direct-scan]") {
+    // The warm lamp's green and blue read nearly black (L 16.8 and 11) beside
+    // whites and yellows at 55 to 65. The outlines the reader first takes are
+    // against the mean of a block as wide as a sticker spacing, which a bright
+    // neighbour drags up: the dark sticker passes only where the block has not
+    // reached it, so it comes out small and off-centre, or, in a row between
+    // bright stickers and a bright room, not at all. Of these 24 frames - the
+    // six sides of seed 5's cube of the case above, each at all four
+    // quarter-turns of the pose show_cube gives it - four were not read, with
+    // dark stickers at the left or top: two had all nine as outlines whose
+    // centres sat 4 pixels off, which made the spacing 32 for a true 40 and
+    // snapped two of nine to the grid, and two had only six, the dark column
+    // or row not an outline at all, so that they spanned two by three.
+    const Cube cube = after("R2 L");
+    std::mt19937 rng = cube::test::deterministic_rng(5);
+    for (const Face face : kAllFaces) {
+        const Placement placement = next_placement(rng);
+        std::array<Color, 9> stickers = outside_view(cube, face);
+        for (int turned = 0; turned < 4; ++turned) {
+            INFO("side " << static_cast<int>(face) << " turned " << turned << " quarter-turns");
+            const std::optional<SideRead> read =
+                read_side(draw_side(stickers, placement.pose, lamp_drawing()));
+            const auto& side = ::cube::test::must_have(read);
+            CHECK(side.stickers_found >= 6);
+            for (std::size_t i = 0; i < 9; ++i) {
+                const std::size_t column = i % 3;
+                const std::size_t row = i / 3;
+                const cv::Point2f expected =
+                    place(placement.pose, static_cast<float>(column) - 1.0F,
+                          static_cast<float>(row) - 1.0F);
+                // A clipped sticker's outline is a few pixels off its centre,
+                // and the lattice is fitted through them: the patch sampled
+                // must still land on its own sticker, which is a sixth of a
+                // spacing's room. The colours say it did.
+                CHECK(cv::norm(side.centres.at(i) - expected) <
+                      0.15 * static_cast<double>(placement.pose.pitch));
+                CHECK(cv::norm(side.lab.at(i) - cube::test::warm_lamp_lab(stickers.at(i))) < 4.0);
+            }
+            stickers = turned_clockwise(stickers);
+        }
+    }
 }
 
 TEST_CASE("a cube whose red and orange sides are each the other's colours is read as six sides",

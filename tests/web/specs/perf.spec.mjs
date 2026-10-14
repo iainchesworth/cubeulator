@@ -63,9 +63,6 @@ const zone = (summary, name) => {
   return entry;
 };
 
-// The app as it is shipped, light probe and all: what a visitor's page does.
-test.use({ appOptions: { lightProbe: true } });
-
 test.describe('performance', () => {
   test('start-up: from navigation to the first screen', async ({ app }) => {
     const report = { journey: 'startup', budgets: [] };
@@ -184,8 +181,8 @@ test.describe('performance', () => {
     const report = { journey: 'walk', budgets: [] };
     await app.page.goto('/index.html?demo=3');
     await app.waitUntilDrawn('solve');
-    // A press is measured once the first frames, which take seconds each with
-    // the light probe on a software renderer, are out of the way.
+    // A press is measured once the first frames, which take seconds each on a
+    // software renderer, are out of the way.
     await app.waitForFrames();
     await app.clearProfile();
 

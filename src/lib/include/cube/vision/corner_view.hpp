@@ -72,4 +72,33 @@ struct CornerRead {
 // how a frame goes to read_side and then here without being worked on twice.
 [[nodiscard]] std::optional<CornerRead> read_corner(const PreparedFrame& frame);
 
+// How far a frame got through read_corner.
+enum class CornerStage : std::uint8_t {
+    // Fewer blobs than two sides have between them (twelve).
+    too_few_blobs,
+    // More than a cube in a hand makes: a busy room.
+    too_many_blobs,
+    // Fewer than two disjoint 3x3 windows of sticker blobs.
+    no_pair_of_lattices,
+    // Two or more, and no two of them share an edge.
+    no_shared_edge,
+    // A lattice runs off the picture, so a sticker has no colour to read.
+    off_the_frame,
+    // A read.
+    read,
+};
+
+// What read_corner did with a frame, for whoever is finding out why two sides
+// in view were not read (`cube_scan funnel`). The read is what read_corner
+// gives; the rest is the working it already holds.
+struct CornerExplained {
+    CornerStage stage = CornerStage::too_few_blobs;
+    // Sticker-shaped blobs the frame had, and the distinct 3x3 windows of six or
+    // more of them that the search made (zero when it was not reached).
+    std::size_t blobs = 0;
+    std::size_t windows = 0;
+    std::optional<CornerRead> read;
+};
+[[nodiscard]] CornerExplained read_corner_explained(const PreparedFrame& frame);
+
 }  // namespace cube::vision

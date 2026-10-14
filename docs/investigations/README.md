@@ -105,4 +105,6 @@ name.
 
 ## Closed investigations
 
-None yet.
+- [2026-10-14: does the scan catch a cube turned slowly about one axis and then
+  another?](2026-10-14-scan-tumble.md) - no: six faults in a row, each fixed and
+  tested; `cube_scan funnel` and `cube_tumble_sim` repeat it.

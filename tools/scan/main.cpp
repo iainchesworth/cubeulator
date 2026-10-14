@@ -11,10 +11,17 @@
 //                                    with the sides read square-on
 //   cube_scan ambiguity <dir>        the cubes six sides make, and how the corner
 //                                    reads of the session vote among them
+//   cube_scan funnel <dir> [-v]      how far each frame with no square-on side got
+//                                    in the corner reader, and what the scan
+//                                    decided, as the app's own loop would
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
-// row-major as seen from outside in any orientation and any order.
+// row-major as seen from outside in any orientation and any order. Six sides
+// that make several cubes name none of them, so a session of such a cube says
+// which it is in layout.txt instead: the line `cube_scan replay` prints for a
+// cube, "U:... D:... L:... R:... F:... B:...", each side as the solver lays it
+// out. The frame times come from index.csv when there is one.
 
 #include <cube/model/facelet.hpp>
 #include <cube/solver/cube.hpp>
@@ -35,9 +42,13 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <limits>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -121,7 +132,64 @@ using cube::solver::Face;
     return '?';
 }
 
+// The cube a session's layout.txt names: six sides as `cube_scan replay` prints
+// a cube, "U:YYWYYYWWY D:..." in the solver's own layout.
+[[nodiscard]] std::optional<Cube> layout_truth_of(const fs::path& session) {
+    std::ifstream in(session / "layout.txt");
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    if (text.empty()) {
+        return std::nullopt;
+    }
+    constexpr std::array<std::pair<Face, char>, 6> kOrder = {{{Face::U, 'U'},
+                                                              {Face::D, 'D'},
+                                                              {Face::L, 'L'},
+                                                              {Face::R, 'R'},
+                                                              {Face::F, 'F'},
+                                                              {Face::B, 'B'}}};
+    std::array<std::array<Color, 9>, 6> sides{};
+    for (const auto& [face, name] : kOrder) {
+        const std::size_t at = text.find(std::string(1, name) + ":");
+        if (at == std::string::npos || at + 2 + 9 > text.size()) {
+            return std::nullopt;
+        }
+        for (std::size_t i = 0; i < 9; ++i) {
+            std::optional<Color> colour;
+            switch (text[at + 2 + i]) {
+                case 'W':
+                    colour = Color::White;
+                    break;
+                case 'Y':
+                    colour = Color::Yellow;
+                    break;
+                case 'R':
+                    colour = Color::Red;
+                    break;
+                case 'O':
+                    colour = Color::Orange;
+                    break;
+                case 'G':
+                    colour = Color::Green;
+                    break;
+                case 'B':
+                    colour = Color::Blue;
+                    break;
+                default:
+                    break;
+            }
+            if (!colour.has_value()) {
+                return std::nullopt;
+            }
+            sides[static_cast<std::size_t>(face)][i] = *colour;
+        }
+    }
+    const auto cube = Cube::from_facelets(sides);
+    return cube.has_value() ? std::optional<Cube>(*cube) : std::nullopt;
+}
+
 [[nodiscard]] std::optional<Cube> truth_of(const fs::path& session) {
+    if (const auto named = layout_truth_of(session); named.has_value()) {
+        return named;
+    }
     std::ifstream in(session / "truth.txt");
     std::array<std::array<Facelet, 9>, 6> sides{};
     for (auto& side : sides) {
@@ -139,6 +207,248 @@ using cube::solver::Face;
     }
     const auto cube = cube::solver::assemble_scanned_faces(sides);
     return cube.has_value() ? std::optional<Cube>(*cube) : std::nullopt;
+}
+
+// How long each frame of a session came after the one before, in milliseconds,
+// from the index the recorder wrote: zero where there is none (a session
+// without an index.csv, the first frame, a frame whose row was overwritten),
+// which SideScan takes as the nominal interval. A replay that ignored it would
+// hold a side still at 30 frames a second that the app, at 20, did not.
+[[nodiscard]] std::vector<float> frame_intervals(const fs::path& session,
+                                                 const std::vector<fs::path>& frames) {
+    std::vector<float> intervals(frames.size(), 0.0F);
+    std::ifstream in(session / "index.csv");
+    if (!in) {
+        return intervals;
+    }
+    // The file for pass n is rec_%06d of n % 3600 (docs/recording-format.md).
+    constexpr long kRing = 3600;
+    std::map<long, long> time_of_file;
+    std::string line;
+    std::getline(in, line);  // header
+    while (std::getline(in, line)) {
+        const std::size_t first = line.find(',');
+        const std::size_t second = line.find(',', first + 1);
+        if (first == std::string::npos || second == std::string::npos) {
+            continue;
+        }
+        const long pass = std::strtol(line.substr(0, first).c_str(), nullptr, 10);
+        const long t_ms =
+            std::strtol(line.substr(first + 1, second - first - 1).c_str(), nullptr, 10);
+        time_of_file[pass % kRing] = t_ms;
+    }
+    std::optional<long> previous;
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        const std::string name = frames[i].filename().string();  // rec_000123.jpg
+        const long number = std::strtol(name.substr(4, 6).c_str(), nullptr, 10);
+        const auto found = time_of_file.find(number);
+        if (found == time_of_file.end()) {
+            previous.reset();
+            continue;
+        }
+        if (previous.has_value()) {
+            intervals[i] = static_cast<float>(found->second - *previous);
+        }
+        previous = found->second;
+    }
+    return intervals;
+}
+
+[[nodiscard]] std::string_view stage_name(cube::vision::CornerStage stage) {
+    switch (stage) {
+        case cube::vision::CornerStage::too_few_blobs:
+            return "fewer than 12 blobs";
+        case cube::vision::CornerStage::too_many_blobs:
+            return "more than 48 blobs";
+        case cube::vision::CornerStage::no_pair_of_lattices:
+            return "fewer than two lattices";
+        case cube::vision::CornerStage::no_shared_edge:
+            return "no shared edge";
+        case cube::vision::CornerStage::off_the_frame:
+            return "off the frame";
+        case cube::vision::CornerStage::read:
+            return "read";
+    }
+    return "";
+}
+
+[[nodiscard]] bool same_sides(const std::vector<cube::vision::SideScan::Side>& a,
+                              const std::vector<cube::vision::SideScan::Side>& b) {
+    if (a.size() != b.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i < a.size(); ++i) {
+        if (a[i].in_view != b[i].in_view || a[i].lab != b[i].lab) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// Which gate of SideScan::add_corner a side of a corner read met.
+enum class SideGate : std::uint8_t { counted, not_whole, strip, moving };
+
+[[nodiscard]] SideGate gate_of(const cube::vision::ObliqueSide& side,
+                               const std::vector<cv::Point2f>& previous_centres, float interval) {
+    if (std::count(side.found.begin(), side.found.end(), true) < cube::vision::kMinCornerFound) {
+        return SideGate::not_whole;
+    }
+    const auto step = [&](std::size_t to) {
+        const cv::Point2f half = (side.centres[to] - side.centres[0]) * 0.5F;
+        return std::hypot(half.x, half.y);
+    };
+    const float longer = std::max(step(2), step(6));
+    if (longer <= 0.0F || std::min(step(2), step(6)) < cube::vision::kMinCornerAspect * longer) {
+        return SideGate::strip;
+    }
+    const float reach =
+        cube::vision::kSteadyFraction * cube::vision::interval_scale(interval) * side.pitch;
+    const bool steady = std::any_of(previous_centres.begin(), previous_centres.end(),
+                                    [&](const cv::Point2f& before) {
+                                        const cv::Point2f gap = side.centres[4] - before;
+                                        return std::hypot(gap.x, gap.y) < reach;
+                                    });
+    return steady ? SideGate::counted : SideGate::moving;
+}
+
+// What the scan did with a session, as the app would have done it, and where
+// each frame in which no side was square to the camera stopped in the corner
+// reader. The loop is DirectScan::processFrame's: both readers from one
+// preparation, the corner reader only for a frame with no square-on side, the
+// scan judged when its sides changed or, being ambiguous, when a corner was
+// added, and the first cube ending it. It is the instrument for a tumble: a
+// cube turned slowly about one axis and then another shows two sides at once
+// between every pair of square-on views, and this says how many of those
+// frames became reads, and which gate the others met.
+int run_funnel(const fs::path& session, bool every_frame) {
+    using cube::vision::CornerStage;
+    const std::vector<fs::path> frames = frames_of(session);
+    const std::vector<float> intervals = frame_intervals(session, frames);
+
+    cube::vision::SideScan scan;
+    std::vector<cube::vision::SideScan::Side> previous_sides;
+    bool ambiguous = false;
+
+    std::size_t square_on = 0;
+    std::size_t corner_frames = 0;
+    std::map<CornerStage, std::size_t> stages;
+    std::size_t two_sided = 0;
+    std::size_t three_sided = 0;
+    std::map<SideGate, std::size_t> gates;
+    std::size_t frames_that_counted = 0;
+    std::vector<cv::Point2f> previous_centres;
+    std::optional<std::size_t> six_at;
+    std::optional<std::size_t> first_ambiguous;
+    std::optional<std::size_t> cube_at;
+    std::optional<Cube> known;
+    std::string verdict = "no sixth side was ever captured";
+    std::size_t evaluations = 0;
+
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        const cv::Mat bgr = cv::imread(frames[i].string(), cv::IMREAD_COLOR);
+        const auto prepared = cube::vision::prepare_frame(bgr);
+        const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+        scan.add(read, intervals[i]);
+
+        std::string what = "square-on";
+        std::optional<cube::vision::CornerRead> corner;
+        if (read.has_value()) {
+            ++square_on;
+            previous_centres.clear();
+        } else {
+            ++corner_frames;
+            cube::vision::CornerExplained explained;
+            if (prepared.has_value()) {
+                explained = cube::vision::read_corner_explained(*prepared);
+            }
+            ++stages[explained.stage];
+            what = std::string(stage_name(explained.stage));
+            if (explained.read.has_value()) {
+                corner = std::move(explained.read);
+                (corner->sides.size() == 2 ? two_sided : three_sided) += 1;
+                std::vector<cv::Point2f> centres;
+                for (const cube::vision::ObliqueSide& side : corner->sides) {
+                    const SideGate gate = gate_of(side, previous_centres, intervals[i]);
+                    ++gates[gate];
+                    centres.push_back(side.centres[4]);
+                    what += fmt::format(" [{}]", gate == SideGate::counted     ? "counted"
+                                                 : gate == SideGate::not_whole ? "too few found"
+                                                 : gate == SideGate::strip     ? "strip"
+                                                                               : "moving");
+                }
+                previous_centres = std::move(centres);
+            } else {
+                previous_centres.clear();
+            }
+        }
+        scan.add_corner(corner, intervals[i]);
+        frames_that_counted += corner.has_value() && scan.reading() ? 1U : 0U;
+
+        // The controller's own trigger for judging the scan.
+        auto sides = scan.sides();
+        if (every_frame) {
+            std::size_t captured = 0;
+            for (const auto& side : sides) {
+                captured += side.reads >= cube::vision::SideScan::kMinReads ? 1U : 0U;
+            }
+            fmt::print("{:5} {:>10.0f} ms  sides {}  {}\n", i, intervals[i], captured, what);
+        }
+        if (same_sides(sides, previous_sides) && !(ambiguous && corner.has_value())) {
+            continue;
+        }
+        previous_sides = std::move(sides);
+        if (cube_at.has_value()) {
+            continue;  // the app has stopped; only the funnel is still counted
+        }
+        ++evaluations;
+        const auto result = scan.scanned();
+        if (result.has_value()) {
+            cube_at = i;
+            known = result->cube;
+            verdict = "a cube";
+            if (!six_at.has_value()) {
+                six_at = i;
+            }
+        } else {
+            ambiguous = result.error() == cube::CubeError::ambiguous_scan;
+            verdict = std::string(to_string(result.error()));
+            if (result.error() != cube::CubeError::face_capture_incomplete && !six_at.has_value()) {
+                six_at = i;
+            }
+            if (ambiguous && !first_ambiguous.has_value()) {
+                first_ambiguous = i;
+            }
+        }
+    }
+
+    fmt::print("{}: {} frames; {} had a side square to the camera, {} went to the corner reader\n",
+               session.filename().string(), frames.size(), square_on, corner_frames);
+    for (const CornerStage stage :
+         {CornerStage::too_few_blobs, CornerStage::too_many_blobs, CornerStage::no_pair_of_lattices,
+          CornerStage::no_shared_edge, CornerStage::off_the_frame, CornerStage::read}) {
+        fmt::print("    {:28} {:5}\n", stage_name(stage), stages[stage]);
+    }
+    fmt::print("  corner reads: {} two-sided, {} three-sided; the scan keeps {} distinct views\n",
+               two_sided, three_sided, scan.corner_reads());
+    fmt::print(
+        "  sides of those reads: {} counted; not counted: {} with fewer than {} stickers found, "
+        "{} too foreshortened, {} moving\n",
+        gates[SideGate::counted], gates[SideGate::not_whole], cube::vision::kMinCornerFound,
+        gates[SideGate::strip], gates[SideGate::moving]);
+    fmt::print("  frames that counted a corner side: {}\n", frames_that_counted);
+    fmt::print(
+        "  judged {} times; the six sides were first judged at frame {}, ambiguous from {}\n",
+        evaluations, six_at.has_value() ? std::to_string(*six_at) : "-",
+        first_ambiguous.has_value() ? std::to_string(*first_ambiguous) : "-");
+    if (cube_at.has_value()) {
+        fmt::print("  the cube was known at frame {}\n", *cube_at);
+        if (const auto truth = truth_of(session); truth.has_value() && known.has_value()) {
+            fmt::print("  truth: {}\n", *truth == *known ? "MATCH" : "WRONG");
+        }
+    } else {
+        fmt::print("  no cube: {}\n", verdict);
+    }
+    return cube_at.has_value() ? 0 : 1;
 }
 
 struct Outcome {
@@ -159,17 +469,20 @@ struct Outcome {
 [[nodiscard]] Outcome replay(const fs::path& session) {
     Outcome outcome;
     cube::vision::SideScan scan;
-    for (const fs::path& frame : frames_of(session)) {
-        const cv::Mat bgr = cv::imread(frame.string(), cv::IMREAD_COLOR);
+    const std::vector<fs::path> frames = frames_of(session);
+    const std::vector<float> intervals = frame_intervals(session, frames);
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        const cv::Mat bgr = cv::imread(frames[i].string(), cv::IMREAD_COLOR);
         // As the app reads a frame: prepared once, the second reader only when
         // the first found no side.
         const auto prepared = cube::vision::prepare_frame(bgr);
         const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
         outcome.reads += read.has_value() ? 1U : 0U;
-        scan.add(read);
+        scan.add(read, intervals[i]);
         if (!read.has_value()) {
-            scan.add_corner(prepared.has_value() ? cube::vision::read_corner(*prepared)
-                                                 : std::nullopt);
+            scan.add_corner(
+                prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt,
+                intervals[i]);
         }
         if (const auto cube = scan.cube(); cube.has_value()) {
             if (!outcome.cube.has_value()) {
@@ -808,9 +1121,13 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "corner-colours") {
         return run_corner_colours(fs::path(args[1]));
     }
+    if ((args.size() == 2 || args.size() == 3) && args[0] == "funnel") {
+        return run_funnel(fs::path(args[1]), args.size() == 3 && args[2] == "-v");
+    }
     fmt::print(
         "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
         "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir> [max-distance]\n"
-        "  cube_scan corner-colours <session-dir>\n  cube_scan ambiguity <session-dir>\n");
+        "  cube_scan corner-colours <session-dir>\n  cube_scan ambiguity <session-dir>\n"
+        "  cube_scan funnel <session-dir> [-v]\n");
     return 2;
 }

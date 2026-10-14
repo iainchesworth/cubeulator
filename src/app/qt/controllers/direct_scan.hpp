@@ -237,6 +237,9 @@ private:
     mutable std::mutex frame_mutex_;
     cv::Mat latest_frame_;
     int frame_seq_ = 0;
+    // When the frame before was captured; the scan's rule that a side must have
+    // held still is scaled by how long ago that was.
+    std::optional<std::int64_t> previous_frame_ms_;
     int frame_width_ = 0;
     int frame_height_ = 0;
 
