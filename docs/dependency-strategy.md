@@ -1,6 +1,6 @@
 # Dependency strategy: vcpkg on every platform
 
-Cubeulator vendors [vcpkg](https://github.com/microsoft/vcpkg) as a pinned git
+Cubeulator vendors [vcpkg](https://github.com/iainchesworthlabs/vcpkg) (the labs fork of microsoft/vcpkg: it tracks upstream and carries our ports until they are merged there) as a pinned git
 submodule (manifest mode, `vcpkg.json`) for its C++ dependencies: Catch2,
 fmt and OpenCV. Qt is a separate prebuilt install
 (aqtinstall / `jurplel/install-qt-action`), not a vcpkg dependency, for the
