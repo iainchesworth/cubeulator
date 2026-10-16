@@ -60,6 +60,7 @@ add_executable(cube_unit_tests
     unit/sticker_colour_test.cpp
     unit/read_set_test.cpp
     unit/corner_view_test.cpp
+    unit/drawn_cube_test.cpp
     unit/held_cube_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
@@ -85,7 +86,8 @@ add_executable(cube_unit_tests
     unit/nxn/notation_test.cpp
     unit/nxn/stepped_plan_test.cpp
     unit/nxn/outside_view_test.cpp
-    unit/nxn/validate_test.cpp)
+    unit/nxn/validate_test.cpp
+    unit/nxn/mesh_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
@@ -294,6 +296,8 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qml_tests
         qml_test_main.cpp
         unit/complete_screen_test.cpp
+        unit/cube_view_reading_test.cpp
+        unit/cube_n_view_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp

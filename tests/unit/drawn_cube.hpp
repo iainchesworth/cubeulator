@@ -4,8 +4,15 @@
 // direct-scan reader and the controller built on it. Real recordings carry
 // the person holding the cube and stay out of the repository; the scoreboard
 // tool (tools/scan) is what runs the reader over those.
+//
+// Every drawing is of an N x N side, N taken from the number of stickers it is
+// given (nine is a 3x3's, twenty-five a 5x5's), and a 3x3 is what the
+// std::array<Color, 9> overloads and the defaults give, so the tests written
+// for the 3x3 are unchanged. The sticker spacing (Pose::pitch) is per sticker,
+// so a bigger cube is a bigger drawing unless the pose says otherwise.
 
 #include <cube/model/facelet.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/solver/solver.hpp>
@@ -16,12 +23,17 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <concepts>
 #include <cstddef>
 #include <functional>
 #include <numbers>
 #include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace cube::test {
 
@@ -74,6 +86,18 @@ namespace cube::test {
     return frame;
 }
 
+// The side length of a square of `count` stickers: 3 for nine, 5 for twenty-five.
+[[nodiscard]] inline int side_length(std::size_t count) {
+    std::size_t size = 0;
+    while ((size + 1) * (size + 1) <= count) {
+        ++size;
+    }
+    if (size < 2 || size * size != count) {
+        throw std::invalid_argument("a cube side has N x N stickers, not " + std::to_string(count));
+    }
+    return static_cast<int>(size);
+}
+
 // Where a side sits in the frame.
 struct Pose {
     cv::Point2f centre{320.0F, 180.0F};
@@ -102,13 +126,14 @@ inline void fill_square(cv::Mat& frame, const Pose& pose, float column, float ro
 
 struct Drawing {
     cv::Size size{640, 360};
-    // How many rows of stickers are in view (a side half out of frame).
-    int rows = 3;
+    // How many rows of stickers are in view (a side half out of frame), from the
+    // top; all of them unless it says otherwise.
+    std::optional<int> rows = std::nullopt;
     // The colour each sticker is drawn in; replace to light the cube differently.
     std::function<cv::Scalar(solver::Color)> paint = &cube::test::paint;
     // A wordmark in four colours across the middle of the centre sticker of a
-    // side whose centre is this colour, the way a Rubik's cube's white centre
-    // carries one. It runs corner to corner and covers about a quarter of the
+    // side (of an odd size; an even one has none) whose centre is this colour, the way a Rubik's
+    // cube's white centre carries one. It runs corner to corner and covers about a quarter of the
     // sticker, and it is painted with `paint`, so it is lit as the rest is.
     std::optional<solver::Color> logo_on_centre = std::nullopt;
 };
@@ -164,20 +189,27 @@ inline void draw_logo(cv::Mat& frame, const Pose& pose, float column, float row,
     }
 }
 
-// One cube side as the camera sees it: dark plastic and nine stickers,
+// One cube side as the camera sees it: dark plastic and N x N stickers,
 // row-major from the top-left.
-[[nodiscard]] inline cv::Mat draw_side(const std::array<solver::Color, 9>& stickers,
-                                       const Pose& pose, const Drawing& drawing = {}) {
+[[nodiscard]] inline cv::Mat draw_side(std::span<const solver::Color> stickers, const Pose& pose,
+                                       const Drawing& drawing = {}) {
+    const int size = side_length(stickers.size());
+    const auto count = static_cast<std::size_t>(size);
+    const float middle = 0.5F * static_cast<float>(size - 1);
+    const int rows = std::min(drawing.rows.value_or(size), size);
     cv::Mat frame = room(drawing.size);
-    fill_square(frame, pose, 0.0F, 0.0F, 1.62F, cv::Scalar(16, 16, 16));
-    for (int row = 0; row < drawing.rows; ++row) {
-        for (int column = 0; column < 3; ++column) {
-            fill_square(frame, pose, static_cast<float>(column - 1), static_cast<float>(row - 1),
-                        0.4F, drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]));
+    fill_square(frame, pose, 0.0F, 0.0F, (0.5F * static_cast<float>(size)) + 0.12F,
+                cv::Scalar(16, 16, 16));
+    for (int row = 0; row < rows; ++row) {
+        for (int column = 0; column < size; ++column) {
+            fill_square(frame, pose, static_cast<float>(column) - middle,
+                        static_cast<float>(row) - middle, 0.4F,
+                        drawing.paint(stickers[(static_cast<std::size_t>(row) * count) +
+                                               static_cast<std::size_t>(column)]));
         }
     }
-    if (drawing.logo_on_centre.has_value() && drawing.rows == 3 &&
-        stickers[4] == *drawing.logo_on_centre) {
+    if (drawing.logo_on_centre.has_value() && rows == size && size % 2 == 1 &&
+        stickers[((count / 2) * count) + (count / 2)] == *drawing.logo_on_centre) {
         draw_logo(frame, pose, 0.0F, 0.0F, drawing);
     }
     return frame;
@@ -187,9 +219,10 @@ inline void draw_logo(cv::Mat& frame, const Pose& pose, float column, float row,
 // the picture: skin-coloured, narrower than the sticker so some of it still
 // shows either side, and covering the middle of it, which is where a sticker
 // is sampled. `cell` is row-major, as the camera sees the side.
-inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
-    const auto column = static_cast<float>(cell % 3 - 1);
-    const auto row = static_cast<float>(cell / 3 - 1);
+inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell, int size = 3) {
+    const float middle = 0.5F * static_cast<float>(size - 1);
+    const auto column = static_cast<float>(cell % size) - middle;
+    const auto row = static_cast<float>(cell / size) - middle;
     const cv::Point2f tip = place(pose, column - 0.25F, row);
     // In from the nearer side edge of the picture.
     const float edge = column >= 0.0F ? static_cast<float>(frame.cols) : 0.0F;
@@ -199,16 +232,26 @@ inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
                   cv::Scalar(140, 170, 222), cv::FILLED, cv::LINE_AA);
 }
 
-[[nodiscard]] inline std::array<solver::Color, 9> turned_clockwise(
-    const std::array<solver::Color, 9>& side) {
-    std::array<solver::Color, 9> turned{};
-    for (int row = 0; row < 3; ++row) {
-        for (int column = 0; column < 3; ++column) {
-            turned[static_cast<std::size_t>(3 * row + column)] =
-                side[static_cast<std::size_t>(3 * (2 - column) + row)];
+// A side turned a quarter turn clockwise in its own plane.
+[[nodiscard]] inline std::vector<solver::Color> turned_clockwise(
+    std::span<const solver::Color> side) {
+    const auto size = static_cast<std::size_t>(side_length(side.size()));
+    std::vector<solver::Color> turned(side.size());
+    for (std::size_t row = 0; row < size; ++row) {
+        for (std::size_t column = 0; column < size; ++column) {
+            turned.at((size * row) + column) = side[(size * (size - 1 - column)) + row];
         }
     }
     return turned;
+}
+
+[[nodiscard]] inline std::array<solver::Color, 9> turned_clockwise(
+    const std::array<solver::Color, 9>& side) {
+    const std::vector<solver::Color> turned =
+        turned_clockwise(std::span<const solver::Color>(side));
+    std::array<solver::Color, 9> out{};
+    std::ranges::copy(turned, out.begin());
+    return out;
 }
 
 // A side of `cube` as a camera pointed at it sees it. The solver's layout is
@@ -226,6 +269,25 @@ inline void lay_finger(cv::Mat& frame, const Pose& pose, int cell) {
     if (face == solver::Face::D || face == solver::Face::R || face == solver::Face::B) {
         for (std::size_t row = 0; row < 3; ++row) {
             std::swap(stickers[row * 3], stickers[row * 3 + 2]);
+        }
+    }
+    return stickers;
+}
+
+// The same for a cube of any size: a side of `cube` as a camera pointed at it
+// sees it, N x N stickers row-major from the top-left. For a 3x3 it is
+// outside_view; the layout of a cube (nxn::NCube is the solver's, for N = 3) is
+// camera-handed on U, F, L and column-mirrored on D, R, B at every size.
+[[nodiscard]] inline std::vector<solver::Color> camera_view(const nxn::NCube& cube,
+                                                            solver::Face face) {
+    const int size = cube.size();
+    const bool mirrored =
+        face == solver::Face::D || face == solver::Face::R || face == solver::Face::B;
+    std::vector<solver::Color> stickers;
+    stickers.reserve(static_cast<std::size_t>(size) * static_cast<std::size_t>(size));
+    for (int row = 0; row < size; ++row) {
+        for (int column = 0; column < size; ++column) {
+            stickers.push_back(cube.at(face, row, mirrored ? size - 1 - column : column));
         }
     }
     return stickers;
@@ -298,11 +360,17 @@ struct CornerPose {
     float tilt = 4.0F;          // rise per column away from the shared edge
 };
 
-[[nodiscard]] inline cv::Mat draw_corner(const std::array<solver::Color, 9>& left,
-                                         const std::array<solver::Color, 9>& right,
+[[nodiscard]] inline cv::Mat draw_corner(std::span<const solver::Color> left,
+                                         std::span<const solver::Color> right,
                                          const CornerPose& pose = {}, const Drawing& drawing = {}) {
+    const int size = side_length(left.size());
+    if (side_length(right.size()) != size) {
+        throw std::invalid_argument("the two sides of a corner view are of one cube");
+    }
+    const auto count = static_cast<std::size_t>(size);
+    const auto cells = static_cast<float>(size);
     cv::Mat frame = room(drawing.size);
-    const float top = pose.edge_y - 1.5F * pose.pitch;
+    const float top = pose.edge_y - (0.5F * cells * pose.pitch);
 
     // A cell (column, row) of a side whose column step is (dx, dy) and whose
     // cell (0,0) has its top-left corner at `origin`.
@@ -312,34 +380,46 @@ struct CornerPose {
             cv::Point2f(origin.x + column * dx, origin.y + column * dy + row * pose.pitch));
     };
     const auto fill_side = [&](const cv::Point2f& origin, float dx, float dy,
-                               const std::array<solver::Color, 9>& stickers) {
+                               std::span<const solver::Color> stickers) {
         const std::array<cv::Point, 4> backing = {
-            corner(origin, dx, dy, -0.08F, -0.08F), corner(origin, dx, dy, 3.08F, -0.08F),
-            corner(origin, dx, dy, 3.08F, 3.08F), corner(origin, dx, dy, -0.08F, 3.08F)};
+            corner(origin, dx, dy, -0.08F, -0.08F),
+            corner(origin, dx, dy, cells + 0.08F, -0.08F),
+            corner(origin, dx, dy, cells + 0.08F, cells + 0.08F),
+            corner(origin, dx, dy, -0.08F, cells + 0.08F),
+        };
         cv::fillConvexPoly(frame, backing.data(), 4, cv::Scalar(16, 16, 16), cv::LINE_AA);
-        for (int row = 0; row < 3; ++row) {
-            for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < size; ++row) {
+            for (int column = 0; column < size; ++column) {
                 const float c = static_cast<float>(column);
                 const float r = static_cast<float>(row);
-                const std::array<cv::Point, 4> quad = {corner(origin, dx, dy, c + 0.1F, r + 0.1F),
-                                                       corner(origin, dx, dy, c + 0.9F, r + 0.1F),
-                                                       corner(origin, dx, dy, c + 0.9F, r + 0.9F),
-                                                       corner(origin, dx, dy, c + 0.1F, r + 0.9F)};
-                cv::fillConvexPoly(
-                    frame, quad.data(), 4,
-                    drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]),
-                    cv::LINE_AA);
+                const std::array<cv::Point, 4> quad = {
+                    corner(origin, dx, dy, c + 0.1F, r + 0.1F),
+                    corner(origin, dx, dy, c + 0.9F, r + 0.1F),
+                    corner(origin, dx, dy, c + 0.9F, r + 0.9F),
+                    corner(origin, dx, dy, c + 0.1F, r + 0.9F),
+                };
+                cv::fillConvexPoly(frame, quad.data(), 4,
+                                   drawing.paint(stickers[(static_cast<std::size_t>(row) * count) +
+                                                          static_cast<std::size_t>(column)]),
+                                   cv::LINE_AA);
             }
         }
     };
 
     // Left side: its right edge is the shared one; columns step right and down
     // towards it, so its far (left) edge is higher.
-    fill_side({pose.edge_x - 3.0F * pose.left_width, top - 3.0F * pose.tilt}, pose.left_width,
+    fill_side({pose.edge_x - (cells * pose.left_width), top - (cells * pose.tilt)}, pose.left_width,
               pose.tilt, left);
     // Right side: its left edge is the shared one; columns step right and up.
     fill_side({pose.edge_x, top}, pose.right_width, -pose.tilt, right);
     return frame;
+}
+
+[[nodiscard]] inline cv::Mat draw_corner(const std::array<solver::Color, 9>& left,
+                                         const std::array<solver::Color, 9>& right,
+                                         const CornerPose& pose = {}, const Drawing& drawing = {}) {
+    return draw_corner(std::span<const solver::Color>(left), std::span<const solver::Color>(right),
+                       pose, drawing);
 }
 
 // Three sides of a cube turned so its near corner points at the camera: the
@@ -356,9 +436,19 @@ struct Corner3Pose {
     float degrees = 0.0F;
 };
 
-[[nodiscard]] inline cv::Mat draw_corner3(const std::array<std::array<solver::Color, 9>, 3>& sides,
-                                          const Corner3Pose& pose = {},
+// For three sides of any one size. A template only so that a braced list of
+// three 3x3 sides, which this signature could take as well as the next one,
+// keeps meaning the next one.
+template <typename Sides>
+    requires std::same_as<Sides, std::array<std::span<const solver::Color>, 3>>
+[[nodiscard]] inline cv::Mat draw_corner3(const Sides& sides, const Corner3Pose& pose = {},
                                           const Drawing& drawing = {}) {
+    const int size = side_length(sides[0].size());
+    if (side_length(sides[1].size()) != size || side_length(sides[2].size()) != size) {
+        throw std::invalid_argument("the three sides of a corner view are of one cube");
+    }
+    const auto count = static_cast<std::size_t>(size);
+    const auto cells = static_cast<float>(size);
     cv::Mat frame = room(drawing.size);
     const float radians = pose.degrees * std::numbers::pi_v<float> / 180.0F;
     const auto turned = [&](float x, float y) {
@@ -370,26 +460,33 @@ struct Corner3Pose {
     const cv::Point2f down_right = turned(0.866F * pose.edge, 0.5F * pose.edge);
 
     // A side as the parallelogram spanned from the vertex by `columns` and
-    // `rows` (each three cells long), with gaps of plastic between stickers.
+    // `rows` (each N cells long), with gaps of plastic between stickers.
     const auto fill_side = [&](const cv::Point2f& columns, const cv::Point2f& rows,
-                               const std::array<solver::Color, 9>& stickers) {
+                               std::span<const solver::Color> stickers) {
         const auto at = [&](float column, float row) {
-            return cv::Point(pose.vertex + (column / 3.0F) * columns + (row / 3.0F) * rows);
+            return cv::Point(pose.vertex + (column / cells) * columns + (row / cells) * rows);
         };
-        const std::array<cv::Point, 4> backing = {at(-0.04F, -0.04F), at(3.04F, -0.04F),
-                                                  at(3.04F, 3.04F), at(-0.04F, 3.04F)};
+        const std::array<cv::Point, 4> backing = {
+            at(-0.04F, -0.04F),
+            at(cells + 0.04F, -0.04F),
+            at(cells + 0.04F, cells + 0.04F),
+            at(-0.04F, cells + 0.04F),
+        };
         cv::fillConvexPoly(frame, backing.data(), 4, cv::Scalar(16, 16, 16), cv::LINE_AA);
-        for (int row = 0; row < 3; ++row) {
-            for (int column = 0; column < 3; ++column) {
+        for (int row = 0; row < size; ++row) {
+            for (int column = 0; column < size; ++column) {
                 const float c = static_cast<float>(column);
                 const float r = static_cast<float>(row);
                 const std::array<cv::Point, 4> quad = {
-                    at(c + 0.1F, r + 0.1F), at(c + 0.9F, r + 0.1F), at(c + 0.9F, r + 0.9F),
-                    at(c + 0.1F, r + 0.9F)};
-                cv::fillConvexPoly(
-                    frame, quad.data(), 4,
-                    drawing.paint(stickers[static_cast<std::size_t>(row * 3 + column)]),
-                    cv::LINE_AA);
+                    at(c + 0.1F, r + 0.1F),
+                    at(c + 0.9F, r + 0.1F),
+                    at(c + 0.9F, r + 0.9F),
+                    at(c + 0.1F, r + 0.9F),
+                };
+                cv::fillConvexPoly(frame, quad.data(), 4,
+                                   drawing.paint(stickers[(static_cast<std::size_t>(row) * count) +
+                                                          static_cast<std::size_t>(column)]),
+                                   cv::LINE_AA);
             }
         }
     };
@@ -397,6 +494,17 @@ struct Corner3Pose {
     fill_side(down_right, down_left, sides[1]);
     fill_side(up, down_right, sides[2]);
     return frame;
+}
+
+[[nodiscard]] inline cv::Mat draw_corner3(const std::array<std::array<solver::Color, 9>, 3>& sides,
+                                          const Corner3Pose& pose = {},
+                                          const Drawing& drawing = {}) {
+    const std::array<std::span<const solver::Color>, 3> spans = {
+        std::span<const solver::Color>(sides[0]),
+        std::span<const solver::Color>(sides[1]),
+        std::span<const solver::Color>(sides[2]),
+    };
+    return draw_corner3(spans, pose, drawing);
 }
 
 // The cube of the first scan recorded with a cube held on corners by hand: a

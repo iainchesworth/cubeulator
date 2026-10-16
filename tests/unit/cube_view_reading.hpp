@@ -8,9 +8,16 @@
 // turns those measurements into the solver's sides and indices by the layout
 // documented in cube.hpp, restated here rather than borrowed from the code
 // under test.
+//
+// Everything that reads a view takes the cube's size (3 unless it says
+// otherwise): the cubies of an N x N x N cube sit at coordinates from -(N-1)/2
+// to (N-1)/2, whole numbers for an odd size and halves for an even one, and
+// the layout is the same one cube::nxn::NCube numbers its stickers by, which
+// for N = 3 is the solver's.
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/outside_view.hpp>
 
@@ -137,49 +144,67 @@ struct Placement {
     return std::nullopt;
 }
 
-// Where the solver keeps the sticker at cubie (x, y, z) of a side: U and D
-// are indexed (row = z + 1, col = x + 1), L and R (row = 1 - y, col = z + 1),
-// F and B (row = 1 - y, col = x + 1). Were this restatement wrong for a
-// side, no turn that carries stickers on or off that side could match
-// Cube::apply.
-[[nodiscard]] inline int solver_index(solver::Face face, int x, int y, int z) {
+// Where an N x N x N cube keeps the sticker at cubie (x, y, z) of a side, as
+// row * N + col. With h = (N - 1) / 2: U and D are indexed (row = z + h,
+// col = x + h), L and R (row = h - y, col = z + h), F and B (row = h - y,
+// col = x + h). Were this restatement wrong for a side, no turn that carries
+// stickers on or off that side could match the library's (the test beside it
+// holds it to every turn of every layer of every size).
+[[nodiscard]] inline int facelet_index(int size, solver::Face face, double x, double y, double z) {
+    const double h = 0.5 * (size - 1);
+    const auto at = [h](double coordinate) {
+        return static_cast<int>(std::lround(coordinate + h));
+    };
     switch (face) {
         case solver::Face::U:
         case solver::Face::D:
-            return (z + 1) * 3 + (x + 1);
+            return (at(z) * size) + at(x);
         case solver::Face::L:
         case solver::Face::R:
-            return (1 - y) * 3 + (z + 1);
+            return ((size - 1 - at(y)) * size) + at(z);
         case solver::Face::F:
         case solver::Face::B:
-            return (1 - y) * 3 + (x + 1);
+            return ((size - 1 - at(y)) * size) + at(x);
     }
     return 0;
 }
 
-// The stickers as the solver would hold them: [side][index] -> colour. Fails
-// unless every sticker sits squarely on a cubie position, facing squarely
-// outwards, and all 54 places are filled once each.
-[[nodiscard]] inline std::array<std::array<QColor, 9>, 6> read(QObject* view) {
-    std::array<std::array<QColor, 9>, 6> sides{};
-    std::array<std::array<int, 9>, 6> seen{};
+// The same for a 3x3, whose cubies are at -1, 0 and 1.
+[[nodiscard]] inline int solver_index(solver::Face face, int x, int y, int z) {
+    return facelet_index(3, face, x, y, z);
+}
+
+// The stickers as the cube would hold them: [side][row * N + col] -> colour.
+using Sides = std::array<std::vector<QColor>, 6>;
+
+// The stickers of a view of an N x N x N cube. Fails unless every sticker sits
+// squarely on a cubie position, facing squarely outwards, and all 6 * N * N
+// places are filled once each.
+[[nodiscard]] inline Sides read(QObject* view, int size = 3) {
+    const double h = 0.5 * (size - 1);
+    const auto count = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    Sides sides;
+    std::array<std::vector<int>, 6> seen;
+    for (std::size_t side = 0; side < sides.size(); ++side) {
+        sides.at(side).resize(count);
+        seen.at(side).assign(count, 0);
+    }
     for (const Placement& placement : placements(view)) {
         const std::optional<solver::Face> side = side_facing(placement.facing);
         REQUIRE(side.has_value());
         const std::array<double, 3> at = {placement.cubie.x, placement.cubie.y, placement.cubie.z};
-        std::array<int, 3> cell{};
-        for (std::size_t axis = 0; axis < 3; ++axis) {
-            cell[axis] = static_cast<int>(std::lround(at[axis]));
-            REQUIRE(std::abs(at[axis] - cell[axis]) < 0.01);
-            REQUIRE(std::abs(cell[axis]) <= 1);
+        for (const double coordinate : at) {
+            REQUIRE(std::abs((coordinate + h) - std::round(coordinate + h)) < 0.01);
+            REQUIRE(std::abs(coordinate) <= h + 0.01);
         }
-        const auto index = static_cast<std::size_t>(solver_index(*side, cell[0], cell[1], cell[2]));
-        sides[static_cast<std::size_t>(*side)][index] = placement.colour;
-        ++seen[static_cast<std::size_t>(*side)][index];
+        const auto index =
+            static_cast<std::size_t>(facelet_index(size, *side, at.at(0), at.at(1), at.at(2)));
+        sides.at(static_cast<std::size_t>(*side)).at(index) = placement.colour;
+        ++seen.at(static_cast<std::size_t>(*side)).at(index);
     }
     for (const auto& side : seen) {
-        for (const int count : side) {
-            REQUIRE(count == 1);
+        for (const int times : side) {
+            REQUIRE(times == 1);
         }
     }
     return sides;
@@ -209,25 +234,74 @@ struct Placement {
     return sides;
 }
 
+// A side of an N x N x N cube as someone looking straight at it from outside
+// sees it: N * N stickers, top-left first, row by row. On F, B, L and R the top
+// row is the one against U; on U it is the row against B; on D the row against F
+// (cube::solver::outside_view for a cube of any size). The cube's own layout is
+// this view on U, F and L, its left-right mirror on R and B, and its top-bottom
+// mirror on D. Restated here from the layout rather than borrowed from the
+// library, so that the view's reading of it is checked against something that
+// is not the view's own.
+[[nodiscard]] inline std::vector<solver::Color> outside_view_of(const nxn::NCube& cube,
+                                                                solver::Face face) {
+    const int size = cube.size();
+    std::vector<solver::Color> stickers;
+    stickers.reserve(static_cast<std::size_t>(size) * static_cast<std::size_t>(size));
+    for (int row = 0; row < size; ++row) {
+        for (int col = 0; col < size; ++col) {
+            const bool mirrored_across = face == solver::Face::R || face == solver::Face::B;
+            const bool mirrored_down = face == solver::Face::D;
+            stickers.push_back(cube.at(face, mirrored_down ? size - 1 - row : row,
+                                       mirrored_across ? size - 1 - col : col));
+        }
+    }
+    return stickers;
+}
+
+// The painting a screen hands to a cube view for `cube`: each side as seen from
+// outside, each colour drawn as `paint` gives it. A fresh JavaScript object on
+// every call (see painting() above).
+[[nodiscard]] inline QJSValue painting(QJSEngine& engine, const nxn::NCube& cube,
+                                       const std::function<QColor(solver::Color)>& paint) {
+    QJSValue sides = engine.newObject();
+    for (const solver::Face face : solver::kAllFaces) {
+        QJSValue colours = engine.newArray();
+        quint32 index = 0;
+        for (const solver::Color colour : outside_view_of(cube, face)) {
+            colours.setProperty(index++, paint(colour).name());
+        }
+        sides.setProperty(letter(face), colours);
+    }
+    return sides;
+}
+
 // True when the view shows `cube`, each colour drawn as `paint` gives it.
-[[nodiscard]] inline bool shows(QObject* view, const solver::Cube& cube,
+[[nodiscard]] inline bool shows(QObject* view, const nxn::NCube& cube,
                                 const std::function<QColor(solver::Color)>& paint) {
-    const auto sides = read(view);
+    const int size = cube.size();
+    const Sides sides = read(view, size);
     bool same = true;
     for (const solver::Face face : solver::kAllFaces) {
-        for (int index = 0; index < 9; ++index) {
-            const QColor seen =
-                sides[static_cast<std::size_t>(face)][static_cast<std::size_t>(index)];
-            if (seen != paint(cube.at(face, index))) {
-                UNSCOPED_INFO("side " << letter(face).toStdString() << " index " << index
-                                      << " shows " << seen.name().toStdString()
-                                      << ", the solver has "
-                                      << paint(cube.at(face, index)).name().toStdString());
-                same = false;
+        for (int row = 0; row < size; ++row) {
+            for (int col = 0; col < size; ++col) {
+                const auto index = static_cast<std::size_t>((row * size) + col);
+                const QColor seen = sides.at(static_cast<std::size_t>(face)).at(index);
+                if (seen != paint(cube.at(face, row, col))) {
+                    UNSCOPED_INFO("side " << letter(face).toStdString() << " index " << index
+                                          << " shows " << seen.name().toStdString()
+                                          << ", the solver has "
+                                          << paint(cube.at(face, row, col)).name().toStdString());
+                    same = false;
+                }
             }
         }
     }
     return same;
+}
+
+[[nodiscard]] inline bool shows(QObject* view, const solver::Cube& cube,
+                                const std::function<QColor(solver::Color)>& paint) {
+    return shows(view, nxn::NCube::from_cube3(cube), paint);
 }
 
 // Which way each side faces in the scene, where the viewer looks along -z
