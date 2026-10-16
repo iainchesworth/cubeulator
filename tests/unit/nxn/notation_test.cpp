@@ -83,32 +83,34 @@ TEST_CASE("notation reads the names a person types", "[nxn][notation]") {
         int size;
         WideMove expected;
     };
-    const std::array<Case, 24> cases = {{
-        {.text = "R", .size = 3, .expected = wide(Face::R, 0, 0, 1)},
-        {.text = "R'", .size = 3, .expected = wide(Face::R, 0, 0, 3)},
-        {.text = "R2", .size = 3, .expected = wide(Face::R, 0, 0, 2)},
-        {.text = "R2'", .size = 3, .expected = wide(Face::R, 0, 0, 2)},
-        {.text = "Rw", .size = 4, .expected = wide(Face::R, 0, 1, 1)},
-        {.text = "Rw'", .size = 4, .expected = wide(Face::R, 0, 1, 3)},
-        {.text = "Uw2", .size = 5, .expected = wide(Face::U, 0, 1, 2)},
-        {.text = "3Rw", .size = 5, .expected = wide(Face::R, 0, 2, 1)},
-        {.text = "4Fw'", .size = 7, .expected = wide(Face::F, 0, 3, 3)},
-        {.text = "2R", .size = 5, .expected = wide(Face::R, 1, 1, 1)},
-        {.text = "3L2", .size = 5, .expected = wide(Face::L, 2, 2, 2)},
-        {.text = "1R", .size = 5, .expected = wide(Face::R, 0, 0, 1)},
-        {.text = "1Rw", .size = 5, .expected = wide(Face::R, 0, 0, 1)},
-        {.text = "2-3R", .size = 6, .expected = wide(Face::R, 1, 2, 1)},
-        {.text = "2-4D'", .size = 6, .expected = wide(Face::D, 1, 3, 3)},
-        {.text = "3-3B", .size = 5, .expected = wide(Face::B, 2, 2, 1)},
-        {.text = "x", .size = 4, .expected = wide(Face::R, 0, 3, 1)},
-        {.text = "y'", .size = 4, .expected = wide(Face::U, 0, 3, 3)},
-        {.text = "z2", .size = 3, .expected = wide(Face::F, 0, 2, 2)},
-        {.text = "r", .size = 4, .expected = wide(Face::R, 0, 1, 1)},
-        {.text = "u'", .size = 5, .expected = wide(Face::U, 0, 1, 3)},
-        {.text = "5Rw", .size = 5, .expected = wide(Face::R, 0, 4, 1)},
-        {.text = "Rw", .size = 2, .expected = wide(Face::R, 0, 1, 1)},
-        {.text = "1-2R", .size = 2, .expected = wide(Face::R, 0, 1, 1)},
-    }};
+    const std::array<Case, 24> cases = {
+        {
+            {.text = "R", .size = 3, .expected = wide(Face::R, 0, 0, 1)},
+            {.text = "R'", .size = 3, .expected = wide(Face::R, 0, 0, 3)},
+            {.text = "R2", .size = 3, .expected = wide(Face::R, 0, 0, 2)},
+            {.text = "R2'", .size = 3, .expected = wide(Face::R, 0, 0, 2)},
+            {.text = "Rw", .size = 4, .expected = wide(Face::R, 0, 1, 1)},
+            {.text = "Rw'", .size = 4, .expected = wide(Face::R, 0, 1, 3)},
+            {.text = "Uw2", .size = 5, .expected = wide(Face::U, 0, 1, 2)},
+            {.text = "3Rw", .size = 5, .expected = wide(Face::R, 0, 2, 1)},
+            {.text = "4Fw'", .size = 7, .expected = wide(Face::F, 0, 3, 3)},
+            {.text = "2R", .size = 5, .expected = wide(Face::R, 1, 1, 1)},
+            {.text = "3L2", .size = 5, .expected = wide(Face::L, 2, 2, 2)},
+            {.text = "1R", .size = 5, .expected = wide(Face::R, 0, 0, 1)},
+            {.text = "1Rw", .size = 5, .expected = wide(Face::R, 0, 0, 1)},
+            {.text = "2-3R", .size = 6, .expected = wide(Face::R, 1, 2, 1)},
+            {.text = "2-4D'", .size = 6, .expected = wide(Face::D, 1, 3, 3)},
+            {.text = "3-3B", .size = 5, .expected = wide(Face::B, 2, 2, 1)},
+            {.text = "x", .size = 4, .expected = wide(Face::R, 0, 3, 1)},
+            {.text = "y'", .size = 4, .expected = wide(Face::U, 0, 3, 3)},
+            {.text = "z2", .size = 3, .expected = wide(Face::F, 0, 2, 2)},
+            {.text = "r", .size = 4, .expected = wide(Face::R, 0, 1, 1)},
+            {.text = "u'", .size = 5, .expected = wide(Face::U, 0, 1, 3)},
+            {.text = "5Rw", .size = 5, .expected = wide(Face::R, 0, 4, 1)},
+            {.text = "Rw", .size = 2, .expected = wide(Face::R, 0, 1, 1)},
+            {.text = "1-2R", .size = 2, .expected = wide(Face::R, 0, 1, 1)},
+        },
+    };
     for (const auto& [text, size, expected] : cases) {
         INFO("text " << text << " size " << size);
         CHECK(one(text, size) == expected);
@@ -129,74 +131,130 @@ TEST_CASE("notation refuses what is not a move, and says where", "[nxn][notation
         int size;
         ParseFault expected;
     };
-    const std::array<Case, 24> cases = {{
-        {.text = "Q", .size = 3, .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1}},
-        {.text = "R U Q U",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 4, .length = 1}},
-        {.text = "R3",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "R''",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "R'2",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "RR",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "Rww",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "Rw3",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "2", .size = 5, .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1}},
-        {.text = "2-",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "-2R",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "2-3Rw",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 5}},
-        {.text = "2x",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "2r",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "xw",
-         .size = 5,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2}},
-        {.text = "M", .size = 3, .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1}},
-        {.text = "R,U",
-         .size = 3,
-         .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3}},
-        {.text = "5R",
-         .size = 4,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 2}},
-        {.text = "0R",
-         .size = 4,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 2}},
-        {.text = "4Rw",
-         .size = 3,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 3}},
-        {.text = "R 3-2R",
-         .size = 5,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 2, .length = 4}},
-        {.text = "2-6R",
-         .size = 5,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 4}},
-        {.text = "99999R",
-         .size = 9,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 6}},
-        {.text = "3Rw",
-         .size = 2,
-         .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 3}},
-    }};
+    const std::array<Case, 24> cases = {
+        {
+            {
+                .text = "Q",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1},
+            },
+            {
+                .text = "R U Q U",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 4, .length = 1},
+            },
+            {
+                .text = "R3",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "R''",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "R'2",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "RR",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "Rww",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "Rw3",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "2",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1},
+            },
+            {
+                .text = "2-",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "-2R",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "2-3Rw",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 5},
+            },
+            {
+                .text = "2x",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "2r",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "xw",
+                .size = 5,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 2},
+            },
+            {
+                .text = "M",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 1},
+            },
+            {
+                .text = "R,U",
+                .size = 3,
+                .expected = {.kind = Kind::UnknownMove, .offset = 0, .length = 3},
+            },
+            {
+                .text = "5R",
+                .size = 4,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 2},
+            },
+            {
+                .text = "0R",
+                .size = 4,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 2},
+            },
+            {
+                .text = "4Rw",
+                .size = 3,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 3},
+            },
+            {
+                .text = "R 3-2R",
+                .size = 5,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 2, .length = 4},
+            },
+            {
+                .text = "2-6R",
+                .size = 5,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 4},
+            },
+            {
+                .text = "99999R",
+                .size = 9,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 6},
+            },
+            {
+                .text = "3Rw",
+                .size = 2,
+                .expected = {.kind = Kind::LayerOutOfRange, .offset = 0, .length = 3},
+            },
+        },
+    };
     for (const auto& [text, size, expected] : cases) {
         INFO("text " << text << " size " << size);
         const auto moves = cube::nxn::parse(text, size);
@@ -213,37 +271,46 @@ TEST_CASE("notation prints the forms a person writes", "[nxn][notation]") {
         int size;
         std::string_view text;
     };
-    const std::array<Case, 20> cases = {{
-        {.move = wide(Face::R, 0, 0, 1), .size = 3, .text = "R"},
-        {.move = wide(Face::R, 0, 0, 2), .size = 3, .text = "R2"},
-        {.move = wide(Face::R, 0, 0, 3), .size = 3, .text = "R'"},
-        {.move = wide(Face::R, 0, 1, 1), .size = 4, .text = "Rw"},
-        {.move = wide(Face::L, 0, 2, 3), .size = 5, .text = "3Lw'"},
-        {.move = wide(Face::U, 0, 3, 2), .size = 7, .text = "4Uw2"},
-        {.move = wide(Face::R, 1, 1, 1), .size = 5, .text = "2R"},
-        {.move = wide(Face::F, 3, 3, 3), .size = 7, .text = "4F'"},
-        {.move = wide(Face::D, 1, 2, 1), .size = 6, .text = "2-3D"},
-        {.move = wide(Face::B, 2, 4, 2), .size = 7, .text = "3-5B2"},
-        {.move = wide(Face::R, 0, 2, 1), .size = 3, .text = "x"},
-        {.move = wide(Face::U, 0, 3, 3), .size = 4, .text = "y'"},
-        {.move = wide(Face::F, 0, 4, 2), .size = 5, .text = "z2"},
-        {.move = wide(Face::L, 0, 2, 1), .size = 3, .text = "x'"},
-        {.move = wide(Face::D, 0, 3, 3), .size = 4, .text = "y"},
-        {.move = wide(Face::B, 0, 4, 1), .size = 5, .text = "z'"},
-        {.move = wide(Face::R, 0, 1, 1), .size = 2, .text = "x"},
-        {.move = wide(Face::R, 0, 0, 1), .size = 2, .text = "R"},
-        {.move = wide(Face::R, 1, 1, 1), .size = 2, .text = "2R"},
-        {.move = wide(Face::R, 0, 7, 3), .size = 9, .text = "8Rw'"},
-    }};
+    const std::array<Case, 20> cases = {
+        {
+            {.move = wide(Face::R, 0, 0, 1), .size = 3, .text = "R"},
+            {.move = wide(Face::R, 0, 0, 2), .size = 3, .text = "R2"},
+            {.move = wide(Face::R, 0, 0, 3), .size = 3, .text = "R'"},
+            {.move = wide(Face::R, 0, 1, 1), .size = 4, .text = "Rw"},
+            {.move = wide(Face::L, 0, 2, 3), .size = 5, .text = "3Lw'"},
+            {.move = wide(Face::U, 0, 3, 2), .size = 7, .text = "4Uw2"},
+            {.move = wide(Face::R, 1, 1, 1), .size = 5, .text = "2R"},
+            {.move = wide(Face::F, 3, 3, 3), .size = 7, .text = "4F'"},
+            {.move = wide(Face::D, 1, 2, 1), .size = 6, .text = "2-3D"},
+            {.move = wide(Face::B, 2, 4, 2), .size = 7, .text = "3-5B2"},
+            {.move = wide(Face::R, 0, 2, 1), .size = 3, .text = "x"},
+            {.move = wide(Face::U, 0, 3, 3), .size = 4, .text = "y'"},
+            {.move = wide(Face::F, 0, 4, 2), .size = 5, .text = "z2"},
+            {.move = wide(Face::L, 0, 2, 1), .size = 3, .text = "x'"},
+            {.move = wide(Face::D, 0, 3, 3), .size = 4, .text = "y"},
+            {.move = wide(Face::B, 0, 4, 1), .size = 5, .text = "z'"},
+            {.move = wide(Face::R, 0, 1, 1), .size = 2, .text = "x"},
+            {.move = wide(Face::R, 0, 0, 1), .size = 2, .text = "R"},
+            {.move = wide(Face::R, 1, 1, 1), .size = 2, .text = "2R"},
+            {.move = wide(Face::R, 0, 7, 3), .size = 9, .text = "8Rw'"},
+        },
+    };
     for (const auto& [move, size, text] : cases) {
         INFO("size " << size << " text " << text);
         CHECK(cube::nxn::to_string(move, size) == text);
     }
-    const std::vector<WideMove> sequence = {wide(Face::R, 0, 0, 1), wide(Face::U, 0, 0, 3),
-                                            wide(Face::R, 0, 1, 2), wide(Face::F, 2, 2, 1)};
+    const std::vector<WideMove> sequence = {
+        wide(Face::R, 0, 0, 1),
+        wide(Face::U, 0, 0, 3),
+        wide(Face::R, 0, 1, 2),
+        wide(Face::F, 2, 2, 1),
+    };
     CHECK(cube::nxn::to_string(std::span<const WideMove>{sequence}, 5) == "R U' Rw2 3F");
-    const std::vector<LayerMove> layers = {layer(Face::R, 0, 1), layer(Face::R, 1, 1),
-                                           layer(Face::U, 2, 3)};
+    const std::vector<LayerMove> layers = {
+        layer(Face::R, 0, 1),
+        layer(Face::R, 1, 1),
+        layer(Face::U, 2, 3),
+    };
     CHECK(cube::nxn::to_string(std::span<const LayerMove>{layers}, 5) == "R 2R 3U'");
 }
 

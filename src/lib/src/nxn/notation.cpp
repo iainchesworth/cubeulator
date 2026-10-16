@@ -251,7 +251,11 @@ struct Depths {
         return std::unexpected(depths.error());
     }
     return WideMove{
-        .face = letter->face, .first = depths->first, .last = depths->last, .turns = *turns};
+        .face = letter->face,
+        .first = depths->first,
+        .last = depths->last,
+        .turns = *turns,
+    };
 }
 
 [[nodiscard]] std::string_view turn_suffix(int turns) noexcept {
@@ -276,7 +280,11 @@ struct Depths {
         return WideMove{.face = face_on(axis, false), .first = lo, .last = hi, .turns = 4 - turns};
     }
     return WideMove{
-        .face = face_on(axis, true), .first = from_positive, .last = size - 1 - lo, .turns = turns};
+        .face = face_on(axis, true),
+        .first = from_positive,
+        .last = size - 1 - lo,
+        .turns = turns,
+    };
 }
 
 }  // namespace
