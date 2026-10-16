@@ -133,7 +133,8 @@
 
         // ?demo=<number> opens on the solve screen with a cube scrambled from
         // that seed and no camera (main.cpp's CUBE_SOLVE_DEMO), which is how to
-        // see the app without a camera; &move=<n> opens n moves in. Digits
+        // see the app without a camera; &move=<n> opens n moves in and
+        // &size=<n> makes it a cube of that side length, 2 to 9. Digits
         // only: these become environment variables of the program.
         const query = new URLSearchParams(window.location.search);
         const environment = {};
@@ -143,6 +144,10 @@
           const move = query.get('move');
           if (move !== null && /^[0-9]{1,3}$/.test(move)) {
             environment.CUBE_SOLVE_DEMO_MOVE = move;
+          }
+          const size = query.get('size');
+          if (size !== null && /^[0-9]$/.test(size)) {
+            environment.CUBE_SOLVE_DEMO_SIZE = size;
           }
         }
 

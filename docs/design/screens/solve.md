@@ -82,7 +82,7 @@ away.
 | part | component | string | objectName |
 |---|---|---|---|
 | Pause | icon button, pause icon | `solve.a11y.menu` | `solve.pause` |
-| Method | three buttons in a row, the chosen one primary; wide, a line under them says what it is | `solve.method.beginner`, `solve.method.intermediate`, `solve.method.advanced`, `solve.method.beginner.note`, `solve.method.intermediate.note`, `solve.method.advanced.note` | `solve.method` |
+| Method | three buttons in a row, the chosen one primary; wide, a line under them says what it is. On a cube bigger than 3x3 a line above them reads "Finish with" | `solve.method.beginner`, `solve.method.intermediate`, `solve.method.advanced`, `solve.method.beginner.note`, `solve.method.intermediate.note`, `solve.method.advanced.note`, `solve.method.finishWith` | `solve.method` |
 | Stage | eyebrow | `solve.stageOf`, `stage.1.title`, `stage.2.title`, `stage.3.title`, `stage.4.title`, `stage.5.title` | `solve.stage` |
 | Turn count | `numeral`. A screen reader that moves to it hears the fuller `solve.a11y.progress` | `solve.progress`, `solve.a11y.progress` | `solve.count` |
 | Progress | solve progress bar. Role: progress bar, value in turns | - | `solve.progress` |
@@ -92,6 +92,8 @@ away.
 | First-turn hint | A line on `accentTint` above the instruction | `solve.hint.touch`, `solve.hint.keys` | `solve.hint` |
 | Next turn | button, primary, giant | `solve.next`, `solve.finish` | `solve.next` |
 | Back one | button, secondary, giant | `solve.previous` | `solve.previous` |
+| Skip to the 3x3 | button, secondary, above the two buttons; wide, with a line under it. Only on a cube of 4 or more that has not reached its 3x3 stages | `solve.skipToCore`, `solve.skipToCore.note` | `solve.skip` |
+| Layer words | The move line of a layer inside a big cube, in words | `solve.move.layer`, `solve.move.layers` | `solve.move` |
 | Stage list | Five stage rows (expanded only) | `stage.*` | `solve.stages` |
 | Stage check | A panel on `accentTint` with a check, replacing the instruction | `solve.stageDone.title`, `solve.stageDone.check`, `solve.stageDone.next`, `stage.*` | `solve.stageCheck` |
 | Carry on | button, primary, giant | `common.carryOn` | `solve.carryOn` |

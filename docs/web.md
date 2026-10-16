@@ -13,7 +13,7 @@ the whole screen.
 
 No camera to hand? <a href="../app/?demo=7" target="_blank" rel="noopener">Open a
 scrambled cube</a> to see the solve screen, with a solution already worked
-out. Any number after `demo=` is a different scramble.
+out. Any number after `demo=` is a different scramble, and `&size=5` makes it a 5x5 (2 to 9).
 
 What the screens are and how to use them is in the [user guide](guide/index.md);
 this page is about running it in a browser.

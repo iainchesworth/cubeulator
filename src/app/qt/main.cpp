@@ -3,6 +3,7 @@
 #include "interfaces/crash_handler.hpp"
 #include "kit/bundled_fonts.hpp"
 
+#include <cube/nxn/cube.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/version.hpp>
@@ -12,6 +13,7 @@
 #include <QQuickWindow>
 #include <QSettings>
 
+#include <algorithm>
 #include <memory>
 
 namespace {
@@ -101,12 +103,21 @@ int main(int argc, char* argv[]) {
     // CUBE_SOLVE_DEMO=<number>: open on the solve screen with a cube
     // scrambled from that seed, no camera and no scan. For working on the
     // solve screen itself - trying how a move is shown does not need a real
-    // cube read first. CUBE_SOLVE_DEMO_MOVE=<n> opens it n moves in.
+    // cube read first. CUBE_SOLVE_DEMO_MOVE=<n> opens it n moves in, and
+    // CUBE_SOLVE_DEMO_SIZE=<n> makes it a cube of that side length, 2 to 9
+    // (3 unless said): the way to see a bigger cube without one in hand.
     bool demo = false;
     const unsigned demo_seed = qEnvironmentVariable("CUBE_SOLVE_DEMO").toUInt(&demo);
     if (demo) {
         const int moves_in = qEnvironmentVariable("CUBE_SOLVE_DEMO_MOVE").toInt();
-        solveController.solveCube(cube::solver::random_scramble(demo_seed));
+        const int demo_size = std::clamp(qEnvironmentVariable("CUBE_SOLVE_DEMO_SIZE", "3").toInt(),
+                                         cube::nxn::kMinSize, cube::nxn::kMaxSize);
+        if (demo_size == 3) {
+            solveController.solveCube(cube::solver::random_scramble(demo_seed));
+        } else {
+            solveController.solveCube(cube::nxn::random_scramble(
+                {.size = demo_size, .seed = demo_seed, .moves = 40 + (8 * demo_size)}));
+        }
         QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
         app_state->setProperty("solveCamera", false);
         auto show_when_solved = std::make_shared<QMetaObject::Connection>();
