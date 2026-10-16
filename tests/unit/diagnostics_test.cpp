@@ -9,6 +9,7 @@
 #include <cube/diagnostics/json.hpp>
 #include <cube/diagnostics/jsonl_file.hpp>
 #include <cube/diagnostics/record.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/recording_v2.hpp>
@@ -505,6 +506,22 @@ TEST_CASE("a cube's state is the manifest's 54-character string", "[diagnostics]
     const std::string turned_state = cube::vision::recording::state_string(turned);
     CHECK(turned_state != state);
     CHECK_FALSE(cube::vision::recording::state_string_problem(turned_state).has_value());
+}
+
+TEST_CASE("a bigger cube's state is the manifest's string at its size", "[diagnostics]") {
+    for (int size = cube::nxn::kMinSize; size <= cube::nxn::kMaxSize; ++size) {
+        CAPTURE(size);
+        const cube::nxn::NCube solved = *cube::nxn::NCube::solved(size);
+        const std::string state = cube::vision::recording::state_string(solved);
+        REQUIRE(state.size() == static_cast<std::size_t>(6 * size * size));
+        CHECK_FALSE(cube::vision::recording::state_string_problem(state, size).has_value());
+        CHECK(cube::diagnostics::cube_json(solved).dump() == "\"" + state + "\"");
+    }
+    // A 3x3 is written the same whichever way it is held.
+    const cube::solver::Cube cube3 =
+        cube::solver::Cube::solved().apply({.face = cube::solver::Face::R, .turns = 1});
+    CHECK(cube::diagnostics::cube_json(cube::nxn::NCube::from_cube3(cube3)).dump() ==
+          cube::diagnostics::cube_json(cube3).dump());
 }
 
 TEST_CASE("moves are written in standard notation", "[diagnostics]") {

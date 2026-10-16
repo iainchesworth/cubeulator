@@ -13,6 +13,7 @@
 #include "drawn_cube.hpp"
 
 #include <cube/diagnostics/json.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
 #include <cube/vision/direct_scan.hpp>
@@ -282,6 +283,7 @@ TEST_CASE("the solve is written when it lands and as it is stepped",
     CHECK(landed.value("total_moves").toInt() > 0);
     CHECK_FALSE(landed.value("moves").toString().isEmpty());
     CHECK(landed.value("move_index").toInt() == 0);
+    CHECK(landed.value("size").toInt() == 3);
     CHECK(landed.value("cube").toString().toStdString() ==
           cube::vision::recording::state_string(cube));
     CHECK_FALSE(landed.value("current_move").isNull());
@@ -290,6 +292,45 @@ TEST_CASE("the solve is written when it lands and as it is stepped",
     CHECK(stepped.value("move_index").toInt() == 1);
     CHECK(stepped.value("cube").toString().toStdString() !=
           cube::vision::recording::state_string(cube));
+}
+
+TEST_CASE("the solve of a bigger cube names its size and writes its state at that size",
+          "[qt][controllers][diagnostics]") {
+    const Scratch scratch;
+    REQUIRE(scratch.dir.isValid());
+    AppControllers controllers(scratch.path());
+    controllers.diagnostics.setEnabled(true);
+
+    const cube::nxn::NCube scrambled =
+        cube::nxn::random_scramble({.size = 5, .seed = 4, .moves = 80});
+    controllers.solve.solveCube(scrambled);
+    wait_for_solution(controllers);
+    controllers.solve.nextMove();
+
+    const auto solves = of_kind(records_in(scratch.file()), "solve");
+    REQUIRE_FALSE(solves.empty());
+    const QJsonObject landed = [&solves] {
+        for (const QJsonObject& record : solves) {
+            if (record.value("data").toObject().value("event").toString() == "solution") {
+                return record.value("data").toObject();
+            }
+        }
+        return QJsonObject{};
+    }();
+    REQUIRE_FALSE(landed.isEmpty());
+    const std::string started = cube::vision::recording::state_string(scrambled);
+    CHECK(landed.value("size").toInt() == 5);
+    CHECK(started.size() == 150);
+    CHECK(landed.value("cube").toString().toStdString() == started);
+    CHECK(landed.value("started_from").toString().toStdString() == started);
+    CHECK(landed.value("total_moves").toInt() > 0);
+    CHECK_FALSE(landed.value("moves").toString().isEmpty());
+    CHECK_FALSE(landed.value("current_move").isNull());
+
+    const QJsonObject stepped = solves.back().value("data").toObject();
+    CHECK(stepped.value("move_index").toInt() == 1);
+    CHECK(stepped.value("size").toInt() == 5);
+    CHECK(stepped.value("cube").toString().toStdString() != started);
 }
 
 TEST_CASE("a snapshot writes the whole scan and solve in one record, even with the channel off",

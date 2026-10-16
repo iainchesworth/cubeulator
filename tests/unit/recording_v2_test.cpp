@@ -4,8 +4,11 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "deterministic_rng.hpp"
 #include "jpeg_codec.hpp"
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/geometry.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/frame_recording.hpp>
 #include <cube/vision/recording_v2.hpp>
@@ -21,6 +24,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <random>
+#include <sstream>
 #include <string>
 #include "must_have.hpp"
 
@@ -133,6 +138,247 @@ TEST_CASE("manifest round-trips and refuses an invalid state", "[recording]") {
     Manifest bad = manifest;
     bad.state = std::string(54, 'U');
     CHECK(write_manifest(dir.string(), bad).has_value());
+}
+
+namespace {
+
+using cube::nxn::NCube;
+
+// A cube of `size` turned by `count` random layer turns that leave the middle
+// sticker of every side where it is, as a person holding the cube one way does:
+// the state string's convention puts the centres of an odd size in place.
+struct Scramble {
+    int size = 3;
+    std::uint32_t seed = 1;
+    int turns = 60;
+};
+
+NCube scrambled_nxn(const Scramble& scramble) {
+    const int size = scramble.size;
+    NCube cube = *NCube::solved(size);
+    auto rng = cube::test::deterministic_rng(scramble.seed);
+    constexpr std::array<cube::solver::Face, 6> kFaces = cube::solver::kAllFaces;
+    const int middle = size % 2 == 1 ? size / 2 : -1;
+    for (int i = 0; i < scramble.turns; ++i) {
+        const cube::solver::Face face = kFaces.at(rng() % kFaces.size());
+        const int depth = static_cast<int>(rng() % static_cast<std::uint32_t>(size));
+        if (depth == middle) {
+            continue;
+        }
+        const int turns = 1 + static_cast<int>(rng() % 3);
+        cube.apply(cube::nxn::LayerMove{.face = face, .depth = depth, .turns = turns});
+    }
+    return cube;
+}
+
+}  // namespace
+
+TEST_CASE("a cube of every size has a state string the oracle takes back", "[recording]") {
+    for (int size = cube::nxn::kMinSize; size <= cube::nxn::kMaxSize; ++size) {
+        CAPTURE(size);
+        const auto per_side = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+
+        const std::string solved = state_string(*NCube::solved(size));
+        CHECK(solved.size() == 6 * per_side);
+        // Each side solid, in the U R F D L B order.
+        CHECK(solved == std::string(per_side, 'U') + std::string(per_side, 'R') +
+                            std::string(per_side, 'F') + std::string(per_side, 'D') +
+                            std::string(per_side, 'L') + std::string(per_side, 'B'));
+        CHECK_FALSE(state_string_problem(solved, size).has_value());
+
+        for (std::uint32_t seed = 1; seed <= 6; ++seed) {
+            const NCube cube =
+                scrambled_nxn({.size = size, .seed = seed, .turns = 40 + (10 * size)});
+            const std::string state = state_string(cube);
+            CAPTURE(seed, state);
+            const auto problem = state_string_problem(state, size);
+            INFO(problem.value_or(""));
+            CHECK_FALSE(problem.has_value());
+            CHECK(state.size() == 6 * per_side);
+        }
+    }
+}
+
+TEST_CASE("a 3x3's state string is the one it always was", "[recording]") {
+    // The generic writer and the 3x3's own are one: same string, and the 3x3 is
+    // still judged by the solver's own oracle.
+    const auto scrambled = cube::solver::Cube::solved()
+                               .apply({.face = cube::solver::Face::R, .turns = 1})
+                               .apply({.face = cube::solver::Face::U, .turns = 3})
+                               .apply({.face = cube::solver::Face::F, .turns = 2});
+    CHECK(state_string(scrambled) == state_string(NCube::from_cube3(scrambled)));
+    CHECK(state_string(scrambled) == state_string_of(scrambled));
+    CHECK_FALSE(state_string_problem(state_string(scrambled), 3).has_value());
+    CHECK_FALSE(state_string_problem(state_string(scrambled)).has_value());
+}
+
+TEST_CASE("the oracle refuses a state that is not a cube of the size named", "[recording]") {
+    for (int size = cube::nxn::kMinSize; size <= cube::nxn::kMaxSize; ++size) {
+        CAPTURE(size);
+        const auto per_side = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+        const std::string solved = state_string(*NCube::solved(size));
+
+        // The wrong length for the size, however good the letters.
+        CHECK(state_string_problem(solved.substr(1), size).has_value());
+        CHECK(state_string_problem(solved + "U", size).has_value());
+        CHECK(state_string_problem(state_string(*NCube::solved(size == 9 ? 8 : size + 1)), size)
+                  .has_value());
+
+        // A letter that is not a side.
+        std::string bad_letter = solved;
+        bad_letter.at(0) = 'X';
+        CHECK(state_string_problem(bad_letter, size).has_value());
+
+        // Two stickers of different colours swapped: no corner, wing or edge of
+        // a cube shows what is left.
+        std::string swapped = solved;
+        std::swap(swapped.at(0), swapped.at(per_side));
+        CHECK(state_string_problem(swapped, size).has_value());
+
+        // A sticker changed to another colour: the counts no longer add up.
+        std::string miscounted = solved;
+        miscounted.at(0) = 'R';
+        CHECK(state_string_problem(miscounted, size).has_value());
+    }
+}
+
+TEST_CASE("an odd size's middle stickers are fixed by position like a 3x3's centres",
+          "[recording]") {
+    for (const int size : {5, 7, 9}) {
+        CAPTURE(size);
+        const auto n = static_cast<std::size_t>(size);
+        std::string state = state_string(*NCube::solved(size));
+        // The two stickers swapped are both middle ones, so the cube is still
+        // one with six colours of equal counts - but it is not held the way the
+        // format says.
+        std::swap(state.at((n / 2 * n) + (n / 2)), state.at((n * n) + (n / 2 * n) + (n / 2)));
+        const auto problem = state_string_problem(state, size);
+        const auto& problem_text = ::cube::test::must_have(problem);
+        CHECK(problem_text.contains("centre"));
+    }
+}
+
+TEST_CASE("a size outside 2 to 9 is no size", "[recording]") {
+    for (const int size : {-1, 0, 1, 10, 100}) {
+        CAPTURE(size);
+        const auto problem = state_string_problem(solved_state(), size);
+        const auto& problem_text = ::cube::test::must_have(problem);
+        CHECK(problem_text.contains("size"));
+    }
+}
+
+TEST_CASE("a manifest of a bigger cube keeps its size, a 3x3's manifest is unchanged",
+          "[recording]") {
+    const auto dir = fresh_dir("manifest-sizes");
+
+    SECTION("a 3x3 writes no size, so its file is the one it always was") {
+        Manifest manifest;
+        manifest.state = solved_state();
+        manifest.lighting = "lamp";
+        manifest.motion_script = "static";
+        manifest.camera = "unit-test";
+        manifest.cube = "imaginary";
+        REQUIRE_FALSE(write_manifest(dir.string(), manifest).has_value());
+        std::ifstream file(dir / std::string(kManifestName));
+        std::stringstream text;
+        text << file.rdbuf();
+        CHECK(text.str() ==
+              "{\n"
+              "  \"state\": \"UUUUUUUUURRRRRRRRRFFFFFFFFFDDDDDDDDDLLLLLLLLLBBBBBBBBB\",\n"
+              "  \"lighting\": \"lamp\",\n"
+              "  \"motion_script\": \"static\",\n"
+              "  \"camera\": \"unit-test\",\n"
+              "  \"intrinsics\": null,\n"
+              "  \"cube\": \"imaginary\"\n"
+              "}\n");
+        CHECK(::cube::test::must_have(read_manifest(dir.string())).size == 3);
+    }
+
+    SECTION("a manifest written before there was a size reads as a 3x3") {
+        {
+            std::ofstream file(dir / std::string(kManifestName));
+            file << R"({"state": ")" << kSolvedText << R"(", "cube": "old"})" << '\n';
+        }
+        const auto read_back = read_manifest(dir.string());
+        const auto& manifest = ::cube::test::must_have(read_back);
+        CHECK(manifest.size == 3);
+        CHECK(manifest.state == solved_state());
+    }
+
+    SECTION("any other size is written and read back, state and all") {
+        for (int size = cube::nxn::kMinSize; size <= cube::nxn::kMaxSize; ++size) {
+            CAPTURE(size);
+            Manifest manifest;
+            manifest.size = size;
+            manifest.state = state_string(scrambled_nxn({.size = size, .seed = 9, .turns = 60}));
+            manifest.cube = "a cube";
+            REQUIRE_FALSE(write_manifest(dir.string(), manifest).has_value());
+            const auto read_back = read_manifest(dir.string());
+            const auto& manifest_back = ::cube::test::must_have(read_back);
+            CHECK(manifest_back.size == size);
+            CHECK(manifest_back.state == manifest.state);
+            CHECK(manifest_back.cube == "a cube");
+        }
+    }
+
+    SECTION("a state of another size than the manifest names is refused") {
+        Manifest manifest;
+        manifest.size = 4;
+        manifest.state = solved_state();
+        CHECK(write_manifest(dir.string(), manifest).has_value());
+        manifest.size = 3;
+        manifest.state = state_string(*NCube::solved(4));
+        CHECK(write_manifest(dir.string(), manifest).has_value());
+    }
+
+    SECTION("an impossible state of a bigger cube is refused") {
+        Manifest manifest;
+        manifest.size = 4;
+        std::string state = state_string(*NCube::solved(4));
+        std::swap(state.at(0), state.at(16));
+        manifest.state = state;
+        CHECK(write_manifest(dir.string(), manifest).has_value());
+    }
+
+    SECTION("a size that is no size is refused, even with no state") {
+        Manifest manifest;
+        manifest.size = 12;
+        CHECK(write_manifest(dir.string(), manifest).has_value());
+    }
+}
+
+TEST_CASE("check_recording audits the state against the size the manifest names", "[recording]") {
+    CUBE_SKIP_WITHOUT_JPEG_CODEC();
+    const auto dir = fresh_dir("audit-size");
+    Manifest manifest;
+    manifest.size = 5;
+    manifest.state = state_string(scrambled_nxn({.size = 5, .seed = 3, .turns = 90}));
+    AsyncRecorder recorder;
+    REQUIRE_FALSE(recorder.start(dir.string(), manifest, false).has_value());
+    const cv::Mat frame(240, 320, CV_8UC3, cv::Scalar(9, 9, 9));
+    for (int i = 0; i < 3; ++i) {
+        recorder.push(frame, std::int64_t{100} * i);
+    }
+    (void)recorder.stop();
+    CHECK_FALSE(check_recording(dir.string()).has_value());
+
+    SECTION("a state of the wrong length for the size") {
+        {
+            std::ofstream file(dir / std::string(kManifestName), std::ios::trunc);
+            file << R"({"state": ")" << kSolvedText << R"(", "size": 5})" << '\n';
+        }
+        const auto problem = check_recording(dir.string());
+        CHECK(::cube::test::must_have(problem).contains("manifest state invalid"));
+    }
+
+    SECTION("a size that is no size") {
+        {
+            std::ofstream file(dir / std::string(kManifestName), std::ios::trunc);
+            file << R"({"size": 1})" << '\n';
+        }
+        const auto problem = check_recording(dir.string());
+        CHECK(::cube::test::must_have(problem).contains("manifest size invalid"));
+    }
 }
 
 TEST_CASE("analysis downscale matches the live contract", "[recording]") {
