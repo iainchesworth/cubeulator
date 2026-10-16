@@ -487,6 +487,15 @@ TEST_CASE("a cube of another size is listed with its size, reviewed and carried 
         CHECK(app.find_text(QStringLiteral("Unfinished · turn 2 of %1").arg(three_turns)) !=
               nullptr);
 
+        // Every row has its delete, which asks first; the safe choice leaves it be.
+        for (const char* row : {"history.delete1", "history.delete2", "history.delete3"}) {
+            app.click(row);
+            CHECK(app.find("history.deleteDialog") != nullptr);
+            app.click("history.deleteDialog.keep");
+            CHECK(app.find("history.deleteDialog") == nullptr);
+        }
+        CHECK(history.count() == 3);
+
         // The 4x4 opens its solution as it was kept: there at once, in the view
         // that draws a 4x4.
         app.click("history.row3");

@@ -18,11 +18,17 @@
 
 #include <QColor>
 #include <QCoreApplication>
+#include <QDir>
+#include <QElapsedTimer>
+#include <QEventLoop>
+#include <QImage>
 #include <QMetaObject>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQuickItem>
+#include <QQuickWindow>
 #include <QString>
+#include <QStringList>
 #include <QVariant>
 #include <QVariantList>
 #include <QVariantMap>
@@ -351,4 +357,62 @@ TEST_CASE("a 3x3 is reviewed in the 3x3's view with the rows it always had",
     for (const QVariant& entry : solver.moves()) {
         CHECK_FALSE(screen.line(entry.toMap()).contains("solution.layer"));
     }
+}
+
+// Pictures of the solution screen of a bigger cube, for looking at rather than for
+// checking. Hidden ("[.gallery]") and inert unless CUBE_GALLERY_DIR names a
+// directory: the real SolutionScreen in a real window, parked off-screen, saved as
+// it renders. One picture per run; CUBE_GALLERY_SHOT is "<size>-<where>", where
+// "<where>" is a position in the solution, or "inner" for the first turn of a layer
+// inside the cube.
+TEST_CASE("solution screen of a bigger cube gallery", "[.gallery]") {
+    const QString out = qEnvironmentVariable("CUBE_GALLERY_DIR");
+    if (out.isEmpty()) {
+        SKIP("set CUBE_GALLERY_DIR to a directory to write the pictures to");
+    }
+    REQUIRE(QDir().mkpath(out));
+    const QString wanted = qEnvironmentVariable("CUBE_GALLERY_SHOT", "5-0");
+    const QStringList parts = wanted.split(QLatin1Char('-'));
+    REQUIRE(parts.size() == 2);
+    const int size = parts.at(0).toInt();
+    SolveController& solver = solve_in_app(
+        cube::nxn::random_scramble({.size = size, .seed = 5, .moves = 40 + (8 * size)}));
+
+    QQuickWindow window;
+    window.setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::WindowDoesNotAcceptFocus);
+    window.setPosition(-4000, -4000);
+    QQmlComponent component(&cube::test::qml_engine());
+    component.loadFromModule("Cubeulator", "SolutionScreen");
+    std::unique_ptr<QQuickItem> screen(
+        qobject_cast<QQuickItem*>(component.beginCreate(cube::test::qml_engine().rootContext())));
+    if (screen == nullptr) {
+        FAIL(component.errorString().toStdString());
+    }
+    screen->setParentItem(window.contentItem());
+    component.completeCreate();
+    const int width = qEnvironmentVariable("CUBE_GALLERY_WIDTH", "900").toInt();
+    const int height = qEnvironmentVariable("CUBE_GALLERY_HEIGHT", "640").toInt();
+    screen->setWidth(width);
+    screen->setHeight(height);
+    window.resize(width, height);
+
+    int position = parts.at(1).toInt();
+    if (parts.at(1) == QLatin1String("inner")) {
+        const QVariantList moves = solver.moves();
+        position = 0;
+        while (position < moves.size() && moves.at(position).toMap().value("first").toInt() == 0) {
+            ++position;
+        }
+    }
+    REQUIRE(QMetaObject::invokeMethod(screen.get(), "jumpTo", Q_ARG(QVariant, position)));
+    window.show();
+    QElapsedTimer timer;
+    timer.start();
+    const int wait = qEnvironmentVariable("CUBE_GALLERY_WAIT_MS", "1500").toInt();
+    while (timer.elapsed() < wait) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    }
+    const QImage image = window.grabWindow();
+    REQUIRE_FALSE(image.isNull());
+    REQUIRE(image.save(QDir(out).filePath("solution-" + wanted + ".png")));
 }
