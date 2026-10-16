@@ -53,7 +53,7 @@ public:
     // By object name, in the objects the screen made and in the items a Repeater made,
     // which are visual children and not QObject children.
     [[nodiscard]] QObject* find(const char* name) const {
-        if (QObject* found = item_->findChild<QObject*>(QString::fromLatin1(name))) {
+        if (auto* found = item_->findChild<QObject*>(QString::fromLatin1(name))) {
             return found;
         }
         return find_visual(item_.get(), QString::fromLatin1(name));
@@ -96,6 +96,8 @@ struct HomeAgain {
     HomeAgain() = default;
     HomeAgain(const HomeAgain&) = delete;
     HomeAgain& operator=(const HomeAgain&) = delete;
+    HomeAgain(HomeAgain&&) = delete;
+    HomeAgain& operator=(HomeAgain&&) = delete;
     ~HomeAgain() {
         app_state().setProperty("screen", QStringLiteral("launch"));
         app_state().setProperty("solveCamera", true);
