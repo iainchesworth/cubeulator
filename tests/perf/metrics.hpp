@@ -37,6 +37,10 @@ struct Metric {
 [[nodiscard]] std::vector<Metric> intermediate_metrics();
 [[nodiscard]] std::vector<Metric> advanced_metrics();
 
+// The N x N solver over its corpus, for each size: moves per solve, and the
+// 3-cycles the size's library holds.
+[[nodiscard]] std::vector<Metric> nxn_metrics();
+
 // The reader's pixel buffers over synthetic frames.
 [[nodiscard]] std::vector<Metric> scan_metrics();
 
@@ -50,6 +54,8 @@ struct Metric {
 
 // Solving by each method, reading frames, and feeding and finishing a scan.
 [[nodiscard]] std::vector<Metric> solve_timing_metrics();
+// An N x N solve at the larger sizes.
+[[nodiscard]] std::vector<Metric> nxn_timing_metrics();
 [[nodiscard]] std::vector<Metric> read_timing_metrics();
 [[nodiscard]] std::vector<Metric> scan_timing_metrics();
 
