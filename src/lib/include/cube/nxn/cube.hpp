@@ -169,4 +169,9 @@ struct ScrambleSpec {
 // corners do not agree on a single scheme.
 [[nodiscard]] Result<std::array<Color, 6>> scheme_of(const NCube& cube);
 
+// The same for stickers not (yet) held in an NCube, numbered face * N^2 +
+// row * N + col. Also fails with invalid_cube_state when `size` is outside
+// [kMinSize, kMaxSize] or the stickers are not that many colours.
+[[nodiscard]] Result<std::array<Color, 6>> scheme_of(int size, std::span<const Color> facelets);
+
 }  // namespace cube::nxn

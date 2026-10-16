@@ -7,9 +7,9 @@
 > Nothing else in the app knows a cube can be another size: the screens, the
 > controllers, the history, the 3D view and the camera pipeline are all a 3x3.
 
-Written 2026-10-15. Status: **decisions accepted 2026-10-15; no phase
-started.** This is the basis for 0.2.0-beta.1 and begins once 0.1.0-beta.1 is
-out ([Release shape](#release-shape)).
+Written 2026-10-15. Status: **decisions accepted 2026-10-15; P0 started
+2026-10-16** ([Progress](#progress)). This is the basis for 0.2.0-beta.1 and
+began once 0.1.0-beta.1 was out ([Release shape](#release-shape)).
 
 This is the app half of the N x N work. The library half is done and described
 in [nxn-solver.md](nxn-solver.md); the camera half is described in
@@ -248,6 +248,21 @@ one by hand".
 | **P2 Scan odd sizes (5, 7)** | gate S0, then constants, colour resolution at N^2 per colour, assembly with the oracle, the steadiness gate in pitch units, N^2 dots on the scan screen, flats-only corner handling | at least 99% sticker accuracy on the corpus; false-accept rate measured; no regression on 3x3 |
 | **P3 Scan even sizes (2, 4, 6)** | corner-seeded clustering, scheme inference, white reference without a centre, 2x2 first | its own gate; may conclude that the review screen confirms the side colours |
 | **P4 Release** | budgets in CI; docs and the 25 guide screenshots; privacy wording ("54 colours" is no longer true); store text; accessibility (layer words, wide moves announced) | the beta checklist in [releasing.md](releasing.md) |
+
+### Progress
+
+Each slice is one pull request to `develop`, library first, with the screens on
+top. Updated as slices land.
+
+| slice | phase | state |
+|---|---|---|
+| Validity oracle `cube::nxn::validate` | P0 | in review (tested against the solver at 2..9 and against an enumeration of every 2x2) |
+| WCA notation: print and parse, round trip over every move of every size | P0 | not started |
+| Stepped plan over `NCube`/`LayerMove`; stage descriptors | P0 | not started |
+| History format v2 | P0 | not started |
+| N-generic test helpers; `size` in recordings and diagnostics | P0 | not started |
+| Budgets and measured phone/wasm timings | P0 | not started |
+| 3D layer-lift prototype, measured at 5x5, 7x7, 9x9 | P0 | not started |
 
 P0 and P1 are the milestone. A person can solve and learn any size from 2 to 5
 (then 7) from a hand-entered or demo cube; scanning arrives size by size.

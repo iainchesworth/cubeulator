@@ -33,6 +33,7 @@ per-size algorithm tables, and no parity algorithms.
 | Centre search | `src/nxn/centres.cpp` | Greedy search over short words for the centres stage |
 | Strategy | `strategy.hpp` | Stages as values; `default_strategy(size)`; target policies; parity handler |
 | Result | `solution.hpp` | `Step`, `Solution`, merging of turns |
+| Validity | `validate.hpp` | `validate()`: is this a cube a person could hold, and if not, why |
 
 ## The model
 
@@ -167,6 +168,72 @@ chosen: home, or - when the corners are an odd permutation away - two edges
 trade places, in whichever of four orientations makes `Cube::is_solvable()`
 true. That is the whole of "PLL parity". An odd size's middle edges fix the
 targets, and the cube is solvable or it is not.
+
+## Is this a cube?
+
+`validate(size, facelets)` (`validate.hpp`) answers the question the 3x3 answers
+with `Cube::is_solvable()`, for a cube of any size and from the stickers alone:
+could turns of layers have produced this? Hand entry, a scan's assembly and a
+history entry read back from disk all hold a facelet array and need to know, and
+if the answer is no, what to tell the person (`Verdict::fault`, with the kind of
+piece and one of its stickers to point at).
+
+The rules are the solver's, said once:
+
+* **The scheme is the cube's own.** An odd size names its six faces by the
+  middle stickers (six different colours); an even size by its corners
+  (`scheme_of`, the same function the solver's `FreeCentres` policy uses). Every
+  colour is renamed to the canonical scheme before the pieces are read, so a
+  cube coloured or held any way is judged as the cube it is. A cube cannot be
+  told apart from its mirror image by colours alone, and need not be: a cube
+  with blue and green swapped is a real cube in another scheme.
+* **Corners**: each of the eight real corners once, and the twists add up to a
+  multiple of three. A corner is read clockwise from the sticker on the up-down
+  axis, so a corner that is the *mirror image* of a real one is not a piece.
+* **Wings**: each ring's 24 once. A wing is the ordered pair of colours on its
+  primary and secondary stickers; there is nothing else to a wing, so there is
+  nothing to add up.
+* **Middle edges** (odd sizes): each of the twelve once, and the flips add up to
+  an even number, where flipped means the colour that ranks higher on the
+  up-down, front-back, left-right axes is not on the sticker that ranks higher.
+* **Centres**: every ring of centre stickers holds each colour equally often
+  (four times, for the rings of 24). Centres have no identity, so nothing else is
+  asked of them.
+* **Parity**, on an odd size only: the corners and the middle edges are permuted
+  with the same parity, the 3x3 rule. An even size has no middle edge to hold
+  the corners to, a quarter turn of an inner layer is odd on one wing ring alone,
+  and a centre ring's parity cannot be seen (two of the same colour can swap), so
+  no parity is asked at all.
+
+That is the whole of "reachable": any cube satisfying it is solved by the
+solvers above, and any cube they cannot solve fails it. The tests hold the two
+equal rather than argue it:
+
+* over scrambles of every size 2 to 9 (and every single turn of every layer),
+  every cube is valid, in any colouring and orientation;
+* over cubes damaged in ten ways by hand (stickers swapped anywhere or within a
+  ring, corners twisted or swapped, an edge flipped, wings and middle edges
+  traded, centres moved within and across rings), the verdict equals "the solver
+  solved it", at every size, with both answers common;
+* at size 2 the oracle is also held to an enumeration that shares nothing with
+  the solver: a breadth-first search over facelets reaches all 3,674,160
+  positions (fixing a corner), every one is accepted, and 60,000 damaged,
+  shuffled, relabelled and rotated cubes are accepted exactly when they are in
+  that set under some naming of the colours;
+* at size 3 it agrees with `Cube::is_solvable()` on every cube whose pieces are
+  real.
+
+**It is stricter than `Cube::is_solvable()`** in the one way a 3x3 can be: a
+corner that is the mirror image of a real one (two of its stickers swapped)
+passes `is_physically_valid()` and `is_solvable()`, which do not look at the
+chirality of a corner, and the solver then refuses it. About 0.5% of the damaged
+3x3s in the test are of this kind. The scan assembly leans on `is_solvable()`
+today; moving it to the oracle (phase P2 of [nxn-app-plan.md](nxn-app-plan.md))
+can only remove false accepts.
+
+It reads each sticker a constant number of times (no allocation after the size's
+tables are built, which `Geometry::of(size)` does once), so it is cheap enough
+to ask of the 4096 candidates of a scan's assembly.
 
 ## Strategy
 
