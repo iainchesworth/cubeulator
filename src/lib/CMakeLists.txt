@@ -75,6 +75,7 @@ target_sources(cube_lib
         src/nxn/two_by_two.cpp
         src/nxn/notation.cpp
         src/nxn/stepped_plan.cpp
+        src/nxn/outside_view.cpp
         src/nxn/validate.cpp
         src/vision/color_resolution.cpp
         src/vision/color_classification.cpp
