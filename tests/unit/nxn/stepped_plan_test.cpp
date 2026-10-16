@@ -301,3 +301,51 @@ TEST_CASE("every stage has a key, and the 3x3 solver's stages keep their numbers
         CHECK(static_cast<int>(cube::nxn::stage_id(step.stage)) == static_cast<int>(step.stage));
     }
 }
+
+TEST_CASE("a plan can be put at any position, and says where the 3x3's stages begin",
+          "[nxn][plan]") {
+    for (const int size : {2, 3, 4, 5, 7}) {
+        INFO("size " << size);
+        const auto [start, solution] = planned(size, 5U, SolveMethod::Beginner);
+        SteppedPlan plan = SteppedPlan::from(start, solution);
+
+        // Anywhere in the plan is the cube cached there; out of range is the nearest end.
+        for (const int index :
+             {0, 1, plan.move_count() / 2, plan.move_count() - 1, plan.move_count()}) {
+            plan.seek(index);
+            CHECK(plan.current_index() == index);
+            CHECK(plan.current_cube() == plan.cube_at(index));
+        }
+        plan.seek(-4);
+        CHECK(plan.at_start());
+        plan.seek(plan.move_count() + 9);
+        CHECK(plan.at_end());
+        plan.seek(plan.move_count() / 2);
+        plan.next();
+        CHECK(plan.current_index() == (plan.move_count() / 2) + 1);
+
+        // The core begins where the first of its stages does: at the start of a
+        // 3x3, which is the core alone, after the reduction of a bigger cube, and
+        // nowhere for a 2x2, which has none.
+        if (size == 3) {
+            CHECK(plan.core_start() == 0);
+        } else if (size == 2) {
+            CHECK(plan.core_start() == plan.move_count());
+        } else {
+            const int begins = plan.core_start();
+            CHECK(begins > 0);
+            CHECK(begins < plan.move_count());
+            // Everything before it is the reduction, and it is not yet a reduced cube
+            // until then: the state at that move is one the 3x3 stages start from.
+            for (const auto& span : plan.stage_ranges()) {
+                if (span.start_index < begins) {
+                    CHECK_FALSE(cube::nxn::is_core(span.id));
+                }
+            }
+            CHECK(plan.cube_at(begins).is_reduced());
+            CHECK_FALSE(plan.cube_at(0).is_reduced());
+            plan.seek(begins);
+            CHECK(cube::nxn::is_core(plan.current_stage()));
+        }
+    }
+}

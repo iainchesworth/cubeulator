@@ -106,12 +106,20 @@ SolveMethod to_solver_method(SolveController::Method method) {
 // QtConcurrent::run rather than the UI thread, so even those seconds never
 // affect app responsiveness.
 
+// How the moves of a solution are shown. A 3x3 and a 2x2 are shown as the
+// library has them, which is what they always were; a bigger cube's adjacent
+// layers turned the same way are one move, as a person would say it ("Rw") -
+// the layer turns are what the history keeps (docs/nxn-app-plan.md, "Notation").
+cube::nxn::Display display_for(int size) {
+    return size >= 4 ? cube::nxn::Display::Wide : cube::nxn::Display::Layers;
+}
+
 // Runs on a QtConcurrent worker thread, not the UI thread - see beginSolve().
 SteppedPlan solve_stepped(const NCube& scrambled, SolveMethod method) {
     CUBE_ZONE_SCOPED_N("app.solve_stepped");
     const auto solution = solve_held(scrambled, method);
     if (solution.has_value()) {
-        return SteppedPlan::from(scrambled, *solution);
+        return SteppedPlan::from(scrambled, *solution, display_for(scrambled.size()));
     }
     // Should not happen for a physically valid cube (every real cube
     // solves) - fall back to an already-solved, zero-move plan so the UI has
@@ -249,6 +257,8 @@ QVariantList SolveController::moves() const {
         moves.append(QVariantMap{
             {QStringLiteral("face"), face_letter(move.face)},
             {QStringLiteral("turns"), move.turns},
+            {QStringLiteral("first"), move.first},
+            {QStringLiteral("last"), move.last},
             {
                 QStringLiteral("notation"),
                 QString::fromStdString(cube::nxn::to_string(move, stepped_.size())),
@@ -274,6 +284,18 @@ QString SolveController::currentMoveFace() const {
 
 int SolveController::currentMoveTurns() const {
     return stepped_.at_end() ? 0 : stepped_.current_move().turns;
+}
+
+int SolveController::currentMoveFirst() const {
+    return stepped_.at_end() ? 0 : stepped_.current_move().first;
+}
+
+int SolveController::currentMoveLast() const {
+    return stepped_.at_end() ? 0 : stepped_.current_move().last;
+}
+
+int SolveController::size() const {
+    return stepped_.size();
 }
 
 int SolveController::moveIndex() const {
@@ -308,6 +330,14 @@ int SolveController::currentStageIndex() const {
                    : static_cast<int>(stepped_.stage_ranges().back().id);
     }
     return static_cast<int>(stepped_.current_stage());
+}
+
+int SolveController::coreStartIndex() const {
+    return stepped_.core_start();
+}
+
+bool SolveController::canSkipToCore() const {
+    return stepped_.size() >= 4 && stepped_.current_index() < stepped_.core_start();
 }
 
 bool SolveController::isSolving() const {
@@ -352,4 +382,19 @@ void SolveController::previousMove() {
     stepped_.previous();
     showCurrentCube();
     emit stateChanged();
+}
+
+void SolveController::goToMove(int index) {
+    if (isSolving_ || index == stepped_.current_index()) {
+        return;
+    }
+    stepped_.seek(index);
+    showCurrentCube();
+    emit stateChanged();
+}
+
+void SolveController::skipToCore() {
+    if (canSkipToCore()) {
+        goToMove(stepped_.core_start());
+    }
 }

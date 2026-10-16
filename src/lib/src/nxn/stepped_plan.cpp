@@ -70,4 +70,17 @@ void SteppedPlan::previous() noexcept {
     }
 }
 
+void SteppedPlan::seek(int index) noexcept {
+    index_ = std::clamp(index, 0, move_count());
+}
+
+int SteppedPlan::core_start() const noexcept {
+    for (const StageSpan& span : stage_ranges_) {
+        if (is_core(span.id)) {
+            return span.start_index;
+        }
+    }
+    return move_count();
+}
+
 }  // namespace cube::nxn
