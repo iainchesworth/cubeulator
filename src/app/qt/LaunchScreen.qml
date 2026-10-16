@@ -50,6 +50,12 @@ Rectangle {
             AppButton {
                 width: parent.width; height: 44
                 variant: "secondary"; block: true
+                objectName: "launch.other"; text: qsTrId("home.other"); trailingIcon: "chevron-right"
+                onClicked: AppState.openEntry()
+            }
+            AppButton {
+                width: parent.width; height: 44
+                variant: "secondary"; block: true
                 objectName: "launch.solveHistory"; text: qsTrId("home.history"); trailingIcon: "chevron-right"
                 onClicked: AppState.openHistory()
             }
@@ -131,7 +137,8 @@ Rectangle {
                     width: 340
                     wrapMode: Text.WordWrap
                 }
-                Row {
+                Flow {
+                    width: parent.width
                     spacing: Theme.space3
                     topPadding: Theme.space3
                     AppButton {
@@ -139,6 +146,7 @@ Rectangle {
                         objectName: "launch.startScan"; text: qsTrId("home.scan"); trailingIcon: "chevron-right"
                         onClicked: AppState.beginScan()
                     }
+                    AppButton { objectName: "launch.other"; height: 46; variant: "secondary"; text: qsTrId("home.other"); onClicked: AppState.openEntry() }
                     AppButton { objectName: "launch.solveHistory"; height: 46; variant: "secondary"; text: qsTrId("home.history"); onClicked: AppState.openHistory() }
                 }
             }

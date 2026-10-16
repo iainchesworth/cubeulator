@@ -177,6 +177,38 @@ set or changed here.
 
 With nothing changed, back and **Scan instead** leave at once.
 
+## A cube of another size
+
+Not part of the 3x3's journey, so it has no state of its own in
+`../journey.md`: the screen is reached from Home by **Another size of cube**
+(`home.other`), and it is how a cube that is not a 3x3 gets into the app
+until the camera reads one (`../../nxn-app-plan.md`, P2 and P3). One column,
+at most 640 wide, scrolling when the window is short:
+
+| part | component | string | objectName |
+|---|---|---|---|
+| Back | button, ghost, chevron | `common.back` | `entry.back` |
+| Title | heading | `entry.title` | `entry.title` |
+| Size | a row of buttons that wraps, the chosen one primary: 2×2, 3×3, 4×4, 5×5 | `entry.size.label`, `entry.size.option` | `entry.size.<n>` |
+| What the camera does at this size | one line under the sizes | `entry.size.camera`, `entry.size.noCamera` | `entry.size.note` |
+| The scramble | a multi-line box in the mono face, on `surface`, the border `accent` while it is wrong | `entry.scramble.label`, `entry.scramble.placeholder` | `entry.scramble` |
+| What a scramble looks like | one paragraph under the box, replaced by the fault while there is one | `entry.scramble.help` | `entry.scramble.help` |
+| What is wrong | the fault, in `accent`, and the move at fault selected in the box | `entry.error.unknownMove`, `entry.error.layer`, `entry.error.empty`, `entry.error.solved` | `entry.error` |
+| Solve | button, primary, block, trailing chevron. Control+Return in the box does the same | `entry.solve` | `entry.solve` |
+| Scan instead | button, secondary, block; only at 3×3 | `entry.scan` | `entry.scan` |
+
+**The size is chosen, never read off the scramble or the camera.** Sizes 2 to 5
+are offered; 6 and 7 follow once the 3D cube has been seen on a phone.
+
+**A scramble is notation** (`../../nxn-solver.md`, "Notation"): R, U', F2,
+2R, Rw, 3Rw, 2-3R, and x, y, z for the whole cube. The letters are not translated
+and a language does not change what is typed. A fault names the move at
+fault, which is selected in the box so that it can be typed over; nothing is
+started until the scramble is whole. A scramble that leaves the cube as it
+was is refused, because there is nothing to solve.
+
+**Solving** goes to the solve screen with no camera, as the demo does.
+
 ## Needs from the scan lane
 
 1. **Whether a hand-entered side can be in any rotation** (above).

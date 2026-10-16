@@ -3,6 +3,7 @@
 #include "solve_controller.hpp"
 
 #include <cube/nxn/cube.hpp>
+#include <cube/nxn/notation.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QCoreApplication>
@@ -444,4 +445,82 @@ TEST_CASE("a side is named by the colour the cube is meant to have there, at any
     for (const QString& side : colours.keys()) {
         CHECK(colours.value(side) == stickers.value(side).toList().at(12));  // the 5x5's middle
     }
+}
+
+TEST_CASE("a scramble in notation is solved at any size", "[qt][controllers]") {
+    SolveController controller;
+    struct Scramble {
+        int size;
+        const char* text;
+    };
+    for (const Scramble& scramble :
+         {Scramble{.size = 2, .text = "R U R' U' F2 R2"},
+          Scramble{.size = 3, .text = "R U R' U' L2 D F' B2"},
+          Scramble{.size = 4, .text = "R U 2R' Fw 3Fw' Uw2 L' D2 2-3B"},
+          Scramble{.size = 5, .text = "R U R' U' 2R F2 3Rw' 2-3L D2 Bw x"}}) {
+        INFO("size " << scramble.size << ": " << scramble.text);
+        const QVariantMap started =
+            controller.solveScramble(scramble.size, QString::fromLatin1(scramble.text));
+        REQUIRE(started.value("ok").toBool());
+        CHECK(started.value("moves").toInt() > 0);
+        CHECK(started.value("layerTurns").toInt() >= started.value("moves").toInt());
+        CHECK(controller.isSolving());
+        REQUIRE(wait_until_solved(controller));
+        CHECK(controller.size() == scramble.size);
+
+        // The cube it solves is the notation made of a solved cube.
+        auto expected = *cube::nxn::NCube::solved(scramble.size);
+        expected.apply(cube::nxn::layers_of(*cube::nxn::parse(scramble.text, scramble.size)));
+        CHECK(controller.plan().cube_at(0) == expected);
+        controller.goToMove(controller.totalMoves());
+        CHECK(controller.plan().current_cube().is_solved());
+    }
+}
+
+TEST_CASE("a scramble that is not one says why, where, and starts nothing", "[qt][controllers]") {
+    SolveController controller;
+    struct Refusal {
+        int size;
+        const char* text;
+        const char* error;
+        int offset;
+        const char* token;
+    };
+    for (const Refusal& refusal : {
+             Refusal{
+                 .size = 3, .text = "R U Q F", .error = "unknownMove", .offset = 4, .token = "Q"},
+             Refusal{
+                 .size = 3, .text = "R U F3", .error = "unknownMove", .offset = 4, .token = "F3"},
+             Refusal{.size = 4,
+                     .text = "R 5L U",
+                     .error = "layerOutOfRange",
+                     .offset = 2,
+                     .token = "5L"},
+             Refusal{.size = 3,
+                     .text = "R 4Rw",
+                     .error = "layerOutOfRange",
+                     .offset = 2,
+                     .token = "4Rw"},
+             Refusal{.size = 3, .text = "", .error = "empty", .offset = 0, .token = ""},
+             Refusal{.size = 3, .text = "   ", .error = "empty", .offset = 0, .token = ""},
+             Refusal{.size = 3, .text = "R R'", .error = "alreadySolved", .offset = 0, .token = ""},
+             Refusal{
+                 .size = 3, .text = "x y2 z'", .error = "alreadySolved", .offset = 0, .token = ""},
+             Refusal{.size = 1, .text = "R", .error = "unsupportedSize", .offset = 0, .token = ""},
+             Refusal{.size = 10, .text = "R", .error = "unsupportedSize", .offset = 0, .token = ""},
+         }) {
+        INFO("size " << refusal.size << ": '" << refusal.text << "'");
+        const QVariantMap result =
+            controller.solveScramble(refusal.size, QString::fromLatin1(refusal.text));
+        CHECK_FALSE(result.value("ok").toBool());
+        CHECK(result.value("error").toString() == QString::fromLatin1(refusal.error));
+        CHECK(result.value("offset").toInt() == refusal.offset);
+        CHECK(result.value("token").toString() == QString::fromLatin1(refusal.token));
+        CHECK_FALSE(controller.isSolving());
+    }
+    // Text that is not Latin-1 is no move, at its own place in the text.
+    const QVariantMap strange = controller.solveScramble(3, QString::fromUtf8("R U \u4e2d F"));
+    CHECK(strange.value("error").toString() == "unknownMove");
+    CHECK(strange.value("offset").toInt() == 4);
+    CHECK_FALSE(controller.isSolving());
 }

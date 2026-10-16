@@ -180,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-431 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+446 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -341,6 +341,7 @@ Review the solution.
 | `home.lede` | Show your cube to the camera, then follow one turn at a time until it is solved. | One sentence under the headline on the home screen. |
 | `home.scan` | Scan a cube | The main button. Starts the camera. |
 | `home.history` | History | Button. Opens the list of past solves. |
+| `home.other` | Another size of cube | Button on Home. Opens the screen for a cube the camera does not read: a different size, or a cube typed in as the scramble that mixed it up. |
 | `home.findingCamera` | Looking for a camera… | Shown briefly at start-up on a computer. |
 | `home.noCamera.title` | No camera found | Heading of a notice. |
 | `home.noCamera.body` | Plug one in and look again, or enter the colours by hand. | Body of the notice. |
@@ -352,6 +353,25 @@ Review the solution.
 | `home.discard.title` | Discard this solve? | Dialog title. |
 | `home.discard.body` | You would need to scan the cube again to solve it. | Dialog body. |
 | `home.discard.keep` | Keep it | Dialog button: the safe choice. |
+
+#### `entry`
+
+| key | English | note for translators |
+|---|---|---|
+| `entry.title` | Another cube | Title of the screen reached from Home by "Another size of cube". |
+| `entry.size.label` | Size | Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on. |
+| `entry.size.option` | %1×%1 | A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits. |
+| `entry.size.camera` | The camera reads a 3×3. Scan it, or type its scramble here. | Under the size buttons when 3×3 is chosen. |
+| `entry.size.noCamera` | The camera cannot read this size yet. Type its scramble here. | Under the size buttons when a size other than 3×3 is chosen. |
+| `entry.scramble.label` | Its scramble | Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it. |
+| `entry.scramble.placeholder` | Type or paste the moves, such as R U R' U' F2 2R Rw | Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated. |
+| `entry.scramble.help` | Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together. | Under the scramble box. The letters and marks are notation and stay as they are. |
+| `entry.solve` | Solve it | Main button of the screen for another size of cube. Works out the solution from the scramble. |
+| `entry.scan` | Scan it instead | Button shown when 3×3 is chosen. Goes to the camera. |
+| `entry.error.unknownMove` | ‘%1’ is not a move. Moves look like R, U', F2, 2R or Rw. | Shown under the scramble box when a word in it is not a move. %1 is that word. |
+| `entry.error.layer` | ‘%1’ turns a layer that a %2×%2 cube does not have. | Shown when a move names a layer the chosen size does not have, such as 5R on a 4×4. %1 is that move, %2 the size in the reader's own digits. |
+| `entry.error.empty` | Type the scramble first. | Shown when Solve it is pressed with nothing typed. |
+| `entry.error.solved` | Those moves leave the cube as it was. Type a scramble that mixes it up. | Shown when the scramble turns the cube back to solved, so there is nothing to solve. |
 
 #### `firstRun`
 
