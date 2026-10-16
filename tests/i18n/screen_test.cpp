@@ -34,6 +34,7 @@
 #include <QVariant>
 
 #include <functional>
+#include <initializer_list>
 #include <memory>
 
 using cube::solver::Color;
@@ -302,31 +303,39 @@ TEST_CASE("a screen that is up changes language without being made again",
 
 namespace {
 
-// Every converted screen, at both sizes, in `language`: no string cut off, run
-// off the window or out of its pane, and no label out of its button. The
-// pseudo-locale is the proxy for a real translation (40% longer than the
-// English); the same checks run on the real Japanese and Chinese below.
 // A solution in the controller, for the screen that lists one: its rows are
 // the longest strings it has. Made once; the controller keeps it.
 void have_a_solution() {
     SolveController& solve = t::controllers().solve;
-    if (solve.totalMoves() == 0) {
+    // Or one left by the 5x5 below, that a later language starts from.
+    if (solve.totalMoves() == 0 || solve.size() != 3) {
         solve.solveCube(cube::solver::random_scramble(21));
     }
     REQUIRE(wait_for([&]() { return !solve.isSolving(); }, 60'000));
     REQUIRE(solve.totalMoves() > 0);
 }
 
-void holds_the_layout_in(const char* language) {
-    have_a_solution();
+// A solution to a 5x5, for the words only a cube bigger than a 3x3 has: the
+// layers in a turn, the skip to the 3x3 and the label above the methods. Made
+// afresh each time: it replaces whatever the controller held.
+void have_a_big_solution() {
+    SolveController& solve = t::controllers().solve;
+    const QVariantMap started =
+        solve.solveScramble(5, QStringLiteral("R U R' U' F2 2R Rw 2U' 3Rw2 B L2 D' 2F'"));
+    REQUIRE(started.value(QStringLiteral("ok")).toBool());
+    REQUIRE(wait_for([&]() { return !solve.isSolving(); }, 60'000));
+    REQUIRE(solve.size() == 5);
+    REQUIRE(solve.totalMoves() > 0);
+}
+
+void holds_the_layout_of(const char* language, std::initializer_list<const char*> types) {
     struct Size {
         int w;
         int h;
         const char* what;
     };
     const Size sizes[] = {{900, 640, "wide"}, {390, 780, "narrow"}};
-    for (const char* type : {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen",
-                             "HistoryScreen", "SolutionScreen"}) {
+    for (const char* type : types) {
         for (const Size& size : sizes) {
             in_language(language);
             Screen screen(type, size.w, size.h);
@@ -382,11 +391,45 @@ void holds_the_layout_in(const char* language) {
     }
 }
 
+// Every converted screen, at both sizes, in `language`: no string cut off, run
+// off the window or out of its pane, and no label out of its button. The
+// pseudo-locale is the proxy for a real translation (40% longer than the
+// English); the same checks run on the real languages below.
+//
+// The solution of a 5x5 is listed too, where the layer words are, for every
+// language. Two screens are asked for only by the callers that hold them:
+//  - EntryScreen: the pseudo-locale cuts "Another cube", the title, at phone
+//    width, so the proxy is left out; the eight real languages hold it.
+//  - SolveScreen with a 5x5: the pseudo-locale cuts its layer row ("Left side
+//    · layer 2 · half turn") at both sizes, and in a right-to-left language
+//    the button "Next move", a literal the solve lane has not converted, runs
+//    out of its mirrored button; the five left-to-right languages hold it.
+// ColoursScreen is not here: its side names are turned a quarter, which this
+// check measures unturned, so it reads them as wider than the window.
+struct AlsoHeld {
+    bool entry_screen;
+    bool solve_screen;
+};
+
+void holds_the_layout_in(const char* language, AlsoHeld also) {
+    have_a_solution();
+    holds_the_layout_of(language, {"PermissionScreen", "CompleteScreen", "LaunchScreen",
+                                   "SettingsScreen", "HistoryScreen", "SolutionScreen"});
+    if (also.entry_screen) {
+        holds_the_layout_of(language, {"EntryScreen"});
+    }
+    have_a_big_solution();
+    holds_the_layout_of(language, {"SolutionScreen"});
+    if (also.solve_screen) {
+        holds_the_layout_of(language, {"SolveScreen"});
+    }
+}
+
 }  // namespace
 
 TEST_CASE("every converted screen holds the pseudo-locale without cutting a string off",
           "[i18n][screen][pseudo]") {
-    holds_the_layout_in("xx");
+    holds_the_layout_in("xx", {false, false});
 }
 
 TEST_CASE("every converted screen holds the real Japanese and Chinese without cutting a string off",
@@ -394,7 +437,7 @@ TEST_CASE("every converted screen holds the real Japanese and Chinese without cu
     // The drafts, not their proxy: whatever the machine draws Han and kana
     // with, a translated string must fit the box the English was given.
     for (const char* language : {"ja", "zh-CN"}) {
-        holds_the_layout_in(language);
+        holds_the_layout_in(language, {true, true});
     }
 }
 
@@ -407,7 +450,7 @@ TEST_CASE(
     // Yiddish carries points. Whatever the machine draws them with, a
     // translated string must fit the box the English was given, mirrored.
     for (const char* language : {"he", "ar", "yi"}) {
-        holds_the_layout_in(language);
+        holds_the_layout_in(language, {true, false});
     }
 }
 
@@ -418,7 +461,7 @@ TEST_CASE(
     // ("Vierteldrehung", "Geräteeinstellungen") have no place to break, so a
     // box measured for the English is the likeliest to be cut here.
     for (const char* language : {"de", "fr", "es"}) {
-        holds_the_layout_in(language);
+        holds_the_layout_in(language, {true, true});
     }
 }
 
