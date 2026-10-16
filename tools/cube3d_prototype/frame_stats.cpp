@@ -1,0 +1,160 @@
+#include "frame_stats.hpp"
+
+#include <QCoreApplication>
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QQuickWindow>
+#include <QTextStream>
+
+#include <algorithm>
+#include <numeric>
+
+#if defined(Q_OS_WIN)
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#else
+#include <sys/resource.h>
+#endif
+
+namespace cube3d {
+
+namespace {
+
+// The processor time the process has used so far, user and kernel, all threads.
+[[nodiscard]] double process_cpu_ms() {
+#if defined(Q_OS_WIN)
+    FILETIME created{};
+    FILETIME exited{};
+    FILETIME kernel{};
+    FILETIME user{};
+    GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user);
+    const auto ticks = [](const FILETIME& t) {
+        return static_cast<double>((static_cast<unsigned long long>(t.dwHighDateTime) << 32) |
+                                   t.dwLowDateTime);
+    };
+    return (ticks(kernel) + ticks(user)) / 10000.0;  // 100 ns ticks
+#else
+    rusage usage{};
+    getrusage(RUSAGE_SELF, &usage);
+    const auto ms = [](const timeval& t) {
+        return (static_cast<double>(t.tv_sec) * 1000.0) + (static_cast<double>(t.tv_usec) / 1000.0);
+    };
+    return ms(usage.ru_utime) + ms(usage.ru_stime);
+#endif
+}
+
+[[nodiscard]] double percentile(std::vector<double> values, double fraction) {
+    if (values.empty()) {
+        return 0.0;
+    }
+    std::ranges::sort(values);
+    const auto at = static_cast<std::size_t>(fraction * static_cast<double>(values.size() - 1));
+    return values.at(at);
+}
+
+}  // namespace
+
+FrameStats::FrameStats(QObject* parent) : QObject(parent) {
+    process_clock_.start();
+}
+
+void FrameStats::attach(QQuickWindow* window) {
+    window_ = window;
+    connect(window, &QQuickWindow::afterAnimating, this, [this] {
+        animated_clock_.start();
+        animated_ = true;
+    });
+    connect(window, &QQuickWindow::frameSwapped, this, [this] {
+        if (animated_ && !current_.isEmpty()) {
+            phases_[current_].frame_ms.push_back(static_cast<double>(animated_clock_.nsecsElapsed()) /
+                                                 1.0e6);
+        }
+        animated_ = false;
+        if (scene_ready_ms_ < 0.0) {
+            scene_ready_ms_ = static_cast<double>(process_clock_.nsecsElapsed()) / 1.0e6;
+            frame_clock_.start();
+            return;
+        }
+        const double ms = static_cast<double>(frame_clock_.nsecsElapsed()) / 1.0e6;
+        frame_clock_.start();
+        if (!current_.isEmpty()) {
+            phases_[current_].intervals_ms.push_back(ms);
+        }
+    });
+}
+
+void FrameStats::phase(const QString& name) {
+    const double cpu = process_cpu_ms();
+    if (!current_.isEmpty()) {
+        phases_[current_].cpu_ms += cpu - cpu_at_phase_start_ms_;
+    }
+    cpu_at_phase_start_ms_ = cpu;
+    current_ = name;
+    if (!name.isEmpty()) {
+        phases_[name];
+    }
+}
+
+double FrameStats::nowMicros() const {
+    return static_cast<double>(process_clock_.nsecsElapsed()) / 1000.0;
+}
+
+void FrameStats::tally(const QString& name, double micros) {
+    Tally& t = tallies_[name];
+    t.micros += micros;
+    t.worst = std::max(t.worst, micros);
+    ++t.count;
+}
+
+bool FrameStats::grab(const QString& path) {
+    return window_ != nullptr && window_->grabWindow().save(path);
+}
+
+void FrameStats::finish(const QVariantMap& facts) {
+    QJsonObject out = QJsonObject::fromVariantMap(facts);
+    out.insert(QStringLiteral("sceneReadyMs"), scene_ready_ms_);
+    for (const auto& [name, phase] : phases_) {
+        const auto& v = phase.intervals_ms;
+        QJsonObject p;
+        p.insert(QStringLiteral("frames"), static_cast<int>(v.size()));
+        if (!v.empty()) {
+            p.insert(QStringLiteral("meanMs"),
+                     std::accumulate(v.begin(), v.end(), 0.0) / static_cast<double>(v.size()));
+            p.insert(QStringLiteral("p50Ms"), percentile(v, 0.50));
+            p.insert(QStringLiteral("p95Ms"), percentile(v, 0.95));
+            p.insert(QStringLiteral("p99Ms"), percentile(v, 0.99));
+            p.insert(QStringLiteral("maxMs"), *std::ranges::max_element(v));
+            // What a frame costs the processor, whatever sets the pace.
+            p.insert(QStringLiteral("cpuMsPerFrame"), phase.cpu_ms / static_cast<double>(v.size()));
+        }
+        p.insert(QStringLiteral("cpuMs"), phase.cpu_ms);
+        const auto& f = phase.frame_ms;
+        if (!f.empty()) {
+            p.insert(QStringLiteral("syncRenderMeanMs"),
+                     std::accumulate(f.begin(), f.end(), 0.0) / static_cast<double>(f.size()));
+            p.insert(QStringLiteral("syncRenderP95Ms"), percentile(f, 0.95));
+            p.insert(QStringLiteral("syncRenderMaxMs"), *std::ranges::max_element(f));
+        }
+        out.insert(name, p);
+    }
+    for (const auto& [name, t] : tallies_) {
+        QJsonObject p;
+        p.insert(QStringLiteral("count"), t.count);
+        p.insert(QStringLiteral("meanMicros"), t.count > 0 ? t.micros / t.count : 0.0);
+        p.insert(QStringLiteral("worstMicros"), t.worst);
+        out.insert(name, p);
+    }
+    const QByteArray line = QJsonDocument(out).toJson(QJsonDocument::Compact);
+    QTextStream(stdout) << line << "\n";
+    if (!report_path_.isEmpty()) {
+        QFile file(report_path_);
+        if (file.open(QIODevice::Append)) {
+            file.write(line + "\n");
+        }
+    }
+    QCoreApplication::quit();
+}
+
+}  // namespace cube3d
