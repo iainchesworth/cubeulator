@@ -46,6 +46,28 @@ and 54 colours.
 - **Keep a history of solves** in Settings turns this off. Turning it off
   stops adding; it does not delete. **Clear history** deletes.
 
+### The file, and cubes of other sizes
+
+The cube is any size from 2x2 to 9x9 (`docs/nxn-app-plan.md`): its colours are
+written as 6 N^2 letters, face by face, and each is read back through the same
+check a scan's assembly uses (`cube::nxn::validate`), so a cube that turns
+could not have made is dropped with its entry, not handed to the solver.
+
+- The file is **version 1** for as long as every entry is a 3x3 with no kept
+  solution, which is byte for byte what the first release wrote, so an app that
+  goes back to it still reads it. An entry of another size carries a `size`, and
+  one with a kept solution a `moves` (the turns of single layers, in cubing
+  notation, `R 2R' U ...`); either makes the file **version 2**. A version 1
+  file is read as 3x3s. A file of a later version is set aside, as before.
+- A 3x3's solution is worked out again (it is the same for the same method). A
+  bigger cube's is **kept**, because the solver's answer for it improves from
+  one release to the next and a solve being carried on must not change under the
+  person doing it. A kept solution that does not solve its cube is discarded
+  and the entry stays.
+- A solution is at most 2000 turns (the biggest cube the library solves takes
+  about 740 on average, 766 the most seen); more is a damaged file. The first
+  release's limit was 400.
+
 ## Layout
 
 One column at every size, at most 640 wide, centred from medium up.

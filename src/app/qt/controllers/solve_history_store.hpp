@@ -1,6 +1,7 @@
 #pragma once
 
-#include <cube/solver/cube.hpp>
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/geometry.hpp>
 
 #include <QString>
 #include <QtGlobal>
@@ -14,23 +15,26 @@ namespace cube::app {
 // number of turns and the time taken.
 //
 // What is NOT here is any picture. A camera frame never reaches this type: the
-// only thing that does is the 54 colours the scan settled on. That is what lets
-// the privacy statement say that no picture is saved.
+// only thing that does is the colours the scan settled on (54 of them, for a
+// 3x3). That is what lets the privacy statement say that no picture is saved.
 //
-// The solution is not stored either; it is worked out again from the cube,
-// which gives the same answer for the same method - so the method is.
+// The cube is of any size. The solution of a 3x3 is not stored; it is worked
+// out again from the cube, which gives the same answer for the same method - so
+// the method is. A bigger cube's is stored (`moves`), because the solver's
+// answer for it improves from one release to the next and a solve being carried
+// on must not change under the person doing it.
 struct HistoryEntry {
     // Never reused while the entry exists; larger is newer.
     qint64 id = 0;
     // Milliseconds since the epoch (UTC) at which the first turn was advanced.
     qint64 startedMs = 0;
     // The cube as the scan read it. What the row's thumbnail is drawn from.
-    cube::solver::Cube scanned = cube::solver::Cube::solved();
+    cube::nxn::NCube scanned = *cube::nxn::NCube::solved(3);
     // The cube the solution in force starts from. The same as `scanned` until
     // the method is changed part-way through, which solves on from the cube in
     // hand: `turn` counts turns of THAT solution, so it is the cube to solve
     // again to find the place.
-    cube::solver::Cube from = cube::solver::Cube::solved();
+    cube::nxn::NCube from = *cube::nxn::NCube::solved(3);
     // SolveController::Method.
     int method = 0;
     // Turns taken, 0 to `turns`.
@@ -39,6 +43,10 @@ struct HistoryEntry {
     // The time the Complete screen shows: seconds from starting to scan.
     int seconds = 0;
     bool finished = false;
+    // The solution in force, as turns of single layers from `from`, when it is
+    // kept (a cube bigger than a 3x3). Empty when it is not: the solution is
+    // worked out again from `from`.
+    std::vector<cube::nxn::LayerMove> moves;
 };
 
 // The kept solves, in one file in the app's own data folder.
@@ -50,11 +58,17 @@ struct HistoryEntry {
 // written at once (QSaveFile: the old file stays whole until the new one is
 // complete), so a crash loses at most the turn being taken.
 //
-// Nothing here knows about the camera, the screen or the solver beyond Cube.
+// Nothing here knows about the camera, the screen or the solver beyond NCube.
+//
+// The file is version 1 for as long as every entry is a 3x3 with no kept
+// solution, which is the file the first release wrote, so that an app that
+// goes back to it still reads it. An entry of another size, or with a kept
+// solution, makes it version 2 (a "size" and a "moves" key on that entry); a
+// version 1 file is read as 3x3s.
 class SolveHistoryStore {
 public:
     static constexpr int kCapacity = 100;
-    static constexpr int kFormatVersion = 1;
+    static constexpr int kFormatVersion = 2;
 
     // Reads `file` if it is there. It need not exist, and nothing is created
     // until the first change.

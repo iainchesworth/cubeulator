@@ -191,6 +191,9 @@ public:
     // asks for.
     void resumeCube(const cube::solver::Cube& scanned, const cube::solver::Cube& from,
                     Method method, int turn);
+    // The same for a cube of any size.
+    void resumeCube(const cube::nxn::NCube& scanned, const cube::nxn::NCube& from, Method method,
+                    int turn);
 
 public slots:
     void nextMove();
