@@ -120,6 +120,29 @@ views' models) and 347 ms (332 of it creating pipelines).
 Tracy's `UI` and `Capture` frame sets record the same cadence but
 `tracy-csvexport` does not export frame times, so they are read in the GUI.
 
+### The 3D view of a cube of any size
+
+`CubeNView.qml` draws a cube that is not a 3x3 (`Cube3DView.qml` is the 3x3's and is
+unchanged). It is **three scene objects at every size**: the cube at rest is one
+mesh, and while layers turn it is two, the layers on a pivot and the rest, with solid
+plastic where they part (`cube::nxn::build_mesh`, `CubeNGeometry`). Nothing is built
+per cubie or bound per sticker, so a move costs the same at 2x2 and 9x9: picking
+layers up and putting them down is two or three mesh builds, 0.1 to 0.2 ms. A whole
+cube is 12 N^2 quads (108 at 3x3, 972 at 9x9).
+
+Measured in the prototype it came from (`tools/cube3d_prototype`, 2026-10-16, on the
+development machine, scene-graph work per frame, mean): 0.2 ms native and 0.4 ms in a
+browser at every size from 3x3 to 9x9, 60 fps throughout. The same cube built the way
+the 3x3's is, a model per cubie and a binding per sticker, costs 0.6 ms at 3x3 and 6.7
+ms at 9x9 natively and misses 60 fps in a browser from 7x7 (31 fps at 7x7, 20 at 9x9).
+**A phone has not been measured**; the estimate is a few times the desktop's figure,
+which a thousand quads leave far inside a frame.
+
+`tests/unit/nxn/mesh_test.cpp` holds the mesh to the library with no GPU (every
+sticker's quad is where the library says that sticker is; a lifted layer is the
+stickers its turn moves), and `tests/unit/cube_n_view_test.cpp` loads the view and
+reads every sticker back out of it at every size, after every kind of move.
+
 ### Startup
 
 From the start of `app.load_qml` to its end, four warm runs at High priority,

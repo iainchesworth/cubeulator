@@ -234,6 +234,47 @@ using Sides = std::array<std::vector<QColor>, 6>;
     return sides;
 }
 
+// A side of an N x N x N cube as someone looking straight at it from outside
+// sees it: N * N stickers, top-left first, row by row. On F, B, L and R the top
+// row is the one against U; on U it is the row against B; on D the row against F
+// (cube::solver::outside_view for a cube of any size). The cube's own layout is
+// this view on U, F and L, its left-right mirror on R and B, and its top-bottom
+// mirror on D. Restated here from the layout rather than borrowed from the
+// library, so that the view's reading of it is checked against something that
+// is not the view's own.
+[[nodiscard]] inline std::vector<solver::Color> outside_view_of(const nxn::NCube& cube,
+                                                                solver::Face face) {
+    const int size = cube.size();
+    std::vector<solver::Color> stickers;
+    stickers.reserve(static_cast<std::size_t>(size) * static_cast<std::size_t>(size));
+    for (int row = 0; row < size; ++row) {
+        for (int col = 0; col < size; ++col) {
+            const bool mirrored_across = face == solver::Face::R || face == solver::Face::B;
+            const bool mirrored_down = face == solver::Face::D;
+            stickers.push_back(cube.at(face, mirrored_down ? size - 1 - row : row,
+                                       mirrored_across ? size - 1 - col : col));
+        }
+    }
+    return stickers;
+}
+
+// The painting a screen hands to a cube view for `cube`: each side as seen from
+// outside, each colour drawn as `paint` gives it. A fresh JavaScript object on
+// every call (see painting() above).
+[[nodiscard]] inline QJSValue painting(QJSEngine& engine, const nxn::NCube& cube,
+                                       const std::function<QColor(solver::Color)>& paint) {
+    QJSValue sides = engine.newObject();
+    for (const solver::Face face : solver::kAllFaces) {
+        QJSValue colours = engine.newArray();
+        quint32 index = 0;
+        for (const solver::Color colour : outside_view_of(cube, face)) {
+            colours.setProperty(index++, paint(colour).name());
+        }
+        sides.setProperty(letter(face), colours);
+    }
+    return sides;
+}
+
 // True when the view shows `cube`, each colour drawn as `paint` gives it.
 [[nodiscard]] inline bool shows(QObject* view, const nxn::NCube& cube,
                                 const std::function<QColor(solver::Color)>& paint) {

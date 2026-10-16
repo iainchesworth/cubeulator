@@ -73,6 +73,7 @@ target_sources(cube_lib
         src/nxn/stages.cpp
         src/nxn/strategy.cpp
         src/nxn/two_by_two.cpp
+        src/nxn/mesh.cpp
         src/nxn/notation.cpp
         src/nxn/stepped_plan.cpp
         src/nxn/outside_view.cpp

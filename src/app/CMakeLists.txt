@@ -139,6 +139,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/Icon.qml
             qt/CubeView.qml
             qt/Cube3DView.qml
+            qt/CubeNView.qml
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/PermissionScreen.qml
@@ -156,6 +157,10 @@ if(CUBEULATOR_BUILD_APP)
             qt/CameraPermission.cpp
             qt/SystemTheme.hpp
             qt/SystemTheme.cpp
+            qt/CubeNModel.hpp
+            qt/CubeNModel.cpp
+            qt/CubeNGeometry.hpp
+            qt/CubeNGeometry.cpp
         RESOURCES
             qt/shaders/toon.frag
             qt/shaders/cel.frag
@@ -170,7 +175,7 @@ if(CUBEULATOR_BUILD_APP)
     # for CameraPermission's own QML_ELEMENT registration (SolveController
     # moved to cube_app_controllers - see the comment there - and no longer
     # needs anything from this target).
-    target_link_libraries(cube_app_qml PRIVATE cube::platform Qt6::Gui Qt6::Qml)
+    target_link_libraries(cube_app_qml PRIVATE cube::lib cube::platform Qt6::Gui Qt6::Qml Qt6::Quick3D)
 
     # The generated cube_app_qml_qmltyperegistrations.cpp includes
     # CameraPermission's QML_ELEMENT header via "#include <CameraPermission.hpp>"
