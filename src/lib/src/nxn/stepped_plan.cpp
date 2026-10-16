@@ -58,6 +58,20 @@ std::vector<LayerMove> SteppedPlan::layers_at(int index) const {
     return layers_of(moves_.at(static_cast<std::size_t>(index)));
 }
 
+Solution SteppedPlan::solution() const {
+    Solution out;
+    out.steps.reserve(stage_ranges_.size());
+    for (const StageSpan& span : stage_ranges_) {
+        Step step = step_of(span.id);
+        for (int i = span.start_index; i < span.end_index; ++i) {
+            const std::vector<LayerMove> turns = layers_at(i);
+            step.moves.insert(step.moves.end(), turns.begin(), turns.end());
+        }
+        out.steps.push_back(std::move(step));
+    }
+    return out;
+}
+
 void SteppedPlan::next() noexcept {
     if (!at_end()) {
         ++index_;

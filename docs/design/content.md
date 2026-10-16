@@ -180,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-457 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+460 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -593,6 +593,8 @@ Review the solution.
 | `solution.atStart` | The cube as it was scanned | Caption under the cube before the first turn. |
 | `solution.atEnd` | Solved | Caption under the cube after the last turn. |
 | `solution.stageTurns` | *one:* %n turn<br>*other:* %n turns | How many turns a stage has. |
+| `solution.layer` | layer %1 | A turn of a layer inside a cube bigger than 3x3, in a row of the list of turns, between the side and the direction ('Right side · layer 2 · upwards · quarter turn'). %1 is how far in the layer is, counted from the side, starting at 1 for the outer layer, in the reader's own digits. |
+| `solution.layers` | layers %1 to %2 | The same for several layers turned together. %1 and %2 are the nearest and the farthest layer, counted from the side as above. |
 | `solution.a11y.turn` | Turn %1. %2 | Screen-reader name of one row in the list. %2 is a turn sentence. |
 
 #### `history`
@@ -604,6 +606,7 @@ Review the solution.
 | `history.empty.body` | Cubes you solve are listed here, on this device only. | Body of the empty list. |
 | `history.item.done` | *one:* %n turn · %1<br>*other:* %n turns · %1 | One row. %1 is a duration such as 12:40. The dot is a separator. |
 | `history.item.unfinished` | Unfinished · turn %1 of %2 | One row, for a solve left part-way. |
+| `history.item.size` | %1×%1 · %2 | Start of one row for a cube that is not a 3x3: its size, as in 5×5 (%1 is the side length twice, in the reader's own digits), then the rest of the row (history.item.done or history.item.unfinished) as %2. |
 | `history.delete` | Delete | Button on one row. |
 | `history.clear` | Clear history | Button. Deletes every entry. |
 | `history.off.title` | History is off | Heading shown when the setting is off. |

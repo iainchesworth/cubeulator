@@ -48,6 +48,12 @@ is left, caption, buttons. Trailing: the list.
 - A turn row shows side, direction and amount on one line separated by
   dots ("Right · downwards · Quarter turn"). Its accessible name is the
   whole sentence (`solution.a11y.turn`).
+- On a cube bigger than a 3x3 a turn of a layer inside it, or of several
+  together, says which: "Right side · layer 2 · downwards · Quarter turn",
+  "Top · layers 1 to 2 · ...", counted from the side the move is named for
+  (`solution.layer`, `solution.layers`). A turn of the outer layer says
+  nothing more, so a 3x3's rows are as they were. The accessible name is the
+  parts joined by commas, where a side's own turn has a sentence of its own.
 - The selected row has `accentTint`, bold text and a 6 px `accent` bar at
   its leading edge. It is kept in view as the selection moves.
 - With **Show cube notation** on, each stage heading also carries the
@@ -117,6 +123,12 @@ what is not:
   `stickersAt(turn)` and a `solutionChanged` signal, and the date as the
   second argument of `openSolution(source, subtitle)`. The screen's header
   says the same.
+- **A cube of another size** is reviewed the same way: the cube is the view
+  that draws any size (`CubeNView`), the stages listed are the ones the cube
+  needed (a reduction with no parity to set up has no such stage), and each
+  side's swatch is the colour the side is named by (`sideColours` on the
+  source; a 3x3 reads it from its centre sticker). A source with no `size`
+  is a 3x3.
 - **Layout classes.** The app has two (`Theme.wideBreakpoint`, 720), not
   the three of `system.md`, so: one column under 720 wide, two panes from
   720 or when the window is under 480 high. Short and expanded are the

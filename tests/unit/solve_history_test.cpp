@@ -13,6 +13,8 @@
 
 #include <cube/nxn/cube.hpp>
 #include <cube/nxn/cube3.hpp>
+#include <cube/nxn/solution.hpp>
+#include <cube/nxn/stage.hpp>
 #include <cube/nxn/strategy.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
@@ -29,12 +31,15 @@
 #include <QTemporaryDir>
 #include <QVariantMap>
 
+#include <cstddef>
+#include <initializer_list>
 #include <memory>
 #include <set>
 #include <utility>
 #include <vector>
 
 using cube::app::HistoryEntry;
+using cube::app::KeptStage;
 using cube::app::SolveHistory;
 using cube::app::SolveHistoryStore;
 using cube::nxn::NCube;
@@ -636,14 +641,34 @@ namespace {
 // single layers: what an entry for a cube bigger than a 3x3 keeps.
 struct Big {
     NCube cube;
+    cube::nxn::Solution solution;
     std::vector<cube::nxn::LayerMove> moves;
+    std::vector<KeptStage> stages;
 };
 
-Big big_cube(int size, unsigned seed) {
+// The stages a solution has, in the form an entry keeps them.
+std::vector<KeptStage> stages_of(const cube::nxn::Solution& solution) {
+    std::vector<KeptStage> stages;
+    for (const cube::nxn::Step& step : solution.steps) {
+        stages.push_back({
+            .stage = static_cast<int>(cube::nxn::stage_id(step)),
+            .count = static_cast<int>(step.moves.size()),
+        });
+    }
+    return stages;
+}
+
+Big big_cube(int size, unsigned seed,
+             cube::solver::SolveMethod method = cube::solver::SolveMethod::Advanced) {
     NCube cube = cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 40 + (8 * size)});
-    const auto solution = cube::nxn::solve_held(cube, cube::solver::SolveMethod::Advanced);
+    const auto solution = cube::nxn::solve_held(cube, method);
     REQUIRE(solution.has_value());
-    return Big{.cube = std::move(cube), .moves = solution->moves()};
+    return Big{
+        .cube = std::move(cube),
+        .solution = *solution,
+        .moves = solution->moves(),
+        .stages = stages_of(*solution),
+    };
 }
 
 HistoryEntry make_big_entry(int size, unsigned seed) {
@@ -653,6 +678,7 @@ HistoryEntry make_big_entry(int size, unsigned seed) {
     entry.scanned = big.cube;
     entry.from = big.cube;
     entry.moves = big.moves;
+    entry.stages = big.stages;
     entry.method = 2;
     entry.turn = 5;
     entry.turns = static_cast<int>(big.moves.size());
@@ -723,6 +749,7 @@ TEST_CASE("a cube of another size is kept with its size and its solution", "[qt]
     CHECK(got->scanned == five.scanned);
     CHECK(got->from == five.from);
     CHECK(got->moves == five.moves);
+    CHECK(got->stages == five.stages);
     CHECK(got->turn == five.turn);
     CHECK(got->turns == five.turns);
 
@@ -865,4 +892,189 @@ TEST_CASE("the controller keeps the solution of a cube bigger than a 3x3, and no
     CHECK(three.value("size").toInt() == 3);
     CHECK(three.value("stickers").toList().size() == 9);
     CHECK(SolveHistoryStore(file).entries().front().moves.empty());
+}
+
+TEST_CASE("the stages of a kept solution are kept with it, and damaged ones spoil it",
+          "[qt][history]") {
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+    const HistoryEntry original = make_big_entry(4, 1);
+    REQUIRE(original.stages.size() >= 2);
+    {
+        SolveHistoryStore store(file);
+        store.add(original);
+    }
+    QJsonObject root = QJsonDocument::fromJson(read_all(file)).object();
+    QJsonArray entries = root.value("entries").toArray();
+    const QJsonObject good = entries.at(0).toObject();
+    // Stage and count, in turn, in one list.
+    REQUIRE(good.value("stages").isArray());
+    CHECK(good.value("stages").toArray().size() ==
+          static_cast<qsizetype>(2 * original.stages.size()));
+    CHECK(SolveHistoryStore(file).entries().front().stages == original.stages);
+
+    const auto with_stages = [&good](int id, const QJsonValue& stages) {
+        QJsonObject copy = good;
+        copy["id"] = id;
+        copy["stages"] = stages;
+        return copy;
+    };
+    const auto pairs = [](std::initializer_list<int> numbers) {
+        QJsonArray out;
+        for (const int number : numbers) {
+            out.append(number);
+        }
+        return out;
+    };
+    const int turns = static_cast<int>(original.moves.size());
+    // Kept without a word of stages: the turns are kept as they are.
+    QJsonObject none = good;
+    none["id"] = 20;
+    none.remove("stages");
+    entries.append(none);
+    // Each of these cannot be what was kept: an odd list; counts that do not add
+    // up to the turns; a stage there is none of; a count below nothing; not a list.
+    entries.append(with_stages(21, pairs({9, turns, 10})));
+    entries.append(with_stages(22, pairs({9, turns - 1})));
+    entries.append(with_stages(23, pairs({9, turns + 1})));
+    entries.append(with_stages(24, pairs({12, turns})));
+    entries.append(with_stages(25, pairs({9, -1, 10, turns + 1})));
+    entries.append(with_stages(26, QStringLiteral("9,5")));
+    root["entries"] = entries;
+    write_all(file, QJsonDocument(root).toJson());
+
+    const SolveHistoryStore store(file);
+    CHECK_FALSE(store.setAsideUnreadableFile());
+    REQUIRE(store.find(1) != nullptr);
+    CHECK(store.find(1)->stages == original.stages);
+    REQUIRE(store.find(20) != nullptr);
+    CHECK(store.find(20)->moves == original.moves);
+    CHECK(store.find(20)->stages.empty());
+    for (const int id : {21, 22, 23, 24, 25, 26}) {
+        INFO("entry " << id);
+        // The entry stays; the solution that cannot be trusted does not.
+        REQUIRE(store.find(id) != nullptr);
+        CHECK(store.find(id)->moves.empty());
+        CHECK(store.find(id)->stages.empty());
+        CHECK(store.find(id)->scanned == original.scanned);
+    }
+}
+
+TEST_CASE("a bigger cube's solve is carried on with the solution it had, not the one found today",
+          "[qt][history]") {
+    isolate_settings();
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+
+    // A solve of a 5x5 followed a few turns, with the layer-by-layer method.
+    const Big big = big_cube(5, 3, cube::solver::SolveMethod::Beginner);
+    {
+        SolveController solve;
+        SolveHistory history(solve, file);
+        solve.setMethod(SolveController::Beginner);
+        solve.solveCube(big.cube);
+        REQUIRE(wait_until_solved(solve));
+        for (int i = 0; i < 4; ++i) {
+            solve.nextMove();
+        }
+        REQUIRE(history.count() == 1);
+        const std::vector<KeptStage> stages = SolveHistoryStore(file).entries().front().stages;
+        // What was kept says where each stage is, and adds up to every turn.
+        REQUIRE_FALSE(stages.empty());
+        std::size_t counted = 0;
+        for (const KeptStage& stage : stages) {
+            counted += static_cast<std::size_t>(stage.count);
+        }
+        CHECK(counted == solve.plan().layer_turns().size());
+    }
+
+    // The solver improves: another solution to the same cube is what it would
+    // work out now. Kept in place of the first, it is the one to be followed.
+    const Big other = big_cube(5, 3, cube::solver::SolveMethod::Advanced);
+    REQUIRE(other.moves != big.moves);
+    {
+        SolveHistoryStore store(file);
+        HistoryEntry entry = store.entries().front();
+        entry.moves = other.moves;
+        entry.stages = other.stages;
+        REQUIRE(store.update(entry));
+    }
+
+    SolveController solve;
+    SolveHistory history(solve, file);
+    const qlonglong id = history.carryOnId();
+    REQUIRE(id != 0);
+    REQUIRE(history.resume(id));
+    // In place at once: no solve to wait for.
+    CHECK_FALSE(solve.isSolving());
+    CHECK(solve.size() == 5);
+    // The solution the controller follows is the kept one, as a bigger cube is
+    // followed: in wide moves.
+    CHECK(solve.plan().layer_turns() ==
+          cube::nxn::SteppedPlan::from(big.cube, other.solution, cube::nxn::Display::Wide)
+              .layer_turns());
+    CHECK(solve.plan().solution().moves() != big.solution.moves());
+    CHECK(solve.moveIndex() == 4);
+    NCube expected = big.cube;
+    for (int i = 0; i < 4; ++i) {
+        expected.apply(solve.plan().layers_at(i));
+    }
+    CHECK(solve.plan().current_cube() == expected);
+
+    // The stages are the ones kept, in order, and the moves add up.
+    const QVariantList ranges = solve.stageRanges();
+    REQUIRE(ranges.size() == static_cast<qsizetype>(other.stages.size()));
+    int end = 0;
+    for (qsizetype i = 0; i < ranges.size(); ++i) {
+        const QVariantMap range = ranges.at(i).toMap();
+        CHECK(range.value("stageIndex").toInt() ==
+              other.stages.at(static_cast<std::size_t>(i)).stage);
+        CHECK(range.value("startIndex").toInt() == end);
+        end = range.value("endIndex").toInt();
+    }
+    CHECK(end == solve.totalMoves());
+
+    // And it is the same entry that goes on being kept up to date.
+    solve.nextMove();
+    CHECK(history.count() == 1);
+    CHECK(history.entry(id).value("turn").toInt() == 5);
+}
+
+TEST_CASE("a bigger cube's entry is reviewed on the solution it kept, at once", "[qt][history]") {
+    isolate_settings();
+    QTemporaryDir dir;
+    SolveController solve;
+    SolveHistory history(solve, dir.filePath(QStringLiteral("h.json")));
+
+    const Big big = big_cube(4, 2);
+    solve.solveCube(big.cube);
+    REQUIRE(wait_until_solved(solve));
+    while (!solve.atEnd()) {
+        solve.nextMove();
+    }
+    history.finish();
+    const int turns = solve.totalMoves();
+    const qlonglong id = history.entries().first().toMap().value("id").toLongLong();
+
+    auto* review = qobject_cast<SolveController*>(history.reviewOf(id));
+    REQUIRE(review != nullptr);
+    REQUIRE(review != &solve);
+    // There when it is returned: nothing is worked out for it.
+    CHECK_FALSE(review->isSolving());
+    CHECK(review->size() == 4);
+    CHECK(review->totalMoves() == turns);
+    CHECK(review->plan().layer_turns() == solve.plan().layer_turns());
+    CHECK(review->moveIndex() == 0);
+    CHECK(review->plan().current_cube() == big.cube);
+    CHECK(review->stageRanges() == solve.stageRanges());
+
+    // A 3x3's is still worked out again.
+    solve_and_wait(solve, scrambled(30));
+    solve.nextMove();
+    const qlonglong three = history.entries().first().toMap().value("id").toLongLong();
+    auto* reviewed_three = qobject_cast<SolveController*>(history.reviewOf(three));
+    REQUIRE(reviewed_three != nullptr);
+    CHECK(reviewed_three->isSolving());
+    REQUIRE(wait_until_solved(*reviewed_three));
+    CHECK(reviewed_three->size() == 3);
 }

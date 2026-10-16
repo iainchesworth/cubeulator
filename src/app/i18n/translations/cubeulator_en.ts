@@ -1600,6 +1600,16 @@ In your hands.</translation>
             <numerusform>%Ln turns</numerusform>
         </translation>
     </message>
+    <message id="solution.layer">
+        <source>layer %1</source>
+        <extracomment>A turn of a layer inside a cube bigger than 3x3, in a row of the list of turns, between the side and the direction ('Right side · layer 2 · upwards · quarter turn'). %1 is how far in the layer is, counted from the side, starting at 1 for the outer layer, in the reader's own digits.</extracomment>
+        <translation>layer %1</translation>
+    </message>
+    <message id="solution.layers">
+        <source>layers %1 to %2</source>
+        <extracomment>The same for several layers turned together. %1 and %2 are the nearest and the farthest layer, counted from the side as above.</extracomment>
+        <translation>layers %1 to %2</translation>
+    </message>
     <message id="solution.a11y.turn">
         <source>Turn %1. %2</source>
         <extracomment>Screen-reader name of one row in the list. %2 is a turn sentence.</extracomment>
@@ -1632,6 +1642,11 @@ In your hands.</translation>
         <source>Unfinished · turn %1 of %2</source>
         <extracomment>One row, for a solve left part-way.</extracomment>
         <translation>Unfinished · turn %1 of %2</translation>
+    </message>
+    <message id="history.item.size">
+        <source>%1×%1 · %2</source>
+        <extracomment>Start of one row for a cube that is not a 3x3: its size, as in 5×5 (%1 is the side length twice, in the reader's own digits), then the rest of the row (history.item.done or history.item.unfinished) as %2.</extracomment>
+        <translation>%1×%1 · %2</translation>
     </message>
     <message id="history.delete">
         <source>Delete</source>

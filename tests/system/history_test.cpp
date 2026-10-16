@@ -17,6 +17,7 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QQuickItem>
@@ -40,6 +41,25 @@ using cube::systest::Layout;
 void keep_a_solve(App& app, unsigned seed, int turns, bool finish, int seconds) {
     auto& solve = app.runtime().solve();
     solve.solveCube(cube::systest::scramble(seed));
+    REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+    app.app_state().setProperty("elapsedSeconds", seconds);
+    for (int i = 0; i < turns; ++i) {
+        solve.nextMove();
+    }
+    if (finish) {
+        while (!solve.atEnd()) {
+            solve.nextMove();
+        }
+        app.go("complete");
+        app.go("launch");
+    }
+}
+
+// The same for a cube of another size, scrambled by layer turns.
+void keep_a_big_solve(App& app, int size, unsigned seed, int turns, bool finish, int seconds) {
+    auto& solve = app.runtime().solve();
+    solve.solveCube(
+        cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 40 + (8 * size)}));
     REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
     app.app_state().setProperty("elapsedSeconds", seconds);
     for (int i = 0; i < turns; ++i) {
@@ -433,4 +453,82 @@ TEST_CASE("back and Esc leave History, and close a dialog first", "[system][hist
     // Then Esc leaves.
     app.key(Qt::Key_Escape);
     CHECK(app.wait_for([&]() { return app.screen() == "launch"; }, 3000));
+}
+
+TEST_CASE("a cube of another size is listed with its size, reviewed and carried on as it was kept",
+          "[system][history]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        static_cast<void>(cube::systest::take_qml_warnings());
+        app.resize(size_for(layout));
+        auto& solve = app.runtime().solve();
+        auto& history = app.runtime().history();
+
+        // A finished 4x4, then a 3x3 and a 5x5 left part-way.
+        keep_a_big_solve(app, 4, 71, 0, true, 760);  // 12:40
+        const int four_turns = solve.totalMoves();
+        keep_a_solve(app, 35, 2, false, 90);
+        const int three_turns = solve.totalMoves();
+        keep_a_big_solve(app, 5, 72, 3, false, 125);
+        const int five_turns = solve.totalMoves();
+        const auto five_moves = solve.plan().layer_turns();
+        REQUIRE(history.count() == 3);
+
+        // Something else is in the controller, as after a restart.
+        solve.solveCube(cube::systest::scramble(99));
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+
+        open_history(app);
+        // A 3x3 says nothing of its size; the others do.
+        CHECK(app.find_text(QStringLiteral("5×5 · Unfinished · turn 3 of %1").arg(five_turns)) !=
+              nullptr);
+        CHECK(app.find_text(QStringLiteral("4×4 · %1 turns · 12:40").arg(four_turns)) != nullptr);
+        CHECK(app.find_text(QStringLiteral("Unfinished · turn 2 of %1").arg(three_turns)) !=
+              nullptr);
+
+        // The 4x4 opens its solution as it was kept: there at once, in the view
+        // that draws a 4x4.
+        app.click("history.row3");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        QObject* reviewed = qvariant_cast<QObject*>(app.app_state().property("solutionSource"));
+        REQUIRE(reviewed != nullptr);
+        CHECK_FALSE(reviewed->property("isSolving").toBool());
+        CHECK(reviewed->property("size").toInt() == 4);
+        CHECK(reviewed->property("totalMoves").toInt() == four_turns);
+        app.settle();
+        QQuickItem* cube = app.find("solution.cube");
+        REQUIRE(cube != nullptr);
+        CHECK(cube->property("cubeSize").toInt() == 4);
+        CHECK(app.find("solution.turn1") != nullptr);
+        CHECK(solve.size() == 3);  // the controller's own solve is untouched
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "history"; }));
+
+        // The 5x5 carries on from turn 3, on the solution it kept.
+        app.click("history.row1");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }));
+        CHECK_FALSE(solve.isSolving());
+        app.settle();
+        CHECK(solve.size() == 5);
+        CHECK(solve.moveIndex() == 3);
+        CHECK(solve.totalMoves() == five_turns);
+        CHECK(solve.plan().layer_turns() == five_moves);
+        QQuickItem* five = app.find("solve.cube");
+        REQUIRE(five != nullptr);
+        CHECK(five->property("cubeSize").toInt() == 5);
+        CHECK(app.find("solve.rescan") == nullptr);
+
+        // The next turn is the entry's next turn.
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return solve.moveIndex() == 4; }, 15'000));
+        CHECK(history.entries().first().toMap().value("turn").toInt() == 4);
+        CHECK(history.count() == 3);
+
+        const auto warnings = cube::systest::take_qml_warnings();
+        for (const auto& warning : warnings) {
+            UNSCOPED_INFO(warning.where.toStdString() << ": " << warning.message.toStdString());
+        }
+        CHECK(warnings.empty());
+    }
 }

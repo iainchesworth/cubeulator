@@ -5,12 +5,16 @@
 #include "solve_controller.hpp"
 
 #include <cube/nxn/outside_view.hpp>
+#include <cube/nxn/solution.hpp>
+#include <cube/nxn/stage.hpp>
 
 #include <QDateTime>
 #include <QDir>
 #include <QSettings>
 #include <QStandardPaths>
 
+#include <cstddef>
+#include <optional>
 #include <utility>
 
 namespace cube::app {
@@ -20,6 +24,32 @@ namespace {
 // Where the keep switch lives (docs/design/screens/settings.md, "Persistence").
 constexpr char kKeepKey[] = "history/keep";
 constexpr char kFileName[] = "solve-history.json";
+
+// The solution an entry kept, as a solution again: its turns cut into the
+// stages it says. Nothing for an entry that kept none, or kept turns without
+// saying which stages they are (those are worked out again, as a 3x3's are).
+[[nodiscard]] std::optional<cube::nxn::Solution> kept_solution(const HistoryEntry& entry) {
+    if (entry.moves.empty() || entry.stages.empty()) {
+        return std::nullopt;
+    }
+    cube::nxn::Solution solution;
+    std::size_t at = 0;
+    for (const KeptStage& kept : entry.stages) {
+        cube::nxn::Step step = cube::nxn::step_of(static_cast<cube::nxn::StageId>(kept.stage));
+        const std::size_t end = at + static_cast<std::size_t>(kept.count);
+        if (end > entry.moves.size()) {
+            return std::nullopt;
+        }
+        step.moves.assign(entry.moves.begin() + static_cast<std::ptrdiff_t>(at),
+                          entry.moves.begin() + static_cast<std::ptrdiff_t>(end));
+        solution.steps.push_back(std::move(step));
+        at = end;
+    }
+    if (at != entry.moves.size()) {
+        return std::nullopt;
+    }
+    return solution;
+}
 
 }  // namespace
 
@@ -166,8 +196,14 @@ QObject* SolveHistory::reviewOf(qlonglong id) {
     // solution, not the place the person got to. resumeCube() because it
     // solves exactly this cube with exactly this method and does not carry on
     // from anything the controller held before.
-    review_.resumeCube(kept->scanned, kept->scanned,
-                       static_cast<SolveController::Method>(kept->method), 0);
+    const auto method = static_cast<SolveController::Method>(kept->method);
+    // A bigger cube's solution is the one that was followed, not today's: it is
+    // there at once. A 3x3's is worked out again.
+    if (const auto solution = kept_solution(*kept); solution.has_value()) {
+        review_.resumeCube(kept->scanned, kept->from, method, 0, *solution);
+    } else {
+        review_.resumeCube(kept->scanned, kept->scanned, method, 0);
+    }
     return &review_;
 }
 
@@ -177,18 +213,32 @@ bool SolveHistory::resume(qlonglong id) {
         return false;
     }
     resuming_ = id;
-    solve_.resumeCube(kept->scanned, kept->from, static_cast<SolveController::Method>(kept->method),
-                      kept->turn);
+    const auto method = static_cast<SolveController::Method>(kept->method);
+    if (const auto solution = kept_solution(*kept); solution.has_value()) {
+        solve_.resumeCube(kept->scanned, kept->from, method, kept->turn, *solution);
+    } else {
+        solve_.resumeCube(kept->scanned, kept->from, method, kept->turn);
+    }
     return true;
 }
 
-std::vector<cube::nxn::LayerMove> SolveHistory::keptSolution() const {
+void SolveHistory::keepSolutionIn(HistoryEntry& entry) const {
+    entry.moves.clear();
+    entry.stages.clear();
     // A 3x3's solution is worked out again from its cube; a bigger cube's is
     // kept (see HistoryEntry).
     if (solve_.plan().size() == 3) {
-        return {};
+        return;
     }
-    return solve_.plan().layer_turns();
+    const cube::nxn::Solution solution = solve_.plan().solution();
+    entry.moves = solution.moves();
+    entry.stages.reserve(solution.steps.size());
+    for (const cube::nxn::Step& step : solution.steps) {
+        entry.stages.push_back({
+            .stage = static_cast<int>(cube::nxn::stage_id(step)),
+            .count = static_cast<int>(step.moves.size()),
+        });
+    }
 }
 
 void SolveHistory::onStateChanged() {
@@ -231,7 +281,7 @@ void SolveHistory::onStateChanged() {
     started.startedMs = QDateTime::currentMSecsSinceEpoch();
     started.scanned = *scanned;
     started.from = *from;
-    started.moves = keptSolution();
+    keepSolutionIn(started);
     started.method = static_cast<int>(solve_.method());
     started.turn = turn;
     started.turns = turns;
@@ -266,7 +316,7 @@ void SolveHistory::onSolutionChanged() {
     }
     HistoryEntry changed = *kept;
     changed.from = *solve_.solutionStartNCube();
-    changed.moves = keptSolution();
+    keepSolutionIn(changed);
     changed.method = static_cast<int>(solve_.method());
     changed.turn = solve_.moveIndex();
     changed.turns = solve_.totalMoves();

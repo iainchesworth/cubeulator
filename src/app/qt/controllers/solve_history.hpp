@@ -84,15 +84,20 @@ public:
     Q_INVOKABLE void finish();
     // What the solution screen reviews for an entry (AppState.openSolution):
     // the solution to the cube as scanned, worked out again with the method
-    // the solve was followed with. A solve controller of its own, so the solve
-    // being followed is not touched, shaped as the screen asks (moves,
-    // stageRanges, method, stickersAt, solutionChanged); the solution lands a
-    // moment later and the screen fills in when it has. The same object for
-    // every entry, replaced by the next call. Null for an id that is not there.
+    // the solve was followed with - or, for a cube bigger than a 3x3, the
+    // solution that was kept, which is in place when this returns (from the
+    // cube the solution in force started from, which is the cube as scanned
+    // unless the method was changed part-way). A solve controller of its own,
+    // so the solve being followed is not touched, shaped as the screen asks
+    // (size, sideColours, moves, stageRanges, method, stickersAt,
+    // solutionChanged); a solution worked out lands a moment later and the
+    // screen fills in when it has. The same object for every entry, replaced by
+    // the next call. Null for an id that is not there.
     Q_INVOKABLE QObject* reviewOf(qlonglong id);
     // Puts the newest unfinished solve back in the solve controller: its cube,
     // its method and the turn reached. The solution is worked out again from
-    // the cube, so the screen opens when it lands. False for any entry that is
+    // the cube, so the screen opens when it lands; a bigger cube's kept
+    // solution is put back as it was, at once. False for any entry that is
     // not the one that can be carried on.
     Q_INVOKABLE bool resume(qlonglong id);
 
@@ -105,9 +110,9 @@ private:
     void onStateChanged();
     void onSolutionChanged();
     [[nodiscard]] QVariantMap toMap(const HistoryEntry& entry, qint64 carry_on) const;
-    // The solution now in force as the turns to keep with an entry: none for a
-    // 3x3.
-    [[nodiscard]] std::vector<cube::nxn::LayerMove> keptSolution() const;
+    // Puts the solution now in force into an entry, as the turns and stages to
+    // keep: none for a 3x3.
+    void keepSolutionIn(HistoryEntry& entry) const;
 
     SolveController& solve_;
     SolveHistoryStore store_;

@@ -1,0 +1,1 @@
+**Review and History work for a cube of any size.** A solution to a 4×4 or 5×5 can be reviewed turn by turn on a cube drawn at its size, with the layer each turn moves named ("Right side · layer 2 · upwards"). History lists these solves with their size, keeps the solution you were following so a solve carried on later is the same one, and shows their front side at that size.
