@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <iterator>
 #include <optional>
 #include <random>
 #include <utility>
@@ -170,11 +171,18 @@ struct Display {
     return true;
 }
 
+// The sticker at `index`. The caller has checked the span is a cube's.
+[[nodiscard]] Color colour_at(std::span<const Color> facelets, std::size_t index) noexcept {
+    assert(index < facelets.size());
+    return *std::next(facelets.begin(), static_cast<std::ptrdiff_t>(index));
+}
+
 // The six face colours of an odd cube: those of its face centre cubies.
-[[nodiscard]] std::array<Color, 6> scheme_from_face_centres(const NCube& cube) {
+[[nodiscard]] std::array<Color, 6> scheme_from_face_centres(const Geometry& geometry,
+                                                            std::span<const Color> facelets) {
     std::array<Color, 6> scheme{};
     for (const Face face : kAllFaces) {
-        scheme.at(static_cast<std::size_t>(face)) = cube.facelet(cube.geometry().face_centre(face));
+        scheme.at(static_cast<std::size_t>(face)) = colour_at(facelets, geometry.face_centre(face));
     }
     return scheme;
 }
@@ -182,14 +190,15 @@ struct Display {
 // Which colours share a corner with which.
 using Adjacency = std::array<std::array<bool, kColorCount>, kColorCount>;
 
-[[nodiscard]] Adjacency corner_adjacency(const NCube& cube) {
+[[nodiscard]] Adjacency corner_adjacency(const Geometry& geometry,
+                                         std::span<const Color> facelets) {
     Adjacency adjacent{};
-    for (const auto& corner : cube.geometry().corners()) {
+    for (const auto& corner : geometry.corners()) {
         for (std::size_t a = 0; a < 3; ++a) {
             for (std::size_t b = 0; b < 3; ++b) {
                 if (a != b) {
-                    adjacent.at(slot_of(cube.facelet(corner.at(a))))
-                        .at(slot_of(cube.facelet(corner.at(b)))) = true;
+                    adjacent.at(slot_of(colour_at(facelets, corner.at(a))))
+                        .at(slot_of(colour_at(facelets, corner.at(b)))) = true;
                 }
             }
         }
@@ -198,12 +207,12 @@ using Adjacency = std::array<std::array<bool, kColorCount>, kColorCount>;
 }
 
 // The colours on the D, L and B stickers of the corner at down-back-left.
-[[nodiscard]] std::optional<std::array<Color, 3>> down_back_left(const NCube& cube) {
-    const Geometry& geometry = cube.geometry();
+[[nodiscard]] std::optional<std::array<Color, 3>> down_back_left(const Geometry& geometry,
+                                                                 std::span<const Color> facelets) {
     for (const auto& corner : geometry.corners()) {
         std::array<std::optional<Color>, 6> on_face{};
         for (const std::uint16_t f : corner) {
-            on_face.at(static_cast<std::size_t>(geometry.face_of(f))) = cube.facelet(f);
+            on_face.at(static_cast<std::size_t>(geometry.face_of(f))) = colour_at(facelets, f);
         }
         const auto d = on_face.at(static_cast<std::size_t>(Face::D));
         const auto l = on_face.at(static_cast<std::size_t>(Face::L));
@@ -233,12 +242,13 @@ using Adjacency = std::array<std::array<bool, kColorCount>, kColorCount>;
 // The six face colours of a cube with no face centres to ask, read off its
 // corners. Two colours are opposite exactly when no corner carries both, and
 // the corner at down-back-left fixes which of the six faces gets which colour.
-[[nodiscard]] Result<std::array<Color, 6>> scheme_from_corners(const NCube& cube) {
-    const auto dbl = down_back_left(cube);
+[[nodiscard]] Result<std::array<Color, 6>> scheme_from_corners(const Geometry& geometry,
+                                                               std::span<const Color> facelets) {
+    const auto dbl = down_back_left(geometry, facelets);
     if (!dbl) {
         return std::unexpected(CubeError::invalid_cube_state);
     }
-    const Adjacency adjacent = corner_adjacency(cube);
+    const Adjacency adjacent = corner_adjacency(geometry, facelets);
     const auto up = opposite_of(adjacent, dbl->at(0));
     const auto right = opposite_of(adjacent, dbl->at(1));
     const auto front = opposite_of(adjacent, dbl->at(2));
@@ -263,10 +273,23 @@ bool NCube::is_reduced() const noexcept {
 }
 
 Result<std::array<Color, 6>> scheme_of(const NCube& cube) {
-    const bool has_face_centres = cube.size() % 2 == 1 && cube.size() >= 3;
+    return scheme_of(cube.size(), cube.facelets());
+}
+
+Result<std::array<Color, 6>> scheme_of(int size, std::span<const Color> facelets) {
+    if (size < kMinSize || size > kMaxSize) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    const Geometry& geometry = Geometry::of(size);
+    if (facelets.size() != geometry.facelet_count() ||
+        std::ranges::any_of(facelets, [](Color c) { return slot_of(c) >= kColorCount; })) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    const bool has_face_centres = size % 2 == 1 && size >= 3;
     const Result<std::array<Color, 6>> scheme =
-        has_face_centres ? Result<std::array<Color, 6>>{scheme_from_face_centres(cube)}
-                         : scheme_from_corners(cube);
+        has_face_centres
+            ? Result<std::array<Color, 6>>{scheme_from_face_centres(geometry, facelets)}
+            : scheme_from_corners(geometry, facelets);
     if (!scheme) {
         return scheme;
     }
