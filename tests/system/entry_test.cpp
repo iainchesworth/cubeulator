@@ -13,10 +13,15 @@
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
 
+#include <cube/nxn/cube.hpp>
+#include <cube/solver/cube.hpp>
+
 #include <QQuickItem>
 #include <QString>
 
+#include <array>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -128,6 +133,90 @@ TEST_CASE("a scramble typed for a 5x5 is solved without the camera, and its redu
         CHECK(solve.plan().current_cube().is_reduced());
         app.pump(80);
         CHECK(app.find("solve.skip") == nullptr);
+
+        const auto warnings = cube::systest::take_qml_warnings();
+        for (const auto& warning : warnings) {
+            UNSCOPED_INFO(warning.where.toStdString() << ": " << warning.message.toStdString());
+        }
+        CHECK(warnings.empty());
+    }
+}
+
+TEST_CASE("a cube typed in colour by colour is painted, checked and solved", "[system][entry]") {
+    const Layout layout = GENERATE(Layout::wide, Layout::narrow);
+    DYNAMIC_SECTION("in the " << cube::systest::to_string(layout) << " layout") {
+        App& app = App::fresh();
+        static_cast<void>(cube::systest::take_qml_warnings());
+        app.resize(size_for(layout));
+        auto& solve = app.runtime().solve();
+        auto& colours = app.runtime().controllers().colours;
+
+        open_entry(app);
+        app.click("entry.size.4");
+        app.pump(40);
+        app.click("entry.colours");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "colours"; }));
+        app.pump(80);
+        CHECK(colours.size() == 4);
+        CHECK(app.layout() == layout);
+        // Wide, the cube is drawn beside the side being painted.
+        CHECK((app.find("colours.cube") != nullptr) == (layout == Layout::wide));
+
+        // Every side, every colour, and a sticker.
+        for (const char* side : {"U", "F", "R", "B", "L", "D"}) {
+            app.click(QString("colours.side.") + side);
+            app.pump(30);
+        }
+        for (const char* colour : {"0", "1", "2", "3", "4", "5", "-1", "2"}) {
+            app.click(QString("colours.colour.") + colour);
+        }
+        app.click("colours.grid");
+        app.pump(40);
+        CHECK(colours.touched());
+        app.click("colours.fillSide");
+        CHECK(colours.paintedOn("D") == 16);
+        app.click("colours.clearAll");
+        CHECK_FALSE(colours.touched());
+
+        // Leaving with colours entered asks first; keep editing, then discard.
+        colours.paint("U", 0, 1);
+        app.click("colours.back");
+        app.pump(80);
+        CHECK(app.screen() == "colours");
+        app.click("colours.discard.keep");
+        app.pump(80);
+        CHECK(colours.touched());
+        app.click("colours.back");
+        app.pump(80);
+        app.click("colours.discard.confirm");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "entry"; }));
+
+        // And a whole cube, said to be one, and solved with no camera.
+        app.click("entry.colours");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "colours"; }));
+        const cube::nxn::NCube cube =
+            cube::nxn::random_scramble({.size = 4, .seed = 5, .moves = 60});
+        constexpr std::array<const char*, 6> kLetters = {"U", "D", "L", "R", "F", "B"};
+        for (const cube::solver::Face face : cube::solver::kAllFaces) {
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    const bool across =
+                        face == cube::solver::Face::R || face == cube::solver::Face::B;
+                    const bool down = face == cube::solver::Face::D;
+                    colours.paint(QString::fromLatin1(kLetters.at(static_cast<std::size_t>(face))),
+                                  (row * 4) + col,
+                                  static_cast<int>(
+                                      cube.at(face, down ? 3 - row : row, across ? 3 - col : col)));
+                }
+            }
+        }
+        app.pump(80);
+        CHECK(colours.status().value("state").toString() == "valid");
+        app.click("colours.solve");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }));
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        CHECK(solve.size() == 4);
+        CHECK(solve.totalMoves() > 0);
 
         const auto warnings = cube::systest::take_qml_warnings();
         for (const auto& warning : warnings) {

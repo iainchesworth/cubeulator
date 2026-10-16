@@ -196,6 +196,7 @@ at most 640 wide, scrolling when the window is short:
 | What is wrong | the fault, in `accent`, and the move at fault selected in the box | `entry.error.unknownMove`, `entry.error.layer`, `entry.error.empty`, `entry.error.solved` | `entry.error` |
 | Solve | button, primary, block, trailing chevron. Control+Return in the box does the same | `entry.solve` | `entry.solve` |
 | Scan instead | button, secondary, block; only at 3×3 | `entry.scan` | `entry.scan` |
+| Enter the colours | button, secondary, block, trailing chevron. Opens the screen below at the size chosen | `common.enterByHand` | `entry.colours` |
 
 **The size is chosen, never read off the scramble or the camera.** Sizes 2 to 5
 are offered; 6 and 7 follow once the 3D cube has been seen on a phone.
@@ -208,6 +209,48 @@ started until the scramble is whole. A scramble that leaves the cube as it
 was is refused, because there is nothing to solve.
 
 **Solving** goes to the solve screen with no camera, as the demo does.
+
+#### Entering the colours of a cube of any size
+
+The hand entry above, built for any size, and the way a cube that is not a
+3x3 is entered when there is no scramble to hand. It differs from the 3x3
+sketch in how a side is named and held, because an even size has no centre
+sticker to name it by and a 5x5 has 150 stickers to set:
+
+- **The cube is held any way up and its sides are named for where they are**:
+  the side facing up is the top, the side facing the person the front. No colour
+  is given beforehand, not even a centre. Whichever six colours are there are the
+  cube's, and the library says whether they can be a cube's (`review.status.*`,
+  `review.fault.*`).
+- **One side at a time, as it looks from outside**, with the sides against its
+  four edges named round the grid, so which way up the grid goes is read off the
+  screen and not guessed. Wide, the cube is drawn beside it and turned to show the
+  side being painted, with the unpainted stickers grey.
+- **Paint, do not pick**: choose a colour once, then tap or drag over the
+  stickers that have it. A seventh swatch takes a colour away. **Fill this side**
+  paints the whole side, which is how a solved side is entered in one touch.
+- **What is wrong is said and pointed at**: too many or too few of a colour; or
+  every colour N × N times and still not a cube, with what is wrong with it and the
+  sticker of the piece at fault outlined. Solve is on only for a cube that is one.
+- **Leaving with colours entered asks first** (`review.discard.*`); **Scan
+  instead** is there at 3×3.
+
+| part | component | string | objectName |
+|---|---|---|---|
+| Back | button, ghost, chevron | `common.back` | `colours.back` |
+| Title | heading | `review.title.enter` | `colours.title` |
+| Clear all | button, ghost, at the trailing end of the bar | `review.clearAll` | `colours.clearAll` |
+| The cube | wide only; the unpainted stickers grey | - | `colours.cube` |
+| Instruction | `small`, `inkSecondary` | `review.intro.enterN` | `colours.intro` |
+| Side picker | six buttons in the order top, front, right, back, left, bottom; a tick when the side is full | `side.top`, `side.front`, `side.right`, `side.back`, `side.left`, `side.bottom`, `review.sidePicker` | `colours.side.<letter>` |
+| Edge names | the side against each edge of the grid, small, round it | `side.*` | `colours.edge.top`, `.right`, `.bottom`, `.left` |
+| The side | N × N stickers on `cubeBody`, tapped or dragged over. Each is a button named by `review.a11y.sticker` | `review.a11y.sticker`, `colour.unset` | `colours.grid`, `colours.sticker.<n>` |
+| Palette | six swatches and one that takes a colour away | `colour.white`, `colour.yellow`, `colour.green`, `colour.blue`, `colour.orange`, `colour.red`, `review.palette` | `colours.colour.<n>` |
+| Fill this side | button, ghost | `review.fillSide` | `colours.fillSide` |
+| Status | a headline and, when there is one, what is wrong | `review.status.emptyN`, `review.status.partial`, `review.status.miscount`, `review.status.miscountOver`, `review.status.miscountUnder`, `review.status.countItem`, `review.status.impossible`, `review.status.impossibleBody`, `review.status.valid`, `review.fault.noScheme`, `review.fault.centreColours`, `review.fault.unknownPiece`, `review.fault.repeatedPiece`, `review.fault.twistedCorner`, `review.fault.flippedEdge`, `review.fault.swappedPieces` | `colours.status` |
+| Solve | button, primary, block; on only for a cube that is one | `review.solve` | `colours.solve` |
+| Scan instead | button, secondary; only at 3×3 | `entry.scan` | `colours.scan` |
+| Discard dialog | dialog | `review.discard.title`, `review.discard.body`, `review.discard.keep`, `review.discard.confirm` | `colours.discard` |
 
 ## Needs from the scan lane
 

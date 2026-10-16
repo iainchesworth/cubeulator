@@ -1028,6 +1028,11 @@ En tus manos.</translation>
         <extracomment>Instruction at the top when checking a scan.</extracomment>
         <translation>Compara cada lado con tu cubo. Toca un color y luego toca cada pegatina que esté mal.</translation>
     </message>
+    <message id="review.intro.enterN">
+        <source>Hold your cube any way up. Call the side facing up the top and the side facing you the front. Pick a colour, then tap or drag over the stickers of that colour on the side shown. The sides named round it are the ones against its edges.</source>
+        <extracomment>Instruction at the top of entering a cube of any size by hand. Replaces review.intro.enter for a cube that has no centre sticker to name each side by.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="review.centre">
         <source>The centre never changes. It names the side.</source>
         <extracomment>Shown when the person taps a centre sticker, which cannot be edited.</extracomment>
@@ -1047,6 +1052,56 @@ En tus manos.</translation>
         <source>48 stickers to fill in</source>
         <extracomment>Status line before anything is entered. A cube has 54 stickers; the six centres are already set.</extracomment>
         <translation>48 pegatinas por rellenar</translation>
+    </message>
+    <message id="review.status.emptyN">
+        <source>%1 stickers to fill in</source>
+        <extracomment>Status line before anything is entered, for a cube of any size. %1 is how many stickers the cube has, in the reader's own digits.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.noScheme">
+        <source>These colours cannot be the six sides of one cube.</source>
+        <extracomment>Says what is wrong with colours that fit in no cube: two colours that belong on opposite sides sit next to each other.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.centreColours">
+        <source>The middle stickers of a side do not hold each colour equally often.</source>
+        <extracomment>Says what is wrong when the middle stickers of one side's ring have the wrong mix of colours.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.unknownPiece">
+        <source>A piece shows colours that no piece of a cube has.</source>
+        <extracomment>Says what is wrong when a corner or an edge has two colours that are never next to each other.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.repeatedPiece">
+        <source>Two pieces show the same colours, so another piece is missing.</source>
+        <extracomment>Says what is wrong when the same corner or edge is entered twice.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.twistedCorner">
+        <source>A corner looks turned in place.</source>
+        <extracomment>Says what is wrong when the corners are right but one is twisted.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.flippedEdge">
+        <source>An edge looks flipped.</source>
+        <extracomment>Says what is wrong when the edges are right but one has its two colours the wrong way round.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fault.swappedPieces">
+        <source>Two pieces look swapped.</source>
+        <extracomment>Says what is wrong when two pieces are in each other's places.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.clearAll">
+        <source>Clear all</source>
+        <extracomment>Button at the top of the hand-entry screen. Unsets every sticker of every side.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="review.fillSide">
+        <source>Fill this side</source>
+        <extracomment>Button under the colours on the hand-entry screen. Paints every sticker of the side being edited with the colour chosen.</extracomment>
+        <translation type="unfinished"></translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>

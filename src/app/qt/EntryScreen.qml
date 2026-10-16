@@ -16,7 +16,7 @@ Rectangle {
     readonly property bool wide: width >= Theme.wideBreakpoint
 
     readonly property var sizes: [2, 3, 4, 5]
-    property int size: 3
+    property int size: AppState.entrySize
     // What the last try said was wrong: the controller's answer, or null.
     property var problem: null
 
@@ -115,7 +115,7 @@ Rectangle {
                             variant: modelData === root.size ? "primary" : "secondary"
                             text: qsTrId("entry.size.option").arg(root.digits(modelData))
                             onClicked: {
-                                root.size = modelData;
+                                AppState.entrySize = modelData;
                                 root.problem = null;
                             }
                         }
@@ -209,6 +209,13 @@ Rectangle {
                     variant: "primary"; block: true
                     text: qsTrId("entry.solve"); trailingIcon: "chevron-right"
                     onClicked: root.solve()
+                }
+                AppButton {
+                    objectName: "entry.colours"
+                    width: parent.width; height: 44
+                    variant: "secondary"; block: true
+                    text: qsTrId("common.enterByHand"); trailingIcon: "chevron-right"
+                    onClicked: AppState.openColours(root.size)
                 }
                 AppButton {
                     objectName: "entry.scan"

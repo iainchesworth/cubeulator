@@ -29,6 +29,7 @@ const std::vector<ScreenDef>& screen_inventory() {
         {"settings", "SettingsScreen.qml", ""},
         {"history", "HistoryScreen.qml", ""},
         {"entry", "EntryScreen.qml", ""},
+        {"colours", "ColoursScreen.qml", ""},
         {"complete", "CompleteScreen.qml", ""},
         {"solution", "SolutionScreen.qml", ""},
     };
