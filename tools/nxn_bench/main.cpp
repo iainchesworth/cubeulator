@@ -151,6 +151,9 @@ int timing(int lo, int hi, int seeds) {
                 moves += solution->move_count();
             }
         }
+        if (times.empty()) {
+            continue;  // no seeds asked for: nothing to report
+        }
         std::ranges::sort(times);
         std::printf("%4d %12.1f %12.1f %12.1f %12.1f %8zu\n", n, prepare_ms,
                     times.at(times.size() / 2), times.back(), times.front(),

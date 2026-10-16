@@ -636,11 +636,13 @@ std::vector<Metric> nxn_timing_metrics() {
     // One seed, the same for each size; the size's setup is built first, the
     // way the app builds it while a person scans or enters a cube.
     constexpr unsigned kSeed = 1;
-    const std::array<std::pair<int, b::TimeBudget>, 3> sizes = {{
-        {5, b::kNxnSolveTime5},
-        {7, b::kNxnSolveTime7},
-        {9, b::kNxnSolveTime9},
-    }};
+    const std::array<std::pair<int, b::TimeBudget>, 3> sizes = {
+        {
+            {5, b::kNxnSolveTime5},
+            {7, b::kNxnSolveTime7},
+            {9, b::kNxnSolveTime9},
+        },
+    };
     solver::prepare(SolveMethod::Advanced);
     for (const auto& [size, limit] : sizes) {
         nxn::prepare(size, SolveMethod::Advanced);
