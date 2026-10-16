@@ -161,7 +161,7 @@ The prototype is the first thing built after the foundations, because decision
 view is now, on a phone-class GPU and in the browser, before any screen is
 rebuilt on it.
 
-**Result (2026-10-16, [tools/cube3d_prototype](../tools/cube3d_prototype/README.md)).**
+**Result (2026-10-16, [tools/cube3d_prototype](https://github.com/iainchesworthlabs/cubeulator/blob/main/tools/cube3d_prototype/README.md)).**
 Built and measured against the same view scaled up the way `Cube3DView.qml` would
 scale (one model per cubie and per sticker, a material bound to each). The lift
 renderer draws a cube of any size as three scene objects: on the development
