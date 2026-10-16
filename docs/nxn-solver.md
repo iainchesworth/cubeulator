@@ -2,8 +2,8 @@
 
 This is the design of `cube::nxn`, the library that solves a cube of any size
 from 2x2x2 up (tested to 9x9x9) and reuses the 3x3 solvers for the last
-stage. It is a spike: a library with tests and a benchmark, with no scanning,
-no UI and no notation for wide moves yet. Everything below is checked by
+stage. It is a library with tests and a benchmark, with no scanning and no UI
+for sizes above 3 yet. Everything below is checked by
 `tests/unit/nxn`; the numbers are from `cube_nxn_bench`.
 
 ## The idea in one paragraph
@@ -32,6 +32,7 @@ per-size algorithm tables, and no parity algorithms.
 | Commutator engine | `commutator.hpp` | `CycleLibrary` of pure 3-cycles; `arrange()` sorts by them (the edges stage) |
 | Centre search | `src/nxn/centres.cpp` | Greedy search over short words for the centres stage |
 | Strategy | `strategy.hpp` | Stages as values; `default_strategy(size)`; target policies; parity handler |
+| Notation | `notation.hpp` | WCA names for a layer turn: print, parse, and gathering turns into wide moves for display |
 | Result | `solution.hpp` | `Step`, `Solution`, merging of turns |
 
 ## The model
@@ -212,6 +213,41 @@ the same way and finishes with the beginner layer-by-layer, `Intermediate`
 with CFOP, `Advanced` with the two-phase search. The reduction does not depend
 on it.
 
+## Notation
+
+`notation.hpp` writes and reads the names a person uses for a turn of layers, at
+any size:
+
+| Text | Means |
+|---|---|
+| `R` `R'` `R2` | the outer layer of R, clockwise, counter-clockwise, a half turn (`R2'` reads as `R2`) |
+| `Rw` `3Rw` | the outer two (three) layers of R together; `r` is the older spelling of `Rw` |
+| `2R` `4L` | the second layer from R only; the fourth from L (counted from the face named) |
+| `2-3R` | layers 2 to 3 from R together |
+| `x` `y` `z` | the whole cube turned as R, U, F turn |
+
+`LayerMove` is one layer; a name can be several turned together, so notation is
+a `WideMove` (`face`, `first`, `last`, `turns`: a block of adjacent layers),
+and `layers_of()` is the layer turns the cube is moved by. `parse(text, size)`
+reads whitespace-separated moves and says where it stopped (`ParseFault`: the
+offset and length of the token, and whether it is not a move or names a layer
+the cube does not have). `to_string()` prints a block as one token; a block
+that is every layer of an axis is a rotation and prints as `x`/`y`/`z` named for
+the positive face, and parsing any other printed block gives back exactly that
+block. The tests print and read back every block of every size from 2 to 9.
+
+`group(moves, size)` is for display. In a run of turns about one axis (which
+commute) it gathers adjacent layers through the same angle into one block,
+spelled from the nearer end: `R 2R` on a 7x7 is `Rw`, `6R 7R` is `Lw'`. It
+cancels nothing and adds nothing, and keeps blocks in the order their first turn
+came in, so a run with nothing to gather is returned as it was. The number of
+blocks is the move count a person is shown (a wide move is one); what is stored
+and replayed is the layer turns, and a person who follows the grouped moves
+arrives where the originals arrive (checked over random runs at every size and
+over the library's own solutions). Not yet: the middle-slice letters `M` `E` `S`,
+which mean different layers at different sizes, and the words ("the second layer
+from the right") the screens will pair with the letters.
+
 ## One state concept, a virtual 3x3
 
 `FaceletState` says what a puzzle state is: an edge length (`puzzle_size`) and
@@ -299,7 +335,7 @@ size and per process.
   measured on a phone and they grow faster than N. Symmetry would cut them
   (build one cycle per rotation class and rotate), and they are built for the
   sizes asked for only.
-* **Scanning, wide-move notation, a UI.** None exist for sizes above 3.
+* **Scanning and a UI.** None exist for sizes above 3.
 * **A compiler other than g++-16 snapshot, MSVC and Clang 23** has not been
   built with; the platform legs (Android, macOS, web) need `<mdspan>`, which
   their libc++ has.
