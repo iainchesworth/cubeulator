@@ -7,9 +7,9 @@
 > Nothing else in the app knows a cube can be another size: the screens, the
 > controllers, the history, the 3D view and the camera pipeline are all a 3x3.
 
-Written 2026-10-15. Status: **decisions accepted 2026-10-15; no phase
-started.** This is the basis for 0.2.0-beta.1 and begins once 0.1.0-beta.1 is
-out ([Release shape](#release-shape)).
+Written 2026-10-15. Status: **decisions accepted 2026-10-15; P0 started
+2026-10-16** ([Progress](#progress)). This is the basis for 0.2.0-beta.1 and
+began once 0.1.0-beta.1 was out ([Release shape](#release-shape)).
 
 This is the app half of the N x N work. The library half is done and described
 in [nxn-solver.md](nxn-solver.md); the camera half is described in
@@ -161,6 +161,20 @@ The prototype is the first thing built after the foundations, because decision
 view is now, on a phone-class GPU and in the browser, before any screen is
 rebuilt on it.
 
+**Result (2026-10-16, [tools/cube3d_prototype](https://github.com/iainchesworthlabs/cubeulator/blob/main/tools/cube3d_prototype/README.md)).**
+Built and measured against the same view scaled up the way `Cube3DView.qml` would
+scale (one model per cubie and per sticker, a material bound to each). The lift
+renderer draws a cube of any size as three scene objects: on the development
+machine it costs 0.2 ms of scene-graph work a frame at every size from 3x3 to
+9x9, and in a browser (Edge, ANGLE D3D11, the same GPU) 0.4 ms and a steady 60
+fps at 9x9, with 0.1 to 0.2 ms to lift a layer and set it down. The naive view is
+9.8 ms a frame in the browser at 5x5, 30.6 at 7x7 (31 fps) and 47.8 at 9x9 (20
+fps). So the renderer is not what limits the size, and decision 4 stands: sizes 6
+and 7 clear the 3D gate, and 8 and 9 would on this evidence. **A phone has not run
+it**: the Android APK is built and `android_matrix.py` is the one command that
+measures it (needs a device); until it has, decision 3's phone half is an
+estimate (about 1 to 2 ms a frame, GPU not included).
+
 ### Screens and flow
 
 - **Size.** A choice before scanning or entry. It is chosen, never inferred
@@ -248,6 +262,21 @@ one by hand".
 | **P2 Scan odd sizes (5, 7)** | gate S0, then constants, colour resolution at N^2 per colour, assembly with the oracle, the steadiness gate in pitch units, N^2 dots on the scan screen, flats-only corner handling | at least 99% sticker accuracy on the corpus; false-accept rate measured; no regression on 3x3 |
 | **P3 Scan even sizes (2, 4, 6)** | corner-seeded clustering, scheme inference, white reference without a centre, 2x2 first | its own gate; may conclude that the review screen confirms the side colours |
 | **P4 Release** | budgets in CI; docs and the 25 guide screenshots; privacy wording ("54 colours" is no longer true); store text; accessibility (layer words, wide moves announced) | the beta checklist in [releasing.md](releasing.md) |
+
+### Progress
+
+Each slice is one pull request to `develop`, library first, with the screens on
+top. Updated as slices land.
+
+| slice | phase | state |
+|---|---|---|
+| Validity oracle `cube::nxn::validate` | P0 | in review (tested against the solver at 2..9 and against an enumeration of every 2x2) |
+| WCA notation: print and parse, round trip over every move of every size | P0 | not started |
+| Stepped plan over `NCube`/`LayerMove`; stage descriptors | P0 | not started |
+| History format v2 | P0 | not started |
+| N-generic test helpers; `size` in recordings and diagnostics | P0 | not started |
+| Budgets and measured phone/wasm timings | P0 | not started |
+| 3D layer-lift prototype, measured at 5x5, 7x7, 9x9 | P0 | not started |
 
 P0 and P1 are the milestone. A person can solve and learn any size from 2 to 5
 (then 7) from a hand-entered or demo cube; scanning arrives size by size.

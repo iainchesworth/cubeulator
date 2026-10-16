@@ -2,8 +2,8 @@
 
 This is the design of `cube::nxn`, the library that solves a cube of any size
 from 2x2x2 up (tested to 9x9x9) and reuses the 3x3 solvers for the last
-stage. It is a spike: a library with tests and a benchmark, with no scanning,
-no UI and no notation for wide moves yet. Everything below is checked by
+stage. It is a library with tests and a benchmark, with no scanning and no UI
+for sizes above 3 yet. Everything below is checked by
 `tests/unit/nxn`; the numbers are from `cube_nxn_bench`.
 
 ## The idea in one paragraph
@@ -32,7 +32,10 @@ per-size algorithm tables, and no parity algorithms.
 | Commutator engine | `commutator.hpp` | `CycleLibrary` of pure 3-cycles; `arrange()` sorts by them (the edges stage) |
 | Centre search | `src/nxn/centres.cpp` | Greedy search over short words for the centres stage |
 | Strategy | `strategy.hpp` | Stages as values; `default_strategy(size)`; target policies; parity handler |
+| Notation | `notation.hpp` | WCA names for a layer turn: print, parse, and gathering turns into wide moves for display |
+| Stepping | `stepped_plan.hpp`, `stage.hpp` | `SteppedPlan`: a solution to follow one move at a time, with the cube at every position; `StageId`: the stage a person is told about |
 | Result | `solution.hpp` | `Step`, `Solution`, merging of turns |
+| Validity | `validate.hpp` | `validate()`: is this a cube a person could hold, and if not, why |
 
 ## The model
 
@@ -168,6 +171,72 @@ trade places, in whichever of four orientations makes `Cube::is_solvable()`
 true. That is the whole of "PLL parity". An odd size's middle edges fix the
 targets, and the cube is solvable or it is not.
 
+## Is this a cube?
+
+`validate(size, facelets)` (`validate.hpp`) answers the question the 3x3 answers
+with `Cube::is_solvable()`, for a cube of any size and from the stickers alone:
+could turns of layers have produced this? Hand entry, a scan's assembly and a
+history entry read back from disk all hold a facelet array and need to know, and
+if the answer is no, what to tell the person (`Verdict::fault`, with the kind of
+piece and one of its stickers to point at).
+
+The rules are the solver's, said once:
+
+* **The scheme is the cube's own.** An odd size names its six faces by the
+  middle stickers (six different colours); an even size by its corners
+  (`scheme_of`, the same function the solver's `FreeCentres` policy uses). Every
+  colour is renamed to the canonical scheme before the pieces are read, so a
+  cube coloured or held any way is judged as the cube it is. A cube cannot be
+  told apart from its mirror image by colours alone, and need not be: a cube
+  with blue and green swapped is a real cube in another scheme.
+* **Corners**: each of the eight real corners once, and the twists add up to a
+  multiple of three. A corner is read clockwise from the sticker on the up-down
+  axis, so a corner that is the *mirror image* of a real one is not a piece.
+* **Wings**: each ring's 24 once. A wing is the ordered pair of colours on its
+  primary and secondary stickers; there is nothing else to a wing, so there is
+  nothing to add up.
+* **Middle edges** (odd sizes): each of the twelve once, and the flips add up to
+  an even number, where flipped means the colour that ranks higher on the
+  up-down, front-back, left-right axes is not on the sticker that ranks higher.
+* **Centres**: every ring of centre stickers holds each colour equally often
+  (four times, for the rings of 24). Centres have no identity, so nothing else is
+  asked of them.
+* **Parity**, on an odd size only: the corners and the middle edges are permuted
+  with the same parity, the 3x3 rule. An even size has no middle edge to hold
+  the corners to, a quarter turn of an inner layer is odd on one wing ring alone,
+  and a centre ring's parity cannot be seen (two of the same colour can swap), so
+  no parity is asked at all.
+
+That is the whole of "reachable": any cube satisfying it is solved by the
+solvers above, and any cube they cannot solve fails it. The tests hold the two
+equal rather than argue it:
+
+* over scrambles of every size 2 to 9 (and every single turn of every layer),
+  every cube is valid, in any colouring and orientation;
+* over cubes damaged in ten ways by hand (stickers swapped anywhere or within a
+  ring, corners twisted or swapped, an edge flipped, wings and middle edges
+  traded, centres moved within and across rings), the verdict equals "the solver
+  solved it", at every size, with both answers common;
+* at size 2 the oracle is also held to an enumeration that shares nothing with
+  the solver: a breadth-first search over facelets reaches all 3,674,160
+  positions (fixing a corner), every one is accepted, and 60,000 damaged,
+  shuffled, relabelled and rotated cubes are accepted exactly when they are in
+  that set under some naming of the colours;
+* at size 3 it agrees with `Cube::is_solvable()` on every cube whose pieces are
+  real.
+
+**It is stricter than `Cube::is_solvable()`** in the one way a 3x3 can be: a
+corner that is the mirror image of a real one (two of its stickers swapped)
+passes `is_physically_valid()` and `is_solvable()`, which do not look at the
+chirality of a corner, and the solver then refuses it. About 0.5% of the damaged
+3x3s in the test are of this kind. The scan assembly leans on `is_solvable()`
+today; moving it to the oracle (phase P2 of [nxn-app-plan.md](nxn-app-plan.md))
+can only remove false accepts.
+
+It reads each sticker a constant number of times (no allocation after the size's
+tables are built, which `Geometry::of(size)` does once), so it is cheap enough
+to ask of the 4096 candidates of a scan's assembly.
+
 ## Strategy
 
 ```
@@ -211,6 +280,72 @@ The core method is the caller's: `solve(cube, SolveMethod::Beginner)` reduces
 the same way and finishes with the beginner layer-by-layer, `Intermediate`
 with CFOP, `Advanced` with the two-phase search. The reduction does not depend
 on it.
+
+## Notation
+
+`notation.hpp` writes and reads the names a person uses for a turn of layers, at
+any size:
+
+| Text | Means |
+|---|---|
+| `R` `R'` `R2` | the outer layer of R, clockwise, counter-clockwise, a half turn (`R2'` reads as `R2`) |
+| `Rw` `3Rw` | the outer two (three) layers of R together; `r` is the older spelling of `Rw` |
+| `2R` `4L` | the second layer from R only; the fourth from L (counted from the face named) |
+| `2-3R` | layers 2 to 3 from R together |
+| `x` `y` `z` | the whole cube turned as R, U, F turn |
+
+`LayerMove` is one layer; a name can be several turned together, so notation is
+a `WideMove` (`face`, `first`, `last`, `turns`: a block of adjacent layers),
+and `layers_of()` is the layer turns the cube is moved by. `parse(text, size)`
+reads whitespace-separated moves and says where it stopped (`ParseFault`: the
+offset and length of the token, and whether it is not a move or names a layer
+the cube does not have). `to_string()` prints a block as one token; a block
+that is every layer of an axis is a rotation and prints as `x`/`y`/`z` named for
+the positive face, and parsing any other printed block gives back exactly that
+block. The tests print and read back every block of every size from 2 to 9.
+
+`group(moves, size)` is for display. In a run of turns about one axis (which
+commute) it gathers adjacent layers through the same angle into one block,
+spelled from the nearer end: `R 2R` on a 7x7 is `Rw`, `6R 7R` is `Lw'`. It
+cancels nothing and adds nothing, and keeps blocks in the order their first turn
+came in, so a run with nothing to gather is returned as it was. The number of
+blocks is the move count a person is shown (a wide move is one); what is stored
+and replayed is the layer turns, and a person who follows the grouped moves
+arrives where the originals arrive (checked over random runs at every size and
+over the library's own solutions). Not yet: the middle-slice letters `M` `E` `S`,
+which mean different layers at different sizes, and the words ("the second layer
+from the right") the screens will pair with the letters.
+
+## Following a solution
+
+`SteppedPlan` (`stepped_plan.hpp`) is what a screen steps through: a solution
+flattened into moves, `next()` and `previous()`, the cube cached at every
+position (`current_cube()`, `cube_at(i)`), and one span of moves per stage. It is
+what the app's `SteppedSolution` is for a 3x3, written for a cube of any size:
+the state is an `NCube`, a move is a `WideMove`, and a stage is a `StageId`.
+Nothing in it knows about Qt or the screens.
+
+* **What a move is** is the caller's choice (`Display`). `Layers` is one move per
+  turn of one layer, the library's solution as it is. `Wide` gathers adjacent
+  layers turned the same way into one move (`group()`, above), so the count a
+  person is shown is the wide-move count. At 3x3 the two are identical. The turns
+  of single layers stay what is stored and replayed (`layer_turns()`,
+  `layers_at(i)`), and a block never reaches across two stages.
+* **A stage** (`StageId`) flattens the two layers the library has, the
+  reduction's (`Stage`) and the 3x3 solver's inside the core (`solver::Stage`),
+  into the one list a screen wants. The 3x3 solver's stages keep the numbers
+  `solver::Stage` gives them (the solve screen words them by number, and a 3x3
+  must read as it always did); the reduction's follow: parity 8, centres 9,
+  edges 10, corners 11 (a 2x2). A 3x3's solution is the core list alone. A stage
+  has no words in the library: `key(id)` is a stable name to translate by, and
+  `is_core(id)` says whether the stage is the 3x3 solver's, which is how a
+  screen knows where "skip ahead to the 3x3 stage" lands.
+* **`solve_held`** (`cube3.hpp`) is the app's way to solve a cube of any size:
+  the library's `solve()` above 3, and at 3 the as-held reading described below.
+
+`tests/unit/nxn/stepped_plan_test.cpp` holds a plan of a 3x3 equal to the
+`SteppedSolution` the app has always used, for all three methods: the same
+moves, the same stage spans, the same cube at every position, stepped both ways.
 
 ## One state concept, a virtual 3x3
 
@@ -299,7 +434,7 @@ size and per process.
   measured on a phone and they grow faster than N. Symmetry would cut them
   (build one cycle per rotation class and rotate), and they are built for the
   sizes asked for only.
-* **Scanning, wide-move notation, a UI.** None exist for sizes above 3.
+* **Scanning and a UI.** None exist for sizes above 3.
 * **A compiler other than g++-16 snapshot, MSVC and Clang 23** has not been
   built with; the platform legs (Android, macOS, web) need `<mdspan>`, which
   their libc++ has.
