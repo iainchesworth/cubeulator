@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <span>
 
 using cube::nxn::NCube;
 using cube::nxn::solve_held;
@@ -168,14 +169,18 @@ void SolveController::showCurrentCube() {
 }
 
 void SolveController::resumeCube(const Cube& scanned, const Cube& from, Method method, int turn) {
-    scanned_ = NCube::from_cube3(scanned);
+    resumeCube(NCube::from_cube3(scanned), NCube::from_cube3(from), method, turn);
+}
+
+void SolveController::resumeCube(const NCube& scanned, const NCube& from, Method method, int turn) {
+    scanned_ = scanned;
     if (method != method_) {
         // Recorded, not acted on through setMethod(): the cube to solve is
         // `from`, not the one a method change would carry on from.
         method_ = method;
         emit methodChanged();
     }
-    beginSolve(NCube::from_cube3(from));
+    beginSolve(from);
     resume_turn_ = std::max(0, turn);
 }
 
@@ -371,26 +376,23 @@ cube::diagnostics::Json SolveController::diagnosticState() const {
     using cube::diagnostics::Json;
     constexpr std::array<const char*, 3> kMethods = {"beginner", "intermediate", "advanced"};
     Json state = Json::object();
+    const int size = stepped_.size();
     state.set("method", kMethods.at(static_cast<std::size_t>(method_)));
+    state.set("size", size);
     state.set("is_solving", isSolving_);
     state.set("continuation", continuation_);
     state.set("move_index", stepped_.current_index());
     state.set("total_moves", stepped_.move_count());
     state.set("at_end", stepped_.at_end());
-    std::vector<cube::solver::Move> moves3;
-    if (stepped_.size() == 3) {
-        moves3.reserve(stepped_.moves().size());
-        for (const WideMove& move : stepped_.moves()) {
-            moves3.push_back(move3_of(move));
-        }
-    }
-    const std::optional<Cube> started_from = solutionStart();
-    state.set("current_move", cube::diagnostics::move_json(currentMove()));
-    state.set("moves", cube::diagnostics::moves_json(moves3));
-    state.set("cube", cube::diagnostics::cube_json(cube3_));
+    state.set("current_move", stepped_.at_end()
+                                  ? Json()
+                                  : Json(cube::nxn::to_string(stepped_.current_move(), size)));
+    state.set("moves",
+              Json(cube::nxn::to_string(std::span<const WideMove>(stepped_.moves()), size)));
+    state.set("cube", cube::diagnostics::cube_json(stepped_.current_cube()));
     state.set("solved", stepped_.current_cube().is_solved());
     state.set("started_from",
-              started_from.has_value() ? cube::diagnostics::cube_json(*started_from) : Json());
+              pending_.has_value() ? cube::diagnostics::cube_json(*pending_) : Json());
     state.set("stage", currentStageIndex());
     return state;
 }
