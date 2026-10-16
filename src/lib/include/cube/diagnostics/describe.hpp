@@ -3,6 +3,7 @@
 #include <cube/diagnostics/json.hpp>
 #include <cube/error.hpp>
 #include <cube/model/facelet.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/color_resolution.hpp>
 #include <cube/vision/direct_scan.hpp>
@@ -57,8 +58,10 @@ namespace cube::diagnostics {
 // 54-character string of docs/recording-format.md.
 [[nodiscard]] Json to_json(const Result<cube::vision::ScannedCube>& scanned);
 
-// The 54-character state string of a cube (docs/recording-format.md).
+// The state string of a cube (docs/recording-format.md): 54 characters for a
+// 3x3, 6 * size^2 for the other sizes.
 [[nodiscard]] Json cube_json(const cube::solver::Cube& cube);
+[[nodiscard]] Json cube_json(const cube::nxn::NCube& cube);
 // A move in standard notation ("R", "U2", "F'"), or null for none.
 [[nodiscard]] Json move_json(const std::optional<cube::solver::Move>& move);
 // Moves as one string of standard notation, space-separated.

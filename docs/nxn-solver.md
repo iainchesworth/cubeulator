@@ -237,6 +237,14 @@ It reads each sticker a constant number of times (no allocation after the size's
 tables are built, which `Geometry::of(size)` does once), so it is cheap enough
 to ask of the 4096 candidates of a scan's assembly.
 
+A cube written down as text, in a recording's manifest or the diagnostics
+channel, is a **state string**: `6 * size^2` letters of `U R F D L B`, side by
+side in that order and row by row, each naming the side whose centre colour the
+sticker shows ([recording-format.md](recording-format.md#manifestjson)). The
+manifest checks one with `validate` (a 3x3's still with the solver's own
+`is_solvable()`), and an odd size's middle stickers are fixed by position like a
+3x3's centres, so the string says which way the cube is held.
+
 ## Strategy
 
 ```
