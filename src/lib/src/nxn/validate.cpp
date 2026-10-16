@@ -342,9 +342,11 @@ constexpr std::size_t kNotACorner = 3;
     Roll roll;
     for (std::size_t slot = 0; slot < kCorners; ++slot) {
         const std::array<std::uint16_t, 3>& stickers = plan.corner_stickers.at(slot);
-        const std::array<std::size_t, 3> shown = {reader.colour(stickers.at(0)),
-                                                  reader.colour(stickers.at(1)),
-                                                  reader.colour(stickers.at(2))};
+        const std::array<std::size_t, 3> shown = {
+            reader.colour(stickers.at(0)),
+            reader.colour(stickers.at(1)),
+            reader.colour(stickers.at(2)),
+        };
         const std::size_t turned = turn_of(shown);
         if (turned == kNotACorner) {
             return fault_at(Fault::UnknownPiece, Role::Corner, stickers.at(0));
@@ -445,7 +447,7 @@ Verdict validate(int size, std::span<const Color> facelets) {
 
     const Result<std::array<Color, kColours>> scheme = scheme_of(size, facelets);
     if (!scheme) {
-        return fault_of(Fault::Scheme);
+        return fault_of(Fault::NoScheme);
     }
     const Reader reader{facelets, *scheme};
 

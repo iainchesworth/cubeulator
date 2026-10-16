@@ -55,7 +55,7 @@ enum class Fault : std::uint8_t {
     // The colours cannot be the six faces of one cube: on an odd size the middle
     // stickers are not six different colours, on an even one the corners do
     // not agree on which colours are opposite.
-    Scheme,
+    NoScheme,
     // A ring of centre stickers does not hold every colour equally often.
     CentreColours,
     // A corner, wing or middle edge shows colours no piece of its kind has.
@@ -79,7 +79,7 @@ enum class Fault : std::uint8_t {
             return "the stickers are not those of a cube of this size";
         case Fault::ColourCounts:
             return "a colour does not appear as many times as a face has stickers";
-        case Fault::Scheme:
+        case Fault::NoScheme:
             return "the colours cannot be the six faces of one cube";
         case Fault::CentreColours:
             return "a ring of centre stickers does not hold every colour equally";

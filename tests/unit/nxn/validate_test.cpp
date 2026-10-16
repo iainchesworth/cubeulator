@@ -142,9 +142,11 @@ TEST_CASE("every single turn of every layer is valid", "[nxn][validate]") {
             for (int layer = 0; layer < size; ++layer) {
                 for (int turns = 1; turns <= 3; ++turns) {
                     NCube cube = *NCube::solved(size);
-                    cube.apply(cube::nxn::SliceTurn{.axis = static_cast<cube::nxn::Axis>(axis),
-                                                    .layer = layer,
-                                                    .turns = turns});
+                    cube.apply(cube::nxn::SliceTurn{
+                        .axis = static_cast<cube::nxn::Axis>(axis),
+                        .layer = layer,
+                        .turns = turns,
+                    });
                     INFO("size " << size << " axis " << axis << " layer " << layer << " turns "
                                  << turns);
                     CHECK(cube::nxn::validate(cube).ok());
@@ -326,7 +328,7 @@ TEST_CASE("stickers that are not a cube are refused with the reason", "[nxn][val
     same_centres.at(down) = same_centres.at(up);
     // Counts still add up if the colour the centre lost turns up elsewhere.
     same_centres.at(Geometry::of(3).index(Face::U, 0, 0)) = Color::White;
-    CHECK(verdict(3, same_centres).fault == Fault::Scheme);
+    CHECK(verdict(3, same_centres).fault == Fault::NoScheme);
 
     // A corner's sticker painted over by the colour opposite one on the same corner.
     Facelets bad_corner = solved(3);
@@ -442,14 +444,18 @@ TEST_CASE("the oracle and the solver agree on cubes damaged by hand", "[nxn][val
     };
     // The solver's side of a valid cube is a whole solve, which costs more as
     // the cube grows, so the big sizes get fewer samples.
-    const std::array<Budget, 8> budget = {{{.size = 2, .samples = 40},
-                                           {.size = 3, .samples = 300},
-                                           {.size = 4, .samples = 200},
-                                           {.size = 5, .samples = 150},
-                                           {.size = 6, .samples = 60},
-                                           {.size = 7, .samples = 40},
-                                           {.size = 8, .samples = 12},
-                                           {.size = 9, .samples = 8}}};
+    const std::array<Budget, 8> budget = {
+        {
+            {.size = 2, .samples = 40},
+            {.size = 3, .samples = 300},
+            {.size = 4, .samples = 200},
+            {.size = 5, .samples = 150},
+            {.size = 6, .samples = 60},
+            {.size = 7, .samples = 40},
+            {.size = 8, .samples = 12},
+            {.size = 9, .samples = 8},
+        },
+    };
     for (const auto& [size, samples] : budget) {
         int accepted = 0;
         int refused = 0;
@@ -563,15 +569,25 @@ public:
                 others.push_back(colour);
             }
         }
-        std::array<std::uint8_t, 3> targets = {
+        const std::array<std::uint8_t, 3> up_right_front = {
             static_cast<std::uint8_t>(cube::solver::canonical_color(Face::U)),
             static_cast<std::uint8_t>(cube::solver::canonical_color(Face::R)),
             static_cast<std::uint8_t>(cube::solver::canonical_color(Face::F)),
         };
-        std::ranges::sort(targets);
-        for (bool more = true; more; more = std::ranges::next_permutation(targets).found) {
+        // The three colours left may be called up, right and front in any order.
+        constexpr std::array<std::array<std::size_t, 3>, 6> kOrders = {
+            {
+                {0, 1, 2},
+                {0, 2, 1},
+                {1, 0, 2},
+                {1, 2, 0},
+                {2, 0, 1},
+                {2, 1, 0},
+            },
+        };
+        for (const auto& order : kOrders) {
             for (std::size_t i = 0; i < 3; ++i) {
-                naming.at(others.at(i)) = targets.at(i);
+                naming.at(others.at(i)) = up_right_front.at(order.at(i));
             }
             if (std::ranges::binary_search(positions_, pack(relabelled(stickers, naming)))) {
                 return true;
