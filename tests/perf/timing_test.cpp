@@ -21,6 +21,12 @@ TEST_CASE("solving takes no more than a multiple of the calibration workload",
     cube::perf::check_within_budget(cube::perf::solve_timing_metrics());
 }
 
+TEST_CASE("solving a big cube takes no more than a multiple of the calibration workload",
+          "[perf][timing][nxn]") {
+    cube::perf::skip_unless_timing_wanted();
+    cube::perf::check_within_budget(cube::perf::nxn_timing_metrics());
+}
+
 TEST_CASE("reading a frame takes no more than a multiple of the calibration workload",
           "[perf][timing][scan]") {
     cube::perf::skip_unless_timing_wanted();
