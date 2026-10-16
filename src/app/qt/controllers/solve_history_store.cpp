@@ -9,45 +9,54 @@
 #include <QJsonParseError>
 #include <QSaveFile>
 
+#include <cube/nxn/notation.hpp>
+#include <cube/nxn/validate.hpp>
+
 #include <algorithm>
 #include <array>
+#include <span>
+#include <utility>
+#include <vector>
 
 namespace cube::app {
 
 namespace {
 
+using cube::nxn::LayerMove;
+using cube::nxn::NCube;
 using cube::solver::Color;
-using cube::solver::Cube;
-using cube::solver::kAllFaces;
 
 constexpr char kColourLetters[] = {'W', 'Y', 'G', 'B', 'O', 'R'};  // Color's order
-constexpr int kStickers = 54;
-// A solution is a few dozen turns; the longest the beginner method has made is
-// well under this. A value past it is a damaged file, not a long solve.
-constexpr int kMostTurns = 400;
+// A 3x3 is the size an entry has when it does not say.
+constexpr int kDefaultSize = 3;
+// A solution is a few dozen turns at a 3x3 and a few hundred at the biggest
+// cube the library solves (740 on average for a 9x9, 766 the most seen); this
+// leaves room past that. A value past it is a damaged file, not a long solve.
+constexpr int kMostTurns = 2000;
 // A day is 86 400; a solve open for a year is not a solve.
 constexpr int kMostSeconds = 366 * 86'400;
 
-[[nodiscard]] QString encode(const Cube& cube) {
+// The cube's stickers as letters, face by face, row by row: 54 for a 3x3, 6 N^2
+// for any size.
+[[nodiscard]] QString encode(const NCube& cube) {
     QString text;
-    text.reserve(kStickers);
-    for (const auto face : kAllFaces) {
-        for (const Color colour : cube.face(face)) {
-            text.append(QLatin1Char(kColourLetters[static_cast<int>(colour)]));
-        }
+    text.reserve(static_cast<qsizetype>(cube.facelets().size()));
+    for (const Color colour : cube.facelets()) {
+        text.append(QLatin1Char(kColourLetters[static_cast<int>(colour)]));
     }
     return text;
 }
 
-// The 54 letters back to a cube, or nothing if the text is not one that a real
-// cube makes: a damaged file must be dropped, not handed to the solver.
-[[nodiscard]] bool decode(const QString& text, Cube& out) {
-    if (text.size() != kStickers) {
+// The letters back to a cube of `size`, or nothing if the text is not one that
+// a real cube makes: a damaged file must be dropped, not handed to the solver.
+[[nodiscard]] bool decode(const QString& text, int size, NCube& out) {
+    if (size < cube::nxn::kMinSize || size > cube::nxn::kMaxSize ||
+        text.size() != 6 * size * size) {
         return false;
     }
-    std::array<std::array<Color, 9>, 6> facelets{};
-    for (int i = 0; i < kStickers; ++i) {
-        const QChar letter = text.at(i);
+    std::vector<Color> facelets;
+    facelets.reserve(static_cast<std::size_t>(text.size()));
+    for (const QChar letter : text) {
         int colour = -1;
         for (int c = 0; c < 6; ++c) {
             if (letter == QLatin1Char(kColourLetters[c])) {
@@ -57,14 +66,42 @@ constexpr int kMostSeconds = 366 * 86'400;
         if (colour < 0) {
             return false;
         }
-        facelets.at(static_cast<std::size_t>(i / 9)).at(static_cast<std::size_t>(i % 9)) =
-            static_cast<Color>(colour);
+        facelets.push_back(static_cast<Color>(colour));
     }
-    const auto cube = Cube::from_facelets(facelets);
-    if (!cube.has_value()) {
+    const auto cube = NCube::from_facelets(size, facelets);
+    if (!cube.has_value() || !cube::nxn::validate(*cube).ok()) {
         return false;
     }
     out = *cube;
+    return true;
+}
+
+// Whether the entry needs the second version of the file to be said.
+[[nodiscard]] bool needs_version_2(const HistoryEntry& entry) {
+    return entry.scanned.size() != kDefaultSize || entry.from.size() != kDefaultSize ||
+           !entry.moves.empty();
+}
+
+// The turns as notation, one token to a layer turn.
+[[nodiscard]] QString encode_moves(const std::vector<LayerMove>& moves, int size) {
+    return QString::fromStdString(cube::nxn::to_string(std::span<const LayerMove>{moves}, size));
+}
+
+// The turns back, or nothing if the text is not turns of layers the cube has
+// that solve it: a solution that does not solve its cube is not kept.
+[[nodiscard]] bool decode_moves(const QString& text, const NCube& from,
+                                std::vector<LayerMove>& out) {
+    const auto parsed = cube::nxn::parse(text.toStdString(), from.size());
+    if (!parsed.has_value()) {
+        return false;
+    }
+    std::vector<LayerMove> moves = cube::nxn::layers_of(*parsed);
+    NCube replay = from;
+    replay.apply(moves);
+    if (!replay.is_solved()) {
+        return false;
+    }
+    out = std::move(moves);
     return true;
 }
 
@@ -79,9 +116,16 @@ constexpr int kMostSeconds = 366 * 86'400;
         {"seconds", entry.seconds},
         {"finished", entry.finished},
     };
+    // Only for a cube that is not a 3x3, which is what a version 1 file holds.
+    if (entry.scanned.size() != kDefaultSize) {
+        object.insert("size", entry.scanned.size());
+    }
     // Written only when the method was changed part-way, which is rare.
     if (!(entry.from == entry.scanned)) {
         object.insert("from", encode(entry.from));
+    }
+    if (!entry.moves.empty()) {
+        object.insert("moves", encode_moves(entry.moves, entry.from.size()));
     }
     return object;
 }
@@ -129,14 +173,30 @@ constexpr int kMostSeconds = 366 * 86'400;
     }
     entry.seconds = static_cast<int>(value);
 
+    // The size is said only when it is not a 3x3's.
+    qint64 size = kDefaultSize;
+    if (object.contains("size") &&
+        !whole(object.value("size"), cube::nxn::kMinSize, cube::nxn::kMaxSize, size)) {
+        return false;
+    }
+    const int cube_size = static_cast<int>(size);
+
     if (!object.value("cube").isString() ||
-        !decode(object.value("cube").toString(), entry.scanned)) {
+        !decode(object.value("cube").toString(), cube_size, entry.scanned)) {
         return false;
     }
     entry.from = entry.scanned;
-    if (object.contains("from") && (!object.value("from").isString() ||
-                                    !decode(object.value("from").toString(), entry.from))) {
+    if (object.contains("from") &&
+        (!object.value("from").isString() ||
+         !decode(object.value("from").toString(), cube_size, entry.from))) {
         return false;
+    }
+    // A kept solution that does not solve its cube is dropped, and the entry
+    // with it kept: the solution is worked out again.
+    if (object.contains("moves") &&
+        (!object.value("moves").isString() ||
+         !decode_moves(object.value("moves").toString(), entry.from, entry.moves))) {
+        entry.moves.clear();
     }
     out = entry;
     return true;
@@ -253,10 +313,15 @@ void SolveHistoryStore::save() {
         return;
     }
     QJsonArray array;
+    bool second_version = false;
     for (const HistoryEntry& entry : entries_) {
         array.append(to_json(entry));
+        second_version = second_version || needs_version_2(entry);
     }
-    const QJsonDocument document(QJsonObject{{"version", kFormatVersion}, {"entries", array}});
+    // Version 1 for as long as nothing in the file needs more, so that the app
+    // that wrote it before can still read it.
+    const QJsonDocument document(
+        QJsonObject{{"version", second_version ? kFormatVersion : 1}, {"entries", array}});
 
     if (!QDir().mkpath(QFileInfo(file_).absolutePath())) {
         qWarning("history: cannot make the folder for %s", qUtf8Printable(file_));

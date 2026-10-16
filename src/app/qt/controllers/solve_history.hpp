@@ -8,6 +8,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <vector>
+
 namespace cube::app {
 
 // The list of solves kept on this device (docs/design/screens/history.md), and
@@ -34,8 +36,8 @@ class SolveHistory : public QObject {
     Q_PROPERTY(bool keep READ keep WRITE setKeep NOTIFY keepChanged)
     // Newest first. Each entry is a map: id, started (ms since the epoch),
     // finished, turn, turns, seconds, method, carryOn (the one entry that can
-    // be carried on) and stickers (nine colour names, the scanned cube's front
-    // side, row by row).
+    // be carried on), size (3 for a 3x3) and stickers (the scanned cube's front
+    // side, row by row: size x size colour names, nine for a 3x3).
     Q_PROPERTY(QVariantList entries READ entries NOTIFY entriesChanged)
     Q_PROPERTY(int count READ count NOTIFY entriesChanged)
     // The newest unfinished solve - the only one that can be carried on - or 0.
@@ -103,6 +105,9 @@ private:
     void onStateChanged();
     void onSolutionChanged();
     [[nodiscard]] QVariantMap toMap(const HistoryEntry& entry, qint64 carry_on) const;
+    // The solution now in force as the turns to keep with an entry: none for a
+    // 3x3.
+    [[nodiscard]] std::vector<cube::nxn::LayerMove> keptSolution() const;
 
     SolveController& solve_;
     SolveHistoryStore store_;
