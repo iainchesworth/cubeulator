@@ -473,42 +473,42 @@ In your hands.</source>
     <message id="stage.parity.title">
         <source>Set up</source>
         <extracomment>Name of the first stage of a solve of a cube bigger than 3x3 when it needs one. Shown with a number, like the other stages. 'Parity' is the cuber's word; do not use it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אײַנרעכטן</translation>
     </message>
     <message id="stage.parity.what">
         <source>A few turns first, so that pairing up the pieces cannot leave two of them swapped, which only a big cube can do.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ערשט עטלעכע דרײען, כּדי בײַם פֿאַראײניקן פֿון די שטיקער זאָלן נישט בלײַבן צװײ פֿאַרביטענע, װאָס קען פֿאָרקומען נאָר בײַ אַ גרױסער קוביע.</translation>
     </message>
     <message id="stage.centres.title">
         <source>Centres</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: gathering the middle stickers of each side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>צענטערס</translation>
     </message>
     <message id="stage.centres.what">
         <source>Gather the middle stickers of each side into one block of a single colour.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>זאַמלט די מיטלסטע קלעפּצעטלעך פֿון יעדער זײַט אין אײן בלאָק פֿון אײן פֿאַרב.</translation>
     </message>
     <message id="stage.edges.title">
         <source>Edges</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: pairing the edge pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ראַנדן</translation>
     </message>
     <message id="stage.edges.what">
         <source>Pair up the edge pieces into whole edges, so that the cube has twelve edges like a 3x3.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>פֿאַראײניקט די ראַנדשטיקער צו גאַנצע ראַנדן, אַזױ אַז די קוביע האָט צװעלף ראַנדן װי אַ 3x3.</translation>
     </message>
     <message id="stage.corners.title">
         <source>Corners</source>
         <extracomment>Name of the only stage of a solve of a 2x2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>װינקלען</translation>
     </message>
     <message id="stage.corners.what">
         <source>Put the eight corners where they belong. A 2x2 has nothing else.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שטעלט די אַכט װינקלען אױף זײערע ערטער. אַ 2x2 האָט גאָרנישט מער.</translation>
     </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
@@ -528,77 +528,77 @@ In your hands.</source>
     <message id="home.other">
         <source>Another size of cube</source>
         <extracomment>Button on Home. Opens the screen for a cube the camera does not read: a different size, or a cube typed in as the scramble that mixed it up.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אַן אַנדערע גרײס קוביע</translation>
     </message>
     <message id="entry.title">
         <source>Another cube</source>
         <extracomment>Title of the screen reached from Home by "Another size of cube".</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אַן אַנדערע קוביע</translation>
     </message>
     <message id="entry.size.label">
         <source>Size</source>
         <extracomment>Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>גרײס</translation>
     </message>
     <message id="entry.size.option">
         <source>%1×%1</source>
         <extracomment>A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1</translation>
     </message>
     <message id="entry.size.camera">
         <source>The camera reads a 3×3. Scan it, or type its scramble here.</source>
         <extracomment>Under the size buttons when 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>די קאַמערע לײענט אַ 3×3. סקאַנירט עס, אָדער שרײַבט דאָ אַרײַן זײַן צומישונג.</translation>
     </message>
     <message id="entry.size.noCamera">
         <source>The camera cannot read this size yet. Type its scramble here.</source>
         <extracomment>Under the size buttons when a size other than 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>די קאַמערע קען נאָך נישט לײענען די גרײס. שרײַבט דאָ אַרײַן די צומישונג.</translation>
     </message>
     <message id="entry.scramble.label">
         <source>Its scramble</source>
         <extracomment>Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>זײַן צומישונג</translation>
     </message>
     <message id="entry.scramble.placeholder">
         <source>Type or paste the moves, such as R U R' U' F2 2R Rw</source>
         <extracomment>Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שרײַבט אָדער קלעפּט אַרײַן די דרײען, צום בײַשפּיל R U R' U' F2 2R Rw</translation>
     </message>
     <message id="entry.scramble.help">
         <source>Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together.</source>
         <extracomment>Under the scramble box. The letters and marks are notation and stay as they are.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שרײַבט די דרײען מיט אַ שפּאַציע צװישן זײ. U'‎ דרײט זיך אין דער אַנדערער ריכטונג, און F2 איז אַ האַלבער דרײ. 2R איז די צװײטע שיכט פֿון R אַרײַן, און Rw דרײט צװײ שיכטן צוזאַמען.</translation>
     </message>
     <message id="entry.solve">
         <source>Solve it</source>
         <extracomment>Main button of the screen for another size of cube. Works out the solution from the scramble.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אױפֿלײזן</translation>
     </message>
     <message id="entry.scan">
         <source>Scan it instead</source>
         <extracomment>Button shown when 3×3 is chosen. Goes to the camera.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>סקאַנירט אַנשטאָט</translation>
     </message>
     <message id="entry.error.unknownMove">
         <source>‘%1’ is not a move. Moves look like R, U', F2, 2R or Rw.</source>
         <extracomment>Shown under the scramble box when a word in it is not a move. %1 is that word.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>‏"%1" איז נישט קײן דרײ. דרײען זעען אױס אַזױ: R, U', F2, 2R אָדער Rw.</translation>
     </message>
     <message id="entry.error.layer">
         <source>‘%1’ turns a layer that a %2×%2 cube does not have.</source>
         <extracomment>Shown when a move names a layer the chosen size does not have, such as 5R on a 4×4. %1 is that move, %2 the size in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>‏"%1" דרײט אַ שיכט װאָס אַ %2×%2 קוביע האָט נישט.</translation>
     </message>
     <message id="entry.error.empty">
         <source>Type the scramble first.</source>
         <extracomment>Shown when Solve it is pressed with nothing typed.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שרײַבט צוערשט אַרײַן די צומישונג.</translation>
     </message>
     <message id="entry.error.solved">
         <source>Those moves leave the cube as it was. Type a scramble that mixes it up.</source>
         <extracomment>Shown when the scramble turns the cube back to solved, so there is nothing to solve.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>די דרײען לאָזן די קוביע װי זי איז געװען. שרײַבט אַרײַן אַ צומישונג װאָס מישט זי צונױף.</translation>
     </message>
     <message id="home.findingCamera">
         <source>Looking for a camera…</source>
@@ -1031,7 +1031,7 @@ In your hands.</source>
     <message id="review.intro.enterN">
         <source>Hold your cube any way up. Call the side facing up the top and the side facing you the front. Pick a colour, then tap or drag over the stickers of that colour on the side shown. The sides named round it are the ones against its edges.</source>
         <extracomment>Instruction at the top of entering a cube of any size by hand. Replaces review.intro.enter for a cube that has no centre sticker to name each side by.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>האַלט די קוביע װי איר װילט. די זײַט װאָס קוקט אַרױף הײסט אױבן, און די זײַט װאָס קוקט צו אײַך הײסט פֿאָרנט. קלײַבט אױס אַ פֿאַרב, און דריקט אָדער שלעפּט איבער די קלעפּצעטלעך פֿון יענער פֿאַרב אױף דער געװיזענער זײַט. די זײַטן װאָס זענען אַרום באַצײכנט זענען די װאָס רירן זיך אָן אירע ראַנדן.</translation>
     </message>
     <message id="review.centre">
         <source>The centre never changes. It names the side.</source>
@@ -1056,52 +1056,52 @@ In your hands.</source>
     <message id="review.status.emptyN">
         <source>%1 stickers to fill in</source>
         <extracomment>Status line before anything is entered, for a cube of any size. %1 is how many stickers the cube has, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 קלעפּצעטלעך צו פֿילן אָן</translation>
     </message>
     <message id="review.fault.noScheme">
         <source>These colours cannot be the six sides of one cube.</source>
         <extracomment>Says what is wrong with colours that fit in no cube: two colours that belong on opposite sides sit next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>די פֿאַרבן קענען נישט זײַן די זעקס זײַטן פֿון אײן קוביע.</translation>
     </message>
     <message id="review.fault.centreColours">
         <source>The middle stickers of a side do not hold each colour equally often.</source>
         <extracomment>Says what is wrong when the middle stickers of one side's ring have the wrong mix of colours.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>די מיטלסטע קלעפּצעטלעך פֿון אײן זײַט האָבן נישט יעדע פֿאַרב גלײַך אָפֿט.</translation>
     </message>
     <message id="review.fault.unknownPiece">
         <source>A piece shows colours that no piece of a cube has.</source>
         <extracomment>Says what is wrong when a corner or an edge has two colours that are never next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אַ שטיק װײַזט פֿאַרבן װאָס קײן שום שטיק פֿון אַ קוביע האָט נישט.</translation>
     </message>
     <message id="review.fault.repeatedPiece">
         <source>Two pieces show the same colours, so another piece is missing.</source>
         <extracomment>Says what is wrong when the same corner or edge is entered twice.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>צװײ שטיקער װײַזן די זעלבע פֿאַרבן, דעריבער פֿעלט אַן אַנדער שטיק.</translation>
     </message>
     <message id="review.fault.twistedCorner">
         <source>A corner looks turned in place.</source>
         <extracomment>Says what is wrong when the corners are right but one is twisted.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אַ װינקל זעט אױס געדרײט אױף זײַן אָרט.</translation>
     </message>
     <message id="review.fault.flippedEdge">
         <source>An edge looks flipped.</source>
         <extracomment>Says what is wrong when the edges are right but one has its two colours the wrong way round.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>אַ ראַנדשטיק זעט אױס איבערגעקערט.</translation>
     </message>
     <message id="review.fault.swappedPieces">
         <source>Two pieces look swapped.</source>
         <extracomment>Says what is wrong when two pieces are in each other's places.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>צװײ שטיקער זעען אױס פֿאַרביטן.</translation>
     </message>
     <message id="review.clearAll">
         <source>Clear all</source>
         <extracomment>Button at the top of the hand-entry screen. Unsets every sticker of every side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>לײדיקן אַלץ</translation>
     </message>
     <message id="review.fillSide">
         <source>Fill this side</source>
         <extracomment>Button under the colours on the hand-entry screen. Paints every sticker of the side being edited with the colour chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>פֿילן אָן די זײַט</translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>
@@ -1307,27 +1307,27 @@ In your hands.</source>
     <message id="solve.move.layer">
         <source>%1 · layer %2 · %3</source>
         <extracomment>The move in words for a layer inside a cube bigger than 3x3. %1 is the side, as 'Right side' or 'Top'; %2 is how far in the layer is counted from that side, starting at 1 for the outer layer; %3 is 'quarter turn' or 'half turn'. The dots are separators.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · שיכט %2 · %3</translation>
     </message>
     <message id="solve.move.layers">
         <source>%1 · layers %2 to %3 · %4</source>
         <extracomment>The same for several layers turned together. %2 and %3 are the nearest and the farthest layer, counted from the side as above; %4 is 'quarter turn' or 'half turn'.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · שיכטן %2 ביז %3 · %4</translation>
     </message>
     <message id="solve.skipToCore">
         <source>Skip to the 3x3 stage</source>
         <extracomment>Button on the solve screen of a cube bigger than 3x3. Jumps over the stages that pair up its pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שפּרינגט צום 3x3 שטאַפּל</translation>
     </message>
     <message id="solve.skipToCore.note">
         <source>Use this once you have paired up the centres and edges yourself. The cube on screen jumps to the 3x3 it should now be.</source>
         <extracomment>Explains the button above it, for someone who can already solve a 3x3.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ניצט דאָס נאָכדעם װי איר האָט אַלײן פֿאַראײניקט די צענטערס און ראַנדן. די קוביע אױפֿן עקראַן שפּרינגט צו דער 3x3 װאָס זי דאַרף איצט זײַן.</translation>
     </message>
     <message id="solve.method.finishWith">
         <source>Finish with</source>
         <extracomment>Small label above the three method buttons when the cube is bigger than 3x3: the methods apply to the 3x3 the cube has become, so they are said to be how it is finished.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>פֿאַרענדיקט מיט</translation>
     </message>
     <message id="solve.finish">
         <source>Finish</source>
@@ -1603,12 +1603,12 @@ In your hands.</source>
     <message id="solution.layer">
         <source>layer %1</source>
         <extracomment>A turn of a layer inside a cube bigger than 3x3, in a row of the list of turns, between the side and the direction ('Right side · layer 2 · upwards · quarter turn'). %1 is how far in the layer is, counted from the side, starting at 1 for the outer layer, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שיכט %1</translation>
     </message>
     <message id="solution.layers">
         <source>layers %1 to %2</source>
         <extracomment>The same for several layers turned together. %1 and %2 are the nearest and the farthest layer, counted from the side as above.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>שיכטן %1 ביז %2</translation>
     </message>
     <message id="solution.a11y.turn">
         <source>Turn %1. %2</source>
@@ -1646,7 +1646,7 @@ In your hands.</source>
     <message id="history.item.size">
         <source>%1×%1 · %2</source>
         <extracomment>Start of one row for a cube that is not a 3x3: its size, as in 5×5 (%1 is the side length twice, in the reader's own digits), then the rest of the row (history.item.done or history.item.unfinished) as %2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1 · %2</translation>
     </message>
     <message id="history.delete">
         <source>Delete</source>
