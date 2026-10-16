@@ -7,18 +7,26 @@
 #include <QVariantMap>
 
 #include <cube/diagnostics/json.hpp>
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/stepped_plan.hpp>
 #include <cube/solver/solver.hpp>
-#include <cube/solver/stepped_solution.hpp>
 
 #include <optional>
+#include <vector>
 
-// Bridges cube::solver's real solve - in whichever of its three methods is
-// chosen - into QML. Owns a SteppedSolution built from the cube the scan read
-// (solveCube). The solve
-// screen reads the exposed properties to draw the current stickers and the
-// move about to happen. Deliberately thin: all solving and stepping logic
-// lives in cube::solver, which is plain C++ and Catch2-tested independently
-// of Qt.
+// Bridges the real solve - in whichever of its three methods is chosen - into
+// QML. Owns a SteppedPlan built from the cube the scan read (solveCube). The
+// solve screen reads the exposed properties to draw the current stickers and
+// the move about to happen. Deliberately thin: all solving and stepping logic
+// lives in cube::nxn, which is plain C++ and Catch2-tested independently of
+// Qt.
+//
+// The cube and its moves are held as cube::nxn types, a 3x3 being an NCube of
+// size 3 (docs/nxn-app-plan.md, decision 1). The accessors that return a
+// cube::solver::Cube or Move - currentCube(), currentMove(), scannedCube(),
+// solutionStart() - are the 3x3 view of that, which is what HeldCube, the
+// history and the diagnostics are written in; they have a value only while the
+// cube is a 3x3.
 //
 // Constructed in C++ and registered via qmlRegisterSingletonInstance, like
 // the other controllers - not QML_ELEMENT/QML_SINGLETON, since the scan
@@ -111,14 +119,15 @@ public:
     Q_INVOKABLE QVariantMap stickersAt(int turn) const;
     [[nodiscard]] QVariantList moves() const;
 
-    // The cube as it stands after the moves stepped through so far.
-    [[nodiscard]] const cube::solver::Cube& currentCube() const noexcept {
-        return stepped_.current_cube();
-    }
-    // The move expected next, or nothing once the cube is solved.
-    [[nodiscard]] std::optional<cube::solver::Move> currentMove() const noexcept {
-        return stepped_.at_end() ? std::nullopt : std::optional(stepped_.current_move());
-    }
+    // The solution being followed, for whoever needs the cube at any size.
+    [[nodiscard]] const cube::nxn::SteppedPlan& plan() const noexcept { return stepped_; }
+
+    // The cube as it stands after the moves stepped through so far, as a 3x3.
+    // A solved 3x3 while the cube is of another size.
+    [[nodiscard]] const cube::solver::Cube& currentCube() const noexcept { return cube3_; }
+    // The move expected next as a 3x3 move, or nothing once the cube is solved
+    // (or when it is not a 3x3).
+    [[nodiscard]] std::optional<cube::solver::Move> currentMove() const noexcept;
 
     [[nodiscard]] QString currentMoveNotation() const;
     [[nodiscard]] QString currentMoveFace() const;
@@ -154,19 +163,25 @@ public:
     // announced beyond that: the caller decides when to show the solution,
     // so a finished scan can stay on screen while this runs.
     void solveCube(const cube::solver::Cube& cube);
+    // The same for a cube of any size.
+    void solveCube(const cube::nxn::NCube& cube);
 
     // The cube as the scan handed it over: what the solve being followed is a
     // solve OF. Set by solveCube(); a method change part-way does not move it
     // (solutionStart() is what moves). Empty until the first scan.
-    [[nodiscard]] const std::optional<cube::solver::Cube>& scannedCube() const noexcept {
+    [[nodiscard]] const std::optional<cube::nxn::NCube>& scannedNCube() const noexcept {
         return scanned_;
     }
     // The cube the solution in force - or the one in flight - starts from. The
     // scanned cube until the method is changed part-way, then the cube in hand
     // at that moment. The turn moveIndex() counts is a turn of THIS solution.
-    [[nodiscard]] const std::optional<cube::solver::Cube>& solutionStart() const noexcept {
+    [[nodiscard]] const std::optional<cube::nxn::NCube>& solutionStartNCube() const noexcept {
         return pending_;
     }
+    // Those two as 3x3s, which the history and HeldCube are written in: empty
+    // when there is no such cube, or it is of another size.
+    [[nodiscard]] std::optional<cube::solver::Cube> scannedCube() const;
+    [[nodiscard]] std::optional<cube::solver::Cube> solutionStart() const;
 
     // Picks a solve up where it was left: `from` is solved with `method` and,
     // when the solution lands, stepped on `turn` turns, so the screen opens on
@@ -195,21 +210,25 @@ private:
     // solved-cube placeholder is set directly, not through this path - see
     // the .cpp. `continuation`: this is the cube already being solved, handed
     // over to another method.
-    void beginSolve(const cube::solver::Cube& scrambled, bool continuation = false);
+    void beginSolve(const cube::nxn::NCube& scrambled, bool continuation = false);
     // Invoked on the UI thread once solveWatcher_'s background solve()
     // (kicked off from beginSolve()) finishes.
     void applySolveResult();
+    // Brings cube3_ to the cube the plan now shows.
+    void showCurrentCube();
 
-    cube::solver::SteppedSolution stepped_;
-    QFutureWatcher<cube::solver::SteppedSolution> solveWatcher_;
+    cube::nxn::SteppedPlan stepped_;
+    QFutureWatcher<cube::nxn::SteppedPlan> solveWatcher_;
+    // The cube on show as a 3x3 (currentCube()); a solved one for any other size.
+    cube::solver::Cube cube3_ = cube::solver::Cube::solved();
     bool isSolving_ = false;
     Method method_ = Beginner;
     // The cube the solve in flight, or the last one to land, was started
     // from; empty until the first. A method change with nothing scanned only
     // records the method.
-    std::optional<cube::solver::Cube> pending_;
+    std::optional<cube::nxn::NCube> pending_;
     // The cube the scan read, whatever the method has done since.
-    std::optional<cube::solver::Cube> scanned_;
+    std::optional<cube::nxn::NCube> scanned_;
     // Turns to step on when the solve in flight lands (resumeCube); 0 for any
     // other solve.
     int resume_turn_ = 0;
