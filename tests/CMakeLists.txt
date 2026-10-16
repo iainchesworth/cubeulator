@@ -82,7 +82,8 @@ add_executable(cube_unit_tests
     unit/nxn/model_test.cpp
     unit/nxn/solve_test.cpp
     unit/nxn/strategy_test.cpp
-    unit/nxn/cube3_test.cpp)
+    unit/nxn/cube3_test.cpp
+    unit/nxn/mesh_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
@@ -292,6 +293,7 @@ if(CUBEULATOR_BUILD_APP)
         qml_test_main.cpp
         unit/complete_screen_test.cpp
         unit/cube_view_reading_test.cpp
+        unit/cube_n_view_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp

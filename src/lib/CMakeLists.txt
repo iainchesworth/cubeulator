@@ -73,6 +73,7 @@ target_sources(cube_lib
         src/nxn/stages.cpp
         src/nxn/strategy.cpp
         src/nxn/two_by_two.cpp
+        src/nxn/mesh.cpp
         src/vision/color_resolution.cpp
         src/vision/color_classification.cpp
         src/vision/recording_v2.cpp
