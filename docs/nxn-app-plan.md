@@ -161,6 +161,20 @@ The prototype is the first thing built after the foundations, because decision
 view is now, on a phone-class GPU and in the browser, before any screen is
 rebuilt on it.
 
+**Result (2026-10-16, [tools/cube3d_prototype](https://github.com/iainchesworthlabs/cubeulator/blob/main/tools/cube3d_prototype/README.md)).**
+Built and measured against the same view scaled up the way `Cube3DView.qml` would
+scale (one model per cubie and per sticker, a material bound to each). The lift
+renderer draws a cube of any size as three scene objects: on the development
+machine it costs 0.2 ms of scene-graph work a frame at every size from 3x3 to
+9x9, and in a browser (Edge, ANGLE D3D11, the same GPU) 0.4 ms and a steady 60
+fps at 9x9, with 0.1 to 0.2 ms to lift a layer and set it down. The naive view is
+9.8 ms a frame in the browser at 5x5, 30.6 at 7x7 (31 fps) and 47.8 at 9x9 (20
+fps). So the renderer is not what limits the size, and decision 4 stands: sizes 6
+and 7 clear the 3D gate, and 8 and 9 would on this evidence. **A phone has not run
+it**: the Android APK is built and `android_matrix.py` is the one command that
+measures it (needs a device); until it has, decision 3's phone half is an
+estimate (about 1 to 2 ms a frame, GPU not included).
+
 ### Screens and flow
 
 - **Size.** A choice before scanning or entry. It is chosen, never inferred

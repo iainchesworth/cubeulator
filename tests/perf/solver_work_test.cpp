@@ -53,6 +53,12 @@ TEST_CASE("the advanced solve visits no more nodes than its budget", "[perf][sol
     check_within_budget(cube::perf::advanced_metrics());
 }
 
+TEST_CASE("an N x N solve makes no more moves than its budget, and its library no more cycles",
+          "[perf][nxn]") {
+    skip_unless_optimised();
+    check_within_budget(cube::perf::nxn_metrics());
+}
+
 TEST_CASE("the stages measured one at a time are the solve that solve() runs", "[perf][solver]") {
     skip_unless_optimised();
     // The beginner figures above are taken by calling the stage functions in

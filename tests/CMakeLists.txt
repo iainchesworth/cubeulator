@@ -60,6 +60,7 @@ add_executable(cube_unit_tests
     unit/sticker_colour_test.cpp
     unit/read_set_test.cpp
     unit/corner_view_test.cpp
+    unit/drawn_cube_test.cpp
     unit/held_cube_test.cpp
     unit/lib_stub_functions_test.cpp
     unit/solver/cube_test.cpp
@@ -294,6 +295,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qml_tests
         qml_test_main.cpp
         unit/complete_screen_test.cpp
+        unit/cube_view_reading_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
         unit/solve_camera_inset_test.cpp
