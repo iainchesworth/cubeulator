@@ -56,7 +56,9 @@ Window {
         }
     }
 
+    property real moveStartedAt: 0
     function step() {
+        moveStartedAt = stats.nowMicros()
         if (!scene.item.begin()) {
             finish()
         }
@@ -95,6 +97,9 @@ Window {
             }
         }
         function onFinished() {
+            // What one move took on the clock, which a cube that cannot keep up
+            // with its own animation shows as more than its turn time.
+            win.stats.tally("moveWall", win.stats.nowMicros() - win.moveStartedAt)
             win.played++
             win.step()
         }

@@ -17,7 +17,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Quick Quick3D Qml)
-qt_standard_project_setup()
+qt_standard_project_setup(REQUIRES 6.5)
 
 set(FMT_INCLUDE_DIR "" CACHE PATH "a directory holding fmt/format.h")
 if(NOT FMT_INCLUDE_DIR)
@@ -39,6 +39,11 @@ target_include_directories(cube_nxn_sources SYSTEM PUBLIC "${FMT_INCLUDE_DIR}")
 target_compile_definitions(cube_nxn_sources PUBLIC FMT_HEADER_ONLY)
 if(MSVC)
     target_compile_options(cube_nxn_sources PRIVATE /utf-8)  # {fmt} asks for it
+endif()
+if(EMSCRIPTEN)
+    # Qt's WebAssembly kit links with threads; everything linked in has to have
+    # been compiled for them.
+    target_compile_options(cube_nxn_sources PRIVATE -pthread)
 endif()
 # The same room src/lib/CMakeLists.txt gives the two files that build tables in
 # constant expressions.

@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QDebug>
 #include <QQuickWindow>
 #include <QTextStream>
 
@@ -148,6 +149,8 @@ void FrameStats::finish(const QVariantMap& facts) {
     }
     const QByteArray line = QJsonDocument(out).toJson(QJsonDocument::Compact);
     QTextStream(stdout) << line << "\n";
+    // Where there is no standard output to read (a phone), the log has it.
+    qInfo().noquote() << "CUBE3D-RESULT" << QString::fromUtf8(line);
     if (!report_path_.isEmpty()) {
         QFile file(report_path_);
         if (file.open(QIODevice::Append)) {

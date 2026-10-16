@@ -16,6 +16,10 @@
 #include <cstdio>
 #include <set>
 
+#if defined(Q_OS_WASM)
+#include <emscripten.h>
+#endif
+
 namespace {
 
 // The mesh against the library, at every size: the stickers a layer turn moves
@@ -124,7 +128,27 @@ int main(int argc, char** argv) {
     parser.addOption({"screenshot-mid", "save a picture part-way through the fourth move", "file", ""});
     parser.addOption({"solve", "play a real solution to the scrambled cube"});
     parser.addOption({"vsync", "leave vsync on"});
+#if defined(Q_OS_WASM)
+    // A page has no command line: the options come from the address, as
+    // ?mode=lift&size=7&moves=40&solve=1
+    QStringList arguments{QStringLiteral("cube3d_prototype")};
+    char* raw = emscripten_run_script_string("window.location.search");
+    const QString query = QString::fromUtf8(raw).mid(1);
+    for (const QString& pair : query.split(QLatin1Char('&'), Qt::SkipEmptyParts)) {
+        const QStringList kv = pair.split(QLatin1Char('='));
+        const QString value = kv.size() > 1 ? kv.at(1) : QString();
+        if (kv.at(0) == QStringLiteral("solve") || kv.at(0) == QStringLiteral("vsync")) {
+            if (value != QStringLiteral("0")) {
+                arguments << (QStringLiteral("--") + kv.at(0));
+            }
+        } else {
+            arguments << (QStringLiteral("--") + kv.at(0)) << value;
+        }
+    }
+    parser.process(arguments);
+#else
     parser.process(app);
+#endif
 
     const int size = parser.value("size").toInt();
     cube3d::Player player(size, parser.value("seed").toUInt(), parser.value("moves").toInt(),
