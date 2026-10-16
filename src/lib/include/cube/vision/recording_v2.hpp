@@ -22,6 +22,7 @@
 //    too, and ends the recording rather than being retried.
 
 #include <cube/error.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/frame_recording.hpp>
 
@@ -61,7 +62,12 @@ struct AnalysisFrame {
 // Per-clip manifest (docs/recording-format.md). Absent optional fields
 // serialise as JSON null.
 struct Manifest {
-    std::optional<std::string> state;  // 54-char URFDLB face-major, row-major faces
+    // 6 * size^2 characters of URFDLB, side-major, each side row-major: 54 for a
+    // 3x3.
+    std::optional<std::string> state;
+    // The cube's side length, 2 to 9. Written only when it is not 3, so that a
+    // 3x3's manifest is the file it always was; a manifest without it is a 3x3.
+    int size = 3;
     std::string lighting;
     std::string motion_script;
     std::string camera;
@@ -69,16 +75,19 @@ struct Manifest {
     std::string cube;
 };
 
-// The state-string oracle: 54 chars of URFDLB, centres canonical by
-// position, and the resulting cube must pass Cube::from_facelets AND
-// is_solvable(). Returns a specific human-readable reason on failure so
-// the recorder can refuse loudly.
-[[nodiscard]] std::optional<std::string> state_string_problem(const std::string& state);
+// The state-string oracle: 6 * size^2 chars of URFDLB, the middle sticker of
+// every side of an odd size canonical by position, and the resulting cube must
+// pass Cube::from_facelets AND is_solvable() for a 3x3 and cube::nxn::validate
+// for any other size. Returns a specific human-readable reason on failure so
+// the recorder can refuse loudly. `size` outside 2 to 9 is a problem too.
+[[nodiscard]] std::optional<std::string> state_string_problem(const std::string& state,
+                                                              int size = 3);
 
 // The state string of a cube: what state_string_problem accepts, for the cube
 // the solver holds. The developer diagnostics channel writes it so that a
 // cube on screen can be pasted into a manifest.
 [[nodiscard]] std::string state_string(const cube::solver::Cube& cube);
+[[nodiscard]] std::string state_string(const cube::nxn::NCube& cube);
 
 // Serialise / parse. read_manifest tolerates unknown keys (the spec says
 // consumers must) and returns nullopt only for unreadable/unparseable

@@ -1,5 +1,7 @@
 #include <cube/vision/recording_v2.hpp>
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/validate.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/cube.hpp>
 
@@ -96,6 +98,7 @@ void append_json_string(std::string& out, const std::string& text) {
 // and the key cannot be passed the wrong way round.
 enum class ManifestField : std::uint8_t {
     state,
+    size,
     lighting,
     motion_script,
     camera,
@@ -126,6 +129,8 @@ constexpr std::string_view field_name(ManifestField field) noexcept {
     switch (field) {
         case ManifestField::state:
             return "state";
+        case ManifestField::size:
+            return "size";
         case ManifestField::lighting:
             return "lighting";
         case ManifestField::motion_script:
@@ -198,41 +203,69 @@ std::optional<std::string> json_string_field(const std::string& text, Field fiel
     return std::nullopt;  // unterminated string
 }
 
-// The key's integer value; zero for absent or not a number. A stream reads
-// it without atoi's silent zero for text and without pointer arithmetic.
-int json_int_field(const std::string& text, StatsField field) {
+// The key's integer value, std::nullopt for an absent key; zero for a key that
+// is not a number. A stream reads it without atoi's silent zero for text and
+// without pointer arithmetic.
+template <typename Field>
+std::optional<int> json_int_field(const std::string& text, Field field) {
     const auto start = json_value_start(text, field);
-    int value = 0;
-    if (start) {
-        std::istringstream{text.substr(*start)} >> value;
+    if (!start) {
+        return std::nullopt;
     }
+    int value = 0;
+    std::istringstream{text.substr(*start)} >> value;
     return value;
 }
 
 }  // namespace
 
-std::string state_string(const cube::solver::Cube& cube) {
+std::string state_string(const cube::nxn::NCube& cube) {
     constexpr std::array<char, 6> kLetters{'U', 'R', 'F', 'D', 'L', 'B'};
+    const int size = cube.size();
+    const auto n = static_cast<std::size_t>(size);
     std::string out;
-    out.reserve(54);
+    out.reserve(6 * n * n);
     for (const cube::solver::Face face : kManifestFaceOrder) {
-        for (int index = 0; index < 9; ++index) {
-            // A sticker shows the colour that is some face's centre; that
-            // face's letter is the character.
-            const cube::solver::Color colour = cube.at(face, index);
-            char letter = '?';
-            for (std::size_t f = 0; f < kManifestFaceOrder.size(); ++f) {
-                if (cube::solver::canonical_color(kManifestFaceOrder.at(f)) == colour) {
-                    letter = kLetters.at(f);
+        for (int row = 0; row < size; ++row) {
+            for (int col = 0; col < size; ++col) {
+                // A sticker shows the colour that is some face's centre; that
+                // face's letter is the character.
+                const cube::solver::Color colour = cube.at(face, row, col);
+                char letter = '?';
+                for (std::size_t f = 0; f < kManifestFaceOrder.size(); ++f) {
+                    if (cube::solver::canonical_color(kManifestFaceOrder.at(f)) == colour) {
+                        letter = kLetters.at(f);
+                    }
                 }
+                out.push_back(letter);
             }
-            out.push_back(letter);
         }
     }
     return out;
 }
 
-std::optional<std::string> state_string_problem(const std::string& state) {
+std::string state_string(const cube::solver::Cube& cube) {
+    return state_string(cube::nxn::NCube::from_cube3(cube));
+}
+
+namespace {
+
+// The cube sizes a manifest may name.
+bool is_cube_size(int size) noexcept {
+    return size >= cube::nxn::kMinSize && size <= cube::nxn::kMaxSize;
+}
+
+std::optional<std::string> size_problem(int size) {
+    if (is_cube_size(size)) {
+        return std::nullopt;
+    }
+    return "size must be between " + std::to_string(cube::nxn::kMinSize) + " and " +
+           std::to_string(cube::nxn::kMaxSize) + ", got " + std::to_string(size);
+}
+
+// state_string_problem for a 3x3: the 54 letters through the 3x3 solver's own
+// oracle.
+std::optional<std::string> state_string_problem_3x3(const std::string& state) {
     if (state.size() != 54) {
         return "state must be 54 characters, got " + std::to_string(state.size());
     }
@@ -268,9 +301,66 @@ std::optional<std::string> state_string_problem(const std::string& state) {
     return std::nullopt;
 }
 
+// state_string_problem for any other size: the letters through the N x N
+// oracle (cube::nxn::validate). An odd size has a middle sticker on every
+// side, fixed by position as the 3x3's centres are; an even size has none, so
+// its letters are only colours.
+std::optional<std::string> state_string_problem_nxn(const std::string& state, int size) {
+    const auto n = static_cast<std::size_t>(size);
+    const std::size_t per_face = n * n;
+    if (state.size() != 6 * per_face) {
+        return "state must be " + std::to_string(6 * per_face) + " characters for a cube of size " +
+               std::to_string(size) + ", got " + std::to_string(state.size());
+    }
+    std::vector<cube::solver::Color> colours(state.size());
+    for (std::size_t i = 0; i < state.size(); ++i) {
+        const auto face = face_from_letter(state.at(i));
+        if (!face) {
+            return "state[" + std::to_string(i) + "] is '" + std::string(1, state.at(i)) +
+                   "', expected one of URFDLB";
+        }
+        // The state string's sides come in URFDLB order; an NCube numbers them
+        // in the solver's (U, D, L, R, F, B).
+        const auto slot = static_cast<std::size_t>(kManifestFaceOrder.at(i / per_face));
+        colours.at((slot * per_face) + (i % per_face)) = cube::solver::canonical_color(*face);
+    }
+    static constexpr std::array<char, 6> kCentreLetters{'U', 'R', 'F', 'D', 'L', 'B'};
+    if (size % 2 == 1) {
+        for (std::size_t f = 0; f < 6; ++f) {
+            const std::size_t middle = (f * per_face) + ((n / 2) * n) + (n / 2);
+            if (state.at(middle) != kCentreLetters.at(f)) {
+                return "state[" + std::to_string(middle) + "] must be the centre '" +
+                       std::string(1, kCentreLetters.at(f)) + "', got '" +
+                       std::string(1, state.at(middle)) + "'";
+            }
+        }
+    }
+    const auto cube = cube::nxn::NCube::from_facelets(size, colours);
+    if (!cube.has_value()) {
+        return "state does not describe a physically valid cube";
+    }
+    if (const auto verdict = cube::nxn::validate(*cube); !verdict.ok()) {
+        return "state describes a cube no one could hold: " +
+               std::string(cube::nxn::to_string(verdict.fault));
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+std::optional<std::string> state_string_problem(const std::string& state, int size) {
+    if (auto problem = size_problem(size)) {
+        return problem;
+    }
+    return size == 3 ? state_string_problem_3x3(state) : state_string_problem_nxn(state, size);
+}
+
 std::optional<std::string> write_manifest(const std::string& dir, const Manifest& manifest) {
+    if (auto problem = size_problem(manifest.size)) {
+        return problem;
+    }
     if (manifest.state) {
-        if (auto problem = state_string_problem(*manifest.state)) {
+        if (auto problem = state_string_problem(*manifest.state, manifest.size)) {
             return problem;
         }
     }
@@ -288,6 +378,10 @@ std::optional<std::string> write_manifest(const std::string& dir, const Manifest
         out += last ? "\n" : ",\n";
     };
     field("state", manifest.state);
+    if (manifest.size != 3) {
+        // Absent means a 3x3, so a 3x3's file is the one it always was.
+        out += "  \"size\": " + std::to_string(manifest.size) + ",\n";
+    }
     field("lighting", manifest.lighting);
     field("motion_script", manifest.motion_script);
     field("camera", manifest.camera);
@@ -316,6 +410,7 @@ std::optional<Manifest> read_manifest(const std::string& dir) {
     }
     Manifest manifest;
     manifest.state = json_string_field(text, ManifestField::state);
+    manifest.size = json_int_field(text, ManifestField::size).value_or(3);
     manifest.lighting = json_string_field(text, ManifestField::lighting).value_or("");
     manifest.motion_script = json_string_field(text, ManifestField::motion_script).value_or("");
     manifest.camera = json_string_field(text, ManifestField::camera).value_or("");
@@ -379,8 +474,8 @@ std::optional<RecorderStats> read_recorder_stats(const std::string& dir) {
     buffer << stats_file.rdbuf();
     const std::string text = buffer.str();
     return RecorderStats{
-        .dropped = json_int_field(text, StatsField::dropped),
-        .failed = json_int_field(text, StatsField::failed),
+        .dropped = json_int_field(text, StatsField::dropped).value_or(0),
+        .failed = json_int_field(text, StatsField::failed).value_or(0),
         .error = json_string_field(text, StatsField::error).value_or(""),
     };
 }
@@ -406,9 +501,14 @@ std::optional<std::string> check_recording(const std::string& dir) {
     if (auto problem = index_problem(dir, rows)) {
         return problem;
     }
-    if (const auto manifest = read_manifest(dir); manifest && manifest->state) {
-        if (auto problem = state_string_problem(*manifest->state)) {
-            return "manifest state invalid: " + *problem;
+    if (const auto manifest = read_manifest(dir); manifest) {
+        if (auto problem = size_problem(manifest->size)) {
+            return "manifest size invalid: " + *problem;
+        }
+        if (manifest->state) {
+            if (auto problem = state_string_problem(*manifest->state, manifest->size)) {
+                return "manifest state invalid: " + *problem;
+            }
         }
     }
     if (stats && stats->dropped > 0) {

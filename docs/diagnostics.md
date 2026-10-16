@@ -92,9 +92,10 @@ Colours are CIELAB, `[L, a, b]` (L 0 to 100). Names are fixed words: `white`,
 `yellow`, `red`, `orange`, `green`, `blue`, `unknown`; errors are the
 `CubeError` enumerator's name (`ambiguous_scan`, `invalid_cube_state`, ...).
 A number that is not finite is `null`, so a line is always valid JSON. Cube
-states are the 54-character `U R F D L B` strings of
-[recording-format.md](recording-format.md#manifestjson) (`state`), so a cube
-on screen can be pasted into a manifest.
+states are the `U R F D L B` strings of
+[recording-format.md](recording-format.md#manifestjson) (`state`: 54 characters
+for a 3x3, `6 * size^2` for the other sizes), so a cube on screen can be pasted
+into a manifest.
 
 ### Record kinds
 
@@ -182,9 +183,13 @@ view from the cube as it stood, and after the move, and how many stickers
 (`stickers_off`) plainly disagree.
 
 **`solve`** - when a solution lands (`event: "solution"`) and on every step
-(`event: "state"`): `method`, `is_solving`, `move_index`, `total_moves`,
-`current_move`, `moves` (the whole solution in standard notation), `cube` (the
-state now), `started_from`, `solved`, `stage`.
+(`event: "state"`): `method`, `size` (the cube's side length, 2 to 9), `is_solving`,
+`move_index`, `total_moves`, `current_move`, `moves` (the whole solution in
+standard notation, wide moves and all for a big cube), `cube` (the state now),
+`started_from`, `solved`, `stage`. `cube` and `started_from` are the state
+strings of [the recording manifest](recording-format.md#manifestjson): 54
+characters for a 3x3, `6 * size^2` for the other sizes, so one can be pasted into
+a manifest together with the `size`.
 
 **`snapshot`** - see below.
 
