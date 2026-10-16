@@ -40,11 +40,11 @@ target_compile_definitions(cube_nxn_sources PUBLIC FMT_HEADER_ONLY)
 if(MSVC)
     target_compile_options(cube_nxn_sources PRIVATE /utf-8)  # {fmt} asks for it
 endif()
-if(EMSCRIPTEN)
-    # Qt's WebAssembly kit links with threads; everything linked in has to have
-    # been compiled for them.
-    target_compile_options(cube_nxn_sources PRIVATE -pthread)
-endif()
+# Whatever the Qt kit asks of everything linked into a Qt program: the
+# WebAssembly kit links with threads, so these sources have to be compiled for
+# them. Taking the flags from Qt's own platform target means no test of the
+# operating system here.
+target_link_libraries(cube_nxn_sources PRIVATE Qt6::Platform)
 # The same room src/lib/CMakeLists.txt gives the two files that build tables in
 # constant expressions.
 if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
@@ -73,3 +73,8 @@ qt_add_qml_module(cube3d_prototype
         player.hpp player.cpp)
 target_link_libraries(cube3d_prototype PRIVATE
     cube_nxn_sources Qt6::Core Qt6::Gui Qt6::Quick Qt6::Quick3D Qt6::Qml)
+
+# The page the WebAssembly build is opened from (run.html?mode=lift&size=7):
+# it passes the address's query to the program as its command line. Beside the
+# build, whatever the kit; only a WebAssembly build has anything for it to load.
+configure_file(run.html "${CMAKE_CURRENT_BINARY_DIR}/run.html" COPYONLY)

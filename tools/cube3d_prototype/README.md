@@ -48,7 +48,6 @@ plays the moves 160 ms a turn, prints one line of JSON and quits. The render loo
 |---|---|
 | `moving.syncRenderMeanMs` | the scene graph's own work in a frame, from the animations having advanced to the frame being swapped in: the figure that says whether a frame fits in 16.7 ms |
 | `moving.p50Ms`, `p95Ms` | the interval between frames; with vsync it is the display's 16.7 ms when the frame fits, and longer when it does not |
-| `moving.cpuMsPerFrame` | the process's processor time over the phase, all threads, per frame |
 | `moveWall.meanMicros` | what one move took on the clock (a turn is `--turn-ms`, more if frames were late) |
 | `pickUp`, `setDown` | the time in lifting a layer and setting it down |
 | `sceneReadyMs`, `peakWorkingSetMB` | to the first frame; peak memory (`run-proto.ps1`-style wrappers add it) |
@@ -57,7 +56,8 @@ plays the moves 160 ms a turn, prints one line of JSON and quits. The render loo
 `-DQT_HOST_PATH=<the desktop Qt>`), serve the directory with
 `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy:
 require-corp`, and open
-`cube3d_prototype.html?mode=lift&size=7&moves=40&solve=1`. A page that is not on
+`run.html?mode=lift&size=7&moves=40&solve=1` (the page `run.html`, copied beside the
+build, passes the address's query to the program as its command line). A page that is not on
 screen is not drawn, so do not measure it in a hidden tab: a headless Chromium with the
 GPU on (`--headless=new --use-angle=d3d11`, driven over the DevTools protocol to read
 the console) is.

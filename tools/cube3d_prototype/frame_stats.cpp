@@ -11,40 +11,9 @@
 #include <algorithm>
 #include <numeric>
 
-#if defined(Q_OS_WIN)
-#define NOMINMAX
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#else
-#include <sys/resource.h>
-#endif
-
 namespace cube3d {
 
 namespace {
-
-// The processor time the process has used so far, user and kernel, all threads.
-[[nodiscard]] double process_cpu_ms() {
-#if defined(Q_OS_WIN)
-    FILETIME created{};
-    FILETIME exited{};
-    FILETIME kernel{};
-    FILETIME user{};
-    GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user);
-    const auto ticks = [](const FILETIME& t) {
-        return static_cast<double>((static_cast<unsigned long long>(t.dwHighDateTime) << 32) |
-                                   t.dwLowDateTime);
-    };
-    return (ticks(kernel) + ticks(user)) / 10000.0;  // 100 ns ticks
-#else
-    rusage usage{};
-    getrusage(RUSAGE_SELF, &usage);
-    const auto ms = [](const timeval& t) {
-        return (static_cast<double>(t.tv_sec) * 1000.0) + (static_cast<double>(t.tv_usec) / 1000.0);
-    };
-    return ms(usage.ru_utime) + ms(usage.ru_stime);
-#endif
-}
 
 [[nodiscard]] double percentile(std::vector<double> values, double fraction) {
     if (values.empty()) {
@@ -87,11 +56,6 @@ void FrameStats::attach(QQuickWindow* window) {
 }
 
 void FrameStats::phase(const QString& name) {
-    const double cpu = process_cpu_ms();
-    if (!current_.isEmpty()) {
-        phases_[current_].cpu_ms += cpu - cpu_at_phase_start_ms_;
-    }
-    cpu_at_phase_start_ms_ = cpu;
     current_ = name;
     if (!name.isEmpty()) {
         phases_[name];
@@ -127,10 +91,7 @@ void FrameStats::finish(const QVariantMap& facts) {
             p.insert(QStringLiteral("p95Ms"), percentile(v, 0.95));
             p.insert(QStringLiteral("p99Ms"), percentile(v, 0.99));
             p.insert(QStringLiteral("maxMs"), *std::ranges::max_element(v));
-            // What a frame costs the processor, whatever sets the pace.
-            p.insert(QStringLiteral("cpuMsPerFrame"), phase.cpu_ms / static_cast<double>(v.size()));
         }
-        p.insert(QStringLiteral("cpuMs"), phase.cpu_ms);
         const auto& f = phase.frame_ms;
         if (!f.empty()) {
             p.insert(QStringLiteral("syncRenderMeanMs"),

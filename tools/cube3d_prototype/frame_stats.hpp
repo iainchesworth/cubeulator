@@ -50,8 +50,6 @@ private:
         // what the scene graph itself costs, which the interval above (set by
         // the animation timer, not by the work) does not show.
         std::vector<double> frame_ms;
-        // The process's own processor time over the phase, all threads, in ms.
-        double cpu_ms = 0.0;
     };
     struct Tally {
         double micros = 0.0;
@@ -65,7 +63,6 @@ private:
     QString current_;
     QElapsedTimer animated_clock_;
     bool animated_ = false;
-    double cpu_at_phase_start_ms_ = 0.0;
     std::map<QString, Phase> phases_;
     std::map<QString, Tally> tallies_;
     double scene_ready_ms_ = -1.0;
