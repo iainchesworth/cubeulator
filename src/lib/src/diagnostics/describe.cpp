@@ -338,6 +338,10 @@ Json cube_json(const cube::solver::Cube& cube) {
     return Json(cube::vision::recording::state_string(cube));
 }
 
+Json cube_json(const cube::nxn::NCube& cube) {
+    return Json(cube::vision::recording::state_string(cube));
+}
+
 Json move_json(const std::optional<cube::solver::Move>& move) {
     return move.has_value() ? Json(cube::solver::to_string(*move)) : Json();
 }

@@ -117,6 +117,48 @@ inline constexpr MethodBudget kAdvanced = {
 };
 
 // ---------------------------------------------------------------------------
+// The N x N solver, counted in moves and cycles
+// ---------------------------------------------------------------------------
+
+// A cube of any size from 2 is solved by reduction (docs/nxn-solver.md), and
+// what that costs is its length: every move of a solution is a table lookup, so
+// the moves made are the work done, and the cycle library a size builds on first
+// use (the 3-cycles its searches choose from) is what that setup costs and
+// holds. Both are counted, not timed, so they are exact on every machine and
+// held a quarter above what they measure. The wall time of the same work, on a
+// desktop, in WebAssembly and on a phone, is docs/performance.md, "Cubes of any
+// size".
+//
+// The corpus is nxn_scramble(size, 1) .. nxn_scramble(size, kNxnSeeds): 60 + 10
+// N random layer turns. Every size the library solves, the 2x2 through the 9x9.
+inline constexpr unsigned kNxnSeeds = 6;
+
+struct SizeBudget {
+    int size;
+    // The most moves in one solve, and the corpus mean.
+    std::uint64_t max_moves;
+    double mean_moves;
+    // The 3-cycles the size's library holds (0 below 4x4, which needs none).
+    std::uint64_t cycles;
+};
+// Measured (worst solve / mean over the six): 2x2 9 / 8.5, 3x3 21 / 19.7, 4x4
+// 145 / 129.8, 5x5 187 / 172.0, 6x6 347 / 335.3, 7x7 434 / 412.8, 8x8 643 / 616.5,
+// 9x9 759 / 737.0. A library holds 4,048 cycles for each orbit of centres and of
+// wings the size has - every 3-cycle of the 24 pieces of an orbit - so that is
+// a structural number, held exactly: 4x4 two orbits (one of each), 5x5 three,
+// 6x6 six, 7x7 eight, 8x8 twelve, 9x9 fifteen.
+inline constexpr std::array<SizeBudget, 8> kNxnSizes = {{
+    {.size = 2, .max_moves = 12, .mean_moves = 11.0, .cycles = 0},
+    {.size = 3, .max_moves = 27, .mean_moves = 25.0, .cycles = 0},
+    {.size = 4, .max_moves = 182, .mean_moves = 163.0, .cycles = 8'096},
+    {.size = 5, .max_moves = 235, .mean_moves = 215.0, .cycles = 12'144},
+    {.size = 6, .max_moves = 435, .mean_moves = 420.0, .cycles = 24'288},
+    {.size = 7, .max_moves = 545, .mean_moves = 516.0, .cycles = 32'384},
+    {.size = 8, .max_moves = 805, .mean_moves = 771.0, .cycles = 48'576},
+    {.size = 9, .max_moves = 950, .mean_moves = 922.0, .cycles = 60'720},
+}};
+
+// ---------------------------------------------------------------------------
 // The reader, counted in cv::Mat pixel buffers
 // ---------------------------------------------------------------------------
 
@@ -245,6 +287,14 @@ inline constexpr TimeBudget kScannedTime = {1.0};
 inline constexpr TimeBudget kCornerReadTime360 = {3.0};
 inline constexpr TimeBudget kCornerReadTime1080 = {8.0};
 inline constexpr TimeBudget kEmptyCornerReadTime360 = {2.0};
+
+// An N x N solve, with the size's one-off setup (cycles, centre search) already
+// built, against the light calibration: 10.4 (5x5, a solve of about 45 ms), 15.6
+// (7x7, about 65 ms) and 39.8 (9x9, about 170 ms). The setup is not timed: it can
+// be made once per process, and docs/performance.md has it.
+inline constexpr TimeBudget kNxnSolveTime5 = {40.0};
+inline constexpr TimeBudget kNxnSolveTime7 = {60.0};
+inline constexpr TimeBudget kNxnSolveTime9 = {150.0};
 
 // How many timed runs each takes, after one that is thrown away.
 inline constexpr int kSolveRuns = 5;

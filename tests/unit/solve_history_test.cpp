@@ -11,6 +11,9 @@
 #include "controllers/solve_history_store.hpp"
 #include "solve_controller.hpp"
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/cube3.hpp>
+#include <cube/nxn/strategy.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
 
@@ -28,10 +31,13 @@
 
 #include <memory>
 #include <set>
+#include <utility>
+#include <vector>
 
 using cube::app::HistoryEntry;
 using cube::app::SolveHistory;
 using cube::app::SolveHistoryStore;
+using cube::nxn::NCube;
 using cube::solver::Cube;
 using cube::solver::MoveCount;
 using cube::solver::random_scramble;
@@ -61,7 +67,7 @@ Cube scrambled(unsigned seed) {
 HistoryEntry make_entry(unsigned seed, int turn = 3, int turns = 20, bool finished = false) {
     HistoryEntry entry;
     entry.startedMs = 1'700'000'000'000 + static_cast<qint64>(seed);
-    entry.scanned = scrambled(seed);
+    entry.scanned = NCube::from_cube3(scrambled(seed));
     entry.from = entry.scanned;
     entry.method = static_cast<int>(seed % 3);
     entry.turn = turn;
@@ -111,7 +117,7 @@ TEST_CASE("a kept solve comes back as it was written", "[qt][history]") {
     // A solve whose method was changed part-way carries the cube it was
     // changed from.
     HistoryEntry third = make_entry(3, 0, 18, false);
-    third.from = scrambled(30);
+    third.from = NCube::from_cube3(scrambled(30));
 
     qint64 first_id = 0;
     qint64 second_id = 0;
@@ -231,7 +237,7 @@ TEST_CASE("a file that cannot be read is ignored, not fatal", "[qt][history]") {
         CHECK(store.setAsideUnreadableFile());
     }
     SECTION("a later version's file is set aside, and not written over") {
-        const QByteArray later = R"({"version":2,"entries":[{"anything":"at all"}]})";
+        const QByteArray later = R"({"version":3,"entries":[{"anything":"at all"}]})";
         write_all(file, later);
         SolveHistoryStore store(file);
         CHECK(store.entries().empty());
@@ -286,7 +292,7 @@ TEST_CASE("what is written holds the colours and numbers, never a picture", "[qt
     {
         SolveHistoryStore store(file);
         HistoryEntry entry = make_entry(7);
-        entry.from = scrambled(8);  // so that the optional key is there too
+        entry.from = NCube::from_cube3(scrambled(8));  // so that the optional key is there too
         store.add(entry);
     }
 
@@ -348,7 +354,7 @@ TEST_CASE("a solve is added when its first turn is advanced, and followed", "[qt
     const SolveHistoryStore on_disk(file);
     REQUIRE(on_disk.entries().size() == 1);
     CHECK(on_disk.entries().front().turn == 2);
-    CHECK(on_disk.entries().front().scanned == cube);
+    CHECK(on_disk.entries().front().scanned == NCube::from_cube3(cube));
     CHECK_FALSE(on_disk.entries().front().finished);
 }
 
@@ -444,8 +450,8 @@ TEST_CASE("changing the method part-way carries on the same entry", "[qt][histor
 
     const SolveHistoryStore store(history.store().file());
     REQUIRE(store.entries().size() == 1);
-    CHECK(store.entries().front().scanned == cube);
-    CHECK(store.entries().front().from == in_hand);
+    CHECK(store.entries().front().scanned == NCube::from_cube3(cube));
+    CHECK(store.entries().front().from == NCube::from_cube3(in_hand));
 }
 
 TEST_CASE("an unfinished solve is picked up where it was left", "[qt][history]") {
@@ -620,4 +626,243 @@ TEST_CASE(
 
     // Nothing for an id that is not there.
     CHECK(history.reviewOf(987654) == nullptr);
+}
+
+// ---- cubes of any size -------------------------------------------------------
+
+namespace {
+
+// A cube of `size` scrambled by layer turns, and the solution to it as turns of
+// single layers: what an entry for a cube bigger than a 3x3 keeps.
+struct Big {
+    NCube cube;
+    std::vector<cube::nxn::LayerMove> moves;
+};
+
+Big big_cube(int size, unsigned seed) {
+    NCube cube = cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 40 + (8 * size)});
+    const auto solution = cube::nxn::solve_held(cube, cube::solver::SolveMethod::Advanced);
+    REQUIRE(solution.has_value());
+    return Big{.cube = std::move(cube), .moves = solution->moves()};
+}
+
+HistoryEntry make_big_entry(int size, unsigned seed) {
+    Big big = big_cube(size, seed);
+    HistoryEntry entry;
+    entry.startedMs = 1'700'000'000'000 + static_cast<qint64>(seed);
+    entry.scanned = big.cube;
+    entry.from = big.cube;
+    entry.moves = big.moves;
+    entry.method = 2;
+    entry.turn = 5;
+    entry.turns = static_cast<int>(big.moves.size());
+    entry.seconds = 120;
+    return entry;
+}
+
+// The first release's file, byte for byte what it wrote for one solved 3x3 that
+// has been followed one turn (the cube is the 54 letters of Cube::solved()).
+constexpr char kFirstReleasesFile[] =
+    R"({"entries":[{"cube":"YYYYYYYYYWWWWWWWWWRRRRRRRRROOOOOOOOOGGGGGGGGGBBBBBBBBB",)"
+    R"("finished":false,"id":1,"method":0,"seconds":7,"started":1700000000000,"turn":1,"turns":3}],)"
+    R"("version":1})";
+
+}  // namespace
+
+TEST_CASE("the first release's file is read as 3x3s, and stays that file while it can",
+          "[qt][history]") {
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+    write_all(file, kFirstReleasesFile);
+
+    SolveHistoryStore store(file);
+    REQUIRE(store.entries().size() == 1);
+    CHECK_FALSE(store.setAsideUnreadableFile());
+    const HistoryEntry& kept = store.entries().front();
+    CHECK(kept.scanned.size() == 3);
+    CHECK(kept.scanned == *NCube::solved(3));
+    CHECK(kept.from == kept.scanned);
+    CHECK(kept.moves.empty());
+    CHECK(kept.turn == 1);
+    CHECK(kept.turns == 3);
+
+    // Another 3x3 is added: the file is still the first release's, so that the
+    // app that wrote it can go on reading it.
+    store.add(make_entry(4));
+    const QJsonObject root = QJsonDocument::fromJson(read_all(file)).object();
+    CHECK(root.value("version").toInt() == 1);
+    for (const QJsonValue& entry : root.value("entries").toArray()) {
+        CHECK_FALSE(entry.toObject().contains("size"));
+        CHECK_FALSE(entry.toObject().contains("moves"));
+    }
+}
+
+TEST_CASE("a cube of another size is kept with its size and its solution", "[qt][history]") {
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+
+    HistoryEntry five = make_big_entry(5, 1);
+    HistoryEntry two = make_big_entry(2, 2);
+    qint64 five_id = 0;
+    qint64 two_id = 0;
+    {
+        SolveHistoryStore store(file);
+        store.add(make_entry(3));  // a 3x3 beside them
+        five_id = store.add(five);
+        two_id = store.add(two);
+        REQUIRE_FALSE(store.lastWriteFailed());
+    }
+
+    const SolveHistoryStore reloaded(file);
+    REQUIRE(reloaded.entries().size() == 3);
+    CHECK_FALSE(reloaded.setAsideUnreadableFile());
+
+    const HistoryEntry* got = reloaded.find(five_id);
+    REQUIRE(got != nullptr);
+    CHECK(got->scanned.size() == 5);
+    CHECK(got->scanned == five.scanned);
+    CHECK(got->from == five.from);
+    CHECK(got->moves == five.moves);
+    CHECK(got->turn == five.turn);
+    CHECK(got->turns == five.turns);
+
+    const HistoryEntry* got_two = reloaded.find(two_id);
+    REQUIRE(got_two != nullptr);
+    CHECK(got_two->scanned.size() == 2);
+    CHECK(got_two->moves == two.moves);
+
+    // What is on disk: the second version, with a size and the solution on the
+    // entries that need them and nothing extra on the 3x3.
+    const QJsonObject root = QJsonDocument::fromJson(read_all(file)).object();
+    CHECK(root.value("version").toInt() == 2);
+    int with_size = 0;
+    for (const QJsonValue& value : root.value("entries").toArray()) {
+        const QJsonObject entry = value.toObject();
+        if (entry.contains("size")) {
+            ++with_size;
+            CHECK(entry.value("cube").toString().size() ==
+                  6 * entry.value("size").toInt() * entry.value("size").toInt());
+            CHECK(entry.value("moves").isString());
+        } else {
+            CHECK(entry.value("cube").toString().size() == 54);
+            CHECK_FALSE(entry.contains("moves"));
+        }
+    }
+    CHECK(with_size == 2);
+}
+
+TEST_CASE("the longest solution the library makes is kept", "[qt][history][slow]") {
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+    HistoryEntry nine = make_big_entry(9, 1);
+    REQUIRE(nine.moves.size() > 400);  // past the first release's cap
+    REQUIRE(nine.moves.size() < 2000);
+    {
+        SolveHistoryStore store(file);
+        store.add(nine);
+    }
+    const SolveHistoryStore reloaded(file);
+    REQUIRE(reloaded.entries().size() == 1);
+    CHECK(reloaded.entries().front().moves == nine.moves);
+    CHECK(reloaded.entries().front().turns == nine.turns);
+}
+
+TEST_CASE("a damaged entry of another size is dropped, a damaged solution is not kept",
+          "[qt][history]") {
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+    const HistoryEntry original = make_big_entry(4, 1);
+    {
+        SolveHistoryStore store(file);
+        store.add(original);
+    }
+    QJsonObject root = QJsonDocument::fromJson(read_all(file)).object();
+    QJsonArray entries = root.value("entries").toArray();
+    const QJsonObject good = entries.at(0).toObject();
+
+    // Dropped, each by itself: a size no cube has; a size that does not fit the
+    // letters; a cube that is not one turns could make (two stickers swapped);
+    // a turn count past what any solve takes.
+    QJsonObject no_such_size = good;
+    no_such_size["id"] = 11;
+    no_such_size["size"] = 1;
+    QJsonObject too_big = good;
+    too_big["id"] = 12;
+    too_big["size"] = 10;
+    QJsonObject wrong_size = good;
+    wrong_size["id"] = 13;
+    wrong_size["size"] = 5;
+    QJsonObject not_a_cube = good;
+    not_a_cube["id"] = 14;
+    QString letters = good.value("cube").toString();
+    // A sticker repainted: a colour is one short and another one over.
+    letters[0] = letters.at(0) == QLatin1Char('W') ? QLatin1Char('Y') : QLatin1Char('W');
+    not_a_cube["cube"] = letters;
+    not_a_cube["from"] = letters;
+    QJsonObject too_long = good;
+    too_long["id"] = 15;
+    too_long["turns"] = 2001;
+    too_long["turn"] = 3;
+    for (const QJsonObject& bad : {no_such_size, too_big, wrong_size, not_a_cube, too_long}) {
+        entries.append(bad);
+    }
+
+    // Kept, without the solution: one that does not solve the cube it is for.
+    QJsonObject wrong_moves = good;
+    wrong_moves["id"] = 16;
+    wrong_moves["moves"] = QStringLiteral("R U R'");
+    entries.append(wrong_moves);
+    QJsonObject garbled_moves = good;
+    garbled_moves["id"] = 17;
+    garbled_moves["moves"] = QStringLiteral("R U Q");
+    entries.append(garbled_moves);
+
+    root["entries"] = entries;
+    write_all(file, QJsonDocument(root).toJson());
+
+    const SolveHistoryStore store(file);
+    CHECK_FALSE(store.setAsideUnreadableFile());
+    REQUIRE(store.entries().size() == 3);
+    CHECK(store.find(1) != nullptr);
+    REQUIRE(store.find(16) != nullptr);
+    CHECK(store.find(16)->moves.empty());
+    CHECK(store.find(16)->scanned.size() == 4);
+    REQUIRE(store.find(17) != nullptr);
+    CHECK(store.find(17)->moves.empty());
+    CHECK(store.find(1)->moves == original.moves);
+}
+
+TEST_CASE("the controller keeps the solution of a cube bigger than a 3x3, and not a 3x3's",
+          "[qt][history]") {
+    isolate_settings();
+    QTemporaryDir dir;
+    const QString file = dir.filePath(QStringLiteral("solve-history.json"));
+    SolveController solve;
+    SolveHistory history(solve, file);
+
+    // A 5x5: the entry has its size, its front side as 25 colours, and the
+    // solution in force.
+    const Big big = big_cube(5, 3);
+    solve.solveCube(big.cube);
+    REQUIRE(wait_until_solved(solve));
+    REQUIRE(solve.totalMoves() > 2);
+    solve.nextMove();
+    REQUIRE(history.count() == 1);
+    const QVariantMap map = history.entries().first().toMap();
+    CHECK(map.value("size").toInt() == 5);
+    CHECK(map.value("stickers").toList().size() == 25);
+    const HistoryEntry kept = SolveHistoryStore(file).entries().front();
+    CHECK(kept.scanned == big.cube);
+    CHECK(kept.from == big.cube);
+    CHECK(kept.moves == solve.plan().layer_turns());
+    CHECK_FALSE(kept.moves.empty());
+
+    // A 3x3 after it: no solution kept, nine colours, size 3.
+    solve_and_wait(solve, scrambled(40));
+    solve.nextMove();
+    REQUIRE(history.count() == 2);
+    const QVariantMap three = history.entries().first().toMap();
+    CHECK(three.value("size").toInt() == 3);
+    CHECK(three.value("stickers").toList().size() == 9);
+    CHECK(SolveHistoryStore(file).entries().front().moves.empty());
 }

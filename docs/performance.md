@@ -14,6 +14,8 @@ estimate.
 |---|---|---|
 | One camera frame, `direct_scan.process_frame` | 33 ms, all of it, on the GUI thread | `DirectScan` polls at about 30 Hz (`kPollIntervalMs`); a pass longer than the interval delays the next frame and everything else on that thread |
 | One solve, `solver.solve` | seconds on a phone, for every input | the solve screen waits for it; no search path may be unbounded (`solver.hpp`) |
+| One solve of a cube of any size, `nxn::solve` | seconds on a phone, for every input; under a quarter of a second on a desktop at every size to 9x9 | the same: the solve screen waits for it, and the work is a fixed pipeline of table lookups with no unbounded search ([Cubes of any size](#cubes-of-any-size)) |
+| The one-off setup for a size, `nxn::prepare(size)` | seconds on a phone, off the UI thread, while a person scans or enters the cube | the geometry, the cycle library and the centre search's actions are built once per size on first use; the solve itself runs on a worker already |
 | Launch to a drawn first screen | no figure is committed; under about 2 s on a desktop is proposed here | nothing waits on it but the person |
 | One UI frame | 16.7 ms (60 Hz) | the display |
 
@@ -244,6 +246,70 @@ nothing measurable (the llvmpipe row), so the walk could ask for the cube the
 app ships and the distinction could go: `app.hpp`, `app.cpp`, three callers and
 the time-budget part of [testing](testing.md). Not done here; `tests/web` no
 longer takes the probe out.
+
+## Cubes of any size
+
+`cube::nxn` solves a cube from 2x2 to 9x9 by reduction ([nxn-solver.md](nxn-solver.md)).
+What a person waits for is two things: the **setup** for a size, built once per
+process on first use (`nxn::prepare(size, method)`: the turn tables, the library
+of 3-cycles the wings and centres are built from, and the centre search's
+actions), and the **solve** that follows it. The app does the first on a worker
+while a person is scanning or entering a cube, and the second on the solve's
+worker thread already.
+
+`cube_nxn_bench time` measures both (setup alone first, then ten seeded
+scrambles with the setup in place), in the build it is given. `tools/nxn_bench/
+standalone.py` compiles it straight from the sources for a target the build does
+not make it for (no OpenCV, no Qt): WebAssembly to run under Node, or an arm64
+Android executable to `adb push` to a phone.
+
+Taken 2026-10-16, 10 scrambles of 60 + 10 N layer turns per size, one thread:
+
+| Size | Moves | Native setup | Native solve (median / max) | Wasm setup | Wasm solve (median / max) |
+|---|---|---|---|---|---|
+| 2x2 | 8 | 0 | 3.2 / 9.3 ms | 0 | 3.2 / 4.5 ms |
+| 3x3 | 19 | 0 | 31 / 33 ms | 0 | 39 / 44 ms |
+| 4x4 | 134 | 23 ms | 42 / 50 ms | 26 ms | 48 / 51 ms |
+| 5x5 | 172 | 47 ms | 41 / 47 ms | 33 ms | 50 / 55 ms |
+| 6x6 | 333 | 109 ms | 63 / 71 ms | 81 ms | 72 / 86 ms |
+| 7x7 | 412 | 172 ms | 73 / 80 ms | 139 ms | 89 / 98 ms |
+| 8x8 | 616 | 310 ms | 115 / 125 ms | 248 ms | 144 / 155 ms |
+| 9x9 | 742 | 462 ms | 164 / 187 ms | 379 ms | 203 / 228 ms |
+
+- **Native**: `windows-msvc-fastdebug` (RelWithDebInfo), MSVC 19.51, the 32-core
+  development machine, shared with other builds (so noise of tens of percent).
+- **Wasm**: the same sources through `emcc -O2` (Emscripten 5.0.5, the one the Qt
+  wasm kit needs), run under Node 24.19 (V8, the engine Chromium uses), on the
+  same machine. Not a browser tab, but the same engine and the same compiler; the
+  browser's own cost (a page that is busy, a throttled background tab) is not in
+  it. The 3x3 method's tables (`Advanced`, built once for any size) are 26 ms
+  native and 117 ms in wasm, and are charged to nobody above.
+- **Memory**: the peak working set of the whole process, setup and solves, is
+  22 MB native for every size to 7x7 and 36 MB at 9x9 (the process itself, with
+  the 3x3 tables, is 22); under Node it is 52 to 67 MB (Node's own is about 50).
+  The tables are not a memory concern at any size.
+- **A refused cube is not free, at 2x2.** Handed an unsolvable cube (a twisted
+  corner), `solve()` refuses a 3x3 at once and a 4x4 to 7x7 in 3 to 40 ms, but a
+  2x2 only after about a second: its search is exhaustive, against 8 ms for one
+  that can be solved. Nothing in the app hands it one (hand entry, a scan's
+  assembly and a history entry are validated first, by `nxn::validate`), but
+  `solve()` is public and promises bounded work on every input; asking the
+  oracle first would make the refusal instant.
+
+**On a phone** this is an estimate until a phone has run it: a phone's big core is
+about a third to two thirds of this machine's for code like this, a mid-range
+one a quarter, so a 7x7's setup is about 0.3 to 0.7 s and its solve 0.15 to 0.3 s,
+and a 9x9's 1 to 2 s and 0.4 to 0.8 s: seconds, at the very worst, for the
+sizes the app is meant to offer. `standalone.py android` builds the executable
+for the measurement. When it has been taken the figures replace this paragraph.
+
+**Held by the performance tier** (`cube_perf_tests`, [testing.md](testing.md)):
+the moves per size over a six-scramble corpus and the cycles each size's library
+holds, counted and exact on every machine, a quarter above what they measure
+(`budgets.hpp`, `kNxnSizes`); and, opt-in with the other wall-time checks, a
+5x5, 7x7 and 9x9 solve against the calibration workload (10.4, 15.6 and 39.8
+times it now; budgets 40, 60, 150). The setup is not timed there: it can be made
+once per process.
 
 ## Ranking
 
