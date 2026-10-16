@@ -180,7 +180,7 @@ Review the solution.
 ## String inventory
 
 <!-- strings:begin -->
-418 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
+431 strings. Generated from `strings.json` by `tools/build.py`; edit that file, not this table.
 
 
 #### `app`
@@ -325,6 +325,14 @@ Review the solution.
 | `stage.reduce.what` | Turn every piece the right way up and send the middle-layer edges back to the middle. | What this stage does, in one sentence. |
 | `stage.finish.title` | Finish | Name of the second of two stages of the Advanced method. Also the word on a button (solve.finish); here it is a heading. |
 | `stage.finish.what` | Solve the rest with turns of the top and bottom and half turns of the other four sides. | What this stage does, in one sentence. |
+| `stage.parity.title` | Set up | Name of the first stage of a solve of a cube bigger than 3x3 when it needs one. Shown with a number, like the other stages. 'Parity' is the cuber's word; do not use it. |
+| `stage.parity.what` | A few turns first, so that pairing up the pieces cannot leave two of them swapped, which only a big cube can do. | What this stage does, in one sentence. |
+| `stage.centres.title` | Centres | Name of a stage of a solve of a cube bigger than 3x3: gathering the middle stickers of each side. |
+| `stage.centres.what` | Gather the middle stickers of each side into one block of a single colour. | What this stage does, in one sentence. |
+| `stage.edges.title` | Edges | Name of a stage of a solve of a cube bigger than 3x3: pairing the edge pieces. |
+| `stage.edges.what` | Pair up the edge pieces into whole edges, so that the cube has twelve edges like a 3x3. | What this stage does, in one sentence. |
+| `stage.corners.title` | Corners | Name of the only stage of a solve of a 2x2. |
+| `stage.corners.what` | Put the eight corners where they belong. A 2x2 has nothing else. | What this stage does, in one sentence. |
 
 #### `home`
 
@@ -486,6 +494,11 @@ Review the solution.
 | `solve.stageOf` | Stage %1 of %2 | Which stage of this solution is being worked on, and how many it has: five for Beginner, four for Intermediate, two for Advanced. Shown in small capitals. |
 | `solve.next` | Next turn | The main button on the solve screen. Very large. |
 | `solve.previous` | Back one | Button. Undoes the last turn on screen so the person can undo it on the cube. |
+| `solve.move.layer` | %1 · layer %2 · %3 | The move in words for a layer inside a cube bigger than 3x3. %1 is the side, as 'Right side' or 'Top'; %2 is how far in the layer is counted from that side, starting at 1 for the outer layer; %3 is 'quarter turn' or 'half turn'. The dots are separators. |
+| `solve.move.layers` | %1 · layers %2 to %3 · %4 | The same for several layers turned together. %2 and %3 are the nearest and the farthest layer, counted from the side as above; %4 is 'quarter turn' or 'half turn'. |
+| `solve.skipToCore` | Skip to the 3x3 stage | Button on the solve screen of a cube bigger than 3x3. Jumps over the stages that pair up its pieces. |
+| `solve.skipToCore.note` | Use this once you have paired up the centres and edges yourself. The cube on screen jumps to the 3x3 it should now be. | Explains the button above it, for someone who can already solve a 3x3. |
+| `solve.method.finishWith` | Finish with | Small label above the three method buttons when the cube is bigger than 3x3: the methods apply to the 3x3 the cube has become, so they are said to be how it is finished. |
 | `solve.finish` | Finish | Replaces 'Next turn' on the last turn. |
 | `solve.hint.touch` | Make the turn, then tap the cube. | Shown once, on the first turn of a first solve, on touch devices. |
 | `solve.hint.keys` | Make the turn, then press Space. | The same, on a computer. 'Space' is the space bar. |

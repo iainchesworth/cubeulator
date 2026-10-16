@@ -70,6 +70,12 @@ private:
     // The cube's side length: 3 for a 3x3, 2 to 9 for any other.
     Q_PROPERTY(int size READ size NOTIFY stateChanged)
 
+    // The colour each side of the cube is meant to be, as the cube is held: side
+    // letter -> colour name. A side is named by the colour of its middle sticker,
+    // which never moves, on an odd size; on an even size it has none, and is named
+    // by the corners (cube::nxn::scheme_of). A 3x3's is what stickers[side][4] says.
+    Q_PROPERTY(QVariantMap sideColours READ sideColours NOTIFY stateChanged)
+
     // The whole solution, one entry per move: { face: side letter, turns:
     // quarter turns clockwise seen from outside that side, first, last:
     // the depth of the nearest and the farthest layer the move turns, counted
@@ -149,6 +155,7 @@ public:
     [[nodiscard]] std::optional<cube::solver::Move> currentMove() const noexcept;
 
     [[nodiscard]] int size() const;
+    [[nodiscard]] QVariantMap sideColours() const;
 
     [[nodiscard]] QString currentMoveNotation() const;
     [[nodiscard]] QString currentMoveFace() const;

@@ -10,6 +10,7 @@
 #include <QEventLoop>
 #include <QMetaObject>
 #include <QMetaProperty>
+#include <QStringList>
 #include <QVariantMap>
 
 #include <cstddef>
@@ -401,5 +402,46 @@ TEST_CASE("a 2x2 and a 4x4 say their size, and only the 4x4 has a reduction to s
         }
         controller.goToMove(controller.totalMoves());
         CHECK(controller.plan().current_cube().is_solved());
+    }
+}
+
+TEST_CASE("a side is named by the colour the cube is meant to have there, at any size",
+          "[qt][controllers]") {
+    // A solved cube of any size has each side its own colour; the names are the
+    // colours the screens already use (colour_name.hpp).
+    for (const int size : {2, 3, 4, 5, 7}) {
+        SolveController controller;
+        controller.solveCube(*cube::nxn::NCube::solved(size));
+        REQUIRE(wait_until_solved(controller));
+        INFO("size " << size);
+        const QVariantMap colours = controller.sideColours();
+        CHECK(colours.size() == 6);
+        QStringList seen;
+        for (const char* side : {"U", "D", "L", "R", "F", "B"}) {
+            REQUIRE(colours.contains(QString::fromLatin1(side)));
+            seen.append(colours.value(QString::fromLatin1(side)).toString());
+        }
+        seen.removeDuplicates();
+        CHECK(seen.size() == 6);  // six sides, six colours
+        if (size == 3) {
+            // The 3x3's own middle stickers say the same.
+            const QVariantMap stickers = controller.stickers();
+            for (const QString& side : colours.keys()) {
+                CHECK(colours.value(side) == stickers.value(side).toList().at(4));
+            }
+        }
+    }
+
+    // A cube scrambled with middle layers has moved its middles; a side is still named
+    // by the colour that is on it.
+    SolveController controller;
+    const cube::nxn::NCube scrambled =
+        cube::nxn::random_scramble({.size = 5, .seed = 9, .moves = 60});
+    controller.solveCube(scrambled);
+    REQUIRE(wait_until_solved(controller));
+    const QVariantMap colours = controller.sideColours();
+    const QVariantMap stickers = controller.stickers();
+    for (const QString& side : colours.keys()) {
+        CHECK(colours.value(side) == stickers.value(side).toList().at(12));  // the 5x5's middle
     }
 }

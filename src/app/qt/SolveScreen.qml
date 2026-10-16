@@ -32,10 +32,21 @@ Rectangle {
         { title: qsTrId("stage.reduce.title"), detail: qsTrId("stage.reduce.what") },
         { title: qsTrId("stage.finish.title"), detail: qsTrId("stage.finish.what") }
     ]
-    // The words for a cube::solver::Stage value. The methods have different
-    // stages, so a stage's value says what it is and nothing about its
-    // position: that is stagePosition below.
+    // The stages a cube that is not a 3x3 has before it is one, which follow in value
+    // (cube::nxn::StageId: parity 8, centres 9, edges 10, and a 2x2's corners 11).
+    readonly property var reductionStageCopy: [
+        { title: qsTrId("stage.parity.title"), detail: qsTrId("stage.parity.what") },
+        { title: qsTrId("stage.centres.title"), detail: qsTrId("stage.centres.what") },
+        { title: qsTrId("stage.edges.title"), detail: qsTrId("stage.edges.what") },
+        { title: qsTrId("stage.corners.title"), detail: qsTrId("stage.corners.what") }
+    ]
+    // The words for a stage value (cube::nxn::StageId, which numbers the 3x3's
+    // stages as cube::solver::Stage does). The methods have different stages, so a
+    // stage's value says what it is and nothing about its position: that is
+    // stagePosition below.
     function copyFor(stage) {
+        if (stage >= stageCopy.length + extraStageCopy.length)
+            return reductionStageCopy[stage - stageCopy.length - extraStageCopy.length];
         return stage < stageCopy.length ? stageCopy[stage] : extraStageCopy[stage - stageCopy.length];
     }
     readonly property var currentCopy: copyFor(SolveController.currentStageIndex)
@@ -45,7 +56,23 @@ Rectangle {
     // on every move (a model that changed each step would rebuild the list).
     property var stageOrder: []
     function updateStageOrder() {
-        stageOrder = SolveController.stageRanges.map(function (range) { return range.stageIndex; });
+        // A 3x3 is shown every stage its method has. A bigger cube's reduction has
+        // stages that a given cube does not need (no parity to set up, say): those
+        // are left out, so that what is listed is what there is to do.
+        var every = SolveController.size === 3;
+        stageOrder = SolveController.stageRanges
+            .filter(function (range) { return every || range.endIndex > range.startIndex; })
+            .map(function (range) { return range.stageIndex; });
+    }
+    // Where a stage is in this solution's moves, by its value; nothing before the
+    // solve has landed.
+    function rangeOf(stage) {
+        var ranges = SolveController.stageRanges;
+        for (var i = 0; i < ranges.length; i++) {
+            if (ranges[i].stageIndex === stage)
+                return ranges[i];
+        }
+        return undefined;
     }
     Connections {
         target: SolveController
@@ -93,8 +120,12 @@ Rectangle {
 
     readonly property bool guiding: !SolveController.isSolving && !SolveController.atEnd
 
-    // A side is named by the colour of its centre, which never moves.
-    function centreColor(side) { return SolveController.stickers[side][4]; }
+    // A side is named by the colour of its centre, which never moves. A cube with
+    // no centre sticker (an even size) is named by what its corners say.
+    function centreColor(side) {
+        return SolveController.size === 3 ? SolveController.stickers[side][4]
+                                          : SolveController.sideColours[side];
+    }
 
     // How the cube is held, in words: every move is shown on the cube as
     // held this way. An instruction until the camera has seen the cube, a
@@ -181,11 +212,20 @@ Rectangle {
     readonly property var placeWords: ({
         top: "Top", bottom: "Bottom", left: "Left side", right: "Right side", front: "Front", back: "Back"
     })
+    readonly property string turnWords: SolveController.currentMoveTurns === 2 ? "half turn" : "quarter turn"
+    readonly property bool outerMove: SolveController.currentMoveFirst === 0
+                                      && SolveController.currentMoveLast === 0
     readonly property string moveWords: {
         if (moveSide === "")
             return "";
-        return placeWords[movePlace] + " · "
-            + (SolveController.currentMoveTurns === 2 ? "half turn" : "quarter turn");
+        if (outerMove)
+            return placeWords[movePlace] + " · " + turnWords;
+        // A layer inside the cube is counted from the side the move is named for.
+        if (SolveController.currentMoveFirst === SolveController.currentMoveLast)
+            return qsTrId("solve.move.layer").arg(placeWords[movePlace])
+                .arg(SolveController.currentMoveFirst + 1).arg(turnWords);
+        return qsTrId("solve.move.layers").arg(placeWords[movePlace])
+            .arg(SolveController.currentMoveFirst + 1).arg(SolveController.currentMoveLast + 1).arg(turnWords);
     }
 
     // ---- where the cube is looked at from ------------------------------------
@@ -213,18 +253,32 @@ Rectangle {
     // one, changes nothing on screen.
     property int pendingStep: 0
 
+    // The cube on screen: the 3x3's own view, or the one for any other size.
+    readonly property bool threeByThree: SolveController.size === 3
+    readonly property Item cube: cubeLoader.item
+
+    // Turns the layers of a move on the cube on screen: all the way, then the
+    // cube says so (movePlayed).
+    function playOnCube(face, first, last, turns) {
+        if (threeByThree)
+            cube.playMove(face, turns);
+        else
+            cube.playMove(face, first, last, turns);
+    }
+
     function next() {
-        if (SolveController.isSolving)
+        if (SolveController.isSolving || cube === null)
             return;
         cube.finishPlaying(); // a turn still in flight lands first
         if (SolveController.atEnd)
             return;
         pendingStep = 1;
-        cube.playMove(SolveController.currentMoveFace, SolveController.currentMoveTurns);
+        playOnCube(SolveController.currentMoveFace, SolveController.currentMoveFirst,
+                   SolveController.currentMoveLast, SolveController.currentMoveTurns);
     }
 
     function previous() {
-        if (SolveController.isSolving)
+        if (SolveController.isSolving || cube === null)
             return;
         cube.finishPlaying();
         if (SolveController.atStart)
@@ -232,11 +286,11 @@ Rectangle {
         // Going back is the last move undone.
         var last = SolveController.moves[SolveController.moveIndex - 1];
         pendingStep = -1;
-        cube.playMove(last.face, 4 - last.turns);
+        playOnCube(last.face, last.first, last.last, 4 - last.turns);
     }
 
     Connections {
-        target: cube
+        target: root.cube
         function onMovePlayed() {
             var step = root.pendingStep;
             root.pendingStep = 0;
@@ -321,7 +375,8 @@ Rectangle {
         // follow. (The cube's box has air round the cube itself, which it
         // needs to turn a layer in; a box that is clear is a cube that is.)
         readonly property real corner: Theme.space4
-        readonly property bool cameraOn: AppState.solveCamera
+        // The camera reads a 3x3; a bigger cube has none to show yet.
+        readonly property bool cameraOn: AppState.solveCamera && root.threeByThree
         readonly property real insetWidth: root.wide ? 184 : 124
         readonly property real insetHeight: Math.round(insetWidth * 3 / 4)
         // The label's column, and the words wrap in it. Room is kept for
@@ -349,38 +404,70 @@ Rectangle {
         readonly property real underSide: Math.min(width, height - cubeTop - footRoom)
         readonly property real betweenSide: Math.min(width - 2 * sideRoom, height - corner - footRoom)
 
-        Cube3DView {
-            id: cube
+        // The cube: the 3x3's own view, or the one that draws any other size.
+        Loader {
+            id: cubeLoader
             readonly property bool between: stage.betweenSide > stage.underSide
             readonly property real side: Math.max(0, between ? stage.betweenSide : stage.underSide)
             readonly property real boxTop: between ? stage.corner : stage.cubeTop
             width: side; height: side
             anchors.horizontalCenter: parent.horizontalCenter
             y: boxTop + (parent.height - stage.footRoom - boxTop - side) / 2
+            sourceComponent: root.threeByThree ? cube3Component : cubeNComponent
+        }
 
-            // Drag it to look round the back; let go and it comes home. The
-            // layer about to move keeps nudging all the while.
-            interactive: true
-            dragTurnsView: true
-            autoRotate: false
-            HoverHandler { cursorShape: cube.dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor }
-            // The colours here are matched against a real cube.
-            evenLight: true
-            shaderStyle: SettingsState.shaderStyleIndex
-            showStats: SettingsState.statsForNerds
+        Component {
+            id: cube3Component
+            Cube3DView {
+                // Drag it to look round the back; let go and it comes home. The
+                // layer about to move keeps nudging all the while.
+                interactive: true
+                dragTurnsView: true
+                autoRotate: false
+                HoverHandler { cursorShape: dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor }
+                // The colours here are matched against a real cube.
+                evenLight: true
+                shaderStyle: SettingsState.shaderStyleIndex
+                showStats: SettingsState.statsForNerds
 
-            objectName: "solve.cube"
+                objectName: "solve.cube"
 
-            // Turned the way the cube is held, and seen from wherever shows
-            // the side about to move.
-            homeRotation: Qt.vector3d(0, 0, 0)
-            holdRotation: HeldCube.rotation
-            viewPitch: root.view.pitch
-            viewYaw: root.view.yaw
+                // Turned the way the cube is held, and seen from wherever shows
+                // the side about to move.
+                homeRotation: Qt.vector3d(0, 0, 0)
+                holdRotation: HeldCube.rotation
+                viewPitch: root.view.pitch
+                viewYaw: root.view.yaw
 
-            faceletColors: root.painted(SolveController.stickers)
-            guideFace: root.moveSide
-            guideTurns: SolveController.currentMoveTurns
+                faceletColors: root.painted(SolveController.stickers)
+                guideFace: root.moveSide
+                guideTurns: SolveController.currentMoveTurns
+            }
+        }
+
+        Component {
+            id: cubeNComponent
+            CubeNView {
+                interactive: true
+                dragTurnsView: true
+                autoRotate: false
+                HoverHandler { cursorShape: dragging ? Qt.ClosedHandCursor : Qt.OpenHandCursor }
+                evenLight: true
+                showStats: SettingsState.statsForNerds
+
+                objectName: "solve.cube"
+
+                // The cube is shown as it is, not as a camera would see it held.
+                homeRotation: Qt.vector3d(0, 0, 0)
+                viewPitch: root.view.pitch
+                viewYaw: root.view.yaw
+
+                faceletColors: root.painted(SolveController.stickers)
+                guideFace: root.moveSide
+                guideFirst: SolveController.currentMoveFirst
+                guideLast: SolveController.currentMoveLast
+                guideTurns: SolveController.currentMoveTurns
+            }
         }
 
         Column {
@@ -473,7 +560,7 @@ Rectangle {
         // cube is roughly where it was.
         Item {
             id: inset
-            visible: AppState.solveCamera
+            visible: stage.cameraOn
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: stage.corner
             width: stage.insetWidth
@@ -734,8 +821,9 @@ Rectangle {
         id: stepRow
         Rectangle {
             property int idx: 0
+            property int stage: 0
             property var copy: null
-            readonly property var range: SolveController.stageRanges[idx]
+            readonly property var range: root.rangeOf(stage)
             readonly property bool isCurrent: range !== undefined
                 && SolveController.currentStageIndex === range.stageIndex
             // No range yet while the solve is still running.
@@ -819,6 +907,8 @@ Rectangle {
                 x: Theme.space3; y: Theme.space3
                 width: parent.width - 2 * Theme.space3
                 showNote: root.wide
+                // A big cube is reduced to a 3x3 first; the methods are for that 3x3.
+                core: SolveController.size >= 4
                 current: SolveController.method
                 choosable: !SolveController.isSolving
                 onSelected: (method) => root.chooseMethod(method)
@@ -826,10 +916,44 @@ Rectangle {
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
         }
 
+        // A person who can reduce a big cube themselves may jump over the reduction:
+        // the cube on screen goes to the 3x3 it should have become, and the
+        // steps carry on from there.
+        Item {
+            id: skipBox
+            objectName: "solve.skip"
+            anchors.bottom: buttons.top
+            width: parent.width
+            visible: SolveController.canSkipToCore && !SolveController.isSolving
+            height: visible ? skipColumn.implicitHeight + 2 * Theme.space3 : 0
+
+            Rectangle { width: parent.width; height: 2; color: Theme.divider }
+            Column {
+                id: skipColumn
+                x: Theme.space3; y: Theme.space3
+                width: parent.width - 2 * Theme.space3
+                spacing: Theme.space1
+                AppButton {
+                    objectName: "solve.skip.button"
+                    height: 34
+                    variant: "secondary"; text: qsTrId("solve.skipToCore")
+                    onClicked: SolveController.skipToCore()
+                }
+                Text {
+                    visible: root.wide
+                    width: parent.width
+                    text: qsTrId("solve.skipToCore.note")
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontHeading; font.pixelSize: 12
+                    color: Theme.inkMuted(0.6)
+                }
+            }
+        }
+
         // Wide: every stage, the current one opened out.
         Column {
             visible: root.wide
-            anchors.top: methodBox.bottom; anchors.bottom: buttons.top
+            anchors.top: methodBox.bottom; anchors.bottom: skipBox.top
             width: parent.width
 
             Text {
@@ -847,7 +971,7 @@ Rectangle {
                 model: root.stageOrder
                 delegate: Loader {
                     sourceComponent: stepRow
-                    onLoaded: { item.idx = index; item.copy = root.copyFor(modelData); }
+                    onLoaded: { item.idx = index; item.stage = modelData; item.copy = root.copyFor(modelData); }
                 }
             }
         }
@@ -855,7 +979,7 @@ Rectangle {
         // Narrow: the current stage only.
         Column {
             visible: !root.wide
-            anchors.top: methodBox.bottom; anchors.bottom: buttons.top
+            anchors.top: methodBox.bottom; anchors.bottom: skipBox.top
             anchors.left: parent.left; anchors.right: parent.right
             anchors.margins: Theme.space4
             spacing: Theme.space1
@@ -912,6 +1036,8 @@ Rectangle {
     AppButton {
         id: leave
         objectName: "solve.rescan"
+        // Only a 3x3 is read by the camera; a bigger cube is entered, not scanned.
+        visible: root.threeByThree
         x: root.wide ? progress.x - width - Theme.space3 : root.width - width - Theme.space3
         y: root.wide ? (header.height - height) / 2 : root.height - buttons.height - height - Theme.space1
         height: 30

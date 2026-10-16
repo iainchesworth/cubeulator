@@ -17,6 +17,9 @@ Column {
     // False while a solve is being worked out, so a second choice does not
     // pile on a first.
     property bool choosable: true
+    // Whether the cube is one that is reduced to a 3x3 first, so that the methods
+    // are for the 3x3 it becomes ("Finish with").
+    property bool core: false
     signal selected(int method)
 
     width: parent ? parent.width : 0
@@ -34,6 +37,16 @@ Column {
         qsTrId("solve.method.intermediate.note"),
         qsTrId("solve.method.advanced.note")
     ]
+
+    Text {
+        visible: root.core
+        objectName: root.objectName !== "" ? root.objectName + ".core" : ""
+        width: parent.width
+        text: qsTrId("solve.method.finishWith")
+        wrapMode: Text.WordWrap
+        font.family: Theme.fontHeading; font.pixelSize: 12
+        color: Theme.inkMuted(0.6)
+    }
 
     Flow {
         width: parent.width

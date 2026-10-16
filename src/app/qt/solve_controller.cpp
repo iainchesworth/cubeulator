@@ -303,6 +303,18 @@ int SolveController::size() const {
     return stepped_.size();
 }
 
+QVariantMap SolveController::sideColours() const {
+    const auto scheme = cube::nxn::scheme_of(stepped_.current_cube());
+    QVariantMap colours;
+    for (const Face face : cube::solver::kAllFaces) {
+        const cube::solver::Color colour = scheme.has_value()
+                                               ? scheme->at(static_cast<std::size_t>(face))
+                                               : cube::solver::canonical_color(face);
+        colours.insert(face_letter(face), colour_name(colour));
+    }
+    return colours;
+}
+
 int SolveController::moveIndex() const {
     return stepped_.current_index();
 }
@@ -330,9 +342,20 @@ QVariantList SolveController::stageRanges() const {
 
 int SolveController::currentStageIndex() const {
     if (stepped_.at_end()) {
-        return stepped_.stage_ranges().empty()
-                   ? 0
-                   : static_cast<int>(stepped_.stage_ranges().back().id);
+        const auto& ranges = stepped_.stage_ranges();
+        if (ranges.empty()) {
+            return 0;
+        }
+        // A bigger cube's stages are listed without the ones with nothing to do, so
+        // the last is the last that did something. A 3x3's is the last, as it was.
+        if (stepped_.size() != 3) {
+            for (auto span = ranges.rbegin(); span != ranges.rend(); ++span) {
+                if (span->end_index > span->start_index) {
+                    return static_cast<int>(span->id);
+                }
+            }
+        }
+        return static_cast<int>(ranges.back().id);
     }
     return static_cast<int>(stepped_.current_stage());
 }

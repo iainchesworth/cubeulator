@@ -470,6 +470,46 @@ In your hands.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
         <translation>[Sõlvé thé rést wîth tûrns õf thé tõp ànd bõttõm ànd hàlf tûrns õf thé õthér fõûr sîdés. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
     </message>
+    <message id="stage.parity.title">
+        <source>Set up</source>
+        <extracomment>Name of the first stage of a solve of a cube bigger than 3x3 when it needs one. Shown with a number, like the other stages. 'Parity' is the cuber's word; do not use it.</extracomment>
+        <translation>[Sét ûp ~~]</translation>
+    </message>
+    <message id="stage.parity.what">
+        <source>A few turns first, so that pairing up the pieces cannot leave two of them swapped, which only a big cube can do.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation>[À féw tûrns fîrst, sõ thàt pàîrîng ûp thé pîécés cànnõt léàvé twõ õf thém swàppéd, whîch õnly à bîg cûbé càn dõ. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
+    </message>
+    <message id="stage.centres.title">
+        <source>Centres</source>
+        <extracomment>Name of a stage of a solve of a cube bigger than 3x3: gathering the middle stickers of each side.</extracomment>
+        <translation>[Céntrés ~~~]</translation>
+    </message>
+    <message id="stage.centres.what">
+        <source>Gather the middle stickers of each side into one block of a single colour.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation>[Gàthér thé mîddlé stîckérs õf éàch sîdé întõ õné blõck õf à sînglé cõlõûr. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
+    </message>
+    <message id="stage.edges.title">
+        <source>Edges</source>
+        <extracomment>Name of a stage of a solve of a cube bigger than 3x3: pairing the edge pieces.</extracomment>
+        <translation>[Édgés ~~]</translation>
+    </message>
+    <message id="stage.edges.what">
+        <source>Pair up the edge pieces into whole edges, so that the cube has twelve edges like a 3x3.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation>[Pàîr ûp thé édgé pîécés întõ whõlé édgés, sõ thàt thé cûbé hàs twélvé édgés lîké à 3x3. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~]</translation>
+    </message>
+    <message id="stage.corners.title">
+        <source>Corners</source>
+        <extracomment>Name of the only stage of a solve of a 2x2.</extracomment>
+        <translation>[Cõrnérs ~~~]</translation>
+    </message>
+    <message id="stage.corners.what">
+        <source>Put the eight corners where they belong. A 2x2 has nothing else.</source>
+        <extracomment>What this stage does, in one sentence.</extracomment>
+        <translation>[Pût thé éîght cõrnérs whéré théy bélõng. À 2x2 hàs nõthîng élsé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~]</translation>
+    </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
         <extracomment>One sentence under the headline on the home screen.</extracomment>
@@ -1133,6 +1173,31 @@ In your hands.</source>
         <source>Back one</source>
         <extracomment>Button. Undoes the last turn on screen so the person can undo it on the cube.</extracomment>
         <translation>[Bàck õné ~~~]</translation>
+    </message>
+    <message id="solve.move.layer">
+        <source>%1 · layer %2 · %3</source>
+        <extracomment>The move in words for a layer inside a cube bigger than 3x3. %1 is the side, as 'Right side' or 'Top'; %2 is how far in the layer is counted from that side, starting at 1 for the outer layer; %3 is 'quarter turn' or 'half turn'. The dots are separators.</extracomment>
+        <translation>[%1 · làyér %2 · %3 ~~~~~ ~~]</translation>
+    </message>
+    <message id="solve.move.layers">
+        <source>%1 · layers %2 to %3 · %4</source>
+        <extracomment>The same for several layers turned together. %2 and %3 are the nearest and the farthest layer, counted from the side as above; %4 is 'quarter turn' or 'half turn'.</extracomment>
+        <translation>[%1 · làyérs %2 tõ %3 · %4 ~~~~~ ~~~~~]</translation>
+    </message>
+    <message id="solve.skipToCore">
+        <source>Skip to the 3x3 stage</source>
+        <extracomment>Button on the solve screen of a cube bigger than 3x3. Jumps over the stages that pair up its pieces.</extracomment>
+        <translation>[Skîp tõ thé 3x3 stàgé ~~~~~ ~~~]</translation>
+    </message>
+    <message id="solve.skipToCore.note">
+        <source>Use this once you have paired up the centres and edges yourself. The cube on screen jumps to the 3x3 it should now be.</source>
+        <extracomment>Explains the button above it, for someone who can already solve a 3x3.</extracomment>
+        <translation>[Ûsé thîs õncé yõû hàvé pàîréd ûp thé céntrés ànd édgés yõûrsélf. Thé cûbé õn scréén jûmps tõ thé 3x3 ît shõûld nõw bé. ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~~~~ ~~]</translation>
+    </message>
+    <message id="solve.method.finishWith">
+        <source>Finish with</source>
+        <extracomment>Small label above the three method buttons when the cube is bigger than 3x3: the methods apply to the 3x3 the cube has become, so they are said to be how it is finished.</extracomment>
+        <translation>[Fînîsh wîth ~~~~]</translation>
     </message>
     <message id="solve.finish">
         <source>Finish</source>
