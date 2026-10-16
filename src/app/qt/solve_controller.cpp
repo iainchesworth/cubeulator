@@ -214,14 +214,18 @@ void SolveController::showCurrentCube() {
 }
 
 void SolveController::resumeCube(const Cube& scanned, const Cube& from, Method method, int turn) {
-    scanned_ = NCube::from_cube3(scanned);
+    resumeCube(NCube::from_cube3(scanned), NCube::from_cube3(from), method, turn);
+}
+
+void SolveController::resumeCube(const NCube& scanned, const NCube& from, Method method, int turn) {
+    scanned_ = scanned;
     if (method != method_) {
         // Recorded, not acted on through setMethod(): the cube to solve is
         // `from`, not the one a method change would carry on from.
         method_ = method;
         emit methodChanged();
     }
-    beginSolve(NCube::from_cube3(from));
+    beginSolve(from);
     resume_turn_ = std::max(0, turn);
 }
 

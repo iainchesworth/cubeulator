@@ -4,6 +4,8 @@
 #include "interfaces/paths.hpp"
 #include "solve_controller.hpp"
 
+#include <cube/nxn/outside_view.hpp>
+
 #include <QDateTime>
 #include <QDir>
 #include <QSettings>
@@ -78,12 +80,16 @@ qlonglong SolveHistory::carryOnId() const noexcept {
 }
 
 QVariantMap SolveHistory::toMap(const HistoryEntry& entry, qint64 carry_on) const {
+    // The scanned cube's front side as a person sees it: nine colours for a 3x3,
+    // N x N for a cube of size N.
     QVariantList stickers;
-    stickers.reserve(9);
-    for (const cube::solver::Color colour : entry.scanned.face(cube::solver::Face::F)) {
+    stickers.reserve(static_cast<qsizetype>(entry.scanned.size()) * entry.scanned.size());
+    for (const cube::solver::Color colour :
+         cube::nxn::outside_view(entry.scanned, cube::solver::Face::F)) {
         stickers.append(colour_name(colour));
     }
     return QVariantMap{
+        {QStringLiteral("size"), entry.scanned.size()},
         {QStringLiteral("id"), static_cast<qlonglong>(entry.id)},
         {QStringLiteral("started"), static_cast<qlonglong>(entry.startedMs)},
         {QStringLiteral("finished"), entry.finished},
@@ -176,6 +182,15 @@ bool SolveHistory::resume(qlonglong id) {
     return true;
 }
 
+std::vector<cube::nxn::LayerMove> SolveHistory::keptSolution() const {
+    // A 3x3's solution is worked out again from its cube; a bigger cube's is
+    // kept (see HistoryEntry).
+    if (solve_.plan().size() == 3) {
+        return {};
+    }
+    return solve_.plan().layer_turns();
+}
+
 void SolveHistory::onStateChanged() {
     if (solve_.isSolving()) {
         return;
@@ -207,8 +222,8 @@ void SolveHistory::onStateChanged() {
     if (!keep_ || recorded_ || turn < 1 || turns < 1) {
         return;
     }
-    const auto& scanned = solve_.scannedCube();
-    const auto& from = solve_.solutionStart();
+    const auto& scanned = solve_.scannedNCube();
+    const auto& from = solve_.solutionStartNCube();
     if (!scanned.has_value() || !from.has_value()) {
         return;
     }
@@ -216,6 +231,7 @@ void SolveHistory::onStateChanged() {
     started.startedMs = QDateTime::currentMSecsSinceEpoch();
     started.scanned = *scanned;
     started.from = *from;
+    started.moves = keptSolution();
     started.method = static_cast<int>(solve_.method());
     started.turn = turn;
     started.turns = turns;
@@ -245,11 +261,12 @@ void SolveHistory::onSolutionChanged() {
     // entry counts are those of the new solution, which starts from the cube in
     // hand.
     const HistoryEntry* kept = store_.find(current_);
-    if (current_ == 0 || kept == nullptr || !solve_.solutionStart().has_value()) {
+    if (current_ == 0 || kept == nullptr || !solve_.solutionStartNCube().has_value()) {
         return;
     }
     HistoryEntry changed = *kept;
-    changed.from = *solve_.solutionStart();
+    changed.from = *solve_.solutionStartNCube();
+    changed.moves = keptSolution();
     changed.method = static_cast<int>(solve_.method());
     changed.turn = solve_.moveIndex();
     changed.turns = solve_.totalMoves();

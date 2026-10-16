@@ -69,6 +69,7 @@ void print_metrics(const char* title, const std::vector<cube::perf::Metric>& met
 void print_timing() {
     print_metrics("timing: solves (fastest run against the calibration workload)",
                   cube::perf::solve_timing_metrics());
+    print_metrics("timing: n x n solves", cube::perf::nxn_timing_metrics());
     print_metrics("timing: reads", cube::perf::read_timing_metrics());
     print_metrics("timing: scan", cube::perf::scan_timing_metrics());
 }
@@ -122,6 +123,7 @@ TEST_CASE("report: what the solver's work and the reader's buffers measure now",
     print_metrics("beginner", cube::perf::beginner_metrics());
     print_metrics("intermediate", cube::perf::intermediate_metrics());
     print_metrics("advanced", cube::perf::advanced_metrics());
+    print_metrics("n x n", cube::perf::nxn_metrics());
     print_metrics("scan", cube::perf::scan_metrics());
     print_metrics("judgement", cube::perf::judgement_metrics());
     print_timing();
