@@ -2,6 +2,7 @@
 
 #include "solve_controller.hpp"
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QCoreApplication>
@@ -11,6 +12,7 @@
 #include <QMetaProperty>
 #include <QVariantMap>
 
+#include <cstddef>
 #include <vector>
 
 using cube::solver::Cube;
@@ -291,4 +293,113 @@ TEST_CASE("a cube scanned after a swap is a new cube, not a continuation",
     CHECK_FALSE(controller.solutionContinuesCube());
     CHECK(controller.currentCube() == next);
     CHECK(stage_values(controller) == std::vector<int>{kReduce, kFinish});
+}
+
+TEST_CASE("a 3x3 solve says its size, turns only outer layers and has no reduction to skip",
+          "[qt][controllers]") {
+    SolveController controller;
+    CHECK(controller.size() == 3);
+    controller.solveCube(random_scramble(8, MoveCount{60}));
+    REQUIRE(wait_until_solved(controller));
+    CHECK(controller.size() == 3);
+    for (const QVariant& entry : controller.moves()) {
+        CHECK(entry.toMap().value(QStringLiteral("first")).toInt() == 0);
+        CHECK(entry.toMap().value(QStringLiteral("last")).toInt() == 0);
+    }
+    CHECK(controller.currentMoveFirst() == 0);
+    CHECK(controller.currentMoveLast() == 0);
+    CHECK(controller.coreStartIndex() == 0);
+    CHECK_FALSE(controller.canSkipToCore());
+    controller.skipToCore();
+    CHECK(controller.moveIndex() == 0);
+}
+
+TEST_CASE("a 5x5 solve can skip its reduction", "[qt][controllers]") {
+    SolveController controller;
+    const cube::nxn::NCube scrambled =
+        cube::nxn::random_scramble({.size = 5, .seed = 12, .moves = 90});
+    controller.solveCube(scrambled);
+    REQUIRE(wait_until_solved(controller));
+    CHECK(controller.size() == 5);
+    REQUIRE(controller.totalMoves() > 0);
+
+    // A move says which layers it turns, and the first move is the one about to happen.
+    for (const QVariant& entry : controller.moves()) {
+        const QVariantMap move = entry.toMap();
+        const int first = move.value(QStringLiteral("first")).toInt();
+        const int last = move.value(QStringLiteral("last")).toInt();
+        CHECK(first >= 0);
+        CHECK(last >= first);
+        CHECK(last < 5);
+    }
+    const QVariantMap front = controller.moves().front().toMap();
+    CHECK(controller.currentMoveFirst() == front.value(QStringLiteral("first")).toInt());
+    CHECK(controller.currentMoveLast() == front.value(QStringLiteral("last")).toInt());
+
+    // The 3x3 stages begin after the reduction, and a person can jump there.
+    const int core = controller.coreStartIndex();
+    CHECK(core > 0);
+    CHECK(core < controller.totalMoves());
+    CHECK(controller.canSkipToCore());
+    controller.skipToCore();
+    CHECK(controller.moveIndex() == core);
+    CHECK_FALSE(controller.canSkipToCore());
+    CHECK(controller.plan().current_cube().is_reduced());
+    // Where they are the stickers are those of the cube there, and the stage
+    // is one of the 3x3's.
+    CHECK(controller.stickers() == controller.stickersAt(core));
+    CHECK(controller.currentStageIndex() <= kFinish);
+
+    // Back to the start, and on to the end, where it is solved.
+    controller.goToMove(0);
+    CHECK(controller.atStart());
+    CHECK(controller.canSkipToCore());
+    controller.goToMove(controller.totalMoves() + 20);
+    CHECK(controller.atEnd());
+    CHECK(controller.plan().current_cube().is_solved());
+    controller.skipToCore();
+    CHECK(controller.atEnd());
+}
+
+TEST_CASE("a bigger cube's adjacent layers turned together are one move", "[qt][controllers]") {
+    // Seed 1 of a 4x4 solved the fewest-moves way has one: 136 layer turns,
+    // 134 moves. Wide moves are rare in real solutions, a fraction of a percent.
+    SolveController controller;
+    controller.setMethod(SolveController::Advanced);
+    const cube::nxn::NCube scrambled =
+        cube::nxn::random_scramble({.size = 4, .seed = 1, .moves = 72});
+    controller.solveCube(scrambled);
+    REQUIRE(wait_until_solved(controller));
+    int wide = 0;
+    int layer_turns = 0;
+    for (const QVariant& entry : controller.moves()) {
+        const QVariantMap move = entry.toMap();
+        const int layers = move.value(QStringLiteral("last")).toInt() -
+                           move.value(QStringLiteral("first")).toInt() + 1;
+        layer_turns += layers;
+        wide += layers > 1 ? 1 : 0;
+    }
+    CHECK(wide > 0);
+    CHECK(controller.totalMoves() < layer_turns);
+    CHECK(static_cast<std::size_t>(layer_turns) == controller.plan().layer_turns().size());
+    // Following the moves ends solved all the same.
+    controller.goToMove(controller.totalMoves());
+    CHECK(controller.plan().current_cube().is_solved());
+}
+
+TEST_CASE("a 2x2 and a 4x4 say their size, and only the 4x4 has a reduction to skip",
+          "[qt][controllers]") {
+    for (const int size : {2, 4}) {
+        SolveController controller;
+        controller.solveCube(cube::nxn::random_scramble({.size = size, .seed = 3, .moves = 60}));
+        REQUIRE(wait_until_solved(controller));
+        INFO("size " << size);
+        CHECK(controller.size() == size);
+        CHECK(controller.canSkipToCore() == (size == 4));
+        if (size == 2) {
+            CHECK(controller.coreStartIndex() == controller.totalMoves());
+        }
+        controller.goToMove(controller.totalMoves());
+        CHECK(controller.plan().current_cube().is_solved());
+    }
 }

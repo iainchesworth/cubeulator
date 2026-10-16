@@ -67,9 +67,15 @@ private:
     // once the names are swapped for the palette's colours.
     Q_PROPERTY(QVariantMap stickers READ stickers NOTIFY stateChanged)
 
+    // The cube's side length: 3 for a 3x3, 2 to 9 for any other.
+    Q_PROPERTY(int size READ size NOTIFY stateChanged)
+
     // The whole solution, one entry per move: { face: side letter, turns:
-    // quarter turns clockwise seen from outside that side, notation }.
-    // Changes only when a solve lands, not as it is stepped through.
+    // quarter turns clockwise seen from outside that side, first, last:
+    // the depth of the nearest and the farthest layer the move turns, counted
+    // from that side (0 is its outer layer; a wide move has last > first),
+    // notation }. Changes only when a solve lands, not as it is stepped
+    // through.
     Q_PROPERTY(QVariantList moves READ moves NOTIFY solutionChanged)
 
     // The move about to be performed from the current state, structured
@@ -78,6 +84,11 @@ private:
     Q_PROPERTY(QString currentMoveNotation READ currentMoveNotation NOTIFY stateChanged)
     Q_PROPERTY(QString currentMoveFace READ currentMoveFace NOTIFY stateChanged)
     Q_PROPERTY(int currentMoveTurns READ currentMoveTurns NOTIFY stateChanged)
+    // The layers the move about to be performed turns: the depth of the
+    // nearest and the farthest, counted from currentMoveFace. Both 0 for an
+    // outer turn, which is every move of a 3x3.
+    Q_PROPERTY(int currentMoveFirst READ currentMoveFirst NOTIFY stateChanged)
+    Q_PROPERTY(int currentMoveLast READ currentMoveLast NOTIFY stateChanged)
 
     Q_PROPERTY(int moveIndex READ moveIndex NOTIFY stateChanged)
     // Notifying, not constant: the solve lands after the solve screen has
@@ -97,6 +108,14 @@ private:
     // The cube::solver::Stage value of the stage the next move belongs to (the
     // last stage's, once solved).
     Q_PROPERTY(int currentStageIndex READ currentStageIndex NOTIFY stateChanged)
+
+    // Where the stages of the 3x3 a big cube becomes begin: the move index
+    // after the parity, centres and edges. 0 for a 3x3 (its solution is the core
+    // alone) and totalMoves for a 2x2 (it has none).
+    Q_PROPERTY(int coreStartIndex READ coreStartIndex NOTIFY stateChanged)
+    // True when the solution has a reduction still to do that a person who can
+    // finish a 3x3 may skip: a cube of size 4 or more, not yet at its core.
+    Q_PROPERTY(bool canSkipToCore READ canSkipToCore NOTIFY stateChanged)
 
     // True from the moment a completed scan is accepted until its
     // background solve() (see solve_controller.cpp) delivers a result.
@@ -129,9 +148,13 @@ public:
     // (or when it is not a 3x3).
     [[nodiscard]] std::optional<cube::solver::Move> currentMove() const noexcept;
 
+    [[nodiscard]] int size() const;
+
     [[nodiscard]] QString currentMoveNotation() const;
     [[nodiscard]] QString currentMoveFace() const;
     [[nodiscard]] int currentMoveTurns() const;
+    [[nodiscard]] int currentMoveFirst() const;
+    [[nodiscard]] int currentMoveLast() const;
 
     [[nodiscard]] int moveIndex() const;
     [[nodiscard]] int totalMoves() const;
@@ -140,6 +163,8 @@ public:
 
     [[nodiscard]] QVariantList stageRanges() const;
     [[nodiscard]] int currentStageIndex() const;
+    [[nodiscard]] int coreStartIndex() const;
+    [[nodiscard]] bool canSkipToCore() const;
 
     [[nodiscard]] bool isSolving() const;
 
@@ -198,6 +223,13 @@ public:
 public slots:
     void nextMove();
     void previousMove();
+    // Shows the cube after `index` moves of this solution, wherever it is now;
+    // an index out of range is the nearest end. For a person who knows where
+    // they are in a long solution (the 3x3's stages, a stage from the list).
+    void goToMove(int index);
+    // Jumps over the reduction to the move where the 3x3 stages begin, when
+    // there is one ahead; nothing otherwise.
+    void skipToCore();
 
 signals:
     void stateChanged();

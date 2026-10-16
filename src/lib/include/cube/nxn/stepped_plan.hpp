@@ -109,6 +109,15 @@ public:
     // Un-applies the previous move; a no-op at_start().
     void previous() noexcept;
 
+    // Puts the state `index` moves in on show, wherever it is now. An index out
+    // of range is the nearest one that is not.
+    void seek(int index) noexcept;
+
+    // The move at which the stages of the 3x3 the cube has become begin: after
+    // the parity, centres and edges of a reduction. 0 for a 3x3, whose plan is
+    // the core alone; move_count() for a 2x2, which has no core.
+    [[nodiscard]] int core_start() const noexcept;
+
     // Each stage's [start, end) range of moves, in solving order, so that a
     // screen can show done / current / to come by comparing current_index()
     // with a range.

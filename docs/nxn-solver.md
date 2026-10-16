@@ -338,7 +338,18 @@ Nothing in it knows about Qt or the screens.
   layers turned the same way into one move (`group()`, above), so the count a
   person is shown is the wide-move count. At 3x3 the two are identical. The turns
   of single layers stay what is stored and replayed (`layer_turns()`,
-  `layers_at(i)`), and a block never reaches across two stages.
+  `layers_at(i)`), and a block never reaches across two stages. **Measured, the
+  difference is small**: over 20 scrambles of each size, gathering turned 2,634
+  layer turns into 2,618 moves at 4x4, 3,500 into 3,480 at 5x5, 6,628 into 6,601 at
+  6x6 and 8,297 into 8,264 at 7x7, under 1%: the solver rarely turns two adjacent
+  layers one after the other. The app shows wide moves for a cube of 4 or more,
+  but a person following a 5x5 meets mostly single layers, and the way to say
+  which one ("2R", "the second layer from the right") matters more than the
+  grouping.
+* **Where a person is** is `current_index()`, set by `next()`, `previous()` or
+  `seek(i)` (any position, clamped), and `core_start()` is the move at which the
+  3x3 stages begin (0 for a 3x3, `move_count()` for a 2x2): the place "skip ahead
+  to the 3x3 stage" goes to, with the cube there reduced.
 * **A stage** (`StageId`) flattens the two layers the library has, the
   reduction's (`Stage`) and the 3x3 solver's inside the core (`solver::Stage`),
   into the one list a screen wants. The 3x3 solver's stages keep the numbers
