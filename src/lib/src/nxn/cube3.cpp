@@ -10,12 +10,18 @@
 
 namespace cube::nxn {
 
-Result<solver::Solution> solve_3x3(const solver::Cube& scrambled, solver::SolveMethod method) {
+Result<Solution> solve_held(const NCube& scrambled, solver::SolveMethod method) {
+    if (scrambled.size() != 3) {
+        return solve(scrambled, method);
+    }
     // Held as it is: see CoreView::AsHeld.
     Strategy strategy{"3x3 as the app holds it"};
     strategy.then("core", solve_core(CoreView::AsHeld));
+    return solve(scrambled, strategy, method);
+}
 
-    Result<Solution> solved = solve(NCube::from_cube3(scrambled), strategy, method);
+Result<solver::Solution> solve_3x3(const solver::Cube& scrambled, solver::SolveMethod method) {
+    Result<Solution> solved = solve_held(NCube::from_cube3(scrambled), method);
     if (!solved) {
         return std::unexpected(solved.error());
     }

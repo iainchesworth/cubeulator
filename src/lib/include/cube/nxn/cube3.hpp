@@ -1,7 +1,9 @@
 #pragma once
 
 #include <cube/error.hpp>
+#include <cube/nxn/cube.hpp>
 #include <cube/nxn/geometry.hpp>
+#include <cube/nxn/solution.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
 
@@ -20,6 +22,15 @@
 // tests/unit/nxn/cube3_test.cpp holds that equal over a corpus, per method.
 
 namespace cube::nxn {
+
+// Solves a cube of any size the way the app holds it. At every size but 3 this
+// is the library's solve(): a cube is read in whatever orientation and colours
+// it has. At size 3 it is solve_3x3's contract exactly - the cube is read as it
+// is held, so one whose centres are not where the 3x3 solvers' scheme puts them
+// is refused, as the app always has - and the moves come back as layer turns
+// (all of depth 0). tests/unit/nxn/cube3_test.cpp holds the two equal.
+[[nodiscard]] Result<Solution> solve_held(
+    const NCube& scrambled, solver::SolveMethod method = solver::SolveMethod::Beginner);
 
 // Solves `scrambled` with `method`, as cube::solver::solve does.
 [[nodiscard]] Result<solver::Solution> solve_3x3(

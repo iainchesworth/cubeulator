@@ -33,6 +33,7 @@ per-size algorithm tables, and no parity algorithms.
 | Centre search | `src/nxn/centres.cpp` | Greedy search over short words for the centres stage |
 | Strategy | `strategy.hpp` | Stages as values; `default_strategy(size)`; target policies; parity handler |
 | Notation | `notation.hpp` | WCA names for a layer turn: print, parse, and gathering turns into wide moves for display |
+| Stepping | `stepped_plan.hpp`, `stage.hpp` | `SteppedPlan`: a solution to follow one move at a time, with the cube at every position; `StageId`: the stage a person is told about |
 | Result | `solution.hpp` | `Step`, `Solution`, merging of turns |
 
 ## The model
@@ -247,6 +248,37 @@ arrives where the originals arrive (checked over random runs at every size and
 over the library's own solutions). Not yet: the middle-slice letters `M` `E` `S`,
 which mean different layers at different sizes, and the words ("the second layer
 from the right") the screens will pair with the letters.
+
+## Following a solution
+
+`SteppedPlan` (`stepped_plan.hpp`) is what a screen steps through: a solution
+flattened into moves, `next()` and `previous()`, the cube cached at every
+position (`current_cube()`, `cube_at(i)`), and one span of moves per stage. It is
+what the app's `SteppedSolution` is for a 3x3, written for a cube of any size:
+the state is an `NCube`, a move is a `WideMove`, and a stage is a `StageId`.
+Nothing in it knows about Qt or the screens.
+
+* **What a move is** is the caller's choice (`Display`). `Layers` is one move per
+  turn of one layer, the library's solution as it is. `Wide` gathers adjacent
+  layers turned the same way into one move (`group()`, above), so the count a
+  person is shown is the wide-move count. At 3x3 the two are identical. The turns
+  of single layers stay what is stored and replayed (`layer_turns()`,
+  `layers_at(i)`), and a block never reaches across two stages.
+* **A stage** (`StageId`) flattens the two layers the library has, the
+  reduction's (`Stage`) and the 3x3 solver's inside the core (`solver::Stage`),
+  into the one list a screen wants. The 3x3 solver's stages keep the numbers
+  `solver::Stage` gives them (the solve screen words them by number, and a 3x3
+  must read as it always did); the reduction's follow: parity 8, centres 9,
+  edges 10, corners 11 (a 2x2). A 3x3's solution is the core list alone. A stage
+  has no words in the library: `key(id)` is a stable name to translate by, and
+  `is_core(id)` says whether the stage is the 3x3 solver's, which is how a
+  screen knows where "skip ahead to the 3x3 stage" lands.
+* **`solve_held`** (`cube3.hpp`) is the app's way to solve a cube of any size:
+  the library's `solve()` above 3, and at 3 the as-held reading described below.
+
+`tests/unit/nxn/stepped_plan_test.cpp` holds a plan of a 3x3 equal to the
+`SteppedSolution` the app has always used, for all three methods: the same
+moves, the same stage spans, the same cube at every position, stepped both ways.
 
 ## One state concept, a virtual 3x3
 
