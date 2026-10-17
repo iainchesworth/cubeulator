@@ -173,14 +173,14 @@ TEST_CASE("a cube is scanned and solved, from launch to the last move", "[system
         // The solve screen keeps the camera, to see how the cube is held.
         CHECK(FakeCamera::instance().capturing());
 
-        // Previous is off at the start, Next move is on.
+        // Previous is off at the start, Next turn is on.
         QQuickItem* previous = app.find("solve.previous");
         QQuickItem* next = app.find("solve.next");
         REQUIRE(previous != nullptr);
         REQUIRE(next != nullptr);
         CHECK_FALSE(previous->property("enabled").toBool());
         CHECK(next->property("enabled").toBool());
-        CHECK(next->property("text").toString() == "Next move");
+        CHECK(next->property("text").toString() == "Next turn");
         app.settle();
 
         // The moves, a press each for the first and last few and for the first
