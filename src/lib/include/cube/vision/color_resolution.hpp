@@ -205,17 +205,31 @@ struct ClusterNaming {
     cube::model::FacetColor name = cube::model::FacetColor::unknown;
 };
 
+// Six vectors of nine default values: what a side's cells were when they were an
+// array of nine.
+template <typename T>
+[[nodiscard]] std::array<std::vector<T>, 6> nine_each() {
+    std::array<std::vector<T>, 6> sides;
+    for (std::vector<T>& side : sides) {
+        side.resize(9);
+    }
+    return sides;
+}
+
 // resolve_colors' answer together with how it got there, read-only. Every
 // value is one the algorithm already held when it finished - building this
 // adds no computation, and resolve_colors is this with the rest dropped.
+//
+// Its vectors are a 3x3's nine unknowns a side until the naming fills them in, as
+// the arrays they were.
 struct ColorResolution {
     // What resolve_colors returns: [face][cell], each with the confidence the
     // assignment had in its cluster (0 when a rival was as close).
-    std::array<std::vector<cube::model::Facelet>, 6> faces{};
+    std::array<std::vector<cube::model::Facelet>, 6> faces = nine_each<cube::model::Facelet>();
     // Indexed by the face whose centre seeded the cluster.
     std::array<ClusterNaming, 6> clusters{};
     // [face][cell]: the cluster each of the 6 N^2 samples went to.
-    std::array<std::vector<std::uint8_t>, 6> cluster_of{};
+    std::array<std::vector<std::uint8_t>, 6> cluster_of = nine_each<std::uint8_t>();
     // Refinement rounds the clustering ran before its assignment repeated.
     int iterations = 0;
     // The summed Lab distance of the palette matching that by_distance names.

@@ -8,6 +8,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 namespace cube::app {
 
@@ -54,6 +55,17 @@ using Side = std::array<cube::model::Facelet, kCells>;
     return out;
 }
 
+// A side the naming made, as nine, or none when it is of another size: the review
+// is a 3x3's as yet.
+[[nodiscard]] std::optional<Side> three_by_three(const std::vector<cube::model::Facelet>& named) {
+    if (named.size() != static_cast<std::size_t>(kCells)) {
+        return std::nullopt;
+    }
+    Side side{};
+    std::ranges::copy(named, side.begin());
+    return side;
+}
+
 [[nodiscard]] Reading blank() {
     Reading reading;
     reading.size = kSize;
@@ -84,12 +96,16 @@ Reading reading_from_cube(const cube::solver::Cube& cube,
         }
         const Color middle = seen.at(kCells / 2);
 
-        for (const Side& named : naming->faces) {
-            const std::optional<Color> centre = color_of(named.at(kCells / 2).color);
+        for (const auto& named_side : naming->faces) {
+            const std::optional<Side> named = three_by_three(named_side);
+            if (!named.has_value()) {
+                continue;
+            }
+            const std::optional<Color> centre = color_of(named->at(kCells / 2).color);
             if (!centre.has_value() || *centre != middle) {
                 continue;
             }
-            Side side = named;
+            Side side = *named;
             for (int turns = 0; turns < 4; ++turns) {
                 bool agrees = true;
                 for (int i = 0; i < kCells && agrees; ++i) {
@@ -115,7 +131,12 @@ std::optional<Reading> reading_from_named_sides(const cube::vision::ColorResolut
     Reading reading = blank();
     reading.upright = false;
     std::array<bool, 6> placed{};
-    for (const Side& named : naming.faces) {
+    for (const auto& named_side : naming.faces) {
+        const std::optional<Side> named_nine = three_by_three(named_side);
+        if (!named_nine.has_value()) {
+            continue;
+        }
+        const Side& named = *named_nine;
         const std::optional<Color> centre = color_of(named.at(kCells / 2).color);
         if (!centre.has_value()) {
             continue;
