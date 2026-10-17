@@ -268,8 +268,7 @@ void walk_cubes(int size, const PinnedSides& pinned, const Visit& visit) {
 // What an even size's search looks at: every piece's stickers as the faces they are on,
 // so that a piece is looked at when the last of its faces is placed.
 struct PieceSeam {
-    std::array<std::uint16_t, 3> stickers{};
-    std::uint8_t count = 0;
+    std::vector<std::uint16_t> stickers;
     std::uint8_t faces = 0;  // a bit for each face (Face's number) a sticker is on
 };
 
@@ -278,14 +277,14 @@ struct PieceSeam {
     const auto add = [&](std::initializer_list<std::uint16_t> stickers) {
         PieceSeam seam;
         for (const std::uint16_t sticker : stickers) {
-            seam.stickers.at(seam.count++) = sticker;
+            seam.stickers.push_back(sticker);
             seam.faces = static_cast<std::uint8_t>(
                 seam.faces | (1U << static_cast<unsigned>(geometry.face_of(sticker))));
         }
-        seams.push_back(seam);
+        seams.push_back(std::move(seam));
     };
     for (const auto& corner : geometry.corners()) {
-        add({corner[0], corner[1], corner[2]});
+        add({corner.at(0), corner.at(1), corner.at(2)});
     }
     for (const auto& orbit : geometry.wing_orbits()) {
         for (const WingSlot& slot : orbit) {
@@ -294,6 +293,116 @@ struct PieceSeam {
     }
     return seams;
 }
+
+// Whether the stickers of a piece are all of different colours.
+[[nodiscard]] bool shows_distinct_colours(const PieceSeam& seam, const std::vector<Color>& laid) {
+    for (std::size_t i = 0; i < seam.stickers.size(); ++i) {
+        for (std::size_t j = i + 1; j < seam.stickers.size(); ++j) {
+            if (laid.at(seam.stickers.at(i)) == laid.at(seam.stickers.at(j))) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The side as laid on `face`, mirrored left to right on D, R and B as the odd sizes' are, in
+// each of its turns that is not a repeat of another.
+[[nodiscard]] std::vector<std::vector<Color>> variants_of(const std::vector<Color>& side, Face at,
+                                                          int size) {
+    std::vector<Color> base = side;
+    if (at == Face::D || at == Face::R || at == Face::B) {
+        const auto n = static_cast<std::ptrdiff_t>(size);
+        for (std::ptrdiff_t row = 0; row < n; ++row) {
+            std::ranges::reverse(base.begin() + (row * n), base.begin() + ((row + 1) * n));
+        }
+    }
+    std::vector<std::vector<Color>> list;
+    for (int quarter = 0; quarter < 4; ++quarter) {
+        if (std::ranges::find(list, base) == list.end()) {
+            list.push_back(base);
+        }
+        base = rotated_clockwise(base, size);
+    }
+    return list;
+}
+
+// The search of an even size's sides (see walk_even): sides laid on the cube one at a time.
+class EvenSearch {
+public:
+    EvenSearch(int size, const ScannedSides& sides)
+        : size_(size),
+          area_(static_cast<std::size_t>(size) * static_cast<std::size_t>(size)),
+          seams_(piece_seams(Geometry::of(size))),
+          candidate_(6 * area_, Color::White) {
+        for (std::size_t side = 0; side < 6; ++side) {
+            for (std::size_t face = 0; face < 6; ++face) {
+                variants_.at(side).at(face) =
+                    variants_of(sides.at(side), static_cast<Face>(face), size);
+            }
+        }
+    }
+
+    // Every cube the sides make, each handed to `visit`, which says whether to go on.
+    template <typename Visit>
+    void run(const Visit& visit) {
+        std::uint64_t nodes = 0;
+        const solver::detail::SearchWorkScope work([&nodes] { return nodes; });
+        bool going = true;
+        lay(0, visit, nodes, going);
+    }
+
+private:
+    // A piece whose last face has just been laid shows no colour twice.
+    [[nodiscard]] bool pieces_hold(std::size_t face) const {
+        const auto bit = static_cast<std::uint8_t>(1U << face);
+        return std::ranges::all_of(seams_, [&](const PieceSeam& seam) {
+            if ((seam.faces & bit) == 0 || (seam.faces & placed_) != seam.faces) {
+                return true;
+            }
+            return shows_distinct_colours(seam, candidate_);
+        });
+    }
+
+    template <typename Visit>
+    void lay(std::size_t side, const Visit& visit, std::uint64_t& nodes, bool& going) {
+        // The first side is on the top and turned no way; the others on any face still free.
+        const std::size_t last_face = side == 0 ? 1 : 6;
+        for (std::size_t face = 0; face < last_face && going; ++face) {
+            if ((placed_ & (1U << face)) == 0) {
+                lay_on(side, face, visit, nodes, going);
+            }
+        }
+    }
+
+    template <typename Visit>
+    void lay_on(std::size_t side, std::size_t face, const Visit& visit, std::uint64_t& nodes,
+                bool& going) {
+        const auto& options = variants_.at(side).at(face);
+        const std::size_t tried = side == 0 ? 1 : options.size();
+        for (std::size_t at = 0; at < tried && going; ++at) {
+            std::ranges::copy(options.at(at),
+                              candidate_.begin() + static_cast<std::ptrdiff_t>(face * area_));
+            placed_ = static_cast<std::uint8_t>(placed_ | (1U << face));
+            ++nodes;
+            if (pieces_hold(face)) {
+                if (side < 5) {
+                    lay(side + 1, visit, nodes, going);
+                } else if (validate(size_, candidate_).ok()) {
+                    going = visit(candidate_);
+                }
+            }
+            placed_ = static_cast<std::uint8_t>(placed_ & ~(1U << face));
+        }
+    }
+
+    int size_;
+    std::size_t area_;
+    std::vector<PieceSeam> seams_;
+    std::vector<Color> candidate_;
+    std::array<std::array<std::vector<std::vector<Color>>, 6>, 6> variants_;
+    std::uint8_t placed_ = 0;
+};
 
 // The sides of an even size, which have no middle sticker to say which side of the cube
 // each is, put together by trying every way of laying them on the cube.
@@ -320,87 +429,7 @@ void walk_even(int size, const ScannedSides& sides, const Visit& visit) {
     if (!std::ranges::all_of(counts, [area](std::size_t count) { return count == area; })) {
         return;
     }
-
-    // variants[side][face] are the side's distinct stickers as laid on that face, one for each
-    // turn that is not a repeat of another.
-    std::array<std::array<std::vector<std::vector<Color>>, 6>, 6> variants;
-    for (std::size_t side = 0; side < 6; ++side) {
-        for (std::size_t face = 0; face < 6; ++face) {
-            std::vector<Color> base = sides.at(side);
-            const auto at = static_cast<Face>(face);
-            if (at == Face::D || at == Face::R || at == Face::B) {
-                for (std::size_t row = 0; row < static_cast<std::size_t>(size); ++row) {
-                    std::ranges::reverse(
-                        base.begin() +
-                            static_cast<std::ptrdiff_t>(row * static_cast<std::size_t>(size)),
-                        base.begin() + static_cast<std::ptrdiff_t>((row + 1) *
-                                                                   static_cast<std::size_t>(size)));
-                }
-            }
-            auto& list = variants.at(side).at(face);
-            for (int quarter = 0; quarter < 4; ++quarter) {
-                if (std::ranges::find(list, base) == list.end()) {
-                    list.push_back(base);
-                }
-                base = rotated_clockwise(base, size);
-            }
-        }
-    }
-
-    const Geometry& geometry = Geometry::of(size);
-    const std::vector<PieceSeam> seams = piece_seams(geometry);
-    std::vector<Color> candidate(6 * area, Color::White);
-    std::uint8_t placed = 0;
-    const auto pieces_hold = [&](std::size_t face) {
-        const auto bit = static_cast<std::uint8_t>(1U << face);
-        for (const PieceSeam& seam : seams) {
-            if ((seam.faces & bit) == 0 || (seam.faces & placed) != seam.faces) {
-                continue;
-            }
-            for (std::uint8_t i = 0; i < seam.count; ++i) {
-                for (std::uint8_t j = static_cast<std::uint8_t>(i + 1); j < seam.count; ++j) {
-                    if (candidate.at(seam.stickers.at(i)) == candidate.at(seam.stickers.at(j))) {
-                        return false;
-                    }
-                }
-            }
-        }
-        return true;
-    };
-
-    bool going = true;
-    std::uint64_t nodes = 0;
-    const solver::detail::SearchWorkScope work([&nodes] { return nodes; });
-    const auto lay = [&](const auto& self, std::size_t side) -> void {
-        for (std::size_t face = 0; face < 6 && going; ++face) {
-            if ((placed & (1U << face)) != 0) {
-                continue;
-            }
-            // The first side is on the top and turned no way.
-            const auto& options = variants.at(side).at(face);
-            const std::size_t only = side == 0 ? 1 : options.size();
-            for (std::size_t at = 0; at < only && going; ++at) {
-                std::ranges::copy(options.at(at),
-                                  candidate.begin() + static_cast<std::ptrdiff_t>(face * area));
-                placed = static_cast<std::uint8_t>(placed | (1U << face));
-                ++nodes;
-                if (pieces_hold(face)) {
-                    if (side == 5) {
-                        if (validate(size, candidate).ok()) {
-                            going = visit(candidate);
-                        }
-                    } else {
-                        self(self, side + 1);
-                    }
-                }
-                placed = static_cast<std::uint8_t>(placed & ~(1U << face));
-            }
-            if (side == 0) {
-                break;  // on the top only
-            }
-        }
-    };
-    lay(lay, 0);
+    EvenSearch(size, sides).run(visit);
 }
 
 }  // namespace
