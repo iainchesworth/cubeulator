@@ -182,6 +182,7 @@ struct Tuning {
 // lattice may lose all but Tuning::min_lattice_blobs of the N^2 (three of the
 // nine of a 3x3), and one more is noise (four).
 [[nodiscard]] int most_stickers_a_hand_covers(int size);
+[[nodiscard]] int most_stickers_unlike_in_one_side(int size);
 
 [[nodiscard]] Tuning tuning_for(int size) {
     const auto n = static_cast<std::size_t>(size);
@@ -201,6 +202,17 @@ struct Tuning {
 int most_stickers_a_hand_covers(int size) {
     const Tuning tuning = tuning_for(size);
     return static_cast<int>(tuning.cells() - tuning.min_lattice_blobs) + 1;
+}
+
+// A side with no centre is told from another by its stickers alone, and the light on a
+// big cube moves a sticker or two past kSameColourLab from one view to the next (a
+// finger, a glint, the lamp's edge): requiring every one to match made a second group of
+// the same side, and a scan of eight sides on a cube that has six. An eighth of the
+// stickers may differ (two of a 4x4's sixteen, none of a 2x2's four). Two sides of a
+// cube alike in all but that many stickers would need most of two colours on two sides,
+// the other four having none.
+int most_stickers_unlike_in_one_side(int size) {
+    return (size * size) / 8;
 }
 
 template <typename T>
@@ -845,7 +857,7 @@ struct FitInputs {
                                      side.at(centre)) <= kSameColourLab) {
         fit.same = true;
     } else {
-        fit.same = differing == 0;
+        fit.same = differing <= (has_centre ? 0 : most_stickers_unlike_in_one_side(size));
     }
     return fit;
 }
