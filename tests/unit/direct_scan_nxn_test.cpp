@@ -44,7 +44,9 @@ using cube::vision::SideRead;
 using cube::vision::SideScan;
 
 // The drawing of an even light, which the tests name rather than write as an empty braced list.
-const Drawing kDaylight;
+Drawing daylight() {
+    return Drawing();
+}
 
 constexpr std::array<Color, 6> kColours = {
     Color::White, Color::Yellow, Color::Green, Color::Blue, Color::Orange, Color::Red,
@@ -358,7 +360,7 @@ TEST_CASE("six sides of a 5x5 and a 7x7 are read into the cube they came from", 
             {.size = size, .seed = static_cast<unsigned>(10 + size), .moves = 20 * size});
         SideScan scan(size);
         REQUIRE(scan.size() == size);
-        show_cube(scan, cube, 77U, kDaylight, 0.6F);
+        show_cube(scan, cube, 77U, daylight(), 0.6F);
 
         REQUIRE(scan.sides().size() == 6);
         for (const SideScan::Side& side : scan.sides()) {
@@ -402,7 +404,7 @@ TEST_CASE("a 3x3 scanned as a size-3 scan has the same cube from both answers", 
     const NCube cube = cube::nxn::random_scramble({.size = 3, .seed = 5, .moves = 25});
     // A scramble of outer turns keeps the centres where the scheme puts them.
     SideScan scan(3);
-    show_cube(scan, cube, 3U, kDaylight, 0.5F);
+    show_cube(scan, cube, 3U, daylight(), 0.5F);
     const auto three = scan.scanned();
     const auto any = scan.scanned_n();
     if (three.has_value()) {
