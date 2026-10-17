@@ -356,13 +356,23 @@ Rectangle {
         anchors.left: parent.left
         width: root.wide ? parent.width - panel.width : parent.width
         // Narrow, what the panel under the stage needs (the method row, the
-        // stage's name and what it asks, the way out and the stepping
-        // buttons) is kept, and the cube is given the rest - up to the most
-        // it can use, which is its own width and what sits above and below.
-        // On a short window that is what the stage always had (55%).
-        readonly property real panelNeed: 240
+        // stage's name and what it asks, the way to skip to the 3x3 stage and
+        // the stepping buttons; see panel.need) is kept, and the cube is given
+        // the rest - up to the most it can use, which is its own width and
+        // what sits above and below.
+        //
+        // On a short window a 3x3's cube is not given less than it always had
+        // (55%). A bigger cube's panel holds more, and is kept whole until
+        // the cube it leaves is as small as it can be followed at (cubeLeast):
+        // after that the cube stops giving way and what the panel cannot hold
+        // scrolls (the stage's words, in the panel).
+        readonly property real panelNeed: panel.need
+        readonly property real cubeLeast: 150
+        readonly property real stageLeast: root.threeByThree
+            ? (parent.height - header.height) * 0.55
+            : cubeTop + cubeLeast + corner
         height: root.wide ? parent.height - header.height
-                          : Math.max(230, Math.min(Math.max((parent.height - header.height) * 0.55,
+                          : Math.max(230, Math.min(Math.max(stageLeast,
                                                             parent.height - header.height - panelNeed),
                                                    cubeTop + width + corner + 44))
 
@@ -900,6 +910,15 @@ Rectangle {
         width: root.wide ? 320 : parent.width
         height: parent.height - y
 
+        // What the narrow layout keeps for this panel (stage.panelNeed): the
+        // method row, with the label over it on a cube that is reduced first;
+        // room for the stage's name and what it asks, three lines of it; the
+        // way to skip to the 3x3 stage, kept whether or not it is showing so
+        // that the cube does not change size when it goes; and the stepping
+        // buttons. A 3x3's is the 240 it always was.
+        readonly property real stageWordsRoom: 116
+        readonly property real need: methodBox.height + skipBox.room + stageWordsRoom + buttons.height
+
         // How the cube is being solved. The same row on both layouts; wide it
         // also says what the chosen method is, narrow there is no room. Choosing
         // a different one solves on from the cube as it stands.
@@ -933,7 +952,11 @@ Rectangle {
             anchors.bottom: buttons.top
             width: parent.width
             visible: SolveController.canSkipToCore && !SolveController.isSolving
-            height: visible ? skipColumn.implicitHeight + 2 * Theme.space3 : 0
+            // What it takes when it is there; the panel is given that much
+            // for any cube that has it (canSkipToCore: a 4x4 and up).
+            readonly property real room: SolveController.size >= 4
+                ? skipColumn.implicitHeight + 2 * Theme.space3 : 0
+            height: visible ? room : 0
 
             Rectangle { width: parent.width; height: 2; color: Theme.divider }
             Column {
@@ -984,24 +1007,49 @@ Rectangle {
             }
         }
 
-        // Narrow: the current stage only.
-        Column {
+        // Narrow: the current stage only. Its room is stageWordsRoom; words
+        // that need more (a translation, or a window too short to give the
+        // panel all it needs) scroll rather than run under what is below,
+        // which on a 3x3 includes the way out that sits over the panel's foot.
+        Flickable {
+            id: stageWords
             visible: !root.wide
             anchors.top: methodBox.bottom; anchors.bottom: skipBox.top
             anchors.left: parent.left; anchors.right: parent.right
-            anchors.margins: Theme.space4
-            spacing: Theme.space1
+            anchors.bottomMargin: leave.visible ? leave.height + Theme.space1 : 0
+            contentWidth: width
+            contentHeight: stageWordsColumn.y + stageWordsColumn.height
+            bottomMargin: Theme.space3 // air under the last line, once scrolled to it
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height + 0.5
 
-            Text {
-                text: root.currentCopy ? root.currentCopy.title : ""
-                font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink
+            Column {
+                id: stageWordsColumn
+                x: Theme.space4; y: Theme.space4
+                width: stageWords.width - 2 * Theme.space4
+                spacing: Theme.space1
+
+                Text {
+                    text: root.currentCopy ? root.currentCopy.title : ""
+                    font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 20; color: Theme.ink
+                }
+                Text {
+                    text: root.currentCopy ? root.currentCopy.detail : ""
+                    font.family: Theme.fontHeading; font.pixelSize: 13
+                    color: Theme.inkMuted(0.6)
+                    width: parent.width; wrapMode: Text.WordWrap
+                }
             }
-            Text {
-                text: root.currentCopy ? root.currentCopy.detail : ""
-                font.family: Theme.fontHeading; font.pixelSize: 13
-                color: Theme.inkMuted(0.6)
-                width: parent.width; wrapMode: Text.WordWrap
-            }
+        }
+        // Where the words are in what there is, when there is more than shows.
+        Rectangle {
+            visible: !root.wide && stageWords.interactive
+            anchors.right: stageWords.right; anchors.rightMargin: 2
+            y: stageWords.y + stageWords.height * stageWords.visibleArea.yPosition
+            width: 3
+            height: stageWords.height * stageWords.visibleArea.heightRatio
+            color: Theme.divider
         }
 
         Item {
