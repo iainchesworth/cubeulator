@@ -1,0 +1,1 @@
+**The solve screen's main button says *Next turn*.** It said *Next move*; the design calls a turn of the cube a turn, as the rest of the screen does (*half turn*, *quarter turn*), and the button now takes its words from the translations like the rest of the app, in every language. On the last turn it still reads *Finish*.

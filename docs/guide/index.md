@@ -32,7 +32,7 @@ solution, and shows you the turns one at a time on a 3D cube.
    camera, one after another, in any order and either way up. Each side fills a
    chip along the bottom of the screen. See [Scanning a cube](scan.md).
 3. **Follow the 3D cube.** The layer to turn nudges the way it has to go; make
-   that turn on your cube, and press *Next move* (or let the camera see it and
+   that turn on your cube, and press *Next turn* (or let the camera see it and
    it steps on by itself). See [Following the solution](solve.md).
 4. **Finish.** The screen says *Solved* with the number of turns and the time,
    and offers another scan, or a review of the whole solution. The solve is

@@ -17,7 +17,7 @@ that it was left part-way (*Unfinished · turn 3 of 96*).
 
 - **The newest unfinished solve** carries on from the turn it reached. The
   camera is off then, because nothing was scanned in this session to match it
-  against, so step with **Next move** and **Previous**; if the cube and the
+  against, so step with **Next turn** and **Previous**; if the cube and the
   solution part company, scan again.
 - **Any other row**, a finished solve or an unfinished one that you have
   since scanned past, opens its solution, to look back over it. See

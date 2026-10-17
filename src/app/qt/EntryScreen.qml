@@ -67,7 +67,9 @@ Rectangle {
             // Top bar: back, and what this is.
             Item {
                 width: parent.width
-                height: 64
+                // One line of title, as it was; a translation that needs more
+                // takes them, and the bar grows to hold them.
+                height: Math.max(64, titleText.implicitHeight + 2 * Theme.space3)
                 AppButton {
                     id: back
                     objectName: "entry.back"
@@ -78,12 +80,13 @@ Rectangle {
                     onClicked: AppState.closeEntry()
                 }
                 Text {
+                    id: titleText
                     objectName: "entry.title"
                     anchors.left: back.right; anchors.leftMargin: Theme.space2
                     anchors.right: parent.right; anchors.rightMargin: Theme.space3
                     anchors.verticalCenter: parent.verticalCenter
                     text: qsTrId("entry.title")
-                    elide: Text.ElideRight
+                    wrapMode: Text.Wrap
                     font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 22
                     color: Theme.ink
                 }
