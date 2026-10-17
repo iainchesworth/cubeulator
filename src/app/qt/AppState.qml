@@ -40,6 +40,7 @@ QtObject {
         // Looking over a scan ends with leaving the colours screen, however it is left.
         if (screen !== "colours") {
             coloursFromScan = false;
+            coloursBackToSolve = false;
         }
         if (screen !== "scan") {
             scanComplete = false;
@@ -218,10 +219,33 @@ QtObject {
         return true;
     }
 
+    // The same, from the solve screen, for a cube the camera read as a cube and read
+    // wrong. The solution is still there and untouched, so back from the colours is the
+    // solve screen as it was (from the scan screen it is a new scan), and only Scan
+    // again starts over. Solving the corrected colours is a new solve either way
+    // (solveColours).
+    function reviewScanFromSolve() {
+        if (!reviewScan()) {
+            return false;
+        }
+        // After the screen has changed, which clears it.
+        coloursBackToSolve = true;
+        return true;
+    }
+
+    // Whether back from the colours screen, looking over a scan, is the solve
+    // screen it was opened from (and not a new scan).
+    property bool coloursBackToSolve: false
+
     function closeColours() {
         if (coloursFromScan) {
+            var backToSolve = coloursBackToSolve;
             coloursFromScan = false;
-            beginScan();
+            if (backToSolve) {
+                screen = "solve";
+            } else {
+                beginScan();
+            }
         } else {
             screen = "entry";
         }

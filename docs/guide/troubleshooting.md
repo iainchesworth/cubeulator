@@ -70,9 +70,13 @@ it is almost always one sticker read as the wrong colour:
 
 ## When the camera misreads a colour
 
-Press **Check the colours** on the scan screen once six sides are in. It shows
-what the camera read, one side at a time, as you would see it on your cube, with
-the sides named by their middle colour.
+Press **Check the colours** on the scan screen once six sides are in. If the scan
+went through and the solution does not match your cube, the same button is on the
+solve screen, over the buttons at the bottom. It shows what the camera read, one
+side at a time, as you would see it on your cube, with the sides named by their
+middle colour. **Back** from the solve screen's button returns to the solution
+where you left it; **Scan again** starts a new scan. **Solve** after a correction
+solves the corrected cube from the first turn.
 
 - **A "?" on a sticker** is one the camera was not sure of. Look at that sticker
   on your cube first. Painting it, with the colour you can see, clears the mark.
