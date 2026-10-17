@@ -442,6 +442,34 @@ TEST_CASE("a finger across a sticker of a 5x5 does not stop the side being read"
     CHECK(is_cube(made->cube, cube));
 }
 
+TEST_CASE("a finger across a sticker of a 4x4 does not make a second group of its side",
+          "[vision][nxn]") {
+    // A side with no middle sticker is told from another by its stickers alone, and a
+    // finger moving over the right-hand column leaves a sticker or two of each read
+    // unlike the side's own colours. That was a group of its own, six times over, and
+    // a scan of eight sides on a cube that has six.
+    const NCube cube = cube::nxn::random_scramble({.size = 4, .seed = 6, .moves = 120});
+    SideScan scan(4);
+    std::mt19937 rng = cube::test::deterministic_rng(5U);
+    std::uniform_real_distribution<float> shake(-0.8F, 0.8F);
+    for (const Face face : cube::solver::kAllFaces) {
+        const std::vector<Color> stickers = cube::nxn::outside_view(cube, face);
+        Pose pose = pose_for(4, 0.6F);
+        for (int frame = 0; frame < 16; ++frame) {
+            Pose shaken = pose;
+            shaken.centre += cv::Point2f(shake(rng), shake(rng));
+            cv::Mat image = cube::test::draw_side(stickers, shaken, even_light());
+            cube::test::lay_finger(image, shaken, 3 + (4 * (frame % 4)), 4);
+            scan.add(cube::vision::read_side(image, 4), 33.0F);
+        }
+        scan.add(std::nullopt);
+    }
+    CHECK(scan.sides().size() == 6);
+    const auto made = scan.scanned_n();
+    REQUIRE(made.has_value());
+    CHECK(is_cube(made->cube, cube));
+}
+
 TEST_CASE("a read of another size is not a read of this cube", "[vision][nxn]") {
     const NCube three = cube::nxn::random_scramble({.size = 3, .seed = 8, .moves = 25});
     const cv::Mat frame = cube::test::draw_side(cube::nxn::outside_view(three, Face::F),
