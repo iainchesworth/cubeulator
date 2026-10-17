@@ -49,7 +49,7 @@ Read from `develop` at the merge of pull request 148.
 | 3D view | 26 cubies by construction (the file says so), `cubieSize` 34, a face's stickers read only if `side.length === 9`, layers addressed as -1/0/+1 | `src/app/qt/Cube3DView.qml` |
 | Controller state | `stickers` is a map of six 9-colour arrays | `src/app/qt/solve_controller.cpp` |
 | History | `kFormatVersion = 1`; a 54-letter cube; at most `kMostTurns = 400` turns; the moves are re-derived by solving the stored cube | `src/app/qt/controllers/solve_history_store.{hpp,cpp}` |
-| Reading a side | lattice fit, blob and colour constants, the corner reader and the steadiness gate are tuned on 3x3 recordings and hard-code 3 and 9 | `src/lib/src/vision/direct_scan.cpp`, `color_resolution.cpp`, `corner_view.cpp` |
+| Reading a side | lattice fit, blob and colour constants, the corner reader (since made N x N to 6x6: [investigation](investigations/2026-10-17-nxn-corner-reader.md)) and the steadiness gate are tuned on 3x3 recordings and hard-code 3 and 9 | `src/lib/src/vision/direct_scan.cpp`, `color_resolution.cpp`, `corner_view.cpp` |
 | Assembling a cube | tries all 4^6 = 4096 per-side rolls and asks "is this a solvable 3x3" of each; the answer is the one that survives | `src/lib/src/solver/scan_assembly.cpp` |
 | Is this an N x N a real cube? | **No oracle.** `NCube` has `is_solved()` and `is_reduced()`; nothing says a facelet array is a cube that turns can produce. The 3x3 has `Cube::is_solvable` and the assembler leans on it | `cube/nxn/cube.hpp` |
 | Review and hand entry | not built (R3 of the recovery plan), for 3x3 either; a 3x3 design exists | [recovery-plan.md](recovery-plan.md), [design/screens/review.md](design/screens/review.md) |

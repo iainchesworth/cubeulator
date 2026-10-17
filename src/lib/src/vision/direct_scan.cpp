@@ -964,7 +964,8 @@ struct CornerVotes {
     std::vector<std::size_t> misses;
 };
 
-[[nodiscard]] CornerVotes corner_votes(const std::vector<solver::Cube>& candidates,
+template <typename CubeType>
+[[nodiscard]] CornerVotes corner_votes(const std::vector<CubeType>& candidates,
                                        const std::vector<CornerRead>& corners,
                                        const SessionColours& colours) {
     CornerVotes votes{
@@ -1294,13 +1295,15 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
 // centres makes, when any trade does: the 3x3's repair (see
 // assemble_with_closest_exchange) for a size the 3x3 assembly cannot read.
 [[nodiscard]] Assembled assemble_n(const NamedFaces& named,
-                                   const std::array<CapturedFace, 6>& faces, int size) {
+                                   const std::array<CapturedFace, 6>& faces,
+                                   const std::vector<CornerRead>& corners, int size) {
     Assembled out{
         .result = std::unexpected(CubeError::invalid_cube_state),
         .result_n = std::unexpected(CubeError::invalid_cube_state),
         .trace = AssemblyTrace(),
     };
     AssemblyTrace& trace = out.trace;
+    trace.corner_reads = corners.size();
     const std::optional<nxn::ScannedSides> sides = colours_of_names(named);
     if (!sides.has_value()) {
         trace.path = AssemblyPath::failed;
@@ -1317,8 +1320,21 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
         return out;
     }
     if (candidates.size() > 1) {
-        // The corner reader is a 3x3's, so nothing here can say which: the sides
-        // are ambiguous.
+        // Several cubes: the corner reads, where two sides were seen at once, say
+        // which fits them (as for a 3x3, assemble_three).
+        const bool all_looked_at = candidates.size() <= kMaxCandidates;
+        if (!all_looked_at) {
+            candidates.erase(candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidates), candidates.end());
+        }
+        const SessionColours colours = colours_of(named, faces);
+        CornerVotes votes = corner_votes(candidates, corners, colours);
+        trace.corner_fits = std::move(votes.fits);
+        trace.chosen = all_looked_at ? choose_by_corners(votes.misses) : std::nullopt;
+        if (trace.chosen.has_value()) {
+            trace.path = AssemblyPath::chosen_by_corners;
+            out.result_n = ScannedCubeN{.cube = candidates.at(*trace.chosen), .colours = colours};
+            return out;
+        }
         trace.path = AssemblyPath::ambiguous;
         trace.error = CubeError::ambiguous_scan;
         out.result_n = std::unexpected(CubeError::ambiguous_scan);
@@ -1377,7 +1393,7 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
 [[nodiscard]] Assembled assemble(const NamedFaces& named, const std::array<CapturedFace, 6>& faces,
                                  const std::vector<CornerRead>& corners, int size) {
     if (size != 3) {
-        return assemble_n(named, faces, size);
+        return assemble_n(named, faces, corners, size);
     }
     Assembled out = assemble_three(as_three(named), faces, corners);
     if (out.result.has_value()) {
@@ -1771,15 +1787,26 @@ void SideScan::merge_alike_groups() {
 
 namespace {
 
+// How far a side of a corner view reaches along its columns (or its rows), in sticker
+// steps: the distance from its first cell to the last of the first row (or column).
+[[nodiscard]] float side_extent(const ObliqueSide& side, int size, bool along_rows) {
+    const auto n = static_cast<std::size_t>(size);
+    const std::size_t last = along_rows ? n * (n - 1) : n - 1;
+    return length(side.centres.at(last) - side.centres.at(0)) / static_cast<float>(size - 1);
+}
+
 // Whether a side of a corner view was seen well enough to count: most of its
 // stickers found, and not so foreshortened that it is a strip.
-[[nodiscard]] bool seen_whole_enough(const ObliqueSide& side) {
-    const auto found = std::ranges::count(side.found, true);
-    if (found < kMinCornerFound) {
+[[nodiscard]] bool seen_whole_enough(const ObliqueSide& side, int size) {
+    const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    // Seven of a 3x3's nine, or that share of a bigger side's (three of a 2x2's four).
+    const auto least_found = static_cast<std::ptrdiff_t>(
+        std::max<std::size_t>(3, (static_cast<std::size_t>(kMinCornerFound) * cells) / 9));
+    if (std::ranges::count(side.found, true) < least_found) {
         return false;
     }
-    const float along_columns = length((side.centres.at(2) - side.centres.at(0)) * 0.5F);
-    const float along_rows = length((side.centres.at(6) - side.centres.at(0)) * 0.5F);
+    const float along_columns = side_extent(side, size, false);
+    const float along_rows = side_extent(side, size, true);
     const float longer = std::max(along_columns, along_rows);
     return longer > 0.0F && std::min(along_columns, along_rows) >= kMinCornerAspect * longer;
 }
@@ -1791,16 +1818,19 @@ namespace {
 // colour that differ in a sticker or more sit further.
 constexpr float kSameViewLab = 8.0F;
 
-[[nodiscard]] bool same_oblique_side(const ObliqueSide& a, const ObliqueSide& b) {
-    if (lab_gap(a.lab.at(4), b.lab.at(4)) > kSameColourLab) {
+[[nodiscard]] bool same_oblique_side(const ObliqueSide& a, const ObliqueSide& b, int size) {
+    const std::size_t cells = a.lab.size();
+    // An even size has no centre to hold alike.
+    if (size % 2 == 1 &&
+        lab_gap(a.lab.at(middle_cell(size)), b.lab.at(middle_cell(size))) > kSameColourLab) {
         return false;
     }
     for (int roll = 0; roll < 4; ++roll) {
         float total = 0.0F;
-        for (std::size_t i = 0; i < 9; ++i) {
-            total += lab_gap(a.lab.at(i), b.lab.at(rolled_cell(3, roll, i)));
+        for (std::size_t i = 0; i < cells; ++i) {
+            total += lab_gap(a.lab.at(i), b.lab.at(rolled_cell(size, roll, i)));
         }
-        if (total / 9.0F <= kSameViewLab) {
+        if (total / static_cast<float>(cells) <= kSameViewLab) {
             return true;
         }
     }
@@ -1814,14 +1844,14 @@ constexpr float kSameViewLab = 8.0F;
 // which stickers of one side touch which of the other is fixed by the cube and
 // by which sides they are.
 [[nodiscard]] bool same_view(const CornerRead& a, const CornerRead& b) {
-    if (a.sides.size() != b.sides.size()) {
+    if (a.size != b.size || a.sides.size() != b.sides.size()) {
         return false;
     }
     std::array<bool, 3> taken{};
     for (const ObliqueSide& side : a.sides) {
         bool matched = false;
         for (std::size_t j = 0; j < b.sides.size() && !matched; ++j) {
-            if (!taken.at(j) && same_oblique_side(side, b.sides.at(j))) {
+            if (!taken.at(j) && same_oblique_side(side, b.sides.at(j), a.size)) {
                 taken.at(j) = true;
                 matched = true;
             }
@@ -1840,8 +1870,8 @@ constexpr float kSameViewLab = 8.0F;
     float least_aspect = 1.0F;
     for (const ObliqueSide& side : read.sides) {
         found += static_cast<float>(std::ranges::count(side.found, true));
-        const float along_columns = length(side.centres.at(2) - side.centres.at(0));
-        const float along_rows = length(side.centres.at(6) - side.centres.at(0));
+        const float along_columns = side_extent(side, read.size, false);
+        const float along_rows = side_extent(side, read.size, true);
         const float longer = std::max(along_columns, along_rows);
         if (longer > 0.0F) {
             least_aspect = std::min(least_aspect, std::min(along_columns, along_rows) / longer);
@@ -1854,8 +1884,8 @@ constexpr float kSameViewLab = 8.0F;
 
 void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_ms) {
     in_view_.clear();
-    // The corner reader reads three sides with a lattice of three: a 3x3's.
-    if (!read.has_value() || size_ != 3) {
+    // A corner view of another size is not of this cube.
+    if (!read.has_value() || read->size != size_) {
         previous_corner_centres_.clear();
         return;
     }
@@ -1885,9 +1915,9 @@ void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_
     // Each side that was seen whole and held still is a read of its side.
     std::vector<cv::Point2f> centres;
     for (const ObliqueSide& side : read->sides) {
-        const cv::Point2f centre = side.centres.at(4);
+        const cv::Point2f centre = side.centres.at(middle_cell(size_));
         centres.push_back(centre);
-        if (!seen_whole_enough(side)) {
+        if (!seen_whole_enough(side, size_)) {
             continue;
         }
         const float reach = kSteadyFraction * interval_scale(interval_ms) * side.pitch;
@@ -1897,7 +1927,7 @@ void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_
         if (!steady) {
             continue;
         }
-        count_read(std::vector<cv::Vec3f>(side.lab.begin(), side.lab.end()), false);
+        count_read(side.lab, false);
     }
     previous_corner_centres_ = std::move(centres);
 }

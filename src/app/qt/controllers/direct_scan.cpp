@@ -555,12 +555,11 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     record(bgr, t_ms);
     scan_.add(read_, interval_ms);
     bool corner_added = false;
-    if (!read_.has_value() && size_ == 3) {
+    if (!read_.has_value() && size_ <= cube::vision::kMaxCornerSize) {
         // Not a side square to the camera. It may still be two sides in one
-        // view, which is what settles a cube whose flat sides fit two ways. (The
-        // corner reader is a 3x3's.)
+        // view, which is what settles a cube whose flat sides fit two ways.
         const auto corner =
-            prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt;
+            prepared.has_value() ? cube::vision::read_corner(*prepared, size_) : std::nullopt;
         scan_.add_corner(corner, interval_ms);
         corner_added = corner.has_value();
     }

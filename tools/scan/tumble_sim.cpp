@@ -5,7 +5,13 @@
 //
 //   cube_tumble_sim <out-dir> <layout> <degrees-per-second> <frames-per-second>
 //                   [--yaw 360] [--pitch 360] [--tilt 8] [--blur 0]
-//                   [--drift 0] [--shade 0.25] [--seed 1]
+//                   [--drift 0] [--shade 0.25] [--seed 1] [--size 3] [--moves 25]
+//
+// For a cube of any size, <layout> can be the word `random`: a cube of --size scrambled
+// with --moves turns by --seed, written with a truth.txt (six sides as seen from outside)
+// and the manifest.json that says its size, as `cube_scan replay`, `diagnose` and `board`
+// read them. Few moves make a cube whose six flat sides fit more than one cube, which is
+// what the corner views are for.
 //
 // <layout> is a cube as `cube_scan replay` prints one, "U:... D:... L:... R:...
 // F:... B:..." in the solver's own layout. The camera starts square to F, the
@@ -25,6 +31,8 @@
 // are flat colours with no glare, and what it shows is what the reader does
 // with geometry, never with a real room.
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/outside_view.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
 #include <cube/solver/outside_view.hpp>
@@ -199,9 +207,14 @@ struct Light {
     double drift = 0.0;
 };
 
-// The cube in the pose given, as the camera sees it.
-[[nodiscard]] cv::Mat render(const Cube& cube, const Camera& camera, const Mat3& pose,
+// The six sides of a cube as an outside viewer sees each, N x N stickers row-major, in
+// solver::kAllFaces' order.
+using Sides = std::array<std::vector<Color>, 6>;
+
+// The cube in the pose given, as the camera sees it. It is 3 units across at any size.
+[[nodiscard]] cv::Mat render(const Sides& sides, int size, const Camera& camera, const Mat3& pose,
                              const Light& light, double gain) {
+    const double unit = 3.0 / static_cast<double>(size);
     cv::Mat frame(camera.height, camera.width, CV_8UC3, cv::Scalar(96, 104, 110));
     const Vec3 lamp = {-0.35, 0.55, 0.76};
     for (const Face face : cube::solver::kAllFaces) {
@@ -226,12 +239,13 @@ struct Light {
                                        plus(plus(centre, right, -half), up, -half)};
         };
         fill_quad(frame, camera, quad(middle, 1.5), cv::Scalar(22, 22, 24) * shade);
-        const std::array<Color, 9> stickers = cube::solver::outside_view(cube, face);
-        for (int cell = 0; cell < 9; ++cell) {
-            const double column = static_cast<double>((cell % 3) - 1);
-            const double row = static_cast<double>(1 - (cell / 3));
+        const std::vector<Color>& stickers = sides.at(static_cast<std::size_t>(face));
+        const double middle_cell = static_cast<double>(size - 1) / 2.0;
+        for (int cell = 0; cell < size * size; ++cell) {
+            const double column = (static_cast<double>(cell % size) - middle_cell) * unit;
+            const double row = (middle_cell - static_cast<double>(cell / size)) * unit;
             const Vec3 centre = plus(plus(middle, right, column), up, row);
-            fill_quad(frame, camera, quad(centre, 0.43),
+            fill_quad(frame, camera, quad(centre, 0.43 * unit),
                       paint(stickers.at(static_cast<std::size_t>(cell))) * (shade * gain));
         }
     }
@@ -248,6 +262,8 @@ struct Options {
     double drift = 0.0;
     double shade = 0.25;
     unsigned seed = 1;
+    int size = 3;
+    int moves = 25;
 };
 
 }  // namespace
@@ -263,11 +279,6 @@ int main(int argc, char** argv) {
         return 2;
     }
     const fs::path out = std::string(args[0]);
-    const auto cube = parse_layout(args[1]);
-    if (!cube.has_value()) {
-        fmt::print("{}\nis not a cube\n", args[1]);
-        return 2;
-    }
     Options options;
     options.degrees_per_second = std::atof(std::string(args[2]).c_str());
     options.frames_per_second = std::atof(std::string(args[3]).c_str());
@@ -287,6 +298,10 @@ int main(int argc, char** argv) {
             options.shade = value;
         } else if (args[i] == "--seed") {
             options.seed = static_cast<unsigned>(value);
+        } else if (args[i] == "--size") {
+            options.size = static_cast<int>(value);
+        } else if (args[i] == "--moves") {
+            options.moves = static_cast<int>(value);
         } else {
             fmt::print("unknown option {}\n", args[i]);
             return 2;
@@ -295,6 +310,40 @@ int main(int argc, char** argv) {
     if (options.degrees_per_second <= 0.0 || options.frames_per_second <= 0.0) {
         fmt::print("the speed and the frame rate must be positive\n");
         return 2;
+    }
+
+    // The six sides to draw, and the size.
+    Sides sides;
+    std::string truth;
+    std::string whole;
+    if (args[1] == "random") {
+        if (options.size < 2 || options.size > 9) {
+            fmt::print("--size is 2 to 9\n");
+            return 2;
+        }
+        const cube::nxn::NCube scrambled = cube::nxn::random_scramble(
+            {.size = options.size, .seed = options.seed, .moves = options.moves});
+        for (const Color colour : scrambled.facelets()) {
+            whole += "WYGBOR"[static_cast<std::size_t>(colour)];
+        }
+        for (const Face face : cube::solver::kAllFaces) {
+            sides.at(static_cast<std::size_t>(face)) = cube::nxn::outside_view(scrambled, face);
+            for (const Color colour : sides.at(static_cast<std::size_t>(face))) {
+                truth += "WYGBOR"[static_cast<std::size_t>(colour)];
+            }
+            truth += '\n';
+        }
+    } else {
+        const auto cube = parse_layout(args[1]);
+        if (!cube.has_value()) {
+            fmt::print("{}\nis not a cube\n", args[1]);
+            return 2;
+        }
+        options.size = 3;
+        for (const Face face : cube::solver::kAllFaces) {
+            const std::array<Color, 9> side = cube::solver::outside_view(*cube, face);
+            sides.at(static_cast<std::size_t>(face)) = std::vector<Color>(side.begin(), side.end());
+        }
     }
 
     const double omega = options.degrees_per_second * kDegrees;
@@ -334,13 +383,13 @@ int main(int argc, char** argv) {
                 const double at = seconds - (1.0 / 120.0) +
                                   ((1.0 / 60.0) * s / static_cast<double>(options.blur - 1));
                 cv::Mat shot;
-                render(*cube, camera, pose_at(std::max(0.0, at)), light, gain)
+                render(sides, options.size, camera, pose_at(std::max(0.0, at)), light, gain)
                     .convertTo(shot, CV_32FC3);
                 sum += shot / static_cast<double>(options.blur);
             }
             sum.convertTo(frame, CV_8UC3);
         } else {
-            frame = render(*cube, camera, pose_at(seconds), light, gain);
+            frame = render(sides, options.size, camera, pose_at(seconds), light, gain);
         }
         cv::Mat noise(frame.size(), CV_8UC3);
         rng.fill(noise, cv::RNG::NORMAL, cv::Scalar::all(0), cv::Scalar::all(3));
@@ -366,6 +415,13 @@ int main(int argc, char** argv) {
         pose_csv << '\n';
     }
     std::ofstream(out / "layout.txt") << args[1] << '\n';
+    if (!truth.empty()) {
+        std::ofstream(out / "truth.txt") << truth;
+        std::ofstream(out / "cube_n.txt") << whole << '\n';
+    }
+    if (options.size != 3) {
+        std::ofstream(out / "manifest.json") << "{ \"size\": " << options.size << " }";
+    }
     fmt::print("{} frames, {:.1f} s: {}\n", frames, total, out.string());
     return 0;
 }
