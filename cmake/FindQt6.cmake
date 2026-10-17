@@ -5,7 +5,7 @@
 #
 # It never replaces Qt6Config.cmake: it only widens CMAKE_PREFIX_PATH with
 # the aqtinstall / install-qt-action layout used by ci/install-qt.ps1 and
-# ci/install-qt.sh (C:/Qt, ~/Qt, /opt/Qt, ...) when Qt6 isn't already
+# ci/install-qt.sh (C:/Qt, C:/Repos/common/qt, ~/Qt, /opt/Qt, ...) when Qt6 isn't already
 # discoverable, then defers to Qt's own config package for the real work.
 # An explicit -DCMAKE_PREFIX_PATH=... or -DQt6_DIR=... always wins.
 # ---------------------------------------------------------------------------
