@@ -61,6 +61,10 @@ USED = [
     ("complete", "wide", ("light", "dark")),
     ("history", "wide", ("light", "dark")),
     ("history-empty", "wide", ("light",)),
+    ("entry", "wide", ("light", "dark")),
+    ("colours", "wide", ("light",)),
+    ("solve-big-middle", "wide", ("light", "dark")),
+    ("solution-big-middle", "wide", ("light", "dark")),
     ("settings", "wide", ("light", "dark")),
     ("settings", "narrow", ("light",)),
 ]

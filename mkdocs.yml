@@ -55,6 +55,7 @@ nav:
       - Installing: guide/install.md
       - Scanning a cube: guide/scan.md
       - Following the solution: guide/solve.md
+      - Another size of cube: guide/other-sizes.md
       - Past solves: guide/history.md
       - Settings and shortcuts: guide/settings.md
       - Privacy: guide/privacy.md
