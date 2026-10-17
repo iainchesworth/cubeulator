@@ -72,3 +72,16 @@ if(NOT Qt6_FOUND)
     unset(_qt6_candidates)
     unset(_qt6_version_dirs)
 endif()
+
+# A find module has to report failure itself: unlike Config mode, CMake does
+# not turn "not found" into an error for REQUIRED. Without this the configure
+# carries on and dies later at qt_standard_project_setup() with "Unknown CMake
+# command", which says nothing about Qt being missing.
+if(NOT Qt6_FOUND AND Qt6_FIND_REQUIRED)
+    message(FATAL_ERROR
+        "Could not find Qt6 (>= ${Qt6_FIND_VERSION}) and no prebuilt Qt was found "
+        "in the platform's usual install locations. Pass -DCMAKE_PREFIX_PATH="
+        "<Qt install>/<kit> (for example C:/Qt/6.12.0/msvc2022_64), or select a "
+        "preset that sets it. Or configure with -DCUBEULATOR_BUILD_APP=OFF for a "
+        "build without the GUI.")
+endif()
