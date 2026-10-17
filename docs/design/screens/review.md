@@ -1,10 +1,13 @@
 # Review and hand entry
 
-> **Status in 0.1.0-beta.1:** Not built (recovery plan R3, still to do). There
-> is no screen to check or correct the colours or to enter a cube by hand:
-> Home has no **Enter colours by hand**, the menu's item for it is disabled,
-> and a scan that does not make a valid cube stays on the scan screen and
-> says so.
+> **Status:** The colours screen (the section "Entering the colours of a cube of
+> any size", below) is built for sizes 2 to 5 and is the screen this page's 3x3
+> sketch became: one side at a time, paint rather than pick, the count and the
+> cube check beside Solve. It also puts right a cube the camera misread (the
+> section "Putting a misread scan right"), reached from the scan screen once six
+> sides are in. Not built: the entry from the solve screen, the sketch's
+> `review.working` and `review.solve-failed` states (Solve goes straight to the
+> solve screen), the keyboard map below, and the unfolded overview.
 
 Lane: **scan** (`feature/direct-scan`; recovery plan R3). This is a
 proposal for the chrome and the states. Checking that colours make a cube,
@@ -176,6 +179,65 @@ set or changed here.
   from, or to the scan.
 
 With nothing changed, back and **Scan instead** leave at once.
+
+## Putting a misread scan right
+
+The same screen as "Entering the colours of a cube of any size" below, started from
+what the camera read instead of from nothing (`AppState.reviewScan`). It differs in
+five ways, and everything else is that screen:
+
+- **It starts full.** Every sticker the camera named is painted. If the six sides
+  made a cube the cube is shown as it is held; if they made none (a misread, or two
+  cubes that fit) the six sides are placed by their middles **as the camera had them**,
+  and the screen says so (`colours.notUpright`) because each may need turning.
+- **Sides are named by their middle colour** ("Red side") on a cube with a middle
+  sticker, and the sides round the grid likewise, as the sketch above asks: a person
+  holding the cube thinks of it that way. The order is yellow, green, orange, blue,
+  red, white. An even size has no middle and keeps top, front and so on.
+- **The camera's doubts are shown.** A sticker the colour naming placed with little
+  to spare over another colour carries a "?" drawn on it (a mark, so that it does not
+  depend on telling the colours apart), the note counts them, and the screen reader
+  reads it. Painting a sticker settles the doubt. The threshold (`kDoubtBelow`) is a
+  first guess, not measured against real misreads.
+- **Every change can be taken back.** *Undo*, *Redo* (also Ctrl+Z, Ctrl+Y), and
+  *Back to the scan*, which puts every sticker as the camera read it. A drag over
+  several stickers is one step. Leaving asks first only when something differs from
+  the scan (`review.discard.*`); *Scan instead* reads *Scan again* and, like Back,
+  starts a new scan.
+- **Two ways beside tapping a sticker.** *Turn this side* turns the side shown a
+  quarter turn clockwise as seen from outside, for a side that came the wrong way up.
+  *Describe this side* opens a box to type the whole side as letters in reading
+  order (W Y G B O R, `?` for a sticker you cannot tell; rows may be separated with
+  `/`, spaces or lines, and an N by N side is N x N letters), prefilled with the side as
+  it stands. The letters are fixed, like the letters of a move; the word for each colour
+  is in the help text, in the reader's language. A description of the wrong length or with
+  a letter that is no colour is refused, says which and where, and changes nothing.
+
+What the person is told does not change: counts, then whether the pieces fit
+together (`review.status.*`, `review.fault.*`), with the sticker of the piece at
+fault outlined. **A cube that cannot be one never reaches the solver**: *Solve* is
+on only for a valid cube. There is no "solve anyway".
+
+| part | component | string | objectName |
+|---|---|---|---|
+| Title | heading | `review.title.check` | `colours.title` |
+| Instruction | `small` | `review.intro.check` | `colours.intro` |
+| Sides could be the wrong way up | caution line | `review.notUpright` | `colours.notUpright` |
+| How many stickers the camera doubted | `small` | `review.doubt.note` | `colours.doubtNote` |
+| A doubted sticker | a "?" on the sticker; its name adds that the camera was unsure | `review.a11y.stickerUnsure` | `colours.doubt.<n>` |
+| Undo, Redo | buttons, ghost | `review.undo`, `review.redo` | `colours.undo`, `colours.redo` |
+| Back to the scan | button, ghost, only here | `review.revert` | `colours.revert` |
+| Turn this side | button, ghost | `review.turnSide` | `colours.turnSide` |
+| Describe this side | button, ghost, opens the box | `review.describe.open` | `colours.describe` |
+| The box | one line in the mono face, always left to right | `review.describe.help`, `review.describe.field` | `colours.describeText` |
+| Use these, Cancel | buttons | `review.describe.apply`, `common.cancel` | `colours.describeApply`, `colours.describeCancel` |
+| What is wrong with the description | `accent` line | `review.describe.tooFew`, `review.describe.tooMany`, `review.describe.unknownLetter` | `colours.describeError` |
+
+**Not built, and not verified.** Entry from the solve screen (*Check the colours*,
+for a cube that was read as valid and is wrong: the scan screen's button is the
+only way in today). Any size but 3x3 from a scan (the scan reads 3x3 only). The "?"
+threshold on real recordings. A cube that fits two ways is shown as six sides to
+compare, not as the two candidates (the sketch's "Two cubes that both fit").
 
 ## A cube of another size
 

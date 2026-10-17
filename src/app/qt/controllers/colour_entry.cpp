@@ -1,6 +1,7 @@
 #include "controllers/colour_entry.hpp"
 
 #include "colour_name.hpp"
+#include "controllers/direct_scan.hpp"
 #include "solve_controller.hpp"
 
 #include <cube/nxn/cube.hpp>
@@ -121,8 +122,20 @@ constexpr std::array<Side, 6> kSides = {
 
 }  // namespace
 
-ColourEntry::ColourEntry(SolveController& solve, QObject* parent)
-    : QObject(parent), solve_(solve), edit_(3) {}
+ColourEntry::ColourEntry(SolveController& solve, DirectScan* scan, QObject* parent)
+    : QObject(parent), solve_(solve), scan_(scan), edit_(3) {}
+
+bool ColourEntry::beginFromScan() {
+    if (scan_ == nullptr) {
+        return false;
+    }
+    std::optional<Reading> reading = scan_->reviewReading();
+    if (!reading.has_value()) {
+        return false;
+    }
+    loadReading(std::move(*reading));
+    return true;
+}
 
 void ColourEntry::begin(int size) {
     edit_.begin(size);

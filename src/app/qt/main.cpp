@@ -1,4 +1,5 @@
 #include "app_runtime.hpp"
+#include "controllers/scan_reading.hpp"
 #include "desktop/desktop_integration.hpp"
 #include "interfaces/crash_handler.hpp"
 #include "kit/bundled_fonts.hpp"
@@ -138,6 +139,32 @@ int main(int argc, char* argv[]) {
                 }
                 app_state->setProperty("screen", QStringLiteral("solve"));
             });
+    }
+
+    // CUBE_REVIEW_DEMO=<number>: open on the screen where a misread scan is put
+    // right, with a cube scrambled from that seed that the "camera" has misread (two
+    // stickers swapped and marked as doubtful, and one more mark). For working on
+    // that screen without scanning a cube badly on purpose. CUBE_REVIEW_DEMO_SIZE=<n>
+    // makes it a cube of that side length, 2 to 9 (3 unless said);
+    // CUBE_REVIEW_DEMO_TURNED=1 has the camera say it could not tell which way up
+    // each side was held. The answer is printed.
+    bool review = false;
+    const unsigned review_seed = qEnvironmentVariable("CUBE_REVIEW_DEMO").toUInt(&review);
+    if (review) {
+        const int review_size =
+            std::clamp(qEnvironmentVariable("CUBE_REVIEW_DEMO_SIZE", "3").toInt(),
+                       cube::nxn::kMinSize, cube::nxn::kMaxSize);
+        const bool turned = qEnvironmentVariable("CUBE_REVIEW_DEMO_TURNED") == QLatin1String("1");
+        runtime.controllers().colours.loadReading(
+            cube::app::demo_reading(review_seed, review_size, !turned));
+        for (const auto& sticker : cube::app::demo_misread_stickers(review_seed, review_size)) {
+            qInfo("CUBE_REVIEW_DEMO: side %c sticker %d should be colour %d", sticker.side,
+                  sticker.index + 1, static_cast<int>(sticker.colour));
+        }
+        QObject* app_state = engine.singletonInstance<QObject*>("Cubeulator", "AppState");
+        app_state->setProperty("solveCamera", false);
+        app_state->setProperty("coloursFromScan", true);
+        app_state->setProperty("screen", QStringLiteral("colours"));
     }
 
     return QGuiApplication::exec();

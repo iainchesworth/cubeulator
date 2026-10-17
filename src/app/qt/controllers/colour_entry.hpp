@@ -10,6 +10,8 @@ class SolveController;
 
 namespace cube::app {
 
+class DirectScan;
+
 // A cube typed in by hand, a colour at a time, for a cube of any size
 // (docs/design/screens/review.md, "A cube of another size") - or a cube the camera
 // read, to be put right where it misread (the same screen, started from the
@@ -63,11 +65,18 @@ class ColourEntry : public QObject {
     Q_PROPERTY(bool fromScan READ fromScan NOTIFY changed)
     // How many stickers the camera doubted and nobody has painted since.
     Q_PROPERTY(int doubtCount READ doubtCount NOTIFY changed)
+    // The sides came from a scan that could not tell which way up each was held, so
+    // each is as the camera had it and may need turning (rotateSide). True for a
+    // typed-in cube, and for a scan that made a cube.
+    Q_PROPERTY(bool upright READ upright NOTIFY changed)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY changed)
     Q_PROPERTY(bool canRedo READ canRedo NOTIFY changed)
 
 public:
-    explicit ColourEntry(SolveController& solve, QObject* parent = nullptr);
+    // `scan`, when there is one, is where beginFromScan() takes the camera's reading
+    // from.
+    explicit ColourEntry(SolveController& solve, DirectScan* scan = nullptr,
+                         QObject* parent = nullptr);
 
     [[nodiscard]] int size() const noexcept { return edit_.size(); }
     [[nodiscard]] QVariantMap sides() const;
@@ -76,6 +85,7 @@ public:
     [[nodiscard]] QVariantMap status() const;
     [[nodiscard]] bool touched() const { return edit_.changed(); }
     [[nodiscard]] bool fromScan() const noexcept { return edit_.from_reading(); }
+    [[nodiscard]] bool upright() const noexcept { return edit_.upright(); }
     [[nodiscard]] int doubtCount() const;
     [[nodiscard]] bool canUndo() const noexcept { return edit_.can_undo(); }
     [[nodiscard]] bool canRedo() const noexcept { return edit_.can_redo(); }
@@ -89,6 +99,9 @@ public:
     // back to.
     void loadReading(Reading reading);
 
+    // Starts from what the scan read, made a cube or not (DirectScan::reviewReading).
+    // False, and nothing changed, when the scan has nothing to show.
+    Q_INVOKABLE bool beginFromScan();
     // A new cube of `size` (2 to 9), nothing painted.
     Q_INVOKABLE void begin(int size);
     // Paints the sticker at `index` (row * N + col, as seen from outside) of `side`
@@ -132,6 +145,7 @@ signals:
 
 private:
     SolveController& solve_;
+    DirectScan* scan_;
     CubeEdit edit_;
 };
 

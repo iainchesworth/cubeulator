@@ -1,5 +1,6 @@
 #pragma once
 
+#include "controllers/cube_edit.hpp"
 #include "interfaces/camera.hpp"
 
 #include <cube/diagnostics/json.hpp>
@@ -117,6 +118,11 @@ class DirectScan : public QObject {
     // ambiguous or no corner would help.
     Q_PROPERTY(QStringList settlingCorner READ settlingCorner NOTIFY sidesChanged)
 
+    // The scan has something to look over by hand: it made a cube (which may still
+    // be wrong), or six sides came in and made none. The review screen starts from
+    // it (reviewReading).
+    Q_PROPERTY(bool reviewable READ reviewable NOTIFY sidesChanged)
+
     // The camera is being kept for the solve screen: sides are looked for in
     // every frame and reported (frameWatched), and none is added to the scan.
     Q_PROPERTY(bool watching READ watching NOTIFY runningChanged)
@@ -142,6 +148,7 @@ public:
     [[nodiscard]] bool ambiguous() const noexcept { return ambiguous_; }
     [[nodiscard]] bool complete() const noexcept { return scanned_.has_value(); }
     [[nodiscard]] QStringList settlingCorner() const { return settling_corner_; }
+    [[nodiscard]] bool reviewable() const noexcept { return scanned_.has_value() || conflicted_; }
     [[nodiscard]] bool watching() const noexcept { return watching_; }
     [[nodiscard]] QString recordingRoot() const { return recording_root_; }
 
@@ -163,6 +170,13 @@ public:
     [[nodiscard]] std::optional<cube::vision::SessionColours> colours() const {
         return scanned_.transform([](const cube::vision::ScannedCube& s) { return s.colours; });
     }
+
+    // The scan as the review screen takes it (scan_reading.hpp): the cube, with the
+    // stickers the colour naming was not sure of marked, when the scan made one;
+    // otherwise the sides it named, each as the camera had it. Empty when the scan
+    // has nothing to show yet. Judges the scan afresh (SideScan::diagnose), so call
+    // it when the person asks, not every frame.
+    [[nodiscard]] std::optional<Reading> reviewReading() const;
 
     // The side in the frame just processed, if there was one square to the
     // camera. While watching this is every frame's read, held still or not.

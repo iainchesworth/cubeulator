@@ -294,6 +294,16 @@ Item {
             variant: "secondary"; text: "Cancel"
             onClicked: AppState.goLaunch()
         }
+        // Six sides are in and they make no cube (or one the person doubts): look
+        // at what was read and put right what the camera misread.
+        AppButton {
+            objectName: "scan.checkColours"
+            height: 42
+            visible: DirectScan.reviewable && !root.cameraFailed
+            variant: DirectScan.conflicted ? "primary" : "secondary"
+            text: qsTrId("scan.checkColours")
+            onClicked: AppState.reviewScan()
+        }
         AppButton {
             height: 42
             visible: !root.complete && !root.cameraFailed

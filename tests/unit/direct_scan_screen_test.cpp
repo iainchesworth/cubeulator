@@ -30,6 +30,7 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QImage>
+#include <QMetaObject>
 #include <QPointF>
 #include <QQmlComponent>
 #include <QQuickItem>
@@ -191,6 +192,55 @@ TEST_CASE("an ambiguous scan has the screen name the corner to show", "[qml][dir
 
     camera.restart();
     CHECK(camera.settlingCorner().isEmpty());
+}
+
+TEST_CASE("six sides that make no cube can be looked over, put right, and come back from",
+          "[qml][direct-scan][review]") {
+    cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
+    camera.setWatching(false);
+    camera.restart();
+    auto* state = cube::test::qml_engine().singletonInstance<QObject*>("Cubeulator", "AppState");
+    REQUIRE(state != nullptr);
+    state->setProperty("screen", QStringLiteral("scan"));
+
+    {
+        // Nothing read: nothing to look over.
+        Screen screen;
+        CHECK_FALSE(screen.one("scan.checkColours")->isVisible());
+    }
+
+    const auto patterned = cube::test::patterned_cube();
+    REQUIRE(patterned.has_value());
+    for (const Face face : cube::solver::kAllFaces) {
+        const cv::Mat frame =
+            draw_side(cube::test::outside_view(*patterned, face), cube::test::Pose{});
+        for (std::size_t i = 0; i < cube::vision::SideScan::kMinReads + 2; ++i) {
+            camera.processFrame(frame);
+        }
+        camera.processFrame(cube::test::room({640, 360}));
+    }
+    REQUIRE(camera.conflicted());
+
+    Screen screen;
+    QQuickItem* button = screen.one("scan.checkColours");
+    CHECK(button->isVisible());
+    // The scan has not made a cube, so this is the way on: it is the main button.
+    CHECK(button->property("variant").toString() == "primary");
+
+    REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
+    CHECK(state->property("screen").toString() == "colours");
+    CHECK(state->property("coloursFromScan").toBool());
+    CHECK(cube::test::app_controllers().colours.fromScan());
+    CHECK(cube::test::app_controllers().colours.size() == 3);
+
+    // Back from there is a new scan.
+    REQUIRE(QMetaObject::invokeMethod(state, "closeColours"));
+    CHECK(state->property("screen").toString() == "scan");
+    CHECK_FALSE(state->property("coloursFromScan").toBool());
+
+    state->setProperty("screen", QStringLiteral("launch"));
+    camera.restart();
+    cube::test::app_controllers().colours.begin(3);
 }
 
 // Pictures of the scan screen, for looking at rather than for checking.

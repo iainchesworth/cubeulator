@@ -86,6 +86,8 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/direct_scan.hpp
         qt/controllers/direct_scan.cpp
         qt/controllers/held_cube.hpp
+        qt/controllers/scan_reading.hpp
+        qt/controllers/scan_reading.cpp
         qt/controllers/held_cube.cpp
         qt/controllers/platform_facts.hpp
         qt/controllers/platform_facts.cpp
