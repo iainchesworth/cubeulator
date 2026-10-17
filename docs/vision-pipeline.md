@@ -605,7 +605,9 @@ path cannot disagree.
 
 `cube_scan_s0` (`tools/scan/s0.cpp`) is the same reader on drawn cubes of any size,
 swept by sticker spacing, light, shake and noise; see [the S0
-investigation](investigations/2026-10-17-nxn-scan-s0.md).
+investigation](investigations/2026-10-17-nxn-scan-s0.md). A recorded session of a cube
+that is not a 3x3 is replayed by `cube_scan replay` and `board` at the size its manifest
+says ([recording format](recording-format.md#truthtxt)).
 
 `cube_scan` (`tools/scan`) replays recorded sessions through the same reader:
 

@@ -47,6 +47,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <random>
 #include <sstream>
@@ -414,6 +416,51 @@ int main(int argc, char** argv) {
                        read->pitch, at.x, at.y);
         } else {
             fmt::print("no read\n");
+        }
+        return 0;
+    }
+    // --session <dir> <size> <seed>: a drawn cube written as a recorded session, for
+    // cube_scan to replay (frames, manifest.json, truth.txt).
+    if (argc == 5 && std::string(argv[1]) == "--session") {
+        const std::filesystem::path dir = argv[2];
+        const int size = std::stoi(argv[3]);
+        const auto seed = static_cast<unsigned>(std::stoul(argv[4]));
+        std::filesystem::create_directories(dir);
+        const NCube cube =
+            cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 20 * size});
+        std::mt19937 rng(seed);
+        std::uniform_real_distribution<float> tilt(-12.0F, 12.0F);
+        std::uniform_real_distribution<float> shift(-30.0F, 30.0F);
+        std::uniform_real_distribution<float> shake(-0.7F, 0.7F);
+        const cube::test::Drawing drawing;
+        std::string truth;
+        int frame_number = 0;
+        for (const Face face : cube::solver::kAllFaces) {
+            std::vector<Color> stickers =
+                turned(cube::nxn::outside_view(cube, face), static_cast<int>(rng() >> 30U));
+            std::string word;
+            for (const Color colour : stickers) {
+                word += "WYGBOR"[static_cast<std::size_t>(colour)];
+            }
+            truth += word + "\n";
+            cube::test::Pose pose;
+            pose.pitch = 0.5F * 360.0F / static_cast<float>(size);
+            pose.centre = {320.0F + shift(rng), 180.0F + shift(rng) / 2.0F};
+            pose.degrees = tilt(rng);
+            for (int i = 0; i < 14; ++i) {
+                cube::test::Pose shaken = pose;
+                shaken.centre += cv::Point2f(shake(rng), shake(rng));
+                cv::imwrite(fmt::format("{}/rec_{:06}.jpg", dir.string(), frame_number++),
+                            cube::test::draw_side(stickers, shaken, drawing));
+            }
+            for (int i = 0; i < 4; ++i) {
+                cv::imwrite(fmt::format("{}/rec_{:06}.jpg", dir.string(), frame_number++),
+                            cube::test::room(drawing.size));
+            }
+        }
+        std::ofstream(dir / "truth.txt") << truth;
+        if (size != 3) {
+            std::ofstream(dir / "manifest.json") << "{ \"size\": " << size << " }";
         }
         return 0;
     }
