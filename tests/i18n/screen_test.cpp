@@ -33,10 +33,13 @@
 #include <QUrl>
 #include <QVariant>
 
+#include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <memory>
+#include <vector>
 
 using cube::solver::Color;
 using cube::solver::Cube;
@@ -198,6 +201,118 @@ public:
                 }
             });
         });
+        return bad;
+    }
+
+    // The item of `name` (its objectName) below the screen.
+    [[nodiscard]] QQuickItem* find(const char* name) const {
+        return screen_->findChild<QQuickItem*>(QString::fromLatin1(name));
+    }
+
+    // The strings and buttons (and the items named in `boxes`, by objectName: the cube) that
+    // lie on top of each other, as drawn. A panel shorter than what it holds draws one thing
+    // over the next while every string in it still fits its own box, which no check of a
+    // single string can see. A string is measured by the text it holds and where its
+    // alignment puts it, not by the box it was given; a button and a named item by their
+    // boxes. A string in a button is the button's own (the button stands for it), and what a
+    // clipping parent cuts off (the part of a scrolled list that is out of view) is not
+    // drawn, so it is not counted.
+    [[nodiscard]] QStringList drawn_over_each_other(
+        std::initializer_list<const char*> boxes = {}) const {
+        struct Drawn {
+            const QQuickItem* item;
+            QRectF rect;
+            QString name;
+        };
+        std::vector<Drawn> drawn;
+        visit(screen_.get(), [&](QQuickItem* item) {
+            const bool is_text = item->inherits("QQuickText");
+            const bool is_button = QString::fromLatin1(item->metaObject()->className())
+                                       .startsWith(QLatin1String("AppButton"));
+            const bool is_named = std::any_of(boxes.begin(), boxes.end(), [&](const char* name) {
+                return item->objectName() == QLatin1String(name);
+            });
+            if (!item->isVisible() || !(is_text || is_button || is_named)) {
+                return;
+            }
+            double opacity = 1;
+            for (const QQuickItem* up = item; up != nullptr; up = up->parentItem()) {
+                opacity *= up->opacity();
+                // A button's label is the button's own: the button stands for it.
+                if (is_text && up != item &&
+                    QString::fromLatin1(up->metaObject()->className())
+                        .startsWith(QLatin1String("AppButton"))) {
+                    return;
+                }
+            }
+            if (opacity < 0.01) {
+                return;
+            }
+            QRectF box(0, 0, item->width(), item->height());
+            QString name = QStringLiteral("item ") + item->objectName();
+            if (is_button) {
+                name = QStringLiteral("button \"") + item->property("text").toString() +
+                       QStringLiteral("\"");
+            } else if (is_text) {
+                const QString shown = item->property("text").toString();
+                if (shown.isEmpty()) {
+                    return;
+                }
+                name = QStringLiteral("text \"") + shown.left(40) + QStringLiteral("\"");
+                const double w = item->property("contentWidth").toDouble();
+                const double h = item->property("contentHeight").toDouble();
+                const double left = item->property("leftPadding").toDouble();
+                const double top = item->property("topPadding").toDouble();
+                const double room_w =
+                    item->width() - left - item->property("rightPadding").toDouble();
+                const double room_h =
+                    item->height() - top - item->property("bottomPadding").toDouble();
+                // QQuickText::HAlignment and VAlignment are Qt::Alignment's values.
+                const int across = item->property("effectiveHorizontalAlignment").toInt();
+                const int down = item->property("verticalAlignment").toInt();
+                const double x = left + (across == Qt::AlignRight     ? room_w - w
+                                         : across == Qt::AlignHCenter ? (room_w - w) / 2
+                                                                      : 0);
+                const double y = top + (down == Qt::AlignBottom    ? room_h - h
+                                        : down == Qt::AlignVCenter ? (room_h - h) / 2
+                                                                   : 0);
+                box = QRectF(x, y, w, h);
+            }
+            QRectF shown_at = item->mapRectToItem(screen_.get(), box);
+            for (const QQuickItem* up = item->parentItem(); up != nullptr; up = up->parentItem()) {
+                if (up->clip()) {
+                    shown_at &=
+                        up->mapRectToItem(screen_.get(), QRectF(0, 0, up->width(), up->height()));
+                }
+            }
+            if (!shown_at.isEmpty()) {
+                drawn.push_back({item, shown_at, name});
+            }
+        });
+        // Whether `inner` is `outer` or something in it (a named box with strings in it).
+        const auto inside = [](const QQuickItem* inner, const QQuickItem* outer) {
+            for (const QQuickItem* up = inner; up != nullptr; up = up->parentItem()) {
+                if (up == outer) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        QStringList bad;
+        for (std::size_t a = 0; a < drawn.size(); ++a) {
+            for (std::size_t b = a + 1; b < drawn.size(); ++b) {
+                if (inside(drawn[a].item, drawn[b].item) || inside(drawn[b].item, drawn[a].item)) {
+                    continue;
+                }
+                const QRectF both = drawn[a].rect.intersected(drawn[b].rect);
+                if (both.width() > 0.5 && both.height() > 0.5) {
+                    bad.append(QStringLiteral("%1 over %2 (%3 x %4)")
+                                   .arg(drawn[a].name, drawn[b].name)
+                                   .arg(both.width(), 0, 'f', 1)
+                                   .arg(both.height(), 0, 'f', 1));
+                }
+            }
+        }
         return bad;
     }
 
@@ -428,6 +543,31 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
             for (const QString& pushed : screen.buttons_below_screen()) {
                 FAIL_CHECK("button below the window: " << str(pushed));
             }
+            // And nothing is drawn on top of anything else: a panel shorter than what
+            // it holds sets its last string over the next one's. Only the solve screen is
+            // held to it so far: the others pass in the machine's face, but in the wider
+            // stand-in (CUBE_I18N_TEST_FONT=Verdana) the launch screen's wide layout has
+            // its history and settings buttons a few pixels across each other in the
+            // pseudo-locale, which is not what is held here.
+            //
+            // Known, and not what is held here either: the wide solve screen of a
+            // right-to-left language puts the panel where the left-to-right layout has it
+            // (it is placed with an x, which does not mirror) while the stage beside it
+            // mirrors, so the two lie over each other. Said, so that it is not lost; a
+            // layout that holds does not say it.
+            if (std::strcmp(type, "SolveScreen") == 0) {
+                const QStringList overlaps = screen.drawn_over_each_other();
+                const bool known = t::language().rtl() && size.w == 900;
+                if (known && !overlaps.isEmpty()) {
+                    WARN("known: " << type << " in " << language << " wide has " << overlaps.size()
+                                   << " strings and buttons drawn over each other, the first "
+                                   << str(overlaps.first()));
+                } else {
+                    for (const QString& over : overlaps) {
+                        FAIL_CHECK("drawn over each other: " << str(over));
+                    }
+                }
+            }
         }
     }
 }
@@ -494,6 +634,59 @@ TEST_CASE(
     // box measured for the English is the likeliest to be cut here.
     for (const char* language : {"de", "fr", "es"}) {
         holds_the_layout_in(language);
+    }
+}
+
+// The panel under the cube on a phone's solve screen. A cube bigger than a 3x3 has more in
+// it than a 3x3 does (the label over the methods, and the way to skip to the 3x3 stage), and
+// when the stage's room for it was a number for a 3x3 the skip button sat over the stage's
+// name and what it asks, in English as much as in any other language. Held at the heights of
+// phones, short and tall, in English, the pseudo-locale and every real language, at the
+// longest words the screen has: nothing in the panel is drawn over anything else, nor is the
+// cube, and the cube is not made smaller than it can be followed at to make room.
+TEST_CASE("the solve screen holds its panel at the sizes of phones for a 3x3 and a 5x5",
+          "[i18n][screen][solve-panel]") {
+    struct Size {
+        int w;
+        int h;
+    };
+    constexpr Size phones[] = {{360, 640}, {390, 780}, {412, 915}};
+    constexpr double least_cube = 150;
+    // A 3x3, a 5x5, and a 5x5 at a turn of several layers, which has the longest words.
+    for (const int cube_kind : {0, 1, 2}) {
+        if (cube_kind == 0) {
+            have_a_solution();
+        } else if (cube_kind == 1) {
+            have_a_big_solution();
+        } else {
+            have_a_wide_solution();
+        }
+        for (const char* language :
+             {"en", "xx", "he", "ar", "yi", "de", "fr", "es", "ja", "zh-CN"}) {
+            in_language(language);
+            for (const Size& size : phones) {
+                Screen screen("SolveScreen", size.w, size.h);
+                INFO(language << ", " << size.w << "x" << size.h << ", "
+                              << (cube_kind == 0   ? "a 3x3"
+                                  : cube_kind == 1 ? "a 5x5"
+                                                   : "a 5x5, a turn of several layers"));
+                for (const QString& over : screen.drawn_over_each_other({"solve.cube"})) {
+                    FAIL_CHECK("drawn over each other: " << str(over));
+                }
+                const QQuickItem* cube = screen.find("solve.cube");
+                REQUIRE(cube != nullptr);
+                CHECK(cube->width() >= least_cube - 0.5);
+                // The skip is there to be pressed: on the screen, whole. (A 3x3 has none.)
+                const QQuickItem* skip = screen.find("solve.skip.button");
+                REQUIRE(skip != nullptr);
+                CHECK(skip->isVisible() == (cube_kind != 0));
+                if (skip->isVisible()) {
+                    const QRectF at = skip->mapRectToItem(
+                        screen.item(), QRectF(0, 0, skip->width(), skip->height()));
+                    CHECK(at.bottom() <= size.h + 0.5);
+                }
+            }
+        }
     }
 }
 
@@ -841,7 +1034,7 @@ TEST_CASE("a label is not wider than the box it is set in, in any of the nine sc
 //
 // CUBE_I18N_SHOT_SIZE=390x780 sets the window, and CUBE_I18N_SHOT_CUBE=5 gives
 // the solution and solve screens a 5x5 to show (5wide: one that opens with a
-// turn of three layers).
+// turn of three layers; 3: a 3x3).
 //
 // One picture a process: a second grabWindow() with the 3D cube in the scene
 // crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
@@ -859,7 +1052,9 @@ TEST_CASE("a picture of a screen in a language", "[.shots]") {
     QCoreApplication::processEvents();
     // The screens that show a solution do so for a 5x5 when asked (CUBE_I18N_SHOT_CUBE=5):
     // that is where the layer words are.
-    if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5")) {
+    if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("3")) {
+        have_a_solution();
+    } else if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5")) {
         have_a_big_solution();
     } else if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5wide")) {
         have_a_wide_solution();

@@ -125,6 +125,21 @@ public:
             return !cube_->property("viewMoving").toBool() && !cube_->property("playing").toBool();
         }));
         QCoreApplication::processEvents();
+        lay_out();
+    }
+
+    // The window's size, as a phone's. Positioners lay their children out when a window
+    // polishes them, and there is no window here, so each is asked (settle() does it
+    // again after every step).
+    void resize(int width, int height) const {
+        item_->setWidth(width);
+        item_->setHeight(height);
+        settle();
+    }
+
+    // The cube's box in the screen's own coordinates.
+    [[nodiscard]] QRectF cube_box() const {
+        return cube_->mapRectToItem(item_.get(), QRectF(0, 0, cube_->width(), cube_->height()));
     }
 
     // Presses Next and waits for the layer to have turned and the solution to have moved on.
@@ -135,6 +150,21 @@ public:
     }
 
 private:
+    static void lay_out(QQuickItem* item) {
+        if (item->inherits("QQuickBasePositioner")) {
+            QMetaObject::invokeMethod(item, "forceLayout");
+        }
+        for (QQuickItem* child : item->childItems()) {
+            lay_out(child);
+        }
+    }
+    void lay_out() const {
+        for (int pass = 0; pass < 3; ++pass) {
+            lay_out(item_.get());
+            QCoreApplication::processEvents();
+        }
+    }
+
     std::unique_ptr<QQuickItem> item_;
     QQuickItem* cube_ = nullptr;
 };
@@ -207,6 +237,53 @@ TEST_CASE("a 5x5 can be skipped to its 3x3 stage, and finished from there",
     }
     CHECK(solver.plan().current_cube().is_solved());
     REQUIRE(screen.shows(solver.plan().current_cube()));
+}
+
+TEST_CASE("the cube of a 5x5 keeps its size on a phone from stage to stage and through the skip",
+          "[qml][solve-screen][nxn]") {
+    // What the panel under the cube holds is kept room for whether or not it is showing
+    // (the way to skip to the 3x3 stage goes once the 3x3's stages begin), and whatever the
+    // stage says: a cube that changed size as the stages went by would not be a cube
+    // anyone could follow. And the panel is given what it needs before the cube is made
+    // smaller than it can be followed at.
+    constexpr double least_cube = 150;
+    constexpr int phones[][2] = {{360, 640}, {390, 780}, {412, 915}};
+    SolveController& solver =
+        solve_in_app(cube::nxn::random_scramble({.size = 5, .seed = 9, .moves = 80}));
+    for (const auto& phone : phones) {
+        INFO(phone[0] << "x" << phone[1]);
+        solver.goToMove(0);
+        Screen screen;
+        screen.resize(phone[0], phone[1]);
+        const QRectF first = screen.cube_box();
+        CHECK(first.width() >= least_cube - 0.5);
+        CHECK(first.width() == first.height());
+        CHECK(first.bottom() <= phone[1]);
+
+        // Every stage's first move, the way to skip to the 3x3 stage, and the end.
+        QList<int> where;
+        for (const QVariant& range : solver.stageRanges()) {
+            where.append(range.toMap().value("startIndex").toInt());
+        }
+        where.append(solver.coreStartIndex());
+        where.append(solver.totalMoves());
+        for (const int index : where) {
+            INFO("move " << index);
+            solver.goToMove(index);
+            screen.settle();
+            const QRectF now = screen.cube_box();
+            CHECK(now.width() == first.width());
+            CHECK(now.top() == first.top());
+        }
+        solver.goToMove(0);
+        screen.settle();
+        QObject* button = screen.find("solve.skip.button");
+        REQUIRE(button != nullptr);
+        REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
+        screen.settle();
+        CHECK(screen.cube_box().width() == first.width());
+        CHECK(screen.cube_box().top() == first.top());
+    }
 }
 
 TEST_CASE("a 3x3 has no skip and still has its own view and its rescan",
