@@ -376,6 +376,22 @@ the flat reads lack.
    corner at a time settles the recorded patterned cube (twenty cubes from six
    sides) in at most three views, in the tests.
 
+### A bigger cube's corner views
+
+`read_corner(frame, size)` and `fit_corner_each(read, ncubes, colours)` read and fit two or
+three sides of N x N, 2 to 6 (`kMaxCornerSize`; 7 costs more than 20 ms a frame), by the rules
+above with these differences. A grid laid from a blob and two neighbours is placed a ring at a
+time, each refit by least squares, for a side of four or more (a 3x3's is placed in one go as
+it was); there are hundreds of windows rather than two dozen, so only the partitions that can
+make a corner are weighed; a side is matched to a face of a candidate by its N x N colours
+alone (an even size has no centre), and the shared edge's pairing is checked on the faces' own
+positions. `SideScan::add_corner` takes a corner view of the scan's size, and `assemble_n` chooses
+among the candidates by the same votes (`choose_by_corners`). The corner to show is not named for
+a bigger cube (`settling_corner` is a 3x3's): the screen asks for two sides at once. Drawn and
+tumbled, 15 of 16 4x4s and 16 of 16 5x5s a few turns from solved were settled, none wrongly;
+nothing is measured on a real cube held corner-on
+([the investigation](investigations/2026-10-17-nxn-corner-reader.md)).
+
 A cube tumbled in front of the camera, which no recording is, is what
 `cube_tumble_sim` draws, and `cube_scan funnel` replays: a cube turned about
 the vertical and then the horizontal shows two sides between every two
@@ -579,9 +595,10 @@ cubes, and nothing but a 3x3 has been read on a real cube.
   five on any free face in any of four turns (5! x 4^5 = 122,880 at most), a branch stopping where a
   corner or wing shows a colour twice, and `validate` reads the colour scheme off the corners at the
   end; a 2x2's six flat sides make more than one cube one time in four (none of 85 4x4s and 6x6s). There is
-  no corner reader above a 3x3: a scan whose flat sides make more than one cube is
-  `ambiguous_scan` and says no corner to show. `SideScan::scanned_n()` / `cube_n()` give the
-  cube of any size (an `NCube`); `scanned()` / `cube()` are the 3x3's.
+  corner reader above a 6x6 and none that names a corner to show: a scan whose flat sides make
+  more than one cube is `ambiguous_scan` until corner views settle it, and asks for "two sides at
+  once" (see below). `SideScan::scanned_n()` / `cube_n()` give the cube of any size (an `NCube`);
+  `scanned()` / `cube()` are the 3x3's.
 - **What the oracle cannot see.** Two stickers of one ring of centres that were swapped by
   a misnaming give a cube nothing can tell from the right one (centres have no identity),
   and of two wing stickers a few per cent do: see the investigation. A scan of a bigger

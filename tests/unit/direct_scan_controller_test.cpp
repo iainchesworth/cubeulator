@@ -493,6 +493,54 @@ TEST_CASE("DirectScan scans a cube of another odd size: its dots, its sides and 
     CHECK_FALSE(scan.complete());
 }
 
+TEST_CASE("a bigger cube whose flat sides fit several cubes is settled by corner views",
+          "[qt][controllers][direct-scan][nxn]") {
+    for (const int size : {2, 4, 5}) {
+        CAPTURE(size);
+        const auto found = cube::test::cube_whose_flat_sides_fit_several(size);
+        REQUIRE(found.has_value());
+        const cube::nxn::NCube& cube = *found;
+
+        DirectScan scan;
+        scan.setSize(size);
+        int completed = 0;
+        QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+
+        cube::test::Pose pose;
+        pose.pitch = 180.0F / static_cast<float>(size);
+        for (const Face face : kAllFaces) {
+            hold(scan, draw_side(cube::nxn::outside_view(cube, face), pose), kFramesToCapture + 3);
+            scan.processFrame(room({640, 360}));
+        }
+        REQUIRE(scan.sidesRead() == 6);
+        // Six sides, none of them wrong, and a way of putting them together that is not
+        // the only one: the scan waits to be shown two sides at once.
+        REQUIRE(scan.ambiguous());
+        CHECK(completed == 0);
+        CHECK_FALSE(scan.cubeN().has_value());
+        CHECK(scan.settlingCorner().isEmpty());
+
+        cube::test::Corner3Pose corner;
+        corner.edge = 1.1F * (150.0F + (5.0F * static_cast<float>(size)));
+        for (const Face vertical : {Face::U, Face::D}) {
+            for (const Face depth : {Face::F, Face::B}) {
+                for (const Face side : {Face::L, Face::R}) {
+                    const cv::Mat frame = cube::test::draw_cube_corner3(
+                        cube, vertical, depth, side, corner, cube::test::Drawing{});
+                    if (!frame.empty() && completed == 0) {
+                        scan.processFrame(room({640, 360}));
+                        hold(scan, frame, kFramesToCapture + 4);
+                    }
+                }
+            }
+        }
+        REQUIRE(completed == 1);
+        REQUIRE(scan.cubeN().has_value());
+        CHECK(scan.cubeN()->size() == size);
+        CHECK_FALSE(scan.ambiguous());
+    }
+}
+
 TEST_CASE("a scan of a 5x5 is recorded at its size and replays to the same cube",
           "[qt][controllers][direct-scan][nxn]") {
     QTemporaryDir folder;

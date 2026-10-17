@@ -37,7 +37,7 @@ namespace cube::vision {
 // 3x3 is the case the numbers were measured on. What is validated beyond it, and
 // what is not, is in docs/nxn-app-plan.md (gate S0): odd sizes are read and
 // assembled end to end; an even size has no middle sticker, so its sides can be
-// read here but not yet named or assembled; the corner reader is a 3x3's.
+// read here but not yet named or assembled; the corner reader reads any size up to kMaxCornerSize.
 
 // One frame's read of the side facing the camera.
 //

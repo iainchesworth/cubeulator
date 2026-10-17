@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/corner_view.hpp>
 #include <cube/vision/direct_scan.hpp>
@@ -53,6 +54,16 @@ inline constexpr float kCornerTurnTolerance = 1.5F;
 // most of them show a read the same faces. Those are fitted once.
 [[nodiscard]] std::vector<CornerFit> fit_corner_each(const CornerRead& read,
                                                      const std::vector<solver::Cube>& cubes,
+                                                     const SessionColours& colours,
+                                                     float max_distance = kCornerFitDistance);
+
+// The same for a cube of any size. A side of the read is matched to a face of the
+// cube by its N x N colours alone (an even size has no centre to name it by, and an
+// odd one is as well named by what is on it); each shared edge must then be where the
+// cube puts the two faces' common edge, with the stickers along it paired as the cube
+// has them. `read.size` must be the cubes'; a cube of another size fits nothing.
+[[nodiscard]] std::vector<CornerFit> fit_corner_each(const CornerRead& read,
+                                                     const std::vector<nxn::NCube>& cubes,
                                                      const SessionColours& colours,
                                                      float max_distance = kCornerFitDistance);
 

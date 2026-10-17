@@ -20,9 +20,10 @@
 //                                    to hold against the camera's 33 ms
 //
 // A session of a cube that is not a 3x3 says so in its manifest.json ("size", the
-// recorder writes it); replay and board then read it as that size (the odd ones: an
-// even size is read and not named) and score it against truth.txt of N x N letters a
-// side. The other commands are a 3x3's.
+// recorder writes it); replay, board, diagnose, funnel and cost then read it as that size
+// and score it against truth.txt of N x N letters a side, or, for a cube whose six flat
+// sides fit several cubes, against cube_n.txt (6 x N^2 letters in the cube's own facelet
+// order, which cube_tumble_sim writes). The other commands are a 3x3's.
 //
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
@@ -34,6 +35,7 @@
 
 #include <cube/model/facelet.hpp>
 #include <cube/nxn/cube.hpp>
+#include <cube/nxn/geometry.hpp>
 #include <cube/nxn/scan_assembly.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
@@ -244,6 +246,28 @@ using cube::solver::Face;
 // each side as seen from outside in any turn, put together as the scan puts sides
 // together, so that what the scan makes and what this makes are the same cube.
 [[nodiscard]] std::optional<cube::nxn::NCube> truth_n_of(const fs::path& session, int size) {
+    // A session may name the cube itself (cube_n.txt: 6 x N^2 letters in the cube's own
+    // facelet order), which a cube whose six flat sides fit several cubes needs; the sides
+    // alone do not say which.
+    if (std::ifstream whole(session / "cube_n.txt"); whole) {
+        std::string letters;
+        whole >> letters;
+        std::vector<Color> stickers;
+        for (const char letter : letters) {
+            const auto colour = colour_of(letter);
+            if (!colour.has_value()) {
+                return std::nullopt;
+            }
+            stickers.push_back(*colour == FacetColor::white    ? Color::White
+                               : *colour == FacetColor::yellow ? Color::Yellow
+                               : *colour == FacetColor::red    ? Color::Red
+                               : *colour == FacetColor::orange ? Color::Orange
+                               : *colour == FacetColor::green  ? Color::Green
+                                                               : Color::Blue);
+        }
+        auto cube = cube::nxn::NCube::from_facelets(size, stickers);
+        return cube.has_value() ? std::optional<cube::nxn::NCube>(*cube) : std::nullopt;
+    }
     std::ifstream in(session / "truth.txt");
     const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
     cube::nxn::ScannedSides sides;
@@ -283,6 +307,23 @@ using cube::solver::Face;
     }
     auto cube = cube::nxn::assemble_scanned_sides(size, sides);
     return cube.has_value() ? std::optional<cube::nxn::NCube>(*cube) : std::nullopt;
+}
+
+// Whether `made` is `truth` or the same cube held another way up: the scan puts a side where
+// its centres say it goes, and an even size has none to say.
+[[nodiscard]] bool same_cube_n(const cube::nxn::NCube& made, const cube::nxn::NCube& truth) {
+    if (made.size() != truth.size()) {
+        return false;
+    }
+    const cube::nxn::Geometry& geometry = cube::nxn::Geometry::of(truth.size());
+    for (std::size_t rotation = 0; rotation < geometry.rotations().size(); ++rotation) {
+        cube::nxn::NCube held = truth;
+        held.apply(geometry.rotation_permutation(rotation));
+        if (held == made) {
+            return true;
+        }
+    }
+    return false;
 }
 
 // How long each frame of a session came after the one before, in milliseconds,
@@ -364,26 +405,33 @@ using cube::solver::Face;
 // Which gate of SideScan::add_corner a side of a corner read met.
 enum class SideGate : std::uint8_t { counted, not_whole, strip, moving };
 
-[[nodiscard]] SideGate gate_of(const cube::vision::ObliqueSide& side,
+[[nodiscard]] SideGate gate_of(const cube::vision::ObliqueSide& side, int size,
                                const std::vector<cv::Point2f>& previous_centres, float interval) {
-    if (std::count(side.found.begin(), side.found.end(), true) < cube::vision::kMinCornerFound) {
+    const auto n = static_cast<std::size_t>(size);
+    const auto least_found = static_cast<std::ptrdiff_t>(std::max<std::size_t>(
+        3, (static_cast<std::size_t>(cube::vision::kMinCornerFound) * n * n) / 9));
+    if (std::count(side.found.begin(), side.found.end(), true) < least_found) {
         return SideGate::not_whole;
     }
     const auto step = [&](std::size_t to) {
-        const cv::Point2f half = (side.centres[to] - side.centres[0]) * 0.5F;
+        const cv::Point2f half =
+            (side.centres.at(to) - side.centres.at(0)) / static_cast<float>(size - 1);
         return std::hypot(half.x, half.y);
     };
-    const float longer = std::max(step(2), step(6));
-    if (longer <= 0.0F || std::min(step(2), step(6)) < cube::vision::kMinCornerAspect * longer) {
+    const float along_columns = step(n - 1);
+    const float along_rows = step(n * (n - 1));
+    const float longer = std::max(along_columns, along_rows);
+    if (longer <= 0.0F ||
+        std::min(along_columns, along_rows) < cube::vision::kMinCornerAspect * longer) {
         return SideGate::strip;
     }
     const float reach =
         cube::vision::kSteadyFraction * cube::vision::interval_scale(interval) * side.pitch;
-    const bool steady = std::any_of(previous_centres.begin(), previous_centres.end(),
-                                    [&](const cv::Point2f& before) {
-                                        const cv::Point2f gap = side.centres[4] - before;
-                                        return std::hypot(gap.x, gap.y) < reach;
-                                    });
+    const bool steady = std::any_of(
+        previous_centres.begin(), previous_centres.end(), [&](const cv::Point2f& before) {
+            const cv::Point2f gap = side.centres.at((n / 2 * n) + (n / 2)) - before;
+            return std::hypot(gap.x, gap.y) < reach;
+        });
     return steady ? SideGate::counted : SideGate::moving;
 }
 
@@ -398,10 +446,11 @@ enum class SideGate : std::uint8_t { counted, not_whole, strip, moving };
 // frames became reads, and which gate the others met.
 int run_funnel(const fs::path& session, bool every_frame) {
     using cube::vision::CornerStage;
+    const int size = session_size(session);
     const std::vector<fs::path> frames = frames_of(session);
     const std::vector<float> intervals = frame_intervals(session, frames);
 
-    cube::vision::SideScan scan;
+    cube::vision::SideScan scan(size);
     std::vector<cube::vision::SideScan::Side> previous_sides;
     bool ambiguous = false;
 
@@ -422,8 +471,9 @@ int run_funnel(const fs::path& session, bool every_frame) {
 
     for (std::size_t i = 0; i < frames.size(); ++i) {
         const cv::Mat bgr = cv::imread(frames[i].string(), cv::IMREAD_COLOR);
-        const auto prepared = cube::vision::prepare_frame(bgr);
-        const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+        const auto prepared = cube::vision::prepare_frame(bgr, size);
+        const auto read =
+            prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
         scan.add(read, intervals[i]);
 
         std::string what = "square-on";
@@ -435,18 +485,21 @@ int run_funnel(const fs::path& session, bool every_frame) {
             ++corner_frames;
             cube::vision::CornerExplained explained;
             if (prepared.has_value()) {
-                explained = cube::vision::read_corner_explained(*prepared);
+                explained = cube::vision::read_corner_explained(*prepared, size);
             }
             ++stages[explained.stage];
             what = std::string(stage_name(explained.stage));
+            what += fmt::format(" ({} blobs, {} windows)", explained.blobs, explained.windows);
             if (explained.read.has_value()) {
                 corner = std::move(explained.read);
                 (corner->sides.size() == 2 ? two_sided : three_sided) += 1;
                 std::vector<cv::Point2f> centres;
                 for (const cube::vision::ObliqueSide& side : corner->sides) {
-                    const SideGate gate = gate_of(side, previous_centres, intervals[i]);
+                    const SideGate gate = gate_of(side, size, previous_centres, intervals[i]);
                     ++gates[gate];
-                    centres.push_back(side.centres[4]);
+                    centres.push_back(side.centres.at(
+                        (static_cast<std::size_t>(size) / 2 * static_cast<std::size_t>(size)) +
+                        (static_cast<std::size_t>(size) / 2)));
                     what += fmt::format(" [{}]", gate == SideGate::counted     ? "counted"
                                                  : gate == SideGate::not_whole ? "too few found"
                                                  : gate == SideGate::strip     ? "strip"
@@ -560,9 +613,9 @@ struct Outcome {
             prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
         outcome.reads += read.has_value() ? 1U : 0U;
         scan.add(read, intervals[i]);
-        if (!read.has_value() && size == 3) {
+        if (!read.has_value() && size <= cube::vision::kMaxCornerSize) {
             scan.add_corner(
-                prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt,
+                prepared.has_value() ? cube::vision::read_corner(*prepared, size) : std::nullopt,
                 intervals[i]);
         }
         if (size != 3) {
@@ -686,9 +739,9 @@ int run_diagnose(const fs::path& session) {
         const auto read =
             prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
         scan.add(read, intervals[i]);
-        if (!read.has_value() && size == 3) {
+        if (!read.has_value() && size <= cube::vision::kMaxCornerSize) {
             scan.add_corner(
-                prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt,
+                prepared.has_value() ? cube::vision::read_corner(*prepared, size) : std::nullopt,
                 intervals[i]);
         }
     }
@@ -775,7 +828,12 @@ int run_diagnose(const fs::path& session) {
                    static_cast<double>(cluster.hue.chroma));
     }
     if (diagnosis.assembly.has_value()) {
-        fmt::print("  assembly: {} candidate(s)\n", diagnosis.assembly->candidates);
+        std::string fits;
+        for (const std::size_t fit : diagnosis.assembly->corner_fits) {
+            fits += fmt::format(" {}", fit);
+        }
+        fmt::print("  assembly: {} candidate(s); {} corner reads kept; reads fitting each:{}\n",
+                   diagnosis.assembly->candidates, diagnosis.assembly->corner_reads, fits);
     }
     fmt::print("  result: {}\n", diagnosis.result_n.has_value()
                                      ? "a cube"
@@ -807,7 +865,7 @@ int run_replay(const fs::path& session) {
         }
         fmt::print("  {}\n", state);
         if (const auto truth = truth_n_of(session, outcome.size); truth.has_value()) {
-            fmt::print("  truth: {}\n", *truth == *outcome.cube_n ? "MATCH" : "WRONG");
+            fmt::print("  truth: {}\n", same_cube_n(*outcome.cube_n, *truth) ? "MATCH" : "WRONG");
         }
         return 0;
     }
@@ -872,9 +930,9 @@ int run_board(const fs::path& root) {
             const auto truth = truth_n_of(session, outcome.size);
             has_truth = truth.has_value();
             if (outcome.cube_n.has_value()) {
-                result = !truth.has_value()          ? "read (no truth)"
-                         : *truth == *outcome.cube_n ? "EXACT"
-                                                     : "WRONG";
+                result = !truth.has_value()                     ? "read (no truth)"
+                         : same_cube_n(*outcome.cube_n, *truth) ? "EXACT"
+                                                                : "WRONG";
             }
         } else {
             const auto truth = truth_of(session);
@@ -1368,6 +1426,7 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
         return std::chrono::duration<float, std::milli>(Clock::now() - from).count();
     };
 
+    const int size = session_size(session);
     const std::vector<fs::path> paths = frames_of(session);
     const std::vector<float> intervals = frame_intervals(session, paths);
     std::vector<cv::Mat> pictures;
@@ -1414,7 +1473,7 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
     std::size_t completed = 0;
 
     for (std::size_t run = 0; run < runs; ++run) {
-        cube::vision::SideScan scan;
+        cube::vision::SideScan scan(size);
         std::vector<cube::vision::SideScan::Side> previous_sides;
         bool ambiguous = false;
         bool done = false;
@@ -1422,11 +1481,11 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
         for (std::size_t i = 0; i < pictures.size() && !done; ++i) {
             const Clock::time_point began = Clock::now();
             Clock::time_point mark = began;
-            const auto prepared = cube::vision::prepare_frame(pictures[i]);
+            const auto prepared = cube::vision::prepare_frame(pictures[i], size);
             const float t_prepare = since(mark);
             mark = Clock::now();
             const auto read =
-                prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+                prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
             const float t_side = since(mark);
             mark = Clock::now();
             scan.add(read, intervals[i]);
@@ -1435,7 +1494,8 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
             std::optional<cube::vision::CornerRead> corner;
             if (!read.has_value()) {
                 mark = Clock::now();
-                corner = prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt;
+                corner = prepared.has_value() ? cube::vision::read_corner(*prepared, size)
+                                              : std::nullopt;
                 t_corner = since(mark);
                 mark = Clock::now();
                 scan.add_corner(corner, intervals[i]);
@@ -1453,8 +1513,8 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
                 const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
                 t_verdict = since(mark);
                 ++judged;
-                ambiguous = !diagnosis.result.has_value() &&
-                            diagnosis.result.error() == cube::CubeError::ambiguous_scan;
+                ambiguous = !diagnosis.result_n.has_value() &&
+                            diagnosis.result_n.error() == cube::CubeError::ambiguous_scan;
                 std::string kind = "fewer than six sides";
                 if (diagnosis.assembly.has_value()) {
                     kind = fmt::format("{}, {} candidate(s), {} corner read(s)",
@@ -1466,7 +1526,7 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
                 entry.kind = kind;
                 entry.ms.push_back(t_verdict);
                 entry.assemblies += scan.assemblies() - assembled_before;
-                if (diagnosis.naming.has_value()) {
+                if (diagnosis.naming.has_value() && size == 3) {
                     std::array<std::uint8_t, 54> naming{};
                     for (std::size_t side = 0; side < 6; ++side) {
                         for (std::size_t cell = 0; cell < 9; ++cell) {
@@ -1483,7 +1543,7 @@ int run_cost(const fs::path& session, std::size_t runs, bool every_frame) {
                     entry.assemble_all_ms.push_back(since(mark));
                     (void)all;
                 }
-                done = diagnosis.result.has_value();
+                done = diagnosis.result_n.has_value();
                 completed += done ? 1U : 0U;
             }
             const float total = since(began);

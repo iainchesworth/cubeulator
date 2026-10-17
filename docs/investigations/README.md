@@ -121,3 +121,7 @@ name.
 - [2026-10-17: can the direct scan read a cube of N x N?](2026-10-17-nxn-scan-s0.md) -
   yes, on drawn cubes: a 5x5 and a 7x7 read at the 3x3's sticker size, 4,240 scans and no
   wrong cube; no recording of one exists, so not yet on a real one. `cube_scan_s0` repeats it.
+
+- [2026-10-17: can a cube of N x N be settled by two sides at once?](2026-10-17-nxn-corner-reader.md) -
+  on drawn tumbles yes to 5x5 (31 of 32 cubes four turns from solved, none wrong) and half of
+  6x6; on real cubes not measured, the recorded sessions hold hardly a corner view.
