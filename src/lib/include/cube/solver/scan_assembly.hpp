@@ -100,4 +100,14 @@ struct AssembledScan {
 [[nodiscard]] Result<Cube> assemble_scanned_faces(
     const std::array<std::array<model::Facelet, 9>, 6>& faces) noexcept;
 
+// The same for faces as the vision layer names them (cube::vision::resolve_colors):
+// six vectors of facelets, which must be nine each. Anything else is not a 3x3's
+// faces and assembles to nothing.
+[[nodiscard]] Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::vector<model::Facelet>, 6>& faces) noexcept;
+[[nodiscard]] std::vector<Cube> assemble_all_scanned_faces(
+    const std::array<std::vector<model::Facelet>, 6>& faces, std::size_t limit = 16) noexcept;
+[[nodiscard]] Result<Cube> assemble_scanned_faces(
+    const std::array<std::vector<model::Facelet>, 6>& faces) noexcept;
+
 }  // namespace cube::solver

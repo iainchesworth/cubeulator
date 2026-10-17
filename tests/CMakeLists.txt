@@ -57,6 +57,7 @@ add_executable(cube_unit_tests
     unit/recording_v2_test.cpp
     unit/diagnostics_test.cpp
     unit/direct_scan_test.cpp
+    unit/direct_scan_nxn_test.cpp
     unit/sticker_colour_test.cpp
     unit/read_set_test.cpp
     unit/corner_view_test.cpp

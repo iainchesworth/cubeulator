@@ -12,6 +12,23 @@ namespace {
 
 constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, true, true, true};
 
+// The holds are of a 3x3: a read of any other size is not one of them.
+[[nodiscard]] std::array<cv::Vec3f, 9> nine_of(std::span<const cv::Vec3f> lab) {
+    std::array<cv::Vec3f, 9> out{};
+    for (std::size_t i = 0; i < out.size() && i < lab.size(); ++i) {
+        out.at(i) = lab[i];
+    }
+    return out;
+}
+
+[[nodiscard]] std::array<bool, 9> nine_found(const SideRead& read) {
+    std::array<bool, 9> out{};
+    for (std::size_t i = 0; i < out.size() && i < read.found.size(); ++i) {
+        out.at(i) = read.found.at(i);
+    }
+    return out;
+}
+
 [[nodiscard]] std::array<HoldFit, 24> fit(const std::array<cv::Vec3f, 9>& lab,
                                           const std::array<bool, 9>& counted,
                                           const solver::Cube& cube, const SessionColours& colours) {
@@ -76,28 +93,29 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
 
 }  // namespace
 
-std::array<HoldFit, 24> fit_holds(const std::array<cv::Vec3f, 9>& lab, const solver::Cube& cube,
+std::array<HoldFit, 24> fit_holds(std::span<const cv::Vec3f> lab, const solver::Cube& cube,
                                   const SessionColours& colours) {
-    return fit(lab, kAllNine, cube, colours);
+    return fit(nine_of(lab), kAllNine, cube, colours);
 }
 
 std::array<HoldFit, 24> fit_holds(const SideRead& read, const solver::Cube& cube,
                                   const SessionColours& colours) {
-    return fit(read.lab, read.found, cube, colours);
+    return fit(nine_of(read.lab), nine_found(read), cube, colours);
 }
 
 bool HoldReading::shows(const solver::Hold& hold) const noexcept {
     return std::ranges::find(holds, hold) != holds.end();
 }
 
-HoldReading read_hold(const std::array<cv::Vec3f, 9>& lab, const solver::Cube& cube,
+HoldReading read_hold(std::span<const cv::Vec3f> lab, const solver::Cube& cube,
                       const SessionColours& colours) {
-    return reading_of(fit(lab, kAllNine, cube, colours), kAllNine, cube);
+    return reading_of(fit(nine_of(lab), kAllNine, cube, colours), kAllNine, cube);
 }
 
 HoldReading read_hold(const SideRead& read, const solver::Cube& cube,
                       const SessionColours& colours) {
-    return reading_of(fit(read.lab, read.found, cube, colours), read.found, cube);
+    const std::array<bool, 9> found = nine_found(read);
+    return reading_of(fit(nine_of(read.lab), found, cube, colours), found, cube);
 }
 
 int stickers_off(const SideRead& read, const std::array<solver::Color, 9>& expected,

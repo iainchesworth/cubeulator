@@ -65,7 +65,7 @@ using cube::vision::LabRule;
     return error.has_value() ? Json(code_of(*error)) : Json();
 }
 
-[[nodiscard]] Json lab_array(const std::array<cv::Vec3f, 9>& labs) {
+[[nodiscard]] Json lab_array(const std::vector<cv::Vec3f>& labs) {
     Json out = Json::array();
     for (const cv::Vec3f& lab : labs) {
         out.push(to_json(lab));
@@ -218,7 +218,7 @@ Json to_json(const cube::vision::ColorResolution& resolution) {
         Json cluster_of = Json::array();
         Json names = Json::array();
         Json confidence = Json::array();
-        for (std::size_t cell = 0; cell < 9; ++cell) {
+        for (std::size_t cell = 0; cell < resolution.faces.at(side).size(); ++cell) {
             cluster_of.push(static_cast<int>(resolution.cluster_of.at(side).at(cell)));
             names.push(name_of(resolution.faces.at(side).at(cell).color));
             confidence.push(resolution.faces.at(side).at(cell).confidence);
@@ -266,6 +266,19 @@ Json to_json(const cube::vision::AssemblyTrace& trace) {
         out.set("exchange", Json());
     }
     out.set("error", optional_error(trace.error));
+    return out;
+}
+
+Json to_json(const Result<cube::vision::ScannedCubeN>& scanned) {
+    Json out = Json::object();
+    out.set("ok", scanned.has_value());
+    if (scanned.has_value()) {
+        out.set("state", cube_json(scanned->cube));
+        out.set("colours", to_json(scanned->colours));
+        out.set("cast", scanned->cast);
+    } else {
+        out.set("error", code_of(scanned.error()));
+    }
     return out;
 }
 
@@ -330,7 +343,17 @@ Json to_json(const cube::vision::ScanDiagnosis& diagnosis) {
         out.set("naming", Json());
     }
     out.set("assembly", diagnosis.assembly.has_value() ? to_json(*diagnosis.assembly) : Json());
-    out.set("result", to_json(diagnosis.result));
+    // A 3x3 scan's record is what it always was. Another size says so, and its
+    // result is the cube of that size.
+    const int size = diagnosis.sides.empty()
+                         ? 3
+                         : cube::vision::side_length_of(diagnosis.sides.front().lab.size());
+    if (size != 3) {
+        out.set("size", size);
+        out.set("result", to_json(diagnosis.result_n));
+    } else {
+        out.set("result", to_json(diagnosis.result));
+    }
     return out;
 }
 

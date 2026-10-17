@@ -397,4 +397,45 @@ Result<Cube> assemble_scanned_faces(
     return assembled->cube;
 }
 
+namespace {
+
+// Six vectors of nine as six arrays of nine, or nothing if they are not.
+std::optional<std::array<std::array<model::Facelet, 9>, 6>> as_arrays(
+    const std::array<std::vector<model::Facelet>, 6>& faces) noexcept {
+    std::array<std::array<model::Facelet, 9>, 6> out{};
+    for (std::size_t side = 0; side < faces.size(); ++side) {
+        if (faces.at(side).size() != 9) {
+            return std::nullopt;
+        }
+        std::ranges::copy(faces.at(side), out.at(side).begin());
+    }
+    return out;
+}
+
+}  // namespace
+
+Result<AssembledScan> assemble_scanned_faces_with_mapping(
+    const std::array<std::vector<model::Facelet>, 6>& faces) noexcept {
+    const auto arrays = as_arrays(faces);
+    if (!arrays) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    return assemble_scanned_faces_with_mapping(*arrays);
+}
+
+std::vector<Cube> assemble_all_scanned_faces(
+    const std::array<std::vector<model::Facelet>, 6>& faces, std::size_t limit) noexcept {
+    const auto arrays = as_arrays(faces);
+    return arrays ? assemble_all_scanned_faces(*arrays, limit) : std::vector<Cube>{};
+}
+
+Result<Cube> assemble_scanned_faces(
+    const std::array<std::vector<model::Facelet>, 6>& faces) noexcept {
+    const auto arrays = as_arrays(faces);
+    if (!arrays) {
+        return std::unexpected(CubeError::invalid_cube_state);
+    }
+    return assemble_scanned_faces(*arrays);
+}
+
 }  // namespace cube::solver

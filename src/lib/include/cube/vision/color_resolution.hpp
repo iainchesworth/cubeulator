@@ -3,6 +3,7 @@
 #include <cube/error.hpp>
 #include <cube/model/face.hpp>
 #include <cube/model/facelet.hpp>
+#include <cube/vision/side_grid.hpp>
 
 #include <opencv2/core.hpp>
 
@@ -10,13 +11,17 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 namespace cube::vision {
 
-// One side's nine sticker colours as float Lab (L in [0,100]), in the order the
-// reader lays them out: a robust per-cell colour, ready for final naming.
+// One side's N x N sticker colours as float Lab (L in [0,100]), in the order the
+// reader lays them out (row-major, side_grid.hpp): a robust per-cell colour,
+// ready for final naming. Nine for a 3x3, twenty-five for a 5x5; the size is
+// the square root of the count.
 struct CapturedFace {
-    std::array<cv::Vec3f, 9> lab{};
+    // Nine zeroes until a side is put in: a 3x3's, as the array this was.
+    std::vector<cv::Vec3f> lab = std::vector<cv::Vec3f>(9);
 };
 
 // ---------------------------------------------------------------------------
@@ -168,7 +173,7 @@ struct LabClassification {
 // find_white_reference), names that cluster white outright instead of asking
 // a lightness floor to - a dim white (L 55 on a cloudy morning) is otherwise
 // "unknown" and costs the hue naming of every other cluster.
-[[nodiscard]] Result<std::array<std::array<cube::model::Facelet, 9>, 6>> resolve_colors(
+[[nodiscard]] Result<std::array<std::vector<cube::model::Facelet>, 6>> resolve_colors(
     const std::array<CapturedFace, 6>& faces, std::optional<std::size_t> white_side = std::nullopt);
 
 // What decided the final names, once the clusters were named by distance to
@@ -206,11 +211,11 @@ struct ClusterNaming {
 struct ColorResolution {
     // What resolve_colors returns: [face][cell], each with the confidence the
     // assignment had in its cluster (0 when a rival was as close).
-    std::array<std::array<cube::model::Facelet, 9>, 6> faces{};
+    std::array<std::vector<cube::model::Facelet>, 6> faces{};
     // Indexed by the face whose centre seeded the cluster.
     std::array<ClusterNaming, 6> clusters{};
-    // [face][cell]: the cluster each of the 54 samples went to.
-    std::array<std::array<std::uint8_t, 9>, 6> cluster_of{};
+    // [face][cell]: the cluster each of the 6 N^2 samples went to.
+    std::array<std::vector<std::uint8_t>, 6> cluster_of{};
     // Refinement rounds the clustering ran before its assignment repeated.
     int iterations = 0;
     // The summed Lab distance of the palette matching that by_distance names.
