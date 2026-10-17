@@ -305,8 +305,8 @@ top. Updated as slices land.
 | Translation drafts for the new strings in eight languages | P1 | open (#179) |
 | Layout checks hold the new screens in the pseudo-locale and the RTL drafts | P1 | open (#180) |
 | User guide page and pictures | P1 | not started |
-| Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | open (feature/nxn-scan-assembly) |
-| The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (feature/nxn-scan-reader); **drawn cubes only** |
+| Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | merged (#190) |
+| The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (#191); **drawn cubes only** |
 | Real recordings of a 5x5 and a 4x4, then the scan screen for odd sizes, then P3 | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
 
 **What P1 found.** Wide moves are rare: grouping adjacent layers turned together
