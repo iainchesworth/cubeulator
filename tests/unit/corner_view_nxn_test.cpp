@@ -81,13 +81,15 @@ std::vector<std::size_t> edge_cells(GridEdge edge, int size) {
 
 // A pose that fits a side of `size` stickers in the frame: the 3x3's pitch scaled.
 CornerPose corner_pose_for(int size) {
-    const float pitch = 150.0F / static_cast<float>(size) + 10.0F;
-    return {.edge_x = 320.0F,
-            .edge_y = 180.0F,
-            .pitch = pitch,
-            .left_width = 0.75F * pitch,
-            .right_width = 0.6F * pitch,
-            .tilt = 0.1F * pitch};
+    const float pitch = (150.0F / static_cast<float>(size)) + 10.0F;
+    return {
+        .edge_x = 320.0F,
+        .edge_y = 180.0F,
+        .pitch = pitch,
+        .left_width = 0.75F * pitch,
+        .right_width = 0.6F * pitch,
+        .tilt = 0.1F * pitch,
+    };
 }
 
 // Whether `made` is `truth` or the same cube held another way up (the scan puts a side where

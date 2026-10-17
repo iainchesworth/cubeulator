@@ -100,6 +100,9 @@ struct Blob {
 
 template <typename T>
 [[nodiscard]] T median_of(std::vector<T> values) {
+    if (values.empty()) {
+        return T{};
+    }
     const auto mid = values.begin() + static_cast<std::ptrdiff_t>(values.size() / 2);
     std::nth_element(values.begin(), mid, values.end());
     if (values.size() % 2 == 1) {
@@ -194,9 +197,11 @@ struct CellPosition {
     float row = 0.0F;
 };
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a cell, then the side's size
 [[nodiscard]] CellPosition position_of(std::size_t cell, int n) {
     const auto width = static_cast<std::size_t>(n);
-    return {.column = static_cast<float>(cell % width), .row = static_cast<float>(cell / width)};
+    const std::size_t row = cell / width;
+    return {.column = static_cast<float>(cell % width), .row = static_cast<float>(row)};
 }
 
 // Blob i taken as a cell, its neighbour j and the neighbour k on its other
@@ -287,6 +292,7 @@ struct Window {
 
 // The window whose first node is (offset_a, offset_b): nothing unless its
 // blobs span all N columns and rows and no two share a cell.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the window's two offsets, then the size
 [[nodiscard]] std::optional<Window> window_at(const std::vector<Placed>& placed, int offset_a,
                                               int offset_b, int n) {
     Window window;
@@ -691,6 +697,65 @@ struct Partition {
     return partition;
 }
 
+// (first, second, third + 1), the third being 0 for a pair.
+using PartitionKey = std::array<std::size_t, 3>;
+
+// The third windows that make a triple of the disjoint pair (a, b): those after b that are
+// disjoint from both and meet one of a pair that meets, or both of a pair that does not.
+void add_triples(const std::vector<Found>& windows, const Meetings& meets,
+                 const std::vector<std::vector<std::size_t>>& meeting, std::size_t a, std::size_t b,
+                 std::vector<PartitionKey>& keys) {
+    const auto apart = [&](std::size_t x, std::size_t y) {
+        return !windows.at(x).blobs_on.meets(windows.at(y).blobs_on);
+    };
+    const bool pair_meets = meets.at(a).at(b);
+    for (const std::size_t c : meeting.at(a)) {
+        if (c > b && apart(a, c) && apart(b, c) && (pair_meets || meets.at(b).at(c))) {
+            keys.push_back({a, b, c + 1});
+        }
+    }
+    if (!pair_meets) {
+        return;
+    }
+    for (const std::size_t c : meeting.at(b)) {
+        if (c > b && !meets.at(a).at(c) && apart(a, c) && apart(b, c)) {
+            keys.push_back({a, b, c + 1});
+        }
+    }
+}
+
+// The partitions weighed are those that make a corner: a pair of windows that meet, or
+// three of which at least two pairs meet (a third that meets neither adds nothing to a
+// pair). They are weighed in the order of the windows, a pair before the triples it
+// begins, which is the order of an exhaustive search; only the ones that cannot win are
+// not looked at, because there are a few hundred windows for a bigger side and the
+// exhaustive search is cubic in them.
+[[nodiscard]] std::vector<PartitionKey> partitions_to_weigh(const std::vector<Found>& windows,
+                                                            const Meetings& meets) {
+    std::vector<std::vector<std::size_t>> meeting(windows.size());
+    for (std::size_t a = 0; a < windows.size(); ++a) {
+        for (std::size_t b = 0; b < windows.size(); ++b) {
+            if (a != b && meets.at(a).at(b)) {
+                meeting.at(a).push_back(b);
+            }
+        }
+    }
+    std::vector<PartitionKey> keys;
+    for (std::size_t a = 0; a < windows.size(); ++a) {
+        for (std::size_t b = a + 1; b < windows.size(); ++b) {
+            if (windows.at(a).blobs_on.meets(windows.at(b).blobs_on)) {
+                continue;
+            }
+            if (meets.at(a).at(b)) {
+                keys.push_back({a, b, 0});
+            }
+            add_triples(windows, meets, meeting, a, b, keys);
+        }
+    }
+    std::ranges::sort(keys);
+    return keys;
+}
+
 // The two or three sides of a corner view: the set of disjoint windows that
 // most of them touch, then that has the most blobs on those that do, then
 // that fits tightest.
@@ -712,9 +777,6 @@ struct Partition {
     }
     const Meetings meets = meetings_of(windows, size.n);
 
-    const auto disjoint = [&](std::size_t a, std::size_t b) {
-        return !windows.at(a).blobs_on.meets(windows.at(b).blobs_on);
-    };
     std::optional<Partition> best;
     const auto consider = [&](std::initializer_list<std::size_t> picks) {
         const Partition partition = partition_of(windows, meets, picks);
@@ -722,50 +784,7 @@ struct Partition {
             best = partition;
         }
     };
-    // The partitions weighed are those that make a corner: a pair of windows that meet, or
-    // three of which at least two pairs meet (a third that meets neither adds nothing to a
-    // pair). They are weighed in the order of the windows, a pair before the triples it
-    // begins, which is the order of an exhaustive search; only the ones that cannot win are
-    // not looked at, because there are a few hundred windows for a bigger side and the
-    // exhaustive search is cubic in them.
-    std::vector<std::vector<std::size_t>> meeting(windows.size());
-    for (std::size_t a = 0; a < windows.size(); ++a) {
-        for (std::size_t b = 0; b < windows.size(); ++b) {
-            if (a != b && meets.at(a).at(b)) {
-                meeting.at(a).push_back(b);
-            }
-        }
-    }
-    // (first, second, third + 1), the third being 0 for a pair.
-    std::vector<std::array<std::size_t, 3>> to_weigh;
-    for (std::size_t a = 0; a < windows.size(); ++a) {
-        for (std::size_t b = a + 1; b < windows.size(); ++b) {
-            if (!disjoint(a, b)) {
-                continue;
-            }
-            const bool pair_meets = meets.at(a).at(b);
-            if (pair_meets) {
-                to_weigh.push_back({a, b, 0});
-            }
-            // A third window that meets one of a pair that meets, or both of a pair that
-            // does not.
-            for (const std::size_t c : meeting.at(a)) {
-                if (c > b && disjoint(a, c) && disjoint(b, c) &&
-                    (pair_meets || meets.at(b).at(c))) {
-                    to_weigh.push_back({a, b, c + 1});
-                }
-            }
-            if (pair_meets) {
-                for (const std::size_t c : meeting.at(b)) {
-                    if (c > b && !meets.at(a).at(c) && disjoint(a, c) && disjoint(b, c)) {
-                        to_weigh.push_back({a, b, c + 1});
-                    }
-                }
-            }
-        }
-    }
-    std::ranges::sort(to_weigh);
-    for (const auto& key : to_weigh) {
+    for (const auto& key : partitions_to_weigh(windows, meets)) {
         if (key.at(2) == 0) {
             consider({key.at(0), key.at(1)});
         } else {
@@ -793,7 +812,8 @@ std::optional<CornerRead> read_corner(const PreparedFrame& frame, int size) {
     return read_corner_explained(frame, size).read;
 }
 
-CornerExplained read_corner_explained(const PreparedFrame& frame, int n) {
+CornerExplained read_corner_explained(const PreparedFrame& frame, int cube_size) {
+    const int n = cube_size;
     CUBE_ZONE_SCOPED_N("vision.corner_view.read_corner");
     const cv::Mat& working = frame.working;
     const float scale = frame.scale;

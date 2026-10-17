@@ -1324,7 +1324,8 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
         // which fits them (as for a 3x3, assemble_three).
         const bool all_looked_at = candidates.size() <= kMaxCandidates;
         if (!all_looked_at) {
-            candidates.erase(candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidates), candidates.end());
+            candidates.erase(candidates.begin() + static_cast<std::ptrdiff_t>(kMaxCandidates),
+                             candidates.end());
         }
         const SessionColours colours = colours_of(named, faces);
         CornerVotes votes = corner_votes(candidates, corners, colours);

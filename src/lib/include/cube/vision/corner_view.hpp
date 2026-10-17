@@ -107,6 +107,6 @@ struct CornerExplained {
     std::size_t windows = 0;
     std::optional<CornerRead> read;
 };
-[[nodiscard]] CornerExplained read_corner_explained(const PreparedFrame& frame, int size = 3);
+[[nodiscard]] CornerExplained read_corner_explained(const PreparedFrame& frame, int cube_size = 3);
 
 }  // namespace cube::vision

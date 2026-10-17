@@ -30,6 +30,7 @@ using Vec3 = std::array<int, 3>;
 
 // A side turned `turns` quarter-turns clockwise in the picture: the cell of the unturned
 // side that lands at each cell (the same permutation the 3x3's fit uses).
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the side's size, then the turns
 [[nodiscard]] std::vector<std::size_t> source_after(int n, int turns) {
     const auto width = static_cast<std::size_t>(n);
     std::vector<std::size_t> source(width * width);
@@ -121,7 +122,7 @@ struct SideOptions {
 class Fitter {
 public:
     Fitter(const CornerRead& read, const SessionColours& colours, float max_distance)
-        : read_(read), max_distance_(max_distance) {
+        : read_(&read), max_distance_(max_distance) {
         const auto width = static_cast<std::size_t>(read.size);
         const std::size_t cells = width * width;
         for (int turns = 0; turns < 4; ++turns) {
@@ -132,7 +133,8 @@ public:
             std::vector<std::array<float, 6>> table(cells);
             for (std::size_t cell = 0; cell < cells; ++cell) {
                 for (std::size_t colour = 0; colour < 6; ++colour) {
-                    table.at(cell).at(colour) = colour_distance(side.lab.at(cell), colours.at(colour));
+                    table.at(cell).at(colour) =
+                        colour_distance(side.lab.at(cell), colours.at(colour));
                 }
             }
             tables_.push_back(std::move(table));
@@ -142,7 +144,7 @@ public:
 
     [[nodiscard]] CornerFit fit(const nxn::NCube& cube) {
         CornerFit result;
-        if (read_.sides.size() < 2 || read_.edges.empty()) {
+        if (read_->sides.size() < 2 || read_->edges.empty()) {
             return result;
         }
         std::array<std::string, 6> keys;
@@ -161,7 +163,7 @@ public:
         std::vector<SideOptions> matches;
         float total = 0.0F;
         bool all_close = true;
-        for (std::size_t side = 0; side < read_.sides.size(); ++side) {
+        for (std::size_t side = 0; side < read_->sides.size(); ++side) {
             SideOptions match = options_of(side, keys);
             total += match.distance;
             all_close = all_close && match.close_enough;
@@ -171,13 +173,12 @@ public:
         if (!all_close) {
             return result;
         }
-        for (const SharedEdge& edge : read_.edges) {
+        for (const SharedEdge& edge : read_->edges) {
             const SideOptions& a = matches.at(edge.first);
             const SideOptions& b = matches.at(edge.second);
             const bool holds = std::ranges::any_of(a.options, [&](const Option& left) {
-                return std::ranges::any_of(b.options, [&](const Option& right) {
-                    return edge_holds(edge, left, right);
-                });
+                return std::ranges::any_of(
+                    b.options, [&](const Option& right) { return edge_holds(edge, left, right); });
             });
             if (!holds) {
                 return result;
@@ -202,7 +203,8 @@ private:
             const std::vector<std::size_t>& source = sources_.at(turns);
             float sum = 0.0F;
             for (std::size_t cell = 0; cell < source.size(); ++cell) {
-                const auto colour = static_cast<std::size_t>(key.at(source.at(cell)));
+                const auto colour =
+                    static_cast<std::size_t>(static_cast<unsigned char>(key.at(source.at(cell))));
                 sum += table.at(cell).at(colour);
             }
             by_turn.at(turns) = sum / static_cast<float>(source.size());
@@ -239,7 +241,7 @@ private:
     // Whether sides a and b, in turns ra and rb, meet along the edge that the read puts
     // them on, with their stickers paired as the cube has them.
     [[nodiscard]] bool edge_holds(const SharedEdge& edge, const Option& a, const Option& b) const {
-        const int n = read_.size;
+        const int n = read_->size;
         if (a.face == b.face || a.face == solver::opposite(b.face)) {
             return false;
         }
@@ -272,7 +274,7 @@ private:
         return true;
     }
 
-    const CornerRead& read_;
+    const CornerRead* read_;
     float max_distance_;
     std::array<std::vector<std::size_t>, 4> sources_;
     std::vector<std::vector<std::array<float, 6>>> tables_;
