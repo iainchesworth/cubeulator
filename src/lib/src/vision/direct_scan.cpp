@@ -1407,6 +1407,9 @@ enum class Look : std::uint8_t {
             }
         }
     }
+    if (gaps.empty()) {
+        return false;
+    }
     const auto quartile = gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() * 3 / 4);
     std::nth_element(gaps.begin(), quartile, gaps.end());
     return *quartile <= kMaxGapOverSticker * std::max(darkest, 1.0F);

@@ -108,7 +108,7 @@ void show_cube(SideScan& scan, const NCube& cube, unsigned seed, const Drawing& 
     for (const std::size_t which : order) {
         std::vector<Color> stickers =
             cube::nxn::outside_view(cube, cube::solver::kAllFaces.at(which));
-        for (std::uint32_t turns = rng() >> 30U; turns > 0; --turns) {
+        for (auto turns = static_cast<std::uint32_t>(rng() >> 30U); turns > 0; --turns) {
             stickers = cube::test::turned_clockwise(stickers);
         }
         Pose pose = pose_for(cube.size(), span_of_height);
