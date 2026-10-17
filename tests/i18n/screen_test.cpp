@@ -1082,8 +1082,8 @@ TEST_CASE("a label is not wider than the box it is set in, in any of the nine sc
 //
 // CUBE_I18N_SHOT_SIZE=390x780 sets the window, and CUBE_I18N_SHOT_CUBE=5 gives
 // the solution and solve screens a 5x5 to show (5wide: one that opens with a
-// turn of three layers; 3: a 3x3; history: the history screen two rows, a finished 5x5 and
-// one left part-way).
+// turn of three layers; 3: a 3x3; history: the history screen two rows, a finished
+// 5x5 and one left part-way).
 //
 // One picture a process: a second grabWindow() with the 3D cube in the scene
 // crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
