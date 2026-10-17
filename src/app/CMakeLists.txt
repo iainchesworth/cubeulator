@@ -53,6 +53,10 @@ if(CUBEULATOR_BUILD_APP)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Concurrent Quick Qml Gui QuickControls2 Quick3D ShaderTools QmlCore)
     qt_standard_project_setup(REQUIRES 6.5)
 
+    # The module's QML files sit in qt/, below the module's own directory, so
+    # each directory that holds some needs a qmldir of its own (QTP0004).
+    qt_policy(SET QTP0004 NEW)
+
     # The Qt libraries the platform's own implementations need (Android's
     # camera uses QJniObject for the permission-settings deep link; see its
     # fragment). cube_platform is otherwise deliberately Qt-free.
@@ -135,6 +139,10 @@ if(CUBEULATOR_BUILD_APP)
     qt_add_qml_module(cube_app_qml
         URI Cubeulator
         VERSION 1.0
+        # Where the generated qmldir and qmltypes go. Qt expects the sources
+        # to sit in a directory called Cubeulator and defaults to this one
+        # directory up when they do not; qmllint then cannot find the module.
+        OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/Cubeulator"
         STATIC
         QML_FILES
             qt/Main.qml
