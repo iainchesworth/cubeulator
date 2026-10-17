@@ -57,8 +57,9 @@ struct AppControllers {
     // is in the app's own data folder (SolveHistory::defaultFile).
     SolveHistory history{solve};
     // A cube typed in colour by colour, of any size (the screen for a cube the
-    // camera does not read); it hands a valid one to the solve controller.
-    ColourEntry colours{solve};
+    // camera does not read, and the screen where a misread scan is put right); it
+    // hands a valid one to the solve controller.
+    ColourEntry colours{solve, &directScan};
 
 private:
     // What both constructors do once the members are there.

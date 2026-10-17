@@ -77,7 +77,15 @@ struct Reading {
     std::vector<std::int8_t> stickers;
     // The same length, nonzero where the reader doubted the sticker; or empty.
     std::vector<std::uint8_t> doubtful;
+    // False when the reader could name the colours of each side but not tell which
+    // way up each side was held, so each is shown as the camera had it and may need
+    // turning (CubeEdit::rotate_side) before the sides fit together.
+    bool upright = true;
 };
+
+// The library's number for the sticker at `index` (row * N + col, as seen from
+// outside) of `face`: where a reading puts what it saw. The mirroring lives here, once.
+[[nodiscard]] std::size_t seen_facelet(cube::solver::Face face, int size, int index);
 
 // What describing a side in words came to.
 struct SideText {
@@ -117,6 +125,9 @@ public:
     [[nodiscard]] int size() const noexcept { return size_; }
     // Started from a reading, not blank.
     [[nodiscard]] bool from_reading() const noexcept { return from_reading_; }
+    // The reading knew which way up each side was held (Reading::upright); true for
+    // a cube typed in.
+    [[nodiscard]] bool upright() const noexcept { return upright_; }
 
     // --- What is on show ---------------------------------------------------
 
@@ -176,7 +187,9 @@ private:
         std::vector<std::uint8_t> doubtful;
     };
 
-    [[nodiscard]] std::size_t facelet(cube::solver::Face face, int index) const;
+    [[nodiscard]] std::size_t facelet(cube::solver::Face face, int index) const {
+        return seen_facelet(face, size_, index);
+    }
     // Records the state before an edit that is about to change something.
     void checkpoint();
     [[nodiscard]] Snapshot snapshot() const { return {stickers_, doubtful_}; }
@@ -185,6 +198,7 @@ private:
 
     int size_ = 3;
     bool from_reading_ = false;
+    bool upright_ = true;
     std::vector<std::int8_t> stickers_;
     std::vector<std::uint8_t> doubtful_;
     Snapshot origin_;

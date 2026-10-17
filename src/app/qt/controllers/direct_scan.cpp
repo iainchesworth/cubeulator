@@ -2,6 +2,7 @@
 
 #include "controllers/diagnostic_records.hpp"
 #include "controllers/diagnostics.hpp"
+#include "controllers/scan_reading.hpp"
 #include "interfaces/camera.hpp"
 
 #include <cube/diagnostics/describe.hpp>
@@ -188,6 +189,20 @@ QVariantList DirectScan::stickerPoints() const {
         }
     }
     return points;
+}
+
+std::optional<Reading> DirectScan::reviewReading() const {
+    if (!reviewable()) {
+        return std::nullopt;
+    }
+    const cube::vision::ScanDiagnosis diagnosis = scan_.diagnose();
+    if (scanned_.has_value()) {
+        return reading_from_cube(scanned_->cube, diagnosis.naming);
+    }
+    if (diagnosis.naming.has_value()) {
+        return reading_from_named_sides(*diagnosis.naming);
+    }
+    return std::nullopt;
 }
 
 QVariantList DirectScan::sides() const {

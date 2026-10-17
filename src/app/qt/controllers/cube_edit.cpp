@@ -45,6 +45,13 @@ constexpr std::array<char, kColourCount> kLetters = {'W', 'Y', 'G', 'B', 'O', 'R
 
 }  // namespace
 
+std::size_t seen_facelet(Face face, int size, int index) {
+    const auto n = static_cast<std::size_t>(size);
+    const auto [row, col] = mirrored(face, size, index / size, index % size);
+    return (static_cast<std::size_t>(face) * n * n) + (static_cast<std::size_t>(row) * n) +
+           static_cast<std::size_t>(col);
+}
+
 char colour_letter(std::int8_t colour) noexcept {
     return is_colour(colour) ? kLetters.at(static_cast<std::size_t>(colour)) : '?';
 }
@@ -95,6 +102,7 @@ void CubeEdit::begin(int size) {
     size_ = std::clamp(size, cube::nxn::kMinSize, cube::nxn::kMaxSize);
     const auto n = static_cast<std::size_t>(size_);
     from_reading_ = false;
+    upright_ = true;
     stickers_.assign(6 * n * n, kUnpainted);
     doubtful_.assign(6 * n * n, 0);
     origin_ = snapshot();
@@ -126,15 +134,10 @@ void CubeEdit::load(Reading reading) {
         }
     }
     from_reading_ = true;
+    upright_ = reading.upright;
     origin_ = snapshot();
 }
 
-std::size_t CubeEdit::facelet(Face face, int index) const {
-    const auto n = static_cast<std::size_t>(size_);
-    const auto [row, col] = mirrored(face, size_, index / size_, index % size_);
-    return (static_cast<std::size_t>(face) * n * n) + (static_cast<std::size_t>(row) * n) +
-           static_cast<std::size_t>(col);
-}
 
 std::int8_t CubeEdit::colour(Face face, int index) const {
     if (index < 0 || index >= size_ * size_) {

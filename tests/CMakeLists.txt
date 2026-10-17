@@ -267,7 +267,9 @@ if(CUBEULATOR_BUILD_APP)
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
         unit/held_cube_controller_test.cpp
+        unit/misscan_review_test.cpp
         unit/platform_facts_test.cpp
+        unit/scan_reading_test.cpp
         unit/solve_controller_test.cpp
         unit/solve_history_test.cpp)
 
