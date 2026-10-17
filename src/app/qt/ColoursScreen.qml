@@ -182,7 +182,9 @@ Rectangle {
     Item {
         id: bar
         width: parent.width
-        height: 64
+        // One line of title, as it was; a translation that needs more takes
+        // them, and the bar grows to hold them.
+        height: Math.max(64, titleText.implicitHeight + 2 * Theme.space3)
         AppButton {
             id: back
             objectName: "colours.back"
@@ -193,12 +195,13 @@ Rectangle {
             onClicked: root.leave()
         }
         Text {
+            id: titleText
             objectName: "colours.title"
             anchors.left: back.right; anchors.leftMargin: Theme.space2
             anchors.right: parent.right; anchors.rightMargin: Theme.space3
             anchors.verticalCenter: parent.verticalCenter
             text: qsTrId("review.title.enter")
-            elide: Text.ElideRight
+            wrapMode: Text.Wrap
             font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 22
             color: Theme.ink
         }
@@ -415,17 +418,25 @@ Rectangle {
                     }
                 }
             }
-            Row {
+            // The colour in hand and the two things to do with a side. A flow, not a
+            // row: where the words of the buttons are longer than the room they have
+            // beside the name, the buttons go to a line of their own.
+            Flow {
                 x: Theme.space4
                 width: parent.width - 2 * Theme.space4
                 spacing: Theme.space2
-                Text {
-                    width: Math.max(40, parent.width - fillSide.width - clearAll.width - 2 * Theme.space2)
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: root.colourName(root.brush)
-                    elide: Text.ElideRight
-                    font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 14
-                    color: Theme.ink
+                Item {
+                    width: Math.min(brushName.implicitWidth, parent.width)
+                    height: 34
+                    Text {
+                        id: brushName
+                        width: parent.width
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: root.colourName(root.brush)
+                        elide: Text.ElideRight
+                        font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 14
+                        color: Theme.ink
+                    }
                 }
                 AppButton {
                     id: fillSide

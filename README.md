@@ -25,7 +25,7 @@ pictures of every screen, live at
 **[iainchesworthlabs.github.io/cubeulator](https://iainchesworthlabs.github.io/cubeulator/)**.
 
 <p align="center">
-  <img src="docs/guide/img/solve-middle-wide-light.webp" alt="The solve screen: a 3D cube with the layer to turn nudged, the stage list, and Next move." width="720">
+  <img src="docs/guide/img/solve-middle-wide-light.webp" alt="The solve screen: a 3D cube with the layer to turn nudged, the stage list, and Next turn." width="720">
 </p>
 
 ## Install
@@ -60,7 +60,7 @@ and a build-provenance attestation for every file; how to check them is in the
    (CFOP, about 50) or *Advanced* (the fewest, about 20) on the solve screen at
    any time.
 4. Follow the 3D cube one turn at a time. The camera stays on, so it sees the
-   side you turned and steps on by itself; **Next move** (or the right arrow)
+   side you turned and steps on by itself; **Next turn** (or the right arrow)
    steps when it cannot.
 
 The [user guide](https://iainchesworthlabs.github.io/cubeulator/guide/) goes

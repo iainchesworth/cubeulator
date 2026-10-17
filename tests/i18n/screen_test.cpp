@@ -33,6 +33,7 @@
 #include <QUrl>
 #include <QVariant>
 
+#include <cmath>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -328,6 +329,33 @@ void have_a_big_solution() {
     REQUIRE(solve.totalMoves() > 0);
 }
 
+// The same, stepped on to a turn of several layers together: the move in words
+// then names a range of layers ("Right side · layers 1 to 3 · quarter turn"),
+// the longest it gets.
+void have_a_wide_solution() {
+    have_a_big_solution();
+    SolveController& solve = t::controllers().solve;
+    for (int step = 0;
+         step < solve.totalMoves() && solve.currentMoveFirst() == solve.currentMoveLast(); ++step) {
+        solve.nextMove();
+    }
+    INFO("move " << solve.moveIndex() << " of " << solve.totalMoves());
+    REQUIRE(solve.currentMoveFirst() != solve.currentMoveLast());
+    // Stepping is a solve begun, which the history keeps; the history screen
+    // is held empty, as the checks have always had it (see holds_the_layout_in).
+    t::controllers().history.clear();
+}
+
+// Whether `item` stands at an angle on the screen: it, or something it is in
+// below the screen, is turned by other than half-turns.
+[[nodiscard]] bool is_turned(const QQuickItem* item, const QQuickItem* screen) {
+    double angle = 0;
+    for (const QQuickItem* up = item; up != nullptr && up != screen; up = up->parentItem()) {
+        angle += up->rotation();
+    }
+    return std::fmod(std::fabs(angle), 180.0) > 0.5;
+}
+
 void holds_the_layout_of(const char* language, std::initializer_list<const char*> types) {
     struct Size {
         int w;
@@ -363,15 +391,28 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
                     CHECK(content_h <= text->height() + 0.5);
                 }
                 CHECK(content_w <= text->width() + 0.5);
-                // And it stays inside the window: nothing runs off an edge.
-                const QPointF at = text->mapToItem(screen.item(), QPointF(0, 0));
-                CHECK(at.x() >= -0.5);
-                CHECK(at.x() + content_w <= screen.item()->width() + 0.5);
+                // And it stays inside the window: nothing runs off an edge. The
+                // box is measured as it is drawn, through every turn on the
+                // way up: a name stood a quarter-turned is as tall as it is
+                // long, and not as wide.
+                const QRectF drawn =
+                    text->mapRectToItem(screen.item(), QRectF(0, 0, content_w, content_h));
+                CHECK(drawn.left() >= -0.5);
+                CHECK(drawn.right() <= screen.item()->width() + 0.5);
                 // And inside the pane it was put in: a string longer than its
                 // column does not cross into the next one.
                 if (const QQuickItem* parent = text->parentItem();
                     parent != nullptr && parent != screen.item() && parent->width() > 0) {
-                    CHECK(text->x() + content_w <= parent->width() + 0.5);
+                    const QRectF in_pane =
+                        text->mapRectToItem(parent, QRectF(0, 0, content_w, content_h));
+                    CHECK(in_pane.right() <= parent->width() + 0.5);
+                    // A turned string runs up its pane, not along it: it stays
+                    // inside on both axes.
+                    if (is_turned(text, screen.item())) {
+                        CHECK(in_pane.left() >= -0.5);
+                        CHECK(in_pane.top() >= -0.5);
+                        CHECK(in_pane.bottom() <= parent->height() + 0.5);
+                    }
                 }
             }
             // A screen that read no text proves nothing.
@@ -396,40 +437,31 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
 // pseudo-locale is the proxy for a real translation (40% longer than the
 // English); the same checks run on the real languages below.
 //
-// The solution of a 5x5 is listed too, where the layer words are, for every
-// language. Two screens are asked for only by the callers that hold them:
-//  - EntryScreen: the pseudo-locale cuts "Another cube", the title, at phone
-//    width, so the proxy is left out; the eight real languages hold it.
-//  - SolveScreen with a 5x5: the pseudo-locale cuts its layer row ("Left side
-//    · layer 2 · half turn") at both sizes, and in a right-to-left language
-//    the button "Next move", a literal the solve lane has not converted, runs
-//    out of its mirrored button; the five left-to-right languages hold it.
-// ColoursScreen is not here: its side names are turned a quarter, which this
-// check measures unturned, so it reads them as wider than the window.
-struct AlsoHeld {
-    bool entry_screen;
-    bool solve_screen;
-};
-
-void holds_the_layout_in(const char* language, AlsoHeld also) {
+// The screens of the N x N app are in: the entry screen and the colours screen,
+// and the solution and solve screens of a 5x5, where the layer words are, the
+// solve screen at its longest (a turn of several layers).
+//
+// The history screen is held with nothing in its list. With a row in it the
+// Arabic and Yiddish screens give the row's date and summary no width at all, and
+// the French and Yiddish titles are cut at phone width by the button that
+// clears the list (docs/i18n.md, "What was looked at"): a row is a state this
+// loop does not reach, so far.
+void holds_the_layout_in(const char* language) {
     have_a_solution();
-    holds_the_layout_of(language, {"PermissionScreen", "CompleteScreen", "LaunchScreen",
-                                   "SettingsScreen", "HistoryScreen", "SolutionScreen"});
-    if (also.entry_screen) {
-        holds_the_layout_of(language, {"EntryScreen"});
-    }
+    holds_the_layout_of(language,
+                        {"PermissionScreen", "CompleteScreen", "LaunchScreen", "SettingsScreen",
+                         "HistoryScreen", "SolutionScreen", "EntryScreen", "ColoursScreen"});
     have_a_big_solution();
-    holds_the_layout_of(language, {"SolutionScreen"});
-    if (also.solve_screen) {
-        holds_the_layout_of(language, {"SolveScreen"});
-    }
+    holds_the_layout_of(language, {"SolutionScreen", "SolveScreen"});
+    have_a_wide_solution();
+    holds_the_layout_of(language, {"SolveScreen"});
 }
 
 }  // namespace
 
 TEST_CASE("every converted screen holds the pseudo-locale without cutting a string off",
           "[i18n][screen][pseudo]") {
-    holds_the_layout_in("xx", {false, false});
+    holds_the_layout_in("xx");
 }
 
 TEST_CASE("every converted screen holds the real Japanese and Chinese without cutting a string off",
@@ -437,7 +469,7 @@ TEST_CASE("every converted screen holds the real Japanese and Chinese without cu
     // The drafts, not their proxy: whatever the machine draws Han and kana
     // with, a translated string must fit the box the English was given.
     for (const char* language : {"ja", "zh-CN"}) {
-        holds_the_layout_in(language, {true, true});
+        holds_the_layout_in(language);
     }
 }
 
@@ -450,7 +482,7 @@ TEST_CASE(
     // Yiddish carries points. Whatever the machine draws them with, a
     // translated string must fit the box the English was given, mirrored.
     for (const char* language : {"he", "ar", "yi"}) {
-        holds_the_layout_in(language, {true, false});
+        holds_the_layout_in(language);
     }
 }
 
@@ -461,7 +493,7 @@ TEST_CASE(
     // ("Vierteldrehung", "Geräteeinstellungen") have no place to break, so a
     // box measured for the English is the likeliest to be cut here.
     for (const char* language : {"de", "fr", "es"}) {
-        holds_the_layout_in(language, {true, true});
+        holds_the_layout_in(language);
     }
 }
 
@@ -807,6 +839,10 @@ TEST_CASE("a label is not wider than the box it is set in, in any of the nine sc
 //   CUBE_I18N_SHOT_DIR=out CUBE_I18N_SHOT_SCREEN=LaunchScreen CUBE_I18N_SHOT_LANG=xx //
 //   cube_i18n_screen_tests "[.shots]"
 //
+// CUBE_I18N_SHOT_SIZE=390x780 sets the window, and CUBE_I18N_SHOT_CUBE=5 gives
+// the solution and solve screens a 5x5 to show (5wide: one that opens with a
+// turn of three layers).
+//
 // One picture a process: a second grabWindow() with the 3D cube in the scene
 // crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
 // hazards").
@@ -821,6 +857,13 @@ TEST_CASE("a picture of a screen in a language", "[.shots]") {
     REQUIRE(size.size() == 2);
     REQUIRE(t::language().preview(lang));
     QCoreApplication::processEvents();
+    // The screens that show a solution do so for a 5x5 when asked (CUBE_I18N_SHOT_CUBE=5):
+    // that is where the layer words are.
+    if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5")) {
+        have_a_big_solution();
+    } else if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5wide")) {
+        have_a_wide_solution();
+    }
 
     Screen screen(type, size.at(0).toInt(), size.at(1).toInt());
     QQuickWindow window;

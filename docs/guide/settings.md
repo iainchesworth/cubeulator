@@ -53,7 +53,7 @@ What to expect in this beta:
   until their translations are written. They are selectable so that the layout
   and direction can be tried.
 - **The scan screen's guidance and most of the words round the solution** (the
-  stage names, *Previous*, *Next move*, *Finish*, *Out of step? Rescan*) are
+  stage names, *Previous*, *Next turn*, *Finish*, *Out of step? Rescan*) are
   English in every language for now.
 
 Japanese and Chinese are drawn in your system's own fonts (the browser version
@@ -68,7 +68,7 @@ carries its own). On Linux, install a CJK font such as Noto Sans CJK.
 | Full screen | <kbd>F11</kbd> | <kbd>Ctrl</kbd>+<kbd>⌘</kbd>+<kbd>F</kbd> | Anywhere |
 | Quit | <kbd>Ctrl</kbd>+<kbd>Q</kbd> | <kbd>⌘</kbd>+<kbd>Q</kbd> | Anywhere |
 | Close window, Minimise | | <kbd>⌘</kbd>+<kbd>W</kbd>, <kbd>⌘</kbd>+<kbd>M</kbd> | Anywhere |
-| Next move | <kbd>→</kbd>, <kbd>Space</kbd>, <kbd>Enter</kbd> | the same | The solve screen |
+| Next turn | <kbd>→</kbd>, <kbd>Space</kbd>, <kbd>Enter</kbd> | the same | The solve screen |
 | Previous move | <kbd>←</kbd> | the same | The solve screen |
 | Play or pause, first turn, solved cube | <kbd>Space</kbd>, <kbd>Home</kbd>, <kbd>End</kbd> | the same | The solution screen ([Following the solution](solve.md#reviewing-the-solution)) |
 | Back | <kbd>Esc</kbd> | the same | The history and solution screens, and a question asking before it deletes |

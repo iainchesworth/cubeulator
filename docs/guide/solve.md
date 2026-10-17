@@ -6,8 +6,8 @@ cube notation: the layer to turn moves on the picture, and the screen says it
 in words as well.
 
 <figure markdown="span">
-  ![The solve screen at the start: the top layer of the 3D cube is nudged part-way round, Stage 1 of 5, and a Next move button.](img/solve-start-wide-light.webp#only-light){ loading=lazy }
-  ![The solve screen at the start: the top layer of the 3D cube is nudged part-way round, Stage 1 of 5, and a Next move button.](img/solve-start-wide-dark.webp#only-dark){ loading=lazy }
+  ![The solve screen at the start: the top layer of the 3D cube is nudged part-way round, Stage 1 of 5, and a Next turn button.](img/solve-start-wide-light.webp#only-light){ loading=lazy }
+  ![The solve screen at the start: the top layer of the 3D cube is nudged part-way round, Stage 1 of 5, and a Next turn button.](img/solve-start-wide-dark.webp#only-dark){ loading=lazy }
   <figcaption>The first move. The top layer is nudged the way it has to go.</figcaption>
 </figure>
 
@@ -39,7 +39,7 @@ For each move, the top left of the screen shows:
 - **The layer on the cube** nudging a little way in the direction it has to go
   and back (twice, for a half turn).
 
-Make that turn on your cube, then press **Next move**. The cube on screen
+Make that turn on your cube, then press **Next turn**. The cube on screen
 turns the layer the whole way so you can see it land, and the next move is
 shown. **Previous** takes the last move back, on screen; turn your cube back
 too.
@@ -83,7 +83,7 @@ and the current one opened out; on a narrow window only the current stage is
 shown.
 
 <figure markdown="span">
-  ![The solve screen in the narrow layout: the cube, the method buttons, the current stage and Previous and Next move.](img/solve-middle-narrow-light.webp){ loading=lazy width="320" }
+  ![The solve screen in the narrow layout: the cube, the method buttons, the current stage and Previous and Next turn.](img/solve-middle-narrow-light.webp){ loading=lazy width="320" }
   <figcaption>The narrow layout, which is also what a phone's browser shows.</figcaption>
 </figure>
 
@@ -113,7 +113,7 @@ corner is what it sees. It does two things:
 - **It steps on by itself when you make the move.** When the side it sees fits
   the cube *after* the move that was asked for, the solution moves on without a
   button press. A move on the side that faces you cannot be seen turning, so for
-  those the screen says to press **Next move**.
+  those the screen says to press **Next turn**.
 
 The frame round the picture is the camera's verdict:
 
@@ -136,7 +136,7 @@ already done stays done.
 
 ## Finishing
 
-On the last move, the **Next move** button changes to **Finish**. Press it, and
+On the last move, the **Next turn** button changes to **Finish**. Press it, and
 the screen says **Solved**, with the number of turns and the time it took.
 
 <figure markdown="span">

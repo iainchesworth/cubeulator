@@ -491,22 +491,30 @@ Rectangle {
             // there is no move to say (at the end), so the cube does not
             // move for it; and it shrinks to its column rather than run
             // under the preview ("Right side" is the longest name).
+            //
+            // A cube bigger than 3x3 names layers too ("Left side · layer 2 ·
+            // half turn"), which is more than one line holds in this column; the
+            // room for a second is kept whatever the move says, for the reason
+            // above, and the words are made to fit the two lines (or the one) as
+            // they are given.
             Row {
                 opacity: root.moveWords !== "" ? 1 : 0
-                height: 20
+                height: root.threeByThree ? 20 : 36
                 spacing: Theme.space2
                 Rectangle {
+                    y: 3
                     width: 14; height: 14
-                    anchors.verticalCenter: parent.verticalCenter
                     color: root.colorHex(root.moveColor)
                     border.width: 1; border.color: Theme.divider
                 }
                 Text {
                     width: Math.max(0, stage.labelWidth - 14 - Theme.space2)
-                    anchors.verticalCenter: parent.verticalCenter
+                    height: parent.height
+                    topPadding: 1.5
                     text: root.moveWords
+                    wrapMode: Text.Wrap
                     elide: Text.ElideRight
-                    fontSizeMode: Text.HorizontalFit; minimumPixelSize: 10
+                    fontSizeMode: Text.Fit; minimumPixelSize: 10
                     font.family: Theme.fontHeading; font.pixelSize: 14; font.weight: Font.DemiBold
                     color: Theme.ink
                 }
@@ -1006,7 +1014,11 @@ Rectangle {
             AppButton {
                 id: previousButton
                 objectName: "solve.previous"
-                x: Theme.space3; y: Theme.space3 + 1
+                // Anchored, and not placed at an x: an x does not mirror, and the
+                // button beside it, which is anchored to this one, would be
+                // mirrored away from it.
+                anchors.left: parent.left; anchors.leftMargin: Theme.space3
+                y: Theme.space3 + 1
                 height: 42
                 variant: "secondary"; text: "Previous"
                 enabled: !SolveController.atStart
@@ -1020,7 +1032,7 @@ Rectangle {
                 anchors.right: parent.right; anchors.rightMargin: Theme.space3
                 y: Theme.space3 + 1
                 height: 42
-                variant: "primary"; text: SolveController.atEnd ? "Finish" : "Next move"
+                variant: "primary"; text: SolveController.atEnd ? qsTrId("solve.finish") : qsTrId("solve.next")
                 enabled: !SolveController.isSolving
                 onClicked: SolveController.atEnd ? root.finish() : root.next()
             }
