@@ -21,9 +21,9 @@
 #include <QVariantMap>
 
 #include <array>
-#include <utility>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 using cube::app::ColourEntry;
 using cube::app::DirectScan;
