@@ -1209,6 +1209,79 @@ In your hands.</source>
             <numerusform>%1: נותרו %Ln מדבקות</numerusform>
         </translation>
     </message>
+    <message id="review.notUpright">
+        <source>The camera could not tell which way up each side was held, so each is shown as it saw it. Compare every side with your cube, and turn any that is the wrong way round.</source>
+        <extracomment>Shown on the check screen when the camera named the colours of the sides but could not fit them together into a cube, so it does not know which way up each side was held. Each side is shown as the camera saw it and may need turning (review.turnSide).</extracomment>
+        <translation>המצלמה לא הצליחה לדעת באיזה כיוון הוחזק כל צד, ולכן כל צד מוצג כפי שהיא ראתה אותו. השוו כל צד לקובייה שלכם, והפכו כל צד שהוא בכיוון הלא נכון.</translation>
+    </message>
+    <message id="review.doubt.note" numerus="yes">
+        <source>The camera was not sure of %Ln stickers. They are marked with a ?.</source>
+        <extracomment>Shown on the check screen when the camera was unsure of some stickers. %n is how many. The mark is a question mark drawn on the sticker itself; keep the question mark as the plain Latin character.</extracomment>
+        <translation>
+            <numerusform>המצלמה לא הייתה בטוחה לגבי מדבקה אחת. היא מסומנת ב-?.</numerusform>
+            <numerusform>המצלמה לא הייתה בטוחה לגבי %Ln מדבקות. הן מסומנות ב-?.</numerusform>
+        </translation>
+    </message>
+    <message id="review.a11y.stickerUnsure">
+        <source>%1, row %2, column %3: %4. The camera was not sure of this one.</source>
+        <extracomment>Screen-reader name of a sticker the camera was unsure of. Like review.a11y.sticker, with the extra sentence. %1 is a colourSide string, %2 and %3 are 1 to 9, %4 a colour name or colour.unset.</extracomment>
+        <translation>%1, שורה %2, עמודה %3: %4. המצלמה לא הייתה בטוחה לגבי המדבקה הזו.</translation>
+    </message>
+    <message id="review.undo">
+        <source>Undo</source>
+        <extracomment>Button on the colours screen. Takes back the last change.</extracomment>
+        <translation>ביטול</translation>
+    </message>
+    <message id="review.redo">
+        <source>Redo</source>
+        <extracomment>Button on the colours screen. Puts back the change that Undo took back.</extracomment>
+        <translation>ביצוע חוזר</translation>
+    </message>
+    <message id="review.revert">
+        <source>Back to the scan</source>
+        <extracomment>Button on the check screen. Puts every sticker back as the camera read it, taking back all the corrections made here. Undo can bring them back.</extracomment>
+        <translation>חזרה לסריקה</translation>
+    </message>
+    <message id="review.turnSide">
+        <source>Turn this side</source>
+        <extracomment>Button on the colours screen. Turns the side being edited a quarter turn clockwise, as seen from outside, in the picture only: for a side the camera read the wrong way up. It does not turn the cube.</extracomment>
+        <translation>סיבוב הצד הזה</translation>
+    </message>
+    <message id="review.describe.open">
+        <source>Describe this side</source>
+        <extracomment>Button on the colours screen. Opens a box to type the colours of the whole side as letters instead of tapping each sticker.</extracomment>
+        <translation>תיאור הצד הזה</translation>
+    </message>
+    <message id="review.describe.help">
+        <source>Type the colours of this side (%1) as you see it on your cube, left to right, a row at a time: W white, Y yellow, G green, B blue, O orange, R red. Use ? for a sticker you cannot tell. Spaces and slashes are ignored.</source>
+        <extracomment>Instruction above the box where a side is described in letters. %1 is the side's name (colourSide.red, side.top and the like). The letters W Y G B O R are fixed, like the letters of a move, and are not translated; say in the language which colour each stands for, naming the colours as in colour.*.</extracomment>
+        <translation>הקלידו את צבעי הצד הזה (%1) כפי שאתם רואים אותו בקובייה, משמאל לימין, שורה אחר שורה: W לבן, Y צהוב, G ירוק, B כחול, O כתום, R אדום. השתמשו ב-? למדבקה שאי אפשר לזהות. רווחים וקווים נטויים מתעלמים מהם.</translation>
+    </message>
+    <message id="review.describe.field">
+        <source>Colours of this side, as letters</source>
+        <extracomment>Screen-reader name of the box where a side is described in letters.</extracomment>
+        <translation>צבעי הצד הזה, באותיות</translation>
+    </message>
+    <message id="review.describe.apply">
+        <source>Use these</source>
+        <extracomment>Button under the box where a side is described in letters. Paints the side with what was typed.</extracomment>
+        <translation>להשתמש בזה</translation>
+    </message>
+    <message id="review.describe.tooFew">
+        <source>That is only %1 of the %2 colours this side needs.</source>
+        <extracomment>Shown when the description of a side has too few colours. %1 is how many were typed and %2 how many stickers the side has, in the reader's own digits.</extracomment>
+        <translation>אלה רק %1 מתוך %2 הצבעים שהצד הזה צריך.</translation>
+    </message>
+    <message id="review.describe.tooMany">
+        <source>That is %1 colours, but this side has only %2 stickers.</source>
+        <extracomment>Shown when the description of a side has too many colours. %1 is how many were typed and %2 how many stickers the side has, in the reader's own digits. %1 is always larger than %2.</extracomment>
+        <translation>אלה %1 צבעים, אבל בצד הזה יש רק %2 מדבקות.</translation>
+    </message>
+    <message id="review.describe.unknownLetter">
+        <source>‘%1’ is not a colour. Use W, Y, G, B, O or R, or ? for a sticker you cannot tell.</source>
+        <extracomment>Shown when the description of a side has a letter that is no colour. %1 is that letter. The letters W Y G B O R are fixed and not translated.</extracomment>
+        <translation>'%1' אינו צבע. השתמשו ב-W, Y, G, B, O או R, או ב-? למדבקה שאי אפשר לזהות.</translation>
+    </message>
     <message id="solve.working">
         <source>Working out the solution…</source>
         <extracomment>Shown while the solution is computed.</extracomment>

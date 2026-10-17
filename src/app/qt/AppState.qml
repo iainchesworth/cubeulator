@@ -37,6 +37,10 @@ QtObject {
 
     // Starts/stops the live capture to match the screen shown.
     onScreenChanged: {
+        // Looking over a scan ends with leaving the colours screen, however it is left.
+        if (screen !== "colours") {
+            coloursFromScan = false;
+        }
         if (screen !== "scan") {
             scanComplete = false;
             completeBeat.stop();
@@ -192,12 +196,35 @@ QtObject {
     // The cube typed in a colour at a time, at the size chosen on the entry
     // screen. Back goes to the entry screen.
     function openColours(size) {
+        coloursFromScan = false;
         ColourEntry.begin(size);
         screen = "colours";
     }
 
+    // Whether the colours screen is looking over what the camera read (and not a
+    // cube typed in from nothing): back from it goes to the camera again.
+    property bool coloursFromScan: false
+
+    // Looks over what the scan read, to put right what it misread: the cube it
+    // made, or the six sides that made none. The camera stops, as it does leaving
+    // the scan screen for any other. False, and nothing changes, when the scan has
+    // nothing to show yet.
+    function reviewScan() {
+        if (!ColourEntry.beginFromScan()) {
+            return false;
+        }
+        coloursFromScan = true;
+        screen = "colours";
+        return true;
+    }
+
     function closeColours() {
-        screen = "entry";
+        if (coloursFromScan) {
+            coloursFromScan = false;
+            beginScan();
+        } else {
+            screen = "entry";
+        }
     }
 
     // Solves the cube typed in, once it is a valid one, and shows the solve
@@ -205,6 +232,7 @@ QtObject {
     function solveColours() {
         var result = ColourEntry.solve();
         if (result.ok) {
+            coloursFromScan = false;
             solveCamera = false;
             elapsedSeconds = 0;
             screen = "solve";

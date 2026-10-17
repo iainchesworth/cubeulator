@@ -68,6 +68,29 @@ it is almost always one sticker read as the wrong colour:
   swapped, there is no solution, and the scan will never settle however well
   it reads.
 
+## When the camera misreads a colour
+
+Press **Check the colours** on the scan screen once six sides are in. It shows
+what the camera read, one side at a time, as you would see it on your cube, with
+the sides named by their middle colour.
+
+- **A "?" on a sticker** is one the camera was not sure of. Look at that sticker
+  on your cube first. Painting it, with the colour you can see, clears the mark.
+- **Pick a colour, then tap or drag over the stickers** that have it. Under the
+  side: **Undo** and **Redo**, and **Back to the scan**, which puts everything
+  back as the camera read it.
+- **If a whole side is wrong,** press **Describe this side** and type its colours
+  as letters, left to right and a row at a time: W white, Y yellow, G green, B
+  blue, O orange, R red, and ? for a sticker you cannot tell. `WWW/WRW/WWW` and
+  `WWWWRWWWW` are the same side.
+- **If the camera could not tell which way up the sides were**, the screen says
+  so and shows each side as the camera saw it. Compare each with your cube and use
+  **Turn this side** on any that is the wrong way round.
+- **Cubeulator tells you when what is on the screen cannot be a real cube** (a
+  colour used too many or too few times, or pieces that cannot go together) and
+  which piece looks wrong. **Solve** is only available for a cube that can exist,
+  so a mistake here is found before the solve rather than after it.
+
 ## "…fit together in more than one way"
 
 *Turn the cube slowly to show the corner where Yellow, Green and Red meet.*

@@ -5,6 +5,8 @@
 #include <cube/solver/cube.hpp>
 #include <cube/vision/direct_scan.hpp>
 
+#include <array>
+#include <cstdint>
 #include <optional>
 
 // What the camera read, as the review screen takes it (CubeEdit's Reading): the
@@ -37,5 +39,22 @@ inline constexpr float kDoubtBelow = 0.3F;
 // scan has not named its sides (fewer than six captured, or naming failed).
 [[nodiscard]] std::optional<Reading> reading_from_named_sides(
     const cube::vision::ColorResolution& naming);
+
+// A cube as a camera might have misread it, for trying the review screen without one
+// (CUBE_REVIEW_DEMO, main.cpp): a cube of `size` scrambled from `seed`, two stickers
+// of different colours swapped (a misread the counts cannot see and the pieces
+// can), the two marked as doubted and a third that was read right marked too, as a
+// camera's second thoughts are. `upright` false has it say the sides may need
+// turning. Putting the two stickers back (demo_misread_stickers) makes the cube again.
+[[nodiscard]] Reading demo_reading(unsigned seed, int size, bool upright = true);
+
+// The two stickers demo_reading swapped, as (side letter, index as seen from outside,
+// colour it should have): the answer to the demo.
+struct DemoSticker {
+    char side;
+    int index;
+    std::int8_t colour;
+};
+[[nodiscard]] std::array<DemoSticker, 2> demo_misread_stickers(unsigned seed, int size);
 
 }  // namespace cube::app

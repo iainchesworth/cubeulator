@@ -15,6 +15,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/strategy.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/solver.hpp>
@@ -35,6 +37,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -497,6 +500,40 @@ void have_a_history() {
     REQUIRE(solve.moveIndex() >= 12);
 }
 
+// What the camera read of a 3x3, for the screen where it is looked over: the sides
+// as the camera had them (it could not tell which way up each was held, which has
+// the colours screen say so), and a sticker it was unsure of on the front.
+void have_a_scan_to_check() {
+    const auto cube = cube::nxn::random_scramble({.size = 3, .seed = 6, .moves = 40});
+    cube::app::Reading reading;
+    reading.size = 3;
+    for (const auto colour : cube.facelets()) {
+        reading.stickers.push_back(static_cast<std::int8_t>(colour));
+    }
+    reading.doubtful.assign(reading.stickers.size(), 0);
+    reading.doubtful.at(static_cast<std::size_t>(cube::nxn::Face::F) * 9) = 1;
+    reading.upright = false;
+    t::controllers().colours.loadReading(reading);
+}
+
+// The colours screen with the box for describing a side open, and a description
+// the screen has refused: the longest the screen gets.
+void describing_wrongly(Screen& screen) {
+    screen.item()->setProperty("describing", true);
+    screen.settle();
+    QQuickItem* field = screen.item_named(QStringLiteral("colours.describeText"));
+    REQUIRE(field != nullptr);
+    field->setProperty("text", QStringLiteral("GGG/GXG/GGG"));
+    QQuickItem* box = screen.item_named(QStringLiteral("colours.describeBox"));
+    REQUIRE(box != nullptr);
+    REQUIRE(QMetaObject::invokeMethod(box, "apply"));
+    screen.settle();
+    // The complaint is on the screen, or the screen is not the longest it gets.
+    QQuickItem* error = screen.item_named(QStringLiteral("colours.describeError"));
+    REQUIRE(error != nullptr);
+    REQUIRE(error->isVisible());
+}
+
 // Whether `item` stands at an angle on the screen: it, or something it is in
 // below the screen, is turned by other than half-turns.
 [[nodiscard]] bool is_turned(const QQuickItem* item, const QQuickItem* screen) {
@@ -515,7 +552,8 @@ struct KeepOff {
     KeepOff& operator=(const KeepOff&) = delete;
 };
 
-void holds_the_layout_of(const char* language, std::initializer_list<const char*> types) {
+void holds_the_layout_of(const char* language, std::initializer_list<const char*> types,
+                         const std::function<void(Screen&)>& prepare = {}) {
     struct Size {
         int w;
         int h;
@@ -526,6 +564,10 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
         for (const Size& size : sizes) {
             in_language(language);
             Screen screen(type, size.w, size.h);
+            if (prepare) {
+                prepare(screen);
+                screen.settle();
+            }
             INFO(language << ", " << type << ", " << size.what);
             int checked = 0;
             for (QQuickItem* text : screen.find_all("QQuickText")) {
@@ -618,6 +660,15 @@ void holds_the_layout_in(const char* language) {
     holds_the_layout_of(language, {"SolutionScreen", "SolveScreen"});
     have_a_wide_solution();
     holds_the_layout_of(language, {"SolveScreen"});
+    // The colours screen looking over a scan: a note that the sides may be the wrong way
+    // up and one that the camera was unsure of a sticker, a "?" on the sticker, the
+    // sides called by their middles, the extra buttons; and with the box for
+    // describing a side open, with a description it has refused.
+    have_a_scan_to_check();
+    holds_the_layout_of(language, {"ColoursScreen"});
+    holds_the_layout_of(language, {"ColoursScreen"}, describing_wrongly);
+    t::controllers().colours.begin(3);
+    holds_the_layout_of(language, {"ColoursScreen"}, describing_wrongly);
     have_a_history();
     {
         // The rows are on the screen: a screen that listed none would pass.

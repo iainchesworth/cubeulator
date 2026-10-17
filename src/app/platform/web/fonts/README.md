@@ -9,8 +9,8 @@ desktops use the system's own faces, chosen by language
 
 | file | family | what it holds | licence |
 |---|---|---|---|
-| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue (731 glyphs, 358 KB) and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
-| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue (769 glyphs, 283 KB) and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
+| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue (736 glyphs, 359 KB) and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
+| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue (778 glyphs, 288 KB) and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
 
 They are the Noto Sans faces cut down by `tools/fonts/subset_cjk.py` to exactly
 the characters the app can show: a closed set, since every string is in a

@@ -2,6 +2,7 @@
 
 #include <cube/model/facelet.hpp>
 #include <cube/nxn/cube.hpp>
+#include <cube/nxn/strategy.hpp>
 
 #include <algorithm>
 #include <array>
@@ -142,6 +143,91 @@ std::optional<Reading> reading_from_named_sides(const cube::vision::ColorResolut
         return std::nullopt;
     }
     return reading;
+}
+
+namespace {
+
+struct Swap {
+    Face a_face;
+    int a_index;
+    Face b_face;
+    int b_index;
+};
+
+// Two stickers of different colours, on different pieces, whichever the scramble.
+[[nodiscard]] Swap demo_swap(const cube::nxn::NCube& cube) {
+    const int size = cube.size();
+    const int last = size * size - 1;
+    const Swap candidates[] = {
+        {Face::F, 0, Face::U, last},
+        {Face::F, 0, Face::R, 0},
+        {Face::D, 0, Face::L, last},
+        {Face::B, last, Face::U, 0},
+    };
+    for (const Swap& swap : candidates) {
+        if (cube.facelet(seen_facelet(swap.a_face, size, swap.a_index)) !=
+            cube.facelet(seen_facelet(swap.b_face, size, swap.b_index))) {
+            return swap;
+        }
+    }
+    return candidates[0];
+}
+
+[[nodiscard]] char side_letter(Face face) {
+    switch (face) {
+        case Face::U:
+            return 'U';
+        case Face::D:
+            return 'D';
+        case Face::L:
+            return 'L';
+        case Face::R:
+            return 'R';
+        case Face::F:
+            return 'F';
+        case Face::B:
+            return 'B';
+    }
+    return 'U';
+}
+
+[[nodiscard]] cube::nxn::NCube demo_cube(unsigned seed, int size) {
+    return cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 40 + (8 * size)});
+}
+
+}  // namespace
+
+Reading demo_reading(unsigned seed, int size, bool upright) {
+    const cube::nxn::NCube cube = demo_cube(seed, size);
+    const Swap swap = demo_swap(cube);
+    Reading reading;
+    reading.size = cube.size();
+    reading.upright = upright;
+    for (const Color colour : cube.facelets()) {
+        reading.stickers.push_back(static_cast<std::int8_t>(colour));
+    }
+    reading.doubtful.assign(reading.stickers.size(), 0);
+    const std::size_t a = seen_facelet(swap.a_face, size, swap.a_index);
+    const std::size_t b = seen_facelet(swap.b_face, size, swap.b_index);
+    std::swap(reading.stickers.at(a), reading.stickers.at(b));
+    reading.doubtful.at(a) = 1;
+    reading.doubtful.at(b) = 1;
+    // One the camera was unsure of and had right.
+    reading.doubtful.at(seen_facelet(Face::D, size, size)) = 1;
+    return reading;
+}
+
+std::array<DemoSticker, 2> demo_misread_stickers(unsigned seed, int size) {
+    const cube::nxn::NCube cube = demo_cube(seed, size);
+    const Swap swap = demo_swap(cube);
+    return {DemoSticker{.side = side_letter(swap.a_face),
+                        .index = swap.a_index,
+                        .colour = static_cast<std::int8_t>(
+                            cube.facelet(seen_facelet(swap.a_face, size, swap.a_index)))},
+            DemoSticker{.side = side_letter(swap.b_face),
+                        .index = swap.b_index,
+                        .colour = static_cast<std::int8_t>(
+                            cube.facelet(seen_facelet(swap.b_face, size, swap.b_index)))}};
 }
 
 }  // namespace cube::app

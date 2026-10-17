@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import Cubeulator
 
 // A cube typed in by hand, a colour at a time, at any size from 2 to 9
@@ -11,6 +12,12 @@ import Cubeulator
 // and turned to show that side. Pick a colour, then tap or drag over the
 // stickers that have it. Whatever six colours there are are the cube's: the
 // library says whether they can be those of a cube (ColourEntry.status).
+//
+// The same screen puts right a cube the camera misread (AppState.reviewScan): it
+// starts from what was read, the stickers the camera was unsure of are marked "?",
+// a side can be turned in place or described in letters, every change can be
+// undone, and the scan can be come back to. A side is then named by its middle
+// colour, as a person holding the cube would, where there is one.
 Rectangle {
     id: root
     color: Theme.paper
@@ -22,11 +29,28 @@ Rectangle {
     property string side: "F"
     property int brush: 0
     readonly property var status: ColourEntry.status
+    // The cube began as what the camera read, and the sides' doubts are on show.
+    readonly property bool fromScan: ColourEntry.fromScan
+    readonly property var doubts: ColourEntry.doubts
+    // Putting a side right by describing it: the box under the buttons is open.
+    property bool describing: false
 
     // The sides in the order a person goes round a cube: the top, the front, then
     // the right, back and left, and the bottom.
     readonly property var sideOrder: ["U", "F", "R", "B", "L", "D"]
     function sideName(letter) {
+        // A cube the camera read is held however the person likes, and its sides
+        // are the ones with a middle sticker: the red side, not the left.
+        if (fromScan) {
+            switch (ColourEntry.centres[letter]) {
+            case "White": return qsTrId("colourSide.white");
+            case "Yellow": return qsTrId("colourSide.yellow");
+            case "Green": return qsTrId("colourSide.green");
+            case "Blue": return qsTrId("colourSide.blue");
+            case "Orange": return qsTrId("colourSide.orange");
+            case "Red": return qsTrId("colourSide.red");
+            }
+        }
         switch (letter) {
         case "U": return qsTrId("side.top");
         case "D": return qsTrId("side.bottom");
@@ -152,6 +176,16 @@ Rectangle {
 
     function paint(index) { ColourEntry.paint(side, index, brush); }
 
+    // What is wrong with a described side, in words. `problem` is what describeSide
+    // answered; `typed` the text it was given, to name the letter at fault.
+    function describeProblemWords(problem, typed) {
+        if (problem.error === "unknownLetter")
+            return qsTrId("review.describe.unknownLetter").arg(typed.charAt(problem.at));
+        if (problem.error === "tooMany")
+            return qsTrId("review.describe.tooMany").arg(digits(problem.at)).arg(digits(size * size));
+        return qsTrId("review.describe.tooFew").arg(digits(problem.at)).arg(digits(size * size));
+    }
+
     // Leaving with colours entered asks first (and says where it was going).
     property bool confirmingLeave: false
     property bool leavingToScan: false
@@ -171,6 +205,17 @@ Rectangle {
     }
     function solve() {
         AppState.solveColours();
+    }
+
+    Shortcut {
+        sequences: [StandardKey.Undo]
+        enabled: ColourEntry.canUndo && !letters.activeFocus
+        onActivated: ColourEntry.undo()
+    }
+    Shortcut {
+        sequences: [StandardKey.Redo]
+        enabled: ColourEntry.canRedo && !letters.activeFocus
+        onActivated: ColourEntry.redo()
     }
 
     focus: true
@@ -200,7 +245,7 @@ Rectangle {
             anchors.left: back.right; anchors.leftMargin: Theme.space2
             anchors.right: parent.right; anchors.rightMargin: Theme.space3
             anchors.verticalCenter: parent.verticalCenter
-            text: qsTrId("review.title.enter")
+            text: root.fromScan ? qsTrId("review.title.check") : qsTrId("review.title.enter")
             wrapMode: Text.Wrap
             font.family: Theme.fontHeading; font.weight: Font.ExtraBold; font.pixelSize: 22
             color: Theme.ink
@@ -241,8 +286,19 @@ Rectangle {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
 
+        // Scrolls so that `item` is on the screen, whole if it fits.
+        function ensureVisible(item) {
+            var top = item.mapToItem(form.contentItem, 0, 0).y;
+            var bottom = top + item.height + Theme.space4;
+            if (bottom > form.contentY + form.height)
+                form.contentY = Math.max(0, Math.min(form.contentHeight - form.height, bottom - form.height));
+            if (top < form.contentY)
+                form.contentY = Math.max(0, top - Theme.space2);
+        }
+
         Column {
             id: column
+            objectName: "colours.column"
             width: Math.min(form.width, 560)
             x: (form.width - width) / 2
             spacing: Theme.space3
@@ -250,9 +306,32 @@ Rectangle {
             bottomPadding: Theme.space4
 
             Text {
+                objectName: "colours.intro"
                 x: Theme.space4
                 width: parent.width - 2 * Theme.space4
-                text: qsTrId("review.intro.enterN")
+                text: root.fromScan ? qsTrId("review.intro.check") : qsTrId("review.intro.enterN")
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontHeading; font.pixelSize: 13
+                color: Theme.inkMuted(0.7)
+            }
+            // What the camera could not say: which way up each side was held, and
+            // which stickers it was unsure of.
+            Text {
+                objectName: "colours.notUpright"
+                x: Theme.space4
+                width: parent.width - 2 * Theme.space4
+                visible: root.fromScan && !ColourEntry.upright
+                text: qsTrId("review.notUpright")
+                wrapMode: Text.WordWrap
+                font.family: Theme.fontHeading; font.pixelSize: 13; font.weight: Font.DemiBold
+                color: Theme.warning
+            }
+            Text {
+                objectName: "colours.doubtNote"
+                x: Theme.space4
+                width: parent.width - 2 * Theme.space4
+                visible: root.fromScan && ColourEntry.doubtCount > 0
+                text: qsTrId("review.doubt.note", ColourEntry.doubtCount)
                 wrapMode: Text.WordWrap
                 font.family: Theme.fontHeading; font.pixelSize: 13
                 color: Theme.inkMuted(0.7)
@@ -344,17 +423,36 @@ Rectangle {
                             readonly property string colourOf: gridBox.names !== undefined ? gridBox.names[index] : ""
                             readonly property bool suspected: root.suspect !== null
                                 && root.suspect.side === root.side && root.suspect.index === index
+                            // The camera was unsure of this one and nobody has painted it since.
+                            readonly property bool doubted: root.doubts[root.side] !== undefined
+                                && root.doubts[root.side][index] === true
                             x: gridBox.pad + (index % root.size) * gridBox.cell + 1
                             y: gridBox.pad + Math.floor(index / root.size) * gridBox.cell + 1
                             width: gridBox.cell - 2; height: gridBox.cell - 2
                             color: colourOf === "" ? "#3A3737" : root.colourHex(colourOf)
                             border.width: suspected ? 3 : (colourOf === "" ? 1 : 0)
                             border.color: suspected ? Theme.accent : "#575353"
-                            Accessible.role: Accessible.Button
-                            Accessible.name: qsTrId("review.a11y.sticker")
+                            // What a screen reader says of it, and a property so that it can be read back.
+                            readonly property string spoken: (doubted ? qsTrId("review.a11y.stickerUnsure") : qsTrId("review.a11y.sticker"))
                                 .arg(root.sideName(root.side)).arg(root.digits(Math.floor(index / root.size) + 1))
                                 .arg(root.digits(index % root.size + 1))
                                 .arg(colourOf === "" ? qsTrId("colour.unset") : root.colourName(root.palette.indexOf(colourOf)))
+                            Accessible.role: Accessible.Button
+                            Accessible.name: spoken
+
+                            // A "?" on a sticker the camera was unsure of: a mark, not a
+                            // colour, so it shows to a person who cannot tell the colours
+                            // apart. Never mirrored: it is a picture of the cube.
+                            Text {
+                                objectName: "colours.doubt." + index
+                                anchors.centerIn: parent
+                                visible: parent.doubted
+                                text: "?"
+                                font.family: Theme.fontHeading; font.weight: Font.ExtraBold
+                                font.pixelSize: Math.max(10, parent.width * 0.55)
+                                color: parent.colourOf === "White" || parent.colourOf === "Yellow"
+                                       ? "#201E1D" : "#F3F2F2"
+                            }
                         }
                     }
 
@@ -368,10 +466,14 @@ Rectangle {
                                 return -1;
                             return row * root.size + col;
                         }
+                        // A drag over several stickers is one step to undo.
                         onPressed: (mouse) => {
+                            ColourEntry.beginStroke();
                             var i = stickerAt(mouse.x, mouse.y);
                             if (i >= 0) root.paint(i);
                         }
+                        onReleased: ColourEntry.endStroke()
+                        onCanceled: ColourEntry.endStroke()
                         onPositionChanged: (mouse) => {
                             if (!pressed)
                                 return;
@@ -456,6 +558,173 @@ Rectangle {
                     onClicked: ColourEntry.clearAll()
                 }
             }
+            // Putting a side right in other ways than a sticker at a time, and taking
+            // a step back.
+            Flow {
+                objectName: "colours.tools"
+                x: Theme.space4
+                width: parent.width - 2 * Theme.space4
+                spacing: Theme.space2
+                AppButton {
+                    objectName: "colours.undo"
+                    height: 34
+                    variant: "ghost"
+                    text: qsTrId("review.undo")
+                    enabled: ColourEntry.canUndo
+                    onClicked: ColourEntry.undo()
+                }
+                AppButton {
+                    objectName: "colours.redo"
+                    height: 34
+                    variant: "ghost"
+                    text: qsTrId("review.redo")
+                    enabled: ColourEntry.canRedo
+                    onClicked: ColourEntry.redo()
+                }
+                AppButton {
+                    objectName: "colours.turnSide"
+                    height: 34
+                    variant: "ghost"
+                    text: qsTrId("review.turnSide")
+                    onClicked: ColourEntry.rotateSide(root.side, 1)
+                }
+                AppButton {
+                    objectName: "colours.describe"
+                    height: 34
+                    variant: root.describing ? "secondary" : "ghost"
+                    text: qsTrId("review.describe.open")
+                    onClicked: root.describing = !root.describing
+                }
+                AppButton {
+                    objectName: "colours.revert"
+                    height: 34
+                    visible: root.fromScan
+                    variant: "ghost"
+                    text: qsTrId("review.revert")
+                    enabled: ColourEntry.touched
+                    onClicked: ColourEntry.revert()
+                }
+            }
+
+            // A side described in letters, in the order it is read: the colours of the
+            // side as it is on the cube, left to right and top to bottom. The letters
+            // are not translated, as the letters of a move are not.
+            Column {
+                id: describeBox
+                objectName: "colours.describeBox"
+                x: Theme.space4
+                width: parent.width - 2 * Theme.space4
+                visible: root.describing
+                spacing: Theme.space2
+                property var problem: null
+
+                function reset() {
+                    describeBox.problem = null;
+                    letters.text = ColourEntry.sideText(root.side);
+                }
+                function apply() {
+                    var result = ColourEntry.describeSide(root.side, letters.text);
+                    if (result.ok) {
+                        root.describing = false;
+                    } else {
+                        describeBox.problem = result;
+                    }
+                }
+                Connections {
+                    target: root
+                    function onSideChanged() { if (root.describing) describeBox.reset(); }
+                    function onDescribingChanged() {
+                        if (!root.describing)
+                            return;
+                        describeBox.reset();
+                        // Open where it can be seen and typed in, whatever the window's
+                        // height - once the column has made room for it.
+                        reveal.begin();
+                    }
+                }
+
+                // Scrolls to the box once the column has put it in its place (that
+                // is a frame after it is shown), trying again until it has.
+                Timer {
+                    id: reveal
+                    property int tries: 0
+                    interval: 50
+                    repeat: true
+                    onTriggered: {
+                        ++tries;
+                        if (describeBox.y > 0 || tries >= 20) {
+                            reveal.stop();
+                            form.ensureVisible(describeBox);
+                            letters.forceActiveFocus();
+                        }
+                    }
+                    function begin() { tries = 0; restart(); }
+                }
+
+                Text {
+                    width: parent.width
+                    text: qsTrId("review.describe.help").arg(root.sideName(root.side))
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontHeading; font.pixelSize: 13
+                    color: Theme.inkMuted(0.7)
+                }
+                Rectangle {
+                    width: parent.width
+                    height: Math.max(48, letters.implicitHeight + 2 * Theme.space2)
+                    color: Theme.surface
+                    border.width: letters.activeFocus ? 2 : 1
+                    border.color: describeBox.problem !== null ? Theme.accent
+                                  : (letters.activeFocus ? Theme.ink : Theme.divider)
+                    // What is typed is letters, left to right, whatever the language.
+                    LayoutMirroring.enabled: false
+                    LayoutMirroring.childrenInherit: true
+                    TextField {
+                        id: letters
+                        objectName: "colours.describeText"
+                        anchors.fill: parent
+                        anchors.margins: Theme.space2
+                        padding: Theme.space1
+                        Accessible.name: qsTrId("review.describe.field")
+                        horizontalAlignment: TextInput.AlignLeft
+                        color: Theme.ink
+                        selectionColor: Theme.accent
+                        selectedTextColor: Theme.paper
+                        font.family: Theme.fontMono; font.pixelSize: 15
+                        inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase
+                                          | Qt.ImhPreferUppercase
+                        background: null
+                        onTextChanged: describeBox.problem = null
+                        onAccepted: describeBox.apply()
+                    }
+                }
+                Text {
+                    objectName: "colours.describeError"
+                    width: parent.width
+                    visible: describeBox.problem !== null
+                    text: describeBox.problem === null ? "" : root.describeProblemWords(describeBox.problem, letters.text)
+                    wrapMode: Text.WordWrap
+                    font.family: Theme.fontHeading; font.pixelSize: 13; font.weight: Font.DemiBold
+                    color: Theme.accent
+                }
+                Flow {
+                    width: parent.width
+                    spacing: Theme.space2
+                    AppButton {
+                        objectName: "colours.describeApply"
+                        height: 34
+                        variant: "primary"
+                        text: qsTrId("review.describe.apply")
+                        onClicked: describeBox.apply()
+                    }
+                    AppButton {
+                        objectName: "colours.describeCancel"
+                        height: 34
+                        variant: "ghost"
+                        text: qsTrId("common.cancel")
+                        onClicked: root.describing = false
+                    }
+                }
+            }
 
             // What is the matter, and the way on.
             Column {
@@ -494,7 +763,7 @@ Rectangle {
                     visible: root.size === 3
                     height: 46
                     variant: "secondary"
-                    text: qsTrId("entry.scan")
+                    text: root.fromScan ? qsTrId("common.scanAgain") : qsTrId("entry.scan")
                     onClicked: root.scanInstead()
                 }
                 AppButton {

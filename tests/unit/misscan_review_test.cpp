@@ -92,7 +92,8 @@ TEST_CASE("there is nothing to review before a cube is shown", "[qt][controllers
     CHECK_FALSE(no_scan.beginFromScan());
 }
 
-TEST_CASE("a scan that made a cube can be looked over as it was read", "[qt][controllers][review]") {
+TEST_CASE("a scan that made a cube can be looked over as it was read",
+          "[qt][controllers][review]") {
     const Cube cube = cube::test::scramble(3);
     SolveController solve;
     DirectScan scan;
@@ -148,7 +149,7 @@ TEST_CASE("a sticker the camera misread is found by the count and put right",
     // cube does not. The review says so, and marks the sticker it was least sure of.
     const QVariantMap status = entry.status();
     REQUIRE(status.value("state").toString() == "impossible");
-    CHECK_FALSE(entry.solve().value("ok").toBool());   // not a cube: never reaches the solver
+    CHECK_FALSE(entry.solve().value("ok").toBool());  // not a cube: never reaches the solver
     CHECK(entry.doubtCount() >= 1);
 
     // The misread sticker is on the front, top-left as seen from outside.

@@ -82,6 +82,10 @@ The words at the top left are the guide. In the order you will meet them:
 - **Try again** takes the place of *Start over* when the camera could not be
   started. It asks for the camera again, so once whatever was in the way is
   sorted you do not have to go back to the start screen.
+- **Check the colours** appears once six sides are in. It opens the colours the
+  camera read, side by side, so that you can put right whatever it got wrong
+  instead of scanning again: see [When the camera misreads a
+  colour](troubleshooting.md#when-the-camera-misreads-a-colour).
 
 ## If the camera will not open
 

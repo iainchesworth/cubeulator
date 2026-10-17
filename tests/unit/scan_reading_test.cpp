@@ -192,7 +192,7 @@ TEST_CASE("sides that make no cube are placed by their middles, as the camera ha
           "[scan_reading]") {
     const Scanned s = scanned(14U);
     ColorResolution naming = naming_of(s.seen);
-    naming.faces.at(3).at(8).confidence = 0.05F;   // one doubted sticker
+    naming.faces.at(3).at(8).confidence = 0.05F;  // one doubted sticker
 
     const auto reading = cube::app::reading_from_named_sides(naming);
     REQUIRE(reading.has_value());
@@ -226,8 +226,45 @@ TEST_CASE("a side whose middle is already taken, or is no colour, is not placed 
     for (const std::int8_t colour : reading->stickers) {
         placed += colour == kUnpainted ? 0 : 1;
     }
-    CHECK(placed == 9);   // six sides said red: only one side of the cube is red
+    CHECK(placed == 9);  // six sides said red: only one side of the cube is red
 
     const ColorResolution unnamed;
     CHECK_FALSE(cube::app::reading_from_named_sides(unnamed).has_value());
+}
+
+TEST_CASE("the demo misread is not a cube, and putting two stickers back makes it one",
+          "[scan_reading][demo]") {
+    for (const int size : {2, 3, 4, 5, 7}) {
+        for (const unsigned seed : {1U, 2U, 3U, 11U}) {
+            INFO("size " << size << " seed " << seed);
+            CubeEdit edit;
+            edit.load(cube::app::demo_reading(seed, size));
+            CHECK(edit.upright());
+            // Counts are right and the pieces are not: the kind of misread a count cannot see.
+            CHECK(edit.status().state == cube::app::EditState::Impossible);
+            CHECK(edit.doubtful_on(Face::D) == 1);
+
+            const auto answer = cube::app::demo_misread_stickers(seed, size);
+            int doubted = 0;
+            for (const Face face : cube::solver::kAllFaces) {
+                doubted += edit.doubtful_on(face);
+            }
+            CHECK(doubted == 3);
+            for (const auto& sticker : answer) {
+                const Face face = sticker.side == 'U'   ? Face::U
+                                  : sticker.side == 'D' ? Face::D
+                                  : sticker.side == 'L' ? Face::L
+                                  : sticker.side == 'R' ? Face::R
+                                  : sticker.side == 'F' ? Face::F
+                                                        : Face::B;
+                CHECK(edit.doubtful(face, sticker.index));
+                CHECK(edit.colour(face, sticker.index) != sticker.colour);
+                edit.paint(face, sticker.index, sticker.colour);
+            }
+            CHECK(edit.status().state == cube::app::EditState::Valid);
+        }
+    }
+    CubeEdit turned;
+    turned.load(cube::app::demo_reading(1U, 3, false));
+    CHECK_FALSE(turned.upright());
 }

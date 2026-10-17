@@ -138,7 +138,6 @@ void CubeEdit::load(Reading reading) {
     origin_ = snapshot();
 }
 
-
 std::int8_t CubeEdit::colour(Face face, int index) const {
     if (index < 0 || index >= size_ * size_) {
         return kUnpainted;

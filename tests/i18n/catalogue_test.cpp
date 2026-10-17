@@ -108,7 +108,7 @@ TEST_CASE("a plural message has exactly the number of forms its language has",
                 CHECK(e.forms.size() == 1);
             }
         }
-        CHECK(plural_messages == 7);
+        CHECK(plural_messages == 8);
     }
 }
 
