@@ -123,7 +123,7 @@ using DistanceTable = std::vector<float>;
     DistanceTable table(samples.size() * face_count);
     for (std::size_t s = 0; s < samples.size(); ++s) {
         for (std::size_t c = 0; c < face_count; ++c) {
-            table[(s * face_count) + c] = assignment_distance(samples[s], means[c]);
+            table.at((s * face_count) + c) = assignment_distance(samples.at(s), means.at(c));
         }
     }
     return table;
@@ -138,8 +138,8 @@ struct Preference {
     float margin = 0.0F;
 };
 
-[[nodiscard]] Preference nearest_open_cluster(const float* distances, const LoadArray& load,
-                                              std::size_t capacity) {
+[[nodiscard]] Preference nearest_open_cluster(const DistanceTable& distances, std::size_t sample,
+                                              const LoadArray& load, std::size_t capacity) {
     constexpr float kInf = std::numeric_limits<float>::infinity();
     float nearest = kInf;
     float second = kInf;
@@ -148,7 +148,7 @@ struct Preference {
         if (load.at(c) >= capacity) {
             continue;
         }
-        const float distance = distances[c];
+        const float distance = distances.at((sample * face_count) + c);
         if (distance < nearest) {
             second = nearest;
             nearest = distance;
@@ -176,8 +176,7 @@ struct Commitment {
         if (cluster.at(s) >= 0) {
             continue;
         }
-        const Preference preference =
-            nearest_open_cluster(distances.data() + (s * face_count), load, capacity);
+        const Preference preference = nearest_open_cluster(distances, s, load, capacity);
         // No open cluster produced a finite comparison. resolve_colors
         // rejects non-finite input before calling this, so this is defence
         // in depth rather than a live path - but the failure it guards is
@@ -206,7 +205,7 @@ struct Commitment {
 void descend_by_swaps(const DistanceTable& distances, const Layout& layout, Assignment& cluster) {
     constexpr float kMinImprovement = 1e-3F;
     const auto distance = [&distances](std::size_t sample, std::size_t of_cluster) {
-        return distances[(sample * face_count) + of_cluster];
+        return distances.at((sample * face_count) + of_cluster);
     };
     bool improved = true;
     while (improved) {

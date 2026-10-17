@@ -3,6 +3,7 @@
 
 #include "deterministic_rng.hpp"
 #include "drawn_cube.hpp"
+#include "must_have.hpp"
 
 #include <cube/error.hpp>
 #include <cube/nxn/cube.hpp>
@@ -80,6 +81,7 @@ Pose pose_for(int size, float span_of_height) {
 // Whether `made` is `truth` or the same cube held another way up: the scan puts
 // a side where its centre colour says it goes, so a cube scrambled with middle
 // layers comes back in the orientation its centres name.
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the cube made, then the cube it should be
 bool is_cube(const NCube& made, const NCube& truth) {
     const cube::nxn::Geometry& geometry = cube::nxn::Geometry::of(truth.size());
     for (std::size_t rotation = 0; rotation < geometry.rotations().size(); ++rotation) {
@@ -94,8 +96,10 @@ bool is_cube(const NCube& made, const NCube& truth) {
 
 // Holds the six sides of `cube` up in turn, each in its own place, a random
 // quarter-turn and a little turned in its plane, and shaken by a pixel.
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
 void show_cube(SideScan& scan, const NCube& cube, unsigned seed, const Drawing& drawing,
                float span_of_height, int frames = 12) {
+    // NOLINTEND(bugprone-easily-swappable-parameters)
     std::mt19937 rng(seed);
     std::uniform_real_distribution<float> tilt(-15.0F, 15.0F);
     std::uniform_real_distribution<float> shift(-30.0F, 30.0F);
@@ -216,6 +220,7 @@ TEST_CASE("a read set of 25 cells fuses reads turned under a quarter-turn", "[vi
         for (std::size_t cell = 0; cell < 25; ++cell) {
             for (int channel = 0; channel < 3; ++channel) {
                 std::vector<float> values;
+                values.reserve(all.size());
                 for (const auto& read : all) {
                     values.push_back(read.at(cell)(channel));
                 }
@@ -244,22 +249,25 @@ TEST_CASE("the reader finds the lattice of a 5x5 and a 7x7, and every sticker's 
                 pose.centre = {300.0F, 190.0F};
                 const cv::Mat frame = cube::test::draw_side(stickers, pose, drawing);
 
-                const std::optional<SideRead> read = cube::vision::read_side(frame, size);
-                REQUIRE(read.has_value());
-                CHECK(read->size == size);
-                REQUIRE(read->lab.size() == stickers.size());
-                REQUIRE(read->centres.size() == stickers.size());
-                CHECK(read->stickers_found == size * size);
-                CHECK(read->pitch == Catch::Approx(pose.pitch).epsilon(0.08));
+                const std::optional<SideRead> found = cube::vision::read_side(frame, size);
+                const SideRead& read = cube::test::must_have(found);
+                CHECK(read.size == size);
+                REQUIRE(read.lab.size() == stickers.size());
+                REQUIRE(read.centres.size() == stickers.size());
+                CHECK(read.stickers_found == size * size);
+                CHECK(read.pitch == Catch::Approx(pose.pitch).epsilon(0.08));
+                const auto n = static_cast<std::size_t>(size);
                 for (std::size_t i = 0; i < stickers.size(); ++i) {
-                    CHECK(nearest_colour(read->lab.at(i), drawing) == stickers.at(i));
+                    CHECK(nearest_colour(read.lab.at(i), drawing) == stickers.at(i));
                     // Where the drawing put it, to a fraction of a sticker.
-                    const float column = static_cast<float>(i % static_cast<std::size_t>(size)) -
-                                         (0.5F * static_cast<float>(size - 1));
-                    const float row = static_cast<float>(i / static_cast<std::size_t>(size)) -
-                                      (0.5F * static_cast<float>(size - 1));
+                    const std::size_t at_row = i / n;
+                    const std::size_t at_column = i % n;
+                    const float column =
+                        static_cast<float>(at_column) - (0.5F * static_cast<float>(size - 1));
+                    const float row =
+                        static_cast<float>(at_row) - (0.5F * static_cast<float>(size - 1));
                     const cv::Point2f want = cube::test::place(pose, column, row);
-                    CHECK(cv::norm(read->centres.at(i) - want) <
+                    CHECK(cv::norm(read.centres.at(i) - want) <
                           static_cast<double>(0.2F * pose.pitch));
                 }
             }
@@ -279,17 +287,35 @@ TEST_CASE("a side is read at the size it is asked for and no other", "[vision][n
     CHECK_FALSE(cube::vision::read_side(frame, 10).has_value());
 }
 
+namespace {
+
+// The width a frame is worked at for a cube of `size`, and the scale back to the frame's own.
+struct Worked {
+    int width = 0;
+    float scale = 0.0F;
+};
+
+Worked worked_at(const cv::Mat& frame, int size) {
+    const std::optional<cube::vision::PreparedFrame> prepared =
+        cube::vision::prepare_frame(frame, size);
+    const cube::vision::PreparedFrame& made = cube::test::must_have(prepared);
+    return {.width = made.working.cols, .scale = made.scale};
+}
+
+}  // namespace
+
 TEST_CASE("a frame is worked at more width for a bigger cube, and read the same where it is not",
           "[vision][nxn]") {
     const cv::Mat wide(720, 1280, CV_8UC3, cv::Scalar(90, 90, 90));
-    CHECK(cube::vision::prepare_frame(wide)->working.cols == 640);
-    CHECK(cube::vision::prepare_frame(wide, 3)->working.cols == 640);
-    CHECK(cube::vision::prepare_frame(wide, 5)->working.cols == 960);
-    CHECK(cube::vision::prepare_frame(wide, 7)->working.cols == 1280);
-    CHECK(cube::vision::prepare_frame(wide, 7)->scale == Catch::Approx(1.0F));
+    CHECK(worked_at(wide, 3).width == 640);
+    CHECK(worked_at(wide, 5).width == 960);
+    CHECK(worked_at(wide, 7).width == 1280);
+    CHECK(worked_at(wide, 7).scale == Catch::Approx(1.0F));
+    // The default is a 3x3's.
+    CHECK(cube::test::must_have(cube::vision::prepare_frame(wide)).working.cols == 640);
     // A frame that is already no wider is read as it is.
     const cv::Mat narrow(360, 640, CV_8UC3, cv::Scalar(90, 90, 90));
-    CHECK(cube::vision::prepare_frame(narrow, 7)->working.cols == 640);
+    CHECK(worked_at(narrow, 7).width == 640);
 }
 
 TEST_CASE("steadiness is judged in sticker spacings, so a small sticker is held to a smaller shake",
@@ -349,11 +375,11 @@ TEST_CASE("six sides of a 5x5 and a 7x7 are read into the cube they came from", 
 
         // Every sticker was given its right name.
         const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
-        REQUIRE(diagnosis.naming.has_value());
+        const auto& naming = cube::test::must_have(diagnosis.naming);
+        const auto& assembly = cube::test::must_have(diagnosis.assembly);
         REQUIRE(diagnosis.result_n.has_value());
-        REQUIRE(diagnosis.assembly.has_value());
-        CHECK(diagnosis.assembly->path == cube::vision::AssemblyPath::single_candidate);
-        for (const auto& face : diagnosis.naming->faces) {
+        CHECK(assembly.path == cube::vision::AssemblyPath::single_candidate);
+        for (const auto& face : naming.faces) {
             CHECK(face.size() == static_cast<std::size_t>(size * size));
         }
     }
@@ -390,7 +416,7 @@ TEST_CASE("a 3x3 scanned as a size-3 scan has the same cube from both answers", 
 TEST_CASE("a finger across a sticker of a 5x5 does not stop the side being read", "[vision][nxn]") {
     const NCube cube = cube::nxn::random_scramble({.size = 5, .seed = 6, .moves = 100});
     SideScan scan(5);
-    std::mt19937 rng(5);
+    std::mt19937 rng = cube::test::deterministic_rng(5U);
     std::uniform_real_distribution<float> shake(-0.8F, 0.8F);
     for (const Face face : cube::solver::kAllFaces) {
         const std::vector<Color> stickers = cube::nxn::outside_view(cube, face);
@@ -434,14 +460,14 @@ TEST_CASE("an even size is read side by side but not named", "[vision][nxn]") {
         const Pose pose = pose_for(size, 0.6F);
         const cv::Mat frame =
             cube::test::draw_side(cube::nxn::outside_view(cube, Face::F), pose, Drawing{});
-        const auto read = cube::vision::read_side(frame, size);
-        REQUIRE(read.has_value());
-        CHECK(read->size == size);
-        CHECK(read->lab.size() == static_cast<std::size_t>(size * size));
+        const auto found = cube::vision::read_side(frame, size);
+        const SideRead& read = cube::test::must_have(found);
+        CHECK(read.size == size);
+        CHECK(read.lab.size() == static_cast<std::size_t>(size * size));
 
         std::array<cube::vision::CapturedFace, 6> faces{};
         for (cube::vision::CapturedFace& face : faces) {
-            face.lab = read->lab;
+            face.lab = read.lab;
         }
         CHECK_FALSE(cube::vision::resolve_colors(faces).has_value());
         CHECK_FALSE(cube::vision::find_white_reference(faces).has_value());

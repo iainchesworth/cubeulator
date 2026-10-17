@@ -86,10 +86,12 @@ public:
             size_ = side_length_of(read.size());
             series_.resize(read.size() * 3);
         }
-        for (std::size_t cell = 0; cell < read.size(); ++cell) {
+        std::size_t cell = 0;
+        for (const cv::Vec3f& value : read) {
             for (int channel = 0; channel < 3; ++channel) {
-                series_.at((cell * 3) + static_cast<std::size_t>(channel)).add(read[cell](channel));
+                series_.at((cell * 3) + static_cast<std::size_t>(channel)).add(value(channel));
             }
+            ++cell;
         }
         ++count_;
     }
@@ -123,7 +125,7 @@ public:
         std::vector<cv::Vec3f> fused(series_.size() / 3);
         for (std::size_t cell = 0; cell < fused.size(); ++cell) {
             for (int channel = 0; channel < 3; ++channel) {
-                fused[cell](channel) =
+                fused.at(cell)(channel) =
                     series_.at((cell * 3) + static_cast<std::size_t>(channel)).median();
             }
         }

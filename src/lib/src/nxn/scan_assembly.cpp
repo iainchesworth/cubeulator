@@ -11,6 +11,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -75,7 +76,7 @@ struct Seams {
         return low;
     };
     for (const auto& corner : geometry.corners()) {
-        seams.corners.at(lowest({corner[0], corner[1], corner[2]})).push_back(corner);
+        seams.corners.at(lowest({corner.at(0), corner.at(1), corner.at(2)})).push_back(corner);
     }
     for (const auto& orbit : geometry.wing_orbits()) {
         for (const WingSlot& slot : orbit) {
@@ -86,7 +87,7 @@ struct Seams {
     if (geometry.size() % 2 == 1) {
         for (std::size_t location = 0; location < Geometry::kEdgeLocations; ++location) {
             const auto& edge = geometry.mid_edge(location);
-            seams.edges.at(lowest({edge[0], edge[1]})).push_back(edge);
+            seams.edges.at(lowest({edge.at(0), edge.at(1)})).push_back(edge);
         }
     }
     return seams;
@@ -183,73 +184,80 @@ struct PinnedSides {
 // share, and a side that looks the same turned is tried once. What that skips
 // is only what validate() would have refused or an earlier combination had
 // already made.
+// The four turns of each side, and of those the ones that differ: a side that looks the same
+// turned a quarter, a half or three quarters (a side of one colour looks the same four ways)
+// is tried once, the cube a repeat makes being the cube the first made.
+struct Turns {
+    std::array<std::array<std::vector<Color>, 4>, 6> sides;
+    std::array<std::array<std::size_t, 4>, 6> distinct_quarters{};
+    std::array<std::size_t, 6> distinct{};
+};
+
+[[nodiscard]] Turns turns_of(int size, const std::array<std::vector<Color>, 6>& base) {
+    Turns turns;
+    for (std::size_t face = 0; face < 6; ++face) {
+        auto& rotations = turns.sides.at(face);
+        rotations.at(0) = base.at(face);
+        for (std::size_t quarter = 1; quarter < 4; ++quarter) {
+            rotations.at(quarter) = rotated_clockwise(rotations.at(quarter - 1), size);
+        }
+        for (std::size_t quarter = 0; quarter < 4; ++quarter) {
+            const auto known =
+                std::span(turns.distinct_quarters.at(face)).first(turns.distinct.at(face));
+            const bool seen = std::ranges::any_of(known, [&](std::size_t before) {
+                return rotations.at(before) == rotations.at(quarter);
+            });
+            if (!seen) {
+                turns.distinct_quarters.at(face).at(turns.distinct.at(face)++) = quarter;
+            }
+        }
+    }
+    return turns;
+}
+
+// Whether the pieces whose last face (in the order the search turns them) is `face` are
+// possible: no edge or corner of them shows two stickers of one axis pair.
+[[nodiscard]] bool seams_hold(const Seams& seams, std::size_t face,
+                              const std::vector<Color>& candidate) {
+    const auto pair = [&candidate](std::uint16_t sticker) {
+        return axis_pair_of(candidate.at(sticker));
+    };
+    const bool edges_hold = std::ranges::all_of(seams.edges.at(face), [&](const auto& edge) {
+        return pair(edge.at(0)) != pair(edge.at(1));
+    });
+    return edges_hold && std::ranges::all_of(seams.corners.at(face), [&](const auto& corner) {
+               const int a = pair(corner.at(0));
+               const int b = pair(corner.at(1));
+               const int c = pair(corner.at(2));
+               return a != b && a != c && b != c;
+           });
+}
+
 template <typename Visit>
 void walk_cubes(int size, const PinnedSides& pinned, const Visit& visit) {
     if (!colour_counts_hold(size, pinned.base)) {
         return;
     }
     const auto area = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
-    std::array<std::array<std::vector<Color>, 4>, 6> rotations;
-    for (std::size_t face = 0; face < 6; ++face) {
-        rotations.at(face).at(0) = pinned.base.at(face);
-        for (std::size_t quarter = 1; quarter < 4; ++quarter) {
-            rotations.at(face).at(quarter) =
-                rotated_clockwise(rotations.at(face).at(quarter - 1), size);
-        }
-    }
-    std::array<std::array<std::size_t, 4>, 6> quarters{};
-    std::array<std::size_t, 6> distinct{};
-    for (std::size_t face = 0; face < 6; ++face) {
-        for (std::size_t quarter = 0; quarter < 4; ++quarter) {
-            const auto& turned = rotations.at(face);
-            bool seen = false;
-            for (std::size_t before = 0; before < distinct.at(face) && !seen; ++before) {
-                seen = turned.at(quarters.at(face).at(before)) == turned.at(quarter);
-            }
-            if (!seen) {
-                quarters.at(face).at(distinct.at(face)++) = quarter;
-            }
-        }
-    }
-
+    const Turns turns = turns_of(size, pinned.base);
     const Seams& seams = seams_of(size);
     std::vector<Color> candidate(6 * area, Color::White);
-    const auto seams_hold = [&](std::size_t face) {
-        const auto pair = [&candidate](std::uint16_t sticker) {
-            return axis_pair_of(candidate.at(sticker));
-        };
-        for (const auto& edge : seams.edges.at(face)) {
-            if (pair(edge[0]) == pair(edge[1])) {
-                return false;
-            }
-        }
-        for (const auto& corner : seams.corners.at(face)) {
-            const int a = pair(corner[0]);
-            const int b = pair(corner[1]);
-            const int c = pair(corner[2]);
-            if (a == b || a == c || b == c) {
-                return false;
-            }
-        }
-        return true;
-    };
 
     bool going = true;
     std::uint64_t nodes = 0;
     const solver::detail::SearchWorkScope work([&nodes] { return nodes; });
     const auto turn = [&](const auto& self, std::size_t face) -> void {
-        for (std::size_t at = 0; at < distinct.at(face) && going; ++at) {
-            const std::vector<Color>& side = rotations.at(face).at(quarters.at(face).at(at));
+        for (std::size_t at = 0; at < turns.distinct.at(face) && going; ++at) {
+            const std::vector<Color>& side =
+                turns.sides.at(face).at(turns.distinct_quarters.at(face).at(at));
             std::ranges::copy(side, candidate.begin() + static_cast<std::ptrdiff_t>(face * area));
             ++nodes;
-            if (!seams_hold(face)) {
+            if (!seams_hold(seams, face, candidate)) {
                 continue;
             }
             if (face > 0) {
                 self(self, face - 1);
-                continue;
-            }
-            if (validate(size, candidate).ok()) {
+            } else if (validate(size, candidate).ok()) {
                 going = visit(candidate);
             }
         }

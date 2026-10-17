@@ -15,9 +15,7 @@ constexpr std::array<bool, 9> kAllNine = {true, true, true, true, true, true, tr
 // The holds are of a 3x3: a read of any other size is not one of them.
 [[nodiscard]] std::array<cv::Vec3f, 9> nine_of(std::span<const cv::Vec3f> lab) {
     std::array<cv::Vec3f, 9> out{};
-    for (std::size_t i = 0; i < out.size() && i < lab.size(); ++i) {
-        out.at(i) = lab[i];
-    }
+    std::ranges::copy(lab.first(std::min(lab.size(), out.size())), out.begin());
     return out;
 }
 

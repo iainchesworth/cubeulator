@@ -32,16 +32,18 @@ namespace cube::vision {
 //
 //   0: 0 1 2 3 4 5 6 7 8     1: 2 5 8 1 4 7 0 3 6
 //   2: 8 7 6 5 4 3 2 1 0     3: 6 3 0 7 4 1 8 5 2
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a size, a turn and a cell, always in this
+// order
 [[nodiscard]] constexpr std::size_t rolled_cell(int size, int roll, std::size_t cell) noexcept {
     const auto n = static_cast<std::size_t>(size);
     const std::size_t row = cell / n;
     const std::size_t col = cell % n;
-    switch (roll & 3) {
-        case 1:
+    switch (static_cast<unsigned>(roll) % 4U) {
+        case 1U:
             return (col * n) + (n - 1 - row);
-        case 2:
+        case 2U:
             return ((n - 1 - row) * n) + (n - 1 - col);
-        case 3:
+        case 3U:
             return ((n - 1 - col) * n) + row;
         default:
             return cell;

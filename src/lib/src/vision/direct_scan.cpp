@@ -399,7 +399,7 @@ struct SnappedPoints {
         const std::size_t at =
             (static_cast<std::size_t>(cell.y) * n) + static_cast<std::size_t>(cell.x);
         duplicate = duplicate || taken.at(at);
-        taken[at] = true;
+        taken.at(at) = true;
     }
     if (duplicate) {
         return std::nullopt;
@@ -739,8 +739,9 @@ struct Upright {
         upright.found.resize(n * n);
         for (std::size_t i = 0; i < n * n; ++i) {
             const std::size_t cell = rolled_cell(size, roll, i);
-            upright.centres[i] = lattice.at(static_cast<int>(cell % n), static_cast<int>(cell / n));
-            upright.found[i] = lattice.found.at(cell);
+            upright.centres.at(i) =
+                lattice.at(static_cast<int>(cell % n), static_cast<int>(cell / n));
+            upright.found.at(i) = lattice.found.at(cell);
         }
         const float score = (upright.centres.at(n - 1) - upright.centres.at(0)).x +
                             (upright.centres.at(n * (n - 1)) - upright.centres.at(0)).y;
@@ -758,7 +759,7 @@ struct Upright {
                                             int roll) {
     std::vector<cv::Vec3f> out(read.size());
     for (std::size_t i = 0; i < read.size(); ++i) {
-        out[i] = read[rolled_cell(size, roll, i)];
+        out.at(i) = read.at(rolled_cell(size, roll, i));
     }
     return out;
 }
@@ -794,14 +795,14 @@ struct SideFit {
 // not, it may be glare on the centre or another side; the others say which.
 // An even size has no centre to go by, and then they alone say.
 struct FitInputs {
-    const std::vector<cv::Vec3f>& read;
-    const std::vector<cv::Vec3f>& side;
+    const std::vector<cv::Vec3f>* read = nullptr;
+    const std::vector<cv::Vec3f>* side = nullptr;
     int prior_roll = 0;
 };
 
 [[nodiscard]] SideFit fit_to_side(const FitInputs& inputs) {
-    const std::vector<cv::Vec3f>& read = inputs.read;
-    const std::vector<cv::Vec3f>& side = inputs.side;
+    const std::vector<cv::Vec3f>& read = *inputs.read;
+    const std::vector<cv::Vec3f>& side = *inputs.side;
     const int size = side_length_of(side.size());
     const bool has_centre = size % 2 == 1;
     const std::size_t centre = has_centre ? middle_cell(size) : side.size();
@@ -809,7 +810,8 @@ struct FitInputs {
         float cost = 0.0F;
         for (std::size_t i = 0; i < side.size(); ++i) {
             if (i != centre) {
-                cost += std::min(lab_gap(read[rolled_cell(size, roll, i)], side[i]), kRollCostCap);
+                cost += std::min(lab_gap(read.at(rolled_cell(size, roll, i)), side.at(i)),
+                                 kRollCostCap);
             }
         }
         return cost;
@@ -832,14 +834,14 @@ struct FitInputs {
     int differing = 0;
     for (std::size_t i = 0; i < side.size(); ++i) {
         if (i != centre &&
-            lab_gap(read[rolled_cell(size, fit.roll, i)], side[i]) > kSameColourLab) {
+            lab_gap(read.at(rolled_cell(size, fit.roll, i)), side.at(i)) > kSameColourLab) {
             ++differing;
         }
     }
     if (differing > most_stickers_a_hand_covers(size)) {
         fit.same = false;
-    } else if (has_centre &&
-               lab_gap(read[rolled_cell(size, fit.roll, centre)], side[centre]) <= kSameColourLab) {
+    } else if (has_centre && lab_gap(read.at(rolled_cell(size, fit.roll, centre)),
+                                     side.at(centre)) <= kSameColourLab) {
         fit.same = true;
     } else {
         fit.same = differing == 0;
@@ -873,7 +875,7 @@ template <typename Groups>
         for (int roll = 0; roll < 4; ++roll) {
             float total = 0.0F;
             for (std::size_t i = 0; i < read.size(); ++i) {
-                total += colour_distance(read[rolled_cell(size, roll, i)], group.fused.at(i));
+                total += colour_distance(read.at(rolled_cell(size, roll, i)), group.fused.at(i));
             }
             if (total / static_cast<float>(read.size()) <= kCornerFitDistance) {
                 return true;
@@ -1166,9 +1168,11 @@ struct Assembled {
 [[nodiscard]] Assembled assemble_three(const NamedSides& named,
                                        const std::array<CapturedFace, 6>& faces,
                                        const std::vector<CornerRead>& corners) {
-    Assembled out{.result = std::unexpected(CubeError::invalid_cube_state),
-                  .result_n = std::unexpected(CubeError::invalid_cube_state),
-                  .trace = {}};
+    Assembled out{
+        .result = std::unexpected(CubeError::invalid_cube_state),
+        .result_n = std::unexpected(CubeError::invalid_cube_state),
+        .trace = {},
+    };
     AssemblyTrace& trace = out.trace;
     trace.corner_reads = corners.size();
 
@@ -1278,9 +1282,11 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
 // assemble_with_closest_exchange) for a size the 3x3 assembly cannot read.
 [[nodiscard]] Assembled assemble_n(const NamedFaces& named,
                                    const std::array<CapturedFace, 6>& faces, int size) {
-    Assembled out{.result = std::unexpected(CubeError::invalid_cube_state),
-                  .result_n = std::unexpected(CubeError::invalid_cube_state),
-                  .trace = {}};
+    Assembled out{
+        .result = std::unexpected(CubeError::invalid_cube_state),
+        .result_n = std::unexpected(CubeError::invalid_cube_state),
+        .trace = {},
+    };
     AssemblyTrace& trace = out.trace;
     const std::optional<nxn::ScannedSides> sides = colours_of_names(named);
     if (!sides.has_value()) {
@@ -1355,9 +1361,11 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
     }
     Assembled out = assemble_three(as_three(named), faces, corners);
     if (out.result.has_value()) {
-        out.result_n = ScannedCubeN{.cube = nxn::NCube::from_cube3(out.result->cube),
-                                    .colours = out.result->colours,
-                                    .cast = out.result->cast};
+        out.result_n = ScannedCubeN{
+            .cube = nxn::NCube::from_cube3(out.result->cube),
+            .colours = out.result->colours,
+            .cast = out.result->cast,
+        };
     } else {
         out.result_n = std::unexpected(out.result.error());
     }
@@ -1581,7 +1589,7 @@ bool SideScan::count_read(const std::vector<cv::Vec3f>& lab, bool square_on) {
     std::size_t claiming = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
         const SideFit fit = fit_to_side(
-            {.read = lab, .side = groups_.at(i).fused, .prior_roll = groups_.at(i).roll});
+            {.read = &lab, .side = &groups_.at(i).fused, .prior_roll = groups_.at(i).roll});
         if (!fit.same) {
             continue;
         }
@@ -1704,8 +1712,9 @@ std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
         for (std::size_t other = keep + 1; other < groups_.size(); ++other) {
             // Two groups are each in the turn their side was first seen in, so
             // no turn is more likely than another.
-            const SideFit fit = fit_to_side(
-                {.read = groups_.at(other).fused, .side = groups_.at(keep).fused, .prior_roll = 0});
+            const SideFit fit = fit_to_side({.read = &groups_.at(other).fused,
+                                             .side = &groups_.at(keep).fused,
+                                             .prior_roll = 0});
             if (fit.same) {
                 return AlikePair{.keep = keep, .other = other, .roll = fit.roll};
             }
