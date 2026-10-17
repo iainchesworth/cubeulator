@@ -13,6 +13,8 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <optional>
+#include <string>
 #include <utility>
 
 namespace cube::app {
@@ -32,9 +34,6 @@ constexpr std::array<Side, 6> kSides = {
     Side{.face = Face::F, .letter = "F"}, Side{.face = Face::B, .letter = "B"},
 };
 
-constexpr int kColourCount = 6;
-constexpr int kUnpainted = -1;
-
 [[nodiscard]] std::optional<Face> face_of(const QString& letter) {
     for (const Side& side : kSides) {
         if (letter == QLatin1String(side.letter)) {
@@ -51,25 +50,6 @@ constexpr int kUnpainted = -1;
         }
     }
     return "U";
-}
-
-// Where the sticker at (row, col) as seen from outside is in the library's
-// numbering of its side, and the other way round: the same picture on U, F and L,
-// mirrored left to right on R and B and top to bottom on D, which undoes itself
-// (cube::nxn::outside_view).
-[[nodiscard]] std::pair<int, int> mirrored(Face face, int size, int row, int col) {
-    switch (face) {
-        case Face::R:
-        case Face::B:
-            return {row, size - 1 - col};
-        case Face::D:
-            return {size - 1 - row, col};
-        case Face::U:
-        case Face::F:
-        case Face::L:
-            break;
-    }
-    return {row, col};
 }
 
 [[nodiscard]] const char* fault_code(cube::nxn::Fault fault) {
@@ -95,6 +75,21 @@ constexpr int kUnpainted = -1;
             break;
     }
     return "unknownPiece";
+}
+
+[[nodiscard]] QString name_of(std::int8_t colour) {
+    return colour == kUnpainted ? QString() : colour_name(static_cast<cube::solver::Color>(colour));
+}
+
+[[nodiscard]] QVariantList counts(const std::vector<ColourCount>& entries) {
+    QVariantList out;
+    for (const ColourCount& entry : entries) {
+        QVariantMap map;
+        map.insert(QStringLiteral("colour"), name_of(entry.colour));
+        map.insert(QStringLiteral("count"), entry.count);
+        out.append(map);
+    }
+    return out;
 }
 
 // The cube turned as a whole until each side's colour is the one the solver's
@@ -126,174 +121,218 @@ constexpr int kUnpainted = -1;
 
 }  // namespace
 
-ColourEntry::ColourEntry(SolveController& solve, QObject* parent) : QObject(parent), solve_(solve) {
-    begin(3);
-}
+ColourEntry::ColourEntry(SolveController& solve, QObject* parent)
+    : QObject(parent), solve_(solve), edit_(3) {}
 
 void ColourEntry::begin(int size) {
-    size_ = std::clamp(size, cube::nxn::kMinSize, cube::nxn::kMaxSize);
-    const auto n = static_cast<std::size_t>(size_);
-    colours_.assign(6 * n * n, static_cast<std::int8_t>(kUnpainted));
+    edit_.begin(size);
+    emit changed();
+}
+
+void ColourEntry::loadReading(Reading reading) {
+    edit_.load(std::move(reading));
     emit changed();
 }
 
 void ColourEntry::paint(const QString& side, int index, int colour) {
     const std::optional<Face> face = face_of(side);
-    if (!face.has_value() || index < 0 || index >= size_ * size_ || colour < kUnpainted ||
-        colour >= kColourCount) {
+    if (!face.has_value()) {
         return;
     }
-    const auto [row, col] = mirrored(*face, size_, index / size_, index % size_);
-    const auto n = static_cast<std::size_t>(size_);
-    const std::size_t facelet = (static_cast<std::size_t>(*face) * n * n) +
-                                (static_cast<std::size_t>(row) * n) + static_cast<std::size_t>(col);
-    if (colours_.at(facelet) == colour) {
-        return;
+    if (edit_.paint(*face, index, static_cast<std::int8_t>(colour))) {
+        emit changed();
     }
-    colours_.at(facelet) = static_cast<std::int8_t>(colour);
-    emit changed();
 }
 
 void ColourEntry::paintSide(const QString& side, int colour) {
     const std::optional<Face> face = face_of(side);
-    if (!face.has_value() || colour < kUnpainted || colour >= kColourCount) {
+    if (!face.has_value()) {
         return;
     }
-    const auto n = static_cast<std::size_t>(size_);
-    const auto first =
-        colours_.begin() + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(*face) * n * n);
-    std::fill(first, first + static_cast<std::ptrdiff_t>(n * n), static_cast<std::int8_t>(colour));
-    emit changed();
+    if (edit_.fill(*face, static_cast<std::int8_t>(colour))) {
+        emit changed();
+    }
 }
 
 void ColourEntry::clearAll() {
-    std::ranges::fill(colours_, static_cast<std::int8_t>(kUnpainted));
-    emit changed();
+    if (edit_.clear_all()) {
+        emit changed();
+    }
 }
 
 int ColourEntry::paintedOn(const QString& side) const {
     const std::optional<Face> face = face_of(side);
-    if (!face.has_value()) {
-        return 0;
-    }
-    const auto n = static_cast<std::size_t>(size_);
-    const auto first =
-        colours_.begin() + static_cast<std::ptrdiff_t>(static_cast<std::size_t>(*face) * n * n);
-    return static_cast<int>(std::count_if(first, first + static_cast<std::ptrdiff_t>(n * n),
-                                          [](std::int8_t colour) { return colour != kUnpainted; }));
+    return face.has_value() ? edit_.painted_on(*face) : 0;
 }
 
-bool ColourEntry::touched() const {
-    return std::ranges::any_of(colours_, [](std::int8_t colour) { return colour != kUnpainted; });
+QVariantMap ColourEntry::describeSide(const QString& side, const QString& text) {
+    QVariantMap out;
+    const std::optional<Face> face = face_of(side);
+    if (!face.has_value()) {
+        out.insert(QStringLiteral("ok"), false);
+        out.insert(QStringLiteral("error"), QStringLiteral("noSuchSide"));
+        out.insert(QStringLiteral("at"), 0);
+        return out;
+    }
+    const std::string latin = text.toStdString();
+    const SideText parsed = parse_side(latin, edit_.size());
+    if (!parsed.error.empty()) {
+        out.insert(QStringLiteral("ok"), false);
+        out.insert(
+            QStringLiteral("error"),
+            QString::fromLatin1(parsed.error.data(), static_cast<qsizetype>(parsed.error.size())));
+        out.insert(QStringLiteral("at"), parsed.at);
+        return out;
+    }
+    if (edit_.set_side(*face, parsed.colours)) {
+        emit changed();
+    }
+    out.insert(QStringLiteral("ok"), true);
+    return out;
+}
+
+QString ColourEntry::sideText(const QString& side) const {
+    const std::optional<Face> face = face_of(side);
+    if (!face.has_value()) {
+        return {};
+    }
+    const int n = edit_.size();
+    QString out;
+    for (int row = 0; row < n; ++row) {
+        if (row > 0) {
+            out.append(QLatin1Char('/'));
+        }
+        for (int col = 0; col < n; ++col) {
+            out.append(QLatin1Char(colour_letter(edit_.colour(*face, (row * n) + col))));
+        }
+    }
+    return out;
+}
+
+void ColourEntry::rotateSide(const QString& side, int quarterTurns) {
+    const std::optional<Face> face = face_of(side);
+    if (face.has_value() && edit_.rotate_side(*face, quarterTurns)) {
+        emit changed();
+    }
+}
+
+void ColourEntry::beginStroke() {
+    edit_.begin_stroke();
+}
+
+void ColourEntry::endStroke() {
+    edit_.end_stroke();
+}
+
+void ColourEntry::undo() {
+    if (edit_.undo()) {
+        emit changed();
+    }
+}
+
+void ColourEntry::redo() {
+    if (edit_.redo()) {
+        emit changed();
+    }
+}
+
+void ColourEntry::revert() {
+    if (edit_.revert()) {
+        emit changed();
+    }
+}
+
+int ColourEntry::doubtCount() const {
+    int total = 0;
+    for (const Side& side : kSides) {
+        total += edit_.doubtful_on(side.face);
+    }
+    return total;
 }
 
 QVariantMap ColourEntry::sides() const {
-    const auto n = static_cast<std::size_t>(size_);
+    const int n = edit_.size();
     QVariantMap out;
     for (const Side& side : kSides) {
         QVariantList stickers;
-        stickers.reserve(static_cast<qsizetype>(n * n));
-        for (int row = 0; row < size_; ++row) {
-            for (int col = 0; col < size_; ++col) {
-                const auto [r, c] = mirrored(side.face, size_, row, col);
-                const std::int8_t colour =
-                    colours_.at((static_cast<std::size_t>(side.face) * n * n) +
-                                (static_cast<std::size_t>(r) * n) + static_cast<std::size_t>(c));
-                stickers.append(colour == kUnpainted
-                                    ? QString()
-                                    : colour_name(static_cast<cube::solver::Color>(colour)));
-            }
+        stickers.reserve(static_cast<qsizetype>(n) * n);
+        for (int i = 0; i < n * n; ++i) {
+            stickers.append(name_of(edit_.colour(side.face, i)));
         }
         out.insert(QString::fromLatin1(side.letter), stickers);
     }
     return out;
 }
 
-QVariantMap ColourEntry::status() const {
-    const auto n = static_cast<std::size_t>(size_);
-    const int per_colour = size_ * size_;
-    std::array<int, kColourCount> counts{};
-    int to_go = 0;
-    for (const std::int8_t colour : colours_) {
-        if (colour == kUnpainted) {
-            ++to_go;
-        } else {
-            ++counts.at(static_cast<std::size_t>(colour));
-        }
-    }
-
+QVariantMap ColourEntry::doubts() const {
+    const int n = edit_.size();
     QVariantMap out;
-    out.insert(QStringLiteral("toGo"), to_go);
-    if (static_cast<std::size_t>(to_go) == 6 * n * n) {
-        out.insert(QStringLiteral("state"), QStringLiteral("empty"));
-        return out;
-    }
-    if (to_go > 0) {
-        out.insert(QStringLiteral("state"), QStringLiteral("partial"));
-        return out;
-    }
-
-    QVariantList over;
-    QVariantList under;
-    for (int colour = 0; colour < kColourCount; ++colour) {
-        const int count = counts.at(static_cast<std::size_t>(colour));
-        if (count == per_colour) {
-            continue;
+    for (const Side& side : kSides) {
+        QVariantList flags;
+        flags.reserve(static_cast<qsizetype>(n) * n);
+        for (int i = 0; i < n * n; ++i) {
+            flags.append(edit_.doubtful(side.face, i));
         }
-        QVariantMap entry;
-        entry.insert(QStringLiteral("colour"),
-                     colour_name(static_cast<cube::solver::Color>(colour)));
-        entry.insert(QStringLiteral("count"), count);
-        (count > per_colour ? over : under).append(entry);
+        out.insert(QString::fromLatin1(side.letter), flags);
     }
-    if (!over.isEmpty() || !under.isEmpty()) {
-        out.insert(QStringLiteral("state"), QStringLiteral("miscount"));
-        out.insert(QStringLiteral("over"), over);
-        out.insert(QStringLiteral("under"), under);
-        return out;
-    }
+    return out;
+}
 
-    std::vector<cube::solver::Color> stickers;
-    stickers.reserve(colours_.size());
-    for (const std::int8_t colour : colours_) {
-        stickers.push_back(static_cast<cube::solver::Color>(colour));
+QVariantMap ColourEntry::centres() const {
+    QVariantMap out;
+    for (const Side& side : kSides) {
+        out.insert(QString::fromLatin1(side.letter), name_of(edit_.centre(side.face)));
     }
-    const cube::nxn::Verdict verdict = cube::nxn::validate(size_, stickers);
-    if (verdict.ok()) {
-        out.insert(QStringLiteral("state"), QStringLiteral("valid"));
-        return out;
-    }
-    out.insert(QStringLiteral("state"), QStringLiteral("impossible"));
-    out.insert(QStringLiteral("fault"), QString::fromLatin1(fault_code(verdict.fault)));
-    // A sticker of the piece at fault, as seen from outside, when it is about one.
-    const bool about_a_piece = verdict.fault == cube::nxn::Fault::TwistedCorner ||
-                               verdict.fault == cube::nxn::Fault::FlippedEdge ||
-                               verdict.fault == cube::nxn::Fault::UnknownPiece ||
-                               verdict.fault == cube::nxn::Fault::RepeatedPiece;
-    if (about_a_piece) {
-        const auto position = cube::nxn::Geometry::of(size_).position(verdict.facelet);
-        const auto [row, col] = mirrored(position.face, size_, position.row, position.col);
-        QVariantMap suspect;
-        suspect.insert(QStringLiteral("side"), QString::fromLatin1(letter_of(position.face)));
-        suspect.insert(QStringLiteral("index"), (row * size_) + col);
-        out.insert(QStringLiteral("suspect"), suspect);
+    return out;
+}
+
+QVariantMap ColourEntry::status() const {
+    const EditStatus now = edit_.status();
+    QVariantMap out;
+    out.insert(QStringLiteral("toGo"), now.to_go);
+    switch (now.state) {
+        case EditState::Empty:
+            out.insert(QStringLiteral("state"), QStringLiteral("empty"));
+            break;
+        case EditState::Partial:
+            out.insert(QStringLiteral("state"), QStringLiteral("partial"));
+            break;
+        case EditState::Miscount:
+            out.insert(QStringLiteral("state"), QStringLiteral("miscount"));
+            out.insert(QStringLiteral("over"), counts(now.over));
+            out.insert(QStringLiteral("under"), counts(now.under));
+            break;
+        case EditState::Impossible:
+            out.insert(QStringLiteral("state"), QStringLiteral("impossible"));
+            out.insert(QStringLiteral("fault"), QString::fromLatin1(fault_code(now.fault)));
+            if (now.suspect.has_value()) {
+                QVariantMap suspect;
+                suspect.insert(QStringLiteral("side"),
+                               QString::fromLatin1(letter_of(now.suspect->face)));
+                suspect.insert(QStringLiteral("index"), now.suspect->index);
+                out.insert(QStringLiteral("suspect"), suspect);
+            }
+            break;
+        case EditState::Valid:
+            out.insert(QStringLiteral("state"), QStringLiteral("valid"));
+            break;
     }
     return out;
 }
 
 QVariantMap ColourEntry::solve() {
     QVariantMap out;
-    if (status().value(QStringLiteral("state")).toString() != QLatin1String("valid")) {
+    if (edit_.status().state != EditState::Valid) {
         out.insert(QStringLiteral("ok"), false);
         out.insert(QStringLiteral("error"), QStringLiteral("notACube"));
         return out;
     }
     std::vector<cube::solver::Color> stickers;
-    stickers.reserve(colours_.size());
-    for (const std::int8_t colour : colours_) {
+    stickers.reserve(edit_.stickers().size());
+    for (const std::int8_t colour : edit_.stickers()) {
         stickers.push_back(static_cast<cube::solver::Color>(colour));
     }
-    const auto cube = cube::nxn::NCube::from_facelets(size_, stickers);
+    const auto cube = cube::nxn::NCube::from_facelets(edit_.size(), stickers);
     if (!cube.has_value()) {
         out.insert(QStringLiteral("ok"), false);
         out.insert(QStringLiteral("error"), QStringLiteral("notACube"));

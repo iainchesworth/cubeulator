@@ -77,6 +77,8 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/camera_controller.cpp
         qt/controllers/colour_entry.hpp
         qt/controllers/colour_entry.cpp
+        qt/controllers/cube_edit.hpp
+        qt/controllers/cube_edit.cpp
         qt/controllers/diagnostic_records.hpp
         qt/controllers/diagnostic_records.cpp
         qt/controllers/diagnostics.hpp
