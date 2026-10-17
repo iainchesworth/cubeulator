@@ -308,9 +308,9 @@ top. Updated as slices land.
 | Layout checks hold the new screens in the pseudo-locale and the RTL drafts | P1 | open (#180) |
 | User guide page and pictures | P1 | not started |
 | Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | merged (#190) |
-| The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (#191); **drawn cubes only** |
-| The scan screen and controller for any odd size: `DirectScan.size`, N^2 dots and chips, the review at its size; recorded at its size; `CUBE_SCAN_SIZE`; **not offered on the entry screen** | P2 | open (#192) |
-| Even sizes: colours named from the corners, sides put on the cube by trying (`resolve_colors`, `assemble_scanned_sides`), `DirectScan` takes 2 to 9 | P3 | open (feature/nxn-scan-even-sizes); **drawn cubes only** |
+| The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | merged (#191); **drawn cubes only** |
+| The scan screen and controller for any odd size: `DirectScan.size`, N^2 dots and chips, the review at its size; recorded at its size; `CUBE_SCAN_SIZE`; **not offered on the entry screen** | P2 | merged (#192) |
+| Even sizes: colours named from the corners, sides put on the cube by trying (`resolve_colors`, `assemble_scanned_sides`), `DirectScan` takes 2 to 9 | P3 | merged (#193); **drawn cubes only** |
 | Real recordings of a 5x5 (`CUBE_SCAN_SIZE=5 CUBE_SCAN_RECORD_DIR=...`) and a 4x4, then offering the camera for 5 (and 4) on the entry screen (with its words) | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
 
 **What P1 found.** Wide moves are rare: grouping adjacent layers turned together
