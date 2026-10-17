@@ -129,13 +129,13 @@ class DirectScan : public QObject {
 
     // The size of the cube being scanned: each side is size x size stickers, so
     // there are size * size dots and cells to a chip. 3 unless it has been set. It
-    // is chosen, never read from the camera. Only an odd size from 3 to 9 is taken
-    // (an even size has no middle sticker, and its sides cannot be named yet); setting
-    // it starts the scan over.
+    // is chosen, never read from the camera. A size from 2 to 9 is taken, and setting
+    // it starts the scan over. A scan of a 2x2 may end ambiguous, which for a size
+    // other than 3 has no corner view to settle it: the sides are to be looked over.
     Q_PROPERTY(int size READ size WRITE setSize NOTIFY sizeChanged)
     // The size a scan is of unless the screen says another: 3, or the one CUBE_SCAN_SIZE
-    // asks for, which is how a developer records and scans a cube that is not a 3x3
-    // while the entry screen offers the camera only for a 3x3.
+    // asks for (2 to 9), which is how a developer records and scans a cube that is not a
+    // 3x3 while the entry screen offers the camera only for a 3x3.
     Q_PROPERTY(int defaultSize READ defaultSize CONSTANT)
 
 public:

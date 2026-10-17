@@ -29,7 +29,11 @@ using cube::model::FacetColor;
 // in the order of the faces.
 //
 // `middle` is each side's middle sticker, which seeds the cluster of its side and
-// is pinned to it (an odd size has one; see resolve_colors_explained).
+// is pinned to it (an odd size has one; see resolve_colors_explained). An even size
+// has none (kNoMiddle): its clusters are seeded from the corners instead, and nothing
+// is pinned.
+inline constexpr std::size_t kNoMiddle = std::numeric_limits<std::size_t>::max();
+
 struct Layout {
     std::size_t area = 0;
     std::size_t middle = 0;
@@ -243,7 +247,7 @@ void descend_by_swaps(const DistanceTable& distances, const Layout& layout, Assi
     LoadArray load{};
     const DistanceTable distances = distances_to(samples, means);
 
-    for (std::size_t face = 0; face < face_count; ++face) {
+    for (std::size_t face = 0; face < face_count && layout.middle != kNoMiddle; ++face) {
         cluster.at((face * layout.area) + layout.middle) = static_cast<int>(face);
         ++load.at(face);
     }
@@ -739,6 +743,65 @@ struct Refinement {
     return refinement;
 }
 
+// The six colours of a cube of an even size, found from its corners, since it has no middle
+// stickers to seed them: a side's four corner cells are the same four however it is turned,
+// so the 24 of them (four of each colour, a corner cubie having three stickers of three
+// colours) are clustered into six groups of four. The starting means are the
+// farthest-first picks from each of the 24 in turn; each start is refined as the
+// clusters are (exactly four to a cluster), and the one that holds its samples closest wins.
+// Nothing needs to be known of which colour is which: the groups are named afterwards.
+[[nodiscard]] std::optional<MeanArray> corner_seeds(
+    const std::array<CapturedFace, face_count>& faces, std::size_t cells) {
+    const auto side = static_cast<std::size_t>(side_length_of(cells));
+    const std::array<std::size_t, 4> corner_cells = {0, side - 1, cells - side, cells - 1};
+    SampleArray corners;
+    for (const CapturedFace& face : faces) {
+        for (const std::size_t cell : corner_cells) {
+            corners.push_back(face.lab.at(cell));
+        }
+    }
+    const Layout layout{.area = 4, .middle = kNoMiddle};
+
+    std::optional<MeanArray> best;
+    float best_cost = std::numeric_limits<float>::max();
+    for (std::size_t start = 0; start < corners.size(); ++start) {
+        MeanArray means{};
+        std::array<bool, 24> chosen{};
+        means.at(0) = corners.at(start);
+        chosen.at(start) = true;
+        for (std::size_t next = 1; next < face_count; ++next) {
+            float farthest = -1.0F;
+            std::size_t pick = 0;
+            for (std::size_t i = 0; i < corners.size(); ++i) {
+                if (chosen.at(i)) {
+                    continue;
+                }
+                float nearest = std::numeric_limits<float>::max();
+                for (std::size_t c = 0; c < next; ++c) {
+                    nearest = std::min(nearest, lab_distance(corners.at(i), means.at(c)));
+                }
+                if (nearest > farthest) {
+                    farthest = nearest;
+                    pick = i;
+                }
+            }
+            chosen.at(pick) = true;
+            means.at(next) = corners.at(pick);
+        }
+        const Refinement refinement = refine_clusters(corners, means, layout);
+        float cost = 0.0F;
+        for (std::size_t i = 0; i < corners.size(); ++i) {
+            cost += assignment_distance(
+                corners.at(i), means.at(static_cast<std::size_t>(refinement.assignment.at(i))));
+        }
+        if (cost < best_cost) {
+            best_cost = cost;
+            best = means;
+        }
+    }
+    return best;
+}
+
 // Naming is a one-to-one matching, not six independent nearest-lookups: under
 // a global cast the nearest reference to a shifted cluster can be a
 // *different* colour (red lifted ~25 L sits nearer the orange reference than
@@ -928,19 +991,19 @@ Result<std::array<std::vector<Facelet>, 6>> resolve_colors(const std::array<Capt
 Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 6>& faces,
                                                  std::optional<std::size_t> white_side) {
     CUBE_ZONE_SCOPED_N("vision.resolve_colors");
-    // Six sides of one odd size. An even size has no middle sticker to seed a
-    // side's cluster from, which is a problem of its own (docs/nxn-app-plan.md,
-    // P3).
+    // Six sides of one size. An odd size's middle stickers seed the clusters; an even
+    // size has none, and its clusters are seeded from its corners (corner_seeds).
     const int size = side_length_of(faces.at(0).lab.size());
-    if (size < 3 || size % 2 == 0 ||
-        std::ranges::any_of(
-            faces,
-            [&faces](const CapturedFace& face) {
-                return face.lab.size() != faces.at(0).lab.size();
-            })) {
+    if (size < 2 || std::ranges::any_of(
+                        faces,
+                        [&faces](const CapturedFace& face) {
+                            return face.lab.size() != faces.at(0).lab.size();
+                        })) {
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
-    const Layout layout{.area = faces.at(0).lab.size(), .middle = middle_cell(size)};
+    const bool even = size % 2 == 0;
+    const Layout layout{.area = faces.at(0).lab.size(),
+                        .middle = even ? kNoMiddle : middle_cell(size)};
 
     SampleArray samples(layout.samples());
     for (std::size_t face = 0; face < face_count; ++face) {
@@ -953,8 +1016,16 @@ Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 
     }
 
     MeanArray means{};
-    for (std::size_t face = 0; face < face_count; ++face) {
-        means.at(face) = faces.at(face).lab.at(layout.middle);
+    if (even) {
+        const std::optional<MeanArray> seeds = corner_seeds(faces, layout.area);
+        if (!seeds.has_value()) {
+            return std::unexpected(CubeError::no_valid_cube_detected);
+        }
+        means = *seeds;
+    } else {
+        for (std::size_t face = 0; face < face_count; ++face) {
+            means.at(face) = faces.at(face).lab.at(layout.middle);
+        }
     }
     if (!seeds_are_distinct(means)) {
         return std::unexpected(CubeError::no_valid_cube_detected);

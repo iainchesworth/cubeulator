@@ -267,8 +267,10 @@ for, moves it to 25% and 30% where the camera gives 1280). What it cannot say: *
 real recordings - is not done**, so nothing is known of a real 5x5's gaps, glare, plastic or
 hands; the oracle cannot see two centre stickers swapped, so a bigger cube's scan is as right as
 its naming (the review screen is the check); and a small sticker makes the steadiness gate
-a smaller shake in pixels (at +-4 px a 7x7 counts one frame in nine). An even size is read
-and not yet named.
+a smaller shake in pixels (at +-4 px a 7x7 counts one frame in nine). **Even sizes (P3) are done
+offline as well**: named from their corners and put together by trying where each side goes; a
+4x4 and a 6x6 read and assemble as the odd sizes do, and a 2x2's six flat sides make more than
+one cube one time in five, which only the review can settle.
 
 ## Phases
 
@@ -308,7 +310,8 @@ top. Updated as slices land.
 | Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | merged (#190) |
 | The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (#191); **drawn cubes only** |
 | The scan screen and controller for any odd size: `DirectScan.size`, N^2 dots and chips, the review at its size; recorded at its size; `CUBE_SCAN_SIZE`; **not offered on the entry screen** | P2 | open (#192) |
-| Real recordings of a 5x5 (`CUBE_SCAN_SIZE=5 CUBE_SCAN_RECORD_DIR=...`) and a 4x4, then offering the camera for 5 on the entry screen (with its words), then P3 | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
+| Even sizes: colours named from the corners, sides put on the cube by trying (`resolve_colors`, `assemble_scanned_sides`), `DirectScan` takes 2 to 9 | P3 | open (feature/nxn-scan-even-sizes); **drawn cubes only** |
+| Real recordings of a 5x5 (`CUBE_SCAN_SIZE=5 CUBE_SCAN_RECORD_DIR=...`) and a 4x4, then offering the camera for 5 (and 4) on the entry screen (with its words) | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
 
 **What P1 found.** Wide moves are rare: grouping adjacent layers turned together
 saves under 1% of the moves (2,634 to 2,618 at 4x4, 8,297 to 8,264 at 7x7), so a

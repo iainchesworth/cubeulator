@@ -197,11 +197,31 @@ TEST_CASE("sides that are not a cube make none", "[nxn][scan]") {
     }
 }
 
-TEST_CASE("an even size is not assembled, for it has no centres to pin a side by", "[nxn][scan]") {
+TEST_CASE("six sides of an even size make the cube they came from, with no centre to pin them by",
+          "[nxn][scan]") {
     std::mt19937 rng = cube::test::deterministic_rng(5);
-    const NCube cube = cube::nxn::random_scramble({.size = 4, .seed = 3, .moves = 40});
-    CHECK(cube::nxn::assemble_all_scanned_sides(4, shown(cube, rng)).empty());
-    CHECK_FALSE(cube::nxn::assemble_scanned_sides(4, shown(cube, rng)).has_value());
+    for (const int size : {2, 4, 6}) {
+        CAPTURE(size);
+        const int cubes = size == 6 ? 25 : 60;
+        std::size_t most = 0;
+        int ambiguous = 0;
+        for (int i = 0; i < cubes; ++i) {
+            const NCube cube = cube::nxn::random_scramble(
+                {.size = size, .seed = static_cast<unsigned>(300 + i), .moves = 20 * size});
+            const ScannedSides sides = shown(cube, rng);
+            const std::vector<NCube> made =
+                cube::nxn::assemble_all_scanned_sides(size, sides, 4096);
+            REQUIRE_FALSE(made.empty());
+            REQUIRE(holds_cube(made, cube));
+            for (const NCube& each : made) {
+                REQUIRE(cube::nxn::validate(each).ok());
+            }
+            most = std::max(most, made.size());
+            ambiguous += made.size() > 1 ? 1 : 0;
+        }
+        WARN("size " << size << ": " << ambiguous << " of " << cubes
+                     << " scrambles make more than one cube from six flat sides, up to " << most);
+    }
 }
 
 TEST_CASE("the search for a cube is bounded", "[nxn][scan]") {
