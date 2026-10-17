@@ -259,7 +259,8 @@ TEST_CASE("the reader finds the lattice of a 5x5 and a 7x7, and every sticker's 
                     const float row = static_cast<float>(i / static_cast<std::size_t>(size)) -
                                       (0.5F * static_cast<float>(size - 1));
                     const cv::Point2f want = cube::test::place(pose, column, row);
-                    CHECK(cv::norm(read->centres.at(i) - want) < 0.2F * pose.pitch);
+                    CHECK(cv::norm(read->centres.at(i) - want) <
+                          static_cast<double>(0.2F * pose.pitch));
                 }
             }
         }

@@ -1892,6 +1892,7 @@ std::vector<SideScan::Side> SideScan::sides() const {
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
         Side side{
+            .lab = {},
             .reads = group.reads.size(),
             .in_view = std::ranges::find(in_view_, i) != in_view_.end(),
         };

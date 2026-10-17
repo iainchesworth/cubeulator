@@ -293,11 +293,12 @@ Tally run_cube(const Scene& scene, unsigned seed) {
             cv::Mat image = cube::test::draw_side(stickers, shaken, drawing);
             if (options.noise > 0.0F) {
                 cv::Mat noise(image.size(), CV_8UC3);
-                cv::randn(noise, cv::Scalar::all(0), cv::Scalar::all(options.noise));
+                cv::randn(noise, cv::Scalar::all(0),
+                          cv::Scalar::all(static_cast<double>(options.noise)));
                 cv::add(image, noise, image);
             }
             if (options.blur > 0.0F) {
-                cv::GaussianBlur(image, image, cv::Size(0, 0), options.blur);
+                cv::GaussianBlur(image, image, cv::Size(0, 0), static_cast<double>(options.blur));
             }
             const auto read = cube::vision::read_side(image, scene.size);
             ++tally.frames;
