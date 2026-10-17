@@ -87,7 +87,8 @@ add_executable(cube_unit_tests
     unit/nxn/notation_test.cpp
     unit/nxn/stepped_plan_test.cpp
     unit/nxn/outside_view_test.cpp
-    unit/nxn/validate_test.cpp)
+    unit/nxn/validate_test.cpp
+    unit/nxn/scan_assembly_test.cpp)
 
 target_link_libraries(cube_unit_tests
     PRIVATE
