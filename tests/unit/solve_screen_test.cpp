@@ -637,8 +637,8 @@ TEST_CASE("a cube the camera read can be looked over from the solve screen, and 
     state->setProperty("solveCamera", true);
     for (const Face face : cube::solver::kAllFaces) {
         for (int i = 0; i < static_cast<int>(cube::vision::SideScan::kMinReads) + 4; ++i) {
-            camera.processFrame(
-                cube::test::draw_side(cube::test::outside_view(scrambled, face), cube::test::Pose{}));
+            camera.processFrame(cube::test::draw_side(cube::test::outside_view(scrambled, face),
+                                                      cube::test::Pose{}));
         }
         camera.processFrame(cube::test::room({640, 360}));
     }
@@ -683,8 +683,8 @@ TEST_CASE("a cube the camera read can be looked over from the solve screen, and 
     // Solving what was looked over is a new solve, from the start; and it is a cube
     // typed in as far as the screen is concerned, so the way in is not offered again.
     QVariant reviewed;
-    REQUIRE(QMetaObject::invokeMethod(state, "reviewScanFromSolve",
-                                      Q_RETURN_ARG(QVariant, reviewed)));
+    REQUIRE(
+        QMetaObject::invokeMethod(state, "reviewScanFromSolve", Q_RETURN_ARG(QVariant, reviewed)));
     REQUIRE(reviewed.toBool());
     QVariant solved;
     REQUIRE(QMetaObject::invokeMethod(state, "solveColours", Q_RETURN_ARG(QVariant, solved)));
