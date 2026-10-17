@@ -10,6 +10,16 @@
 
 namespace cube::app {
 
+// A stage of a kept solution: which (a cube::nxn::StageId), and how many of the
+// kept turns it is. A stage with no turns is kept too, so that the stages a
+// solution has are the stages it has when it is read back.
+struct KeptStage {
+    int stage = 0;
+    int count = 0;
+
+    friend bool operator==(const KeptStage&, const KeptStage&) = default;
+};
+
 // One solve, as it is kept on the device (docs/design/screens/history.md,
 // "What is kept"): when it started, the cube as scanned, the turn reached, the
 // number of turns and the time taken.
@@ -47,6 +57,11 @@ struct HistoryEntry {
     // kept (a cube bigger than a 3x3). Empty when it is not: the solution is
     // worked out again from `from`.
     std::vector<cube::nxn::LayerMove> moves;
+    // The stages of `moves`, in order, which add up to all of them: what the
+    // solve screen says of where the person is in the solve. Empty when `moves`
+    // is, and also for a kept solution that does not say (then the solution is
+    // worked out again, as for a 3x3).
+    std::vector<KeptStage> stages;
 };
 
 // The kept solves, in one file in the app's own data folder.

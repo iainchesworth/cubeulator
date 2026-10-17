@@ -14,17 +14,25 @@ import Cubeulator
 // What it reviews is `source`: SolveController, for the solve just finished.
 // Anything with the same shape can be put there - the solve history's entry
 // for a solve from another day - which is what AppState.openSolution() is for.
-// The shape: `moves` (the list of { face, turns, notation }), `stageRanges`
-// (the list of { stageIndex, startIndex, endIndex }), `method` (a
+// The shape: `moves` (the list of { face, turns, notation, first, last }:
+// the layers a move turns, counted from its side, 0 for the outer one),
+// `stageRanges` (the list of { stageIndex, startIndex, endIndex }), `method` (a
 // SolveController.Method), the invokable `stickersAt(turn)` (the cube after
 // that many turns, as SolveController.stickers), and a `solutionChanged`
-// signal for when the moves are replaced.
+// signal for when the moves are replaced. A source of a cube that is not a 3x3
+// also says its `size` and `sideColours` (a side's letter to the colour it is
+// named by); one that says neither is a 3x3.
 Rectangle {
     id: root
     objectName: "solution"
     color: Theme.paper
 
     property var source: SolveController
+    // The cube reviewed: a 3x3 with the 3x3's own view, or any other size with
+    // the one that draws them (CubeNView).
+    readonly property int cubeSize: source.size !== undefined ? source.size : 3
+    readonly property bool threeByThree: cubeSize === 3
+    readonly property Item cube: cubeLoader.item
     // A second line under the title: the date of the solve, when it was opened
     // from the history.
     property string subtitle: ""
@@ -92,9 +100,31 @@ Rectangle {
         return out;
     }
 
+    // The cube at the position shown, painted; again when a solution lands.
+    readonly property var paintedNow: {
+        revision;
+        return painted(source.stickersAt(position));
+    }
+
+    // Seen from above and to the right, and from behind for a turn of the back
+    // side, which turns out of sight otherwise.
+    readonly property real viewYaw: position < total && turnList[position]
+                                    && turnList[position].face === "B" ? -140 : -32
+
+    // The layers a move turns, counted from its side: the outer one unless the
+    // source says otherwise.
+    function firstLayer(move) { return move.first !== undefined ? move.first : 0; }
+    function lastLayer(move) { return move.last !== undefined ? move.last : 0; }
+
     function rebuild() {
         var list = source.moves;
-        var ranges = source.stageRanges;
+        // A 3x3 is listed every stage its method has. A bigger cube's reduction has
+        // stages that a given cube does not need (no parity to set up, say):
+        // those are left out, so that what is listed is what there is to do.
+        var every = threeByThree;
+        var ranges = source.stageRanges.filter(function (range) {
+            return every || range.endIndex > range.startIndex;
+        });
         var items = [];
         var places = [];
         for (var s = 0; s < ranges.length; ++s) {
@@ -104,13 +134,22 @@ Rectangle {
             for (var i = range.startIndex; i < range.endIndex; ++i) {
                 places[i] = items.length;
                 items.push({ kind: "turn", index: i, number: i + 1,
-                             face: list[i].face, turns: list[i].turns });
+                             face: list[i].face, turns: list[i].turns,
+                             first: firstLayer(list[i]), last: lastLayer(list[i]) });
             }
         }
-        var start = source.stickersAt(0);
+        // A side is named by the colour of its centre, which never moves; a cube
+        // with no centre sticker (an even size) is named by what its corners say.
         var found = {};
-        for (var side in start)
-            found[side] = colorHex(start[side][4]);
+        if (threeByThree) {
+            var start = source.stickersAt(0);
+            for (var side in start)
+                found[side] = colorHex(start[side][4]);
+        } else {
+            var named = source.sideColours;
+            for (var letter in named)
+                found[letter] = colorHex(named[letter]);
+        }
 
         turnList = list;
         total = list.length;
@@ -144,8 +183,40 @@ Rectangle {
         case 5: return { title: qsTrId("stage.f2l.title"), what: qsTrId("stage.f2l.what"), why: "" };
         case 6: return { title: qsTrId("stage.reduce.title"), what: qsTrId("stage.reduce.what"), why: "" };
         case 7: return { title: qsTrId("stage.finish.title"), what: qsTrId("stage.finish.what"), why: "" };
+        // The stages a cube bigger than a 3x3 has before it is one (cube::nxn::StageId).
+        case 8: return { title: qsTrId("stage.parity.title"), what: qsTrId("stage.parity.what"), why: "" };
+        case 9: return { title: qsTrId("stage.centres.title"), what: qsTrId("stage.centres.what"), why: "" };
+        case 10: return { title: qsTrId("stage.edges.title"), what: qsTrId("stage.edges.what"), why: "" };
+        case 11: return { title: qsTrId("stage.corners.title"), what: qsTrId("stage.corners.what"), why: "" };
         }
         return { title: "", what: "", why: "" };
+    }
+
+    // Which layers of a side a turn is, when it is not just the side's outer
+    // one: "layer 2", "layers 1 to 2" (counted from the side, from 1).
+    function layerWords(first, last) {
+        if (!(first > 0 || last > 0))
+            return "";
+        if (first === last)
+            return qsTrId("solution.layer").arg(number(first + 1));
+        return qsTrId("solution.layers").arg(number(first + 1)).arg(number(last + 1));
+    }
+
+    // A turn as the parts of a row: side, layers (only for a layer inside the
+    // cube), direction, amount.
+    function turnLine(info) {
+        return [sideWords(info.face), layerWords(info.first, info.last),
+                directionWords(directionOf(info.face, info.turns)), amountWords(info.turns)]
+            .filter(function (part) { return part !== ""; }).join(" · ");
+    }
+
+    // The whole turn as one sentence, for a screen reader: the sentence written
+    // for the side's turn when it is the side that turns, else its parts.
+    function turnSpeech(info) {
+        if (!(info.first > 0 || info.last > 0))
+            return turnSentence(info.face, info.turns);
+        return [sideWords(info.face), layerWords(info.first, info.last),
+                directionWords(directionOf(info.face, info.turns)), amountWords(info.turns)].join(", ");
     }
 
     // A move names a side by its letter; as the cube is held at the start of
@@ -290,7 +361,7 @@ Rectangle {
         if (!root.reducedMotion) {
             var move = turnList[position];
             pendingStep = 1;
-            if (cube.playMove(move.face, move.turns) && cube.playing)
+            if (playOnCube(move, move.turns) && cube.playing)
                 return true;
             pendingStep = 0;
         }
@@ -306,12 +377,18 @@ Rectangle {
             // Going back is the last turn undone.
             var move = turnList[position - 1];
             pendingStep = -1;
-            if (cube.playMove(move.face, 4 - move.turns) && cube.playing)
+            if (playOnCube(move, 4 - move.turns) && cube.playing)
                 return true;
             pendingStep = 0;
         }
         position -= 1;
         return true;
+    }
+
+    // Turns the layers of a move on the cube on screen; false if it refuses.
+    function playOnCube(move, turns) {
+        return threeByThree ? cube.playMove(move.face, turns)
+                            : cube.playMove(move.face, firstLayer(move), lastLayer(move), turns);
     }
 
     Connections {
@@ -496,37 +573,62 @@ Rectangle {
             LayoutMirroring.enabled: false
             LayoutMirroring.childrenInherit: true
 
-            Cube3DView {
-                id: cube
-                objectName: "solution.cube"
+            // The 3x3's own view, or the one that draws any other size; the two
+            // are painted and turned alike.
+            Loader {
+                id: cubeLoader
                 readonly property real side: Math.max(0, Math.min(parent.width - 2 * lead.margin, parent.height))
                 width: side; height: side
                 anchors.centerIn: parent
+                sourceComponent: root.threeByThree ? cube3Component : cubeNComponent
+            }
 
-                // Looked at, not handled: dragging it would be a control with
-                // no word for what it does.
-                interactive: false
-                autoRotate: false
-                evenLight: true
-                shaderStyle: SettingsState.shaderStyleIndex
-                showStats: SettingsState.statsForNerds
+            Component {
+                id: cube3Component
+                Cube3DView {
+                    objectName: "solution.cube"
 
-                // As the cube is held at the start of the solve, and seen from
-                // above and to the right - from behind for a turn of the back
-                // side, which turns out of sight otherwise. It is the view
-                // that turns, not the cube.
-                homeRotation: Qt.vector3d(0, 0, 0)
-                viewPitch: 24
-                viewYaw: root.position < root.total && root.turnList[root.position]
-                         && root.turnList[root.position].face === "B" ? -140 : -32
+                    // Looked at, not handled: dragging it would be a control with
+                    // no word for what it does.
+                    interactive: false
+                    autoRotate: false
+                    evenLight: true
+                    shaderStyle: SettingsState.shaderStyleIndex
+                    showStats: SettingsState.statsForNerds
 
-                faceletColors: {
-                    root.revision; // painted again when a solution lands
-                    return root.painted(root.source.stickersAt(root.position));
+                    // As the cube is held at the start of the solve, and seen from
+                    // above and to the right - from behind for a turn of the back
+                    // side, which turns out of sight otherwise. It is the view
+                    // that turns, not the cube.
+                    homeRotation: Qt.vector3d(0, 0, 0)
+                    viewPitch: 24
+                    viewYaw: root.viewYaw
+
+                    faceletColors: root.paintedNow
+
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: root.caption
                 }
+            }
 
-                Accessible.role: Accessible.Graphic
-                Accessible.name: root.caption
+            Component {
+                id: cubeNComponent
+                CubeNView {
+                    objectName: "solution.cube"
+                    interactive: false
+                    autoRotate: false
+                    evenLight: true
+                    showStats: SettingsState.statsForNerds
+
+                    homeRotation: Qt.vector3d(0, 0, 0)
+                    viewPitch: 24
+                    viewYaw: root.viewYaw
+
+                    faceletColors: root.paintedNow
+
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: root.caption
+                }
             }
         }
 
@@ -698,7 +800,7 @@ Rectangle {
         id: turnRow
         Rectangle {
             id: turn
-            property var info: ({ index: -1, number: 0, face: "U", turns: 1 })
+            property var info: ({ index: -1, number: 0, face: "U", turns: 1, first: 0, last: 0 })
             readonly property bool selected: root.position === info.index
             readonly property string direction: root.directionOf(info.face, info.turns)
 
@@ -709,7 +811,7 @@ Rectangle {
 
             Accessible.role: Accessible.ListItem
             Accessible.name: qsTrId("solution.a11y.turn").arg(root.number(info.number))
-                                 .arg(root.turnSentence(info.face, info.turns))
+                                 .arg(root.turnSpeech(info))
             Accessible.selectable: true
             Accessible.selected: selected
 
@@ -754,8 +856,7 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 Text {
                     width: parent.width
-                    text: [root.sideWords(turn.info.face), root.directionWords(turn.direction),
-                           root.amountWords(turn.info.turns)].join(" · ")
+                    text: root.turnLine(turn.info)
                     wrapMode: Text.WordWrap
                     font.family: Theme.fontHeading; font.pixelSize: 14
                     font.weight: turn.selected ? Font.Bold : Font.Normal

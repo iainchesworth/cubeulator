@@ -237,6 +237,12 @@ public:
     // The same for a cube of any size.
     void resumeCube(const cube::nxn::NCube& scanned, const cube::nxn::NCube& from, Method method,
                     int turn);
+    // The same with the solution the solve had, kept: nothing is worked out, so
+    // the solution is the one that was followed whatever the solver would say
+    // today, and it is in place (solutionChanged has been emitted) when this
+    // returns. `kept` must be a solution of `from`.
+    void resumeCube(const cube::nxn::NCube& scanned, const cube::nxn::NCube& from, Method method,
+                    int turn, const cube::nxn::Solution& kept);
 
 public slots:
     void nextMove();
@@ -267,6 +273,9 @@ private:
     // Invoked on the UI thread once solveWatcher_'s background solve()
     // (kicked off from beginSolve()) finishes.
     void applySolveResult();
+    // Puts the plan just made in place and announces it: steps it on to
+    // resume_turn_, shows the cube, ends the solving state.
+    void land();
     // Brings cube3_ to the cube the plan now shows.
     void showCurrentCube();
 

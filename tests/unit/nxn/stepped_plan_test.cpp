@@ -349,3 +349,42 @@ TEST_CASE("a plan can be put at any position, and says where the 3x3's stages be
         }
     }
 }
+
+TEST_CASE("a plan gives back the solution it was made from, and every stage can be rebuilt",
+          "[nxn][plan]") {
+    using cube::nxn::StageId;
+    // The step of a stage is the stage's, and nothing else.
+    for (std::uint8_t value = 0; value <= static_cast<std::uint8_t>(StageId::Corners); ++value) {
+        const auto id = static_cast<StageId>(value);
+        const cube::nxn::Step step = cube::nxn::step_of(id);
+        CHECK(cube::nxn::stage_id(step) == id);
+        CHECK(step.moves.empty());
+    }
+
+    for (const int size : {2, 3, 4, 5, 6}) {
+        for (const Display display : {Display::Layers, Display::Wide}) {
+            INFO("size " << size << (display == Display::Wide ? " wide" : " layers"));
+            const auto [start, solution] = planned(size, 9U, SolveMethod::Beginner);
+            const SteppedPlan plan = SteppedPlan::from(start, solution, display);
+
+            // One step per stage span, in order, with the turns of its moves.
+            const cube::nxn::Solution again = plan.solution();
+            REQUIRE(again.steps.size() == plan.stage_ranges().size());
+            for (std::size_t i = 0; i < again.steps.size(); ++i) {
+                CHECK(cube::nxn::stage_id(again.steps.at(i)) == plan.stage_ranges().at(i).id);
+            }
+            // The turns are the plan's own, in its order: a wide move gathers its layers
+            // from the nearest, which is the solution's order only where it was that.
+            CHECK(again.moves() == plan.layer_turns());
+            if (display == Display::Layers) {
+                CHECK(again.moves() == solution.moves());
+            }
+
+            // And made into a plan again, it is that plan.
+            const SteppedPlan rebuilt = SteppedPlan::from(start, again, display);
+            CHECK(rebuilt.moves() == plan.moves());
+            CHECK(rebuilt.stage_ranges() == plan.stage_ranges());
+            CHECK(rebuilt.cube_at(rebuilt.move_count()) == plan.cube_at(plan.move_count()));
+        }
+    }
+}

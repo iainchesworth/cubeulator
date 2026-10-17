@@ -10,6 +10,7 @@
 #include <QSaveFile>
 
 #include <cube/nxn/notation.hpp>
+#include <cube/nxn/stage.hpp>
 #include <cube/nxn/validate.hpp>
 
 #include <algorithm>
@@ -105,6 +106,16 @@ constexpr int kMostSeconds = 366 * 86'400;
     return true;
 }
 
+// The stages as the file has them: stage and turn count, in turn, one list.
+[[nodiscard]] QJsonArray encode_stages(const std::vector<KeptStage>& stages) {
+    QJsonArray out;
+    for (const KeptStage& stage : stages) {
+        out.append(stage.stage);
+        out.append(stage.count);
+    }
+    return out;
+}
+
 [[nodiscard]] QJsonObject to_json(const HistoryEntry& entry) {
     QJsonObject object{
         {"id", static_cast<double>(entry.id)},
@@ -126,6 +137,9 @@ constexpr int kMostSeconds = 366 * 86'400;
     }
     if (!entry.moves.empty()) {
         object.insert("moves", encode_moves(entry.moves, entry.from.size()));
+        if (!entry.stages.empty()) {
+            object.insert("stages", encode_stages(entry.stages));
+        }
     }
     return object;
 }
@@ -141,6 +155,38 @@ constexpr int kMostSeconds = 366 * 86'400;
         return false;
     }
     out = static_cast<qint64>(number);
+    return true;
+}
+
+// The stages back, or nothing if they are not stages of a solution of `turns`
+// turns: stage numbers there are, counts that are not negative and add up to all
+// of the turns.
+[[nodiscard]] bool decode_stages(const QJsonValue& value, std::size_t turns,
+                                 std::vector<KeptStage>& out) {
+    if (!value.isArray()) {
+        return false;
+    }
+    const QJsonArray list = value.toArray();
+    if (list.size() % 2 != 0) {
+        return false;
+    }
+    constexpr int kStages = static_cast<int>(cube::nxn::StageId::Corners) + 1;
+    std::vector<KeptStage> stages;
+    std::size_t counted = 0;
+    for (qsizetype i = 0; i < list.size(); i += 2) {
+        qint64 stage = 0;
+        qint64 count = 0;
+        if (!whole(list.at(i), 0, kStages - 1, stage) ||
+            !whole(list.at(i + 1), 0, static_cast<qint64>(turns), count)) {
+            return false;
+        }
+        counted += static_cast<std::size_t>(count);
+        stages.push_back({.stage = static_cast<int>(stage), .count = static_cast<int>(count)});
+    }
+    if (counted != turns) {
+        return false;
+    }
+    out = std::move(stages);
     return true;
 }
 
@@ -196,6 +242,13 @@ constexpr int kMostSeconds = 366 * 86'400;
     if (object.contains("moves") &&
         (!object.value("moves").isString() ||
          !decode_moves(object.value("moves").toString(), entry.from, entry.moves))) {
+        entry.moves.clear();
+    }
+    // Stages that do not fit the turns spoil the kept solution as much as turns
+    // that do not solve the cube; a solution kept with no stages is kept as it is,
+    // and used by nothing that needs them.
+    if (!entry.moves.empty() && object.contains("stages") &&
+        !decode_stages(object.value("stages"), entry.moves.size(), entry.stages)) {
         entry.moves.clear();
     }
     out = entry;

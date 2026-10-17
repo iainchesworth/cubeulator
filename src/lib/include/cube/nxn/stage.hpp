@@ -78,6 +78,38 @@ static_assert(static_cast<std::uint8_t>(StageId::Finish) ==
     return StageId::Cross;
 }
 
+// A step with no moves, of the stage: the other way from stage_id(const Step&),
+// for building a solution back from the stages and the moves that were kept.
+[[nodiscard]] inline Step step_of(StageId id) {
+    Step step;
+    switch (id) {
+        case StageId::Parity:
+            step.stage = Stage::Parity;
+            break;
+        case StageId::Centres:
+            step.stage = Stage::Centres;
+            break;
+        case StageId::Edges:
+            step.stage = Stage::Edges;
+            break;
+        case StageId::Corners:
+            step.stage = Stage::Corners;
+            break;
+        case StageId::Cross:
+        case StageId::WhiteCorners:
+        case StageId::MiddleEdges:
+        case StageId::Oll:
+        case StageId::Pll:
+        case StageId::F2l:
+        case StageId::Reduce:
+        case StageId::Finish:
+            step.stage = Stage::Core;
+            step.core_stage = static_cast<solver::Stage>(static_cast<std::uint8_t>(id));
+            break;
+    }
+    return step;
+}
+
 // Whether the stage is one of the 3x3 solver's: the part of a solve of a big
 // cube that is, once reduced, an ordinary 3x3 solve.
 [[nodiscard]] constexpr bool is_core(StageId id) noexcept {

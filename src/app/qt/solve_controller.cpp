@@ -230,6 +230,22 @@ void SolveController::resumeCube(const NCube& scanned, const NCube& from, Method
     resume_turn_ = std::max(0, turn);
 }
 
+void SolveController::resumeCube(const NCube& scanned, const NCube& from, Method method, int turn,
+                                 const cube::nxn::Solution& kept) {
+    scanned_ = scanned;
+    if (method != method_) {
+        method_ = method;
+        emit methodChanged();
+    }
+    // Nothing to work out. A solve still in flight is let go: it lands on nothing
+    // (applySolveResult).
+    pending_ = from;
+    solving_continuation_ = false;
+    stepped_ = SteppedPlan::from(from, kept, display_for(from.size()));
+    resume_turn_ = std::max(0, turn);
+    land();
+}
+
 void SolveController::setMethod(Method method) {
     if (method == method_) {
         return;
@@ -269,8 +285,16 @@ void SolveController::beginSolve(const NCube& scrambled, bool continuation) {
 
 void SolveController::applySolveResult() {
     CUBE_ZONE_SCOPED_N("app.solve.apply_result");
+    if (!isSolving_) {
+        // Replaced by a solution that was kept (resumeCube) while this was worked out.
+        return;
+    }
     CUBE_MESSAGE("solve.finished");
     stepped_ = solveWatcher_.result();
+    land();
+}
+
+void SolveController::land() {
     // A solve picked up from the history lands on the turn it was left at.
     for (int i = 0; i < resume_turn_ && !stepped_.at_end(); ++i) {
         stepped_.next();

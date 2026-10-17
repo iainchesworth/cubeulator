@@ -60,9 +60,11 @@ Rectangle {
         return Qt.locale(Qt.uiLanguage).toString(new Date(entry.started), Locale.ShortFormat);
     }
     function summaryOf(entry) {
-        return entry.finished
+        var summary = entry.finished
             ? qsTrId("history.item.done", entry.turns).arg(AppState.durationLabel(entry.seconds))
             : qsTrId("history.item.unfinished").arg(digits(entry.turn)).arg(digits(entry.turns));
+        // A 3x3 is the cube nothing needs to be said of.
+        return entry.size === 3 ? summary : qsTrId("history.item.size").arg(digits(entry.size)).arg(summary);
     }
 
     // Hands are on the keys, or on a phone's back gesture: back leaves, and
@@ -74,21 +76,23 @@ Rectangle {
 
     // ---- parts ----------------------------------------------------------------
 
-    // Nine stickers of the scanned cube's front side: a way to recognise a
-    // scramble at a glance, not information, so it is not read out. The cube is
-    // the object in the hand, and does not mirror with the layout.
+    // The stickers of the scanned cube's front side - nine for a 3x3, N x N for a
+    // cube of size N, in the same 44 pixels: a way to recognise a scramble at a
+    // glance, not information, so it is not read out. The cube is the object in
+    // the hand, and does not mirror with the layout.
     component SideChip: Grid {
         property var colours: []
+        readonly property int stickersAcross: colours.length > 0 ? Math.round(Math.sqrt(colours.length)) : 3
         width: 44; height: 44
-        columns: 3
+        columns: stickersAcross
         spacing: 1
         LayoutMirroring.enabled: false
         LayoutMirroring.childrenInherit: true
         Accessible.ignored: true
         Repeater {
-            model: 9
+            model: parent.stickersAcross * parent.stickersAcross
             Rectangle {
-                width: 14; height: 14
+                width: (44 - (parent.stickersAcross - 1)) / parent.stickersAcross; height: width
                 color: root.colorHex(index < parent.colours.length ? parent.colours[index] : "")
                 // White on the light theme's paper would be a hole.
                 border.width: 1

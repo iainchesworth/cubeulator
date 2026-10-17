@@ -73,6 +73,12 @@ public:
     // The turns of single layers move `index` is.
     [[nodiscard]] std::vector<LayerMove> layers_at(int index) const;
 
+    // The solution this plan was made from: one step per stage span, in order,
+    // each with the turns of single layers of its moves. `from` of it, with the
+    // plan's display, gives this plan again. This is what is kept of a solve to
+    // follow it later without solving it again.
+    [[nodiscard]] Solution solution() const;
+
     // How many moves have been applied to reach the state on show; in
     // [0, move_count()].
     [[nodiscard]] int current_index() const noexcept { return index_; }
