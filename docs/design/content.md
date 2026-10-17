@@ -361,8 +361,8 @@ Review the solution.
 | `entry.title` | Another cube | Title of the screen reached from Home by "Another size of cube". |
 | `entry.size.label` | Size | Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on. |
 | `entry.size.option` | %1×%1 | A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits. |
-| `entry.size.camera` | The camera reads a 3×3. Scan it, or type its scramble here. | Under the size buttons when 3×3 is chosen. |
-| `entry.size.noCamera` | The camera cannot read this size yet. Type its scramble here. | Under the size buttons when a size other than 3×3 is chosen. |
+| `entry.size.camera` | The camera reads this cube. Scan it, or type its scramble here. | Under the size buttons: the camera reads every size offered. |
+
 | `entry.scramble.label` | Its scramble | Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it. |
 | `entry.scramble.placeholder` | Type or paste the moves, such as R U R' U' F2 2R Rw | Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated. |
 | `entry.scramble.help` | Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together. | Under the scramble box. The letters and marks are notation and stay as they are. |

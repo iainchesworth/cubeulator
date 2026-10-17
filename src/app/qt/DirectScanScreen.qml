@@ -204,6 +204,29 @@ Item {
         }
     }
 
+    // The size of the cube being scanned. Choosing another starts the scan over; it
+    // is chosen, not detected, because six flat sides of a bigger cube are read the
+    // same way at every size and only the count of stickers differs.
+    Row {
+        objectName: "scan.sizes"
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: chips.top
+        anchors.bottomMargin: Theme.space3
+        spacing: Theme.space2
+        visible: !root.complete && !root.cameraFailed
+
+        Repeater {
+            model: [2, 3, 4, 5]
+            AppButton {
+                objectName: "scan.size." + modelData
+                height: 36
+                variant: modelData === DirectScan.size ? "primary" : "secondary"
+                text: qsTrId("entry.size.option").arg(modelData)
+                onClicked: DirectScan.size = modelData
+            }
+        }
+    }
+
     // The sides read so far, in the order they were first shown, each as the
     // camera last saw it. Colours are the measured ones, not tidy swatches.
     Row {

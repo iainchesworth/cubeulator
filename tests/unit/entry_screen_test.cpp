@@ -117,17 +117,17 @@ TEST_CASE("Home has a way to another size of cube, and back", "[qml][entry]") {
     CHECK(app_state().property("screen").toString() == "launch");
 }
 
-TEST_CASE("the entry screen offers 2 to 5, and says what the camera does at each", "[qml][entry]") {
+TEST_CASE("the entry screen offers 2 to 5, and the camera at each", "[qml][entry]") {
     const HomeAgain home;
     const Loaded screen("EntryScreen");
     for (const int size : {2, 3, 4, 5}) {
         INFO("size " << size);
         screen.click("entry.size." + std::to_string(size));
         CHECK(screen.get("size").toInt() == size);
-        // Only a 3x3 can be scanned; under test a string is its id.
-        CHECK(screen.visible("entry.scan") == (size == 3));
+        // Every size offered can be scanned; under test a string is its id.
+        CHECK(screen.visible("entry.scan"));
         CHECK(screen.require("entry.size.note").property("text").toString() ==
-              (size == 3 ? "entry.size.camera" : "entry.size.noCamera"));
+              "entry.size.camera");
     }
     CHECK(screen.find("entry.size.6") == nullptr);
     CHECK(screen.find("entry.size.1") == nullptr);

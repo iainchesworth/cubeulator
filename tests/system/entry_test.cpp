@@ -60,8 +60,8 @@ TEST_CASE("Home opens the screen for another size, which offers its sizes and go
             INFO("size " << size);
             app.click(QString::fromStdString("entry.size." + std::to_string(size)));
             app.pump(40);
-            // Only a 3x3 can be scanned instead.
-            CHECK((app.find_all("entry.scan").first()->isVisible()) == (size == 3));
+            // Any size offered can be scanned instead.
+            CHECK(app.find_all("entry.scan").first()->isVisible());
         }
         CHECK(app.find("entry.size.6") == nullptr);
 

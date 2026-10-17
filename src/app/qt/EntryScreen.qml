@@ -127,7 +127,7 @@ Rectangle {
                 Text {
                     objectName: "entry.size.note"
                     width: parent.width
-                    text: root.size === 3 ? qsTrId("entry.size.camera") : qsTrId("entry.size.noCamera")
+                    text: qsTrId("entry.size.camera")
                     wrapMode: Text.WordWrap
                     font.family: Theme.fontHeading; font.pixelSize: 13
                     color: Theme.inkMuted(0.65)
@@ -222,11 +222,10 @@ Rectangle {
                 }
                 AppButton {
                     objectName: "entry.scan"
-                    visible: root.size === 3
                     width: parent.width; height: 44
                     variant: "secondary"; block: true
                     text: qsTrId("entry.scan")
-                    onClicked: AppState.beginScan()
+                    onClicked: AppState.beginScan(root.size)
                 }
                 Item { width: 1; height: Theme.space6 }
             }

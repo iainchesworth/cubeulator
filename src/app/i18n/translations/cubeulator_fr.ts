@@ -546,14 +546,9 @@ Entre vos mains.</translation>
         <translation>%1×%1</translation>
     </message>
     <message id="entry.size.camera">
-        <source>The camera reads a 3×3. Scan it, or type its scramble here.</source>
-        <extracomment>Under the size buttons when 3×3 is chosen.</extracomment>
-        <translation>La caméra lit un 3×3. Scannez-le, ou saisissez ici son mélange.</translation>
-    </message>
-    <message id="entry.size.noCamera">
-        <source>The camera cannot read this size yet. Type its scramble here.</source>
-        <extracomment>Under the size buttons when a size other than 3×3 is chosen.</extracomment>
-        <translation>La caméra ne sait pas encore lire cette taille. Saisissez ici le mélange.</translation>
+        <source>The camera reads this cube. Scan it, or type its scramble here.</source>
+        <extracomment>Under the size buttons: the camera reads every size offered.</extracomment>
+        <translation>La caméra lit ce cube. Scannez-le, ou saisissez ici son mélange.</translation>
     </message>
     <message id="entry.scramble.label">
         <source>Its scramble</source>

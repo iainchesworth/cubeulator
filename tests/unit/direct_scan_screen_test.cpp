@@ -307,6 +307,23 @@ TEST_CASE("scan screen gallery", "[.gallery][direct-scan]") {
     camera.restart();
 }
 
+TEST_CASE("the scan screen offers 2 to 5 and scans the one chosen", "[qml][direct-scan][nxn]") {
+    cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
+    camera.setWatching(false);
+    camera.setSize(3);
+    camera.restart();
+
+    Screen screen;
+    for (const int size : {2, 4, 5, 3}) {
+        INFO("size " << size);
+        QQuickItem* button = screen.one(("scan.size." + std::to_string(size)).c_str());
+        CHECK(button->isVisible());
+        REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
+        CHECK(camera.size() == size);
+    }
+    CHECK(screen.all("scan.size.6").empty());
+}
+
 TEST_CASE("the scan screen of a 5x5 marks its 25 stickers and no more", "[qml][direct-scan][nxn]") {
     cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
     camera.setWatching(false);
