@@ -24,6 +24,7 @@ ApplicationWindow {
         sourceComponent: {
             switch (AppState.screen) {
             case "entry": return entryScreen;
+            case "colours": return coloursScreen;
             case "permission": return permissionScreen;
             case "scan": return scanScreen;
             case "solve": return solveScreen;
@@ -82,6 +83,7 @@ ApplicationWindow {
 
     Component { id: launchScreen; LaunchScreen {} }
     Component { id: entryScreen; EntryScreen {} }
+    Component { id: coloursScreen; ColoursScreen {} }
     Component { id: permissionScreen; PermissionScreen {} }
     Component { id: scanScreen; DirectScanScreen {} }
     Component { id: solveScreen; SolveScreen {} }

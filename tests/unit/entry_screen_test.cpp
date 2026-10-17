@@ -101,6 +101,7 @@ struct HomeAgain {
     ~HomeAgain() {
         app_state().setProperty("screen", QStringLiteral("launch"));
         app_state().setProperty("solveCamera", true);
+        app_state().setProperty("entrySize", 3);
     }
 };
 

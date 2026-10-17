@@ -1,6 +1,7 @@
 #pragma once
 
 #include "controllers/camera_controller.hpp"
+#include "controllers/colour_entry.hpp"
 #include "controllers/diagnostics.hpp"
 #include "controllers/direct_scan.hpp"
 #include "controllers/held_cube.hpp"
@@ -55,6 +56,9 @@ struct AppControllers {
     // steps through one, and puts the unfinished one back on request. Its file
     // is in the app's own data folder (SolveHistory::defaultFile).
     SolveHistory history{solve};
+    // A cube typed in colour by colour, of any size (the screen for a cube the
+    // camera does not read); it hands a valid one to the solve controller.
+    ColourEntry colours{solve};
 
 private:
     // What both constructors do once the members are there.

@@ -75,6 +75,8 @@ if(CUBEULATOR_BUILD_APP)
         qt/controllers/app_controllers.cpp
         qt/controllers/camera_controller.hpp
         qt/controllers/camera_controller.cpp
+        qt/controllers/colour_entry.hpp
+        qt/controllers/colour_entry.cpp
         qt/controllers/diagnostic_records.hpp
         qt/controllers/diagnostic_records.cpp
         qt/controllers/diagnostics.hpp
@@ -143,6 +145,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
             qt/EntryScreen.qml
+            qt/ColoursScreen.qml
             qt/PermissionScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml

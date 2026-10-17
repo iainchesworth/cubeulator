@@ -261,6 +261,7 @@ if(CUBEULATOR_BUILD_APP)
     add_executable(cube_qt_controller_tests
         qt_test_main.cpp
         unit/camera_controller_test.cpp
+        unit/colour_entry_test.cpp
         unit/diagnostics_controller_test.cpp
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp
@@ -295,6 +296,7 @@ if(CUBEULATOR_BUILD_APP)
 
     add_executable(cube_qml_tests
         qml_test_main.cpp
+        unit/colours_screen_test.cpp
         unit/complete_screen_test.cpp
         unit/cube_view_reading_test.cpp
         unit/cube_n_view_test.cpp
