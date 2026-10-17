@@ -17,6 +17,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/solver.hpp>
 
 #include <QFileInfo>
@@ -203,6 +204,73 @@ void tour_layout(const std::string& layout) {
         app.click("history.back");
         REQUIRE(app.wait_for([&]() { return app.screen() == "launch"; }));
 
+        // Another size of cube: the entry screen with a 5x5's scramble typed in,
+        // the colours screen with the top and front of a 4x4 painted, and the
+        // 5x5's solve and review at the first turn of a layer inside the cube.
+        const auto type_scramble = [&](const QString& text) {
+            QQuickItem* box = app.find("entry.scramble");
+            REQUIRE(box != nullptr);
+            REQUIRE(box->setProperty("text", text));
+            app.pump(40);
+        };
+        const QString five = QStringLiteral("R U 2R' F2 3Rw Uw' L2 2D B' 2F Rw2 U 3L' D2 Fw");
+        app.click("launch.other");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "entry"; }));
+        app.click("entry.size.5");
+        type_scramble(five);
+        tour.shoot("entry");
+
+        app.click("entry.size.4");
+        app.click("entry.colours");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "colours"; }));
+        const cube::nxn::NCube four =
+            cube::nxn::random_scramble({.size = 4, .seed = 5, .moves = 60});
+        auto& entered = app.runtime().controllers().colours;
+        for (const char* side : {"U", "F"}) {
+            const auto face = side[0] == 'U' ? cube::solver::Face::U : cube::solver::Face::F;
+            for (int row = 0; row < 4; ++row) {
+                for (int col = 0; col < 4; ++col) {
+                    entered.paint(QString::fromLatin1(side), (row * 4) + col,
+                                  static_cast<int>(four.at(face, row, col)));
+                }
+            }
+        }
+        app.click("colours.side.F");
+        tour.shoot("colours");
+        app.click("colours.back");
+        app.click("colours.discard.confirm");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "entry"; }));
+
+        app.click("entry.size.5");
+        type_scramble(five);
+        app.click("entry.solve");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solve"; }));
+        REQUIRE(app.wait_for([&]() { return !solve.isSolving(); }, 180'000));
+        REQUIRE(solve.size() == 5);
+        // A few turns in, at the next turn of a layer inside the cube.
+        for (int i = 0; i < 5 && !solve.atEnd(); ++i) {
+            solve.nextMove();
+        }
+        while (!solve.atEnd() && solve.currentMoveFirst() == 0) {
+            solve.nextMove();
+        }
+        const int inner = solve.moveIndex();
+        app.pump(40);
+        tour.shoot("solve-big-middle");
+        while (!solve.atEnd()) {
+            solve.nextMove();
+        }
+        app.click("solve.next");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+        app.click("complete.review");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "solution"; }));
+        REQUIRE(QMetaObject::invokeMethod(app.screen_item(), "jumpTo", Q_ARG(QVariant, inner)));
+        app.pump(80);
+        tour.shoot("solution-big-middle");
+        app.click("solution.back");
+        REQUIRE(app.wait_for([&]() { return app.screen() == "complete"; }));
+        app.go("launch");
+
         for (const QString& path : tour.written) {
             INFO("picture " << path.toStdString());
             REQUIRE(QFileInfo::exists(path));
@@ -220,9 +288,9 @@ void tour_layout(const std::string& layout) {
         }
     }
 
-    // Seventeen pictures a variant, two variants a layout.
+    // Twenty-one pictures a variant, two variants a layout.
     CHECK(variants == 2);
-    CHECK(all.size() == 17 * variants);
+    CHECK(all.size() == 21 * variants);
 }
 
 }  // namespace

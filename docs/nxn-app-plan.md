@@ -1,14 +1,13 @@
 # N x N in the app plan
 
-> **Status in 0.1.0-beta.1:** This is the plan, not a description of the app.
-> What exists is the solver library: `cube::nxn` solves a cube of any size from
-> 2x2 to 9x9 ([nxn-solver.md](nxn-solver.md)), and the app solves its 3x3
-> through it with nothing a person can see changed (`cube::nxn::solve_3x3`).
-> Nothing else in the app knows a cube can be another size: the screens, the
-> controllers, the history, the 3D view and the camera pipeline are all a 3x3.
+> **Status:** 0.1.0-beta.1 solved a 3x3 and nothing else. On `develop` now the
+> app follows a cube of 2 to 5 (more, in the library) from a typed scramble or
+> hand-entered colours, draws it, reviews it and keeps it in History
+> ([Progress](#progress)); the camera still reads only a 3x3. The rest of the
+> page is the plan as accepted.
 
-Written 2026-10-15. Status: **decisions accepted 2026-10-15; P0 started
-2026-10-16** ([Progress](#progress)). This is the basis for 0.2.0-beta.1 and
+Written 2026-10-15. Status: **decisions accepted 2026-10-15; P0 done and P1
+built 2026-10-16 to 17** ([Progress](#progress)). This is the basis for 0.2.0-beta.1 and
 began once 0.1.0-beta.1 was out ([Release shape](#release-shape)).
 
 This is the app half of the N x N work. The library half is done and described
@@ -270,13 +269,44 @@ top. Updated as slices land.
 
 | slice | phase | state |
 |---|---|---|
-| Validity oracle `cube::nxn::validate` | P0 | in review (tested against the solver at 2..9 and against an enumeration of every 2x2) |
-| WCA notation: print and parse, round trip over every move of every size | P0 | not started |
-| Stepped plan over `NCube`/`LayerMove`; stage descriptors | P0 | not started |
-| History format v2 | P0 | not started |
-| N-generic test helpers; `size` in recordings and diagnostics | P0 | not started |
-| Budgets and measured phone/wasm timings | P0 | not started |
-| 3D layer-lift prototype, measured at 5x5, 7x7, 9x9 | P0 | not started |
+| Validity oracle `cube::nxn::validate` | P0 | merged (#164) |
+| WCA notation: print and parse, round trip over every move of every size | P0 | merged (#165) |
+| Stepped plan over `NCube`/`LayerMove`; stage descriptors | P0 | merged (#166) |
+| The solve controller holds `NCube` and a stepped plan | P0 | merged (#167) |
+| History format v2 | P0 | merged (#168) |
+| Budgets and measured timings | P0 | merged (#169); **desktop and wasm measured, a phone not** (see below) |
+| 3D layer-lift prototype, measured at 5x5, 7x7, 9x9 | P0 | merged (#170) |
+| `size` in recordings and diagnostics | P0 | merged (#171) |
+| N-generic test helpers | P0 | merged (#172) |
+| The controller says size, layers of a move, the 3x3 stage's start | P1 | merged (#173) |
+| The 3D view for any size (`CubeNView`, `cube::nxn::build_mesh`) | P1 | merged (#174) |
+| The solve screen for any size: layer words, stage list, skip to the 3x3 | P1 | merged (#175) |
+| Home's *Another size of cube*; size 2 to 5; scramble entry; demo size | P1 | merged (#176) |
+| Typing a cube in a colour at a time, with the validity oracle | P1 | merged (#177) |
+| Review and History for any size; the kept solution carries its stages | P1 | merged (#178) |
+| Translation drafts for the new strings in eight languages | P1 | open (#179) |
+| Layout checks hold the new screens in the pseudo-locale and the RTL drafts | P1 | open (#180) |
+| User guide page and pictures | P1 | not started |
+| Gate S0 (offline scan feasibility), then P2 and P3 | S0 | not started; needs recordings of a 5x5 and a 4x4 |
+
+**What P1 found.** Wide moves are rare: grouping adjacent layers turned together
+saves under 1% of the moves (2,634 to 2,618 at 4x4, 8,297 to 8,264 at 7x7), so a
+person following a 5x5 is helped by being told *which layer* ("2R", "layer 2
+from the right"), which the screens do, more than by shorter lists. The 3D view
+costs three scene objects at any size, 0.2 ms of scene-graph work a frame
+natively and 0.4 ms in a browser at 3x3 and at 9x9. Hand entry names a side by
+where it is on the cube, not by a centre colour, which an even size does not
+have; that is where the plan's "any way up" bent. Sizes 6 and 7 are built and
+tested in the library and the view but are not offered in the UI yet (decision 3
+waits on a phone measurement). The 3x3's own screens, pictures and tests are
+unchanged and pass as they were.
+
+**Open against the P1 gate.** The gate asks for a 5x5 demo solved end to end on
+a phone-class device inside the time budget. Desktop and the browser build are
+covered by tests (the system walk, the Playwright spec `sizes.spec.mjs`); the
+phone timing was not run (it needs a phone and was waived on 2026-10-17), so a
+phone's cost for `solve()` at 5x5 is unknown. `SteppedSolution` is not deleted
+yet: it is still the reference the 3x3 stepped-plan tests are held against.
 
 P0 and P1 are the milestone. A person can solve and learn any size from 2 to 5
 (then 7) from a hand-entered or demo cube; scanning arrives size by size.
