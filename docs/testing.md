@@ -497,8 +497,10 @@ solve screens - narrow (390x844) and wide (900x640), light and dark:
 `scan-looking`, `scan-reading`, `scan-three-sides`, `scan-cube-read`,
 `solve-start`, `solve-middle`, `solve-end`, `complete`, and the solution
 reviewed from it: `solution-start`, `solution-middle`, `solution-end`; then the
-history: `history` (a finished solve and one left part-way) and `history-empty`.
-Names are
+history: `history` (a finished solve and one left part-way) and `history-empty`;
+then a cube of another size: `entry` (a 5x5's scramble typed in), `colours` (the top
+and front of a 4x4 painted), `solve-big-middle` (the 5x5 at a layer inside the
+cube) and `solution-big-middle` (its review). Names are
 `<screen>-<layout>-<theme>.png`. Frames are drawn; the launch cube's idle
 spin is switched off so pictures do not depend on timing. The test asserts
 each exists and is not a blank window; judging them is for a person.
@@ -511,7 +513,7 @@ tour's cluttered room. Refresh them when a screen the guide shows changes.
 
 It is two ctest entries of its own (`system.tour.narrow` and `.wide`, writing
 to `<build>/system-test-output/tour/<layout>`) because it is the slowest part
-by far - 68 grabs of a window that is being rendered in software on Linux CI
+by far - 84 grabs of a window that is being rendered in software on Linux CI
 - and a picture that cannot be taken should not hide what the walk found, nor
 spend the walk's time budget. Each layout is a half of the pictures and can
 run beside the other. The solution is stepped to its middle and its end
