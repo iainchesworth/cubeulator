@@ -98,8 +98,9 @@ public:
         settle();
     }
 
-    // Positioners lay their children out when a window polishes them; there
-    // is no window, so ask each, outermost first.
+    // Positioners lay their children out, and lists make the rows they show,
+    // when a window polishes them; there is no window, so ask each, outermost
+    // first.
     void settle() {
         QCoreApplication::processEvents();
         for (int pass = 0; pass < 3; ++pass) {
@@ -140,6 +141,17 @@ public:
                 QString::fromLatin1(item->metaObject()->className())
                     .startsWith(QLatin1String("AppButton")) &&
                 item->property("text").toString() == text) {
+                found = item;
+            }
+        });
+        return found;
+    }
+
+    // The first visible item called `name` (its objectName), or null.
+    [[nodiscard]] QQuickItem* item_named(const QString& name) const {
+        QQuickItem* found = nullptr;
+        visit(screen_.get(), [&](QQuickItem* item) {
+            if (found == nullptr && item->isVisible() && item->objectName() == name) {
                 found = item;
             }
         });
@@ -222,7 +234,7 @@ private:
         }
     }
     static void lay_out(QQuickItem* item) {
-        if (item->inherits("QQuickBasePositioner")) {
+        if (item->inherits("QQuickBasePositioner") || item->inherits("QQuickItemView")) {
             QMetaObject::invokeMethod(item, "forceLayout");
         }
         for (QQuickItem* child : item->childItems()) {
@@ -342,8 +354,33 @@ void have_a_wide_solution() {
     INFO("move " << solve.moveIndex() << " of " << solve.totalMoves());
     REQUIRE(solve.currentMoveFirst() != solve.currentMoveLast());
     // Stepping is a solve begun, which the history keeps; the history screen
-    // is held empty, as the checks have always had it (see holds_the_layout_in).
+    // is held empty here and with rows by have_a_history, each on its own.
     t::controllers().history.clear();
+}
+
+// A history with two rows in it, for the screen that lists them: a 5x5 that was
+// finished, with the time it took, and above it - newest first - another left
+// part-way, whose "turn 12 of ..." is the longest summary a row has. Replaces
+// whatever was kept; cleared again by whoever is done with it.
+void have_a_history() {
+    SolveController& solve = t::controllers().solve;
+    auto& history = t::controllers().history;
+    history.clear();
+
+    have_a_big_solution();
+    solve.nextMove();
+    REQUIRE(history.count() == 1);
+    // The complete screen's clock: more minutes than a first solve has.
+    history.setElapsedSeconds(7384);
+    history.finish();
+
+    have_a_big_solution();
+    for (int step = 0; step < 12 && solve.moveIndex() < solve.totalMoves(); ++step) {
+        solve.nextMove();
+    }
+    REQUIRE(history.count() == 2);
+    INFO("turn " << solve.moveIndex() << " of " << solve.totalMoves());
+    REQUIRE(solve.moveIndex() >= 12);
 }
 
 // Whether `item` stands at an angle on the screen: it, or something it is in
@@ -355,6 +392,14 @@ void have_a_wide_solution() {
     }
     return std::fmod(std::fabs(angle), 180.0) > 0.5;
 }
+
+// "Keep a history of solves" switched off for as long as this is in scope.
+struct KeepOff {
+    KeepOff() { t::controllers().history.setKeep(false); }
+    ~KeepOff() { t::controllers().history.setKeep(true); }
+    KeepOff(const KeepOff&) = delete;
+    KeepOff& operator=(const KeepOff&) = delete;
+};
 
 void holds_the_layout_of(const char* language, std::initializer_list<const char*> types) {
     struct Size {
@@ -441,11 +486,9 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
 // and the solution and solve screens of a 5x5, where the layer words are, the
 // solve screen at its longest (a turn of several layers).
 //
-// The history screen is held with nothing in its list. With a row in it the
-// Arabic and Yiddish screens give the row's date and summary no width at all, and
-// the French and Yiddish titles are cut at phone width by the button that
-// clears the list (docs/i18n.md, "What was looked at"): a row is a state this
-// loop does not reach, so far.
+// The history screen is held with nothing in its list (above, in the first
+// pass), with two rows in it, one finished and one left part-way, and with
+// history switched off, with those rows and with none.
 void holds_the_layout_in(const char* language) {
     have_a_solution();
     holds_the_layout_of(language,
@@ -455,6 +498,23 @@ void holds_the_layout_in(const char* language) {
     holds_the_layout_of(language, {"SolutionScreen", "SolveScreen"});
     have_a_wide_solution();
     holds_the_layout_of(language, {"SolveScreen"});
+    have_a_history();
+    {
+        // The rows are on the screen: a screen that listed none would pass.
+        Screen screen("HistoryScreen", 900, 640);
+        REQUIRE(screen.item_named(QStringLiteral("history.row1")) != nullptr);
+        REQUIRE(screen.item_named(QStringLiteral("history.row2")) != nullptr);
+    }
+    holds_the_layout_of(language, {"HistoryScreen"});
+    {
+        // Switched off: with the rows still kept, a notice above the list; and
+        // with none, the notice is the whole screen.
+        const KeepOff off;
+        holds_the_layout_of(language, {"HistoryScreen"});
+        t::controllers().history.clear();
+        holds_the_layout_of(language, {"HistoryScreen"});
+    }
+    t::controllers().history.clear();
 }
 
 }  // namespace
@@ -841,7 +901,8 @@ TEST_CASE("a label is not wider than the box it is set in, in any of the nine sc
 //
 // CUBE_I18N_SHOT_SIZE=390x780 sets the window, and CUBE_I18N_SHOT_CUBE=5 gives
 // the solution and solve screens a 5x5 to show (5wide: one that opens with a
-// turn of three layers).
+// turn of three layers; history: the history screen two rows, a finished 5x5 and
+// one left part-way).
 //
 // One picture a process: a second grabWindow() with the 3D cube in the scene
 // crashed the solve lane's gallery test (docs/app-experience-plan.md, "Two
@@ -863,6 +924,8 @@ TEST_CASE("a picture of a screen in a language", "[.shots]") {
         have_a_big_solution();
     } else if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("5wide")) {
         have_a_wide_solution();
+    } else if (qEnvironmentVariable("CUBE_I18N_SHOT_CUBE") == QLatin1String("history")) {
+        have_a_history();
     }
 
     Screen screen(type, size.at(0).toInt(), size.at(1).toInt());
