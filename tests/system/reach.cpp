@@ -136,9 +136,7 @@ const std::vector<StateDef>& state_inventory() {
         {"scan", "cube-read",
          [](App& a) { return a.screen() == "scan" && a.runtime().directScan().complete(); }, ""},
         {"scan", "sides-conflict",
-         [](App& a) { return a.screen() == "scan" && a.runtime().directScan().conflicted(); },
-         "needs six sides that are each read cleanly yet do not make a cube; the drawn frames are "
-         "consistent, so the suite does not stage a misread"},
+         [](App& a) { return a.screen() == "scan" && a.runtime().directScan().conflicted(); }, ""},
 
         {"solve", "solving",
          [](App& a) { return a.screen() == "solve" && a.runtime().solve().isSolving(); },
