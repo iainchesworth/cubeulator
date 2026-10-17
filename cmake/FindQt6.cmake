@@ -5,7 +5,7 @@
 #
 # It never replaces Qt6Config.cmake: it only widens CMAKE_PREFIX_PATH with
 # the aqtinstall / install-qt-action layout used by ci/install-qt.ps1 and
-# ci/install-qt.sh (C:/Qt, ~/Qt, /opt/Qt, ...) when Qt6 isn't already
+# ci/install-qt.sh (C:/Qt, C:/Repos/common/qt, ~/Qt, /opt/Qt, ...) when Qt6 isn't already
 # discoverable, then defers to Qt's own config package for the real work.
 # An explicit -DCMAKE_PREFIX_PATH=... or -DQt6_DIR=... always wins.
 # ---------------------------------------------------------------------------
@@ -71,4 +71,17 @@ if(NOT Qt6_FOUND)
     unset(_qt6_arch_dirs)
     unset(_qt6_candidates)
     unset(_qt6_version_dirs)
+endif()
+
+# A find module has to report failure itself: unlike Config mode, CMake does
+# not turn "not found" into an error for REQUIRED. Without this the configure
+# carries on and dies later at qt_standard_project_setup() with "Unknown CMake
+# command", which says nothing about Qt being missing.
+if(NOT Qt6_FOUND AND Qt6_FIND_REQUIRED)
+    message(FATAL_ERROR
+        "Could not find Qt6 (>= ${Qt6_FIND_VERSION}) and no prebuilt Qt was found "
+        "in the platform's usual install locations. Pass -DCMAKE_PREFIX_PATH="
+        "<Qt install>/<kit> (for example C:/Qt/6.12.0/msvc2022_64), or select a "
+        "preset that sets it. Or configure with -DCUBEULATOR_BUILD_APP=OFF for a "
+        "build without the GUI.")
 endif()

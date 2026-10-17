@@ -25,7 +25,10 @@ set(CUBEULATOR_PLATFORM_TEST_DISPLAY_HELP "")
 set(CUBEULATOR_PLATFORM_TEST_HIDE_WINDOW ON)
 set(CUBEULATOR_PLATFORM_TEST_LINK_OPTIONS "")
 
-set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "C:/Qt" "$ENV{USERPROFILE}/Qt")
+# C:/Repos/common/<dependency> is where the shared dependencies of the
+# checkouts on one machine live (Qt among them); C:/Qt is where
+# ci/install-qt.ps1 puts it.
+set(CUBEULATOR_PLATFORM_QT_SEARCH_ROOTS "C:/Qt" "C:/Repos/common/qt" "$ENV{USERPROFILE}/Qt")
 set(CUBEULATOR_PLATFORM_QT_ARCH_DIRS msvc2022_64 msvc2019_64 mingw_64)
 
 # The installer's root: the licence and the notices sit beside bin/.
