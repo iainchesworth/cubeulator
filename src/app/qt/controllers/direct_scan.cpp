@@ -121,6 +121,13 @@ constexpr int kLockWaitFrames = 240;
 
 DirectScan::DirectScan(QObject* parent)
     : QObject(parent), recording_root_(qEnvironmentVariable("CUBE_SCAN_RECORD_DIR")) {
+    // For a developer, to scan and record a cube that is not a 3x3 (see defaultSize).
+    const int asked = qEnvironmentVariableIntValue("CUBE_SCAN_SIZE");
+    if (asked >= 3 && asked <= 9 && asked % 2 == 1) {
+        default_size_ = asked;
+        size_ = asked;
+        scan_ = cube::vision::SideScan(asked);
+    }
     poll_timer_.setInterval(kPollIntervalMs);
     connect(&poll_timer_, &QTimer::timeout, this, &DirectScan::poll);
     connect(&start_watcher_, &QFutureWatcher<cube::Result<void>>::finished, this,
@@ -156,6 +163,8 @@ void DirectScan::record(const cv::Mat& bgr, std::int64_t t_ms) {
                                     QStringLiteral("yyyyMMdd-HHmmss-zzz")));
         cube::vision::recording::Manifest manifest;
         manifest.motion_script = "direct scan";
+        // Written only when it is not 3, so a 3x3's recording is the file it always was.
+        manifest.size = size_;
         // The reader's own frames only: the full-resolution copy shows more
         // of the room and nothing the reader uses.
         if (const auto problem = recorder_.start(dir.toStdString(), manifest, false);
@@ -196,8 +205,8 @@ std::optional<Reading> DirectScan::reviewReading() const {
         return std::nullopt;
     }
     const cube::vision::ScanDiagnosis diagnosis = scan_.diagnose();
-    if (scanned_.has_value()) {
-        return reading_from_cube(scanned_->cube, diagnosis.naming);
+    if (scanned_n_.has_value()) {
+        return reading_from_cube(scanned_n_->cube, diagnosis.naming);
     }
     if (diagnosis.naming.has_value()) {
         return reading_from_named_sides(*diagnosis.naming);
@@ -277,7 +286,8 @@ cube::diagnostics::Json DirectScan::diagnosticState() const {
     state.set("running", running_);
     state.set("watching", watching_);
     state.set("awaiting_lock", awaiting_lock_);
-    state.set("complete", scanned_.has_value());
+    state.set("complete", scanned_n_.has_value());
+    state.set("size", size_);
     state.set("conflicted", conflicted_);
     state.set("ambiguous", ambiguous_);
     state.set("sides_read", sides_.size());
@@ -289,25 +299,25 @@ cube::diagnostics::Json DirectScan::diagnosticState() const {
     state.set("lock",
               lock_report_.has_value() ? cube::app::records::photometry(*lock_report_) : Json());
     state.set("scan", cube::diagnostics::to_json(scan_.diagnose()));
-    if (scanned_.has_value()) {
-        state.set("scanned_state", cube::diagnostics::cube_json(scanned_->cube));
-        state.set("session_colours", cube::diagnostics::to_json(scanned_->colours));
+    if (scanned_n_.has_value()) {
+        state.set("scanned_state", cube::diagnostics::cube_json(scanned_n_->cube));
+        state.set("session_colours", cube::diagnostics::to_json(scanned_n_->colours));
     }
     return state;
 }
 
-cube::Result<cube::vision::ScannedCube> DirectScan::evaluateScan(std::string_view trigger) {
+cube::Result<cube::vision::ScannedCubeN> DirectScan::evaluateScan(std::string_view trigger) {
     // One evaluation answers both what the cube is and, when the sides fit
     // together in more than one way, which corner to ask the person for.
     cube::vision::ScanDiagnosis diagnosis = scan_.diagnose();
     settling_corner_ = settling_corner_of(diagnosis);
     if (!diagnosing()) {
-        return std::move(diagnosis.result);
+        return std::move(diagnosis.result_n);
     }
     std::string digest = digest_of(diagnosis);
     if (digest == last_scan_digest_) {
         ++scans_unchanged_;
-        return std::move(diagnosis.result);
+        return std::move(diagnosis.result_n);
     }
     cube::diagnostics::Json data = cube::diagnostics::to_json(diagnosis);
     data.set("trigger", trigger);
@@ -316,7 +326,17 @@ cube::Result<cube::vision::ScannedCube> DirectScan::evaluateScan(std::string_vie
     diagnostics_->write("scan", std::move(data));
     last_scan_digest_ = std::move(digest);
     scans_unchanged_ = 0;
-    return std::move(diagnosis.result);
+    return std::move(diagnosis.result_n);
+}
+
+void DirectScan::setSize(int size) {
+    if (size == size_ || size < 3 || size > 9 || size % 2 == 0) {
+        return;
+    }
+    size_ = size;
+    scan_ = cube::vision::SideScan(size);
+    restart();
+    emit sizeChanged();
 }
 
 void DirectScan::start(const QString& deviceId) {
@@ -453,6 +473,7 @@ void DirectScan::restart() {
     ambiguous_ = false;
     settling_corner_.clear();
     scanned_.reset();
+    scanned_n_.reset();
     if (diagnosing()) {
         diagnostics_->write("scan", cube::diagnostics::Json::object().set("trigger", "restart"));
     }
@@ -512,7 +533,7 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
         return;
     }
 
-    if (scanned_.has_value()) {
+    if (scanned_n_.has_value()) {
         // Scan finished; keep the preview live until the screen changes.
         emit frameUpdated();
         return;
@@ -521,8 +542,9 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // Reduced and outlined once: a side square to the camera and two sides at
     // an angle are read from the same preparation, and the second reader only
     // runs on the frames the first found nothing in.
-    const std::optional<cube::vision::PreparedFrame> prepared = cube::vision::prepare_frame(bgr);
-    read_ = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+    const std::optional<cube::vision::PreparedFrame> prepared =
+        cube::vision::prepare_frame(bgr, size_);
+    read_ = prepared.has_value() ? cube::vision::read_side(*prepared, size_) : std::nullopt;
     if (awaiting_lock_) {
         // Show where the cube is, but count nothing yet.
         emit frameUpdated();
@@ -533,9 +555,10 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     record(bgr, t_ms);
     scan_.add(read_, interval_ms);
     bool corner_added = false;
-    if (!read_.has_value()) {
+    if (!read_.has_value() && size_ == 3) {
         // Not a side square to the camera. It may still be two sides in one
-        // view, which is what settles a cube whose flat sides fit two ways.
+        // view, which is what settles a cube whose flat sides fit two ways. (The
+        // corner reader is a 3x3's.)
         const auto corner =
             prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt;
         scan_.add_corner(corner, interval_ms);
@@ -563,7 +586,13 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     ambiguous_ = !cube.has_value() && cube.error() == cube::CubeError::ambiguous_scan;
     if (cube.has_value()) {
         // Nothing more is read, so nothing is marked on the picture.
-        scanned_ = *cube;
+        scanned_n_ = *cube;
+        if (size_ == 3) {
+            if (auto three = cube->cube.to_cube3_as_held(); three.has_value()) {
+                scanned_ = cube::vision::ScannedCube{
+                    .cube = *three, .colours = cube->colours, .cast = cube->cast};
+            }
+        }
         read_.reset();
         reading_ = false;
         capture_progress_ = 0.0;
@@ -573,7 +602,7 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // listener that leaves the scan screen on scanCompleted would otherwise
     // never show it.
     emit sidesChanged();
-    if (scanned_.has_value()) {
+    if (scanned_n_.has_value()) {
         finishRecording();
         CUBE_MESSAGE("direct_scan.completed");
         emit scanCompleted();

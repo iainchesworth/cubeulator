@@ -55,7 +55,8 @@ QtObject {
             // A scan precedes whatever solve follows, so the camera has
             // something to be matched against again (resumeSolve turned it
             // off, having none).
-            solveCamera = true;
+            // (Only a 3x3 has a camera to follow it: the held-cube match is a 3x3's.)
+            solveCamera = DirectScan.size === 3;
             DirectScan.start(CameraController.selectedDeviceId);
         } else if (screen === "solve" && solveCamera) {
             // The camera the scan used stays as it is, exposure and white
@@ -279,7 +280,10 @@ QtObject {
         return result;
     }
 
-    function beginScan() {
+    // `size` is the cube's, 3 unless a screen says (DirectScan.size; a developer's
+    // CUBE_SCAN_SIZE changes what "unless" is).
+    function beginScan(size) {
+        DirectScan.size = size === undefined ? DirectScan.defaultSize : size;
         if (cameraGranted || !isMobile) {
             elapsedSeconds = 0;
             screen = "scan";

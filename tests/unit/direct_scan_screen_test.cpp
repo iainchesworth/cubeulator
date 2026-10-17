@@ -22,6 +22,8 @@
 #include "drawn_cube.hpp"
 #include "qml_test_app.hpp"
 
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/outside_view.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/solver.hpp>
 #include <cube/vision/direct_scan.hpp>
@@ -303,4 +305,45 @@ TEST_CASE("scan screen gallery", "[.gallery][direct-scan]") {
 
     window.hide();
     camera.restart();
+}
+
+TEST_CASE("the scan screen of a 5x5 marks its 25 stickers and no more", "[qml][direct-scan][nxn]") {
+    cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
+    camera.setWatching(false);
+    camera.restart();
+    camera.setSize(5);
+    REQUIRE(camera.size() == 5);
+
+    const cube::nxn::NCube cube = cube::nxn::random_scramble({.size = 5, .seed = 4, .moves = 80});
+    cube::test::Pose pose;
+    pose.pitch = 360.0F * 0.6F / 5.0F;
+    const cv::Mat frame = draw_side(cube::nxn::outside_view(cube, Face::F), pose);
+    for (std::size_t i = 0; i < cube::vision::SideScan::kMinReads; ++i) {
+        camera.processFrame(frame);
+    }
+    REQUIRE(camera.stickerPoints().size() == 25);
+
+    {
+        Screen screen;
+        const std::vector<QQuickItem*> dots = screen.all("scan.dot");
+        REQUIRE(dots.size() == 25);
+        // Every one is on its sticker, as the picture shows it (the camera in this
+        // process is a front one or not; the dot follows the same mirror as the picture).
+        for (const QQuickItem* dot : dots) {
+            CHECK(dot->isVisible());
+            // Smaller than a 3x3's 14, for the smaller stickers.
+            CHECK(dot->width() < 14.0);
+            CHECK(dot->width() >= 8.0);
+        }
+        // And the six chips are drawn from the sides read, 25 cells to a chip.
+        CHECK(screen.one("scan.chips")->childItems().size() > 0);
+    }
+
+    camera.setSize(3);
+    camera.restart();
+    {
+        Screen screen;
+        // A 3x3's dots are the 14 they always were, and one for each of nine.
+        CHECK(screen.all("scan.dot").size() == 9);
+    }
 }

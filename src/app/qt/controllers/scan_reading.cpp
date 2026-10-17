@@ -3,6 +3,7 @@
 #include <cube/model/facelet.hpp>
 #include <cube/nxn/cube.hpp>
 #include <cube/nxn/strategy.hpp>
+#include <cube/vision/side_grid.hpp>
 
 #include <algorithm>
 #include <array>
@@ -18,10 +19,7 @@ using cube::model::FacetColor;
 using cube::solver::Color;
 using cube::solver::Face;
 
-constexpr int kSize = 3;
-constexpr int kCells = kSize * kSize;
-
-using Side = std::array<cube::model::Facelet, kCells>;
+using Side = std::vector<cube::model::Facelet>;
 
 [[nodiscard]] std::optional<Color> color_of(FacetColor colour) noexcept {
     switch (colour) {
@@ -43,34 +41,39 @@ using Side = std::array<cube::model::Facelet, kCells>;
     return std::nullopt;
 }
 
-// The side turned a quarter clockwise: the cell at (row, col) goes to (col, 2 - row).
-[[nodiscard]] Side turned(const Side& side) {
-    Side out{};
-    for (int row = 0; row < kSize; ++row) {
-        for (int col = 0; col < kSize; ++col) {
-            out.at(static_cast<std::size_t>((col * kSize) + (kSize - 1 - row))) =
-                side.at(static_cast<std::size_t>((row * kSize) + col));
+// The side turned a quarter clockwise: the cell at (row, col) goes to (col, N - 1 - row).
+[[nodiscard]] Side turned(const Side& side, int size) {
+    Side out(side.size());
+    for (int row = 0; row < size; ++row) {
+        for (int col = 0; col < size; ++col) {
+            out.at(static_cast<std::size_t>((col * size) + (size - 1 - row))) =
+                side.at(static_cast<std::size_t>((row * size) + col));
         }
     }
     return out;
 }
 
-// A side the naming made, as nine, or none when it is of another size: the review
-// is a 3x3's as yet.
-[[nodiscard]] std::optional<Side> three_by_three(const std::vector<cube::model::Facelet>& named) {
-    if (named.size() != static_cast<std::size_t>(kCells)) {
-        return std::nullopt;
+// The side length of the sides a naming made, when they are all one square of an odd size
+// (an even one has no middle sticker to say which side it is), or 0.
+[[nodiscard]] int size_of_naming(const cube::vision::ColorResolution& naming) {
+    const int size = cube::vision::side_length_of(naming.faces.at(0).size());
+    if (size < 3 || size % 2 == 0) {
+        return 0;
     }
-    Side side{};
-    std::ranges::copy(named, side.begin());
-    return side;
+    for (const Side& side : naming.faces) {
+        if (side.size() != naming.faces.at(0).size()) {
+            return 0;
+        }
+    }
+    return size;
 }
 
-[[nodiscard]] Reading blank() {
+[[nodiscard]] Reading blank(int size) {
+    const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
     Reading reading;
-    reading.size = kSize;
-    reading.stickers.assign(6 * kCells, kUnpainted);
-    reading.doubtful.assign(6 * kCells, 0);
+    reading.size = size;
+    reading.stickers.assign(6 * cells, kUnpainted);
+    reading.doubtful.assign(6 * cells, 0);
     return reading;
 }
 
@@ -78,48 +81,52 @@ using Side = std::array<cube::model::Facelet, kCells>;
 
 Reading reading_from_cube(const cube::solver::Cube& cube,
                           const std::optional<cube::vision::ColorResolution>& naming) {
-    const cube::nxn::NCube held = cube::nxn::NCube::from_cube3(cube);
-    Reading reading = blank();
+    return reading_from_cube(cube::nxn::NCube::from_cube3(cube), naming);
+}
+
+Reading reading_from_cube(const cube::nxn::NCube& held,
+                          const std::optional<cube::vision::ColorResolution>& naming) {
+    const int size = held.size();
+    const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    Reading reading = blank(size);
     for (std::size_t i = 0; i < held.facelets().size(); ++i) {
         reading.stickers.at(i) = static_cast<std::int8_t>(held.facelets()[i]);
     }
-    if (!naming.has_value()) {
+    // The doubts are laid over the cube's sides where the naming's sides can be told by
+    // their middles, which an even size has none of, and of the size of the cube.
+    if (!naming.has_value() || size % 2 == 0 || size_of_naming(*naming) != size) {
         return reading;
     }
+    const std::size_t middle_cell = cells / 2;
 
     for (const Face face : cube::solver::kAllFaces) {
         // The camera saw this side from outside, as CubeEdit shows it, so the two
         // differ by a turn in place and nothing else.
-        std::array<Color, kCells> seen{};
-        for (int i = 0; i < kCells; ++i) {
-            seen.at(static_cast<std::size_t>(i)) = held.facelet(seen_facelet(face, kSize, i));
+        std::vector<Color> seen(cells);
+        for (std::size_t i = 0; i < cells; ++i) {
+            seen.at(i) = held.facelet(seen_facelet(face, size, static_cast<int>(i)));
         }
-        const Color middle = seen.at(kCells / 2);
+        const Color middle = seen.at(middle_cell);
 
-        for (const auto& named_side : naming->faces) {
-            const std::optional<Side> named = three_by_three(named_side);
-            if (!named.has_value()) {
-                continue;
-            }
-            const std::optional<Color> centre = color_of(named->at(kCells / 2).color);
+        for (const Side& named : naming->faces) {
+            const std::optional<Color> centre = color_of(named.at(middle_cell).color);
             if (!centre.has_value() || *centre != middle) {
                 continue;
             }
-            Side side = *named;
+            Side side = named;
             for (int turns = 0; turns < 4; ++turns) {
                 bool agrees = true;
-                for (int i = 0; i < kCells && agrees; ++i) {
-                    agrees = color_of(side.at(static_cast<std::size_t>(i)).color) ==
-                             std::optional<Color>{seen.at(static_cast<std::size_t>(i))};
+                for (std::size_t i = 0; i < cells && agrees; ++i) {
+                    agrees = color_of(side.at(i).color) == std::optional<Color>{seen.at(i)};
                 }
                 if (agrees) {
-                    for (int i = 0; i < kCells; ++i) {
-                        reading.doubtful.at(seen_facelet(face, kSize, i)) =
-                            side.at(static_cast<std::size_t>(i)).confidence < kDoubtBelow ? 1 : 0;
+                    for (std::size_t i = 0; i < cells; ++i) {
+                        reading.doubtful.at(seen_facelet(face, size, static_cast<int>(i))) =
+                            side.at(i).confidence < kDoubtBelow ? 1 : 0;
                     }
                     break;
                 }
-                side = turned(side);
+                side = turned(side, size);
             }
             break;
         }
@@ -128,16 +135,16 @@ Reading reading_from_cube(const cube::solver::Cube& cube,
 }
 
 std::optional<Reading> reading_from_named_sides(const cube::vision::ColorResolution& naming) {
-    Reading reading = blank();
+    const int size = size_of_naming(naming);
+    if (size == 0) {
+        return std::nullopt;
+    }
+    const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    Reading reading = blank(size);
     reading.upright = false;
     std::array<bool, 6> placed{};
-    for (const auto& named_side : naming.faces) {
-        const std::optional<Side> named_nine = three_by_three(named_side);
-        if (!named_nine.has_value()) {
-            continue;
-        }
-        const Side& named = *named_nine;
-        const std::optional<Color> centre = color_of(named.at(kCells / 2).color);
+    for (const Side& named : naming.faces) {
+        const std::optional<Color> centre = color_of(named.at(cells / 2).color);
         if (!centre.has_value()) {
             continue;
         }
@@ -149,9 +156,9 @@ std::optional<Reading> reading_from_named_sides(const cube::vision::ColorResolut
                 continue;
             }
             placed.at(static_cast<std::size_t>(face)) = true;
-            for (int i = 0; i < kCells; ++i) {
-                const auto& sticker = named.at(static_cast<std::size_t>(i));
-                const std::size_t at = seen_facelet(face, kSize, i);
+            for (std::size_t i = 0; i < cells; ++i) {
+                const auto& sticker = named.at(i);
+                const std::size_t at = seen_facelet(face, size, static_cast<int>(i));
                 const std::optional<Color> colour = color_of(sticker.color);
                 reading.stickers.at(at) =
                     colour.has_value() ? static_cast<std::int8_t>(*colour) : kUnpainted;
