@@ -292,9 +292,10 @@ struct Window {
 
 // The window whose first node is (offset_a, offset_b): nothing unless its
 // blobs span all N columns and rows and no two share a cell.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the window's two offsets, then the size
+// NOLINTBEGIN(bugprone-easily-swappable-parameters): the window's two offsets, then the size
 [[nodiscard]] std::optional<Window> window_at(const std::vector<Placed>& placed, int offset_a,
                                               int offset_b, int n) {
+    // NOLINTEND(bugprone-easily-swappable-parameters)
     Window window;
     window.cells.assign(static_cast<std::size_t>(n) * static_cast<std::size_t>(n), -1);
     int min_a = n;
