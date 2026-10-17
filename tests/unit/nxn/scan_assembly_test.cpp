@@ -136,7 +136,9 @@ TEST_CASE("a 3x3 assembles the cubes the 3x3 assembly makes", "[nxn][scan]") {
         for (std::size_t side = 0; side < 6; ++side) {
             for (std::size_t cell = 0; cell < 9; ++cell) {
                 faces.at(side).at(cell) = cube::model::Facelet{
-                    .color = facet(sides.at(side).at(cell)), .confidence = 1.0F};
+                    .color = facet(sides.at(side).at(cell)),
+                    .confidence = 1.0F,
+                };
             }
         }
         const std::vector<cube::solver::Cube> old =

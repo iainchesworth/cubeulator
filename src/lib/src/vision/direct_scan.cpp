@@ -1171,7 +1171,7 @@ struct Assembled {
     Assembled out{
         .result = std::unexpected(CubeError::invalid_cube_state),
         .result_n = std::unexpected(CubeError::invalid_cube_state),
-        .trace = {},
+        .trace = AssemblyTrace(),
     };
     AssemblyTrace& trace = out.trace;
     trace.corner_reads = corners.size();
@@ -1285,7 +1285,7 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
     Assembled out{
         .result = std::unexpected(CubeError::invalid_cube_state),
         .result_n = std::unexpected(CubeError::invalid_cube_state),
-        .trace = {},
+        .trace = AssemblyTrace(),
     };
     AssemblyTrace& trace = out.trace;
     const std::optional<nxn::ScannedSides> sides = colours_of_names(named);
@@ -1712,9 +1712,11 @@ std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
         for (std::size_t other = keep + 1; other < groups_.size(); ++other) {
             // Two groups are each in the turn their side was first seen in, so
             // no turn is more likely than another.
-            const SideFit fit = fit_to_side({.read = &groups_.at(other).fused,
-                                             .side = &groups_.at(keep).fused,
-                                             .prior_roll = 0});
+            const SideFit fit = fit_to_side({
+                .read = &groups_.at(other).fused,
+                .side = &groups_.at(keep).fused,
+                .prior_roll = 0,
+            });
             if (fit.same) {
                 return AlikePair{.keep = keep, .other = other, .roll = fit.roll};
             }
