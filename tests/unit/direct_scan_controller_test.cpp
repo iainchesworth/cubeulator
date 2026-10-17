@@ -442,9 +442,9 @@ TEST_CASE("DirectScan scans a cube of another odd size: its dots, its sides and 
     int size_changes = 0;
     QObject::connect(&scan, &DirectScan::sizeChanged, [&size_changes]() { ++size_changes; });
 
-    // Only an odd size from 3 to 9 is taken: an even size's sides cannot be named yet.
-    scan.setSize(4);
-    scan.setSize(2);
+    // Only a size from 2 to 9 is taken.
+    scan.setSize(1);
+    scan.setSize(10);
     scan.setSize(11);
     scan.setSize(3);
     CHECK(scan.size() == 3);

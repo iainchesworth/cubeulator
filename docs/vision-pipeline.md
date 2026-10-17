@@ -533,9 +533,8 @@ N from 2 to 9, and are a 3x3 when no size is said (`read_side(frame, size)`,
 `SideScan(size)`, `prepare_frame(frame, size)`). The size is **chosen, never
 inferred**: nothing here looks at a lattice and says "this is a 5x5". How far it
 is validated is in [the S0 investigation](investigations/2026-10-17-nxn-scan-s0.md);
-in short, odd sizes are read, named and assembled end to end on drawn cubes, an
-even size is read and not named, and nothing but a 3x3 has been read on a real
-cube.
+in short, every size from 2 to 9 is read, named and assembled end to end on drawn
+cubes, and nothing but a 3x3 has been read on a real cube.
 
 - **A side is N^2 cells**, numbered row * N + column, row-major from the sticker
   nearest the image's top-left (`vision/side_grid.hpp`). `SideRead`,
@@ -562,16 +561,24 @@ cube.
   above, when the camera gives so many, and the adaptive threshold's block scales
   by 3/N. A frame no wider is read as it is, so on a platform whose capture is
   capped at 640 (the browser's) a bigger cube gets the 3x3's pixels.
-- **Naming** (`resolve_colors`) takes six sides of any odd size: the middle
-  sticker of each seeds its cluster and stays there, and exactly N^2 stickers go to each
-  cluster. The distance from every sticker to every cluster mean is worked out once
+- **Naming** (`resolve_colors`) takes six sides of any size. At an odd size the middle
+  sticker of each seeds its cluster and stays there; at an even size, which has none, the
+  24 corner stickers (a side's four corner cells are the same four however it is turned; four
+  of each colour) are clustered first, in groups of four, from the farthest-first picks of
+  each of them in turn, the best of the 24 starts kept, and the six means seed the rest. In both
+  exactly N^2 stickers go to each cluster. The distance from every sticker to every cluster mean is worked out once
   for each pass of the assignment and not each time it is asked for (the descent by
-  swaps looks at every pair of stickers: 43,000 pairs at a 7x7, 1,400 at a 3x3).
-  An even size has no middle sticker and comes back `no_valid_cube_detected`.
+  swaps looks at every pair of stickers: 43,000 pairs at a 7x7, 1,400 at a 3x3). There is no
+  white to read off a middle at an even size, so the light is not corrected for it
+  (`find_white_reference` says none), and no pair of centres whose names could be traded.
 - **Assembly** is `cube::solver::assemble_scanned_faces` for a 3x3, as it was, and
-  `cube::nxn::assemble_scanned_sides` for any other size: the same 4^6 quarter-turns of
-  six sides pinned by their middles, pruned by the pieces (no edge, wing or corner shows
-  two colours of one axis pair), and asked of `cube::nxn::validate` at the end. There is
+  `cube::nxn::assemble_scanned_sides` for any other size. At an odd size: the same 4^6
+  quarter-turns of six sides pinned by their middles, pruned by the pieces (no edge, wing or corner
+  shows two colours of one axis pair), and asked of `cube::nxn::validate` at the end. At an even
+  size there is no middle to pin a side by, so the first side is laid on the top and the other
+  five on any free face in any of four turns (5! x 4^5 = 122,880 at most), a branch stopping where a
+  corner or wing shows a colour twice, and `validate` reads the colour scheme off the corners at the
+  end; a 2x2's six flat sides make more than one cube one time in four (none of 85 4x4s and 6x6s). There is
   no corner reader above a 3x3: a scan whose flat sides make more than one cube is
   `ambiguous_scan` and says no corner to show. `SideScan::scanned_n()` / `cube_n()` give the
   cube of any size (an `NCube`); `scanned()` / `cube()` are the 3x3's.

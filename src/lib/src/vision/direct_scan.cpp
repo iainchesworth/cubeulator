@@ -188,7 +188,8 @@ struct Tuning {
     const double shrink = (3.0 / static_cast<double>(size)) * (3.0 / static_cast<double>(size));
     Tuning tuning;
     tuning.size = size;
-    tuning.min_blob_area = kMinBlobArea * shrink;
+    // The smallest sticker a frame can show is the 3x3's however big a 2x2's are.
+    tuning.min_blob_area = kMinBlobArea * std::min(1.0, shrink);
     tuning.max_blob_area = kMaxBlobArea * shrink;
     tuning.reach = kReachInSides * static_cast<float>(size - 1) / 2.0F;
     tuning.min_lattice_blobs = ((2 * n * n) + 2) / 3;
@@ -1312,6 +1313,13 @@ using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
         return out;
     }
     trace.direct_error = CubeError::invalid_cube_state;
+
+    // An even size has no centres whose names could have been traded.
+    if (size % 2 == 0) {
+        trace.path = AssemblyPath::failed;
+        trace.error = CubeError::invalid_cube_state;
+        return out;
+    }
 
     // Trade the names of the centres that look most alike.
     const std::size_t middle = middle_cell(size);

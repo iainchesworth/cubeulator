@@ -19,9 +19,12 @@
 // question for any size, asked of the stickers alone.
 //
 // A side with a middle sticker (odd N) is pinned by it, as at 3x3. A side
-// without one (even N) is not pinned by anything on it, so an even size is not
-// assembled here: the sides come back as no cube. Telling six even sides apart
-// is a problem of its own (docs/nxn-app-plan.md, phase P3).
+// without one (even N) is not pinned by anything on it, and is put on the cube
+// by trying every face it could go on: the first on the top, the other five on
+// any face that is free, each in four turns, which is 5! x 4^5 at the most and a
+// good deal fewer once the pieces are looked at (a corner or a wing that shows a
+// colour twice is no piece). The cube comes back with the first side on the top,
+// in the colours the sides have, whichever way up the cube was held.
 
 namespace cube::nxn {
 

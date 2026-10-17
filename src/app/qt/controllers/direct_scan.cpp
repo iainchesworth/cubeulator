@@ -123,7 +123,7 @@ DirectScan::DirectScan(QObject* parent)
     : QObject(parent), recording_root_(qEnvironmentVariable("CUBE_SCAN_RECORD_DIR")) {
     // For a developer, to scan and record a cube that is not a 3x3 (see defaultSize).
     const int asked = qEnvironmentVariableIntValue("CUBE_SCAN_SIZE");
-    if (asked >= 3 && asked <= 9 && asked % 2 == 1) {
+    if (asked >= 2 && asked <= 9) {
         default_size_ = asked;
         size_ = asked;
         scan_ = cube::vision::SideScan(asked);
@@ -330,7 +330,7 @@ cube::Result<cube::vision::ScannedCubeN> DirectScan::evaluateScan(std::string_vi
 }
 
 void DirectScan::setSize(int size) {
-    if (size == size_ || size < 3 || size > 9 || size % 2 == 0) {
+    if (size == size_ || size < 2 || size > 9) {
         return;
     }
     size_ = size;

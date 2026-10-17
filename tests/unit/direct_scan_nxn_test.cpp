@@ -456,31 +456,38 @@ TEST_CASE("a read of another size is not a read of this cube", "[vision][nxn]") 
     CHECK_FALSE(five.reading());
 }
 
-TEST_CASE("an even size is read side by side but not named", "[vision][nxn]") {
-    // A 2x2 and a 4x4 have no middle sticker to seed a colour's cluster from.
-    // What is read is read; what cannot be named says so (P3 of the plan).
+TEST_CASE("an even size is read, named from its corners, and put together", "[vision][nxn]") {
+    // A 2x2, 4x4 and 6x6 have no middle sticker: the six colours are found from the 24
+    // corner stickers, and the sides laid on the cube by trying where each can go.
     for (const int size : {2, 4, 6}) {
         CAPTURE(size);
-        const NCube cube = cube::nxn::random_scramble({.size = size, .seed = 9, .moves = 30});
-        const Pose pose = pose_for(size, 0.6F);
-        const cv::Mat frame =
-            cube::test::draw_side(cube::nxn::outside_view(cube, Face::F), pose, Drawing{});
-        const auto found = cube::vision::read_side(frame, size);
-        const SideRead& read = cube::test::must_have(found);
-        CHECK(read.size == size);
-        CHECK(read.lab.size() == static_cast<std::size_t>(size * size));
+        const NCube cube = cube::nxn::random_scramble(
+            {.size = size, .seed = static_cast<unsigned>(40 + size), .moves = 30 * size});
+        SideScan scan(size);
+        show_cube(scan, cube, 17U, even_light(), 0.6F);
+        REQUIRE(scan.sides().size() == 6);
 
-        std::array<cube::vision::CapturedFace, 6> faces{};
-        for (cube::vision::CapturedFace& face : faces) {
-            face.lab = read.lab;
+        const auto made = scan.scanned_n();
+        if (made.has_value()) {
+            CHECK(is_cube(made->cube, cube));
+        } else {
+            // Six flat sides of a 2x2 make more than one cube one time in four.
+            CHECK(size == 2);
+            CHECK(made.error() == cube::CubeError::ambiguous_scan);
         }
-        CHECK_FALSE(cube::vision::resolve_colors(faces).has_value());
+
+        // No middle to read a white from: the naming is of the colours as they are.
+        std::array<cube::vision::CapturedFace, 6> faces{};
+        for (std::size_t i = 0; i < 6; ++i) {
+            faces.at(i).lab = scan.sides().at(i).lab;
+        }
         CHECK_FALSE(cube::vision::find_white_reference(faces).has_value());
+        CHECK(cube::vision::resolve_colors(faces).has_value());
     }
 }
 
-TEST_CASE("sticker colours are named at any odd size, exactly N^2 of each", "[vision][nxn]") {
-    for (const int size : {3, 5, 7, 9}) {
+TEST_CASE("sticker colours are named at any size, exactly N^2 of each", "[vision][nxn]") {
+    for (const int size : {2, 3, 4, 5, 6, 7, 8, 9}) {
         CAPTURE(size);
         const NCube cube = cube::nxn::random_scramble({.size = size, .seed = 12, .moves = 50});
         const Drawing drawing;
