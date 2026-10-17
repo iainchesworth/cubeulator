@@ -18,8 +18,8 @@ namespace cube::vision {
 // frame, it is shared by read_side (direct_scan.hpp) and read_corner
 // (corner_view.hpp).
 struct PreparedFrame {
-    // The frame at the working width, or the frame itself when it is already
-    // no wider.
+    // The frame at the working width (640 for a 3x3, more for a bigger cube: see
+    // prepare_frame), or the frame itself when it is already no wider.
     cv::Mat working;
     // Input pixels per working pixel: what turns a position found in `working`
     // back into the frame's own.
@@ -34,7 +34,12 @@ struct PreparedFrame {
 };
 
 // Nothing for a frame that is empty or is not 8-bit BGR.
-[[nodiscard]] std::optional<PreparedFrame> prepare_frame(const cv::Mat& bgr);
+//
+// `size` is the cube's (N x N x N), because what a pixel is judged against is
+// the plastic and stickers about it, and a side of more stickers across the same
+// span has stickers that are smaller by 3 / N: the block is scaled by that for a
+// size above 3 (a 3x3, and anything smaller, is as it was).
+[[nodiscard]] std::optional<PreparedFrame> prepare_frame(const cv::Mat& bgr, int size = 3);
 
 // The outlines of a prepared frame taken against a narrower block than
 // PreparedFrame::contours, for a reader that found nothing in those.
@@ -55,6 +60,7 @@ struct PreparedFrame {
 // 583. As the second look at a frame the first gave nothing, no frame the
 // first read is different. It costs the threshold and the contours again, from
 // the same brightness.
-[[nodiscard]] std::vector<std::vector<cv::Point>> narrow_contours(const cv::Mat& brightness);
+[[nodiscard]] std::vector<std::vector<cv::Point>> narrow_contours(const cv::Mat& brightness,
+                                                                  int size = 3);
 
 }  // namespace cube::vision

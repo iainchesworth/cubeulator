@@ -140,6 +140,12 @@ Optional, for scoring with `cube_scan board`. Six words of nine letters from
 row-major as seen from outside the cube, in any orientation and any order.
 Nothing in the app writes it; it is typed from the cube in hand.
 
+For a cube that is not a 3x3 (the manifest says `size`), the words are `size^2`
+letters long, and `cube_scan replay` and `board` read the session as that size
+and score the cube against them (odd sizes: an even size has no middle sticker to
+put its sides together by). The other `cube_scan` commands are a 3x3's.
+`cube_scan_s0 --session <dir> <size> <seed>` writes a drawn cube as such a session.
+
 ## `layout.txt`
 
 Optional, instead of `truth.txt`, for a cube whose six sides make more than one

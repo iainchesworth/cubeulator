@@ -117,3 +117,7 @@ name.
   verdict freeze the page?](2026-10-15-web-scan-frame-cost.md) - not freeze: the
   dearest judgement is 12 to 25 ms there, and was repeated on most frames until
   the assembly guard; `cube_scan cost` and the browser ceiling hold it.
+
+- [2026-10-17: can the direct scan read a cube of N x N?](2026-10-17-nxn-scan-s0.md) -
+  yes, on drawn cubes: a 5x5 and a 7x7 read at the 3x3's sticker size, 4,240 scans and no
+  wrong cube; no recording of one exists, so not yet on a real one. `cube_scan_s0` repeats it.

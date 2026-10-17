@@ -2,6 +2,7 @@
 #include <cube/vision/direct_scan.hpp>
 
 #include <cube/model/facelet.hpp>
+#include <cube/nxn/scan_assembly.hpp>
 #include <cube/profiling.hpp>
 #include <cube/solver/scan_assembly.hpp>
 #include <cube/vision/color_resolution.hpp>
@@ -21,18 +22,21 @@ namespace cube::vision {
 namespace {
 
 // Sticker blob limits, as fractions of the frame area. At the working width
-// they admit stickers from about 9 to 65 pixels across.
+// they admit the stickers of a 3x3 from about 9 to 65 pixels across; a cube of
+// N holds the same extent in the frame, so its stickers are 3 / N of that
+// (Tuning::min_blob_area).
 constexpr double kMinBlobArea = 0.0006;
 constexpr double kMaxBlobArea = 0.03;
 constexpr float kMaxBlobAspect = 1.45F;
 constexpr float kMinBlobFill = 0.72F;
 
 // Blobs that may belong to one lattice: similar size, within reach of the
-// seed. Six of nine is enough to span three rows and three columns.
+// seed. Six of nine is enough to span three rows and three columns; two thirds
+// of the stickers of a side of any size is the same share
+// (Tuning::min_lattice_blobs).
 constexpr float kMinSizeRatio = 0.72F;
 constexpr float kMaxSizeRatio = 1.4F;
 constexpr float kReachInSides = 3.4F;
-constexpr std::size_t kMinLatticeBlobs = 6;
 constexpr float kMaxCellResidual = 0.3F;
 
 // Square-on test: the lattice's two axes must be near-equal and near
@@ -111,7 +115,7 @@ static_assert(kSameColourLab < kMinCentreSeedSeparationLab,
 // of the eight stickers other than the centre unlike the side's: the reader
 // needs six of the nine in the lattice, so at most three are covered, and one
 // more is noise. More than that is another side whatever its centre reads.
-constexpr int kMostStickersAHandCovers = 4;
+// (most_stickers_a_hand_covers, below, is that count for a side of any size.)
 
 // Cost of laying a read on a side is the summed distance of the eight
 // stickers other than the centre, each capped so one finger cannot decide a
@@ -147,16 +151,56 @@ struct Blob {
     float side = 0.0F;
 };
 
-// kRoll[k][i] is the cell of a read that lands at cell i once the read is
-// turned k quarter-turns.
-constexpr std::array<std::array<int, 9>, 4> kRoll = {
-    {
-        {0, 1, 2, 3, 4, 5, 6, 7, 8},
-        {2, 5, 8, 1, 4, 7, 0, 3, 6},
-        {8, 7, 6, 5, 4, 3, 2, 1, 0},
-        {6, 3, 0, 7, 4, 1, 8, 5, 2},
-    },
+// What the numbers above come to for a side of `size` x `size` stickers: the
+// 3x3's own at size 3, and at another size the same thing in the unit it was
+// measured in (a sticker, a share of the stickers, a span of the lattice).
+struct Tuning {
+    int size = 3;
+    // Blob area limits, as fractions of the frame area.
+    double min_blob_area = kMinBlobArea;
+    double max_blob_area = kMaxBlobArea;
+    // How far from a seed its lattice reaches, in sticker sides.
+    float reach = kReachInSides;
+    // Fewest blobs that make a lattice: two thirds of the stickers, rounded up
+    // (six of nine), which is enough to span the side's rows and columns.
+    std::size_t min_lattice_blobs = 6;
+    // Fewest blobs on a lattice placed through its own fit: eight of nine, or
+    // that share of the stickers (see kMinPlacedBlobs' note below).
+    std::size_t min_placed_blobs = 8;
+    // The most cells either way that a neighbour set is placed through its own
+    // lattice, from the first neighbour: twice the side's span.
+    int most_cells_away = 6;
+    [[nodiscard]] std::size_t cells() const {
+        return static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    }
 };
+
+[[nodiscard]] Tuning tuning_for(int size);
+
+// The most stickers other than the centre that a hand can leave unlike the
+// side's own before the read is another side whatever its centre reads: the
+// lattice may lose all but Tuning::min_lattice_blobs of the N^2 (three of the
+// nine of a 3x3), and one more is noise (four).
+[[nodiscard]] int most_stickers_a_hand_covers(int size);
+
+[[nodiscard]] Tuning tuning_for(int size) {
+    const auto n = static_cast<std::size_t>(size);
+    const double shrink = (3.0 / static_cast<double>(size)) * (3.0 / static_cast<double>(size));
+    Tuning tuning;
+    tuning.size = size;
+    tuning.min_blob_area = kMinBlobArea * shrink;
+    tuning.max_blob_area = kMaxBlobArea * shrink;
+    tuning.reach = kReachInSides * static_cast<float>(size - 1) / 2.0F;
+    tuning.min_lattice_blobs = ((2 * n * n) + 2) / 3;
+    tuning.min_placed_blobs = ((8 * n * n) + 8) / 9;
+    tuning.most_cells_away = 2 * size;
+    return tuning;
+}
+
+int most_stickers_a_hand_covers(int size) {
+    const Tuning tuning = tuning_for(size);
+    return static_cast<int>(tuning.cells() - tuning.min_lattice_blobs) + 1;
+}
 
 template <typename T>
 [[nodiscard]] T median_of(std::vector<T> values) {
@@ -172,12 +216,13 @@ template <typename T>
 // Bright, compact, squarish regions bounded by darker plastic: the outlines
 // prepare_frame found, kept when they are the size and shape of a sticker.
 [[nodiscard]] std::vector<Blob> sticker_blobs(const std::vector<std::vector<cv::Point>>& contours,
-                                              const cv::Mat& working) {
+                                              const cv::Mat& working, const Tuning& tuning) {
     const double frame_area = static_cast<double>(working.rows) * static_cast<double>(working.cols);
     std::vector<Blob> blobs;
     for (const auto& contour : contours) {
         const double area = cv::contourArea(contour);
-        if (area <= frame_area * kMinBlobArea || area >= frame_area * kMaxBlobArea) {
+        if (area <= frame_area * tuning.min_blob_area ||
+            area >= frame_area * tuning.max_blob_area) {
             continue;
         }
         const cv::RotatedRect rect = cv::minAreaRect(contour);
@@ -201,8 +246,8 @@ struct Lattice {
     cv::Point2f row_step;
     std::size_t blobs = 0;
     float rms = 0.0F;  // residual of the blobs about the lattice, in spacings
-    // Which cells (row * 3 + column) have a blob on them.
-    std::array<bool, 9> found{};
+    // Which cells (row * N + column) have a blob on them.
+    std::vector<bool> found;
 
     [[nodiscard]] cv::Point2f at(int column, int row) const {
         return origin + column_step * static_cast<float>(column) +
@@ -248,13 +293,13 @@ struct Lattice {
 
 // The blobs of a size and distance near enough to `seed` to be on its side.
 [[nodiscard]] std::vector<cv::Point2f> neighbours_of(const std::vector<Blob>& blobs,
-                                                     const Blob& seed) {
+                                                     const Blob& seed, const Tuning& tuning) {
     std::vector<cv::Point2f> points;
     for (const Blob& blob : blobs) {
         const float ratio = blob.side / seed.side;
         const cv::Point2f offset = blob.centre - seed.centre;
         if (ratio > kMinSizeRatio && ratio < kMaxSizeRatio &&
-            std::hypot(offset.x, offset.y) < kReachInSides * seed.side) {
+            std::hypot(offset.x, offset.y) < tuning.reach * seed.side) {
             points.push_back(blob.centre);
         }
     }
@@ -332,27 +377,29 @@ struct SnappedPoints {
     return snapped;
 }
 
-// Moves `cells` so the lattice starts at (0, 0) and returns which of the nine
-// cells are taken - or nothing unless they span exactly three by three with no
-// cell used twice. Anything other than a full three-by-three span leaves the
-// lattice's position on the side unknown by a row or a column.
-[[nodiscard]] std::optional<std::array<bool, 9>> normalise_cells(std::vector<cv::Point>& cells) {
+// Moves `cells` so the lattice starts at (0, 0) and returns which of the N^2
+// cells are taken - or nothing unless they span exactly N by N with no cell
+// used twice. Anything other than a full N-by-N span leaves the lattice's
+// position on the side unknown by a row or a column.
+[[nodiscard]] std::optional<std::vector<bool>> normalise_cells(std::vector<cv::Point>& cells,
+                                                               int size) {
     const auto [min_a, max_a] =
         std::ranges::minmax_element(cells, [](const auto& l, const auto& r) { return l.x < r.x; });
     const auto [min_b, max_b] =
         std::ranges::minmax_element(cells, [](const auto& l, const auto& r) { return l.y < r.y; });
     const cv::Point low(min_a->x, min_b->y);
-    if (max_a->x - low.x != 2 || max_b->y - low.y != 2) {
+    if (max_a->x - low.x != size - 1 || max_b->y - low.y != size - 1) {
         return std::nullopt;
     }
-    std::array<bool, 9> taken{};
+    const auto n = static_cast<std::size_t>(size);
+    std::vector<bool> taken(n * n, false);
     bool duplicate = false;
     for (cv::Point& cell : cells) {
         cell -= low;
-        bool& slot =
-            taken.at((static_cast<std::size_t>(cell.y) * 3) + static_cast<std::size_t>(cell.x));
-        duplicate = duplicate || slot;
-        slot = true;
+        const std::size_t at =
+            (static_cast<std::size_t>(cell.y) * n) + static_cast<std::size_t>(cell.x);
+        duplicate = duplicate || taken.at(at);
+        taken.at(at) = true;
     }
     if (duplicate) {
         return std::nullopt;
@@ -450,11 +497,6 @@ struct Affine {
     return Affine{.origin = at(2), .column_step = at(0), .row_step = at(1)};
 }
 
-// The most cells either way that a neighbour set is placed through its own
-// lattice, from the first neighbour: the span of a side is 3, and a seed sees a
-// little more than one.
-constexpr int kMostCellsAway = 6;
-
 // The two steps of a fitted lattice must be this far from the same line (the
 // sine of the angle between them): a fit through points in a near-line has no
 // second axis to place the others by.
@@ -464,7 +506,9 @@ constexpr float kMinAxesSine = 0.5F;
 // is trusted to place the others: two steps and an offset, with one to spare.
 constexpr std::size_t kMinPlacedFrom = 4;
 
-// Fewest blobs on a lattice placed through its own fit. The square grid is a
+// Fewest blobs on a lattice placed through its own fit (Tuning::min_placed_blobs:
+// eight of the nine of a 3x3, and that share of the stickers at another size).
+// The square grid is a
 // strong prior and six of nine is enough for it; an affine fit through six
 // points has no point left over to disagree, so a seed that is not a side can
 // always be fitted. With a finger over one sticker (eight of nine) it has ten
@@ -472,10 +516,9 @@ constexpr std::size_t kMinPlacedFrom = 4;
 // on the recorded sessions the nine- and eight-sticker ones were all the
 // cube's sides, and two of the three with six or seven were not (21 and 34 Lab
 // units from every side the scan held).
-constexpr std::size_t kMinPlacedBlobs = 8;
 
-// The 3x3 windows, of the lattice that the neighbours already on the square
-// grid make, that hold at least kMinPlacedBlobs of all the neighbours.
+// The N x N windows, of the lattice that the neighbours already on the square
+// grid make, that hold at least Tuning::min_placed_blobs of all the neighbours.
 //
 // snap_to_grid lays a square grid at the nearest-neighbour spacing. A side
 // turned about one axis is not square: its steps along the turned axis are
@@ -497,7 +540,8 @@ constexpr std::size_t kMinPlacedBlobs = 8;
 // Nothing when there is too little on the grid to fit, or the points it has
 // lie in a line.
 [[nodiscard]] std::vector<SnappedPoints> windows_through_fit(const std::vector<cv::Point2f>& points,
-                                                             const SnappedPoints& on_grid) {
+                                                             const SnappedPoints& on_grid,
+                                                             const Tuning& tuning) {
     if (on_grid.on_grid.size() < kMinPlacedFrom) {
         return {};
     }
@@ -523,13 +567,13 @@ constexpr std::size_t kMinPlacedBlobs = 8;
         const float cell_u = std::round(u);
         const float cell_v = std::round(v);
         if (std::abs(u - cell_u) < kMaxCellResidual && std::abs(v - cell_v) < kMaxCellResidual &&
-            std::abs(cell_u) <= static_cast<float>(kMostCellsAway) &&
-            std::abs(cell_v) <= static_cast<float>(kMostCellsAway)) {
+            std::abs(cell_u) <= static_cast<float>(tuning.most_cells_away) &&
+            std::abs(cell_v) <= static_cast<float>(tuning.most_cells_away)) {
             placed_points.push_back(point);
             placed_cells.emplace_back(static_cast<int>(cell_u), static_cast<int>(cell_v));
         }
     }
-    if (placed_points.size() < kMinPlacedBlobs) {
+    if (placed_points.size() < tuning.min_placed_blobs) {
         return {};
     }
 
@@ -538,17 +582,18 @@ constexpr std::size_t kMinPlacedBlobs = 8;
     const auto [min_v, max_v] = std::ranges::minmax_element(
         placed_cells, [](const auto& l, const auto& r) { return l.y < r.y; });
     std::vector<SnappedPoints> windows;
-    for (int u0 = min_u->x; u0 <= max_u->x - 2; ++u0) {
-        for (int v0 = min_v->y; v0 <= max_v->y - 2; ++v0) {
+    for (int u0 = min_u->x; u0 <= max_u->x - (tuning.size - 1); ++u0) {
+        for (int v0 = min_v->y; v0 <= max_v->y - (tuning.size - 1); ++v0) {
             SnappedPoints window;
             for (std::size_t i = 0; i < placed_points.size(); ++i) {
                 const cv::Point& cell = placed_cells.at(i);
-                if (cell.x >= u0 && cell.x < u0 + 3 && cell.y >= v0 && cell.y < v0 + 3) {
+                if (cell.x >= u0 && cell.x < u0 + tuning.size && cell.y >= v0 &&
+                    cell.y < v0 + tuning.size) {
                     window.on_grid.push_back(placed_points.at(i));
                     window.cells.push_back(cell);
                 }
             }
-            if (window.on_grid.size() >= kMinPlacedBlobs) {
+            if (window.on_grid.size() >= tuning.min_placed_blobs) {
                 windows.push_back(std::move(window));
             }
         }
@@ -556,14 +601,15 @@ constexpr std::size_t kMinPlacedBlobs = 8;
     return windows;
 }
 
-// The best 3x3 lattice through the blobs: most blobs on it, then tightest.
+// The best N x N lattice through the blobs: most blobs on it, then tightest.
 // Each blob in turn seeds a group of similar-sized neighbours; the group's
 // nearest-neighbour spacing and direction give a grid to snap its members to.
-[[nodiscard]] std::optional<Lattice> fit_lattice(const std::vector<Blob>& blobs) {
+[[nodiscard]] std::optional<Lattice> fit_lattice(const std::vector<Blob>& blobs,
+                                                 const Tuning& tuning) {
     std::optional<Lattice> best;
     for (const Blob& seed : blobs) {
-        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed);
-        if (points.size() < kMinLatticeBlobs) {
+        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed, tuning);
+        if (points.size() < tuning.min_lattice_blobs) {
             continue;
         }
         const std::optional<GridFrame> frame = grid_frame(points);
@@ -571,10 +617,10 @@ constexpr std::size_t kMinPlacedBlobs = 8;
             continue;
         }
         SnappedPoints snapped = snap_to_grid(points, *frame);
-        if (snapped.on_grid.size() < kMinLatticeBlobs) {
+        if (snapped.on_grid.size() < tuning.min_lattice_blobs) {
             continue;
         }
-        const std::optional<std::array<bool, 9>> taken = normalise_cells(snapped.cells);
+        const std::optional<std::vector<bool>> taken = normalise_cells(snapped.cells, tuning.size);
         if (!taken) {
             continue;
         }
@@ -613,10 +659,11 @@ struct Candidate {
 // the near side and the merged column of a much thinner side beside it passed
 // the gate on its own (ratio 0.852); the near side it was part of, at 0.80,
 // did not, and fitted tighter.
-[[nodiscard]] std::optional<Lattice> fit_lattice_through_fit(const std::vector<Blob>& blobs) {
+[[nodiscard]] std::optional<Lattice> fit_lattice_through_fit(const std::vector<Blob>& blobs,
+                                                             const Tuning& tuning) {
     std::vector<Candidate> candidates;
-    const auto consider = [&candidates](SnappedPoints set, float pitch) {
-        if (set.on_grid.size() < kMinLatticeBlobs) {
+    const auto consider = [&candidates, &tuning](SnappedPoints set, float pitch) {
+        if (set.on_grid.size() < tuning.min_lattice_blobs) {
             return;
         }
         // The same blobs as a lattice already weighed: seeds on one side
@@ -631,7 +678,7 @@ struct Candidate {
             return;
         }
         const std::vector<cv::Point2f> members = set.on_grid;
-        const std::optional<std::array<bool, 9>> taken = normalise_cells(set.cells);
+        const std::optional<std::vector<bool>> taken = normalise_cells(set.cells, tuning.size);
         if (!taken) {
             return;
         }
@@ -641,8 +688,8 @@ struct Candidate {
     };
 
     for (const Blob& seed : blobs) {
-        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed);
-        if (points.size() < kMinLatticeBlobs) {
+        const std::vector<cv::Point2f> points = neighbours_of(blobs, seed, tuning);
+        if (points.size() < tuning.min_lattice_blobs) {
             continue;
         }
         const std::optional<GridFrame> frame = grid_frame(points);
@@ -650,7 +697,7 @@ struct Candidate {
             continue;
         }
         const SnappedPoints snapped = snap_to_grid(points, *frame);
-        for (SnappedPoints& window : windows_through_fit(points, snapped)) {
+        for (SnappedPoints& window : windows_through_fit(points, snapped, tuning)) {
             consider(std::move(window), frame->pitch);
         }
         consider(snapped, frame->pitch);
@@ -673,40 +720,46 @@ struct Candidate {
     return std::nullopt;
 }
 
-// The nine centres row-major with cell 0 nearest the image's top-left: of
+// The N^2 centres row-major with cell 0 nearest the image's top-left: of
 // the lattice's four quarter-turn labellings, the one whose rows run most
 // nearly rightwards and whose columns run most nearly downwards.
 struct Upright {
-    std::array<cv::Point2f, 9> centres{};
+    std::vector<cv::Point2f> centres;
     // Whether each of those centres had a blob on it.
-    std::array<bool, 9> found{};
+    std::vector<bool> found;
 };
 
-[[nodiscard]] Upright upright_centres(const Lattice& lattice) {
+[[nodiscard]] Upright upright_centres(const Lattice& lattice, int size) {
     Upright best;
     float best_score = -std::numeric_limits<float>::max();
-    for (const auto& roll : kRoll) {
+    const auto n = static_cast<std::size_t>(size);
+    for (int roll = 0; roll < 4; ++roll) {
         Upright upright;
-        for (std::size_t i = 0; i < 9; ++i) {
-            const int cell = roll.at(i);
-            upright.centres.at(i) = lattice.at(cell % 3, cell / 3);
-            upright.found.at(i) = lattice.found.at(static_cast<std::size_t>(cell));
+        upright.centres.resize(n * n);
+        upright.found.resize(n * n);
+        for (std::size_t i = 0; i < n * n; ++i) {
+            const std::size_t cell = rolled_cell(size, roll, i);
+            upright.centres.at(i) =
+                lattice.at(static_cast<int>(cell % n), static_cast<int>(cell / n));
+            upright.found.at(i) = lattice.found.at(cell);
         }
-        const float score = (upright.centres.at(2) - upright.centres.at(0)).x +
-                            (upright.centres.at(6) - upright.centres.at(0)).y;
+        const float score = (upright.centres.at(n - 1) - upright.centres.at(0)).x +
+                            (upright.centres.at(n * (n - 1)) - upright.centres.at(0)).y;
         if (score > best_score) {
             best_score = score;
-            best = upright;
+            best = std::move(upright);
         }
     }
     return best;
 }
 
-[[nodiscard]] std::array<cv::Vec3f, 9> rolled(const std::array<cv::Vec3f, 9>& read, int roll) {
-    std::array<cv::Vec3f, 9> out{};
-    for (std::size_t i = 0; i < 9; ++i) {
-        out.at(i) =
-            read.at(static_cast<std::size_t>(kRoll.at(static_cast<std::size_t>(roll)).at(i)));
+// `read` turned `roll` quarter-turns: cell i takes the value of cell
+// rolled_cell(size, roll, i).
+[[nodiscard]] std::vector<cv::Vec3f> rolled(const std::vector<cv::Vec3f>& read, int size,
+                                            int roll) {
+    std::vector<cv::Vec3f> out(read.size());
+    for (std::size_t i = 0; i < read.size(); ++i) {
+        out.at(i) = read.at(rolled_cell(size, roll, i));
     }
     return out;
 }
@@ -722,7 +775,7 @@ struct Upright {
 // How a read lays on a side, and whether it is that side.
 struct SideFit {
     int roll = 0;
-    // Summed distance of the eight stickers other than the centre.
+    // Summed distance of the stickers other than the centre.
     float cost = 0.0F;
     bool same = false;
 };
@@ -730,7 +783,7 @@ struct SideFit {
 // Lays `read` on `side` under whichever quarter-turn fits best, `prior_roll`
 // winning any near-tie, and judges whether the two are one side.
 //
-// The quarter-turn is chosen from the eight stickers other than the centre,
+// The quarter-turn is chosen from the stickers other than the centre,
 // which every turn leaves where it was, in plain Lab with each capped: a
 // finger over one sticker must not turn the side. It was chosen by
 // colour_distance, which barely sees red against orange, so a red and orange
@@ -738,24 +791,27 @@ struct SideFit {
 //
 // Then the judgement. The centre is the side's identity (see
 // kSameColourLab). When it agrees the read is the side, however many
-// stickers a hand covers (up to kMostStickersAHandCovers). When it does not,
-// it may be glare on the centre or another side; the other eight say which.
+// stickers a hand covers (up to most_stickers_a_hand_covers). When it does
+// not, it may be glare on the centre or another side; the others say which.
+// An even size has no centre to go by, and then they alone say.
 struct FitInputs {
-    std::array<cv::Vec3f, 9> read;
-    std::array<cv::Vec3f, 9> side;
+    const std::vector<cv::Vec3f>* read = nullptr;
+    const std::vector<cv::Vec3f>* side = nullptr;
     int prior_roll = 0;
 };
 
 [[nodiscard]] SideFit fit_to_side(const FitInputs& inputs) {
-    const std::array<cv::Vec3f, 9>& read = inputs.read;
-    const std::array<cv::Vec3f, 9>& side = inputs.side;
-    const int prior_roll = inputs.prior_roll;
+    const std::vector<cv::Vec3f>& read = *inputs.read;
+    const std::vector<cv::Vec3f>& side = *inputs.side;
+    const int size = side_length_of(side.size());
+    const bool has_centre = size % 2 == 1;
+    const std::size_t centre = has_centre ? middle_cell(size) : side.size();
     const auto cost_of = [&](int roll) {
         float cost = 0.0F;
-        const std::array<cv::Vec3f, 9> turned = rolled(read, roll);
-        for (std::size_t i = 0; i < 9; ++i) {
-            if (i != 4) {
-                cost += std::min(lab_gap(turned.at(i), side.at(i)), kRollCostCap);
+        for (std::size_t i = 0; i < side.size(); ++i) {
+            if (i != centre) {
+                cost += std::min(lab_gap(read.at(rolled_cell(size, roll, i)), side.at(i)),
+                                 kRollCostCap);
             }
         }
         return cost;
@@ -769,21 +825,23 @@ struct FitInputs {
             fit.cost = cost;
         }
     }
-    if (const float prior_cost = cost_of(prior_roll); prior_cost <= fit.cost + kRollPriorMargin) {
-        fit.roll = prior_roll;
+    if (const float prior_cost = cost_of(inputs.prior_roll);
+        prior_cost <= fit.cost + kRollPriorMargin) {
+        fit.roll = inputs.prior_roll;
         fit.cost = prior_cost;
     }
 
-    const std::array<cv::Vec3f, 9> turned = rolled(read, fit.roll);
     int differing = 0;
-    for (std::size_t i = 0; i < 9; ++i) {
-        if (i != 4 && lab_gap(turned.at(i), side.at(i)) > kSameColourLab) {
+    for (std::size_t i = 0; i < side.size(); ++i) {
+        if (i != centre &&
+            lab_gap(read.at(rolled_cell(size, fit.roll, i)), side.at(i)) > kSameColourLab) {
             ++differing;
         }
     }
-    if (differing > kMostStickersAHandCovers) {
+    if (differing > most_stickers_a_hand_covers(size)) {
         fit.same = false;
-    } else if (lab_gap(turned.at(4), side.at(4)) <= kSameColourLab) {
+    } else if (has_centre && lab_gap(read.at(rolled_cell(size, fit.roll, centre)),
+                                     side.at(centre)) <= kSameColourLab) {
         fit.same = true;
     } else {
         fit.same = differing == 0;
@@ -796,13 +854,13 @@ struct FitInputs {
 // alone (a side seen at an angle is lit a little differently). A template, for
 // the group type is the scan's own and private.
 template <typename Group>
-[[nodiscard]] std::array<cv::Vec3f, 9> fused_of(const Group& group) {
+[[nodiscard]] std::vector<cv::Vec3f> fused_of(const Group& group) {
     return (group.flat_reads.size() >= SideScan::kMinReads ? group.flat_reads : group.reads)
         .median();
 }
 
-// Whether a read taken at an angle is one of `groups` lit differently: its nine
-// colours are those of the side under some quarter-turn, as colour_distance
+// Whether a read taken at an angle is one of `groups` lit differently: its colours
+// are those of the side under some quarter-turn, as colour_distance
 // counts them - lightness and chroma, which shading moves, for a quarter of what
 // hue is. That is deliberately the loose measure: it is asked only whether a
 // read that fits no side is nevertheless one of them, and when it is not sure it
@@ -811,16 +869,15 @@ template <typename Group>
 // square-on, where the strict fit_to_side tells them apart. A template, for the
 // group type is the scan's own and private.
 template <typename Groups>
-[[nodiscard]] bool is_shaded_view_of_any(const std::array<cv::Vec3f, 9>& read,
-                                         const Groups& groups) {
-    return std::ranges::any_of(groups, [&read](const auto& group) {
+[[nodiscard]] bool is_shaded_view_of_any(const std::vector<cv::Vec3f>& read, const Groups& groups,
+                                         int size) {
+    return std::ranges::any_of(groups, [&](const auto& group) {
         for (int roll = 0; roll < 4; ++roll) {
-            const std::array<cv::Vec3f, 9> turned = rolled(read, roll);
             float total = 0.0F;
-            for (std::size_t i = 0; i < 9; ++i) {
-                total += colour_distance(turned.at(i), group.fused.at(i));
+            for (std::size_t i = 0; i < read.size(); ++i) {
+                total += colour_distance(read.at(rolled_cell(size, roll, i)), group.fused.at(i));
             }
-            if (total / 9.0F <= kCornerFitDistance) {
+            if (total / static_cast<float>(read.size()) <= kCornerFitDistance) {
                 return true;
             }
         }
@@ -828,6 +885,7 @@ template <typename Groups>
     });
 }
 
+// The 3x3's six sides, named: what the corner reader and the 3x3 assembly speak.
 using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 
 [[nodiscard]] std::optional<solver::Color> solver_colour(model::FacetColor colour) {
@@ -852,11 +910,12 @@ using NamedSides = std::array<std::array<model::Facelet, 9>, 6>;
 
 // What each colour measured, given the naming that made the cube: the
 // per-channel median over every sticker given that name.
-[[nodiscard]] SessionColours colours_of(const NamedSides& named,
+template <typename Named>
+[[nodiscard]] SessionColours colours_of(const Named& named,
                                         const std::array<CapturedFace, 6>& faces) {
     std::array<std::array<std::vector<float>, 3>, 6> samples;
     for (std::size_t side = 0; side < 6; ++side) {
-        for (std::size_t cell = 0; cell < 9; ++cell) {
+        for (std::size_t cell = 0; cell < faces.at(side).lab.size(); ++cell) {
             const auto colour = solver_colour(named.at(side).at(cell).color);
             if (!colour.has_value()) {
                 continue;
@@ -1027,8 +1086,9 @@ constexpr std::size_t kMarginOfMisses = 2;
 }
 
 // `named` with two colour names traded wherever they appear.
-[[nodiscard]] NamedSides with_names_exchanged(NamedSides named, model::FacetColor first,
-                                              model::FacetColor second) {
+template <typename Named>
+[[nodiscard]] Named with_names_exchanged(Named named, model::FacetColor first,
+                                         model::FacetColor second) {
     for (auto& side : named) {
         for (model::Facelet& facelet : side) {
             if (facelet.color == first) {
@@ -1079,9 +1139,11 @@ struct Exchanged {
     return best;
 }
 
-// The cube, and how it was put together.
+// The cube, and how it was put together. `result` is the 3x3 of a size-3 scan
+// and an error otherwise; `result_n` is the cube of a scan of any size.
 struct Assembled {
     Result<ScannedCube> result;
+    Result<ScannedCubeN> result_n;
     AssemblyTrace trace;
 };
 
@@ -1103,9 +1165,14 @@ struct Assembled {
 //
 // What happened on the way is returned beside the cube, in an AssemblyTrace:
 // values this function holds anyway, handed back instead of dropped.
-[[nodiscard]] Assembled assemble(const NamedSides& named, const std::array<CapturedFace, 6>& faces,
-                                 const std::vector<CornerRead>& corners) {
-    Assembled out{.result = std::unexpected(CubeError::invalid_cube_state), .trace = {}};
+[[nodiscard]] Assembled assemble_three(const NamedSides& named,
+                                       const std::array<CapturedFace, 6>& faces,
+                                       const std::vector<CornerRead>& corners) {
+    Assembled out{
+        .result = std::unexpected(CubeError::invalid_cube_state),
+        .result_n = std::unexpected(CubeError::invalid_cube_state),
+        .trace = AssemblyTrace(),
+    };
     AssemblyTrace& trace = out.trace;
     trace.corner_reads = corners.size();
 
@@ -1169,15 +1236,140 @@ struct Assembled {
     return out;
 }
 
-// The name each of the 54 stickers was given, side by side.
-[[nodiscard]] std::array<std::array<model::FacetColor, 9>, 6> names_of(const NamedSides& named) {
-    std::array<std::array<model::FacetColor, 9>, 6> names{};
+using NamedFaces = std::array<std::vector<model::Facelet>, 6>;
+
+// The name each sticker was given, side by side.
+[[nodiscard]] std::array<std::vector<model::FacetColor>, 6> names_of(const NamedFaces& named) {
+    std::array<std::vector<model::FacetColor>, 6> names;
     for (std::size_t side = 0; side < 6; ++side) {
-        for (std::size_t cell = 0; cell < 9; ++cell) {
-            names.at(side).at(cell) = named.at(side).at(cell).color;
+        names.at(side).reserve(named.at(side).size());
+        for (const model::Facelet& facelet : named.at(side)) {
+            names.at(side).push_back(facelet.color);
         }
     }
     return names;
+}
+
+// A 3x3's six named sides as the 3x3 assembly takes them.
+[[nodiscard]] NamedSides as_three(const NamedFaces& named) {
+    NamedSides out{};
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (std::size_t cell = 0; cell < 9; ++cell) {
+            out.at(side).at(cell) = named.at(side).at(cell);
+        }
+    }
+    return out;
+}
+
+// Six named sides as the colours the assembly of any size takes; nothing if a
+// sticker was given no name.
+[[nodiscard]] std::optional<nxn::ScannedSides> colours_of_names(const NamedFaces& named) {
+    nxn::ScannedSides sides;
+    for (std::size_t side = 0; side < 6; ++side) {
+        for (const model::Facelet& facelet : named.at(side)) {
+            const std::optional<solver::Color> colour = solver_colour(facelet.color);
+            if (!colour.has_value()) {
+                return std::nullopt;
+            }
+            sides.at(side).push_back(*colour);
+        }
+    }
+    return sides;
+}
+
+// The cube of any size that trading the names of the two closest-looking
+// centres makes, when any trade does: the 3x3's repair (see
+// assemble_with_closest_exchange) for a size the 3x3 assembly cannot read.
+[[nodiscard]] Assembled assemble_n(const NamedFaces& named,
+                                   const std::array<CapturedFace, 6>& faces, int size) {
+    Assembled out{
+        .result = std::unexpected(CubeError::invalid_cube_state),
+        .result_n = std::unexpected(CubeError::invalid_cube_state),
+        .trace = AssemblyTrace(),
+    };
+    AssemblyTrace& trace = out.trace;
+    const std::optional<nxn::ScannedSides> sides = colours_of_names(named);
+    if (!sides.has_value()) {
+        trace.path = AssemblyPath::failed;
+        trace.error = CubeError::invalid_cube_state;
+        return out;
+    }
+    std::vector<nxn::NCube> candidates =
+        nxn::assemble_all_scanned_sides(size, *sides, kMaxCandidates + 1);
+    trace.candidates = candidates.size();
+    if (candidates.size() == 1) {
+        trace.path = AssemblyPath::single_candidate;
+        out.result_n =
+            ScannedCubeN{.cube = candidates.front(), .colours = colours_of(named, faces)};
+        return out;
+    }
+    if (candidates.size() > 1) {
+        // The corner reader is a 3x3's, so nothing here can say which: the sides
+        // are ambiguous.
+        trace.path = AssemblyPath::ambiguous;
+        trace.error = CubeError::ambiguous_scan;
+        out.result_n = std::unexpected(CubeError::ambiguous_scan);
+        return out;
+    }
+    trace.direct_error = CubeError::invalid_cube_state;
+
+    // Trade the names of the centres that look most alike.
+    const std::size_t middle = middle_cell(size);
+    float best_distance = std::numeric_limits<float>::max();
+    for (std::size_t a = 0; a < 6; ++a) {
+        for (std::size_t b = a + 1; b < 6; ++b) {
+            const float distance =
+                colour_distance(faces.at(a).lab.at(middle), faces.at(b).lab.at(middle));
+            if (distance >= best_distance) {
+                continue;
+            }
+            const NamedFaces exchanged = with_names_exchanged(named, named.at(a).at(middle).color,
+                                                              named.at(b).at(middle).color);
+            const std::optional<nxn::ScannedSides> traded = colours_of_names(exchanged);
+            if (!traded.has_value()) {
+                continue;
+            }
+            if (Result<nxn::NCube> cube = nxn::assemble_scanned_sides(size, *traded);
+                cube.has_value()) {
+                out.result_n = ScannedCubeN{.cube = *cube, .colours = colours_of(exchanged, faces)};
+                trace.exchange = NameExchange{
+                    .first_side = a,
+                    .second_side = b,
+                    .first_name = named.at(a).at(middle).color,
+                    .second_name = named.at(b).at(middle).color,
+                    .centre_distance = distance,
+                };
+                best_distance = distance;
+            }
+        }
+    }
+    if (out.result_n.has_value()) {
+        trace.path = AssemblyPath::names_exchanged;
+    } else {
+        trace.path = AssemblyPath::failed;
+        trace.error = CubeError::invalid_cube_state;
+    }
+    return out;
+}
+
+// Assembles the named sides of a scan of `size`: the 3x3's way for a 3x3, which
+// reads the corner views as well, the N x N way for any other size.
+[[nodiscard]] Assembled assemble(const NamedFaces& named, const std::array<CapturedFace, 6>& faces,
+                                 const std::vector<CornerRead>& corners, int size) {
+    if (size != 3) {
+        return assemble_n(named, faces, size);
+    }
+    Assembled out = assemble_three(as_three(named), faces, corners);
+    if (out.result.has_value()) {
+        out.result_n = ScannedCubeN{
+            .cube = nxn::NCube::from_cube3(out.result->cube),
+            .colours = out.result->colours,
+            .cast = out.result->cast,
+        };
+    } else {
+        out.result_n = std::unexpected(out.result.error());
+    }
+    return out;
 }
 
 // Whether any of the six colours measures further than kRejudgeLabDistance from
@@ -1203,7 +1395,7 @@ enum class Look : std::uint8_t {
 
 // Whether the plastic between the lattice's stickers is darker than the
 // stickers: see kMaxGapOverSticker.
-[[nodiscard]] bool gaps_are_plastic(const cv::Mat& value, const Lattice& lattice) {
+[[nodiscard]] bool gaps_are_plastic(const cv::Mat& value, const Lattice& lattice, int size) {
     const auto at = [&value](const cv::Point2f& point) {
         const int x = std::clamp(static_cast<int>(std::lround(point.x)), 0, value.cols - 1);
         const int y = std::clamp(static_cast<int>(std::lround(point.y)), 0, value.rows - 1);
@@ -1211,17 +1403,20 @@ enum class Look : std::uint8_t {
     };
     float darkest = std::numeric_limits<float>::max();
     std::vector<float> gaps;
-    for (int row = 0; row < 3; ++row) {
-        for (int column = 0; column < 3; ++column) {
+    for (int row = 0; row < size; ++row) {
+        for (int column = 0; column < size; ++column) {
             const cv::Point2f centre = lattice.at(column, row);
             darkest = std::min(darkest, at(centre));
-            if (column < 2) {
+            if (column < size - 1) {
                 gaps.push_back(at((centre + lattice.at(column + 1, row)) * 0.5F));
             }
-            if (row < 2) {
+            if (row < size - 1) {
                 gaps.push_back(at((centre + lattice.at(column, row + 1)) * 0.5F));
             }
         }
+    }
+    if (gaps.empty()) {
+        return false;
     }
     const auto quartile = gaps.begin() + static_cast<std::ptrdiff_t>(gaps.size() * 3 / 4);
     std::nth_element(gaps.begin(), quartile, gaps.end());
@@ -1231,8 +1426,9 @@ enum class Look : std::uint8_t {
 // The side the blobs make, if they make one: the lattice through them, judged
 // square-on, and the nine colours sampled at its cells.
 [[nodiscard]] std::optional<SideRead> read_blobs(const PreparedFrame& frame,
-                                                 const std::vector<Blob>& blobs, Look look) {
-    if (blobs.size() < kMinLatticeBlobs) {
+                                                 const std::vector<Blob>& blobs, Look look,
+                                                 const Tuning& tuning) {
+    if (blobs.size() < tuning.min_lattice_blobs) {
         return std::nullopt;
     }
     // The first try is a square grid, which is all a side held square needs.
@@ -1241,56 +1437,78 @@ enum class Look : std::uint8_t {
     // with a blob beside it that is not part of it. A set of blobs that read
     // before reads as it did, and one with a side held square pays nothing
     // more.
-    std::optional<Lattice> lattice = fit_lattice(blobs);
-    if (!lattice.has_value() || !is_square_on(*lattice)) {
-        lattice = fit_lattice_through_fit(blobs);
+    //
+    // That is a 3x3's. A side of more reaches further from any seed, and a
+    // spacing or a turn that is a few per cent out has put the far cells off
+    // their places by then: the square grid drops stickers from the outside in,
+    // and a lattice that has lost a whole row makes up the span from strays and
+    // reads as a side one row from where it is (found on drawn 5x5s turned 20
+    // degrees and seen a little from the side). So a side of more than three is
+    // placed through its own lattice from the start, which every cell is where
+    // the fit puts, and which includes the square grid as a candidate.
+    std::optional<Lattice> lattice;
+    if (tuning.size > 3) {
+        lattice = fit_lattice_through_fit(blobs, tuning);
+    } else {
+        lattice = fit_lattice(blobs, tuning);
+        if (!lattice.has_value() || !is_square_on(*lattice)) {
+            lattice = fit_lattice_through_fit(blobs, tuning);
+        }
     }
     if (!lattice.has_value() || !is_square_on(*lattice)) {
         return std::nullopt;
     }
     const float columns = length(lattice->column_step);
     const float rows = length(lattice->row_step);
-    if (look == Look::second && !gaps_are_plastic(frame.brightness, *lattice)) {
+    if (look == Look::second && !gaps_are_plastic(frame.brightness, *lattice, tuning.size)) {
         return std::nullopt;
     }
 
     const float pitch = (columns + rows) / 2.0F;
     const int half_width = std::max(2, static_cast<int>(kPatchHalfWidth * pitch));
-    const Upright upright = upright_centres(*lattice);
-    const std::array<cv::Point2f, 9>& centres = upright.centres;
+    const Upright upright = upright_centres(*lattice, tuning.size);
 
     SideRead read;
+    read.size = tuning.size;
     read.pitch = pitch * frame.scale;
     read.stickers_found = static_cast<int>(lattice->blobs);
     read.found = upright.found;
-    for (std::size_t i = 0; i < 9; ++i) {
-        const std::optional<cv::Vec3f> lab = sticker_lab(frame.working, centres.at(i), half_width);
+    read.centres.resize(tuning.cells());
+    read.lab.resize(tuning.cells());
+    for (std::size_t i = 0; i < tuning.cells(); ++i) {
+        const std::optional<cv::Vec3f> lab =
+            sticker_lab(frame.working, upright.centres.at(i), half_width);
         if (!lab.has_value()) {
             return std::nullopt;
         }
         read.lab.at(i) = *lab;
-        read.centres.at(i) = centres.at(i) * frame.scale;
+        read.centres.at(i) = upright.centres.at(i) * frame.scale;
     }
     return read;
 }
 
 }  // namespace
 
-std::optional<SideRead> read_side(const cv::Mat& bgr) {
-    const std::optional<PreparedFrame> frame = prepare_frame(bgr);
-    return frame.has_value() ? read_side(*frame) : std::nullopt;
+std::optional<SideRead> read_side(const cv::Mat& bgr, int size) {
+    const std::optional<PreparedFrame> frame = prepare_frame(bgr, size);
+    return frame.has_value() ? read_side(*frame, size) : std::nullopt;
 }
 
-std::optional<SideRead> read_side(const PreparedFrame& frame) {
+std::optional<SideRead> read_side(const PreparedFrame& frame, int size) {
     CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side");
-    const std::vector<Blob> blobs = sticker_blobs(frame.contours, frame.working);
-    if (std::optional<SideRead> read = read_blobs(frame, blobs, Look::first); read.has_value()) {
+    if (size < 2 || size > 9) {
+        return std::nullopt;
+    }
+    const Tuning tuning = tuning_for(size);
+    const std::vector<Blob> blobs = sticker_blobs(frame.contours, frame.working, tuning);
+    if (std::optional<SideRead> read = read_blobs(frame, blobs, Look::first, tuning);
+        read.has_value()) {
         return read;
     }
-    // Most frames of a scan have nothing in them near a side: no six
-    // sticker-sized outlines at all. The second look is for the frame that
-    // came close, six or more that did not make a side.
-    if (blobs.size() < kMinLatticeBlobs) {
+    // Most frames of a scan have nothing in them near a side: no sticker-sized
+    // outlines enough to make one at all. The second look is for the frame that
+    // came close, as many that did not make a side.
+    if (blobs.size() < tuning.min_lattice_blobs) {
         return std::nullopt;
     }
     // A dark sticker beside a bright one is clipped by the mean the outlines
@@ -1299,8 +1517,9 @@ std::optional<SideRead> read_side(const PreparedFrame& frame) {
     // first look read is read as it was: only one it read nothing of is
     // looked at again.
     CUBE_ZONE_SCOPED_N("vision.direct_scan.read_side_second_look");
-    return read_blobs(frame, sticker_blobs(narrow_contours(frame.brightness), frame.working),
-                      Look::second);
+    return read_blobs(frame,
+                      sticker_blobs(narrow_contours(frame.brightness, size), frame.working, tuning),
+                      Look::second, tuning);
 }
 
 float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
@@ -1313,8 +1532,20 @@ float colour_distance(const cv::Vec3f& a, const cv::Vec3f& b) {
                      hue_squared);
 }
 
+cv::Point2f steady_point(const SideRead& read) {
+    const auto n = static_cast<std::size_t>(read.size);
+    if (n % 2 == 1) {
+        return read.centres.at(middle_cell(read.size));
+    }
+    // The middle of the four middle stickers.
+    const std::size_t upper = ((n / 2) - 1) * n;
+    return (read.centres.at(upper + (n / 2) - 1) + read.centres.at(upper + (n / 2)) +
+            read.centres.at(upper + n + (n / 2) - 1) + read.centres.at(upper + n + (n / 2))) *
+           0.25F;
+}
+
 bool held_still(const SideRead& read, const cv::Point2f& previous_centre) {
-    return length(read.centres.at(4) - previous_centre) < kSteadyFraction * read.pitch;
+    return length(steady_point(read) - previous_centre) < kSteadyFraction * read.pitch;
 }
 
 float interval_scale(float interval_ms) {
@@ -1337,6 +1568,8 @@ cv::Vec3b lab_to_bgr(const cv::Vec3f& lab) {
     };
 }
 
+SideScan::SideScan(int size) : size_(size) {}
+
 void SideScan::reset() {
     groups_.clear();
     corners_.clear();
@@ -1348,7 +1581,7 @@ void SideScan::reset() {
     in_view_.clear();
 }
 
-bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
+bool SideScan::count_read(const std::vector<cv::Vec3f>& lab, bool square_on) {
     // Which sides this read is: those it fits (fit_to_side), the cheapest
     // laying winning.
     std::optional<std::size_t> nearest;
@@ -1356,7 +1589,7 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
     std::size_t claiming = 0;
     for (std::size_t i = 0; i < groups_.size(); ++i) {
         const SideFit fit = fit_to_side(
-            {.read = lab, .side = groups_.at(i).fused, .prior_roll = groups_.at(i).roll});
+            {.read = &lab, .side = &groups_.at(i).fused, .prior_roll = groups_.at(i).roll});
         if (!fit.same) {
             continue;
         }
@@ -1384,7 +1617,7 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
     // verdict that takes the better part of a tenth of a second to reach, on
     // every frame, with the screen saying the sides do not fit. A side that is
     // not like any seen so far is new, as before.
-    if (!nearest.has_value() && !square_on && is_shaded_view_of_any(lab, groups_)) {
+    if (!nearest.has_value() && !square_on && is_shaded_view_of_any(lab, groups_, size_)) {
         return false;
     }
 
@@ -1392,7 +1625,7 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
     if (nearest.has_value()) {
         index = *nearest;
         Group& group = groups_.at(index);
-        const std::array<cv::Vec3f, 9> aligned = rolled(lab, nearest_fit.roll);
+        const std::vector<cv::Vec3f> aligned = rolled(lab, size_, nearest_fit.roll);
         group.reads.add(aligned);
         if (square_on) {
             group.flat_reads.add(aligned);
@@ -1424,16 +1657,18 @@ bool SideScan::count_read(const std::array<cv::Vec3f, 9>& lab, bool square_on) {
 void SideScan::add(const std::optional<SideRead>& read, float interval_ms) {
     CUBE_ZONE_SCOPED_N("vision.direct_scan.add");
     in_view_.clear();
-    if (!read.has_value()) {
+    // A read of another size is not of this cube.
+    if (!read.has_value() || read->size != size_) {
         previous_centre_.reset();
         return;
     }
     // A side square to the camera: whatever corner view came before is over.
     previous_corner_centres_.clear();
+    const cv::Point2f centre = steady_point(*read);
     const bool steady = previous_centre_.has_value() &&
-                        length(read->centres.at(4) - *previous_centre_) <
+                        length(centre - *previous_centre_) <
                             kSteadyFraction * interval_scale(interval_ms) * read->pitch;
-    previous_centre_ = read->centres.at(4);
+    previous_centre_ = centre;
     if (!steady) {
         return;
     }
@@ -1477,8 +1712,11 @@ std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
         for (std::size_t other = keep + 1; other < groups_.size(); ++other) {
             // Two groups are each in the turn their side was first seen in, so
             // no turn is more likely than another.
-            const SideFit fit = fit_to_side(
-                {.read = groups_.at(other).fused, .side = groups_.at(keep).fused, .prior_roll = 0});
+            const SideFit fit = fit_to_side({
+                .read = &groups_.at(other).fused,
+                .side = &groups_.at(keep).fused,
+                .prior_roll = 0,
+            });
             if (fit.same) {
                 return AlikePair{.keep = keep, .other = other, .roll = fit.roll};
             }
@@ -1489,9 +1727,8 @@ std::optional<SideScan::AlikePair> SideScan::first_alike_pair() const {
 
 void SideScan::absorb(const AlikePair& pair) {
     Group& kept = groups_.at(pair.keep);
-    const std::array<int, 9>& source = kRoll.at(static_cast<std::size_t>(pair.roll));
-    kept.reads.absorb(groups_.at(pair.other).reads, source);
-    kept.flat_reads.absorb(groups_.at(pair.other).flat_reads, source);
+    kept.reads.absorb(groups_.at(pair.other).reads, pair.roll);
+    kept.flat_reads.absorb(groups_.at(pair.other).flat_reads, pair.roll);
     kept.fused = fused_of(kept);
     groups_.erase(groups_.begin() + static_cast<std::ptrdiff_t>(pair.other));
     for (std::size_t& viewed : in_view_) {
@@ -1539,10 +1776,9 @@ constexpr float kSameViewLab = 8.0F;
         return false;
     }
     for (int roll = 0; roll < 4; ++roll) {
-        const std::array<cv::Vec3f, 9> turned = rolled(b.lab, roll);
         float total = 0.0F;
         for (std::size_t i = 0; i < 9; ++i) {
-            total += lab_gap(a.lab.at(i), turned.at(i));
+            total += lab_gap(a.lab.at(i), b.lab.at(rolled_cell(3, roll, i)));
         }
         if (total / 9.0F <= kSameViewLab) {
             return true;
@@ -1598,7 +1834,8 @@ constexpr float kSameViewLab = 8.0F;
 
 void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_ms) {
     in_view_.clear();
-    if (!read.has_value()) {
+    // The corner reader reads three sides with a lattice of three: a 3x3's.
+    if (!read.has_value() || size_ != 3) {
         previous_corner_centres_.clear();
         return;
     }
@@ -1640,7 +1877,7 @@ void SideScan::add_corner(const std::optional<CornerRead>& read, float interval_
         if (!steady) {
             continue;
         }
-        count_read(side.lab, false);
+        count_read(std::vector<cv::Vec3f>(side.lab.begin(), side.lab.end()), false);
     }
     previous_corner_centres_ = std::move(centres);
 }
@@ -1669,12 +1906,13 @@ std::vector<SideScan::Side> SideScan::sides() const {
         // The fused read is stored in the orientation the side was first
         // seen in; turn it back to how it was last shown.
         Side side{
+            .lab = {},
             .reads = group.reads.size(),
             .in_view = std::ranges::find(in_view_, i) != in_view_.end(),
         };
-        for (std::size_t cell = 0; cell < 9; ++cell) {
-            side.lab.at(static_cast<std::size_t>(
-                kRoll.at(static_cast<std::size_t>(group.roll)).at(cell))) = group.fused.at(cell);
+        side.lab.resize(group.fused.size());
+        for (std::size_t cell = 0; cell < group.fused.size(); ++cell) {
+            side.lab.at(rolled_cell(size_, group.roll, cell)) = group.fused.at(cell);
         }
         out.push_back(side);
     }
@@ -1728,6 +1966,28 @@ Result<ScannedCube> SideScan::scanned() const {
     return judge(faces).result;
 }
 
+Result<nxn::NCube> SideScan::cube_n() const {
+    // By hand, not Result::transform: see scan_assembly.cpp.
+    const auto whole = scanned_n();
+    if (!whole) {
+        return std::unexpected(whole.error());
+    }
+    return whole->cube;
+}
+
+Result<ScannedCubeN> SideScan::scanned_n() const {
+    CUBE_ZONE_SCOPED_N("vision.direct_scan.scanned");
+    const std::vector<std::size_t> captured = captured_by_support();
+    if (captured.size() < 6) {
+        return std::unexpected(CubeError::face_capture_incomplete);
+    }
+    std::array<CapturedFace, 6> faces{};
+    for (std::size_t i = 0; i < 6; ++i) {
+        faces.at(i).lab = groups_.at(captured.at(i)).fused;
+    }
+    return judge(faces).result_n;
+}
+
 ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
     ScanDiagnosis judged;
     // Named in the colours the light would have given under neutral light,
@@ -1752,9 +2012,10 @@ ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
         seen, judged.white.has_value() ? std::optional(judged.white->side) : std::nullopt);
     if (!naming) {
         judged.result = std::unexpected(naming.error());
+        judged.result_n = std::unexpected(naming.error());
         return judged;
     }
-    const NamedSides& named = naming->faces;
+    const NamedFaces& named = naming->faces;
     const auto names = names_of(named);
 
     // The assembly that failed is the answer again when what it rested on is as
@@ -1771,6 +2032,7 @@ ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
             // What the trace says it was given, as of now.
             judged.assembly->corner_reads = corners_.size();
             judged.result = std::unexpected(failed_->error);
+            judged.result_n = std::unexpected(failed_->error);
             judged.naming = std::move(*naming);
             return judged;
         }
@@ -1781,9 +2043,9 @@ ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
     // beside what each time costs (a judgement answered as the last was has no
     // zone here): the browser's trace and Tracy both count them.
     CUBE_ZONE_SCOPED_N("vision.direct_scan.assemble");
-    Assembled assembled = assemble(named, faces, corners_);
+    Assembled assembled = assemble(named, faces, corners_, size_);
     // Only a failure is kept: a cube ends the scan.
-    if (assembled.result.has_value()) {
+    if (assembled.result_n.has_value()) {
         failed_.reset();
     } else {
         failed_ = FailedAssembly{
@@ -1791,13 +2053,19 @@ ScanDiagnosis SideScan::judge(const std::array<CapturedFace, 6>& faces) const {
             .colours = colours_of(named, faces),
             .corner_revision = corner_revision_,
             .trace = assembled.trace,
-            .error = assembled.result.error(),
+            .error = assembled.result_n.error(),
         };
     }
     judged.assembly = std::move(assembled.trace);
     judged.result = std::move(assembled.result);
-    if (judged.result.has_value() && judged.white.has_value()) {
-        judged.result->cast = judged.white->cast;
+    judged.result_n = std::move(assembled.result_n);
+    if (judged.white.has_value()) {
+        if (judged.result.has_value()) {
+            judged.result->cast = judged.white->cast;
+        }
+        if (judged.result_n.has_value()) {
+            judged.result_n->cast = judged.white->cast;
+        }
     }
     judged.naming = std::move(*naming);
     return judged;
@@ -1834,6 +2102,7 @@ ScanDiagnosis SideScan::diagnose() const {
     diagnosis.naming = std::move(judged.naming);
     diagnosis.assembly = std::move(judged.assembly);
     diagnosis.result = std::move(judged.result);
+    diagnosis.result_n = std::move(judged.result_n);
     return diagnosis;
 }
 

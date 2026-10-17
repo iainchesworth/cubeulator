@@ -57,6 +57,7 @@ namespace cube::diagnostics {
 // {"ok": true, "state", "colours"} or {"ok": false, "error"}; `state` is the
 // 54-character string of docs/recording-format.md.
 [[nodiscard]] Json to_json(const Result<cube::vision::ScannedCube>& scanned);
+[[nodiscard]] Json to_json(const Result<cube::vision::ScannedCubeN>& scanned);
 
 // The state string of a cube (docs/recording-format.md): 54 characters for a
 // 3x3, 6 * size^2 for the other sizes.

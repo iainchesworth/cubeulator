@@ -29,3 +29,21 @@ target_link_libraries(cube_tumble_sim
         fmt::fmt)
 
 cube_deploy_sanitizer_runtime(cube_tumble_sim)
+
+# cube_scan_s0: gate S0 of docs/nxn-app-plan.md - how well the reader does on a
+# cube of N x N, measured on cubes that are drawn (tests/unit/drawn_cube.hpp).
+add_executable(cube_scan_s0 s0.cpp)
+
+target_include_directories(cube_scan_s0
+    PRIVATE
+        "${PROJECT_SOURCE_DIR}/tests/unit")
+
+target_link_libraries(cube_scan_s0
+    PRIVATE
+        cube::lib
+        cube::warnings
+        cube::sanitizers
+        cube::coverage
+        fmt::fmt)
+
+cube_deploy_sanitizer_runtime(cube_scan_s0)

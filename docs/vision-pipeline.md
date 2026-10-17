@@ -526,6 +526,60 @@ the scan while watching.
   drift in a sticker can exceed the red/orange gap. The review screen is the
   planned backstop.
 
+## A cube of another size
+
+The reader, the scan and the colour naming are written for a cube of N x N x N,
+N from 2 to 9, and are a 3x3 when no size is said (`read_side(frame, size)`,
+`SideScan(size)`, `prepare_frame(frame, size)`). The size is **chosen, never
+inferred**: nothing here looks at a lattice and says "this is a 5x5". How far it
+is validated is in [the S0 investigation](investigations/2026-10-17-nxn-scan-s0.md);
+in short, odd sizes are read, named and assembled end to end on drawn cubes, an
+even size is read and not named, and nothing but a 3x3 has been read on a real
+cube.
+
+- **A side is N^2 cells**, numbered row * N + column, row-major from the sticker
+  nearest the image's top-left (`vision/side_grid.hpp`). `SideRead`,
+  `CapturedFace`, `ReadSet` and `SideScan::Side` hold them in vectors and a
+  read says its size. A quarter-turn of a side is `rolled_cell(size, roll, cell)`;
+  at 3 it is the four tables the 3x3 had.
+- **Constants are stated in stickers**, so that the 3x3 is the case they were
+  measured on and another size is the same thing in a different unit
+  (`Tuning` in `direct_scan.cpp`): the blob area limits scale by (3/N)^2 for a
+  cube spanning the same part of the frame; a seed reaches (N-1)/2 times the
+  3x3's 3.4 sticker sides; two thirds of the stickers make a lattice (six of nine)
+  and eight ninths of them make one placed through its own fit; the cells a fit
+  places reach twice the side's span; a hand may leave unlike the side as many
+  stickers as the lattice may lose, and one more; and the steadiness gate is
+  0.12 of a sticker spacing, which for a small sticker is a smaller shake.
+- **Placing the lattice.** A 3x3 is laid on a square grid at the stickers' own
+  spacing, and placed through its own fit only if that leaves no side square-on,
+  as it always was. A bigger side reaches further from any seed, and a spacing a
+  few per cent out has put the far cells off their places: the grid drops
+  stickers from the outside in and a lattice that lost a row made up its span from
+  strays and read one row from where it was. So a bigger side is placed through its
+  own fit from the start (the grid is still a candidate in it).
+- **The frame** is worked at 640 pixels wide for a 3x3, 960 for 4 and 5 and 1280
+  above, when the camera gives so many, and the adaptive threshold's block scales
+  by 3/N. A frame no wider is read as it is, so on a platform whose capture is
+  capped at 640 (the browser's) a bigger cube gets the 3x3's pixels.
+- **Naming** (`resolve_colors`) takes six sides of any odd size: the middle
+  sticker of each seeds its cluster and stays there, and exactly N^2 stickers go to each
+  cluster. The distance from every sticker to every cluster mean is worked out once
+  for each pass of the assignment and not each time it is asked for (the descent by
+  swaps looks at every pair of stickers: 43,000 pairs at a 7x7, 1,400 at a 3x3).
+  An even size has no middle sticker and comes back `no_valid_cube_detected`.
+- **Assembly** is `cube::solver::assemble_scanned_faces` for a 3x3, as it was, and
+  `cube::nxn::assemble_scanned_sides` for any other size: the same 4^6 quarter-turns of
+  six sides pinned by their middles, pruned by the pieces (no edge, wing or corner shows
+  two colours of one axis pair), and asked of `cube::nxn::validate` at the end. There is
+  no corner reader above a 3x3: a scan whose flat sides make more than one cube is
+  `ambiguous_scan` and says no corner to show. `SideScan::scanned_n()` / `cube_n()` give the
+  cube of any size (an `NCube`); `scanned()` / `cube()` are the 3x3's.
+- **What the oracle cannot see.** Two stickers of one ring of centres that were swapped by
+  a misnaming give a cube nothing can tell from the right one (centres have no identity),
+  and of two wing stickers a few per cent do: see the investigation. A scan of a bigger
+  cube is as right as its naming, and the review screen is the check.
+
 ## Seeing what the app is reading, live
 
 A scan that misnames a colour, a cube that will not assemble: the running app
@@ -548,6 +602,12 @@ and `scanned()` are those with the rest dropped, so the diagnostic and the live
 path cannot disagree.
 
 ## Scoring and replay
+
+`cube_scan_s0` (`tools/scan/s0.cpp`) is the same reader on drawn cubes of any size,
+swept by sticker spacing, light, shake and noise; see [the S0
+investigation](investigations/2026-10-17-nxn-scan-s0.md). A recorded session of a cube
+that is not a 3x3 is replayed by `cube_scan replay` and `board` at the size its manifest
+says ([recording format](recording-format.md#truthtxt)).
 
 `cube_scan` (`tools/scan`) replays recorded sessions through the same reader:
 

@@ -19,6 +19,11 @@
 //                                    verdicts came to (and cost) - the number
 //                                    to hold against the camera's 33 ms
 //
+// A session of a cube that is not a 3x3 says so in its manifest.json ("size", the
+// recorder writes it); replay and board then read it as that size (the odd ones: an
+// even size is read and not named) and score it against truth.txt of N x N letters a
+// side. The other commands are a 3x3's.
+//
 // A session is a directory of rec_NNNNNN.jpg frames. Its truth, if known, is
 // truth.txt: six words of nine letters from WYROGB, one per side, each side
 // row-major as seen from outside in any orientation and any order. Six sides
@@ -28,6 +33,8 @@
 // out. The frame times come from index.csv when there is one.
 
 #include <cube/model/facelet.hpp>
+#include <cube/nxn/cube.hpp>
+#include <cube/nxn/scan_assembly.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/hold.hpp>
 #include <cube/solver/notation.hpp>
@@ -215,6 +222,67 @@ using cube::solver::Face;
     }
     const auto cube = cube::solver::assemble_scanned_faces(sides);
     return cube.has_value() ? std::optional<Cube>(*cube) : std::nullopt;
+}
+
+// The cube's size, as the recorder's manifest.json says it: 3 when it does not.
+[[nodiscard]] int session_size(const fs::path& session) {
+    std::ifstream in(session / "manifest.json");
+    const std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    const std::size_t at = text.find("\"size\"");
+    if (at == std::string::npos) {
+        return 3;
+    }
+    const std::size_t colon = text.find(':', at);
+    if (colon == std::string::npos) {
+        return 3;
+    }
+    const int size = std::atoi(text.c_str() + colon + 1);
+    return size >= 2 && size <= 9 ? size : 3;
+}
+
+// The cube a session's truth.txt names when it is not a 3x3: six words of N^2 letters,
+// each side as seen from outside in any turn, put together as the scan puts sides
+// together, so that what the scan makes and what this makes are the same cube.
+[[nodiscard]] std::optional<cube::nxn::NCube> truth_n_of(const fs::path& session, int size) {
+    std::ifstream in(session / "truth.txt");
+    const auto cells = static_cast<std::size_t>(size) * static_cast<std::size_t>(size);
+    cube::nxn::ScannedSides sides;
+    for (auto& side : sides) {
+        std::string word;
+        if (!(in >> word) || word.size() != cells) {
+            return std::nullopt;
+        }
+        for (const char letter : word) {
+            const auto colour = colour_of(letter);
+            if (!colour.has_value()) {
+                return std::nullopt;
+            }
+            switch (*colour) {
+                case cube::model::FacetColor::white:
+                    side.push_back(Color::White);
+                    break;
+                case cube::model::FacetColor::yellow:
+                    side.push_back(Color::Yellow);
+                    break;
+                case cube::model::FacetColor::red:
+                    side.push_back(Color::Red);
+                    break;
+                case cube::model::FacetColor::orange:
+                    side.push_back(Color::Orange);
+                    break;
+                case cube::model::FacetColor::green:
+                    side.push_back(Color::Green);
+                    break;
+                case cube::model::FacetColor::blue:
+                    side.push_back(Color::Blue);
+                    break;
+                case cube::model::FacetColor::unknown:
+                    return std::nullopt;
+            }
+        }
+    }
+    auto cube = cube::nxn::assemble_scanned_sides(size, sides);
+    return cube.has_value() ? std::optional<cube::nxn::NCube>(*cube) : std::nullopt;
 }
 
 // How long each frame of a session came after the one before, in milliseconds,
@@ -468,6 +536,8 @@ struct Outcome {
     std::optional<cube::vision::SessionColours> colours;  // what each colour measured
     std::optional<std::size_t> read_at;                   // first frame at which the cube was known
     std::optional<Cube> cube;                             // the cube at that frame
+    int size = 3;                                         // of a cube that is not a 3x3: the size,
+    std::optional<cube::nxn::NCube> cube_n;               // and the cube instead of `cube`
     std::optional<cube::CubeError> failure;               // why the last frame had none
     // The corner the scan would ask to be shown, when it is ambiguous.
     std::optional<std::array<Color, 3>> settling_corner;
@@ -476,23 +546,35 @@ struct Outcome {
 
 [[nodiscard]] Outcome replay(const fs::path& session) {
     Outcome outcome;
-    cube::vision::SideScan scan;
+    outcome.size = session_size(session);
+    const int size = outcome.size;
+    cube::vision::SideScan scan(size);
     const std::vector<fs::path> frames = frames_of(session);
     const std::vector<float> intervals = frame_intervals(session, frames);
     for (std::size_t i = 0; i < frames.size(); ++i) {
         const cv::Mat bgr = cv::imread(frames[i].string(), cv::IMREAD_COLOR);
         // As the app reads a frame: prepared once, the second reader only when
         // the first found no side.
-        const auto prepared = cube::vision::prepare_frame(bgr);
-        const auto read = prepared.has_value() ? cube::vision::read_side(*prepared) : std::nullopt;
+        const auto prepared = cube::vision::prepare_frame(bgr, size);
+        const auto read =
+            prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
         outcome.reads += read.has_value() ? 1U : 0U;
         scan.add(read, intervals[i]);
-        if (!read.has_value()) {
+        if (!read.has_value() && size == 3) {
             scan.add_corner(
                 prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt,
                 intervals[i]);
         }
-        if (const auto cube = scan.cube(); cube.has_value()) {
+        if (size != 3) {
+            if (const auto cube = scan.cube_n(); cube.has_value()) {
+                if (!outcome.cube_n.has_value()) {
+                    outcome.cube_n = *cube;
+                    outcome.read_at = outcome.frames;
+                } else if (!(*cube == *outcome.cube_n)) {
+                    ++outcome.changes_after;
+                }
+            }
+        } else if (const auto cube = scan.cube(); cube.has_value()) {
             if (!outcome.cube.has_value()) {
                 outcome.cube = *cube;
                 outcome.read_at = outcome.frames;
@@ -505,7 +587,7 @@ struct Outcome {
     outcome.captured = scan.sides();
     outcome.sides = outcome.captured.size();
     outcome.corner_reads = scan.corner_reads();
-    if (const auto whole = scan.scanned(); whole.has_value()) {
+    if (const auto whole = scan.scanned_n(); whole.has_value()) {
         outcome.colours = whole->colours;
     } else {
         outcome.failure = whole.error();
@@ -595,6 +677,29 @@ int run_replay(const fs::path& session) {
     fmt::print("{}: frames {}  lattice reads {}  corner reads {}  sides {}\n",
                session.filename().string(), outcome.frames, outcome.reads, outcome.corner_reads,
                outcome.sides);
+    if (outcome.size != 3) {
+        // A cube of another size: its state and whether it is the truth. There is
+        // no 3x3 solution to print.
+        fmt::print("  a {0}x{0}x{0}\n", outcome.size);
+        if (!outcome.cube_n.has_value()) {
+            fmt::print("  no cube: {} of 6 sides captured{}\n", outcome.sides,
+                       outcome.failure.has_value()
+                           ? fmt::format(" ({})", to_string(*outcome.failure))
+                           : std::string());
+            return 1;
+        }
+        fmt::print("  cube known at frame {} ({} later frames disagreed)\n", *outcome.read_at,
+                   outcome.changes_after);
+        std::string state;
+        for (const Color colour : outcome.cube_n->facelets()) {
+            state += letter_of(colour);
+        }
+        fmt::print("  {}\n", state);
+        if (const auto truth = truth_n_of(session, outcome.size); truth.has_value()) {
+            fmt::print("  truth: {}\n", *truth == *outcome.cube_n ? "MATCH" : "WRONG");
+        }
+        return 0;
+    }
     if (!outcome.cube.has_value()) {
         fmt::print("  no cube: {} of 6 sides captured{}\n", outcome.sides,
                    outcome.failure.has_value() ? fmt::format(" ({})", to_string(*outcome.failure))
@@ -650,14 +755,26 @@ int run_board(const fs::path& root) {
                "read-at", "result");
     for (const fs::path& session : sessions) {
         const Outcome outcome = replay(session);
-        const auto truth = truth_of(session);
         std::string result = "incomplete";
-        if (outcome.cube.has_value()) {
-            result = !truth.has_value()        ? "read (no truth)"
-                     : *truth == *outcome.cube ? "EXACT"
-                                               : "WRONG";
+        bool has_truth = false;
+        if (outcome.size != 3) {
+            const auto truth = truth_n_of(session, outcome.size);
+            has_truth = truth.has_value();
+            if (outcome.cube_n.has_value()) {
+                result = !truth.has_value()          ? "read (no truth)"
+                         : *truth == *outcome.cube_n ? "EXACT"
+                                                     : "WRONG";
+            }
+        } else {
+            const auto truth = truth_of(session);
+            has_truth = truth.has_value();
+            if (outcome.cube.has_value()) {
+                result = !truth.has_value()        ? "read (no truth)"
+                         : *truth == *outcome.cube ? "EXACT"
+                                                   : "WRONG";
+            }
         }
-        with_truth += truth.has_value() ? 1U : 0U;
+        with_truth += has_truth ? 1U : 0U;
         exact += result == "EXACT" ? 1U : 0U;
         wrong += result == "WRONG" ? 1U : 0U;
         fmt::print("{:44} {:>6} {:>6} {:>5} {:>8}  {}{}\n",

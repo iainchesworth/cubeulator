@@ -16,6 +16,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 using cube::app::CubeEdit;
 using cube::app::kDoubtBelow;
@@ -78,7 +79,7 @@ ColorResolution naming_of(const CubeEdit& seen) {
         for (int t = 0; t < turns % 4; ++t) {
             side = turned_clockwise(side);
         }
-        out.faces.at(slot--) = side;
+        out.faces.at(slot--) = std::vector<Facelet>(side.begin(), side.end());
         ++turns;
     }
     return out;
@@ -180,7 +181,7 @@ TEST_CASE("a side the naming and the cube disagree about is left unmarked", "[sc
     const Scanned s = scanned(5U);
     ColorResolution naming = naming_of(s.seen);
     // Slot 5 (the cube's U) names a corner differently from the cube, and doubts it.
-    Side& side = naming.faces.at(5);
+    auto& side = naming.faces.at(5);
     side.at(0).color = side.at(0).color == FacetColor::red ? FacetColor::blue : FacetColor::red;
     side.at(0).confidence = 0.0F;
     CubeEdit edit;

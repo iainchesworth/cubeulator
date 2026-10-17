@@ -3,8 +3,10 @@
 > **Status:** 0.1.0-beta.1 solved a 3x3 and nothing else. On `develop` now the
 > app follows a cube of 2 to 5 (more, in the library) from a typed scramble or
 > hand-entered colours, draws it, reviews it and keeps it in History
-> ([Progress](#progress)); the camera still reads only a 3x3. The rest of the
-> page is the plan as accepted.
+> ([Progress](#progress)); the camera in the app still reads only a 3x3. The
+> library reads, names and assembles any odd size from drawn cubes
+> ([Gate S0](#gate-s0), offline half passed); no real cube but a 3x3 has been read.
+> The rest of the page is the plan as accepted.
 
 Written 2026-10-15. Status: **decisions accepted 2026-10-15; P0 done and P1
 built 2026-10-16 to 17** ([Progress](#progress)). This is the basis for 0.2.0-beta.1 and
@@ -252,6 +254,22 @@ The gate decides P2 and P3: pass for 5x5 and 7x7 means P2 is built; a size
 that does not pass is not offered a camera, and its screen says "enter this
 one by hand".
 
+**Result (2026-10-17, items 1 and 2; [the investigation](investigations/2026-10-17-nxn-scan-s0.md)).**
+Offline, on drawn cubes in daylight and a warm lamp's light, the reader reads a 5x5 and
+a 7x7 as it reads a 3x3 at the same sticker size: 100.00% of stickers where a side is read
+at all (99.91% at the edge), every sticker of every complete scan named right, and no wrong
+cube put together in 4,240 scans (the 3x3's replay of the real recordings is unchanged, line
+for line). The line is a sticker's size, not the cube's: stickers of 13 px (22 px in lamplight)
+in a 640-wide frame, which a 5x5 holds at 22% (39%) of the frame's height and a 7x7 at 31%
+(54%): **a 5x5 is read at about a 3x3's distance in daylight and closer by a lamp, a 7x7 must
+be held about 1.4 to 2.4 times closer** (a wider working frame, which a bigger cube now asks
+for, moves it to 25% and 30% where the camera gives 1280). What it cannot say: **item 3 -
+real recordings - is not done**, so nothing is known of a real 5x5's gaps, glare, plastic or
+hands; the oracle cannot see two centre stickers swapped, so a bigger cube's scan is as right as
+its naming (the review screen is the check); and a small sticker makes the steadiness gate
+a smaller shake in pixels (at +-4 px a 7x7 counts one frame in nine). An even size is read
+and not yet named.
+
 ## Phases
 
 | phase | scope | exit gate |
@@ -287,7 +305,9 @@ top. Updated as slices land.
 | Translation drafts for the new strings in eight languages | P1 | open (#179) |
 | Layout checks hold the new screens in the pseudo-locale and the RTL drafts | P1 | open (#180) |
 | User guide page and pictures | P1 | not started |
-| Gate S0 (offline scan feasibility), then P2 and P3 | S0 | not started; needs recordings of a 5x5 and a 4x4 |
+| Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | merged (#190) |
+| The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (#191); **drawn cubes only** |
+| Real recordings of a 5x5 and a 4x4, then the scan screen for odd sizes, then P3 | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
 
 **What P1 found.** Wide moves are rare: grouping adjacent layers turned together
 saves under 1% of the moves (2,634 to 2,618 at 4x4, 8,297 to 8,264 at 7x7), so a

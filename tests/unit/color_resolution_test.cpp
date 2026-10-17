@@ -989,7 +989,7 @@ const MeasuredCube& evening_led_cube() {
 std::array<CapturedFace, 6> faces_of(const MeasuredCube& cube) {
     std::array<CapturedFace, 6> faces{};
     for (std::size_t face = 0; face < 6; ++face) {
-        faces.at(face).lab.fill(cube.centres.at(face));
+        faces.at(face).lab.assign(9, cube.centres.at(face));
     }
     // A few stickers traded across sides, as a real scramble does, so the
     // clusters span faces; nine of each colour is kept.

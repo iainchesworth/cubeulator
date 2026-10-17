@@ -48,7 +48,7 @@ Read random_read(std::mt19937& rng, bool coarse) {
 // cell and channel of `reads`, to the bit.
 void require_median_of(const ReadSet& set, const std::vector<Read>& reads) {
     REQUIRE(set.size() == reads.size());
-    const Read fused = set.median();
+    const std::vector<cv::Vec3f> fused = set.median();
     for (std::size_t cell = 0; cell < 9; ++cell) {
         for (int channel = 0; channel < 3; ++channel) {
             std::vector<float> values;
@@ -118,7 +118,8 @@ TEST_CASE("a read set absorbs another's reads turned under a quarter-turn", "[re
         },
     };
     std::mt19937 rng = cube::test::deterministic_rng(31U);
-    for (const std::array<int, 9>& turn : turns) {
+    for (int roll = 0; roll < 4; ++roll) {
+        const std::array<int, 9>& turn = turns.at(static_cast<std::size_t>(roll));
         ReadSet kept;
         ReadSet other;
         std::vector<Read> all;
@@ -132,7 +133,7 @@ TEST_CASE("a read set absorbs another's reads turned under a quarter-turn", "[re
             other.add(read);
             all.push_back(turned(read, turn));
         }
-        kept.absorb(other, turn);
+        kept.absorb(other, roll);
         require_median_of(kept, all);
 
         // And what is added after is added to the same set.

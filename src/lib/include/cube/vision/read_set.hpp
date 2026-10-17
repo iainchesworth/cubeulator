@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cube/vision/side_grid.hpp>
+
 #include <opencv2/core.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cstddef>
 #include <functional>
+#include <span>
 #include <vector>
 
 namespace cube::vision {
@@ -68,30 +71,45 @@ private:
     std::vector<float> high_;  // a min-heap
 };
 
-// The reads of one side (nine Lab triples each) as what is taken of them: the
+// The reads of one side (N x N Lab triples each) as what is taken of them: the
 // median of each channel of each cell, which is the side's fused colours. Not
 // the reads themselves - nothing asks for one again - so a read costs a
-// heap insertion for each of its 27 numbers, not a sort of all of them, and a
-// side held in view for a minute is not slower to read at the end of it than at
-// the start.
+// heap insertion for each of its 3 N^2 numbers, not a sort of all of them, and
+// a side held in view for a minute is not slower to read at the end of it than
+// at the start.
+//
+// The size is the size of the first read added; every read of one set is of one.
 class ReadSet {
 public:
-    void add(const std::array<cv::Vec3f, 9>& read) {
-        for (std::size_t cell = 0; cell < 9; ++cell) {
+    void add(std::span<const cv::Vec3f> read) {
+        if (series_.empty()) {
+            size_ = side_length_of(read.size());
+            series_.resize(read.size() * 3);
+        }
+        std::size_t cell = 0;
+        for (const cv::Vec3f& value : read) {
             for (int channel = 0; channel < 3; ++channel) {
-                series_.at((cell * 3) + static_cast<std::size_t>(channel))
-                    .add(read.at(cell)(channel));
+                series_.at((cell * 3) + static_cast<std::size_t>(channel)).add(value(channel));
             }
+            ++cell;
         }
         ++count_;
     }
 
-    // Every read of `other`, each turned so that its cell `source[i]` lies at
-    // cell i (the quarter-turn that lays one grouping of a side on another).
-    void absorb(const ReadSet& other, const std::array<int, 9>& source) {
-        for (std::size_t cell = 0; cell < 9; ++cell) {
+    // Every read of `other`, each turned `roll` quarter-turns so that its cell
+    // rolled_cell(size, roll, i) lies at cell i (the turn that lays one
+    // grouping of a side on another).
+    void absorb(const ReadSet& other, int roll) {
+        if (other.series_.empty()) {
+            return;
+        }
+        if (series_.empty()) {
+            size_ = other.size_;
+            series_.resize(other.series_.size());
+        }
+        for (std::size_t cell = 0; cell < series_.size() / 3; ++cell) {
             for (std::size_t channel = 0; channel < 3; ++channel) {
-                const auto from = (static_cast<std::size_t>(source.at(cell)) * 3) + channel;
+                const auto from = (rolled_cell(size_, roll, cell) * 3) + channel;
                 RunningMedian& into = series_.at((cell * 3) + channel);
                 other.series_.at(from).for_each([&into](float value) { into.add(value); });
             }
@@ -103,9 +121,9 @@ public:
     [[nodiscard]] bool empty() const noexcept { return count_ == 0; }
 
     // Of at least one read.
-    [[nodiscard]] std::array<cv::Vec3f, 9> median() const {
-        std::array<cv::Vec3f, 9> fused{};
-        for (std::size_t cell = 0; cell < 9; ++cell) {
+    [[nodiscard]] std::vector<cv::Vec3f> median() const {
+        std::vector<cv::Vec3f> fused(series_.size() / 3);
+        for (std::size_t cell = 0; cell < fused.size(); ++cell) {
             for (int channel = 0; channel < 3; ++channel) {
                 fused.at(cell)(channel) =
                     series_.at((cell * 3) + static_cast<std::size_t>(channel)).median();
@@ -116,7 +134,8 @@ public:
 
 private:
     std::size_t count_ = 0;
-    std::array<RunningMedian, 27> series_;
+    int size_ = 0;
+    std::vector<RunningMedian> series_;
 };
 
 }  // namespace cube::vision

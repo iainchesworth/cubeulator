@@ -8,6 +8,7 @@
 
 #include <array>
 #include <limits>
+#include <span>
 #include <vector>
 
 namespace cube::vision {
@@ -41,7 +42,7 @@ struct HoldFit {
 
 // Every hold, best fit first. `lab` is a SideRead's nine colours, row-major
 // as the camera saw them.
-[[nodiscard]] std::array<HoldFit, 24> fit_holds(const std::array<cv::Vec3f, 9>& lab,
+[[nodiscard]] std::array<HoldFit, 24> fit_holds(std::span<const cv::Vec3f> lab,
                                                 const solver::Cube& cube,
                                                 const SessionColours& colours);
 // The same for a read, counting only the stickers the reader actually found.
@@ -75,7 +76,7 @@ struct HoldReading {
     [[nodiscard]] bool shows(const solver::Hold& hold) const noexcept;
 };
 
-[[nodiscard]] HoldReading read_hold(const std::array<cv::Vec3f, 9>& lab, const solver::Cube& cube,
+[[nodiscard]] HoldReading read_hold(std::span<const cv::Vec3f> lab, const solver::Cube& cube,
                                     const SessionColours& colours);
 // The same for a read, counting only the stickers the reader actually found.
 [[nodiscard]] HoldReading read_hold(const SideRead& read, const solver::Cube& cube,

@@ -177,8 +177,9 @@ TEST_CASE("a sticker that was not found says nothing about how the cube is held"
     int spoiled = 0;
     for (const Hold& hold : all_holds()) {
         cube::vision::SideRead read;
-        read.lab = seen(cube, hold, 1.0F);
-        read.found.fill(true);
+        const std::array<cv::Vec3f, 9> measured = seen(cube, hold, 1.0F);
+        read.lab.assign(measured.begin(), measured.end());
+        read.found.assign(9, true);
         read.stickers_found = 8;
         read.found.at(5) = false;
         read.lab.at(5) = {68.0F, 14.0F, 20.0F};  // skin
@@ -204,8 +205,9 @@ TEST_CASE("stickers of the wrong colour are counted against the session's own co
     const Cube cube = cube::solver::random_scramble(6);
     const std::array<Color, 9> expected = camera_view(cube, kStatedHold);
     cube::vision::SideRead read;
-    read.lab = seen(cube, kStatedHold, 1.5F);
-    read.found.fill(true);
+    const std::array<cv::Vec3f, 9> measured = seen(cube, kStatedHold, 1.5F);
+    read.lab.assign(measured.begin(), measured.end());
+    read.found.assign(9, true);
     read.stickers_found = 9;
     CHECK(cube::vision::stickers_off(read, expected, session()) == 0);
 
