@@ -262,6 +262,7 @@ if(CUBEULATOR_BUILD_APP)
         qt_test_main.cpp
         unit/camera_controller_test.cpp
         unit/colour_entry_test.cpp
+        unit/cube_edit_test.cpp
         unit/diagnostics_controller_test.cpp
         unit/direct_scan_controller_test.cpp
         unit/frame_image_provider_test.cpp

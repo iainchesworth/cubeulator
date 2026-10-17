@@ -321,3 +321,138 @@ TEST_CASE("two stickers swapped between pieces is not a cube either",
         CHECK_FALSE(entry.solve().value("ok").toBool());
     }
 }
+
+namespace {
+
+cube::app::Reading reading_of(const NCube& cube, bool doubting_the_first_of_front) {
+    cube::app::Reading reading;
+    reading.size = cube.size();
+    for (const Color colour : cube.facelets()) {
+        reading.stickers.push_back(static_cast<std::int8_t>(colour));
+    }
+    reading.doubtful.assign(reading.stickers.size(), 0);
+    if (doubting_the_first_of_front) {
+        const auto n = static_cast<std::size_t>(cube.size());
+        reading.doubtful.at(static_cast<std::size_t>(Face::F) * n * n) = 1;
+    }
+    return reading;
+}
+
+}  // namespace
+
+TEST_CASE("a cube the camera read can be corrected and put back", "[qt][controllers][colours]") {
+    SolveController solve;
+    ColourEntry entry(solve);
+    const NCube cube = cube::nxn::random_scramble({.size = 3, .seed = 4, .moves = 40});
+    entry.loadReading(reading_of(cube, true));
+
+    CHECK(entry.fromScan());
+    CHECK_FALSE(entry.touched());  // nothing to lose by leaving yet
+    CHECK(state_of(entry) == "valid");
+    CHECK(entry.doubtCount() == 1);
+    CHECK(entry.doubts().value("F").toList().front().toBool());
+    CHECK_FALSE(entry.doubts().value("U").toList().front().toBool());
+    // The odd size names its sides by their middles.
+    CHECK(entry.centres().value("F").toString() == colour_name(cube.at(Face::F, 1, 1)));
+
+    // Correct one sticker: the cube is no longer a cube, and says so.
+    const QString was = entry.sides().value("U").toList().at(0).toString();
+    entry.paint("U", 0, was == "Red" ? 3 : 5);
+    CHECK(entry.touched());
+    CHECK(state_of(entry) != "valid");
+    CHECK_FALSE(entry.solve().value("ok").toBool());  // never reaches the solver
+
+    entry.undo();
+    CHECK(state_of(entry) == "valid");
+    CHECK_FALSE(entry.touched());
+    CHECK(entry.canRedo());
+    entry.redo();
+    CHECK(entry.touched());
+
+    entry.revert();
+    CHECK_FALSE(entry.touched());
+    CHECK(entry.sides().value("U").toList().at(0).toString() == was);
+    CHECK(state_of(entry) == "valid");
+
+    // A new cube forgets the reading.
+    entry.begin(3);
+    CHECK_FALSE(entry.fromScan());
+    CHECK(entry.doubtCount() == 0);
+    CHECK_FALSE(entry.canUndo());
+}
+
+TEST_CASE("a whole side can be described in letters", "[qt][controllers][colours]") {
+    SolveController solve;
+    ColourEntry entry(solve);
+    entry.begin(3);
+
+    QVariantMap result = entry.describeSide("F", "ggg/gbg/ggg");
+    CHECK(result.value("ok").toBool());
+    CHECK(entry.paintedOn("F") == 9);
+    CHECK(entry.sides().value("F").toList().at(4).toString() == "Blue");
+    CHECK(entry.sideText("F") == "GGG/GBG/GGG");
+    CHECK(entry.touched());
+
+    result = entry.describeSide("F", "ggg/gbg");
+    CHECK_FALSE(result.value("ok").toBool());
+    CHECK(result.value("error").toString() == "tooFew");
+    CHECK(result.value("at").toInt() == 6);
+    result = entry.describeSide("F", "ggg/gxg/ggg");
+    CHECK(result.value("error").toString() == "unknownLetter");
+    CHECK(result.value("at").toInt() == 5);
+    // A side that was not understood is left as it was.
+    CHECK(entry.sideText("F") == "GGG/GBG/GGG");
+    CHECK(entry.describeSide("Q", "ggggggggg").value("error").toString() == "noSuchSide");
+
+    // One step to undo, and "?" leaves a sticker unpainted.
+    entry.describeSide("F", "ggg/g?g/ggg");
+    CHECK(entry.paintedOn("F") == 8);
+    entry.undo();
+    CHECK(entry.sideText("F") == "GGG/GBG/GGG");
+}
+
+TEST_CASE("a side described for a bigger cube takes that many letters",
+          "[qt][controllers][colours]") {
+    SolveController solve;
+    ColourEntry entry(solve);
+    for (const int size : {2, 4, 5, 7}) {
+        entry.begin(size);
+        INFO("size " << size);
+        const QString letters(size * size, QLatin1Char('y'));
+        CHECK(entry.describeSide("D", letters).value("ok").toBool());
+        CHECK(entry.paintedOn("D") == size * size);
+        CHECK_FALSE(entry.describeSide("D", letters + "y").value("ok").toBool());
+        // The side's own text is what describes it again.
+        CHECK(entry.describeSide("D", entry.sideText("D")).value("ok").toBool());
+    }
+}
+
+TEST_CASE("a side that was read the wrong way up is turned and put right",
+          "[qt][controllers][colours]") {
+    SolveController solve;
+    ColourEntry entry(solve);
+    entry.begin(3);
+    entry.describeSide("R", "WYG/BOR/WYG");
+    entry.rotateSide("R", 1);
+    CHECK(entry.sideText("R") == "WBW/YOY/GRG");
+    entry.rotateSide("R", -1);
+    CHECK(entry.sideText("R") == "WYG/BOR/WYG");
+    entry.undo();
+    entry.undo();
+    CHECK(entry.sideText("R") == "WYG/BOR/WYG");
+}
+
+TEST_CASE("a stroke painted over several stickers undoes together", "[qt][controllers][colours]") {
+    SolveController solve;
+    ColourEntry entry(solve);
+    entry.begin(5);
+    entry.beginStroke();
+    for (int i = 0; i < 5; ++i) {
+        entry.paint("U", i, 0);
+    }
+    entry.endStroke();
+    CHECK(entry.paintedOn("U") == 5);
+    entry.undo();
+    CHECK(entry.paintedOn("U") == 0);
+    CHECK_FALSE(entry.canUndo());
+}
