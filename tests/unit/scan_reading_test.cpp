@@ -8,10 +8,13 @@
 
 #include <cube/model/facelet.hpp>
 #include <cube/nxn/cube.hpp>
+#include <cube/nxn/outside_view.hpp>
+#include <cube/nxn/scan_assembly.hpp>
 #include <cube/nxn/strategy.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/color_resolution.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -268,4 +271,46 @@ TEST_CASE("the demo misread is not a cube, and putting two stickers back makes i
     CubeEdit turned;
     turned.load(cube::app::demo_reading(1U, 3, false));
     CHECK_FALSE(turned.upright());
+}
+
+TEST_CASE("a 5x5 scan is read for review at its size, doubts and all", "[scan_reading][nxn]") {
+    const NCube cube = cube::nxn::random_scramble({.size = 5, .seed = 6, .moves = 100});
+    cube::nxn::ScannedSides sides;
+    ColorResolution naming;
+    for (std::size_t i = 0; i < 6; ++i) {
+        sides.at(i) = cube::nxn::outside_view(cube, cube::solver::kAllFaces.at(i));
+        naming.faces.at(i).clear();
+        for (const Color colour : sides.at(i)) {
+            naming.faces.at(i).push_back(Facelet{.color = facet_of(colour), .confidence = 1.0F});
+        }
+    }
+    // One sticker the naming was unsure of.
+    naming.faces.at(2).at(7).confidence = kDoubtBelow - 0.01F;
+    // The scan's cube: the sides put together, as the scan puts them.
+    const auto made = cube::nxn::assemble_scanned_sides(5, sides);
+    REQUIRE(made.has_value());
+
+    const Reading reading = cube::app::reading_from_cube(*made, naming);
+    CHECK(reading.size == 5);
+    REQUIRE(reading.stickers.size() == 150);
+    REQUIRE(reading.doubtful.size() == 150);
+    for (std::size_t i = 0; i < 150; ++i) {
+        CHECK(reading.stickers.at(i) == static_cast<std::int8_t>(made->facelets()[i]));
+    }
+    CHECK(std::ranges::count(reading.doubtful, std::uint8_t{1}) == 1);
+
+    // Sides that made no cube are placed by their middles, at their size.
+    const auto named = cube::app::reading_from_named_sides(naming);
+    REQUIRE(named.has_value());
+    CHECK(named->size == 5);
+    CHECK_FALSE(named->upright);
+    CHECK(std::ranges::count(named->stickers, kUnpainted) == 0);
+    CHECK(std::ranges::count(named->doubtful, std::uint8_t{1}) == 1);
+
+    // An even size has no middle to place a side by.
+    ColorResolution four;
+    for (auto& side : four.faces) {
+        side.assign(16, Facelet{.color = FacetColor::red, .confidence = 1.0F});
+    }
+    CHECK_FALSE(cube::app::reading_from_named_sides(four).has_value());
 }

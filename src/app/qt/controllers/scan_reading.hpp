@@ -2,6 +2,7 @@
 
 #include "controllers/cube_edit.hpp"
 
+#include <cube/nxn/cube.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/vision/direct_scan.hpp>
 
@@ -12,9 +13,8 @@
 // What the camera read, as the review screen takes it (CubeEdit's Reading): the
 // stickers named, and the ones the reader was not sure of marked.
 //
-// Qt-free, and the only place the scan's own types meet the review. The scan reads
-// 3x3 cubes only today; Reading carries a size and the numbering of any cube, so
-// when the scan reads other sizes this is the one function to widen.
+// Qt-free, and the only place the scan's own types meet the review. A Reading carries a
+// size and the numbering of any cube, and these take the naming of any odd size.
 
 namespace cube::app {
 
@@ -30,6 +30,11 @@ inline constexpr float kDoubtBelow = 0.3F;
 // rather than mark the wrong stickers). `naming` is ScanDiagnosis::naming, or none.
 [[nodiscard]] Reading reading_from_cube(
     const cube::solver::Cube& cube,
+    const std::optional<cube::vision::ColorResolution>& naming = std::nullopt);
+// The same for a cube of any size. The doubts are marked for an odd size, whose sides the
+// naming's can be told from by their middles.
+[[nodiscard]] Reading reading_from_cube(
+    const cube::nxn::NCube& cube,
     const std::optional<cube::vision::ColorResolution>& naming = std::nullopt);
 
 // A scan that did not make a cube: the sides it named, each placed on the side of the

@@ -34,8 +34,11 @@ void AppControllers::wire() {
     // A finished scan goes straight to the solver; the scan screen stays up
     // meanwhile (see AppState.qml).
     QObject::connect(&directScan, &DirectScan::scanCompleted, &solve, [this]() {
+        // A 3x3 goes to the solver as it always has; any other size as the cube it is.
         if (const auto cube = directScan.cube(); cube.has_value()) {
             solve.solveCube(*cube);
+        } else if (const auto any = directScan.cubeN(); any.has_value()) {
+            solve.solveCube(*any);
         }
     });
 

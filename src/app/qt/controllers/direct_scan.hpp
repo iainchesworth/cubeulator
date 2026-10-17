@@ -127,6 +127,17 @@ class DirectScan : public QObject {
     // every frame and reported (frameWatched), and none is added to the scan.
     Q_PROPERTY(bool watching READ watching NOTIFY runningChanged)
 
+    // The size of the cube being scanned: each side is size x size stickers, so
+    // there are size * size dots and cells to a chip. 3 unless it has been set. It
+    // is chosen, never read from the camera. Only an odd size from 3 to 9 is taken
+    // (an even size has no middle sticker, and its sides cannot be named yet); setting
+    // it starts the scan over.
+    Q_PROPERTY(int size READ size WRITE setSize NOTIFY sizeChanged)
+    // The size a scan is of unless the screen says another: 3, or the one CUBE_SCAN_SIZE
+    // asks for, which is how a developer records and scans a cube that is not a 3x3
+    // while the entry screen offers the camera only for a 3x3.
+    Q_PROPERTY(int defaultSize READ defaultSize CONSTANT)
+
 public:
     explicit DirectScan(QObject* parent = nullptr);
     ~DirectScan() override;
@@ -146,9 +157,12 @@ public:
     [[nodiscard]] int sidesRead() const noexcept { return static_cast<int>(sides_.size()); }
     [[nodiscard]] bool conflicted() const noexcept { return conflicted_; }
     [[nodiscard]] bool ambiguous() const noexcept { return ambiguous_; }
-    [[nodiscard]] bool complete() const noexcept { return scanned_.has_value(); }
+    [[nodiscard]] bool complete() const noexcept { return scanned_n_.has_value(); }
+    [[nodiscard]] int size() const noexcept { return size_; }
+    [[nodiscard]] int defaultSize() const noexcept { return default_size_; }
+    void setSize(int size);
     [[nodiscard]] QStringList settlingCorner() const { return settling_corner_; }
-    [[nodiscard]] bool reviewable() const noexcept { return scanned_.has_value() || conflicted_; }
+    [[nodiscard]] bool reviewable() const noexcept { return scanned_n_.has_value() || conflicted_; }
     [[nodiscard]] bool watching() const noexcept { return watching_; }
     [[nodiscard]] QString recordingRoot() const { return recording_root_; }
 
@@ -161,14 +175,18 @@ public:
     // ever recorded: the solve screen's camera (watching) writes nothing.
     void setRecordingRoot(const QString& root);
 
-    // The cube, once scanCompleted has fired for the current scan.
+    // The cube, once scanCompleted has fired for the current scan: the 3x3 of a scan of
+    // size 3 (nothing for another size), and the cube of any size in cubeN().
     [[nodiscard]] std::optional<cube::solver::Cube> cube() const {
         return scanned_.transform([](const cube::vision::ScannedCube& s) { return s.cube; });
+    }
+    [[nodiscard]] std::optional<cube::nxn::NCube> cubeN() const {
+        return scanned_n_.transform([](const cube::vision::ScannedCubeN& s) { return s.cube; });
     }
     // What each colour measured in that scan; later frames from the same
     // camera session are matched against these.
     [[nodiscard]] std::optional<cube::vision::SessionColours> colours() const {
-        return scanned_.transform([](const cube::vision::ScannedCube& s) { return s.colours; });
+        return scanned_n_.transform([](const cube::vision::ScannedCubeN& s) { return s.colours; });
     }
 
     // The scan as the review screen takes it (scan_reading.hpp): the cube, with the
@@ -223,6 +241,7 @@ signals:
     void frameUpdated();
     void sidesChanged();
     void recordingRootChanged();
+    void sizeChanged();
     // Six sides have been read and make exactly one valid cube: cube().
     void scanCompleted();
     // A frame has been looked at while watching: read() is its side, or
@@ -237,7 +256,7 @@ private:
     void openCamera(const QString& deviceId);
     // Evaluates the scan as scanned() does, and - the channel being on - writes
     // what the evaluation did, once for each distinct outcome.
-    [[nodiscard]] cube::Result<cube::vision::ScannedCube> evaluateScan(std::string_view trigger);
+    [[nodiscard]] cube::Result<cube::vision::ScannedCubeN> evaluateScan(std::string_view trigger);
     // One `camera` record: `event`, the device, the frame size, the lock.
     void noteCamera(std::string_view event) const;
     [[nodiscard]] bool diagnosing() const noexcept;
@@ -261,6 +280,8 @@ private:
     bool awaiting_lock_ = false;
     int frames_awaiting_lock_ = 0;
 
+    int size_ = 3;
+    int default_size_ = 3;
     cube::vision::SideScan scan_;
     std::optional<cube::vision::SideRead> read_;
     bool reading_ = false;
@@ -269,6 +290,8 @@ private:
     bool conflicted_ = false;
     bool ambiguous_ = false;
     QStringList settling_corner_;
+    // The scan's cube, of any size; and for a size of 3 the same as a 3x3.
+    std::optional<cube::vision::ScannedCubeN> scanned_n_;
     std::optional<cube::vision::ScannedCube> scanned_;
     bool watching_ = false;
 

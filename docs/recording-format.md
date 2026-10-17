@@ -144,7 +144,10 @@ For a cube that is not a 3x3 (the manifest says `size`), the words are `size^2`
 letters long, and `cube_scan replay` and `board` read the session as that size
 and score the cube against them (odd sizes: an even size has no middle sticker to
 put its sides together by). The other `cube_scan` commands are a 3x3's.
-`cube_scan_s0 --session <dir> <size> <seed>` writes a drawn cube as such a session.
+`cube_scan_s0 --session <dir> <size> <seed>` writes a drawn cube as such a session. The app
+records one when it is started with `CUBE_SCAN_SIZE=5` (an odd size, 3 to 9) as well as
+`CUBE_SCAN_RECORD_DIR`: the scan from the launch screen is then of that size, and the manifest
+says so. The entry screen still offers the camera for a 3x3 only.
 
 ## `layout.txt`
 

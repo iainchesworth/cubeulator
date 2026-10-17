@@ -307,7 +307,8 @@ top. Updated as slices land.
 | User guide page and pictures | P1 | not started |
 | Assembling six scanned sides of any odd size (`cube::nxn::assemble_scanned_sides`, on the oracle) | P2 | merged (#190) |
 | The reader, the scan and the naming for any size; gate S0 offline (`cube_scan_s0`) | S0, P2 | open (#191); **drawn cubes only** |
-| Real recordings of a 5x5 and a 4x4, then the scan screen for odd sizes, then P3 | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
+| The scan screen and controller for any odd size: `DirectScan.size`, N^2 dots and chips, the review at its size; recorded at its size; `CUBE_SCAN_SIZE`; **not offered on the entry screen** | P2 | open (#192) |
+| Real recordings of a 5x5 (`CUBE_SCAN_SIZE=5 CUBE_SCAN_RECORD_DIR=...`) and a 4x4, then offering the camera for 5 on the entry screen (with its words), then P3 | S0, P2, P3 | not started; needs a 5x5 and a 4x4 in the hand |
 
 **What P1 found.** Wide moves are rare: grouping adjacent layers turned together
 saves under 1% of the moves (2,634 to 2,618 at 4x4, 8,297 to 8,264 at 7x7), so a
