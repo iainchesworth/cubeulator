@@ -473,42 +473,42 @@ En tus manos.</translation>
     <message id="stage.parity.title">
         <source>Set up</source>
         <extracomment>Name of the first stage of a solve of a cube bigger than 3x3 when it needs one. Shown with a number, like the other stages. 'Parity' is the cuber's word; do not use it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Puesta a punto</translation>
     </message>
     <message id="stage.parity.what">
         <source>A few turns first, so that pairing up the pieces cannot leave two of them swapped, which only a big cube can do.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Unos pocos giros antes, para que al unir las piezas no puedan quedar dos de ellas intercambiadas, algo que solo ocurre en un cubo grande.</translation>
     </message>
     <message id="stage.centres.title">
         <source>Centres</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: gathering the middle stickers of each side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Centros</translation>
     </message>
     <message id="stage.centres.what">
         <source>Gather the middle stickers of each side into one block of a single colour.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Reúne las pegatinas del medio de cada lado en un solo bloque de un mismo color.</translation>
     </message>
     <message id="stage.edges.title">
         <source>Edges</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: pairing the edge pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Aristas</translation>
     </message>
     <message id="stage.edges.what">
         <source>Pair up the edge pieces into whole edges, so that the cube has twelve edges like a 3x3.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Junta las piezas de arista hasta formar aristas completas, de modo que el cubo tenga doce aristas, como un 3x3.</translation>
     </message>
     <message id="stage.corners.title">
         <source>Corners</source>
         <extracomment>Name of the only stage of a solve of a 2x2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Esquinas</translation>
     </message>
     <message id="stage.corners.what">
         <source>Put the eight corners where they belong. A 2x2 has nothing else.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Coloca las ocho esquinas en su sitio. Un 2x2 no tiene nada más.</translation>
     </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
@@ -528,77 +528,77 @@ En tus manos.</translation>
     <message id="home.other">
         <source>Another size of cube</source>
         <extracomment>Button on Home. Opens the screen for a cube the camera does not read: a different size, or a cube typed in as the scramble that mixed it up.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Otro tamaño de cubo</translation>
     </message>
     <message id="entry.title">
         <source>Another cube</source>
         <extracomment>Title of the screen reached from Home by "Another size of cube".</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Otro cubo</translation>
     </message>
     <message id="entry.size.label">
         <source>Size</source>
         <extracomment>Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Tamaño</translation>
     </message>
     <message id="entry.size.option">
         <source>%1×%1</source>
         <extracomment>A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1</translation>
     </message>
     <message id="entry.size.camera">
         <source>The camera reads a 3×3. Scan it, or type its scramble here.</source>
         <extracomment>Under the size buttons when 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>La cámara lee un 3×3. Escanéalo, o escribe aquí su mezcla.</translation>
     </message>
     <message id="entry.size.noCamera">
         <source>The camera cannot read this size yet. Type its scramble here.</source>
         <extracomment>Under the size buttons when a size other than 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>La cámara aún no puede leer este tamaño. Escribe aquí la mezcla.</translation>
     </message>
     <message id="entry.scramble.label">
         <source>Its scramble</source>
         <extracomment>Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Su mezcla</translation>
     </message>
     <message id="entry.scramble.placeholder">
         <source>Type or paste the moves, such as R U R' U' F2 2R Rw</source>
         <extracomment>Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Escribe o pega los giros, por ejemplo R U R' U' F2 2R Rw</translation>
     </message>
     <message id="entry.scramble.help">
         <source>Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together.</source>
         <extracomment>Under the scramble box. The letters and marks are notation and stay as they are.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Escribe los giros con un espacio entre ellos. U' gira en el otro sentido y F2 es media vuelta. 2R es la segunda capa a partir de R, y Rw gira dos capas juntas.</translation>
     </message>
     <message id="entry.solve">
         <source>Solve it</source>
         <extracomment>Main button of the screen for another size of cube. Works out the solution from the scramble.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Resolverlo</translation>
     </message>
     <message id="entry.scan">
         <source>Scan it instead</source>
         <extracomment>Button shown when 3×3 is chosen. Goes to the camera.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Escanearlo en su lugar</translation>
     </message>
     <message id="entry.error.unknownMove">
         <source>‘%1’ is not a move. Moves look like R, U', F2, 2R or Rw.</source>
         <extracomment>Shown under the scramble box when a word in it is not a move. %1 is that word.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>«%1» no es un giro. Los giros se escriben así: R, U', F2, 2R o Rw.</translation>
     </message>
     <message id="entry.error.layer">
         <source>‘%1’ turns a layer that a %2×%2 cube does not have.</source>
         <extracomment>Shown when a move names a layer the chosen size does not have, such as 5R on a 4×4. %1 is that move, %2 the size in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>«%1» gira una capa que un cubo %2×%2 no tiene.</translation>
     </message>
     <message id="entry.error.empty">
         <source>Type the scramble first.</source>
         <extracomment>Shown when Solve it is pressed with nothing typed.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Escribe primero la mezcla.</translation>
     </message>
     <message id="entry.error.solved">
         <source>Those moves leave the cube as it was. Type a scramble that mixes it up.</source>
         <extracomment>Shown when the scramble turns the cube back to solved, so there is nothing to solve.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Esos giros dejan el cubo como estaba. Escribe una mezcla que lo desordene.</translation>
     </message>
     <message id="home.findingCamera">
         <source>Looking for a camera…</source>
@@ -1031,7 +1031,7 @@ En tus manos.</translation>
     <message id="review.intro.enterN">
         <source>Hold your cube any way up. Call the side facing up the top and the side facing you the front. Pick a colour, then tap or drag over the stickers of that colour on the side shown. The sides named round it are the ones against its edges.</source>
         <extracomment>Instruction at the top of entering a cube of any size by hand. Replaces review.intro.enter for a cube that has no centre sticker to name each side by.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Sujeta tu cubo como quieras. Llama arriba al lado que mira hacia arriba y delante al lado que mira hacia ti. Elige un color y luego toca o arrastra sobre las pegatinas de ese color en el lado mostrado. Los lados nombrados alrededor son los que están junto a sus bordes.</translation>
     </message>
     <message id="review.centre">
         <source>The centre never changes. It names the side.</source>
@@ -1056,52 +1056,52 @@ En tus manos.</translation>
     <message id="review.status.emptyN">
         <source>%1 stickers to fill in</source>
         <extracomment>Status line before anything is entered, for a cube of any size. %1 is how many stickers the cube has, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 pegatinas por rellenar</translation>
     </message>
     <message id="review.fault.noScheme">
         <source>These colours cannot be the six sides of one cube.</source>
         <extracomment>Says what is wrong with colours that fit in no cube: two colours that belong on opposite sides sit next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Estos colores no pueden ser los seis lados de un mismo cubo.</translation>
     </message>
     <message id="review.fault.centreColours">
         <source>The middle stickers of a side do not hold each colour equally often.</source>
         <extracomment>Says what is wrong when the middle stickers of one side's ring have the wrong mix of colours.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Las pegatinas del medio de un lado no tienen cada color el mismo número de veces.</translation>
     </message>
     <message id="review.fault.unknownPiece">
         <source>A piece shows colours that no piece of a cube has.</source>
         <extracomment>Says what is wrong when a corner or an edge has two colours that are never next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Una pieza muestra colores que ninguna pieza de un cubo tiene.</translation>
     </message>
     <message id="review.fault.repeatedPiece">
         <source>Two pieces show the same colours, so another piece is missing.</source>
         <extracomment>Says what is wrong when the same corner or edge is entered twice.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Dos piezas muestran los mismos colores, así que falta otra pieza.</translation>
     </message>
     <message id="review.fault.twistedCorner">
         <source>A corner looks turned in place.</source>
         <extracomment>Says what is wrong when the corners are right but one is twisted.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Una esquina parece girada en su sitio.</translation>
     </message>
     <message id="review.fault.flippedEdge">
         <source>An edge looks flipped.</source>
         <extracomment>Says what is wrong when the edges are right but one has its two colours the wrong way round.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Una arista parece volteada.</translation>
     </message>
     <message id="review.fault.swappedPieces">
         <source>Two pieces look swapped.</source>
         <extracomment>Says what is wrong when two pieces are in each other's places.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Dos piezas parecen intercambiadas.</translation>
     </message>
     <message id="review.clearAll">
         <source>Clear all</source>
         <extracomment>Button at the top of the hand-entry screen. Unsets every sticker of every side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Borrar todo</translation>
     </message>
     <message id="review.fillSide">
         <source>Fill this side</source>
         <extracomment>Button under the colours on the hand-entry screen. Paints every sticker of the side being edited with the colour chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Rellenar este lado</translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>
@@ -1307,27 +1307,27 @@ En tus manos.</translation>
     <message id="solve.move.layer">
         <source>%1 · layer %2 · %3</source>
         <extracomment>The move in words for a layer inside a cube bigger than 3x3. %1 is the side, as 'Right side' or 'Top'; %2 is how far in the layer is counted from that side, starting at 1 for the outer layer; %3 is 'quarter turn' or 'half turn'. The dots are separators.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · capa %2 · %3</translation>
     </message>
     <message id="solve.move.layers">
         <source>%1 · layers %2 to %3 · %4</source>
         <extracomment>The same for several layers turned together. %2 and %3 are the nearest and the farthest layer, counted from the side as above; %4 is 'quarter turn' or 'half turn'.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · capas %2 a %3 · %4</translation>
     </message>
     <message id="solve.skipToCore">
         <source>Skip to the 3x3 stage</source>
         <extracomment>Button on the solve screen of a cube bigger than 3x3. Jumps over the stages that pair up its pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Saltar a la etapa 3x3</translation>
     </message>
     <message id="solve.skipToCore.note">
         <source>Use this once you have paired up the centres and edges yourself. The cube on screen jumps to the 3x3 it should now be.</source>
         <extracomment>Explains the button above it, for someone who can already solve a 3x3.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Úsalo cuando ya hayas unido los centros y las aristas por tu cuenta. El cubo en pantalla salta al 3x3 en el que debería haberse convertido.</translation>
     </message>
     <message id="solve.method.finishWith">
         <source>Finish with</source>
         <extracomment>Small label above the three method buttons when the cube is bigger than 3x3: the methods apply to the 3x3 the cube has become, so they are said to be how it is finished.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>Terminar con</translation>
     </message>
     <message id="solve.finish">
         <source>Finish</source>
@@ -1603,12 +1603,12 @@ En tus manos.</translation>
     <message id="solution.layer">
         <source>layer %1</source>
         <extracomment>A turn of a layer inside a cube bigger than 3x3, in a row of the list of turns, between the side and the direction ('Right side · layer 2 · upwards · quarter turn'). %1 is how far in the layer is, counted from the side, starting at 1 for the outer layer, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>capa %1</translation>
     </message>
     <message id="solution.layers">
         <source>layers %1 to %2</source>
         <extracomment>The same for several layers turned together. %1 and %2 are the nearest and the farthest layer, counted from the side as above.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>capas %1 a %2</translation>
     </message>
     <message id="solution.a11y.turn">
         <source>Turn %1. %2</source>
@@ -1646,7 +1646,7 @@ En tus manos.</translation>
     <message id="history.item.size">
         <source>%1×%1 · %2</source>
         <extracomment>Start of one row for a cube that is not a 3x3: its size, as in 5×5 (%1 is the side length twice, in the reader's own digits), then the rest of the row (history.item.done or history.item.unfinished) as %2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1 · %2</translation>
     </message>
     <message id="history.delete">
         <source>Delete</source>

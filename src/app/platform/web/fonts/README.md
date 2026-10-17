@@ -9,8 +9,8 @@ desktops use the system's own faces, chosen by language
 
 | file | family | what it holds | licence |
 |---|---|---|---|
-| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue (722 glyphs, 354 KB) and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
-| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue (740 glyphs, 271 KB) and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
+| `NotoSansJP-Subset.ttf` | Noto Sans JP, variable weight 100-900 | the characters of the Japanese catalogue (731 glyphs, 358 KB) and language name, all hiragana and katakana, CJK punctuation, printable ASCII | `OFL-NotoSansJP.txt` |
+| `NotoSansSC-Subset.ttf` | Noto Sans SC, variable weight 100-900 | the characters of the Simplified Chinese catalogue (769 glyphs, 283 KB) and language name, CJK punctuation, printable ASCII | `OFL-NotoSansSC.txt` |
 
 They are the Noto Sans faces cut down by `tools/fonts/subset_cjk.py` to exactly
 the characters the app can show: a closed set, since every string is in a
@@ -46,7 +46,10 @@ environment (`python -m venv v && v/bin/pip install fonttools`) and run its
 The subsets were regenerated on 2026-10-14 when the Japanese and Simplified
 Chinese translations first landed (before that they held only the language
 names, kana and ASCII), from the unmodified fonts in the table below with
-fontTools 4.66.1.
+fontTools 4.66.1. They were regenerated again on 2026-10-17, from the same
+fonts (the hashes below were checked first), when the N x N app's strings
+brought in 38 more characters, among them the multiplication sign of a size
+of cube; fontTools 4.63.0 this time.
 
 ## Where the full fonts came from
 
@@ -65,8 +68,8 @@ project ships:
 SHA-256 of what is in this folder:
 
 ```
-f30b51fa6ad890ce8afd3a591b175a3e380aab56b4d2abff90a9393d8a3c760e  NotoSansJP-Subset.ttf
-176592c9e60ab2c936c59123f1f39284ac2aa81b87e5b938c52a3e69c4fd2fdb  NotoSansSC-Subset.ttf
+0c6ef95bb0d540d61bef01e54a19125bbffc5ee8c9000a52269d14897ea800d4  NotoSansJP-Subset.ttf
+5ce535b9efee47fba6db96154fce0449b8e900f1dcf742e5d8c5dacaf6f6afe8  NotoSansSC-Subset.ttf
 ```
 
 ## Notes

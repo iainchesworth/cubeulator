@@ -473,42 +473,42 @@ In your hands.</source>
     <message id="stage.parity.title">
         <source>Set up</source>
         <extracomment>Name of the first stage of a solve of a cube bigger than 3x3 when it needs one. Shown with a number, like the other stages. 'Parity' is the cuber's word; do not use it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>التهيئة</translation>
     </message>
     <message id="stage.parity.what">
         <source>A few turns first, so that pairing up the pieces cannot leave two of them swapped, which only a big cube can do.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>بضع دورات في البداية، حتى لا تبقى قطعتان متبادلتان عند ربط القطع معًا، وهذا لا يحدث إلا في المكعبات الكبيرة.</translation>
     </message>
     <message id="stage.centres.title">
         <source>Centres</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: gathering the middle stickers of each side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>المراكز</translation>
     </message>
     <message id="stage.centres.what">
         <source>Gather the middle stickers of each side into one block of a single colour.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>اجمع الملصقات الوسطى لكل جانب في كتلة واحدة بلون واحد.</translation>
     </message>
     <message id="stage.edges.title">
         <source>Edges</source>
         <extracomment>Name of a stage of a solve of a cube bigger than 3x3: pairing the edge pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الحواف</translation>
     </message>
     <message id="stage.edges.what">
         <source>Pair up the edge pieces into whole edges, so that the cube has twelve edges like a 3x3.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>اربط قطع الحواف معًا لتكوين حواف كاملة، ليصبح للمكعب اثنتا عشرة حافة كما في 3x3.</translation>
     </message>
     <message id="stage.corners.title">
         <source>Corners</source>
         <extracomment>Name of the only stage of a solve of a 2x2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الزوايا</translation>
     </message>
     <message id="stage.corners.what">
         <source>Put the eight corners where they belong. A 2x2 has nothing else.</source>
         <extracomment>What this stage does, in one sentence.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ضع الزوايا الثماني في أماكنها. لا يوجد في 2x2 شيء آخر.</translation>
     </message>
     <message id="home.lede">
         <source>Show your cube to the camera, then follow one turn at a time until it is solved.</source>
@@ -528,77 +528,77 @@ In your hands.</source>
     <message id="home.other">
         <source>Another size of cube</source>
         <extracomment>Button on Home. Opens the screen for a cube the camera does not read: a different size, or a cube typed in as the scramble that mixed it up.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>مكعب بحجم آخر</translation>
     </message>
     <message id="entry.title">
         <source>Another cube</source>
         <extracomment>Title of the screen reached from Home by "Another size of cube".</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>مكعب آخر</translation>
     </message>
     <message id="entry.size.label">
         <source>Size</source>
         <extracomment>Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الحجم</translation>
     </message>
     <message id="entry.size.option">
         <source>%1×%1</source>
         <extracomment>A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1</translation>
     </message>
     <message id="entry.size.camera">
         <source>The camera reads a 3×3. Scan it, or type its scramble here.</source>
         <extracomment>Under the size buttons when 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>تقرأ الكاميرا مكعبًا بحجم 3×3. امسحه، أو اكتب تسلسل خلطه هنا.</translation>
     </message>
     <message id="entry.size.noCamera">
         <source>The camera cannot read this size yet. Type its scramble here.</source>
         <extracomment>Under the size buttons when a size other than 3×3 is chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>لا تستطيع الكاميرا قراءة هذا الحجم بعد. اكتب تسلسل الخلط هنا.</translation>
     </message>
     <message id="entry.scramble.label">
         <source>Its scramble</source>
         <extracomment>Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>تسلسل الخلط</translation>
     </message>
     <message id="entry.scramble.placeholder">
         <source>Type or paste the moves, such as R U R' U' F2 2R Rw</source>
         <extracomment>Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>اكتب الدورات أو الصقها، مثل R U R' U' F2 2R Rw</translation>
     </message>
     <message id="entry.scramble.help">
         <source>Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together.</source>
         <extracomment>Under the scramble box. The letters and marks are notation and stay as they are.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>اكتب الدورات مع مسافة بين كل واحدة والتالية. U'‎ يعني الاتجاه المعاكس، وF2 نصف دورة. 2R هي الطبقة الثانية من جهة R، وRw يدير طبقتين معًا.</translation>
     </message>
     <message id="entry.solve">
         <source>Solve it</source>
         <extracomment>Main button of the screen for another size of cube. Works out the solution from the scramble.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>حلّه</translation>
     </message>
     <message id="entry.scan">
         <source>Scan it instead</source>
         <extracomment>Button shown when 3×3 is chosen. Goes to the camera.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>امسحه بدلًا من ذلك</translation>
     </message>
     <message id="entry.error.unknownMove">
         <source>‘%1’ is not a move. Moves look like R, U', F2, 2R or Rw.</source>
         <extracomment>Shown under the scramble box when a word in it is not a move. %1 is that word.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>‏"%1" ليست دورة صالحة. تبدو الدورات هكذا: R, U', F2, 2R أو Rw.</translation>
     </message>
     <message id="entry.error.layer">
         <source>‘%1’ turns a layer that a %2×%2 cube does not have.</source>
         <extracomment>Shown when a move names a layer the chosen size does not have, such as 5R on a 4×4. %1 is that move, %2 the size in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>‏"%1" يدير طبقة غير موجودة في مكعب %2×%2.</translation>
     </message>
     <message id="entry.error.empty">
         <source>Type the scramble first.</source>
         <extracomment>Shown when Solve it is pressed with nothing typed.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>اكتب تسلسل الخلط أولًا.</translation>
     </message>
     <message id="entry.error.solved">
         <source>Those moves leave the cube as it was. Type a scramble that mixes it up.</source>
         <extracomment>Shown when the scramble turns the cube back to solved, so there is nothing to solve.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>هذه الدورات تترك المكعب كما كان. اكتب تسلسل خلط يخلطه فعلًا.</translation>
     </message>
     <message id="home.findingCamera">
         <source>Looking for a camera…</source>
@@ -1035,7 +1035,7 @@ In your hands.</source>
     <message id="review.intro.enterN">
         <source>Hold your cube any way up. Call the side facing up the top and the side facing you the front. Pick a colour, then tap or drag over the stickers of that colour on the side shown. The sides named round it are the ones against its edges.</source>
         <extracomment>Instruction at the top of entering a cube of any size by hand. Replaces review.intro.enter for a cube that has no centre sticker to name each side by.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>أمسك المكعب في أي وضع. سمِّ الجانب المواجه للأعلى العلوي، والجانب المواجه لك الأمامي. اختر لونًا، ثم انقر أو اسحب فوق ملصقات ذلك اللون في الجانب المعروض. الجوانب المسمّاة حوله هي التي تلامس حوافه.</translation>
     </message>
     <message id="review.centre">
         <source>The centre never changes. It names the side.</source>
@@ -1060,52 +1060,52 @@ In your hands.</source>
     <message id="review.status.emptyN">
         <source>%1 stickers to fill in</source>
         <extracomment>Status line before anything is entered, for a cube of any size. %1 is how many stickers the cube has, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>يلزم ملء %1 ملصقًا</translation>
     </message>
     <message id="review.fault.noScheme">
         <source>These colours cannot be the six sides of one cube.</source>
         <extracomment>Says what is wrong with colours that fit in no cube: two colours that belong on opposite sides sit next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>لا يمكن أن تكون هذه الألوان هي الجوانب الستة لمكعب واحد.</translation>
     </message>
     <message id="review.fault.centreColours">
         <source>The middle stickers of a side do not hold each colour equally often.</source>
         <extracomment>Says what is wrong when the middle stickers of one side's ring have the wrong mix of colours.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الملصقات الوسطى في أحد الجوانب لا تحتوي على كل لون بعدد المرات نفسه.</translation>
     </message>
     <message id="review.fault.unknownPiece">
         <source>A piece shows colours that no piece of a cube has.</source>
         <extracomment>Says what is wrong when a corner or an edge has two colours that are never next to each other.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>توجد قطعة تُظهر ألوانًا لا توجد في أي قطعة من المكعب.</translation>
     </message>
     <message id="review.fault.repeatedPiece">
         <source>Two pieces show the same colours, so another piece is missing.</source>
         <extracomment>Says what is wrong when the same corner or edge is entered twice.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>قطعتان تُظهران الألوان نفسها، لذا فهناك قطعة أخرى مفقودة.</translation>
     </message>
     <message id="review.fault.twistedCorner">
         <source>A corner looks turned in place.</source>
         <extracomment>Says what is wrong when the corners are right but one is twisted.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>تبدو زاوية وكأنها مدارة في مكانها.</translation>
     </message>
     <message id="review.fault.flippedEdge">
         <source>An edge looks flipped.</source>
         <extracomment>Says what is wrong when the edges are right but one has its two colours the wrong way round.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>تبدو حافة وكأنها مقلوبة.</translation>
     </message>
     <message id="review.fault.swappedPieces">
         <source>Two pieces look swapped.</source>
         <extracomment>Says what is wrong when two pieces are in each other's places.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>تبدو قطعتان وكأنهما متبادلتان.</translation>
     </message>
     <message id="review.clearAll">
         <source>Clear all</source>
         <extracomment>Button at the top of the hand-entry screen. Unsets every sticker of every side.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>إفراغ الكل</translation>
     </message>
     <message id="review.fillSide">
         <source>Fill this side</source>
         <extracomment>Button under the colours on the hand-entry screen. Paints every sticker of the side being edited with the colour chosen.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>ملء هذا الجانب</translation>
     </message>
     <message id="review.status.partial" numerus="yes">
         <source>%Ln stickers to go</source>
@@ -1319,27 +1319,27 @@ In your hands.</source>
     <message id="solve.move.layer">
         <source>%1 · layer %2 · %3</source>
         <extracomment>The move in words for a layer inside a cube bigger than 3x3. %1 is the side, as 'Right side' or 'Top'; %2 is how far in the layer is counted from that side, starting at 1 for the outer layer; %3 is 'quarter turn' or 'half turn'. The dots are separators.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · الطبقة %2 · %3</translation>
     </message>
     <message id="solve.move.layers">
         <source>%1 · layers %2 to %3 · %4</source>
         <extracomment>The same for several layers turned together. %2 and %3 are the nearest and the farthest layer, counted from the side as above; %4 is 'quarter turn' or 'half turn'.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1 · الطبقات %2 إلى %3 · %4</translation>
     </message>
     <message id="solve.skipToCore">
         <source>Skip to the 3x3 stage</source>
         <extracomment>Button on the solve screen of a cube bigger than 3x3. Jumps over the stages that pair up its pieces.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>التخطي إلى مرحلة 3x3</translation>
     </message>
     <message id="solve.skipToCore.note">
         <source>Use this once you have paired up the centres and edges yourself. The cube on screen jumps to the 3x3 it should now be.</source>
         <extracomment>Explains the button above it, for someone who can already solve a 3x3.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>استخدم هذا بعد أن تربط المراكز والحواف بنفسك. ينتقل المكعب على الشاشة مباشرة إلى حالة 3x3 التي يجب أن يكون عليها الآن.</translation>
     </message>
     <message id="solve.method.finishWith">
         <source>Finish with</source>
         <extracomment>Small label above the three method buttons when the cube is bigger than 3x3: the methods apply to the 3x3 the cube has become, so they are said to be how it is finished.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الإنهاء باستخدام</translation>
     </message>
     <message id="solve.finish">
         <source>Finish</source>
@@ -1623,12 +1623,12 @@ In your hands.</source>
     <message id="solution.layer">
         <source>layer %1</source>
         <extracomment>A turn of a layer inside a cube bigger than 3x3, in a row of the list of turns, between the side and the direction ('Right side · layer 2 · upwards · quarter turn'). %1 is how far in the layer is, counted from the side, starting at 1 for the outer layer, in the reader's own digits.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الطبقة %1</translation>
     </message>
     <message id="solution.layers">
         <source>layers %1 to %2</source>
         <extracomment>The same for several layers turned together. %1 and %2 are the nearest and the farthest layer, counted from the side as above.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>الطبقات %1 إلى %2</translation>
     </message>
     <message id="solution.a11y.turn">
         <source>Turn %1. %2</source>
@@ -1670,7 +1670,7 @@ In your hands.</source>
     <message id="history.item.size">
         <source>%1×%1 · %2</source>
         <extracomment>Start of one row for a cube that is not a 3x3: its size, as in 5×5 (%1 is the side length twice, in the reader's own digits), then the rest of the row (history.item.done or history.item.unfinished) as %2.</extracomment>
-        <translation type="unfinished"></translation>
+        <translation>%1×%1 · %2</translation>
     </message>
     <message id="history.delete">
         <source>Delete</source>

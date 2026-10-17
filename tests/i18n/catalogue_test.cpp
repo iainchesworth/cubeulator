@@ -255,8 +255,10 @@ namespace {
     if (c == U'\n' || (c >= 0x20 && c < 0x7F)) {
         return true;  // layout, Latin, digits, ASCII punctuation
     }
-    if (c == 0x00B7 || c == 0x2026 || c == 0x200E || c == 0x200F) {
-        return true;  // middle dot, ellipsis, left-to-right and right-to-left marks
+    if (c == 0x00B7 || c == 0x00D7 || c == 0x2026 || c == 0x200E || c == 0x200F) {
+        // middle dot, multiplication sign (a size of cube, 5×5), ellipsis,
+        // left-to-right and right-to-left marks
+        return true;
     }
     if (code == QLatin1String("ar")) {
         return (c >= 0x0621 && c <= 0x063A) || (c >= 0x0640 && c <= 0x064A) ||  // letters, tatweel
