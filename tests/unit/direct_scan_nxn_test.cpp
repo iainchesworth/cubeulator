@@ -45,7 +45,7 @@ using cube::vision::SideScan;
 
 // The drawing of an even light, which the tests name rather than write as an empty braced list.
 Drawing daylight() {
-    return Drawing();
+    return {};
 }
 
 constexpr std::array<Color, 6> kColours = {
