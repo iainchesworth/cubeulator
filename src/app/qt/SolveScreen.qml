@@ -905,7 +905,10 @@ Rectangle {
 
     Item {
         id: panel
-        x: root.wide ? stage.width : 0
+        // At the edge the stage is not at, wide; under it, narrow (the whole width). Anchored,
+        // and not placed at an x: an x does not mirror, and the stage, which is anchored to the
+        // left edge, does - the two would lie over each other in a right-to-left language.
+        anchors.right: parent.right
         y: root.wide ? stage.y : stage.y + stage.height
         width: root.wide ? 320 : parent.width
         height: parent.height - y
@@ -1098,7 +1101,11 @@ Rectangle {
         objectName: "solve.rescan"
         // Only a 3x3 is read by the camera; a bigger cube is entered, not scanned.
         visible: root.threeByThree
-        x: root.wide ? progress.x - width - Theme.space3 : root.width - width - Theme.space3
+        // Anchored to the edge the count is at, and not placed at an x, which does not mirror:
+        // wide, clear of the count (the header's own, which this cannot be anchored to: it is
+        // not a sibling); narrow, at the same edge, above the stepping buttons.
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.space3 + (root.wide ? progress.width + Theme.space3 : 0)
         y: root.wide ? (header.height - height) / 2 : root.height - buttons.height - height - Theme.space1
         height: 30
         variant: "ghost"; text: "Out of step? Rescan"

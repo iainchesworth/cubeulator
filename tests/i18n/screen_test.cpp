@@ -35,7 +35,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <functional>
 #include <initializer_list>
 #include <memory>
@@ -544,29 +543,10 @@ void holds_the_layout_of(const char* language, std::initializer_list<const char*
                 FAIL_CHECK("button below the window: " << str(pushed));
             }
             // And nothing is drawn on top of anything else: a panel shorter than what
-            // it holds sets its last string over the next one's. Only the solve screen is
-            // held to it so far: the others pass in the machine's face, but in the wider
-            // stand-in (CUBE_I18N_TEST_FONT=Verdana) the launch screen's wide layout has
-            // its history and settings buttons a few pixels across each other in the
-            // pseudo-locale, which is not what is held here.
-            //
-            // Known, and not what is held here either: the wide solve screen of a
-            // right-to-left language puts the panel where the left-to-right layout has it
-            // (it is placed with an x, which does not mirror) while the stage beside it
-            // mirrors, so the two lie over each other. Said, so that it is not lost; a
-            // layout that holds does not say it.
-            if (std::strcmp(type, "SolveScreen") == 0) {
-                const QStringList overlaps = screen.drawn_over_each_other();
-                const bool known = t::language().rtl() && size.w == 900;
-                if (known && !overlaps.isEmpty()) {
-                    WARN("known: " << type << " in " << language << " wide has " << overlaps.size()
-                                   << " strings and buttons drawn over each other, the first "
-                                   << str(overlaps.first()));
-                } else {
-                    for (const QString& over : overlaps) {
-                        FAIL_CHECK("drawn over each other: " << str(over));
-                    }
-                }
+            // it holds sets its last string over the next one's, and a pane placed with an
+            // x lies over the one beside it when the layout mirrors.
+            for (const QString& over : screen.drawn_over_each_other()) {
+                FAIL_CHECK("drawn over each other: " << str(over));
             }
         }
     }
@@ -635,6 +615,14 @@ TEST_CASE(
     for (const char* language : {"de", "fr", "es"}) {
         holds_the_layout_in(language);
     }
+}
+
+TEST_CASE("every converted screen holds English, the words the layout was made for",
+          "[i18n][screen][english]") {
+    // The checks were written against the translations; the English is held to them too, so
+    // that a layout that lies one string over another in English is not found only by a
+    // reader of a translation.
+    holds_the_layout_in("en");
 }
 
 // The panel under the cube on a phone's solve screen. A cube bigger than a 3x3 has more in
