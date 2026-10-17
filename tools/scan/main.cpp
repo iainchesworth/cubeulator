@@ -672,6 +672,117 @@ void explain(const Outcome& outcome) {
                                           fitting > 1 ? " (cube_scan ambiguity)" : ""));
 }
 
+// What the scan made of a session, side by side, at the session's size: how each side was
+// named (the letters, row by row, as the side was first seen), what the centres and the
+// clusters measured, and why the cube was or was not put together.
+int run_diagnose(const fs::path& session) {
+    const int size = session_size(session);
+    cube::vision::SideScan scan(size);
+    const std::vector<fs::path> frames = frames_of(session);
+    const std::vector<float> intervals = frame_intervals(session, frames);
+    for (std::size_t i = 0; i < frames.size(); ++i) {
+        const cv::Mat bgr = cv::imread(frames[i].string(), cv::IMREAD_COLOR);
+        const auto prepared = cube::vision::prepare_frame(bgr, size);
+        const auto read =
+            prepared.has_value() ? cube::vision::read_side(*prepared, size) : std::nullopt;
+        scan.add(read, intervals[i]);
+        if (!read.has_value() && size == 3) {
+            scan.add_corner(
+                prepared.has_value() ? cube::vision::read_corner(*prepared) : std::nullopt,
+                intervals[i]);
+        }
+    }
+    const cube::vision::ScanDiagnosis diagnosis = scan.diagnose();
+    fmt::print("{}: a {}x{}x{}, {} frames, {} groups, {} captured\n", session.filename().string(),
+               size, size, size, frames.size(), diagnosis.groups, diagnosis.captured);
+    for (const auto& side : diagnosis.sides) {
+        const cv::Vec3f& centre = side.lab.at(side.lab.size() / 2);
+        fmt::print("  side seen {}th: {} reads; middle cell Lab {:5.1f} {:6.1f} {:6.1f}\n",
+                   side.first_seen, side.reads, centre[0], centre[1], centre[2]);
+    }
+    // How alike each pair of captured sides is, under the turn that lays them best: the number
+    // of cells further apart than the scan counts as the same colour (10 Lab), the mean and the
+    // largest plain Lab gap, and the mean of colour_distance (which counts lightness and
+    // chroma for a quarter). Two reads of one side lit differently show here as close pairs.
+    for (std::size_t a = 0; a < diagnosis.sides.size(); ++a) {
+        for (std::size_t b = a + 1; b < diagnosis.sides.size(); ++b) {
+            const auto& left = diagnosis.sides.at(a).lab;
+            const auto& right = diagnosis.sides.at(b).lab;
+            const auto cells = left.size();
+            std::size_t best_differing = cells + 1;
+            double best_mean = 0.0;
+            double best_max = 0.0;
+            double best_shaded = 0.0;
+            for (int roll = 0; roll < 4; ++roll) {
+                std::size_t differing = 0;
+                double total = 0.0;
+                double most = 0.0;
+                double shaded = 0.0;
+                for (std::size_t i = 0; i < cells; ++i) {
+                    const cv::Vec3f& other = right.at(cube::vision::rolled_cell(size, roll, i));
+                    const cv::Vec3f gap = left.at(i) - other;
+                    const double plain = std::sqrt(static_cast<double>(gap.dot(gap)));
+                    differing += plain > 10.0 ? 1U : 0U;
+                    total += plain;
+                    most = std::max(most, plain);
+                    shaded += static_cast<double>(cube::vision::colour_distance(left.at(i), other));
+                }
+                if (differing < best_differing) {
+                    best_differing = differing;
+                    best_mean = total / static_cast<double>(cells);
+                    best_max = most;
+                    best_shaded = shaded / static_cast<double>(cells);
+                }
+            }
+            if (best_differing * 2 <= cells) {
+                fmt::print(
+                    "  sides {} and {}: {} of {} cells differ; mean gap {:.1f}, largest {:.1f}; "
+                    "shaded mean {:.1f}\n                    ",
+                    a, b, best_differing, cells, best_mean, best_max, best_shaded);
+            }
+        }
+    }
+    if (diagnosis.white.has_value()) {
+        fmt::print("  white centre found: side {}, cast {:.1f}\n", diagnosis.white->side,
+                   diagnosis.white->cast);
+    }
+    if (!diagnosis.naming.has_value()) {
+        fmt::print("  colours not named: {}\n",
+                   diagnosis.result_n.has_value()
+                       ? "?"
+                       : std::string(to_string(diagnosis.result_n.error())));
+        return 1;
+    }
+    const auto n = static_cast<std::size_t>(size);
+    for (std::size_t side = 0; side < diagnosis.naming->faces.size(); ++side) {
+        fmt::print("  side {} named:\n", side);
+        for (std::size_t row = 0; row < n; ++row) {
+            std::string letters;
+            std::string sure;
+            for (std::size_t col = 0; col < n; ++col) {
+                const auto& facelet = diagnosis.naming->faces.at(side).at((row * n) + col);
+                letters += letter_of(facelet.color);
+                sure += fmt::format(" {:.2f}", static_cast<double>(facelet.confidence));
+            }
+            fmt::print("    {}  {}\n", letters, sure);
+        }
+    }
+    for (std::size_t c = 0; c < diagnosis.naming->clusters.size(); ++c) {
+        const auto& cluster = diagnosis.naming->clusters.at(c);
+        fmt::print("  cluster {} {}: mean Lab {:5.1f} {:6.1f} {:6.1f}  hue {:.0f} chroma {:.0f}\n",
+                   c, letter_of(cluster.name), cluster.mean[0], cluster.mean[1], cluster.mean[2],
+                   static_cast<double>(cluster.hue.hue_degrees),
+                   static_cast<double>(cluster.hue.chroma));
+    }
+    if (diagnosis.assembly.has_value()) {
+        fmt::print("  assembly: {} candidate(s)\n", diagnosis.assembly->candidates);
+    }
+    fmt::print("  result: {}\n", diagnosis.result_n.has_value()
+                                     ? "a cube"
+                                     : std::string(to_string(diagnosis.result_n.error())));
+    return diagnosis.result_n.has_value() ? 0 : 1;
+}
+
 int run_replay(const fs::path& session) {
     const Outcome outcome = replay(session);
     fmt::print("{}: frames {}  lattice reads {}  corner reads {}  sides {}\n",
@@ -1444,6 +1555,9 @@ int main(int argc, char** argv) {
     if (args.size() == 2 && args[0] == "replay") {
         return run_replay(fs::path(args[1]));
     }
+    if (args.size() == 2 && args[0] == "diagnose") {
+        return run_diagnose(fs::path(args[1]));
+    }
     if (args.size() == 2 && args[0] == "board") {
         return run_board(fs::path(args[1]));
     }
@@ -1478,7 +1592,8 @@ int main(int argc, char** argv) {
         return run_cost(fs::path(args[1]), runs, every_frame);
     }
     fmt::print(
-        "usage:\n  cube_scan replay <session-dir>\n  cube_scan board <root-dir>\n"
+        "usage:\n  cube_scan replay <session-dir>\n  cube_scan diagnose <session-dir>\n  cube_scan "
+        "board <root-dir>\n"
         "  cube_scan holds <session-dir>\n  cube_scan corners <session-dir> [max-distance]\n"
         "  cube_scan corner-colours <session-dir>\n  cube_scan ambiguity <session-dir>\n"
         "  cube_scan funnel <session-dir> [-v]\n"
