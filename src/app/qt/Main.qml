@@ -23,6 +23,7 @@ ApplicationWindow {
         onLoaded: screenFade.restart()
         sourceComponent: {
             switch (AppState.screen) {
+            case "entry": return entryScreen;
             case "permission": return permissionScreen;
             case "scan": return scanScreen;
             case "solve": return solveScreen;
@@ -80,6 +81,7 @@ ApplicationWindow {
     }
 
     Component { id: launchScreen; LaunchScreen {} }
+    Component { id: entryScreen; EntryScreen {} }
     Component { id: permissionScreen; PermissionScreen {} }
     Component { id: scanScreen; DirectScanScreen {} }
     Component { id: solveScreen; SolveScreen {} }

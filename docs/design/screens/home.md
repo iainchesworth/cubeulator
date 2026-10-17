@@ -50,6 +50,7 @@ scrolls; the cube shrinks to its minimum first.
 | Lede | `body`, `inkSecondary` | `home.lede` | `home.lede` |
 | Scan | button, primary, thumb, block, trailing chevron | `home.scan` | `home.scan` |
 | Enter by hand | button, secondary, block, trailing chevron | `common.enterByHand` | `home.enterByHand` |
+| Another size | button, secondary, block, trailing chevron. Opens [the screen for another size or a typed scramble](review.md#a-cube-of-another-size) | `home.other` | `launch.other` |
 | History | button, ghost, clock icon | `home.history` | `home.history` |
 | Help | button, ghost, help icon | `common.help` | `home.help` |
 | Settings | button, ghost, sliders icon | `common.settings` | `home.settings` |

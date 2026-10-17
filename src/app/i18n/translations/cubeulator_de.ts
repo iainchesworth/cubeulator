@@ -525,6 +525,81 @@ In deinen Händen.</translation>
         <extracomment>Button. Opens the list of past solves.</extracomment>
         <translation>Verlauf</translation>
     </message>
+    <message id="home.other">
+        <source>Another size of cube</source>
+        <extracomment>Button on Home. Opens the screen for a cube the camera does not read: a different size, or a cube typed in as the scramble that mixed it up.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.title">
+        <source>Another cube</source>
+        <extracomment>Title of the screen reached from Home by "Another size of cube".</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.size.label">
+        <source>Size</source>
+        <extracomment>Small heading above the buttons that choose the size of the cube: 2×2, 3×3 and so on.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.size.option">
+        <source>%1×%1</source>
+        <extracomment>A size of cube on a button: the side length twice, as in 5×5. %1 is the number in the reader's own digits.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.size.camera">
+        <source>The camera reads a 3×3. Scan it, or type its scramble here.</source>
+        <extracomment>Under the size buttons when 3×3 is chosen.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.size.noCamera">
+        <source>The camera cannot read this size yet. Type its scramble here.</source>
+        <extracomment>Under the size buttons when a size other than 3×3 is chosen.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.scramble.label">
+        <source>Its scramble</source>
+        <extracomment>Small heading above the box where the scramble is typed. A scramble is the list of moves that mixed the cube up, as a timer or a puzzle site shows it.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.scramble.placeholder">
+        <source>Type or paste the moves, such as R U R' U' F2 2R Rw</source>
+        <extracomment>Grey text in the empty scramble box, showing what a scramble looks like. The moves are cubing notation and are not translated.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.scramble.help">
+        <source>Write the moves with a space between them. U' turns the other way and F2 is a half turn. 2R is the second layer in from R, and Rw turns two layers together.</source>
+        <extracomment>Under the scramble box. The letters and marks are notation and stay as they are.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.solve">
+        <source>Solve it</source>
+        <extracomment>Main button of the screen for another size of cube. Works out the solution from the scramble.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.scan">
+        <source>Scan it instead</source>
+        <extracomment>Button shown when 3×3 is chosen. Goes to the camera.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.error.unknownMove">
+        <source>‘%1’ is not a move. Moves look like R, U', F2, 2R or Rw.</source>
+        <extracomment>Shown under the scramble box when a word in it is not a move. %1 is that word.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.error.layer">
+        <source>‘%1’ turns a layer that a %2×%2 cube does not have.</source>
+        <extracomment>Shown when a move names a layer the chosen size does not have, such as 5R on a 4×4. %1 is that move, %2 the size in the reader's own digits.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.error.empty">
+        <source>Type the scramble first.</source>
+        <extracomment>Shown when Solve it is pressed with nothing typed.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
+    <message id="entry.error.solved">
+        <source>Those moves leave the cube as it was. Type a scramble that mixes it up.</source>
+        <extracomment>Shown when the scramble turns the cube back to solved, so there is nothing to solve.</extracomment>
+        <translation type="unfinished"></translation>
+    </message>
     <message id="home.findingCamera">
         <source>Looking for a camera…</source>
         <extracomment>Shown briefly at start-up on a computer.</extracomment>

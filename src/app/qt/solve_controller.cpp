@@ -139,6 +139,52 @@ SolveController::SolveController(QObject* parent) : QObject(parent) {
             &SolveController::applySolveResult);
 }
 
+QVariantMap SolveController::solveScramble(int size, const QString& scramble) {
+    const auto refused = [&scramble](const char* error, std::size_t offset = 0,
+                                     std::size_t length = 0) {
+        QVariantMap out;
+        out.insert(QStringLiteral("ok"), false);
+        out.insert(QStringLiteral("error"), QString::fromLatin1(error));
+        // Offsets are in the text as typed, which is what a field can point at.
+        out.insert(QStringLiteral("offset"), static_cast<qulonglong>(offset));
+        out.insert(QStringLiteral("length"), static_cast<qulonglong>(length));
+        out.insert(QStringLiteral("token"),
+                   scramble.mid(static_cast<qsizetype>(offset), static_cast<qsizetype>(length)));
+        return out;
+    };
+    auto solved = NCube::solved(size);
+    if (!solved.has_value()) {
+        return refused("unsupportedSize");
+    }
+    // Notation is ASCII, so one byte is one character of the text as typed (a letter
+    // that is not Latin-1 becomes a question mark, which is no move either) and the
+    // offsets of a fault are offsets in the text.
+    const std::string text = scramble.toLatin1().toStdString();
+    const auto moves = cube::nxn::parse(text, size);
+    if (!moves.has_value()) {
+        using Kind = cube::nxn::ParseFault::Kind;
+        const char* error = moves.error().kind == Kind::LayerOutOfRange   ? "layerOutOfRange"
+                            : moves.error().kind == Kind::UnsupportedSize ? "unsupportedSize"
+                                                                          : "unknownMove";
+        return refused(error, moves.error().offset, moves.error().length);
+    }
+    if (moves->empty()) {
+        return refused("empty");
+    }
+    const std::vector<cube::nxn::LayerMove> turns = cube::nxn::layers_of(*moves);
+    NCube cube = *solved;
+    cube.apply(turns);
+    if (cube.is_solved()) {
+        return refused("alreadySolved");
+    }
+    solveCube(cube);
+    QVariantMap out;
+    out.insert(QStringLiteral("ok"), true);
+    out.insert(QStringLiteral("moves"), static_cast<int>(moves->size()));
+    out.insert(QStringLiteral("layerTurns"), static_cast<int>(turns.size()));
+    return out;
+}
+
 void SolveController::solveCube(const Cube& cube) {
     solveCube(NCube::from_cube3(cube));
 }

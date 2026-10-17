@@ -9,7 +9,7 @@ import Cubeulator
 QtObject {
     id: state
 
-    property string screen: "launch" // launch | permission | scan | solve | settings | history | complete | solution
+    property string screen: "launch" // launch | entry | permission | scan | solve | settings | history | complete | solution
 
     // Camera-access screens exist only for mobile platforms, where the OS
     // requires an explicit in-app permission prompt. Desktop platforms grant
@@ -173,6 +173,31 @@ QtObject {
         solveCamera = false;
         screen = "solve";
         return true;
+    }
+
+    // A cube the camera does not read: another size, or a cube typed in as the
+    // scramble that mixed it up. Entered from Home; back goes there.
+    function openEntry() {
+        screen = "entry";
+    }
+
+    function closeEntry() {
+        screen = "launch";
+    }
+
+    // Solves the cube that `scramble` (cubing notation) makes of a solved cube
+    // of `size`, and shows the solve screen when it has started: there is no
+    // camera for it to be matched against, so the solve screen keeps it off. Says
+    // what is wrong with the scramble, if anything is, and then leaves the screen as
+    // it is (see SolveController.solveScramble for the answer).
+    function solveScramble(size, scramble) {
+        var result = SolveController.solveScramble(size, scramble);
+        if (result.ok) {
+            solveCamera = false;
+            elapsedSeconds = 0;
+            screen = "solve";
+        }
+        return result;
     }
 
     function beginScan() {

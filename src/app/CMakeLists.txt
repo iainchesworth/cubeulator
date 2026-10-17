@@ -142,6 +142,7 @@ if(CUBEULATOR_BUILD_APP)
             qt/CubeNView.qml
             qt/StatsOverlay.qml
             qt/LaunchScreen.qml
+            qt/EntryScreen.qml
             qt/PermissionScreen.qml
             qt/DirectScanScreen.qml
             qt/SolveScreen.qml

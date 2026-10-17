@@ -300,6 +300,7 @@ if(CUBEULATOR_BUILD_APP)
         unit/cube_n_view_test.cpp
         unit/cube_view_test.cpp
         unit/direct_scan_screen_test.cpp
+        unit/entry_screen_test.cpp
         unit/solve_camera_inset_test.cpp
         unit/solve_screen_gallery_test.cpp
         unit/solve_screen_nxn_test.cpp

@@ -190,6 +190,17 @@ public:
     // hold the screen asks for, a continuation keeps the hold it has seen.
     [[nodiscard]] bool solutionContinuesCube() const noexcept { return continuation_; }
 
+    // Starts solving the cube that `scramble` makes of a solved cube of `size`: the
+    // way into the app for a cube the camera does not read, from a scramble in
+    // cubing notation (R U' 2R F2, Rw, 3Rw2, 2-3R, x ...) such as a timer or a
+    // puzzle site gives. Returns { ok: true, moves, layerTurns } when the solve has
+    // started (isSolving is true until it lands), or { ok: false, error, offset,
+    // length } where `error` is one of "unsupportedSize", "empty", "unknownMove",
+    // "layerOutOfRange" (the token that failed starts at `offset` in the text and
+    // is `length` long) or "alreadySolved" (the turns leave the cube as it was).
+    // Nothing is started unless it is ok.
+    Q_INVOKABLE QVariantMap solveScramble(int size, const QString& scramble);
+
     // Starts solving a cube handed over already validated - the direct-scan
     // path. isSolving is true until the solution lands. Nothing is
     // announced beyond that: the caller decides when to show the solution,
