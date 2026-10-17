@@ -5,7 +5,7 @@
 > sketch became: one side at a time, paint rather than pick, the count and the
 > cube check beside Solve. It also puts right a cube the camera misread (the
 > section "Putting a misread scan right"), reached from the scan screen once six
-> sides are in. Not built: the entry from the solve screen, the sketch's
+> sides are in, and from the solve screen for a cube read as valid. Not built: the sketch's
 > `review.working` and `review.solve-failed` states (Solve goes straight to the
 > solve screen), the keyboard map below, and the unfolded overview.
 
@@ -233,9 +233,19 @@ on only for a valid cube. There is no "solve anyway".
 | Use these, Cancel | buttons | `review.describe.apply`, `common.cancel` | `colours.describeApply`, `colours.describeCancel` |
 | What is wrong with the description | `accent` line | `review.describe.tooFew`, `review.describe.tooMany`, `review.describe.unknownLetter` | `colours.describeError` |
 
-**Not built, and not verified.** Entry from the solve screen (*Check the colours*,
-for a cube that was read as valid and is wrong: the scan screen's button is the
-only way in today). Any size but 3x3 from a scan (the scan reads 3x3 only). The "?"
+**From the solve screen.** A cube the camera read as valid and read wrong is only
+found out at the solve, so the solve screen has the same button (`solve.checkColours`,
+`scan.checkColours`, ghost) for a 3x3 that came from a scan: `AppState.solveCamera` and
+`DirectScan.complete`, so not for a typed cube, a scramble, a solve carried on from the
+history, a cube that has been corrected and solved (it is a typed cube from then on) or a
+scan since started over. It is a row of its own over the stepping buttons in both
+layouts, and *Out of step? Rescan* narrow moves up over it: beside that button it did not
+fit in every language. **Back from there is the solve screen**, as it was (the solution is
+untouched, the camera comes back on it); only *Scan again* starts a new scan. Leaving with
+changes asks first, as always. *Solve* on the corrected colours is a new solve from the
+first turn (`solveColours`); the solve it replaces stays in the history as unfinished.
+
+**Not built, and not verified.** Any size but 3x3 from a scan (the scan reads 3x3 only). The "?"
 threshold on real recordings. A cube that fits two ways is shown as six sides to
 compare, not as the two candidates (the sketch's "Two cubes that both fit").
 

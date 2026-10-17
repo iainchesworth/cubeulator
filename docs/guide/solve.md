@@ -134,6 +134,13 @@ Rescan** (top of the screen on a wide window, above the buttons on a narrow
 one) reads the cube again as it now is and solves it from there. Anything
 already done stays done.
 
+If the cube you scanned was not the cube you have (a sticker read as the wrong
+colour that still made a real cube), **Check the colours**, over the buttons at the
+bottom, shows what the camera read so that you can put it right by hand; see [When
+the camera misreads a
+colour](troubleshooting.md#when-the-camera-misreads-a-colour). **Solve** there
+starts a new solution from the first turn, and **Back** returns to this one.
+
 ## Finishing
 
 On the last move, the **Next turn** button changes to **Finish**. Press it, and

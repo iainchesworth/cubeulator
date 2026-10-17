@@ -255,6 +255,15 @@ Rectangle {
 
     // The cube on screen: the 3x3's own view, or the one for any other size.
     readonly property bool threeByThree: SolveController.size === 3
+
+    // Whether this solve is of a cube the camera read as a cube, which it may have read
+    // wrongly: the scan screen's own way to look the colours over is only for six sides
+    // that made none. Not a typed cube, a scramble, or a solve carried on from the
+    // history (none of them has a scan, and solveCamera is off for each), nor one that is
+    // not a 3x3 (only a 3x3 is read). A property and not a binding in the tests' way: the
+    // layout checks set it to see the screen at its fullest.
+    property bool fromScan: AppState.solveCamera && DirectScan.complete
+    readonly property bool canCheckColours: fromScan && threeByThree
     readonly property Item cube: cubeLoader.item
 
     // Turns the layers of a move on the cube on screen: all the way, then the
@@ -920,7 +929,7 @@ Rectangle {
         // that the cube does not change size when it goes; and the stepping
         // buttons. A 3x3's is the 240 it always was.
         readonly property real stageWordsRoom: 116
-        readonly property real need: methodBox.height + skipBox.room + stageWordsRoom + buttons.height
+        readonly property real need: methodBox.height + skipBox.room + checkBox.room + stageWordsRoom + buttons.height
 
         // How the cube is being solved. The same row on both layouts; wide it
         // also says what the chosen method is, narrow there is no room. Choosing
@@ -944,6 +953,33 @@ Rectangle {
                 onSelected: (method) => root.chooseMethod(method)
             }
             Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: 2; color: Theme.divider }
+        }
+
+        // The way to look the colours over, for a cube the camera read as a cube and read
+        // wrong. A row of its own over the stepping buttons (a 3x3 has no skip to share
+        // it with): beside "Out of step? Rescan" the two do not fit in every language.
+        // Narrow, that button sits over this row; wide, this row is all there is.
+        Item {
+            id: checkBox
+            objectName: "solve.check"
+            anchors.bottom: skipBox.top
+            width: parent.width
+            visible: root.canCheckColours && !SolveController.isSolving
+            // What it takes when it is there; the panel is given that much for any cube
+            // that can have it.
+            readonly property real room: root.canCheckColours ? checkButton.height + 2 * Theme.space1 : 0
+            height: room
+
+            AppButton {
+                id: checkButton
+                objectName: "solve.checkColours"
+                // The edge the way out is at (narrow), so that the two are one column.
+                anchors.right: parent.right; anchors.rightMargin: Theme.space3
+                y: Theme.space1
+                height: 30
+                variant: "ghost"; text: qsTrId("scan.checkColours")
+                onClicked: AppState.reviewScanFromSolve()
+            }
         }
 
         // A person who can reduce a big cube themselves may jump over the reduction:
@@ -987,7 +1023,7 @@ Rectangle {
         // Wide: every stage, the current one opened out.
         Column {
             visible: root.wide
-            anchors.top: methodBox.bottom; anchors.bottom: skipBox.top
+            anchors.top: methodBox.bottom; anchors.bottom: checkBox.top
             width: parent.width
 
             Text {
@@ -1017,7 +1053,7 @@ Rectangle {
         Flickable {
             id: stageWords
             visible: !root.wide
-            anchors.top: methodBox.bottom; anchors.bottom: skipBox.top
+            anchors.top: methodBox.bottom; anchors.bottom: checkBox.top
             anchors.left: parent.left; anchors.right: parent.right
             anchors.bottomMargin: leave.visible ? leave.height + Theme.space1 : 0
             contentWidth: width
@@ -1106,7 +1142,8 @@ Rectangle {
         // not a sibling); narrow, at the same edge, above the stepping buttons.
         anchors.right: parent.right
         anchors.rightMargin: Theme.space3 + (root.wide ? progress.width + Theme.space3 : 0)
-        y: root.wide ? (header.height - height) / 2 : root.height - buttons.height - height - Theme.space1
+        y: root.wide ? (header.height - height) / 2
+                     : root.height - buttons.height - checkBox.height - height - Theme.space1
         height: 30
         variant: "ghost"; text: "Out of step? Rescan"
         onClicked: AppState.rescan()

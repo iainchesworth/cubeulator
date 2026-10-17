@@ -534,6 +534,17 @@ void describing_wrongly(Screen& screen) {
     REQUIRE(error->isVisible());
 }
 
+// The solve screen of a 3x3 the camera read, which has the way to look its colours over
+// (the screen asks the scan; the layout checks have none, so say so): one more button
+// than the screen otherwise has.
+void from_a_scan(Screen& screen) {
+    screen.item()->setProperty("fromScan", true);
+    screen.settle();
+    const QQuickItem* check = screen.item_named(QStringLiteral("solve.checkColours"));
+    REQUIRE(check != nullptr);
+    REQUIRE(check->isVisible());
+}
+
 // Whether `item` stands at an angle on the screen: it, or something it is in
 // below the screen, is turned by other than half-turns.
 [[nodiscard]] bool is_turned(const QQuickItem* item, const QQuickItem* screen) {
@@ -660,6 +671,9 @@ void holds_the_layout_in(const char* language) {
     holds_the_layout_of(language, {"SolutionScreen", "SolveScreen"});
     have_a_wide_solution();
     holds_the_layout_of(language, {"SolveScreen"});
+    // A 3x3 the camera read has the way to check its colours as well as the way out.
+    have_a_solution();
+    holds_the_layout_of(language, {"SolveScreen"}, from_a_scan);
     // The colours screen looking over a scan: a note that the sides may be the wrong way
     // up and one that the camera was unsure of a sticker, a "?" on the sticker, the
     // sides called by their middles, the extra buttons; and with the box for
@@ -760,29 +774,48 @@ TEST_CASE("the solve screen holds its panel at the sizes of phones for a 3x3 and
         } else {
             have_a_wide_solution();
         }
-        for (const char* language :
-             {"en", "xx", "he", "ar", "yi", "de", "fr", "es", "ja", "zh-CN"}) {
-            in_language(language);
-            for (const Size& size : phones) {
-                Screen screen("SolveScreen", size.w, size.h);
-                INFO(language << ", " << size.w << "x" << size.h << ", "
-                              << (cube_kind == 0   ? "a 3x3"
-                                  : cube_kind == 1 ? "a 5x5"
-                                                   : "a 5x5, a turn of several layers"));
-                for (const QString& over : screen.drawn_over_each_other({"solve.cube"})) {
-                    FAIL_CHECK("drawn over each other: " << str(over));
-                }
-                const QQuickItem* cube = screen.find("solve.cube");
-                REQUIRE(cube != nullptr);
-                CHECK(cube->width() >= least_cube - 0.5);
-                // The skip is there to be pressed: on the screen, whole. (A 3x3 has none.)
-                const QQuickItem* skip = screen.find("solve.skip.button");
-                REQUIRE(skip != nullptr);
-                CHECK(skip->isVisible() == (cube_kind != 0));
-                if (skip->isVisible()) {
-                    const QRectF at = skip->mapRectToItem(
-                        screen.item(), QRectF(0, 0, skip->width(), skip->height()));
-                    CHECK(at.bottom() <= size.h + 0.5);
+        // A 3x3 is also held as the camera read it, with the way to look its colours over.
+        for (const bool scanned : {false, true}) {
+            if (scanned && cube_kind != 0) {
+                continue;
+            }
+            for (const char* language :
+                 {"en", "xx", "he", "ar", "yi", "de", "fr", "es", "ja", "zh-CN"}) {
+                in_language(language);
+                for (const Size& size : phones) {
+                    Screen screen("SolveScreen", size.w, size.h);
+                    if (scanned) {
+                        from_a_scan(screen);
+                    }
+                    INFO(language << ", " << size.w << "x" << size.h << ", "
+                                  << (cube_kind == 0   ? (scanned ? "a 3x3 from a scan" : "a 3x3")
+                                      : cube_kind == 1 ? "a 5x5"
+                                                       : "a 5x5, a turn of several layers"));
+                    for (const QString& over : screen.drawn_over_each_other({"solve.cube"})) {
+                        FAIL_CHECK("drawn over each other: " << str(over));
+                    }
+                    const QQuickItem* cube = screen.find("solve.cube");
+                    REQUIRE(cube != nullptr);
+                    CHECK(cube->width() >= least_cube - 0.5);
+                    // The skip is there to be pressed: on the screen, whole. (A 3x3 has none.)
+                    const QQuickItem* skip = screen.find("solve.skip.button");
+                    REQUIRE(skip != nullptr);
+                    CHECK(skip->isVisible() == (cube_kind != 0));
+                    if (skip->isVisible()) {
+                        const QRectF at = skip->mapRectToItem(
+                            screen.item(), QRectF(0, 0, skip->width(), skip->height()));
+                        CHECK(at.bottom() <= size.h + 0.5);
+                    }
+                    // So is the way to look the colours over: on the screen, whole.
+                    if (scanned) {
+                        const QQuickItem* check = screen.find("solve.checkColours");
+                        REQUIRE(check != nullptr);
+                        const QRectF at = check->mapRectToItem(
+                            screen.item(), QRectF(0, 0, check->width(), check->height()));
+                        CHECK(at.bottom() <= size.h + 0.5);
+                        CHECK(at.left() >= -0.5);
+                        CHECK(at.right() <= size.w + 0.5);
+                    }
                 }
             }
         }

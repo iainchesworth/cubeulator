@@ -620,3 +620,90 @@ TEST_CASE("each stage of each method has words", "[qml][solve-screen][solve-meth
         CHECK_FALSE(words.value("detail").toString().isEmpty());
     }
 }
+
+TEST_CASE("a cube the camera read can be looked over from the solve screen, and back is the solve",
+          "[qml][solve-screen][review]") {
+    cube::app::AppControllers& app = cube::test::app_controllers();
+    SolveController& solver = app.solve;
+    cube::app::DirectScan& camera = app.directScan;
+    auto* state = cube::test::qml_engine().singletonInstance<QObject*>("Cubeulator", "AppState");
+    REQUIRE(state != nullptr);
+
+    // The scan screen has read six sides that made a cube; the app's own wiring hands
+    // it to the solver.
+    const Cube scrambled = cube::solver::random_scramble(5);
+    camera.setWatching(false);
+    camera.restart();
+    state->setProperty("solveCamera", true);
+    for (const Face face : cube::solver::kAllFaces) {
+        for (int i = 0; i < static_cast<int>(cube::vision::SideScan::kMinReads) + 4; ++i) {
+            camera.processFrame(
+                cube::test::draw_side(cube::test::outside_view(scrambled, face), cube::test::Pose{}));
+        }
+        camera.processFrame(cube::test::room({640, 360}));
+    }
+    REQUIRE(camera.complete());
+    REQUIRE(wait_for([&]() { return !solver.isSolving(); }, 60'000));
+    REQUIRE(solver.currentCube() == scrambled);
+    REQUIRE(state->setProperty("screen", QStringLiteral("solve")));
+
+    Screen screen;
+    screen.settle();
+    const auto check = [&screen]() {
+        QCoreApplication::processEvents();
+        return qobject_cast<QQuickItem*>(screen.find("solve.checkColours"));
+    };
+    QQuickItem* button = check();
+    REQUIRE(button != nullptr);
+    CHECK(button->isVisible());
+    CHECK(button->property("variant").toString() == "ghost");
+    CHECK(screen.get("canCheckColours").toBool());
+
+    // Some of the solution is done; it is still there, where it was, afterwards.
+    screen.call("next");
+    REQUIRE(wait_for([&]() { return solver.moveIndex() == 1; }));
+
+    REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
+    CHECK(state->property("screen").toString() == "colours");
+    CHECK(state->property("coloursFromScan").toBool());
+    CHECK(app.colours.fromScan());
+    CHECK(app.colours.status().value("state").toString() == "valid");
+    // Looking at it does not touch the solve.
+    CHECK(solver.moveIndex() == 1);
+
+    // Back is the solve screen, with the solution where it was and the camera on it
+    // again. (From the scan screen it is a new scan.)
+    REQUIRE(QMetaObject::invokeMethod(state, "closeColours"));
+    CHECK(state->property("screen").toString() == "solve");
+    CHECK_FALSE(state->property("coloursFromScan").toBool());
+    CHECK(state->property("solveCamera").toBool());
+    CHECK(solver.moveIndex() == 1);
+    CHECK(camera.complete());
+
+    // Solving what was looked over is a new solve, from the start; and it is a cube
+    // typed in as far as the screen is concerned, so the way in is not offered again.
+    QVariant reviewed;
+    REQUIRE(QMetaObject::invokeMethod(state, "reviewScanFromSolve",
+                                      Q_RETURN_ARG(QVariant, reviewed)));
+    REQUIRE(reviewed.toBool());
+    QVariant solved;
+    REQUIRE(QMetaObject::invokeMethod(state, "solveColours", Q_RETURN_ARG(QVariant, solved)));
+    CHECK(solved.toMap().value("ok").toBool());
+    CHECK(state->property("screen").toString() == "solve");
+    CHECK_FALSE(state->property("solveCamera").toBool());
+    REQUIRE(wait_for([&]() { return !solver.isSolving(); }, 60'000));
+    CHECK(solver.moveIndex() == 0);
+    CHECK(solver.currentCube() == scrambled);
+    CHECK_FALSE(check()->isVisible());
+
+    // Not offered for a solve that has no scan behind it: one carried on from the
+    // history or typed in (solveCamera is off), or a scan since started over.
+    state->setProperty("solveCamera", true);
+    CHECK(check()->isVisible());
+    camera.restart();
+    CHECK_FALSE(check()->isVisible());
+
+    state->setProperty("screen", QStringLiteral("launch"));
+    state->setProperty("solveCamera", true);
+    camera.restart();
+}

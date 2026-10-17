@@ -1,0 +1,1 @@
+**Check the colours from the solve screen.** When the solution does not match your cube because the scan read a sticker wrong (but still made a real cube), the solve screen now has *Check the colours* over its buttons, as the scan screen does. Back returns to the solution where you left it, and *Solve* on the corrected colours starts a new solution.
