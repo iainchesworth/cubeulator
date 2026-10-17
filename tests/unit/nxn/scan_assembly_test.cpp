@@ -40,7 +40,8 @@ ScannedSides shown(const NCube& cube, std::mt19937& rng) {
     std::ranges::shuffle(order, rng);
     const int size = cube.size();
     for (std::size_t i = 0; i < 6; ++i) {
-        std::vector<Color> view = cube::nxn::outside_view(cube, cube::solver::kAllFaces.at(order.at(i)));
+        std::vector<Color> view =
+            cube::nxn::outside_view(cube, cube::solver::kAllFaces.at(order.at(i)));
         const int turns = static_cast<int>(rng() % 4);
         for (int turn = 0; turn < turns; ++turn) {
             std::vector<Color> next(view.size());
@@ -138,7 +139,8 @@ TEST_CASE("a 3x3 assembles the cubes the 3x3 assembly makes", "[nxn][scan]") {
                     .color = facet(sides.at(side).at(cell)), .confidence = 1.0F};
             }
         }
-        const std::vector<cube::solver::Cube> old = cube::solver::assemble_all_scanned_faces(faces, 64);
+        const std::vector<cube::solver::Cube> old =
+            cube::solver::assemble_all_scanned_faces(faces, 64);
         const std::vector<NCube> now = cube::nxn::assemble_all_scanned_sides(3, sides, 64);
         REQUIRE(now.size() == old.size());
         for (const cube::solver::Cube& each : old) {
@@ -207,7 +209,8 @@ TEST_CASE("the search for a cube is bounded", "[nxn][scan]") {
     std::mt19937 rng = cube::test::deterministic_rng(13);
     for (const int size : {3, 5, 7}) {
         CAPTURE(size);
-        const NCube cube = cube::nxn::random_scramble({.size = size, .seed = 21, .moves = 40 * size});
+        const NCube cube =
+            cube::nxn::random_scramble({.size = size, .seed = 21, .moves = 40 * size});
         const ScannedSides sides = shown(cube, rng);
         cube::solver::detail::tally() = {};
         const std::vector<NCube> made = cube::nxn::assemble_all_scanned_sides(size, sides, 16);

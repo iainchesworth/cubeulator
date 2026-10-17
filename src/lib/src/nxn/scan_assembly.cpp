@@ -112,8 +112,9 @@ struct Seams {
         for (int col = 0; col < size; ++col) {
             out.at((static_cast<std::size_t>(row) * static_cast<std::size_t>(size)) +
                    static_cast<std::size_t>(col)) =
-                side.at((static_cast<std::size_t>(size - 1 - col) * static_cast<std::size_t>(size)) +
-                        static_cast<std::size_t>(row));
+                side.at(
+                    (static_cast<std::size_t>(size - 1 - col) * static_cast<std::size_t>(size)) +
+                    static_cast<std::size_t>(row));
         }
     }
     return out;

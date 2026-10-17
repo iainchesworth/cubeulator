@@ -534,7 +534,7 @@ TEST_CASE("a side is described in letters, and a description that is wrong chang
     CHECK(screen.require("colours.describeBox").property("visible").toBool());
     QObject& field = screen.require("colours.describeText");
     // It opens with the side as it stands: nothing painted yet.
-    CHECK(field.property("text").toString() == "???/???/???");
+    CHECK(field.property("text").toString() == "\?\?\?/\?\?\?/\?\?\?");
 
     // Too few, and a letter that is no colour: said, and nothing is painted.
     field.setProperty("text", "GGG/GBG");
@@ -563,7 +563,7 @@ TEST_CASE("a side is described in letters, and a description that is wrong chang
     // Changing side while the box is open describes that side instead.
     screen.click("colours.describe");
     screen.click("colours.side.R");
-    CHECK(field.property("text").toString() == "???/???/???");
+    CHECK(field.property("text").toString() == "\?\?\?/\?\?\?/\?\?\?");
     screen.click("colours.describeCancel");
     CHECK_FALSE(screen.require("colours.describeBox").property("visible").toBool());
 }
