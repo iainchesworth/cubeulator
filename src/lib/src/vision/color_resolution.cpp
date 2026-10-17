@@ -1002,8 +1002,8 @@ Result<ColorResolution> resolve_colors_explained(const std::array<CapturedFace, 
         return std::unexpected(CubeError::no_valid_cube_detected);
     }
     const bool even = size % 2 == 0;
-    const Layout layout{.area = faces.at(0).lab.size(),
-                        .middle = even ? kNoMiddle : middle_cell(size)};
+    const std::size_t middle = even ? kNoMiddle : middle_cell(size);
+    const Layout layout{.area = faces.at(0).lab.size(), .middle = middle};
 
     SampleArray samples(layout.samples());
     for (std::size_t face = 0; face < face_count; ++face) {
