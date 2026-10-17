@@ -464,7 +464,7 @@ TEST_CASE("an even size is read, named from its corners, and put together", "[vi
         const NCube cube = cube::nxn::random_scramble(
             {.size = size, .seed = static_cast<unsigned>(40 + size), .moves = 30 * size});
         SideScan scan(size);
-        show_cube(scan, cube, 17U, kDaylight, 0.6F);
+        show_cube(scan, cube, 17U, even_light(), 0.6F);
         REQUIRE(scan.sides().size() == 6);
 
         const auto made = scan.scanned_n();
