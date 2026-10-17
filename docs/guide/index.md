@@ -12,7 +12,7 @@ solution, and shows you the turns one at a time on a 3D cube.
 
 ## What you need
 
-- **A 3x3 cube.** It reads best on a cube with dark (black) plastic between the
+- **A cube.** The camera reads a 3x3, and it reads best on a cube with dark (black) plastic between the
   stickers, which is most of them. A cube with white or light plastic, or no
   stickers at all, is not read yet.
 - **A camera.** A laptop's webcam or a USB one is enough; in a browser on a
@@ -45,6 +45,7 @@ solution, and shows you the turns one at a time on a 3D cube.
 | [Installing](install.md) | The package for each system, the first-run prompts, and uninstalling |
 | [Scanning a cube](scan.md) | How to hold the cube, what the screen is telling you, and what to do when it asks again |
 | [Following the solution](solve.md) | The solve screen, the three methods, and how the camera follows your turns |
+| [Another size of cube](other-sizes.md) | A 2x2, 4x4 or 5x5: type its scramble or its colours, and follow it |
 | [Past solves](history.md) | The list of cubes you have solved, and carrying on one you left |
 | [Settings and shortcuts](settings.md) | Camera, method, appearance, language, and the keyboard |
 | [Privacy](privacy.md) | What the camera picture is used for, and what is kept |
