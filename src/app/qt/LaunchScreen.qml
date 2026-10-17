@@ -98,6 +98,7 @@ Rectangle {
             readonly property real pad: Theme.space8 + Theme.space2
 
             Text {
+                id: appName
                 anchors.top: parent.top
                 anchors.left: parent.left
                 anchors.margins: leftPane.pad
@@ -114,7 +115,16 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.leftMargin: leftPane.pad
                 anchors.rightMargin: leftPane.pad
+                // Centred, as long as it has room to be: a longer translation (or a wider
+                // face) makes it taller than the pane's middle has room for, and a column
+                // that grows evenly up and down then sets its last row of buttons over the
+                // footer's. It is moved off the middle only as far as keeps it between the
+                // product name and the footer.
                 anchors.verticalCenter: parent.verticalCenter
+                readonly property real centred: leftPane.height / 2 - height / 2
+                anchors.verticalCenterOffset:
+                    Math.max(appName.y + appName.height + Theme.space2,
+                             Math.min(centred, footer.y - Theme.space2 - height)) - centred
                 spacing: Theme.space3
                 Text {
                     text: qsTrId("app.tagline")
@@ -152,6 +162,7 @@ Rectangle {
             }
 
             Row {
+                id: footer
                 anchors.left: parent.left
                 anchors.bottom: parent.bottom
                 anchors.margins: leftPane.pad

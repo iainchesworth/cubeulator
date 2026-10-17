@@ -462,11 +462,6 @@ TEST_CASE(
     // The known few are listed as they are, so that a new one fails and so
     // does the day one of these is fixed. Owner of each is named.
     const std::set<std::string> known = {
-        // The solve lane's SolveScreen.qml: the rescan button is placed with
-        // an x that does not follow the layout, and lands off the left edge.
-        "solve.rescan @ 720x640",
-        "solve.rescan @ 900x640",
-        "solve.rescan @ 1280x800",
         // As in layout_test.cpp: the Complete screen's buttons below the fold
         // of a large window (experience lane, E3d).
         "complete.review @ 1280x800",

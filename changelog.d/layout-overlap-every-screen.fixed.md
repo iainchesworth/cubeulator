@@ -1,0 +1,1 @@
+**The solve screen on a wide window is laid out right to left in Hebrew, Arabic and Yiddish.** The list of stages and the cube no longer lie over each other, and the *Out of step? Rescan* button stays inside the window instead of running off its left edge.
