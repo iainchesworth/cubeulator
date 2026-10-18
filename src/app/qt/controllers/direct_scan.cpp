@@ -16,6 +16,7 @@
 #include <QVariantMap>
 #include <QtConcurrent/QtConcurrentRun>
 
+#include <algorithm>
 #include <string>
 #include <utility>
 
@@ -330,13 +331,102 @@ cube::Result<cube::vision::ScannedCubeN> DirectScan::evaluateScan(std::string_vi
 }
 
 void DirectScan::setSize(int size) {
-    if (size == size_ || size < 2 || size > 9) {
+    if (size < 2 || size > 9) {
+        return;
+    }
+    // A size that is asked for is the person's, whatever it was found to be.
+    const bool was_auto = auto_size_;
+    auto_size_ = false;
+    if (was_auto) {
+        emit autoSizeChanged();
+    }
+    if (size == size_) {
         return;
     }
     size_ = size;
     scan_ = cube::vision::SideScan(size);
     restart();
     emit sizeChanged();
+}
+
+void DirectScan::adoptSize(int size) {
+    size_ = size;
+    scan_ = cube::vision::SideScan(size);
+    restart();
+    emit sizeChanged();
+}
+
+void DirectScan::useAutoSize() {
+    const bool was_auto = auto_size_;
+    auto_size_ = true;
+    if (!was_auto) {
+        emit autoSizeChanged();
+    }
+    if (size_ != 3) {
+        adoptSize(3);
+        return;
+    }
+    restart();
+}
+
+void DirectScan::useDefaultSize() {
+    if (default_size_ != 3) {
+        setSize(default_size_);
+        return;
+    }
+    if (auto_size_ && size_ == 3 && !size_locked_) {
+        return;
+    }
+    useAutoSize();
+}
+
+std::optional<int> DirectScan::detectedSize(const cv::Mat& bgr, bool read_here) {
+    // The reader of N x N finds a grid of fewer in a bigger side (a 5x5 reads at 2, 3, 4
+    // and 5, a 3x3 at 2 and 3, measured on drawings) and never a bigger grid than the
+    // side has, so the cube's size is the largest the frame reads at: up from this
+    // size while it reads, or down from it until it does.
+    constexpr int kSmallest = 2;
+    constexpr int kLargest = 5;
+    const auto reads_at = [&bgr](int size) {
+        const auto prepared = cube::vision::prepare_frame(bgr, size);
+        return prepared.has_value() && cube::vision::read_side(*prepared, size).has_value();
+    };
+    int found = 0;
+    if (read_here) {
+        found = size_;
+        while (found < kLargest && reads_at(found + 1)) {
+            ++found;
+        }
+    } else {
+        for (int size = std::min(size_, kLargest + 1) - 1; size >= kSmallest; --size) {
+            if (reads_at(size)) {
+                found = size;
+                break;
+            }
+        }
+    }
+    if (found == 0) {
+        return std::nullopt;
+    }
+    // A hand over a few stickers reads smaller, never bigger, so the size is the largest
+    // that most of the last frames read at.
+    constexpr std::size_t kFrames = 8;
+    constexpr std::size_t kAgreeing = 5;
+    size_votes_.push_back(found);
+    if (size_votes_.size() > kFrames) {
+        size_votes_.erase(size_votes_.begin());
+    }
+    if (size_votes_.size() < kAgreeing) {
+        return std::nullopt;
+    }
+    for (int size = kLargest; size >= kSmallest; --size) {
+        const auto reading = static_cast<std::size_t>(
+            std::ranges::count_if(size_votes_, [size](int vote) { return vote >= size; }));
+        if (reading >= kAgreeing) {
+            return size;
+        }
+    }
+    return std::nullopt;
 }
 
 void DirectScan::start(const QString& deviceId) {
@@ -474,6 +564,8 @@ void DirectScan::restart() {
     settling_corner_.clear();
     scanned_.reset();
     scanned_n_.reset();
+    size_locked_ = false;
+    size_votes_.clear();
     if (diagnosing()) {
         diagnostics_->write("scan", cube::diagnostics::Json::object().set("trigger", "restart"));
     }
@@ -542,9 +634,17 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     // Reduced and outlined once: a side square to the camera and two sides at
     // an angle are read from the same preparation, and the second reader only
     // runs on the frames the first found nothing in.
-    const std::optional<cube::vision::PreparedFrame> prepared =
-        cube::vision::prepare_frame(bgr, size_);
+    std::optional<cube::vision::PreparedFrame> prepared = cube::vision::prepare_frame(bgr, size_);
     read_ = prepared.has_value() ? cube::vision::read_side(*prepared, size_) : std::nullopt;
+    if (auto_size_ && !size_locked_) {
+        // Until a side is captured the cube's size is looked for in the frames.
+        if (const auto found = detectedSize(bgr, read_.has_value());
+            found.has_value() && *found != size_) {
+            adoptSize(*found);
+            prepared = cube::vision::prepare_frame(bgr, size_);
+            read_ = prepared.has_value() ? cube::vision::read_side(*prepared, size_) : std::nullopt;
+        }
+    }
     if (awaiting_lock_) {
         // Show where the cube is, but count nothing yet.
         emit frameUpdated();
@@ -565,6 +665,8 @@ void DirectScan::processFrame(const cv::Mat& bgr, std::int64_t t_ms) {
     }
 
     std::vector<cube::vision::SideScan::Side> sides = scan_.sides();
+    // A side is in: the cube's size is settled.
+    size_locked_ = size_locked_ || !sides.empty();
     reading_ = scan_.reading();
     const std::size_t held = scan_.reads_in_view();
     capture_progress_ =

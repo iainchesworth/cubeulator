@@ -728,6 +728,38 @@ void explain(const Outcome& outcome) {
 // What the scan made of a session, side by side, at the session's size: how each side was
 // named (the letters, row by row, as the side was first seen), what the centres and the
 // clusters measured, and why the cube was or was not put together.
+// The size the app would find a session's cube to be (DirectScan::detectedSize): for each
+// frame, the largest size 2 to 5 at which a side is read, counted, so that what the
+// reader says of a real cube at each size can be seen. A frame that reads at no size says
+// nothing.
+int run_detect_size(const fs::path& session) {
+    const std::vector<fs::path> frames = frames_of(session);
+    std::map<int, std::size_t> largest;
+    std::size_t none = 0;
+    for (const fs::path& path : frames) {
+        const cv::Mat bgr = cv::imread(path.string(), cv::IMREAD_COLOR);
+        int found = 0;
+        for (int size = 2; size <= 5; ++size) {
+            const auto prepared = cube::vision::prepare_frame(bgr, size);
+            if (prepared.has_value() && cube::vision::read_side(*prepared, size).has_value()) {
+                found = size;
+            }
+        }
+        if (found == 0) {
+            ++none;
+        } else {
+            ++largest[found];
+        }
+    }
+    fmt::print("{}: {} frames, session size {}; read at no size {}", session.filename().string(),
+               frames.size(), session_size(session), none);
+    for (const auto& [size, count] : largest) {
+        fmt::print("; largest {}: {}", size, count);
+    }
+    fmt::print("\n");
+    return 0;
+}
+
 int run_diagnose(const fs::path& session) {
     const int size = session_size(session);
     cube::vision::SideScan scan(size);
@@ -1614,6 +1646,9 @@ int main(int argc, char** argv) {
     const std::vector<std::string_view> args(argv + 1, argv + argc);
     if (args.size() == 2 && args[0] == "replay") {
         return run_replay(fs::path(args[1]));
+    }
+    if (args.size() == 2 && args[0] == "detect-size") {
+        return run_detect_size(fs::path(args[1]));
     }
     if (args.size() == 2 && args[0] == "diagnose") {
         return run_diagnose(fs::path(args[1]));

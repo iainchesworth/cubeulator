@@ -134,6 +134,13 @@ class DirectScan : public QObject {
     // one time in four, a cube a few turns from solved at any size) is settled by corner
     // views, two or three sides in one picture, up to size 7.
     Q_PROPERTY(int size READ size WRITE setSize NOTIFY sizeChanged)
+    // Whether the size is being found from the cube in view (the default for a scan
+    // that is not given one): the largest size, 2 to 5, whose side the reader finds in
+    // the frames, which is the cube's, since a reader of N x N also finds a smaller grid
+    // inside a bigger side and never a bigger one. It decides on the first frames of a
+    // cube held up and stops looking once a side is captured. Setting `size` turns it
+    // off, so a person's choice stands; useAutoSize() turns it on again.
+    Q_PROPERTY(bool autoSize READ autoSize NOTIFY autoSizeChanged)
     // The size a scan is of unless the screen says another: 3, or the one CUBE_SCAN_SIZE
     // asks for (2 to 9), which is how a developer records and scans a cube that is not a
     // 3x3 while the entry screen offers the camera only for a 3x3.
@@ -162,6 +169,12 @@ public:
     [[nodiscard]] int size() const noexcept { return size_; }
     [[nodiscard]] int defaultSize() const noexcept { return default_size_; }
     void setSize(int size);
+    [[nodiscard]] bool autoSize() const noexcept { return auto_size_; }
+    // Finds the size from the cube again, starting from a 3x3, and scans over.
+    Q_INVOKABLE void useAutoSize();
+    // What a scan begun without a size is: found from the cube, or the developer's
+    // CUBE_SCAN_SIZE when there is one.
+    Q_INVOKABLE void useDefaultSize();
     [[nodiscard]] QStringList settlingCorner() const { return settling_corner_; }
     [[nodiscard]] bool reviewable() const noexcept { return scanned_n_.has_value() || conflicted_; }
     [[nodiscard]] bool watching() const noexcept { return watching_; }
@@ -238,6 +251,7 @@ public slots:
     void restart();
 
 signals:
+    void autoSizeChanged();
     void runningChanged();
     void frameUpdated();
     void sidesChanged();
@@ -283,6 +297,17 @@ private:
 
     int size_ = 3;
     int default_size_ = 3;
+    // Finding the size from the cube (autoSize): the largest size read in each of the
+    // last frames that read any, and whether a side has been captured, after which the
+    // size is not looked for.
+    bool auto_size_ = true;
+    bool size_locked_ = false;
+    std::vector<int> size_votes_;
+    // The size the frame shows, when it shows a cube: `read_here` is whether the reader
+    // found a side at size_. Nothing until enough frames agree.
+    [[nodiscard]] std::optional<int> detectedSize(const cv::Mat& bgr, bool read_here);
+    // Becomes a scan of `size` without a person having chosen it.
+    void adoptSize(int size);
     cube::vision::SideScan scan_;
     std::optional<cube::vision::SideRead> read_;
     bool reading_ = false;

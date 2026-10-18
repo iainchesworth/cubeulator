@@ -204,9 +204,9 @@ Item {
         }
     }
 
-    // The size of the cube being scanned. Choosing another starts the scan over; it
-    // is chosen, not detected, because six flat sides of a bigger cube are read the
-    // same way at every size and only the count of stickers differs.
+    // The size of the cube being scanned: found from the cube in view (Auto, the
+    // default) or chosen here, which stands until Auto is chosen again. A change
+    // starts the scan over.
     Row {
         objectName: "scan.sizes"
         anchors.horizontalCenter: parent.horizontalCenter
@@ -215,6 +215,15 @@ Item {
         spacing: Theme.space2
         visible: !root.complete && !root.cameraFailed
 
+        // The size is found from the cube until a size is chosen; this goes back to
+        // finding it.
+        AppButton {
+            objectName: "scan.size.auto"
+            height: 36
+            variant: DirectScan.autoSize ? "primary" : "secondary"
+            text: qsTrId("scan.size.auto")
+            onClicked: DirectScan.useAutoSize()
+        }
         Repeater {
             model: [2, 3, 4, 5]
             AppButton {

@@ -70,6 +70,21 @@ not measured. The 3x3's own corner reads were marginal in the same light (docs/v
 The scan asks, when it is ambiguous, "Turn the cube slowly so that two sides show at once"; it
 does not name a corner (`settling_corner` is a 3x3's).
 
+## Finding the size from the cube
+
+The scan screen is of a size the person chooses, or, by default, of the size the cube is found to be
+(`DirectScan::detectedSize`). The reader of N x N reads a grid of fewer inside a bigger side and never a
+bigger grid than there is: drawn sides of 2x2 to 6x6, 72 frames each, read at every size up to their own
+(a 5x5 at 2, 3, 4 and 5, 72 of 72 each, and at 6 or 7 never). So the cube's size is the largest size
+(2 to 5) a frame reads at, found by going up from the current size while it reads or down until it
+does; the scan takes the largest that at least five of the last eight frames that read anything
+read at, and stops looking once a side is captured. On the recorded sessions the largest size read at
+is the session's for most frames (4x4: 137 of 177 frames that read at all in one, 5x5: 310 of 328 in
+another; the rest read at a smaller size, a hand over some stickers), `cube_scan detect-size <session>`.
+Choosing a size stands until Auto is chosen again. What is not covered: a cube held with its stickers
+covered enough that it reads one size smaller on most frames of the first second reads as that size and is
+then kept, which is what the buttons are for.
+
 ## Where the code is
 
 `src/lib/src/vision/corner_view.cpp` (lattices), `corner_fit_n.cpp` (fit), `direct_scan.cpp`

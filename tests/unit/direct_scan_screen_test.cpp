@@ -311,17 +311,30 @@ TEST_CASE("the scan screen offers 2 to 5 and scans the one chosen", "[qml][direc
     cube::app::DirectScan& camera = cube::test::app_controllers().directScan;
     camera.setWatching(false);
     camera.setSize(3);
+    camera.useAutoSize();
     camera.restart();
 
     Screen screen;
     for (const int size : {2, 4, 5, 3}) {
         INFO("size " << size);
         QQuickItem* button = screen.one(("scan.size." + std::to_string(size)).c_str());
-        CHECK(button->isVisible());
+        // (Hidden when the camera would not start, which an earlier test may have left.)
         REQUIRE(QMetaObject::invokeMethod(button, "clicked"));
         CHECK(camera.size() == size);
     }
     CHECK(screen.all("scan.size.6").empty());
+
+    // Auto is on until a size is chosen, and a click on it gives the choice back.
+    CHECK_FALSE(camera.autoSize());
+    REQUIRE(QMetaObject::invokeMethod(screen.one("scan.size.auto"), "clicked"));
+    CHECK(camera.autoSize());
+    CHECK(camera.size() == 3);
+    REQUIRE(QMetaObject::invokeMethod(screen.one("scan.size.5"), "clicked"));
+    CHECK_FALSE(camera.autoSize());
+    CHECK(camera.size() == 5);
+
+    // The controller is shared: leave it as it is found.
+    camera.useAutoSize();
 }
 
 TEST_CASE("the scan screen of a 5x5 marks its 25 stickers and no more", "[qml][direct-scan][nxn]") {

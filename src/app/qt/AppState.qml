@@ -76,6 +76,13 @@ QtObject {
     property bool scanComplete: false
     property var directScanConnections: Connections {
         target: DirectScan
+        // The size is found from the cube while it is being scanned, and only a
+        // 3x3 has a camera to follow it into the solve.
+        function onSizeChanged() {
+            if (state.screen === "scan") {
+                state.solveCamera = DirectScan.size === 3;
+            }
+        }
         function onScanCompleted() {
             state.scanComplete = true;
             completeBeat.restart();
@@ -283,7 +290,11 @@ QtObject {
     // `size` is the cube's, 3 unless a screen says (DirectScan.size; a developer's
     // CUBE_SCAN_SIZE changes what "unless" is).
     function beginScan(size) {
-        DirectScan.size = size === undefined ? DirectScan.defaultSize : size;
+        if (size === undefined) {
+            DirectScan.useDefaultSize();
+        } else {
+            DirectScan.size = size;
+        }
         if (cameraGranted || !isMobile) {
             elapsedSeconds = 0;
             screen = "scan";

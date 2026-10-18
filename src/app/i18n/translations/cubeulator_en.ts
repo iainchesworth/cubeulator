@@ -850,6 +850,11 @@ In your hands.</translation>
         <extracomment>Button. Forgets the sides read so far.</extracomment>
         <translation>Start over</translation>
     </message>
+    <message id="scan.size.auto">
+        <source>Auto</source>
+        <extracomment>Button on the scan screen beside the sizes of cube: the app finds the size of the cube from what the camera sees.</extracomment>
+        <translation>Auto</translation>
+    </message>
     <message id="scan.checkColours">
         <source>Check the colours</source>
         <extracomment>Button. Opens the screen where each sticker can be corrected.</extracomment>

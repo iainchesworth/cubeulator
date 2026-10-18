@@ -7,6 +7,7 @@
 
 #include <cube/nxn/cube.hpp>
 #include <cube/nxn/outside_view.hpp>
+#include <cube/nxn/scan_assembly.hpp>
 #include <cube/solver/cube.hpp>
 #include <cube/solver/notation.hpp>
 #include <cube/solver/solver.hpp>
@@ -24,6 +25,7 @@
 
 #include <array>
 #include <cstddef>
+#include <optional>
 
 using cube::app::DirectScan;
 using cube::solver::Color;
@@ -491,6 +493,67 @@ TEST_CASE("DirectScan scans a cube of another odd size: its dots, its sides and 
     CHECK(size_changes == 2);
     CHECK(scan.sidesRead() == 0);
     CHECK_FALSE(scan.complete());
+}
+
+TEST_CASE("the size of the cube is found from the cube held up, and a chosen size stands",
+          "[qt][controllers][direct-scan][nxn]") {
+    for (const int size : {2, 3, 4, 5}) {
+        CAPTURE(size);
+        // A cube whose six flat sides make one cube (a 2x2's often make two).
+        std::optional<cube::nxn::NCube> unambiguous;
+        for (unsigned seed = 70; !unambiguous.has_value(); ++seed) {
+            const cube::nxn::NCube tried =
+                cube::nxn::random_scramble({.size = size, .seed = seed, .moves = 25 * size});
+            cube::nxn::ScannedSides sides;
+            for (std::size_t i = 0; i < 6; ++i) {
+                sides.at(i) = cube::nxn::outside_view(tried, kAllFaces.at(i));
+            }
+            if (cube::nxn::assemble_all_scanned_sides(size, sides, 8).size() == 1) {
+                unambiguous = tried;
+            }
+        }
+        const cube::nxn::NCube& cube = *unambiguous;
+        DirectScan scan;
+        CHECK(scan.autoSize());
+        CHECK(scan.size() == 3);
+        int completed = 0;
+        QObject::connect(&scan, &DirectScan::scanCompleted, [&completed]() { ++completed; });
+
+        // The first frames of the first side go to finding the size, so it is held longer.
+        cube::test::Pose pose;
+        pose.pitch = 180.0F / static_cast<float>(size);
+        for (const Face face : kAllFaces) {
+            hold(scan, draw_side(cube::nxn::outside_view(cube, face), pose), kFramesToCapture + 9);
+            scan.processFrame(room({640, 360}));
+        }
+        // Found from the first frames, not asked, and the scan is of that size.
+        CHECK(scan.size() == size);
+        CHECK(scan.autoSize());
+        REQUIRE(completed == 1);
+        REQUIRE(scan.cubeN().has_value());
+        CHECK(scan.cubeN()->size() == size);
+    }
+
+    // A size that is chosen stands whatever is held up, until Auto is chosen again.
+    const cube::nxn::NCube five = cube::nxn::random_scramble({.size = 5, .seed = 8, .moves = 100});
+    cube::test::Pose pose;
+    pose.pitch = 180.0F / 5.0F;
+    DirectScan scan;
+    scan.setSize(4);
+    CHECK_FALSE(scan.autoSize());
+    hold(scan, draw_side(cube::nxn::outside_view(five, Face::F), pose), 20);
+    CHECK(scan.size() == 4);
+    scan.useAutoSize();
+    CHECK(scan.autoSize());
+    CHECK(scan.size() == 3);
+    hold(scan, draw_side(cube::nxn::outside_view(five, Face::F), pose), 20);
+    CHECK(scan.size() == 5);
+
+    // A new scan with no size asked for is found again; the size of the last is not kept.
+    scan.setSize(2);
+    scan.useDefaultSize();
+    CHECK(scan.autoSize());
+    CHECK(scan.size() == 3);
 }
 
 TEST_CASE("a bigger cube whose flat sides fit several cubes is settled by corner views",

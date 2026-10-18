@@ -427,6 +427,7 @@ Review the solution.
 | `scan.stuck.title` | Not reading? | Heading of a hint that appears after ten seconds without progress. |
 | `scan.stuck.body` | Use bright, even light. Tilt the cube until there is no glare on the stickers. Fill about half the picture with one side. | Hint body. Three short instructions. |
 | `scan.startOver` | Start over | Button. Forgets the sides read so far. |
+| `scan.size.auto` | Auto | Button on the scan screen beside the sizes of cube: the app finds the size of the cube from what the camera sees. |
 | `scan.checkColours` | Check the colours | Button. Opens the screen where each sticker can be corrected. |
 | `scan.more.enter` | Enter the rest by hand | Item in the More sheet. |
 | `scan.more.chooseCamera` | Choose a camera | Item in the More sheet, on a computer with more than one camera. |
