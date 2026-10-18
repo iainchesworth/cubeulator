@@ -79,7 +79,7 @@ bigger grid than there is: drawn sides of 2x2 to 6x6, 72 frames each, read at ev
 (2 to 5) a frame reads at, found by going up from the current size while it reads or down until it
 does; the scan takes the largest that at least five of the last eight frames that read anything
 read at, and stops looking once a side is captured. On the recorded sessions the largest size read at
-is the session's for most frames (4x4: 137 of 177 frames that read at all in one, 5x5: 310 of 328 in
+is the session's for most frames (4x4: 137 of 153 frames that read at all in one, 5x5: 310 of 330 in
 another; the rest read at a smaller size, a hand over some stickers), `cube_scan detect-size <session>`.
 Choosing a size stands until Auto is chosen again. What is not covered: a cube held with its stickers
 covered enough that it reads one size smaller on most frames of the first second reads as that size and is
